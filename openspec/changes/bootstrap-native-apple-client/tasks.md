@@ -31,8 +31,8 @@
 - [x] 5.1 Implement host model, secure identity storage abstraction, and persisted settings.
 - [x] 5.2 Implement discovery and manual host-add flow.
 - [x] 5.3 Implement pairing state machine with structured errors.
-- [ ] 5.4 Implement app-list retrieval and artwork cache abstraction.
-- [ ] 5.5 Implement stream negotiation/session state skeleton before media transport details.
+- [x] 5.4 Implement app-list retrieval and artwork cache abstraction.
+- [x] 5.5 Implement stream negotiation/session state skeleton before media transport details.
 
 ## 6. Input and controls
 

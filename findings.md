@@ -75,6 +75,12 @@
 - 2026-06-09 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 11 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、tvOS simulator Debug build 均通过。visionOS 26.4 runtime 后续安装完成，`Apple Vision Pro` simulator destination Debug build 通过。
 - 新增配对状态机骨架：`PairingStateMachine` actor 固化 idle、waitingForPIN、exchangingSecrets、verifyingServer、pinningIdentity、paired、failed、cancelled 阶段；`PairingFailureCode` 提供 invalid PIN、invalid transition、missing identity/address、transport/server/certificate/cancelled 等结构化错误；server major version >= 7 使用 SHA256，否则使用 SHA1；成功 pin server identity 后生成 `PinnedHostIdentity` 并把 host 标记为 paired。该层还不包含真实 Moonlight PIN/cert/AES HTTP transport，后续可把 transport 接入这些阶段。
 - 配对状态机测试覆盖 digest 选择、PIN 校验、非法阶段和 paired host/pinned identity 结果；加入后 `LuneXCoreTests` 增至 15 个测试并通过。
+- 新增 app catalog 抽象：`RemoteApp`、`AppListSnapshot`、`RemoteAppArtwork`、`AppListClient`、`ArtworkCache`、`AppCatalogManager`。当前 HTTP client 使用 Moonlight HTTPS `/applist?uniqueid=...` 拉取应用列表，使用 `/appasset?uniqueid=...&appid=...&AssetType=2&AssetIdx=0` 拉取 poster artwork；XML parser 解析 `AppTitle`、`ID`、`IsHdrSupported`、`AppInstallPath`，并拒绝非 200 `status_code`。
+- artwork cache 以 host id + app poster key 作为缓存 key，避免不同主机相同 app id 复用错误封面。测试覆盖同 app id 跨 host 时必须分别拉取。
+- 新增 stream negotiation/session skeleton：`StreamLaunchRequest`、`StreamNegotiationParameters`、`StreamNegotiator`、`StreamLaunchClient`、`StreamSessionCoordinator`。当前实现先验证 host paired/address/resolution/bitrate，把偏好转成 `3840x2160x120` 等 mode 字符串，仅在用户 HDR 偏好与 app HDR 支持同时满足时请求 HDR；HTTP launch client 构造 `/launch` query，stop 构造 `/cancel?uniqueid=...`。
+- `StreamSessionCoordinator` actor 当前覆盖 prepare、launch、readyForTransport、streaming、stopping、disconnected 和 failed 状态转换；真实 RTSP、视频、音频、输入 transport 后续接入这些 stage，而不是直接耦合到 UI。
+- Swift 6 XCTest 注意：不要把 `await actor.property` 放入 `XCTAssertEqual` 等 autoclosure 参数；测试 stub actor 应暴露隔离方法，先 await 到局部变量后再断言。
+- 2026-06-09 任务 5.4/5.5 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 23 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
 
 ## 风险与决策
 

@@ -30,7 +30,7 @@
 
 ## 当前焦点
 
-阶段 5 到阶段 8：已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机和 macOS 核心单测。下一步继续推进 5.4 app-list/artwork 缓存抽象、5.5 stream negotiation/session skeleton、6.x 输入适配、7.x 音频与后台连续性。OpenSpec 当前 active change 为 `bootstrap-native-apple-client`，严格校验已通过，任务进度为 24/38。
+阶段 5 到阶段 8：已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机、app-list/artwork cache 抽象和 stream negotiation/session skeleton。下一步继续推进 6.1 macOS 键盘/鼠标适配、6.2 iOS/iPadOS touch/pointer/overlay event model、7.1 AVAudioEngine session pipeline skeleton。OpenSpec 当前 active change 为 `bootstrap-native-apple-client`，严格校验已通过，任务进度为 26/38。
 
 ## 遇到的错误
 
@@ -43,3 +43,4 @@
 | tvOS build 使用 `CAMetalLayer.wantsExtendedDynamicRangeContent` 失败 | 1 | 该属性在 tvOS SDK 中显式 unavailable；macOS/iOS 启用，tvOS/visionOS 暂 no-op |
 | tvOS build 使用 `Scene.defaultSize(width:height:)` 失败 | 1 | 将 Scene 配置按平台分支，tvOS 不调用窗口 sizing API |
 | Swift 6 构建在 SwiftUI `.task` 中调用 `AppModel` async 方法时报 non-Sendable crossing | 1 | 将 `AppModel` 标记为 `@MainActor @Observable`，明确 UI 状态容器 actor 边界；网络/存储仍通过 `HostLibraryManager` actor 隔离 |
+| Swift 6 XCTest 在 `XCTAssertEqual(await actor.property, ...)` 报 actor-isolated autoclosure 错误 | 1 | 在测试 stub actor 上提供同步隔离方法，先 `await` 到局部变量，再传给 XCTest autoclosure |

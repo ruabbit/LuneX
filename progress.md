@@ -66,3 +66,18 @@
 - 远端为 `git@github.com:ruabbit/LuneX.git`；直接 `git push -u origin main` 失败，错误为 `Connection closed by 20.205.243.166 port 22`。随后 `ssh -T git@github.com` 与 `git ls-remote origin` 均复现同一 SSH 22 端口连接关闭问题。`ssh -T -p 443 git@ssh.github.com` 成功认证为 `ruabbit`；最终用 `GIT_SSH_COMMAND='ssh -p 443 -o HostName=ssh.github.com' git push -u origin main` 推送成功。
 - visionOS 26.4 runtime 安装完成，`xcrun simctl list runtimes` 出现 `visionOS 26.4 (26.4 - 23O243)`。
 - `xcodebuild -project LuneX.xcodeproj -scheme LuneX-visionOS -configuration Debug -destination 'platform=visionOS Simulator,id=9BF41D0C-B423-4B3F-B75D-00B31E85FE18' CODE_SIGNING_ALLOWED=NO build` 通过，未创建或启动额外 visionOS simulator。
+- 会话恢复脚本提示上一轮有 63 条未同步上下文；已重新读取 `task_plan.md`、`findings.md`、`progress.md`、OpenSpec tasks、新增 tests/source 和 git status，以当前验证结果为准继续。
+- 新增 `Sources/LuneXNetworking/AppCatalog.swift`：app-list XML parser、HTTPS app list/artwork client、in-memory artwork cache、`AppCatalogManager` actor。
+- 新增 `Tests/LuneXCoreTests/AppCatalogTests.swift`：覆盖 app list XML 解析、非 OK 状态拒绝、artwork cache 命中、host-scoped artwork cache。
+- 新增 `Sources/LuneXNetworking/StreamNegotiation.swift`：stream launch request/parameters、HTTP `/launch` 和 `/cancel` client、launch response parser、`StreamSessionCoordinator` actor。
+- 新增 `Tests/LuneXCoreTests/StreamNegotiationTests.swift`：覆盖 launch 参数、未配对 host 拒绝、launch response 解析、coordinator ready/streaming/disconnected 状态转换。
+- 修复 Swift 6 XCTest actor isolation：测试不再在 `XCTAssertEqual` autoclosure 中直接 `await` actor-isolated properties，而是通过 stub actor 方法读取计数到局部变量后断言。
+- 更新 `Tools/generate_xcodeproj.rb` 并重新生成 `LuneX.xcodeproj/project.pbxproj`，把 app catalog 和 stream negotiation 源码/测试纳入对应 targets。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，23 个测试通过。
+- macOS Debug build 通过。
+- 固定 iPhone 17 Pro simulator `23A27088-C19F-4F77-A455-4E50E393167E` Debug build 通过。
+- 固定 iPad Pro 13-inch (M5) simulator `409A5908-8C39-4797-A41C-04503A05FA3D` Debug build 通过。
+- 固定 tvOS simulator destination `11D0B224-D778-4A13-A156-272A45AFF119` Debug build 通过，未启动额外 tvOS 模拟器。
+- 固定 Apple Vision Pro visionOS simulator destination `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` Debug build 通过，未启动额外 visionOS 模拟器。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- OpenSpec 任务更新：5.4、5.5 已完成。任务进度更新为 26/38。

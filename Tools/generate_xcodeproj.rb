@@ -33,9 +33,11 @@ sources = [
   "Sources/LuneXAudio/AudioRouteState.swift",
   "Sources/LuneXDiagnostics/DiagnosticsStore.swift",
   "Sources/LuneXNetworking/HostDiscovery.swift",
+  "Sources/LuneXNetworking/AppCatalog.swift",
   "Sources/LuneXNetworking/HostEndpoint.swift",
   "Sources/LuneXNetworking/Pairing.swift",
   "Sources/LuneXNetworking/ServerInfo.swift",
+  "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
 ]
@@ -50,18 +52,22 @@ test_support_sources = [
   "Sources/LuneXRendering/DisplayHeadroom.swift",
   "Sources/LuneXInput/InputMapper.swift",
   "Sources/LuneXNetworking/HostDiscovery.swift",
+  "Sources/LuneXNetworking/AppCatalog.swift",
   "Sources/LuneXNetworking/HostEndpoint.swift",
   "Sources/LuneXNetworking/Pairing.swift",
   "Sources/LuneXNetworking/ServerInfo.swift",
+  "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
 ]
 
 test_sources = [
+  "Tests/LuneXCoreTests/AppCatalogTests.swift",
   "Tests/LuneXCoreTests/DiscoveryTests.swift",
   "Tests/LuneXCoreTests/LifecycleRenderPolicyTests.swift",
   "Tests/LuneXCoreTests/HostAndPersistenceTests.swift",
-  "Tests/LuneXCoreTests/PairingStateMachineTests.swift"
+  "Tests/LuneXCoreTests/PairingStateMachineTests.swift",
+  "Tests/LuneXCoreTests/StreamNegotiationTests.swift"
 ]
 
 resources = [
