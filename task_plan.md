@@ -30,7 +30,7 @@
 
 ## 当前焦点
 
-阶段 5 到阶段 8：已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机、app-list/artwork cache 抽象、stream negotiation/session skeleton、macOS 键鼠/cursor capture 输入核心、iOS/iPadOS touch/pointer/virtual controller event model、GameController/tvOS remote/focus 输入绑定、unsupported/reserved input diagnostics、AVAudioEngine session pipeline skeleton 和 route diagnostics。下一步继续推进 7.2 entitlement-gated spatial audio/head-tracking availability model、7.3 iOS/iPadOS background/PiP continuity policy skeleton、7.4 macOS visibility-based background performance policy。OpenSpec 当前 active change 为 `bootstrap-native-apple-client`，严格校验已通过，任务进度为 31/38。
+阶段 5 到阶段 8：已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机、app-list/artwork cache 抽象、stream negotiation/session skeleton、macOS 键鼠/cursor capture 输入核心、iOS/iPadOS touch/pointer/virtual controller event model、GameController/tvOS remote/focus 输入绑定、unsupported/reserved input diagnostics、AVAudioEngine session pipeline skeleton 和 route diagnostics、spatial audio/head-tracking capability gating、移动后台/PiP continuity policy、macOS visibility-based background performance policy。下一步继续推进 8.1 host library and pairing UI、8.2 app grid/list stream settings launch flow、8.3 stream overlay。OpenSpec 当前 active change 为 `bootstrap-native-apple-client`，严格校验已通过，任务进度为 34/38。
 
 ## 遇到的错误
 
@@ -45,3 +45,4 @@
 | Swift 6 构建在 SwiftUI `.task` 中调用 `AppModel` async 方法时报 non-Sendable crossing | 1 | 将 `AppModel` 标记为 `@MainActor @Observable`，明确 UI 状态容器 actor 边界；网络/存储仍通过 `HostLibraryManager` actor 隔离 |
 | Swift 6 XCTest 在 `XCTAssertEqual(await actor.property, ...)` 报 actor-isolated autoclosure 错误 | 1 | 在测试 stub actor 上提供同步隔离方法，先 `await` 到局部变量，再传给 XCTest autoclosure |
 | GameController notification 误用 `GCController.didConnectNotification` | 1 | 用 Xcode 26.4 SDK typecheck 确认应使用 `Notification.Name.GCControllerDidConnect` 和 `Notification.Name.GCControllerDidDisconnect` |
+| `LuneXCoreTests` 新增空间音频测试找不到 `AudioRouteState` | 1 | 将 `Sources/LuneXAudio/AudioRouteState.swift` 纳入测试支持源码并重新生成 Xcode project |

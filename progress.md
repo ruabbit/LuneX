@@ -112,3 +112,14 @@
 - macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator destination、固定 Apple Vision Pro visionOS simulator destination Debug build 均通过，未创建或启动额外模拟器。
 - `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
 - OpenSpec 任务更新：7.1 已完成。任务进度更新为 31/38。
+- 更新 `Sources/LuneXAudio/AudioRouteState.swift`：新增 `SpatialAudioCapabilityContext`、`SpatialAudioPlatform`、`SpatialAudioAvailabilityResolver`，按 platform SDK、route spatial support、head-pose entitlement、channel count 和用户设置计算 spatial/head tracking 可用性。
+- 更新 `Sources/LuneXDiagnostics/DiagnosticsStore.swift`，支持记录 `AudioRouteState` 的空间音频可用性和 unavailable reason。
+- 新增 `Sources/LuneXPlatform/ContinuityPolicy.swift`：mobile background/PiP continuity policy、PiP render size coordinator、macOS visibility-based background performance policy。
+- 更新 `Sources/LuneXCore/AppSettings.swift`，把 `ContinuityPreferences.defaults` 纳入持久化设置模型。
+- 更新 `Tools/generate_xcodeproj.rb`，把 `ContinuityPolicy.swift` 和 `ContinuityPolicyTests.swift` 纳入 targets，并为 visionOS target 生成 `INFOPLIST_KEY_UIBackgroundModes=audio`。
+- 新增 `Tests/LuneXCoreTests/ContinuityPolicyTests.swift`：覆盖 spatial audio entitlement/channel/platform gating、spatial diagnostics、mobile audio+PiP/background fallback、PiP size update、macOS inactive visible throttle 和 occluded pause。
+- 首次新增 continuity tests 后，`LuneXCoreTests` 构建失败，原因是测试支持源码漏纳入 `AudioRouteState.swift`；已修正生成器并重新生成 project。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，46 个测试通过。
+- macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator destination、固定 Apple Vision Pro visionOS simulator destination Debug build 均通过，未创建或启动额外模拟器；visionOS target 带 `UIBackgroundModes=audio` 仍构建通过。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- OpenSpec 任务更新：7.2、7.3、7.4 已完成。任务进度更新为 34/38。

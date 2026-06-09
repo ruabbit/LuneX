@@ -24,6 +24,7 @@ sources = [
   "Sources/LuneXCore/HostLibrary.swift",
   "Sources/LuneXCore/Models.swift",
   "Sources/LuneXCore/SessionState.swift",
+  "Sources/LuneXPlatform/ContinuityPolicy.swift",
   "Sources/LuneXPlatform/PlatformLifecycle.swift",
   "Sources/LuneXPlatform/AppKitLifecycleMonitor.swift",
   "Sources/LuneXPlatform/UIKitLifecycleMonitor.swift",
@@ -55,6 +56,7 @@ test_support_sources = [
   "Sources/LuneXCore/HostLibrary.swift",
   "Sources/LuneXCore/Models.swift",
   "Sources/LuneXCore/SessionState.swift",
+  "Sources/LuneXPlatform/ContinuityPolicy.swift",
   "Sources/LuneXPlatform/PlatformLifecycle.swift",
   "Sources/LuneXRendering/DisplayHeadroom.swift",
   "Sources/LuneXInput/GameControllerInputAdapter.swift",
@@ -65,6 +67,7 @@ test_support_sources = [
   "Sources/LuneXInput/TVRemoteFocusInputAdapter.swift",
   "Sources/LuneXInput/TouchInputAdapter.swift",
   "Sources/LuneXAudio/AudioSessionPipeline.swift",
+  "Sources/LuneXAudio/AudioRouteState.swift",
   "Sources/LuneXDiagnostics/DiagnosticsStore.swift",
   "Sources/LuneXNetworking/HostDiscovery.swift",
   "Sources/LuneXNetworking/AppCatalog.swift",
@@ -80,6 +83,7 @@ test_sources = [
   "Tests/LuneXCoreTests/AppCatalogTests.swift",
   "Tests/LuneXCoreTests/AudioPipelineTests.swift",
   "Tests/LuneXCoreTests/ControllerAndDiagnosticsTests.swift",
+  "Tests/LuneXCoreTests/ContinuityPolicyTests.swift",
   "Tests/LuneXCoreTests/DiscoveryTests.swift",
   "Tests/LuneXCoreTests/LifecycleRenderPolicyTests.swift",
   "Tests/LuneXCoreTests/HostAndPersistenceTests.swift",
@@ -142,7 +146,8 @@ targets = [
     deployment: "26.0",
     bundle: "dev.lunex.client.visionos",
     extra: {
-      "TARGETED_DEVICE_FAMILY" => "7"
+      "TARGETED_DEVICE_FAMILY" => "7",
+      "INFOPLIST_KEY_UIBackgroundModes" => "audio"
     }
   }
 ]

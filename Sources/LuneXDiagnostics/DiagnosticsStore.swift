@@ -32,6 +32,16 @@ final class DiagnosticsStore {
             date: audioSnapshot.updatedAt
         ))
     }
+
+    func record(spatialAudioState: AudioRouteState, date: Date = Date()) {
+        let status = spatialAudioState.headTrackingEnabled ? "enabled" : "disabled"
+        let reason = spatialAudioState.unavailableReason.map { "; \($0)" } ?? ""
+        events.append(DiagnosticEvent(
+            subsystem: "audio.spatial",
+            message: "Spatial audio \(spatialAudioState.spatialAudioAvailable ? "available" : "unavailable"), head tracking \(status)\(reason)",
+            date: date
+        ))
+    }
 }
 
 struct DiagnosticEvent: Identifiable, Hashable {

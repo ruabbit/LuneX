@@ -4,12 +4,14 @@ struct AppSettings: Codable, Equatable, Sendable {
     var discoveryEnabled: Bool
     var stream: StreamPreferences
     var input: InputPreferences
+    var continuity: ContinuityPreferences
     var diagnosticsEnabled: Bool
 
     static let defaults = AppSettings(
         discoveryEnabled: true,
         stream: .defaults,
         input: .defaults,
+        continuity: .defaults,
         diagnosticsEnabled: true
     )
 }

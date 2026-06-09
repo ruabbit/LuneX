@@ -96,6 +96,12 @@
 - 新增 audio session pipeline skeleton：`StreamAudioConfiguration` 保存 negotiated sample rate/channel/latency/spatial preference；`AudioSessionPipeline` actor 管理 idle/configured/running/draining/stopped/failed；`AVAudioEngineClient` 负责配置 `AVAudioSession` 首选 sample rate/buffer duration、启动/停止 `AVAudioEngine`，真实 decoder 后续接入该 session-scoped engine。
 - 新增 route diagnostics：`AudioRouteSnapshot` 保存 output names、sample rate、output channel count、preferred buffer duration；`DiagnosticsStore.record(audioSnapshot:)` 可把 audio pipeline state 发布到现有 diagnostics overlay/settings 流。
 - 2026-06-09 任务 7.1 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 38 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
+- 空间音频 gating 已从直接开关升级为 `SpatialAudioAvailabilityResolver`：同时检查平台 SDK、route spatial support、`com.apple.developer.coremotion.head-pose` entitlement、channel count 和用户 head tracking 设置；visionOS SDK 当前仍返回 head tracking unavailable，但 spatial playback 可保持功能。
+- `DiagnosticsStore.record(spatialAudioState:)` 会把空间音频可用性和不可用原因发布到 diagnostics，满足 entitlement/hardware 缺失时用户可见的要求。
+- 移动后台连续性策略已模型化：`MobileContinuityPolicyResolver` 在 background 时优先 audio+PiP，其次 audio-only；无受支持路径时 suspend foreground rendering 或 pause stream。`PictureInPictureStateCoordinator` 可单独更新 PiP render size，不改变 main session state。
+- macOS 后台性能策略已模型化：`MacBackgroundPerformancePolicyResolver` 使用 stream active、app active、window visible、window focused、drawable size；窗口可见但 app inactive 时 throttle 而不是 pause，窗口 occluded/minimized 时 pause。
+- `Tools/generate_xcodeproj.rb` 现为 iOS、tvOS、visionOS target 生成 `UIBackgroundModes=audio`；visionOS Debug build 已验证该声明不会破坏构建。
+- 2026-06-09 任务 7.2/7.3/7.4 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 46 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
 
 ## 风险与决策
 
