@@ -36,6 +36,7 @@ sources = [
   "Sources/LuneXInput/MacInputAdapter.swift",
   "Sources/LuneXInput/TVRemoteFocusInputAdapter.swift",
   "Sources/LuneXInput/TouchInputAdapter.swift",
+  "Sources/LuneXAudio/AudioSessionPipeline.swift",
   "Sources/LuneXAudio/AudioRouteState.swift",
   "Sources/LuneXDiagnostics/DiagnosticsStore.swift",
   "Sources/LuneXNetworking/HostDiscovery.swift",
@@ -63,6 +64,7 @@ test_support_sources = [
   "Sources/LuneXInput/MacInputAdapter.swift",
   "Sources/LuneXInput/TVRemoteFocusInputAdapter.swift",
   "Sources/LuneXInput/TouchInputAdapter.swift",
+  "Sources/LuneXAudio/AudioSessionPipeline.swift",
   "Sources/LuneXDiagnostics/DiagnosticsStore.swift",
   "Sources/LuneXNetworking/HostDiscovery.swift",
   "Sources/LuneXNetworking/AppCatalog.swift",
@@ -76,6 +78,7 @@ test_support_sources = [
 
 test_sources = [
   "Tests/LuneXCoreTests/AppCatalogTests.swift",
+  "Tests/LuneXCoreTests/AudioPipelineTests.swift",
   "Tests/LuneXCoreTests/ControllerAndDiagnosticsTests.swift",
   "Tests/LuneXCoreTests/DiscoveryTests.swift",
   "Tests/LuneXCoreTests/LifecycleRenderPolicyTests.swift",

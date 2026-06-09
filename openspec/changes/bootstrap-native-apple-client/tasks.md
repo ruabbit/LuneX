@@ -43,7 +43,7 @@
 
 ## 7. Audio and continuity
 
-- [ ] 7.1 Implement AVAudioEngine session pipeline skeleton and route diagnostics.
+- [x] 7.1 Implement AVAudioEngine session pipeline skeleton and route diagnostics.
 - [ ] 7.2 Implement entitlement-gated spatial audio/head-tracking availability model.
 - [ ] 7.3 Implement iOS/iPadOS background/PiP continuity policy skeleton and Info.plist capability wiring.
 - [ ] 7.4 Implement macOS visibility-based background performance policy.

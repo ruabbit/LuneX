@@ -103,3 +103,12 @@
 - macOS、固定 iPhone 17 Pro simulator `23A27088-C19F-4F77-A455-4E50E393167E`、固定 iPad Pro 13-inch (M5) simulator `409A5908-8C39-4797-A41C-04503A05FA3D`、固定 tvOS simulator destination `11D0B224-D778-4A13-A156-272A45AFF119`、固定 Apple Vision Pro visionOS simulator destination `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` Debug build 均通过，未创建或启动额外模拟器。
 - `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
 - OpenSpec 任务更新：6.3、6.4 已完成。任务进度更新为 30/38。
+- 进行 AVFAudio SDK typecheck；`AVAudioEngine` 在 macOS/iOS/tvOS/visionOS 通过，`AVAudioSession.sharedInstance().sampleRate`、`outputNumberOfChannels`、`currentRoute.outputs`、`ioBufferDuration` 在 iOS/tvOS/visionOS 通过。
+- 新增 `Sources/LuneXAudio/AudioSessionPipeline.swift`：stream audio configuration、latency policy、pipeline stage、stop reason、route snapshot、`AudioEngineClient` protocol、`AVAudioEngineClient`、`AudioRouteInspector` 和 `AudioSessionPipeline` actor。
+- 更新 `Sources/LuneXDiagnostics/DiagnosticsStore.swift`，支持记录 `AudioPipelineSnapshot` 到 diagnostics event。
+- 新增 `Tests/LuneXCoreTests/AudioPipelineTests.swift`：覆盖 configure/start/stop route snapshot、missing configuration failure、audio snapshot diagnostics。
+- 更新 `Tools/generate_xcodeproj.rb` 并重新生成 `LuneX.xcodeproj/project.pbxproj`，把 audio pipeline 源码和测试纳入 targets。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，38 个测试通过。
+- macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator destination、固定 Apple Vision Pro visionOS simulator destination Debug build 均通过，未创建或启动额外模拟器。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- OpenSpec 任务更新：7.1 已完成。任务进度更新为 31/38。

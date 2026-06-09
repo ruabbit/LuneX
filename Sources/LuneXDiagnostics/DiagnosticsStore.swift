@@ -20,6 +20,18 @@ final class DiagnosticsStore {
             date: inputDiagnostic.createdAt
         ))
     }
+
+    func record(audioSnapshot: AudioPipelineSnapshot) {
+        let route = audioSnapshot.route
+        let routeName = route?.outputNames.joined(separator: ", ") ?? "unknown route"
+        let sampleRate = Int(route?.sampleRate ?? audioSnapshot.configuration?.sampleRate ?? 0)
+        let channels = route?.outputChannelCount ?? audioSnapshot.configuration?.channelCount ?? 0
+        events.append(DiagnosticEvent(
+            subsystem: "audio",
+            message: "Audio \(audioSnapshot.stage.rawValue): \(sampleRate) Hz, \(channels) ch, \(routeName)",
+            date: audioSnapshot.updatedAt
+        ))
+    }
 }
 
 struct DiagnosticEvent: Identifiable, Hashable {

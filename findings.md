@@ -92,6 +92,10 @@
 - 新增 tvOS remote/focus 输入模型：串流未活动时 tvOS remote 保留给本机；串流活动时 `menu`、`select`、`playPause`、方向键可转成 remote input event；focus movement/status 作为单独 input event 发布。
 - 新增 input diagnostics：`InputDiagnosticsRecorder` 记录 `.reserveLocally` 为 info、`.drop` 为 warning，并可记录 controller snapshot；`DiagnosticsStore` 可接收 `InputDiagnosticRecord` 以供 overlay/settings 后续展示。
 - 2026-06-09 任务 6.3/6.4 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 35 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
+- Xcode 26.4 SDK typecheck 结论：`AVAudioEngine` 在 macOS/iOS/tvOS/visionOS 可用；`AVAudioSession.sharedInstance().sampleRate`、`outputNumberOfChannels`、`currentRoute.outputs`、`ioBufferDuration` 在 iOS/tvOS/visionOS typecheck 通过。macOS route diagnostics 应从 `AVAudioEngine.outputNode.outputFormat(forBus:)` 读取。
+- 新增 audio session pipeline skeleton：`StreamAudioConfiguration` 保存 negotiated sample rate/channel/latency/spatial preference；`AudioSessionPipeline` actor 管理 idle/configured/running/draining/stopped/failed；`AVAudioEngineClient` 负责配置 `AVAudioSession` 首选 sample rate/buffer duration、启动/停止 `AVAudioEngine`，真实 decoder 后续接入该 session-scoped engine。
+- 新增 route diagnostics：`AudioRouteSnapshot` 保存 output names、sample rate、output channel count、preferred buffer duration；`DiagnosticsStore.record(audioSnapshot:)` 可把 audio pipeline state 发布到现有 diagnostics overlay/settings 流。
+- 2026-06-09 任务 7.1 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 38 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
 
 ## 风险与决策
 

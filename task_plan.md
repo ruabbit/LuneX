@@ -30,7 +30,7 @@
 
 ## 当前焦点
 
-阶段 5 到阶段 8：已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机、app-list/artwork cache 抽象、stream negotiation/session skeleton、macOS 键鼠/cursor capture 输入核心、iOS/iPadOS touch/pointer/virtual controller event model、GameController/tvOS remote/focus 输入绑定、unsupported/reserved input diagnostics。下一步继续推进 7.1 AVAudioEngine session pipeline skeleton、7.2 entitlement-gated spatial audio/head-tracking availability model、7.3 iOS/iPadOS background/PiP continuity policy skeleton。OpenSpec 当前 active change 为 `bootstrap-native-apple-client`，严格校验已通过，任务进度为 30/38。
+阶段 5 到阶段 8：已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机、app-list/artwork cache 抽象、stream negotiation/session skeleton、macOS 键鼠/cursor capture 输入核心、iOS/iPadOS touch/pointer/virtual controller event model、GameController/tvOS remote/focus 输入绑定、unsupported/reserved input diagnostics、AVAudioEngine session pipeline skeleton 和 route diagnostics。下一步继续推进 7.2 entitlement-gated spatial audio/head-tracking availability model、7.3 iOS/iPadOS background/PiP continuity policy skeleton、7.4 macOS visibility-based background performance policy。OpenSpec 当前 active change 为 `bootstrap-native-apple-client`，严格校验已通过，任务进度为 31/38。
 
 ## 遇到的错误
 
