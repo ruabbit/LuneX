@@ -38,8 +38,8 @@
 
 - [x] 6.1 Implement macOS keyboard and pointer adapters with cursor/capture policy.
 - [x] 6.2 Implement iOS/iPadOS touch, pointer, and virtual controller overlay event model.
-- [ ] 6.3 Implement GameController binding for controllers and tvOS remote/focus input.
-- [ ] 6.4 Add diagnostics for unsupported or reserved input events.
+- [x] 6.3 Implement GameController binding for controllers and tvOS remote/focus input.
+- [x] 6.4 Add diagnostics for unsupported or reserved input events.
 
 ## 7. Audio and continuity
 

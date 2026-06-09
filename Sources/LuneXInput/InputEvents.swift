@@ -5,6 +5,9 @@ enum RemoteInputEvent: Equatable, Sendable {
     case pointer(PointerInputEvent)
     case touch(TouchInputEvent)
     case virtualController(VirtualControllerInputEvent)
+    case gameController(GameControllerInputEvent)
+    case tvRemote(TVRemoteInputEvent)
+    case focus(FocusInputEvent)
 }
 
 struct InputModifiers: OptionSet, Codable, Hashable, Sendable {
@@ -87,6 +90,67 @@ struct VirtualControllerInputEvent: Codable, Equatable, Hashable, Sendable {
     var control: VirtualControllerControl
     var value: Double
     var isPressed: Bool
+}
+
+enum GameControllerElement: String, Codable, Hashable, Sendable {
+    case a
+    case b
+    case x
+    case y
+    case leftShoulder
+    case rightShoulder
+    case leftTrigger
+    case rightTrigger
+    case menu
+    case options
+    case dpadUp
+    case dpadDown
+    case dpadLeft
+    case dpadRight
+    case leftThumbstickX
+    case leftThumbstickY
+    case rightThumbstickX
+    case rightThumbstickY
+    case leftThumbstickButton
+    case rightThumbstickButton
+}
+
+struct GameControllerInputEvent: Codable, Equatable, Hashable, Sendable {
+    var controllerID: String
+    var playerIndex: Int?
+    var element: GameControllerElement
+    var value: Double
+    var isPressed: Bool
+}
+
+enum TVRemoteButton: String, Codable, Hashable, Sendable {
+    case menu
+    case select
+    case playPause
+    case up
+    case down
+    case left
+    case right
+}
+
+struct TVRemoteInputEvent: Codable, Equatable, Hashable, Sendable {
+    var button: TVRemoteButton
+    var isDown: Bool
+}
+
+enum FocusMovementDirection: String, Codable, Hashable, Sendable {
+    case up
+    case down
+    case left
+    case right
+    case next
+    case previous
+}
+
+struct FocusInputEvent: Codable, Equatable, Hashable, Sendable {
+    var focusedItemID: String?
+    var movement: FocusMovementDirection?
+    var isFocused: Bool
 }
 
 enum InputDeliveryPolicy: Equatable, Sendable {

@@ -86,6 +86,12 @@
 - macOS keyboard adapter 默认保留 Command-Q、Command-Tab、Command-H 给本机系统，除非后续显式启用 system shortcut forwarding。Tab 的 macOS virtual key code 是 48。
 - macOS pointer adapter 在 remote pointer capture 时发送相对 delta；未 capture 时使用 `InputMapper` 把本地点映射到远端绝对坐标。iOS/iPadOS touch/pointer/virtual controller adapter 同样只依赖 `InputMapper`，保证 letterbox/fill 后的坐标关系单源一致。
 - 2026-06-09 任务 6.1/6.2 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 29 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
+- Xcode 26.4 SDK typecheck 结论：`GCController.controllers()`、`Notification.Name.GCControllerDidConnect`、`Notification.Name.GCControllerDidDisconnect`、`GCController.extendedGamepad`、`GCController.microGamepad`、`GCController.playerIndex` 在 iOS/tvOS/visionOS typecheck 通过；`GCController.didConnectNotification`/`didDisconnectNotification` 不存在。
+- 新增 GameController 输入绑定核心：`GameControllerConnectionState` 描述连接状态、profile 支持和 player index；`GameControllerBindingSnapshot.remoteControllersBitmap` 把最多 8 个已连接控制器映射到 Moonlight launch 所需 bitmap；`GameControllerInputAdapter` 支持 button/trigger 0...1 clamp 和 thumbstick axis -1...1 clamp。
+- 新增 `GameControllerPlatformMonitor`：通过 `Notification.Name.GCControllerDidConnect`/`DidDisconnect` 刷新 `GCController.controllers()` snapshot，保持平台 monitor 与可测试核心 adapter 分离。
+- 新增 tvOS remote/focus 输入模型：串流未活动时 tvOS remote 保留给本机；串流活动时 `menu`、`select`、`playPause`、方向键可转成 remote input event；focus movement/status 作为单独 input event 发布。
+- 新增 input diagnostics：`InputDiagnosticsRecorder` 记录 `.reserveLocally` 为 info、`.drop` 为 warning，并可记录 controller snapshot；`DiagnosticsStore` 可接收 `InputDiagnosticRecord` 以供 overlay/settings 后续展示。
+- 2026-06-09 任务 6.3/6.4 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 35 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
 
 ## 风险与决策
 

@@ -91,3 +91,15 @@
 - macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator destination、固定 Apple Vision Pro visionOS simulator destination Debug build 均通过，未创建或启动额外模拟器。
 - `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
 - OpenSpec 任务更新：6.1、6.2 已完成。任务进度更新为 28/38。
+- 进行 GameController SDK typecheck；`GCController.didConnectNotification`/`didDisconnectNotification` 不存在，改用 `Notification.Name.GCControllerDidConnect` 和 `Notification.Name.GCControllerDidDisconnect`。修正后 iOS、tvOS、visionOS typecheck 均通过。
+- 新增 `Sources/LuneXInput/GameControllerInputAdapter.swift`：controller connection snapshot、remote controller bitmap、controller element event mapping、GameController platform monitor。
+- 新增 `Sources/LuneXInput/TVRemoteFocusInputAdapter.swift`：tvOS remote button、press type mapper 和 focus event model；串流未活动时 remote 输入保留本机。
+- 新增 `Sources/LuneXInput/InputDiagnostics.swift`：reserved/dropped/unsupported input 诊断记录，以及 controller snapshot diagnostic。
+- 更新 `Sources/LuneXInput/InputEvents.swift`，加入 physical game controller、tvOS remote 和 focus input event。
+- 更新 `Sources/LuneXDiagnostics/DiagnosticsStore.swift`，支持接收 `InputDiagnosticRecord`。
+- 新增 `Tests/LuneXCoreTests/ControllerAndDiagnosticsTests.swift`：覆盖 controller button/axis mapping、remote controller bitmap、tvOS remote/focus policy、input diagnostics severity/subsystem/controller status。
+- 更新 `Tools/generate_xcodeproj.rb` 并重新生成 `LuneX.xcodeproj/project.pbxproj`，把 GameController/tvOS remote/diagnostics 源码与测试纳入 targets。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，35 个测试通过。
+- macOS、固定 iPhone 17 Pro simulator `23A27088-C19F-4F77-A455-4E50E393167E`、固定 iPad Pro 13-inch (M5) simulator `409A5908-8C39-4797-A41C-04503A05FA3D`、固定 tvOS simulator destination `11D0B224-D778-4A13-A156-272A45AFF119`、固定 Apple Vision Pro visionOS simulator destination `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` Debug build 均通过，未创建或启动额外模拟器。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- OpenSpec 任务更新：6.3、6.4 已完成。任务进度更新为 30/38。
