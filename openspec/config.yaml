@@ -1,0 +1,36 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+context: |
+  Project: LuneX, a from-scratch native SwiftUI Moonlight-compatible Apple client.
+  Primary delivery targets: macOS 26+ and iOS/iPadOS 26+. Architecture must preserve tvOS 26+ and visionOS 26+ platform entry points.
+  Tech direction: Swift 6.3, SwiftUI, Swift Concurrency, Observation, Metal/VideoToolbox, AVFoundation/AVFAudio, GameController, AppKit/UIKit platform adapters.
+  Reference policy: moonlight-stream/moonlight-ios and moonlight-stream/moonlight-qt are read-only behavioral references. Do not copy source code. Treat GPL reuse or linking as an explicit product/license decision.
+  Validation constraint: when using simulators, create/run at most one instance per device class. Prefer existing iOS 26.4 iPhone 17 Pro and iPad Pro 13-inch (M5) devices.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Keep capability names stable and kebab-case.
+    - Call out license-sensitive reuse explicitly.
+  specs:
+    - Requirements must be testable with concrete scenarios.
+    - Include platform-specific behavior where macOS, iOS/iPadOS, tvOS, and visionOS differ.
+  tasks:
+    - Keep task groups ordered from research and scaffolding through implementation and verification.
+    - Include OpenSpec validation and planning-file updates as explicit tasks.

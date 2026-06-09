@@ -1,0 +1,15 @@
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.build/
+
+# Local upstream reference checkouts used for research only.
+references/
+
+# Xcode result bundles.
+*.xcresult
+
+# Local verification screenshots and transient outputs.
+artifacts/

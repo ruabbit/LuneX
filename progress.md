@@ -1,0 +1,68 @@
+# LuneX 进度日志
+
+## 2026-06-09
+
+- 创建项目跟踪文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认当前工作目录 `/Users/tanmy/Projects/LuneX` 初始为空。
+- 读取 `planning-with-files-zh` 技能说明，确认需要持续维护三个规划文件。
+- 记忆命中 OpenSpec 本机安装历史与计划文件同步偏好；当前项目仍以本地检查为准。
+- 浅克隆 `moonlight-stream/moonlight-ios` 到 `references/moonlight-ios`，浅克隆 `moonlight-stream/moonlight-qt` 到 `references/moonlight-qt`，用于只读架构参考。
+- 检查本机环境：Xcode 26.4、Swift 6.3、OpenSpec 1.3.1、iOS 26.4 iPhone/iPad 模拟器可用。
+- 通过 Apple 官方文档确认 macOS 窗口遮挡、屏幕变化、EDR、iOS EDR、空间音频头部跟踪、后台模式/PiP 和 SwiftUI 窗口 API 的第一轮可行性。
+- 更新 `findings.md`，记录第一轮调查结论与许可/架构风险。
+- 运行 `openspec init --tools codex --force .`，生成 `openspec/config.yaml` 和 `.codex/skills/` OpenSpec 指令。
+- 创建 OpenSpec change `bootstrap-native-apple-client`。
+- 写入 `proposal.md`、`design.md`、7 个 capability spec delta 和 `tasks.md`，共 38 个实现任务。
+- 运行 `openspec validate bootstrap-native-apple-client --strict --json`，结果为 1/1 passed、0 issues。
+- 更新 `task_plan.md`：阶段 0、2、3 complete；阶段 1 in_progress。
+- 进行 Xcode 26.4 SDK API typecheck；发现 `AVAudioEnvironmentNode.listenerHeadTrackingEnabled` 在 Swift 中应使用 `isListenerHeadTrackingEnabled`，且 visionOS 不可用。已记录为平台 gating 要求。
+- 重跑修正后的 SDK typecheck：macOS、iOS simulator、tvOS simulator、visionOS simulator 均通过；visionOS 只验证通用窗口/控制器能力，不验证不可用的 head tracking 属性。
+- 完成 OpenSpec 任务 1.1、1.2、1.3、1.4，并在 `tasks.md` 勾选。
+- 添加 SwiftUI 多平台脚手架源码、`Tools/generate_xcodeproj.rb` 和 `Resources/Assets.xcassets`。
+- 生成 `LuneX.xcodeproj`，`xcodebuild -list` 可识别 `LuneX-macOS`、`LuneX-iOS`、`LuneX-tvOS`、`LuneX-visionOS` 四个 schemes。
+- 首次 macOS build 失败，原因是 project 生成器让 Xcode 查找 `Sources/Sources/...` 和 `Resources/Resources/...`；已修正生成器 group path。
+- macOS Debug build 已通过。
+- 首次 iOS simulator build 失败，原因是 `DisplayHeadroomReader.read(screen: UIScreen = .main)` 在 Swift 6 中把 main actor-isolated 默认值用于非隔离上下文；已改为显式 `@MainActor read(screen:)`。
+- 用户补充要求使用 Git，远程仓库为 `git@github.com:ruabbit/LuneX.git`，并要求缺失 simulator runtime 可以安装，不视为限制。
+- 创建线程目标执行：分析 Moonlight 并构建 LuneX 原生 SwiftUI Apple 全平台客户端。
+- 初始化 Git 仓库并设置 `origin git@github.com:ruabbit/LuneX.git`。
+- 创建 `.gitignore`，排除 `references/`、DerivedData/build、Xcode 用户状态和 result bundles。
+- 将 Git 默认分支改为 `main`。
+- iPhone 17 Pro simulator 和 iPad Pro 13-inch (M5) simulator 均已 boot，仅各启动一个实例。
+- iOS simulator build 通过，iPadOS simulator build 通过。
+- iOS app 安装并启动到 iPhone simulator，bundle id `dev.lunex.client.ios`，进程号 70033。
+- iOS/iPadOS app 安装并启动到 iPad simulator，bundle id `dev.lunex.client.ios`，进程号 70032。
+- 截图验证非黑屏：`artifacts/iphone-lunex.png`、`artifacts/ipad-lunex.png`。`artifacts/` 已加入 `.gitignore`，作为本地验证产物。
+- tvOS 26.4 simulator runtime 下载已启动，大小约 3.76 GB。
+- visionOS 26.4 simulator runtime 下载已启动，大小约 7.31 GB。
+- OpenSpec 任务更新：2.1-2.4、3.1-3.3、4.1-4.4、9.1-9.4 已完成。
+- 新增 `LifecycleRenderPolicyResolver` 和 `LuneXCoreTests`，完成生命周期到渲染策略单测；首次测试 target 漏编 `DisplayHeadroom.swift`，已修正。
+- 新增主机模型、能力模型、pinned identity metadata、App settings、client identity store、JSON 文件 repository 和 Keychain identity store。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，8 个测试通过。
+- `openspec validate bootstrap-native-apple-client --strict --json` 再次通过，1/1 passed、0 issues。
+- macOS Debug build 重新通过，并修正 AppKit notification callback 的 Swift 6 main actor warning。
+- 固定 iPhone 17 Pro simulator build 和固定 iPad Pro 13-inch (M5) simulator build 重新通过，未创建或启动额外同类模拟器。
+- tvOS 26.4 simulator runtime 已安装；`LuneX-tvOS` simulator build 首次发现 `CAMetalLayer.wantsExtendedDynamicRangeContent` 在 tvOS unavailable，第二次发现 `Scene.defaultSize` 在 tvOS unavailable，均已按平台 gating 修正；第三次 tvOS simulator build 通过，未启动 tvOS 模拟器。
+- visionOS 26.4 simulator runtime 下载进程仍在运行，尚未出现在 `simctl list runtimes`。
+- OpenSpec 任务更新：3.4、5.1、9.5 已完成。
+- 会话恢复脚本提示上一轮有 42 条未同步上下文；已重新读取 `task_plan.md`、`findings.md`、`progress.md`、OpenSpec tasks 和当前源码，并以本轮验证结果为准继续。
+- 修复 Swift 6 actor isolation 构建错误：`AppModel` 增加 `@MainActor`，解决 SwiftUI `.task`/sheet Task 调用 `loadHosts()` 和 `addManualHost(...)` 时的 non-Sendable crossing 诊断。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，11 个测试通过。
+- macOS Debug build 通过。
+- 固定 iPhone 17 Pro simulator `23A27088-C19F-4F77-A455-4E50E393167E` Debug build 通过。
+- 固定 iPad Pro 13-inch (M5) simulator `409A5908-8C39-4797-A41C-04503A05FA3D` Debug build 通过。
+- 固定 tvOS simulator destination `11D0B224-D778-4A13-A156-272A45AFF119` Debug build 通过，未启动额外 tvOS 模拟器。
+- visionOS 26.4 runtime 下载进程仍在运行；`xcodebuild -showdestinations` 显示 `visionOS 26.4 is not installed`，visionOS 构建等待 runtime 安装完成。
+- OpenSpec 任务更新：5.2 已完成。任务进度更新为 23/38。
+- 新增 `Sources/LuneXNetworking/Pairing.swift`：配对阶段 actor、SHA1/SHA256 digest 选择、结构化 `PairingFailure`、PIN 校验、server identity pinning 到 `MoonlightHost`。
+- 新增 `Tests/LuneXCoreTests/PairingStateMachineTests.swift`，覆盖 server major version digest 选择、非法 PIN、非法阶段和成功 paired host/pinned identity。
+- 更新 `Tools/generate_xcodeproj.rb`，重新生成 `LuneX.xcodeproj/project.pbxproj`，把 pairing 源码加入 app/test targets。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 再次通过，15 个测试通过。
+- 新增 pairing 源码后，macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch (M5)、固定 tvOS simulator destination Debug build 均再次通过。
+- visionOS 26.4 runtime 下载进程仍在运行，`showdestinations` 仍显示 `visionOS 26.4 is not installed`。
+- OpenSpec 任务更新：5.3 已完成。任务进度更新为 24/38。
+- 创建 Git 初始提交 `51e5e8c Initial native SwiftUI Apple client scaffold`，包含 50 个项目/源码/测试/OpenSpec/规划文件；`references/` 与 `artifacts/` 仍为 ignored。
+- 远端为 `git@github.com:ruabbit/LuneX.git`；尝试 `git push -u origin main` 失败，错误为 `Connection closed by 20.205.243.166 port 22`。随后 `ssh -T git@github.com` 与 `git ls-remote origin` 均复现同一 SSH 22 端口连接关闭问题。当前本地提交已完成，远端推送待 SSH/GitHub 连接恢复或改用可用传输方式。
+- visionOS 26.4 runtime 安装完成，`xcrun simctl list runtimes` 出现 `visionOS 26.4 (26.4 - 23O243)`。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneX-visionOS -configuration Debug -destination 'platform=visionOS Simulator,id=9BF41D0C-B423-4B3F-B75D-00B31E85FE18' CODE_SIGNING_ALLOWED=NO build` 通过，未创建或启动额外 visionOS simulator。
