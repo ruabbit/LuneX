@@ -81,3 +81,13 @@
 - 固定 Apple Vision Pro visionOS simulator destination `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` Debug build 通过，未启动额外 visionOS 模拟器。
 - `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
 - OpenSpec 任务更新：5.4、5.5 已完成。任务进度更新为 26/38。
+- 新增 `Sources/LuneXInput/InputEvents.swift`：统一 keyboard、pointer、touch、virtual controller remote input event 模型，以及 deliver/drop/reserve-local delivery policy。
+- 新增 `Sources/LuneXInput/MacInputAdapter.swift`：macOS cursor capture policy resolver、keyboard adapter、pointer move/button/scroll adapter；默认保留 Command-Q、Command-Tab、Command-H 给本机系统。
+- 新增 `Sources/LuneXInput/TouchInputAdapter.swift`：iOS/iPadOS touch、pointer hover、virtual controller event model，坐标统一经 `InputMapper` 映射。
+- 更新 `Sources/LuneXInput/InputMapper.swift` 和 `Sources/LuneXPlatform/PlatformLifecycle.swift`，让 `InputMapper`、`RemotePoint`、`RenderTransform` 显式 `Sendable`，适配后续 session actor 边界。
+- 新增 `Tests/LuneXCoreTests/InputAdapterTests.swift`：覆盖 focused/visible/active cursor capture、macOS 相对/绝对 pointer、Command-Tab 本地保留、touch 坐标映射、virtual controller value clamp。
+- 更新 `Tools/generate_xcodeproj.rb` 并重新生成 `LuneX.xcodeproj/project.pbxproj`，把输入源码和测试纳入 app/test targets。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，29 个测试通过。
+- macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator destination、固定 Apple Vision Pro visionOS simulator destination Debug build 均通过，未创建或启动额外模拟器。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- OpenSpec 任务更新：6.1、6.2 已完成。任务进度更新为 28/38。

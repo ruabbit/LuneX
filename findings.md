@@ -81,6 +81,11 @@
 - `StreamSessionCoordinator` actor 当前覆盖 prepare、launch、readyForTransport、streaming、stopping、disconnected 和 failed 状态转换；真实 RTSP、视频、音频、输入 transport 后续接入这些 stage，而不是直接耦合到 UI。
 - Swift 6 XCTest 注意：不要把 `await actor.property` 放入 `XCTAssertEqual` 等 autoclosure 参数；测试 stub actor 应暴露隔离方法，先 await 到局部变量后再断言。
 - 2026-06-09 任务 5.4/5.5 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 23 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
+- 新增输入事件核心：`RemoteInputEvent` 统一 keyboard、pointer、touch、virtual controller；`InputAdapterOutput` 同时携带事件与 delivery policy，允许 adapter 明确 deliver、drop 或 reserve locally。
+- macOS 输入策略：`CursorCapturePolicyResolver` 只在 stream active、window visible、window key 且用户选择 remote pointer 时隐藏系统鼠标并捕获相对指针；失焦或后台时不隐藏鼠标、不发送相对鼠标，契合 `NSWindowDidResignKeyNotification`/`NSWindowDidBecomeKeyNotification` 生命周期目标。
+- macOS keyboard adapter 默认保留 Command-Q、Command-Tab、Command-H 给本机系统，除非后续显式启用 system shortcut forwarding。Tab 的 macOS virtual key code 是 48。
+- macOS pointer adapter 在 remote pointer capture 时发送相对 delta；未 capture 时使用 `InputMapper` 把本地点映射到远端绝对坐标。iOS/iPadOS touch/pointer/virtual controller adapter 同样只依赖 `InputMapper`，保证 letterbox/fill 后的坐标关系单源一致。
+- 2026-06-09 任务 6.1/6.2 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 29 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
 
 ## 风险与决策
 

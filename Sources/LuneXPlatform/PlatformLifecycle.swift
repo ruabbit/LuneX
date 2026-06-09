@@ -71,7 +71,7 @@ struct PixelSize: Codable, Equatable, Hashable, Sendable {
     var height: Int
 }
 
-struct RenderTransform: Equatable {
+struct RenderTransform: Equatable, Sendable {
     var sourceSize = PixelSize.zero
     var drawableSize = PixelSize.zero
     var mode: RenderScaleMode = .fit

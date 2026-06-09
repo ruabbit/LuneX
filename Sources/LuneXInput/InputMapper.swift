@@ -1,6 +1,6 @@
 import Foundation
 
-struct InputMapper {
+struct InputMapper: Sendable {
     var transform: RenderTransform
 
     func remotePoint(localX: Double, localY: Double) -> RemotePoint? {
@@ -34,7 +34,7 @@ struct InputMapper {
     }
 }
 
-struct RemotePoint: Equatable {
+struct RemotePoint: Codable, Equatable, Hashable, Sendable {
     var x: Double
     var y: Double
 }
