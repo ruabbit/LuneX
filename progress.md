@@ -63,6 +63,6 @@
 - visionOS 26.4 runtime 下载进程仍在运行，`showdestinations` 仍显示 `visionOS 26.4 is not installed`。
 - OpenSpec 任务更新：5.3 已完成。任务进度更新为 24/38。
 - 创建 Git 初始提交 `51e5e8c Initial native SwiftUI Apple client scaffold`，包含 50 个项目/源码/测试/OpenSpec/规划文件；`references/` 与 `artifacts/` 仍为 ignored。
-- 远端为 `git@github.com:ruabbit/LuneX.git`；尝试 `git push -u origin main` 失败，错误为 `Connection closed by 20.205.243.166 port 22`。随后 `ssh -T git@github.com` 与 `git ls-remote origin` 均复现同一 SSH 22 端口连接关闭问题。当前本地提交已完成，远端推送待 SSH/GitHub 连接恢复或改用可用传输方式。
+- 远端为 `git@github.com:ruabbit/LuneX.git`；直接 `git push -u origin main` 失败，错误为 `Connection closed by 20.205.243.166 port 22`。随后 `ssh -T git@github.com` 与 `git ls-remote origin` 均复现同一 SSH 22 端口连接关闭问题。`ssh -T -p 443 git@ssh.github.com` 成功认证为 `ruabbit`；最终用 `GIT_SSH_COMMAND='ssh -p 443 -o HostName=ssh.github.com' git push -u origin main` 推送成功。
 - visionOS 26.4 runtime 安装完成，`xcrun simctl list runtimes` 出现 `visionOS 26.4 (26.4 - 23O243)`。
 - `xcodebuild -project LuneX.xcodeproj -scheme LuneX-visionOS -configuration Debug -destination 'platform=visionOS Simulator,id=9BF41D0C-B423-4B3F-B75D-00B31E85FE18' CODE_SIGNING_ALLOWED=NO build` 通过，未创建或启动额外 visionOS simulator。
