@@ -102,9 +102,18 @@
 - macOS 后台性能策略已模型化：`MacBackgroundPerformancePolicyResolver` 使用 stream active、app active、window visible、window focused、drawable size；窗口可见但 app inactive 时 throttle 而不是 pause，窗口 occluded/minimized 时 pause。
 - `Tools/generate_xcodeproj.rb` 现为 iOS、tvOS、visionOS target 生成 `UIBackgroundModes=audio`；visionOS Debug build 已验证该声明不会破坏构建。
 - 2026-06-09 任务 7.2/7.3/7.4 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 46 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过。
+- 2026-06-17 原生 UI phase 完成：`RootView` 扩展为 SwiftUI NavigationSplitView shell，包含 host library、pairing、app catalog grid、stream launch panel、Metal stream workspace、status/input/HDR/audio overlay、virtual controller overlay、diagnostics list 和 settings form。
+- `AppModel` 从简单 demo 状态扩展为 UI workflow coordinator：加载/保存设置、host add/remove/selection、pairing skeleton 提交、app catalog refresh、stream launch/stop、diagnostics recording、render preference 更新都由 `@MainActor @Observable` 模型统一发布给 SwiftUI。
+- `HostLibraryManager` 新增 replace/remove host 能力，供 pairing UI 成功后持久替换 host 状态、host library UI 删除主机使用。
+- `AppCatalogManager.refreshApps` 现在稳定按 app name 排序，避免 UI 默认选择第一个 app 时依赖服务端返回顺序。
+- 新增 `AppModelWorkflowTests`，覆盖从手动加主机、pairing skeleton、刷新 app、launch stream 到 stop stream 的 UI-facing workflow。加入后 `LuneXCoreTests` 增至 47 个测试并通过。
+- SwiftUI 平台差异结论：`List(selection:)` 在 iOS/tvOS unavailable；tvOS 不支持 `TextFieldStyle.roundedBorder` 和 `Stepper`。LuneX UI 已按平台分支：macOS 使用 selection list，移动/tvOS/visionOS 用 button list；tvOS settings 用 plus/minus button 代替 Stepper。
+- Xcode 构建操作结论：并发跑多个 simulator target 会竞争同一个 DerivedData `build.db` 并失败，后续固定 simulator build 矩阵应串行执行或显式分离 DerivedData。
+- 2026-06-17 任务 8.1/8.2/8.3/8.4 修复后验证：OpenSpec strict validate 通过；`LuneXCoreTests` 47 个测试通过；macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator、固定 Apple Vision Pro visionOS simulator Debug build 均通过，未创建或启动额外模拟器。
 
 ## 风险与决策
 
 - 许可风险：Moonlight iOS/Qt 均为 GPL 许可证仓库；若直接复制或链接 GPL 代码，LuneX 需要满足 GPL 义务。当前决策是只做架构和行为参考，不直接搬运源码。协议核心若复用 `moonlight-common-c`，必须把许可策略作为 OpenSpec 中的显式决策。
 - 架构决策倾向：核心会话/状态机用 Swift actor/Observation 建模；平台细节通过 AppKit/UIKit/tvOS/visionOS adapter 注入；渲染使用 Metal/VideoToolbox 原生管线，避免 SDL/Qt 抽象层。
 - API 校验风险：不要直接把 Obj-C 文档符号拼进 Swift；需要在 Xcode 26.4 SDK 上用 `swiftc -typecheck` 验证实际 Swift 名称和平台 availability。
+- 产品级剩余风险：当前 OpenSpec bootstrap change 已完成，但 Moonlight RTSP/control transport、真实 VideoToolbox decode、Opus/PCM audio decode、远程输入发送、真实 pairing HTTP/AES/cert 交换、真机 HDR/EDR 亮度验证和 App Store background/PiP 审核策略仍是后续 change 的范围。

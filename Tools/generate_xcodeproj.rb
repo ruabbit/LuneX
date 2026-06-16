@@ -51,6 +51,7 @@ sources = [
 ]
 
 test_support_sources = [
+  "Sources/LuneXCore/AppModel.swift",
   "Sources/LuneXCore/AppSettings.swift",
   "Sources/LuneXCore/ClientIdentity.swift",
   "Sources/LuneXCore/HostLibrary.swift",
@@ -81,6 +82,7 @@ test_support_sources = [
 
 test_sources = [
   "Tests/LuneXCoreTests/AppCatalogTests.swift",
+  "Tests/LuneXCoreTests/AppModelWorkflowTests.swift",
   "Tests/LuneXCoreTests/AudioPipelineTests.swift",
   "Tests/LuneXCoreTests/ControllerAndDiagnosticsTests.swift",
   "Tests/LuneXCoreTests/ContinuityPolicyTests.swift",

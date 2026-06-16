@@ -189,7 +189,9 @@ actor AppCatalogManager {
 
     func refreshApps(for host: MoonlightHost, clientUniqueID: String, now: Date = Date()) async throws -> AppListSnapshot {
         let endpoint = try HostEndpointParser.parse(host.address)
-        let apps = try await appListClient.fetchApps(from: endpoint, clientUniqueID: clientUniqueID)
+        let apps = try await appListClient.fetchApps(from: endpoint, clientUniqueID: clientUniqueID).sorted { lhs, rhs in
+            lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
         return AppListSnapshot(hostID: host.id, apps: apps, updatedAt: now)
     }
 

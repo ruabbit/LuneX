@@ -123,3 +123,25 @@
 - macOS、固定 iPhone 17 Pro simulator、固定 iPad Pro 13-inch (M5) simulator、固定 tvOS simulator destination、固定 Apple Vision Pro visionOS simulator destination Debug build 均通过，未创建或启动额外模拟器；visionOS target 带 `UIBackgroundModes=audio` 仍构建通过。
 - `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
 - OpenSpec 任务更新：7.2、7.3、7.4 已完成。任务进度更新为 34/38。
+
+## 2026-06-17
+
+- 重新创建线程目标：继续完成 LuneX 原生 SwiftUI Moonlight Apple 全平台客户端剩余 OpenSpec 工作，优先完成 macOS 与 iOS/iPadOS 功能完备 UI、验证、提交并推送。
+- 读取 `planning-with-files-zh` 与 `openspec-apply-change` 技能说明，恢复 `task_plan.md`、`findings.md`、`progress.md` 和 OpenSpec apply 状态。
+- `openspec instructions apply --change bootstrap-native-apple-client --json` 显示剩余任务为 8.1、8.2、8.3、8.4，进度 34/38。
+- 扩展 `Sources/LuneXCore/AppModel.swift`：新增 navigation selection、selected host/app、pairing UI state、catalog UI state、stream launch state；接入 host add/remove/replace、settings load/save、app refresh、pairing skeleton、stream launch/stop 和 diagnostics。
+- 扩展 `Sources/LuneXNetworking/HostDiscovery.swift`：`HostLibraryManager` 新增 `replaceHost(_:)` 与 `removeHost(id:)`，供 pairing UI 和 host library 删除流程使用。
+- 重写 `Sources/LuneXApp/RootView.swift`：实现 NavigationSplitView shell、host library、pairing panel、app catalog grid、stream launch panel、Metal stream workspace、stream status overlay、virtual controller overlay、diagnostics screen、settings screen。
+- 首轮 iOS/tvOS build 发现 SwiftUI API 差异：`List(selection:)` 在 iOS/tvOS unavailable，tvOS 不支持 `TextFieldStyle.roundedBorder` 与 `Stepper`；已按平台分支修正。
+- 首轮并发 simulator build 出现 DerivedData build database lock；后续改为按固定 simulator ID 串行验证。
+- 新增 `Tests/LuneXCoreTests/AppModelWorkflowTests.swift`，覆盖 UI-facing workflow：manual host add、pairing skeleton、app catalog refresh、launch stream、stop stream。
+- 更新 `Tools/generate_xcodeproj.rb` 并重新生成 `LuneX.xcodeproj/project.pbxproj`，把 AppModel 测试支持源码和新 workflow test 纳入测试 target。
+- 修复 `AppModelWorkflowTests` 暴露的 app 顺序不稳定问题：`AppCatalogManager.refreshApps` 统一按 app name 排序。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test` 通过，47 个测试通过。
+- `openspec validate bootstrap-native-apple-client --strict --json` 通过，1/1 passed、0 issues。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneX-macOS -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build -quiet` 通过。
+- 固定 iPhone 17 Pro simulator `23A27088-C19F-4F77-A455-4E50E393167E` Debug build 通过。
+- 固定 iPad Pro 13-inch (M5) simulator `409A5908-8C39-4797-A41C-04503A05FA3D` Debug build 通过。
+- 固定 tvOS simulator destination `11D0B224-D778-4A13-A156-272A45AFF119` Debug build 通过。
+- 固定 Apple Vision Pro visionOS simulator destination `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` Debug build 通过。
+- OpenSpec 任务更新：8.1、8.2、8.3、8.4 已完成。任务进度更新为 38/38。

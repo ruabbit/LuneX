@@ -104,6 +104,28 @@ actor HostLibraryManager {
         try await merge(candidate)
     }
 
+    func replaceHost(_ host: MoonlightHost) async throws -> [MoonlightHost] {
+        var hosts = try await repository.loadHosts()
+        if let index = hosts.firstIndex(where: { $0.id == host.id }) {
+            hosts[index] = host
+        } else {
+            hosts.append(host)
+        }
+        try await repository.saveHosts(hosts)
+        return hosts.sorted { lhs, rhs in
+            lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    func removeHost(id: MoonlightHost.ID) async throws -> [MoonlightHost] {
+        var hosts = try await repository.loadHosts()
+        hosts.removeAll { $0.id == id }
+        try await repository.saveHosts(hosts)
+        return hosts.sorted { lhs, rhs in
+            lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     private func merge(_ candidate: HostDiscoveryCandidate) async throws -> [MoonlightHost] {
         var hosts = try await repository.loadHosts()
         let canonicalAddress = candidate.endpoint.displayAddress

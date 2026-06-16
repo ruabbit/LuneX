@@ -50,10 +50,10 @@
 
 ## 8. Native UI
 
-- [ ] 8.1 Implement host library and pairing UI for macOS and iOS/iPadOS.
-- [ ] 8.2 Implement app grid/list, stream settings, and launch flow.
-- [ ] 8.3 Implement stream overlay for status, controls, input mode, HDR/audio state, and disconnect.
-- [ ] 8.4 Implement diagnostics and settings screens.
+- [x] 8.1 Implement host library and pairing UI for macOS and iOS/iPadOS.
+- [x] 8.2 Implement app grid/list, stream settings, and launch flow.
+- [x] 8.3 Implement stream overlay for status, controls, input mode, HDR/audio state, and disconnect.
+- [x] 8.4 Implement diagnostics and settings screens.
 
 ## 9. Verification
 

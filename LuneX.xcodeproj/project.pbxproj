@@ -253,6 +253,7 @@
 		621A12FBFB2EF39B0A7BBB71 /* LuneX-tvOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LuneX-tvOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		627BAC5502DE8338016671CD /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
 		62CD86A6609B3B279A387A1F /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+				91F48A8AF584103D46926CDF /* AppModel.swift in Sources */,
 				0B2A80D1BEBAA8E701467FE0 /* AppSettings.swift in Sources */,
 				8726147B2CC1DF70D22CFB20 /* ClientIdentity.swift in Sources */,
 				6D26C862CE5D532CD74DDD23 /* HostLibrary.swift in Sources */,
@@ -280,6 +281,7 @@
 				C0A1A2F7BDC9DFE181BBCBEF /* JSONFileStores.swift in Sources */,
 				F06598331012C73833FFB82B /* KeychainClientIdentityStore.swift in Sources */,
 				E7CA5C07D4789409605B8EE0 /* AppCatalogTests.swift in Sources */,
+				964916DFE9B0D91D8BE72F72 /* AppModelWorkflowTests.swift in Sources */,
 				B5AD4050462EA1A4C3821D27 /* AudioPipelineTests.swift in Sources */,
 				C7BA81230C2E426B7859E0DF /* ControllerAndDiagnosticsTests.swift in Sources */,
 				6EBD829EF63753A1F5AD100B /* ContinuityPolicyTests.swift in Sources */,
@@ -385,6 +387,7 @@
 		87617E2E33694E4FDE29C6CF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/StreamNegotiation.swift"; sourceTree = "<group>"; };
 		91A89A56CD694D32BD707CD9 /* LuneXApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FE925D93939396C8853A8E /* LuneXApp.swift */; };
+		91F48A8AF584103D46926CDF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		924C8DA2F61A43C3704C2771 /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
 		936AC5DDAECC9B0866E9A93F /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
 		9385939EF0E8DA7C2B380B21 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
@@ -430,6 +433,7 @@
 				MACOSX_DEPLOYMENT_TARGET = "26.0";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 			}; name = Debug; };
+		964916DFE9B0D91D8BE72F72 /* AppModelWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */; };
 		97B249D70217EBBA15751AAF /* ClientIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ClientIdentity.swift"; sourceTree = "<group>"; };
 		99653315A9F4B45A05EA9D0B /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
 		99D1CE46E3A02FEFD83A16D6 /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */; };
@@ -441,6 +445,7 @@
 		9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/PairingStateMachineTests.swift"; sourceTree = "<group>"; };
 		A0937472EE5878FA82CB0F7E /* Tests */ = {isa = PBXGroup; children = (
 				2ACF9C6C82903CEB2A8E982F /* AppCatalogTests.swift */,
+				A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */,
 				29601CEF411F6EC4ABEB07B8 /* AudioPipelineTests.swift */,
 				9E777E706BD746A05A169374 /* ControllerAndDiagnosticsTests.swift */,
 				2D0A723D4D2A55FC6AD152A8 /* ContinuityPolicyTests.swift */,
@@ -451,6 +456,7 @@
 				9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */,
 				E5F4371F9A47B38E2727DCD1 /* StreamNegotiationTests.swift */
 			); name = Tests; sourceTree = "<group>"; };
+		A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/AppModelWorkflowTests.swift"; sourceTree = "<group>"; };
 		A11319EF185BB2B85CAC1E57 /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
 		A12D89B5B16AA0A305B1F4A0 /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBF2FCD8F8F190A2CD96920 /* InputDiagnostics.swift */; };
 		A3C464852F3EC9D4F2E283F6 /* PlatformLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */; };
