@@ -45,20 +45,22 @@ final class AppModel {
     private let hostLibraryManager: HostLibraryManager
     private let settingsRepository: AppSettingsRepository
     private let appCatalogManager: AppCatalogManager
+    private let appCatalogRepository: AppCatalogSnapshotRepository
     private let streamSessionCoordinator: StreamSessionCoordinator
     private let clientUniqueID: String
     private let remoteInputKey: RemoteInputKeyMaterial
 
     init(
         hostLibraryManager: HostLibraryManager = HostLibraryManager(
-            repository: InMemoryHostRepository(),
+            repository: JSONFileHostRepository(fileURL: AppStorageLocations.hostsFile),
             serverInfoClient: HTTPServerInfoClient()
         ),
-        settingsRepository: AppSettingsRepository = InMemoryAppSettingsRepository(),
+        settingsRepository: AppSettingsRepository = JSONFileAppSettingsRepository(fileURL: AppStorageLocations.settingsFile),
         appCatalogManager: AppCatalogManager = AppCatalogManager(
             appListClient: HTTPAppListClient(),
             artworkCache: InMemoryArtworkCache()
         ),
+        appCatalogRepository: AppCatalogSnapshotRepository = JSONFileAppCatalogSnapshotRepository(fileURL: AppStorageLocations.appCatalogFile),
         streamSessionCoordinator: StreamSessionCoordinator = StreamSessionCoordinator(
             launchClient: HTTPStreamLaunchClient()
         ),
@@ -71,6 +73,7 @@ final class AppModel {
         self.hostLibraryManager = hostLibraryManager
         self.settingsRepository = settingsRepository
         self.appCatalogManager = appCatalogManager
+        self.appCatalogRepository = appCatalogRepository
         self.streamSessionCoordinator = streamSessionCoordinator
         self.clientUniqueID = clientUniqueID
         self.remoteInputKey = remoteInputKey
@@ -93,6 +96,7 @@ final class AppModel {
     func loadInitialState() async {
         await loadSettings()
         await loadHosts()
+        await loadCachedApps()
     }
 
     func loadHosts() async {
@@ -114,6 +118,19 @@ final class AppModel {
             diagnostics.record("Loaded stream and platform settings", subsystem: "settings")
         } catch {
             diagnostics.record("Failed to load settings: \(error)", subsystem: "settings")
+        }
+    }
+
+    func loadCachedApps() async {
+        do {
+            let snapshots = try await appCatalogRepository.loadSnapshots()
+            appsByHostID = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.hostID, $0.apps) })
+            if let selectedHostID, streamLaunchUI.selectedAppID == nil {
+                streamLaunchUI.selectedAppID = appsByHostID[selectedHostID]?.first?.id
+            }
+            diagnostics.record("Loaded cached app lists for \(snapshots.count) hosts", subsystem: "apps")
+        } catch {
+            diagnostics.record("Failed to load cached apps: \(error)", subsystem: "apps")
         }
     }
 
@@ -207,6 +224,10 @@ final class AppModel {
         do {
             let snapshot = try await appCatalogManager.refreshApps(for: host, clientUniqueID: clientUniqueID)
             appsByHostID[host.id] = snapshot.apps
+            let snapshots = appsByHostID.map { hostID, apps in
+                AppListSnapshot(hostID: hostID, apps: apps, updatedAt: hostID == host.id ? snapshot.updatedAt : Date())
+            }
+            try await appCatalogRepository.saveSnapshots(snapshots)
             streamLaunchUI.selectedAppID = snapshot.apps.first?.id
             appCatalogUI.lastUpdatedAt = snapshot.updatedAt
             diagnostics.record("Loaded \(snapshot.apps.count) apps from \(host.name)", subsystem: "apps")

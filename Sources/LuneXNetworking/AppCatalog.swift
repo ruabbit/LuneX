@@ -41,6 +41,27 @@ protocol ArtworkCache: Sendable {
     func removeArtwork(forKey key: String) async throws
 }
 
+protocol AppCatalogSnapshotRepository: Sendable {
+    func loadSnapshots() async throws -> [AppListSnapshot]
+    func saveSnapshots(_ snapshots: [AppListSnapshot]) async throws
+}
+
+actor InMemoryAppCatalogSnapshotRepository: AppCatalogSnapshotRepository {
+    private var snapshots: [AppListSnapshot]
+
+    init(snapshots: [AppListSnapshot] = []) {
+        self.snapshots = snapshots
+    }
+
+    func loadSnapshots() async throws -> [AppListSnapshot] {
+        snapshots
+    }
+
+    func saveSnapshots(_ snapshots: [AppListSnapshot]) async throws {
+        self.snapshots = snapshots
+    }
+}
+
 actor InMemoryArtworkCache: ArtworkCache {
     private var storage: [String: RemoteAppArtwork] = [:]
 

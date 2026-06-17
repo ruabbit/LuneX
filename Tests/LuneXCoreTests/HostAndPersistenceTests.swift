@@ -59,4 +59,29 @@ final class HostAndPersistenceTests: XCTestCase {
         XCTAssertEqual(settings.stream.scaleMode, .fit)
         XCTAssertTrue(settings.input.preferRelativeMouseMode)
     }
+
+    func testJSONFileAppCatalogSnapshotRepositoryRoundTripsSnapshots() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileURL = directory.appendingPathComponent("app_catalog.json")
+        let repository = JSONFileAppCatalogSnapshotRepository(fileURL: fileURL)
+        let snapshot = AppListSnapshot(
+            hostID: UUID(uuidString: "9942D8B8-8625-4E2A-926C-F05F15D1812D")!,
+            apps: [
+                RemoteApp(id: "1", name: "Desktop", supportsHDR: true, installPath: nil),
+                RemoteApp(id: "2", name: "Steam Big Picture", supportsHDR: false, installPath: "/Applications/Steam.app")
+            ],
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let emptySnapshots = try await repository.loadSnapshots()
+        XCTAssertEqual(emptySnapshots, [])
+
+        try await repository.saveSnapshots([snapshot])
+        let loaded = try await repository.loadSnapshots()
+
+        XCTAssertEqual(loaded, [snapshot])
+    }
 }

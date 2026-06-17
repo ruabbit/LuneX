@@ -117,3 +117,11 @@
 - 架构决策倾向：核心会话/状态机用 Swift actor/Observation 建模；平台细节通过 AppKit/UIKit/tvOS/visionOS adapter 注入；渲染使用 Metal/VideoToolbox 原生管线，避免 SDL/Qt 抽象层。
 - API 校验风险：不要直接把 Obj-C 文档符号拼进 Swift；需要在 Xcode 26.4 SDK 上用 `swiftc -typecheck` 验证实际 Swift 名称和平台 availability。
 - 产品级剩余风险：当前 OpenSpec bootstrap change 已完成，但 Moonlight RTSP/control transport、真实 VideoToolbox decode、Opus/PCM audio decode、远程输入发送、真实 pairing HTTP/AES/cert 交换、真机 HDR/EDR 亮度验证和 App Store background/PiP 审核策略仍是后续 change 的范围。
+
+### 2026-06-17 Moonlight-qt 本地数据导入
+
+- 本机 Moonlight-qt macOS 偏好文件位于 `~/Library/Preferences/com.moonlight-stream.Moonlight.plist`。该 Qt plist 含二进制/对象值，`plutil -convert json` 不适合作为导入路径；Python `plistlib` 可以读取。
+- Moonlight-qt 偏好中主机字段使用 `hosts.size` 与 `hosts.{index}.*` 形式；已确认可用字段包括 `hostname`、`uuid`、`localaddress`、`localport`、`remoteaddress`、`manualaddress`、`ipv6address`、`srvcert` 和 `apps`。
+- 本机 Moonlight-qt 当前可导入 2 台 paired host：`tanmy-deck` 地址 `10.1.100.246`，缓存 app `Desktop`；`tanmy-white` 地址 `10.1.100.69`，缓存 app `Desktop`、`Steam Big Picture`、`War Thunder`。
+- Moonlight-qt 客户端 identity 存在 `uniqueid`、`certificate`、`key`；host pinned server certificate 存在 `hosts.{index}.srvcert`。这些均属于敏感配对材料，只导入到用户本机 `~/Library/Application Support/LuneX`，不提交到仓库，日志中只输出 host/app 摘要。
+- LuneX 本地测试存储采用 `hosts.json`、`settings.json`、`app_catalog.json` 和 `moonlight_qt_identity.json`。当前 Swift App 默认读取前三者；`moonlight_qt_identity.json` 暂作为后续真实 Moonlight pairing/identity 集成的本机测试材料。

@@ -145,3 +145,16 @@
 - 固定 tvOS simulator destination `11D0B224-D778-4A13-A156-272A45AFF119` Debug build 通过。
 - 固定 Apple Vision Pro visionOS simulator destination `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` Debug build 通过。
 - OpenSpec 任务更新：8.1、8.2、8.3、8.4 已完成。任务进度更新为 38/38。
+- 追加阶段 10：从本机 Moonlight-qt 偏好导入真实 paired host/app cache 作为 LuneX 本地测试数据。
+- 创建 `Tools/import_moonlight_qt_data.py`，用 `plistlib` 读取 `~/Library/Preferences/com.moonlight-stream.Moonlight.plist`，输出到 `~/Library/Application Support/LuneX`；脚本只打印 host/app 摘要，不打印 certificate/private key/server cert 明文。
+- 更新 `Sources/LuneXPersistence/JSONFileStores.swift`，新增 `JSONFileAppCatalogSnapshotRepository` 与 `AppStorageLocations`，让 LuneX 默认从用户 Application Support 读取 `hosts.json`、`settings.json`、`app_catalog.json`。
+- 更新 `Sources/LuneXNetworking/AppCatalog.swift`，新增 `AppCatalogSnapshotRepository` 与 in-memory 测试实现。
+- 更新 `Sources/LuneXCore/AppModel.swift`，默认持久化从 Application Support JSON 读取，`loadInitialState()` 会加载 settings、hosts、cached apps，刷新 app list 后会保存 snapshot。
+- 更新 `Tests/LuneXCoreTests/AppModelWorkflowTests.swift`，显式注入 `InMemoryAppCatalogSnapshotRepository`，避免单测覆盖本机导入的 app cache。
+- 创建 `script/build_and_run.sh` 与 `.codex/environments/environment.toml`，提供 Codex macOS Run 入口；脚本使用项目本地 `build/DerivedData`，支持 `run`、`--verify`、`--debug`、`--logs`、`--telemetry`。
+- 新增 `JSONFileAppCatalogSnapshotRepository` round-trip 单测；首次写法把 `try await repository.loadSnapshots()` 直接放入 `XCTAssertEqual` autoclosure，Swift 6 构建失败，已改为先 await 到局部变量再断言。
+- 执行 `python3 Tools/import_moonlight_qt_data.py`，写入 `~/Library/Application Support/LuneX/hosts.json`、`settings.json`、`app_catalog.json`、`moonlight_qt_identity.json`；导入摘要为 2 台 paired host、4 个 cached app 条目。
+- 本地 JSON 摘要校验：`tanmy-deck` paired 地址 `10.1.100.246`，cached app `Desktop`；`tanmy-white` paired 地址 `10.1.100.69`，cached apps `Desktop`、`Steam Big Picture`、`War Thunder`；client certificate/private key 存在但未输出明文。
+- `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test -quiet` 通过，48 个测试通过。
+- `./script/build_and_run.sh --verify` 通过，当前唯一运行的 `LuneX-macOS` 进程来自 `/Users/tanmy/Projects/LuneX/build/DerivedData/Build/Products/Debug/LuneX-macOS.app`。
+- 使用 Computer Use 检查前台窗口：Library 显示 `tanmy-deck`、`tanmy-white` 两台 paired host，默认选中 `tanmy-deck` 时显示 cached `Desktop` app。

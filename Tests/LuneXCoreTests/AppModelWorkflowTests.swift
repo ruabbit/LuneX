@@ -19,6 +19,7 @@ final class AppModelWorkflowTests: XCTestCase {
             hostLibraryManager: hostManager,
             settingsRepository: InMemoryAppSettingsRepository(),
             appCatalogManager: catalogManager,
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: streamCoordinator,
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data([0xAA, 0xBB]))
