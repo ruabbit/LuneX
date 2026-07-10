@@ -179,6 +179,7 @@ def import_settings(settings):
 def write_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    path.chmod(0o600)
 
 
 def main():
@@ -205,14 +206,6 @@ def main():
     hosts, app_snapshots = import_hosts(settings, timestamp)
     app_settings = import_settings(settings)
 
-    identity_payload = {
-        "uniqueID": settings.get("uniqueid"),
-        "certificatePEM": data_b64(settings.get("certificate") or b""),
-        "privateKeyPEM": data_b64(settings.get("key") or b""),
-        "importedAt": timestamp,
-        "source": str(source),
-    }
-
     print(f"Source: {source}")
     print(f"Destination: {output_dir}")
     print(f"Hosts: {len(hosts)}")
@@ -226,8 +219,11 @@ def main():
     write_json(output_dir / "hosts.json", {"hosts": hosts, "updatedAt": timestamp})
     write_json(output_dir / "settings.json", app_settings)
     write_json(output_dir / "app_catalog.json", app_snapshots)
-    write_json(output_dir / "moonlight_qt_identity.json", identity_payload)
-    print("Wrote hosts.json, settings.json, app_catalog.json, moonlight_qt_identity.json")
+    legacy_identity_path = output_dir / "moonlight_qt_identity.json"
+    if legacy_identity_path.exists():
+        legacy_identity_path.unlink()
+        print("Removed legacy plaintext moonlight_qt_identity.json")
+    print("Wrote hosts.json, settings.json, app_catalog.json (mode 0600); private key was not copied")
 
 
 if __name__ == "__main__":

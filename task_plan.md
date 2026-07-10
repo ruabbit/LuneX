@@ -28,10 +28,11 @@
 | 8. tvOS/visionOS 适配 | complete | 平台入口、遥控器/手柄/空间音频/窗口模型适配 |
 | 9. 验证与迭代 | complete | 构建、单测、模拟器/本机运行、性能和回归验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
+| 11. 审计关键问题修复 | in_progress | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 
 ## 当前焦点
 
-阶段 10：已把本机 Moonlight-qt 的 paired host 与 app cache 作为 LuneX 本地测试数据导入。导入目标是 `~/Library/Application Support/LuneX`，证书和私钥只保存在用户本机 Application Support，不写入仓库、不在日志中展开；macOS App 本地 build 已验证能读取两台 paired host 和 cached app。阶段 5 到阶段 9 已完成多平台 SwiftUI 工程、生命周期/渲染基础、主机/设置/身份存储模型、Bonjour/serverinfo/manual host-add 骨架、配对状态机、app-list/artwork cache 抽象、stream negotiation/session skeleton、macOS 键鼠/cursor capture 输入核心、iOS/iPadOS touch/pointer/virtual controller event model、GameController/tvOS remote/focus 输入绑定、unsupported/reserved input diagnostics、AVAudioEngine session pipeline skeleton 和 route diagnostics、spatial audio/head-tracking capability gating、移动后台/PiP continuity policy、macOS visibility-based background performance policy，以及原生 SwiftUI host library、pairing、app catalog、stream settings/launch、stream overlay、diagnostics/settings UI。OpenSpec active change `bootstrap-native-apple-client` 已完成 38/38，严格校验通过；当前剩余产品级缺口是把 skeleton transport/media decode 替换为真实 Moonlight RTSP/视频/音频/输入传输集成，并做真机 HDR/EDR 与后台/PiP 运行验证。
+阶段 11：全面审计确认 bootstrap skeleton 被生产 UI 误当作真实配对和串流能力。当前执行 OpenSpec `remediate-critical-audit-findings`，先让运行时 fail closed：不得用本地 PIN 伪造 pinned identity，不得在没有 media transport 时发送 launch 或显示 Streaming，不得复制私钥到普通 JSON；同时修复 iPhone compact NavigationSplitView 无法进入 detail/Add Host 的阻断。真实 Moonlight pairing、RTSP/media/input transport、生命周期/HDR/audio/PiP 接线仍属于后续独立 change，不能再标记为产品级完成。
 
 ## 遇到的错误
 

@@ -118,6 +118,14 @@
 - API 校验风险：不要直接把 Obj-C 文档符号拼进 Swift；需要在 Xcode 26.4 SDK 上用 `swiftc -typecheck` 验证实际 Swift 名称和平台 availability。
 - 产品级剩余风险：当前 OpenSpec bootstrap change 已完成，但 Moonlight RTSP/control transport、真实 VideoToolbox decode、Opus/PCM audio decode、远程输入发送、真实 pairing HTTP/AES/cert 交换、真机 HDR/EDR 亮度验证和 App Store background/PiP 审核策略仍是后续 change 的范围。
 
+### 2026-07-10 全面审计与第一批修复
+
+- 审计确认生产 UI 曾把 pairing/session skeleton 当作真实能力：任意四位 PIN 会生成伪 certificate 并覆盖 pinned identity；launch response 后会在无 RTSP/media transport 时进入 Streaming。第一批修复已改为 runtime capability fail-closed。
+- `AppKitLifecycleMonitor`、`UIKitLifecycleMonitor`、audio/spatial/PiP/input adapter 目前仍是未接入运行路径的孤立模块；后续必须用独立 OpenSpec change 接线，不能把 policy 单测通过等同于平台功能完成。
+- 固定 iPhone 17 Pro 运行验证发现 compact `NavigationSplitView` 首屏只显示 sidebar，Add Host 不可达。已改为 compact `TabView + NavigationStack`，Library 直接作为首屏、四个主页面可达、Library panel 单列布局。
+- Moonlight-qt importer 曾把 client private key 复制到普通 JSON。新版默认仅写 hosts/settings/app catalog，权限为 `0600`，并删除由旧版 importer 生成的明文 identity 副本；原始 Moonlight-qt plist 不受影响。
+- OpenSpec `remediate-critical-audit-findings` 只声明安全降级和 compact navigation 修复，不声称真实 pairing 或 media transport 已实现。
+
 ### 2026-06-17 Moonlight-qt 本地数据导入
 
 - 本机 Moonlight-qt macOS 偏好文件位于 `~/Library/Preferences/com.moonlight-stream.Moonlight.plist`。该 Qt plist 含二进制/对象值，`plutil -convert json` 不适合作为导入路径；Python `plistlib` 可以读取。

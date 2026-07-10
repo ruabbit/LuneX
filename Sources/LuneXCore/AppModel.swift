@@ -27,6 +27,16 @@ struct StreamLaunchUIState: Equatable {
     var errorMessage: String?
 }
 
+struct RuntimeCapabilityAvailability: Equatable, Sendable {
+    var pairingTransportAvailable: Bool
+    var streamTransportAvailable: Bool
+
+    static let current = RuntimeCapabilityAvailability(
+        pairingTransportAvailable: false,
+        streamTransportAvailable: false
+    )
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -47,6 +57,7 @@ final class AppModel {
     private let appCatalogManager: AppCatalogManager
     private let appCatalogRepository: AppCatalogSnapshotRepository
     private let streamSessionCoordinator: StreamSessionCoordinator
+    private let runtimeCapabilities: RuntimeCapabilityAvailability
     private let clientUniqueID: String
     private let remoteInputKey: RemoteInputKeyMaterial
 
@@ -64,6 +75,7 @@ final class AppModel {
         streamSessionCoordinator: StreamSessionCoordinator = StreamSessionCoordinator(
             launchClient: HTTPStreamLaunchClient()
         ),
+        runtimeCapabilities: RuntimeCapabilityAvailability = .current,
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
         remoteInputKey: RemoteInputKeyMaterial = RemoteInputKeyMaterial(
             keyID: 1,
@@ -75,6 +87,7 @@ final class AppModel {
         self.appCatalogManager = appCatalogManager
         self.appCatalogRepository = appCatalogRepository
         self.streamSessionCoordinator = streamSessionCoordinator
+        self.runtimeCapabilities = runtimeCapabilities
         self.clientUniqueID = clientUniqueID
         self.remoteInputKey = remoteInputKey
     }
@@ -91,6 +104,14 @@ final class AppModel {
 
     var selectedApp: RemoteApp? {
         selectedApps.first { $0.id == streamLaunchUI.selectedAppID } ?? selectedApps.first
+    }
+
+    var isPairingTransportAvailable: Bool {
+        runtimeCapabilities.pairingTransportAvailable
+    }
+
+    var isStreamTransportAvailable: Bool {
+        runtimeCapabilities.streamTransportAvailable
     }
 
     func loadInitialState() async {
@@ -169,6 +190,18 @@ final class AppModel {
     }
 
     func beginPairing(host: MoonlightHost) {
+        guard runtimeCapabilities.pairingTransportAvailable else {
+            pairingUI = PairingUIState(
+                hostID: host.id,
+                pin: "",
+                isRunning: false,
+                message: "Pairing is unavailable until authenticated Moonlight transport is installed."
+            )
+            session.phase = .disconnected
+            diagnostics.record("Blocked placeholder pairing for \(host.name); pinned identity was preserved", subsystem: "pairing")
+            return
+        }
+
         pairingUI = PairingUIState(
             hostID: host.id,
             pin: "",
@@ -183,30 +216,17 @@ final class AppModel {
               let host = hosts.first(where: { $0.id == hostID })
         else { return }
 
-        pairingUI.isRunning = true
-        defer { pairingUI.isRunning = false }
-
-        do {
-            let machine = PairingStateMachine(hostID: host.id)
-            _ = await machine.begin(serverMajorVersion: 7)
-            _ = try await machine.submitPIN(pairingUI.pin)
-            _ = try await machine.markSecretsExchanged()
-            let identity = PairingServerIdentity(
-                certificateDER: Data(pairingUI.pin.utf8),
-                certificateSHA256: "lunex-ui-skeleton-\(host.id.uuidString)",
-                serverMajorVersion: 7
-            )
-            let result = try await machine.pinServerIdentity(identity, for: host)
-            hosts = try await hostLibraryManager.replaceHost(result.host)
-            selectedHostID = result.host.id
-            pairingUI.message = "Pairing state saved. Full Moonlight transport will replace the current local skeleton."
+        guard runtimeCapabilities.pairingTransportAvailable else {
+            pairingUI.isRunning = false
+            pairingUI.message = "Pairing is unavailable until authenticated Moonlight transport is installed."
             session.phase = .disconnected
-            diagnostics.record("Paired \(result.host.name) using \(result.digestAlgorithm.rawValue)", subsystem: "pairing")
-        } catch {
-            pairingUI.message = "Pairing failed: \(error)"
-            session.phase = .failed(SessionError(subsystem: "pairing", message: String(describing: error)))
-            diagnostics.record("Pairing failed for \(host.name): \(error)", subsystem: "pairing")
+            diagnostics.record("Rejected pairing PIN for \(host.name); no host state changed", subsystem: "pairing")
+            return
         }
+
+        pairingUI.message = "No authenticated pairing provider is configured."
+        session.phase = .failed(SessionError(subsystem: "pairing", message: "Authenticated pairing provider is unavailable"))
+        diagnostics.record("Pairing provider unavailable for \(host.name)", subsystem: "pairing")
     }
 
     func refreshAppsForSelectedHost() async {
@@ -252,6 +272,16 @@ final class AppModel {
             return
         }
 
+        guard runtimeCapabilities.streamTransportAvailable else {
+            let message = "Streaming is unavailable until Moonlight media transport is installed."
+            streamLaunchUI.errorMessage = message
+            session.activeHostID = nil
+            session.phase = .disconnected
+            renderState.policy = .idle
+            diagnostics.record("Blocked launch of \(app.name) on \(host.name): media transport unavailable", subsystem: "stream.transport")
+            return
+        }
+
         streamLaunchUI.isLaunching = true
         streamLaunchUI.errorMessage = nil
         session.activeHostID = host.id
@@ -277,7 +307,6 @@ final class AppModel {
             renderState.policy = .active
             navigationSelection = .stream
             diagnostics.record("Streaming \(app.name) from \(host.name)", subsystem: "stream")
-            diagnostics.record("Transport/media decode remains the next integration layer", subsystem: "stream.transport")
         } catch {
             let message = String(describing: error)
             streamLaunchUI.errorMessage = message

@@ -158,3 +158,14 @@
 - `xcodebuild -project LuneX.xcodeproj -scheme LuneXCoreTests -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test -quiet` 通过，48 个测试通过。
 - `./script/build_and_run.sh --verify` 通过，当前唯一运行的 `LuneX-macOS` 进程来自 `/Users/tanmy/Projects/LuneX/build/DerivedData/Build/Products/Debug/LuneX-macOS.app`。
 - 使用 Computer Use 检查前台窗口：Library 显示 `tanmy-deck`、`tanmy-white` 两台 paired host，默认选中 `tanmy-deck` 时显示 cached `Desktop` app。
+
+## 2026-07-10
+
+- 完成代码与 UI/UX 全面审计：确认伪 pairing 会覆盖 pinned identity、launch 会在无 transport 时显示 Streaming、平台 lifecycle/HDR/audio/PiP/input 模块未接入运行路径、iPhone compact 导航阻断、导入私钥以明文 JSON 保存等问题。
+- 审计验证：48 个 macOS 单测通过；macOS、iOS、tvOS、visionOS 构建通过；复用固定 iPhone 17 Pro simulator 运行当前 App，确认首屏停留 sidebar 且 Add Host 不可达，审计后已关闭该 simulator。
+- 创建 OpenSpec change `remediate-critical-audit-findings`，新增 `runtime-integrity` 与 `compact-navigation` capability，开始第一批安全和导航修复。
+- `AppModel` 新增 runtime capability availability；真实 provider 未接入时 pairing 保持 host/pinned identity 不变，stream launch 不调用网络 client、不进入 Streaming，并记录明确 diagnostics。
+- Moonlight-qt importer 默认不再复制 certificate/private key identity JSON，写出的 hosts/settings/app catalog 权限收紧到 `0600`；已执行新版 importer 并删除旧版生成的 `moonlight_qt_identity.json`。
+- iPhone compact root 改为 `TabView + NavigationStack`，Library 首屏直接显示 Add Host，Library/Stream/Diagnostics/Settings 四个 tab 可达，Library 内容按单列堆叠并为浮动 tab bar 保留底部滚动空间。
+- 新增 fail-closed workflow 回归测试；`LuneXCoreTests` 49 个测试通过，OpenSpec strict validate 通过。
+- 使用独立 DerivedData 构建 macOS、固定 iPhone 17 Pro、tvOS、visionOS target，全部通过；固定 iPhone 实际安装运行并截图验证 compact UI，随后已关闭该 simulator，未创建其他同类设备。

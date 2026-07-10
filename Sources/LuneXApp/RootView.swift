@@ -2,17 +2,45 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isShowingAddHost = false
 
     var body: some View {
+        navigationRoot
+            .task {
+                await appModel.loadInitialState()
+            }
+            .sheet(isPresented: $isShowingAddHost) {
+                AddHostSheet { name, address in
+                    Task {
+                        await appModel.addManualHost(name: name, address: address)
+                    }
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var navigationRoot: some View {
+        #if os(iOS)
+        if horizontalSizeClass == .compact {
+            compactNavigation
+        } else {
+            splitNavigation
+        }
+        #else
+        splitNavigation
+        #endif
+    }
+
+    private var splitNavigation: some View {
         @Bindable var appModel = appModel
 
-        NavigationSplitView {
+        return NavigationSplitView {
             SidebarNavigationList(selection: $appModel.navigationSelection)
-            .navigationTitle("LuneX")
-            #if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
-            #endif
+                .navigationTitle("LuneX")
+                #if os(macOS)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+                #endif
         } detail: {
             content
                 .navigationTitle(title)
@@ -35,17 +63,72 @@ struct RootView: View {
                     }
                 }
         }
-        .task {
-            await appModel.loadInitialState()
-        }
-        .sheet(isPresented: $isShowingAddHost) {
-            AddHostSheet { name, address in
-                Task {
-                    await appModel.addManualHost(name: name, address: address)
-                }
+    }
+
+    #if os(iOS)
+    private var compactNavigation: some View {
+        @Bindable var appModel = appModel
+
+        return TabView(selection: $appModel.navigationSelection) {
+            NavigationStack {
+                LibraryDashboardView()
+                    .navigationTitle("Library")
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                isShowingAddHost = true
+                            } label: {
+                                Label("Add Host", systemImage: "plus")
+                            }
+                        }
+                    }
             }
+            .tabItem {
+                Label("Library", systemImage: "rectangle.grid.2x2")
+            }
+            .tag(AppNavigationSelection.library)
+
+            NavigationStack {
+                StreamWorkspaceView()
+                    .navigationTitle("Stream")
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                Task {
+                                    await appModel.stopStream()
+                                }
+                            } label: {
+                                Label("Disconnect", systemImage: "stop.fill")
+                            }
+                            .disabled(appModel.session.phase == .disconnected)
+                        }
+                    }
+            }
+            .tabItem {
+                Label("Stream", systemImage: "play.rectangle")
+            }
+            .tag(AppNavigationSelection.stream)
+
+            NavigationStack {
+                DiagnosticsView()
+                    .navigationTitle("Diagnostics")
+            }
+            .tabItem {
+                Label("Diagnostics", systemImage: "waveform.path.ecg")
+            }
+            .tag(AppNavigationSelection.diagnostics)
+
+            NavigationStack {
+                SettingsView()
+                    .navigationTitle("Settings")
+            }
+            .tabItem {
+                Label("Settings", systemImage: "slider.horizontal.3")
+            }
+            .tag(AppNavigationSelection.settings)
         }
     }
+    #endif
 
     @ViewBuilder
     private var content: some View {
@@ -170,23 +253,44 @@ private struct AddHostSheet: View {
 
 private struct LibraryDashboardView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         @Bindable var appModel = appModel
 
         ScrollView {
-            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
-                GridRow {
+            #if os(iOS)
+            if horizontalSizeClass == .compact {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     HostLibraryPanel(selectedHostID: $appModel.selectedHostID)
                     AppCatalogPanel()
-                }
-                GridRow {
                     PairingPanel()
                     StreamLaunchPanel()
                 }
+                .padding(.horizontal)
+                .padding(.top)
+                .padding(.bottom, 96)
+            } else {
+                dashboardGrid(selectedHostID: $appModel.selectedHostID)
             }
-            .padding()
+            #else
+            dashboardGrid(selectedHostID: $appModel.selectedHostID)
+            #endif
         }
+    }
+
+    private func dashboardGrid(selectedHostID: Binding<MoonlightHost.ID?>) -> some View {
+        Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
+            GridRow {
+                HostLibraryPanel(selectedHostID: selectedHostID)
+                AppCatalogPanel()
+            }
+            GridRow {
+                PairingPanel()
+                StreamLaunchPanel()
+            }
+        }
+        .padding()
     }
 }
 
@@ -281,30 +385,40 @@ private struct PairingPanel: View {
                         .font(.caption)
                         .foregroundStyle(host.pairingState == .paired ? .green : .secondary)
 
-                    HStack {
-                        TextField("PIN", text: $appModel.pairingUI.pin)
-                            #if os(iOS)
-                            .keyboardType(.numberPad)
-                            #endif
-                            #if !os(tvOS)
-                            .textFieldStyle(.roundedBorder)
-                            #endif
-                            .frame(maxWidth: 120)
+                    if host.pairingState == .paired {
+                        Label("Pinned identity preserved", systemImage: "checkmark.shield")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if !appModel.isPairingTransportAvailable {
+                        Label("Authenticated pairing transport unavailable", systemImage: "exclamationmark.shield")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack {
+                            TextField("PIN", text: $appModel.pairingUI.pin)
+                                #if os(iOS)
+                                .keyboardType(.numberPad)
+                                #endif
+                                #if !os(tvOS)
+                                .textFieldStyle(.roundedBorder)
+                                #endif
+                                .frame(maxWidth: 120)
 
-                        Button {
-                            appModel.beginPairing(host: host)
-                        } label: {
-                            Label("Start", systemImage: "lock.open")
-                        }
-
-                        Button {
-                            Task {
-                                await appModel.submitPairingPIN()
+                            Button {
+                                appModel.beginPairing(host: host)
+                            } label: {
+                                Label("Start", systemImage: "lock.open")
                             }
-                        } label: {
-                            Label("Submit", systemImage: "checkmark")
+
+                            Button {
+                                Task {
+                                    await appModel.submitPairingPIN()
+                                }
+                            } label: {
+                                Label("Submit", systemImage: "checkmark")
+                            }
+                            .disabled(appModel.pairingUI.pin.count != 4 || appModel.pairingUI.isRunning)
                         }
-                        .disabled(appModel.pairingUI.pin.count != 4 || appModel.pairingUI.isRunning)
                     }
 
                     if let message = appModel.pairingUI.message {
@@ -416,15 +530,21 @@ private struct StreamLaunchPanel: View {
                     LabeledContent("Bitrate", value: "\(appModel.settings.stream.bitrateKbps / 1000) Mbps")
                     LabeledContent("HDR", value: appModel.settings.stream.hdrEnabled && app.supportsHDR ? "Requested" : "Off")
 
-                    Button {
-                        Task {
-                            await appModel.launchSelectedApp()
+                    if appModel.isStreamTransportAvailable {
+                        Button {
+                            Task {
+                                await appModel.launchSelectedApp()
+                            }
+                        } label: {
+                            Label(appModel.streamLaunchUI.isLaunching ? "Launching" : "Launch Stream", systemImage: "play.circle.fill")
                         }
-                    } label: {
-                        Label(appModel.streamLaunchUI.isLaunching ? "Launching" : "Launch Stream", systemImage: "play.circle.fill")
+                        .buttonStyle(.borderedProminent)
+                        .disabled(appModel.streamLaunchUI.isLaunching || host.pairingState != .paired)
+                    } else {
+                        Label("Moonlight media transport unavailable", systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(appModel.streamLaunchUI.isLaunching || host.pairingState != .paired)
 
                     if let error = appModel.streamLaunchUI.errorMessage {
                         Text(error)
