@@ -28,11 +28,11 @@
 | 8. tvOS/visionOS 适配 | complete | 平台入口、遥控器/手柄/空间音频/窗口模型适配 |
 | 9. 验证与迭代 | complete | 构建、单测、模拟器/本机运行、性能和回归验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
-| 11. 审计关键问题修复 | in_progress | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
+| 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 
 ## 当前焦点
 
-阶段 11：全面审计确认 bootstrap skeleton 被生产 UI 误当作真实配对和串流能力。当前执行 OpenSpec `remediate-critical-audit-findings`，先让运行时 fail closed：不得用本地 PIN 伪造 pinned identity，不得在没有 media transport 时发送 launch 或显示 Streaming，不得复制私钥到普通 JSON；同时修复 iPhone compact NavigationSplitView 无法进入 detail/Add Host 的阻断。真实 Moonlight pairing、RTSP/media/input transport、生命周期/HDR/audio/PiP 接线仍属于后续独立 change，不能再标记为产品级完成。
+阶段 11 已完成并推送：运行时现在 fail closed，不再用本地 PIN 伪造 pinned identity，不再在没有 media transport 时发送 launch 或显示 Streaming，不再复制私钥到普通 JSON；iPhone compact NavigationSplitView 阻断已改为可直接工作的 tab navigation。真实 Moonlight pairing、RTSP/media/input transport、生命周期/HDR/audio/PiP 接线仍属于后续独立 change，不能再标记为产品级完成。
 
 ## 遇到的错误
 

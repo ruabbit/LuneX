@@ -18,4 +18,4 @@
 - [x] 3.2 Validate OpenSpec and run the macOS test suite
 - [x] 3.3 Build macOS, fixed iPhone, tvOS, and visionOS targets without duplicate simulators
 - [x] 3.4 Run and visually verify the fixed iPhone compact UI
-- [ ] 3.5 Update planning files, commit, and push the first remediation batch
+- [x] 3.5 Update planning files, commit, and push the first remediation batch

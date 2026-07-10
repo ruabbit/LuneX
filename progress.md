@@ -169,3 +169,4 @@
 - iPhone compact root 改为 `TabView + NavigationStack`，Library 首屏直接显示 Add Host，Library/Stream/Diagnostics/Settings 四个 tab 可达，Library 内容按单列堆叠并为浮动 tab bar 保留底部滚动空间。
 - 新增 fail-closed workflow 回归测试；`LuneXCoreTests` 49 个测试通过，OpenSpec strict validate 通过。
 - 使用独立 DerivedData 构建 macOS、固定 iPhone 17 Pro、tvOS、visionOS target，全部通过；固定 iPhone 实际安装运行并截图验证 compact UI，随后已关闭该 simulator，未创建其他同类设备。
+- 创建并推送提交 `04fa2ef Fail closed on unavailable Moonlight transport` 到 `origin/main`（`c7b08d6..04fa2ef`）。OpenSpec `remediate-critical-audit-findings` 13/13 tasks complete。
