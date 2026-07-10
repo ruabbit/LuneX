@@ -177,3 +177,4 @@
 - 最终构建矩阵通过：macOS Debug、macOS Release、固定 iPhone 17 Pro `23A27088-C19F-4F77-A455-4E50E393167E`、固定 Apple TV `11D0B224-D778-4A13-A156-272A45AFF119`、固定 Apple Vision Pro `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`；使用隔离 DerivedData，目标模拟器保持 Shutdown。
 - `./script/build_and_run.sh --verify` 通过；运行日志确认 lifecycle monitor attached、drawable `2560x1600`、EDR `5.0`、Debug 文件 store 无 identity、加载 3 台保存主机。当前 App 保持运行。
 - OpenSpec strict validate 1/1 passed，`git diff --check` 通过；3 个导入 pin 均为 726-byte DER，本地 hosts/settings/app catalog 文件权限均为 `0600`。OpenSpec 任务 1.1-4.3 已完成，4.4 等待提交与推送成功后勾选。
+- 创建并推送功能提交 `faf9ef9 Integrate pinned identity and macOS lifecycle` 到 `origin/main`（`f9b9adb..faf9ef9`）；OpenSpec 4.4 条件满足，阶段 12 与 change 任务更新为 complete。

@@ -25,4 +25,4 @@
 - [x] 4.1 Validate OpenSpec and run normal tests without Keychain access
 - [x] 4.2 Build macOS, fixed iPhone, tvOS, and visionOS targets with isolated DerivedData
 - [x] 4.3 Run the macOS app and verify imported hosts still load
-- [ ] 4.4 Update planning files, commit, and push
+- [x] 4.4 Update planning files, commit, and push

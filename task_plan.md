@@ -29,11 +29,11 @@
 | 9. 验证与迭代 | complete | 构建、单测、模拟器/本机运行、性能和回归验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
-| 12. 身份/TLS/macOS 生命周期接线 | in_progress | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
+| 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 
 ## 当前焦点
 
-阶段 12 的实现与验证已完成，等待 Git 提交和推送：真实 Keychain round-trip 只运行一次，后续 Debug 测试使用 `0600` 文件 fallback，Release 保持 Keychain；host pinned certificate 已接入 app-list/artwork/launch/stop HTTPS challenge；macOS window occlusion/focus/screen/resize/EDR 已驱动实际 render state。真实 Moonlight pairing 与 media transport 仍不在本 change 范围。
+阶段 12 已完成并推送：真实 Keychain round-trip 只运行一次，后续 Debug 测试使用 `0600` 文件 fallback，Release 保持 Keychain；host pinned certificate 已接入 app-list/artwork/launch/stop HTTPS challenge；macOS window occlusion/focus/screen/resize/EDR 已驱动实际 render state。下一批仍需围绕真实 Moonlight pairing、RTSP/media transport、解码与输入发送创建独立 change。
 
 ## 遇到的错误
 
