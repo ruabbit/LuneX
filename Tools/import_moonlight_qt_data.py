@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import plistlib
+import ssl
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,15 @@ def data_b64(value):
     if isinstance(value, str):
         return base64.b64encode(value.encode("utf-8")).decode("ascii")
     raise TypeError(f"Unsupported data value: {type(value)!r}")
+
+
+def certificate_der(value):
+    if not value:
+        return b""
+    raw = value if isinstance(value, bytes) else value.encode("utf-8")
+    if raw.startswith(b"-----BEGIN CERTIFICATE-----"):
+        return ssl.PEM_cert_to_DER_cert(raw.decode("ascii"))
+    return raw
 
 
 def int_value(settings, key, default=0):
@@ -90,7 +100,7 @@ def import_hosts(settings, timestamp):
         if not addresses:
             continue
 
-        server_cert = settings.get(f"hosts.{index}.srvcert") or b""
+        server_cert = certificate_der(settings.get(f"hosts.{index}.srvcert") or b"")
         paired = bool(server_cert)
         max_width = int_value(settings, "width")
         max_height = int_value(settings, "height")

@@ -4,9 +4,12 @@ struct RootView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isShowingAddHost = false
+    #if os(macOS)
+    @State private var platformLifecycle = PlatformLifecycleState()
+    #endif
 
     var body: some View {
-        navigationRoot
+        platformRoot
             .task {
                 await appModel.loadInitialState()
             }
@@ -17,6 +20,26 @@ struct RootView: View {
                     }
                 }
             }
+    }
+
+    @ViewBuilder
+    private var platformRoot: some View {
+        #if os(macOS)
+        navigationRoot
+            .background {
+                AppKitLifecycleAttachment(lifecycle: platformLifecycle)
+                    .frame(width: 0, height: 0)
+            }
+            .onChange(of: appModel.session.isStreaming, initial: true) { _, isStreaming in
+                platformLifecycle.setStreamActive(isStreaming)
+                appModel.applyPlatformLifecycle(platformLifecycle)
+            }
+            .onChange(of: platformLifecycle.revision, initial: true) { _, _ in
+                appModel.applyPlatformLifecycle(platformLifecycle)
+            }
+        #else
+        navigationRoot
+        #endif
     }
 
     @ViewBuilder

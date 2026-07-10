@@ -44,6 +44,7 @@ sources = [
   "Sources/LuneXNetworking/AppCatalog.swift",
   "Sources/LuneXNetworking/HostEndpoint.swift",
   "Sources/LuneXNetworking/Pairing.swift",
+  "Sources/LuneXNetworking/PinnedHTTPSClient.swift",
   "Sources/LuneXNetworking/ServerInfo.swift",
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
@@ -74,6 +75,7 @@ test_support_sources = [
   "Sources/LuneXNetworking/AppCatalog.swift",
   "Sources/LuneXNetworking/HostEndpoint.swift",
   "Sources/LuneXNetworking/Pairing.swift",
+  "Sources/LuneXNetworking/PinnedHTTPSClient.swift",
   "Sources/LuneXNetworking/ServerInfo.swift",
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
@@ -274,6 +276,7 @@ targets.each do |target|
       "SWIFT_VERSION" => "6.0",
       target[:deployment_key] => target[:deployment]
     }.merge(target[:extra])
+    settings["SWIFT_ACTIVE_COMPILATION_CONDITIONS"] = "DEBUG" if cfg == "Debug"
     build_settings = settings.map { |key, value| "\t\t\t\t#{key} = #{q(value)};" }.join("\n")
     objects << "#{cfg_id} /* #{cfg} */ = {isa = XCBuildConfiguration; buildSettings = {\n#{build_settings}\n\t\t\t}; name = #{cfg}; };"
   end
@@ -313,6 +316,7 @@ objects << "#{test_frameworks_phase} /* Frameworks */ = {isa = PBXFrameworksBuil
     "WRAPPER_EXTENSION" => "xctest",
     test_target[:deployment_key] => test_target[:deployment]
   }
+  settings["SWIFT_ACTIVE_COMPILATION_CONDITIONS"] = "DEBUG" if cfg == "Debug"
   build_settings = settings.map { |key, value| "\t\t\t\t#{key} = #{q(value)};" }.join("\n")
   objects << "#{cfg_id} /* #{cfg} */ = {isa = XCBuildConfiguration; buildSettings = {\n#{build_settings}\n\t\t\t}; name = #{cfg}; };"
 end

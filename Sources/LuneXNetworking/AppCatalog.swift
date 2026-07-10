@@ -31,8 +31,8 @@ enum AppCatalogError: Error, Equatable, Sendable {
 }
 
 protocol AppListClient: Sendable {
-    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String) async throws -> [RemoteApp]
-    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String) async throws -> RemoteAppArtwork?
+    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> [RemoteApp]
+    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> RemoteAppArtwork?
 }
 
 protocol ArtworkCache: Sendable {
@@ -79,13 +79,13 @@ actor InMemoryArtworkCache: ArtworkCache {
 }
 
 struct HTTPAppListClient: AppListClient {
-    var session: URLSession
+    var requestExecutor: any PinnedHTTPSRequestExecuting
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(requestExecutor: any PinnedHTTPSRequestExecuting = PinnedHTTPSRequestExecutor()) {
+        self.requestExecutor = requestExecutor
     }
 
-    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String) async throws -> [RemoteApp] {
+    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> [RemoteApp] {
         guard let url = MoonlightHTTPURLBuilder.secureURL(
             endpoint: endpoint,
             path: "/applist",
@@ -96,11 +96,11 @@ struct HTTPAppListClient: AppListClient {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await requestExecutor.data(for: request, pinnedIdentity: pinnedIdentity)
         return try AppListParser.parse(data)
     }
 
-    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String) async throws -> RemoteAppArtwork? {
+    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> RemoteAppArtwork? {
         guard let url = MoonlightHTTPURLBuilder.secureURL(
             endpoint: endpoint,
             path: "/appasset",
@@ -116,7 +116,7 @@ struct HTTPAppListClient: AppListClient {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await requestExecutor.data(for: request, pinnedIdentity: pinnedIdentity)
         guard !data.isEmpty else { return nil }
         let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")
         return RemoteAppArtwork(appID: app.id, data: data, contentType: contentType, updatedAt: Date())
@@ -210,7 +210,11 @@ actor AppCatalogManager {
 
     func refreshApps(for host: MoonlightHost, clientUniqueID: String, now: Date = Date()) async throws -> AppListSnapshot {
         let endpoint = try HostEndpointParser.parse(host.address)
-        let apps = try await appListClient.fetchApps(from: endpoint, clientUniqueID: clientUniqueID).sorted { lhs, rhs in
+        let apps = try await appListClient.fetchApps(
+            from: endpoint,
+            clientUniqueID: clientUniqueID,
+            pinnedIdentity: host.pinnedIdentity
+        ).sorted { lhs, rhs in
             lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
         return AppListSnapshot(hostID: host.id, apps: apps, updatedAt: now)
@@ -223,7 +227,12 @@ actor AppCatalogManager {
         }
 
         let endpoint = try HostEndpointParser.parse(host.address)
-        guard let fetched = try await appListClient.fetchArtwork(for: app, from: endpoint, clientUniqueID: clientUniqueID) else {
+        guard let fetched = try await appListClient.fetchArtwork(
+            for: app,
+            from: endpoint,
+            clientUniqueID: clientUniqueID,
+            pinnedIdentity: host.pinnedIdentity
+        ) else {
             return nil
         }
         try await artworkCache.store(fetched, forKey: cacheKey)

@@ -95,10 +95,10 @@ protocol StreamLaunchClient: Sendable {
 }
 
 struct HTTPStreamLaunchClient: StreamLaunchClient {
-    var session: URLSession
+    var requestExecutor: any PinnedHTTPSRequestExecuting
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(requestExecutor: any PinnedHTTPSRequestExecuting = PinnedHTTPSRequestExecutor()) {
+        self.requestExecutor = requestExecutor
     }
 
     func launch(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse {
@@ -133,7 +133,7 @@ struct HTTPStreamLaunchClient: StreamLaunchClient {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.timeoutInterval = 30
-        let (data, _) = try await session.data(for: urlRequest)
+        let (data, _) = try await requestExecutor.data(for: urlRequest, pinnedIdentity: request.host.pinnedIdentity)
         return try StreamLaunchResponseParser.parse(data)
     }
 
@@ -149,7 +149,7 @@ struct HTTPStreamLaunchClient: StreamLaunchClient {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.timeoutInterval = 30
-        _ = try await session.data(for: urlRequest)
+        _ = try await requestExecutor.data(for: urlRequest, pinnedIdentity: host.pinnedIdentity)
     }
 }
 

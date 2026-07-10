@@ -2,6 +2,36 @@ import XCTest
 
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
+    func testAppModelAppliesPlatformLifecycleToRenderState() {
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(launchClient: StubStreamLaunchClient()),
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+        let lifecycle = PlatformLifecycleState()
+        lifecycle.isStreamActive = true
+        lifecycle.isVisible = true
+        lifecycle.isFocused = false
+        lifecycle.drawableSize = PixelSize(width: 2560, height: 1440)
+        lifecycle.headroom = DisplayHeadroom(potential: 2.0, current: 1.5, reference: 1.0)
+        lifecycle.updateRenderPolicy()
+
+        model.applyPlatformLifecycle(lifecycle)
+
+        XCTAssertEqual(model.renderState.policy, .throttled(reason: "Window or scene not focused"))
+        XCTAssertEqual(model.renderState.transform.drawableSize, PixelSize(width: 2560, height: 1440))
+        XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
+    }
+
     func testUnavailablePairingPreservesHostState() async throws {
         let hostRepository = InMemoryHostRepository()
         let hostManager = HostLibraryManager(
@@ -19,6 +49,7 @@ final class AppModelWorkflowTests: XCTestCase {
             appCatalogManager: catalogManager,
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: streamCoordinator,
+            clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data([0xAA, 0xBB]))
         )
@@ -66,6 +97,7 @@ final class AppModelWorkflowTests: XCTestCase {
             appCatalogManager: catalogManager,
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
+            clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data([0xAA, 0xBB]))
         )
@@ -99,14 +131,14 @@ private struct StubServerInfoClient: ServerInfoClient {
 }
 
 private struct StubAppListClient: AppListClient {
-    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String) async throws -> [RemoteApp] {
+    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> [RemoteApp] {
         [
             RemoteApp(id: "2", name: "Game", supportsHDR: true, installPath: nil),
             RemoteApp(id: "1", name: "Desktop", supportsHDR: false, installPath: nil)
         ]
     }
 
-    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String) async throws -> RemoteAppArtwork? {
+    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> RemoteAppArtwork? {
         nil
     }
 }

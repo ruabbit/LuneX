@@ -94,6 +94,50 @@ actor JSONFileAppCatalogSnapshotRepository: AppCatalogSnapshotRepository {
     }
 }
 
+actor JSONFileClientIdentityStore: ClientIdentityStore {
+    private let fileURL: URL
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    }
+
+    func loadIdentity() async throws -> ClientIdentityMaterial? {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        let data = try Data(contentsOf: fileURL)
+        return try decoder.decode(ClientIdentityMaterial.self, from: data)
+    }
+
+    func saveIdentity(_ identity: ClientIdentityMaterial) async throws {
+        let directory = fileURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        let data = try encoder.encode(identity)
+        try data.write(to: fileURL, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+    }
+
+    func deleteIdentity() async throws {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        try FileManager.default.removeItem(at: fileURL)
+    }
+}
+
+enum ClientIdentityStoreFactory {
+    static func makeDefault(
+        debugFileURL: URL = AppStorageLocations.debugClientIdentityFile
+    ) -> any ClientIdentityStore {
+        #if DEBUG
+        return JSONFileClientIdentityStore(fileURL: debugFileURL)
+        #else
+        _ = debugFileURL
+        return KeychainClientIdentityStore()
+        #endif
+    }
+}
+
 enum AppStorageLocations {
     static var applicationSupportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -111,5 +155,9 @@ enum AppStorageLocations {
 
     static var appCatalogFile: URL {
         applicationSupportDirectory.appendingPathComponent("app_catalog.json")
+    }
+
+    static var debugClientIdentityFile: URL {
+        applicationSupportDirectory.appendingPathComponent("client_identity.debug.json")
     }
 }

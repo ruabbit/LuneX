@@ -8,7 +8,9 @@ final class PlatformLifecycleState {
     var isFocused = true
     var displayID: String?
     var drawableSize: PixelSize = .zero
+    var headroom = DisplayHeadroom()
     var renderPolicy: RenderPolicy = .idle
+    private(set) var revision = 0
 
     func updateRenderPolicy() {
         renderPolicy = LifecycleRenderPolicyResolver.resolve(
@@ -17,6 +19,7 @@ final class PlatformLifecycleState {
             isFocused: isFocused,
             drawableSize: drawableSize
         )
+        revision &+= 1
     }
 
     func setStreamActive(_ active: Bool) {

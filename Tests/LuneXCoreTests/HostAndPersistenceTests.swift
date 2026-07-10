@@ -84,4 +84,75 @@ final class HostAndPersistenceTests: XCTestCase {
 
         XCTAssertEqual(loaded, [snapshot])
     }
+
+    func testJSONFileIdentityStoreUsesPrivatePermissionsAndRoundTrips() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileURL = directory.appendingPathComponent("client_identity.debug.json")
+        let store = JSONFileClientIdentityStore(fileURL: fileURL)
+        let identity = ClientIdentityMaterial(
+            id: UUID(uuidString: "01CDA768-A358-4341-93D9-326E92E09AE6")!,
+            certificateDER: Data([1, 2, 3]),
+            privateKeyDER: Data([4, 5, 6]),
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await store.saveIdentity(identity)
+        let loaded = try await store.loadIdentity()
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let permissions = attributes[.posixPermissions] as? NSNumber
+
+        XCTAssertEqual(loaded, identity)
+        XCTAssertEqual(permissions?.intValue, 0o600)
+
+        try await store.deleteIdentity()
+        let deleted = try await store.loadIdentity()
+        XCTAssertNil(deleted)
+    }
+
+    func testRealKeychainIdentityRoundTripWhenExplicitlyEnabled() async throws {
+        guard ProcessInfo.processInfo.environment["LUNEX_RUN_KEYCHAIN_TEST"] == "1" else {
+            throw XCTSkip("Set LUNEX_RUN_KEYCHAIN_TEST=1 for the one-time authorized Keychain verification.")
+        }
+
+        let suffix = UUID().uuidString
+        let store = KeychainClientIdentityStore(
+            service: "dev.lunex.client.identity.integration.\(suffix)",
+            account: "moonlight-client-\(suffix)"
+        )
+        let identity = ClientIdentityMaterial(
+            certificateDER: Data([10, 20, 30]),
+            privateKeyDER: Data([40, 50, 60])
+        )
+        defer {
+            Task { try? await store.deleteIdentity() }
+        }
+
+        try await store.saveIdentity(identity)
+        let loaded = try await store.loadIdentity()
+        XCTAssertEqual(loaded, identity)
+        try await store.deleteIdentity()
+    }
+
+    #if DEBUG
+    func testDebugIdentityStoreFactoryUsesFileFallback() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileURL = directory.appendingPathComponent("factory-identity.json")
+        let store = ClientIdentityStoreFactory.makeDefault(debugFileURL: fileURL)
+        let identity = ClientIdentityMaterial(
+            certificateDER: Data([1, 3, 5]),
+            privateKeyDER: Data([2, 4, 6])
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await store.saveIdentity(identity)
+        let loaded = try await store.loadIdentity()
+
+        XCTAssertEqual(loaded, identity)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+
+        try await store.deleteIdentity()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+    #endif
 }

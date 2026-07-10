@@ -133,3 +133,13 @@
 - 本机 Moonlight-qt 当前可导入 2 台 paired host：`tanmy-deck` 地址 `10.1.100.246`，缓存 app `Desktop`；`tanmy-white` 地址 `10.1.100.69`，缓存 app `Desktop`、`Steam Big Picture`、`War Thunder`。
 - Moonlight-qt 客户端 identity 存在 `uniqueid`、`certificate`、`key`；host pinned server certificate 存在 `hosts.{index}.srvcert`。这些均属于敏感配对材料，只导入到用户本机 `~/Library/Application Support/LuneX`，不提交到仓库，日志中只输出 host/app 摘要。
 - LuneX 本地测试存储采用 `hosts.json`、`settings.json`、`app_catalog.json` 和 `moonlight_qt_identity.json`。当前 Swift App 默认读取前三者；`moonlight_qt_identity.json` 暂作为后续真实 Moonlight pairing/identity 集成的本机测试材料。
+
+### 2026-07-10 身份、TLS 与 macOS 生命周期接线
+
+- 一次性真实 Keychain 验证已完成：对唯一 service/account 执行 save、load/equality、delete，1 个测试通过；后续正常测试显式不设置 `LUNEX_RUN_KEYCHAIN_TEST`，该用例保持 skipped，避免重复授权。
+- `ClientIdentityStoreFactory` 在 Debug 选择 Application Support 下的 `client_identity.debug.json`，以原子写入和 `0600` 权限保存；Release 选择 `KeychainClientIdentityStore`。AppModel 启动时从选中 store 恢复稳定 client UUID，不生成伪证书或私钥。
+- Moonlight HTTPS app-list、artwork、launch、stop 全部经过 exact leaf pin executor。缺失 pin 在网络前失败；叶证书不匹配被映射为结构化 `PinnedTransportError.certificateMismatch`；未采用 trust-all。
+- Moonlight-qt importer 将 PEM `srvcert` 标准化为 DER 后持久化。当前 3 个本地主机 pin 均为 726-byte DER；`hosts.json`、`settings.json`、`app_catalog.json` 均为 `0600`，客户端私钥未从 Moonlight-qt 导入。
+- macOS SwiftUI window 已通过 `AppKitLifecycleAttachment` 接到 AppKit monitor，覆盖 occlusion、key、screen、resize/live resize、backing scale、miniaturize 与 app activation；状态同步到 AppModel render policy、drawable pixel size 和 EDR headroom。
+- 运行态验证读取到实际 drawable `2560x1600`、EDR headroom `5.0`，并加载 3 台主机；Debug 文件 identity store 当前无持久化 identity，未访问 Keychain。
+- 最终正常测试结果为 58 total：57 passed、1 skipped（仅 opt-in Keychain）、0 failed。macOS Debug、macOS Release、固定 iPhone 17 Pro、固定 Apple TV、固定 Apple Vision Pro 隔离构建均通过，未启动目标模拟器。

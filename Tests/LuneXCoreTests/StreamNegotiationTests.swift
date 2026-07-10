@@ -61,6 +61,23 @@ final class StreamNegotiationTests: XCTestCase {
         XCTAssertEqual(stopCount, 1)
     }
 
+    func testHTTPLaunchAndStopRoutePinnedIdentityToExecutor() async throws {
+        let request = try makeRequest()
+        let parameters = try StreamNegotiator().makeParameters(from: request)
+        let executor = RecordingPinnedStreamRequestExecutor()
+        let client = HTTPStreamLaunchClient(requestExecutor: executor)
+
+        let response = try await client.launch(request, parameters: parameters)
+        try await client.stop(host: request.host, clientUniqueID: request.clientUniqueID)
+        let calls = await executor.recordedCalls()
+
+        XCTAssertEqual(response.gameSessionID, "123")
+        XCTAssertEqual(calls.map(\.url.path), ["/launch", "/cancel"])
+        XCTAssertEqual(calls.map(\.pin), [request.host.pinnedIdentity, request.host.pinnedIdentity])
+        XCTAssertTrue(calls.allSatisfy { $0.url.scheme == "https" })
+        XCTAssertTrue(calls.allSatisfy { $0.url.port == HostEndpoint.defaultHTTPSPort })
+    }
+
     private func makeRequest(
         app: RemoteApp = RemoteApp(id: "0", name: "Desktop", supportsHDR: false, installPath: nil),
         preferences: StreamPreferences = .defaults
@@ -86,6 +103,31 @@ final class StreamNegotiationTests: XCTestCase {
             controllerBitmap: 3,
             optimizeGameSettings: false
         )
+    }
+}
+
+private actor RecordingPinnedStreamRequestExecutor: PinnedHTTPSRequestExecuting {
+    struct Call: Sendable {
+        var url: URL
+        var pin: PinnedHostIdentity?
+    }
+
+    private var calls: [Call] = []
+
+    func data(for request: URLRequest, pinnedIdentity: PinnedHostIdentity?) async throws -> (Data, URLResponse) {
+        let url = try XCTUnwrap(request.url)
+        calls.append(Call(url: url, pin: pinnedIdentity))
+        let data: Data
+        if url.path == "/launch" {
+            data = Data("<root status_code=\"200\"><gamesession>123</gamesession></root>".utf8)
+        } else {
+            data = Data()
+        }
+        return (data, URLResponse(url: url, mimeType: "application/xml", expectedContentLength: data.count, textEncodingName: "utf-8"))
+    }
+
+    func recordedCalls() -> [Call] {
+        calls
     }
 }
 

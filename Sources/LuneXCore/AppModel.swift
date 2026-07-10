@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 enum AppNavigationSelection: Hashable {
     case library
@@ -40,6 +41,7 @@ struct RuntimeCapabilityAvailability: Equatable, Sendable {
 @MainActor
 @Observable
 final class AppModel {
+    private let logger = Logger(subsystem: "dev.lunex.client", category: "app.model")
     var hosts: [MoonlightHost] = []
     var settings = AppSettings.defaults
     var session = StreamingSessionState()
@@ -58,7 +60,8 @@ final class AppModel {
     private let appCatalogRepository: AppCatalogSnapshotRepository
     private let streamSessionCoordinator: StreamSessionCoordinator
     private let runtimeCapabilities: RuntimeCapabilityAvailability
-    private let clientUniqueID: String
+    private let clientIdentityStore: any ClientIdentityStore
+    private var clientUniqueID: String
     private let remoteInputKey: RemoteInputKeyMaterial
 
     init(
@@ -76,6 +79,7 @@ final class AppModel {
             launchClient: HTTPStreamLaunchClient()
         ),
         runtimeCapabilities: RuntimeCapabilityAvailability = .current,
+        clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
         remoteInputKey: RemoteInputKeyMaterial = RemoteInputKeyMaterial(
             keyID: 1,
@@ -88,6 +92,7 @@ final class AppModel {
         self.appCatalogRepository = appCatalogRepository
         self.streamSessionCoordinator = streamSessionCoordinator
         self.runtimeCapabilities = runtimeCapabilities
+        self.clientIdentityStore = clientIdentityStore
         self.clientUniqueID = clientUniqueID
         self.remoteInputKey = remoteInputKey
     }
@@ -115,9 +120,32 @@ final class AppModel {
     }
 
     func loadInitialState() async {
+        await loadClientIdentity()
         await loadSettings()
         await loadHosts()
         await loadCachedApps()
+    }
+
+    func loadClientIdentity() async {
+        do {
+            guard let identity = try await clientIdentityStore.loadIdentity() else {
+                diagnostics.record("No persisted client identity; pairing remains unavailable", subsystem: "identity")
+                logger.info("No persisted client identity in selected store")
+                return
+            }
+            clientUniqueID = identity.id.uuidString
+            diagnostics.record("Loaded persisted client identity", subsystem: "identity")
+            logger.info("Loaded persisted client identity")
+        } catch {
+            diagnostics.record("Failed to load client identity: \(error)", subsystem: "identity")
+            logger.error("Failed to load client identity: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    func applyPlatformLifecycle(_ lifecycle: PlatformLifecycleState) {
+        renderState.policy = lifecycle.renderPolicy
+        renderState.transform.drawableSize = lifecycle.drawableSize
+        renderState.headroom = lifecycle.headroom
     }
 
     func loadHosts() async {
@@ -127,8 +155,10 @@ final class AppModel {
                 selectedHostID = hosts.first?.id
             }
             diagnostics.record("Loaded \(hosts.count) saved hosts")
+            logger.info("Loaded \(self.hosts.count, privacy: .public) saved hosts")
         } catch {
             diagnostics.record("Failed to load hosts: \(error)", subsystem: "hosts")
+            logger.error("Failed to load hosts: \(String(describing: error), privacy: .public)")
         }
     }
 

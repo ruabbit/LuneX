@@ -29,10 +29,11 @@
 | 9. 验证与迭代 | complete | 构建、单测、模拟器/本机运行、性能和回归验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
+| 12. 身份/TLS/macOS 生命周期接线 | in_progress | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 
 ## 当前焦点
 
-阶段 11 已完成并推送：运行时现在 fail closed，不再用本地 PIN 伪造 pinned identity，不再在没有 media transport 时发送 launch 或显示 Streaming，不再复制私钥到普通 JSON；iPhone compact NavigationSplitView 阻断已改为可直接工作的 tab navigation。真实 Moonlight pairing、RTSP/media/input transport、生命周期/HDR/audio/PiP 接线仍属于后续独立 change，不能再标记为产品级完成。
+阶段 12 的实现与验证已完成，等待 Git 提交和推送：真实 Keychain round-trip 只运行一次，后续 Debug 测试使用 `0600` 文件 fallback，Release 保持 Keychain；host pinned certificate 已接入 app-list/artwork/launch/stop HTTPS challenge；macOS window occlusion/focus/screen/resize/EDR 已驱动实际 render state。真实 Moonlight pairing 与 media transport 仍不在本 change 范围。
 
 ## 遇到的错误
 
@@ -51,3 +52,5 @@
 | `LuneXCoreTests` 新增空间音频测试找不到 `AudioRouteState` | 1 | 将 `Sources/LuneXAudio/AudioRouteState.swift` 纳入测试支持源码并重新生成 Xcode project |
 | iOS/tvOS build 中使用 `List(selection:)`、tvOS `TextField.roundedBorder`、tvOS `Stepper` 失败 | 1 | 将 sidebar selection 按平台分支；tvOS 避免 roundedBorder，并用 plus/minus button 替代 Stepper |
 | 并发跑多个 simulator build 触发 Xcode build database lock | 1 | 改为按固定 simulator ID 串行验证，避免共享 DerivedData build.db 锁冲突 |
+| 运行态日志检查误调用 zsh `log` 内建并假设 `hosts.json` 顶层为数组 | 1 | 改用 `/usr/bin/log show`，并用 `jq` 按实际 `{hosts:[...]}` 结构读取仅主机摘要 |
+| 跟踪文件合并补丁使用了不存在的 `findings.md` 标题上下文 | 1 | 读取实际文件尾部后按现有章节定位，分块更新 OpenSpec 与跟踪记录 |

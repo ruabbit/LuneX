@@ -2,6 +2,69 @@ import Foundation
 import XCTest
 
 final class AppCatalogTests: XCTestCase {
+    func testPinnedCertificateValidatorRequiresExactLeafData() {
+        let expected = Data([1, 2, 3])
+
+        XCTAssertTrue(PinnedCertificateValidator.matches(expectedLeafDER: expected, presentedLeafDER: expected))
+        XCTAssertFalse(PinnedCertificateValidator.matches(expectedLeafDER: expected, presentedLeafDER: Data([1, 2, 4])))
+        XCTAssertFalse(PinnedCertificateValidator.matches(expectedLeafDER: expected, presentedLeafDER: nil))
+        XCTAssertFalse(PinnedCertificateValidator.matches(expectedLeafDER: Data(), presentedLeafDER: expected))
+    }
+
+    func testPinnedCertificateValidatorNormalizesPEMToDER() throws {
+        let der = Data([1, 2, 3, 4, 5])
+        let pem = """
+        -----BEGIN CERTIFICATE-----
+        \(der.base64EncodedString())
+        -----END CERTIFICATE-----
+        """
+
+        XCTAssertEqual(PinnedCertificateValidator.normalizedDER(Data(pem.utf8)), der)
+        XCTAssertTrue(PinnedCertificateValidator.matches(
+            expectedLeafDER: Data(pem.utf8),
+            presentedLeafDER: der
+        ))
+    }
+
+    func testPinnedRequestExecutorRejectsMissingIdentityBeforeNetworkAccess() async {
+        let request = URLRequest(url: URL(string: "https://moon.local:47984/applist")!)
+
+        do {
+            _ = try await PinnedHTTPSRequestExecutor().data(for: request, pinnedIdentity: nil)
+            XCTFail("Expected a missing-pin failure")
+        } catch {
+            XCTAssertEqual(error as? PinnedTransportError, .missingPinnedIdentity)
+        }
+    }
+
+    func testHTTPAppListClientRoutesPinnedIdentityToExecutor() async throws {
+        let xml = """
+        <root status_code="200" status_message="OK">
+          <App><AppTitle>Desktop</AppTitle><ID>0</ID></App>
+        </root>
+        """
+        let executor = RecordingPinnedRequestExecutor(responseData: Data(xml.utf8))
+        let client = HTTPAppListClient(requestExecutor: executor)
+        let pin = PinnedHostIdentity(
+            certificateSHA256: "pin",
+            serverCertificateDER: Data([9, 8, 7]),
+            pairedAt: Date(timeIntervalSince1970: 1)
+        )
+
+        let apps = try await client.fetchApps(
+            from: HostEndpoint(host: "moon.local", port: HostEndpoint.defaultHTTPPort),
+            clientUniqueID: "client",
+            pinnedIdentity: pin
+        )
+        let recordedPin = await executor.recordedPinnedIdentity()
+        let recordedURL = await executor.recordedRequestURL()
+
+        XCTAssertEqual(apps.map(\.name), ["Desktop"])
+        XCTAssertEqual(recordedPin, pin)
+        XCTAssertEqual(recordedURL?.scheme, "https")
+        XCTAssertEqual(recordedURL?.port, HostEndpoint.defaultHTTPSPort)
+    }
+
     func testAppListParserExtractsAppsAndSortsByName() throws {
         let xml = """
         <root status_code="200" status_message="OK">
@@ -98,6 +161,36 @@ final class AppCatalogTests: XCTestCase {
     }
 }
 
+private actor RecordingPinnedRequestExecutor: PinnedHTTPSRequestExecuting {
+    private let responseData: Data
+    private var requestURL: URL?
+    private var pin: PinnedHostIdentity?
+
+    init(responseData: Data) {
+        self.responseData = responseData
+    }
+
+    func data(for request: URLRequest, pinnedIdentity: PinnedHostIdentity?) async throws -> (Data, URLResponse) {
+        requestURL = request.url
+        pin = pinnedIdentity
+        let response = URLResponse(
+            url: request.url!,
+            mimeType: "application/xml",
+            expectedContentLength: responseData.count,
+            textEncodingName: "utf-8"
+        )
+        return (responseData, response)
+    }
+
+    func recordedPinnedIdentity() -> PinnedHostIdentity? {
+        pin
+    }
+
+    func recordedRequestURL() -> URL? {
+        requestURL
+    }
+}
+
 private actor StubAppListClient: AppListClient {
     let apps: [RemoteApp]
     let artwork: RemoteAppArtwork?
@@ -108,11 +201,11 @@ private actor StubAppListClient: AppListClient {
         self.artwork = artwork
     }
 
-    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String) async throws -> [RemoteApp] {
+    func fetchApps(from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> [RemoteApp] {
         apps
     }
 
-    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String) async throws -> RemoteAppArtwork? {
+    func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> RemoteAppArtwork? {
         artworkFetchCount += 1
         return artwork
     }
