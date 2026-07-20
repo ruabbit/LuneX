@@ -10,11 +10,11 @@
 
 ## 2. Runtime architecture and network foundation
 
-- [ ] 2.1 Define production protocols for pairing, session control, video receive, audio receive, and remote input providers
-- [ ] 2.2 Implement cancellable Network.framework TCP and UDP channel wrappers with bounded reads and timeouts
-- [ ] 2.3 Implement session-owned task and resource tracking with deterministic async teardown
-- [ ] 2.4 Add structured runtime diagnostics with secret redaction and per-stage timing
-- [ ] 2.5 Add malformed-frame, timeout, cancellation, and resource-release tests for the network foundation
+- [x] 2.1 Define production protocols for pairing, session control, video receive, audio receive, and remote input providers
+- [x] 2.2 Implement cancellable Network.framework TCP and UDP channel wrappers with bounded reads and timeouts
+- [x] 2.3 Implement session-owned task and resource tracking with deterministic async teardown
+- [x] 2.4 Add structured runtime diagnostics with secret redaction and per-stage timing
+- [x] 2.5 Add malformed-frame, timeout, cancellation, and resource-release tests for the network foundation
 
 ## 3. Client identity and authenticated pairing
 

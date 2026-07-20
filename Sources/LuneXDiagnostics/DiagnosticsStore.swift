@@ -42,6 +42,21 @@ final class DiagnosticsStore {
             date: date
         ))
     }
+
+    func record(runtimeEvent: RuntimeDiagnosticEvent) {
+        let duration = runtimeEvent.elapsedMilliseconds.map { String(format: " %.2f ms", $0) } ?? ""
+        let fieldSummary = runtimeEvent.fields.isEmpty
+            ? ""
+            : " " + runtimeEvent.fields
+                .sorted(by: { $0.key < $1.key })
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: " ")
+        events.append(DiagnosticEvent(
+            subsystem: runtimeEvent.subsystem,
+            message: "\(runtimeEvent.stage).\(runtimeEvent.code)\(duration)\(fieldSummary)",
+            date: runtimeEvent.recordedAt
+        ))
+    }
 }
 
 struct DiagnosticEvent: Identifiable, Hashable {

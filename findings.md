@@ -156,6 +156,8 @@
 
 ### 2026-07-21 阶段 13 协议盘点
 
+- OpenSpec `implement-moonlight-session-runtime` 的正确完成计数为 11/61：1.2–1.7 共 6 项、2.1–2.5 共 5 项；1.1 仍因缺少已授权 Sunshine release semantic version 证据而保持未完成。此前进度日志中的 12/61 是计数错误，不改变已完成任务本身。
+
 - 只读 Bonjour 与 `serverinfo` 确认一台可用 Sunshine host，协议 `appversion=7.1.431.-1`、兼容 GFE `3.23.0.74`、HTTPS 47984、当前无活动游戏；Web UI 使用 Basic Auth，未尝试认证。
 - `servercodecmodesupport=0x001F0301`：H.264、HEVC、HEVC Main10、AV1 Main8/Main10、H.264 4:4:4、HEVC 4:4:4 8/10-bit；不含 AV1 4:4:4。HEVC luma limit 为 `1869449984`。
 - `appversion` 是 Sunshine 模拟的 GameStream 协议版本，不是发布语义版本；上游 `nvhttp.h` 也明确该字段是 protocol version。精确 Sunshine release version 需要已授权 Web config GET 或主机侧 `sunshine --version`，任务 1.1 暂不勾选。
@@ -169,3 +171,9 @@
 - 多声道代表性要求：Sunshine 的 5.1/7.1 encoder 直接使用 Moonlight speaker-order identity mapping（分别 `[0...5]`、`[0...7]`）；常规 Ogg/FFmpeg 5.1 `OpusHead` 使用 Vorbis-order mapping `[0,4,1,2,3,5]`，不能直接充当 Sunshine multistream fixture。合成 fixture 必须显式使用 Sunshine 的 streams/coupledStreams/mapping。
 - AudioToolbox runtime spike 在 macOS 解码 Sunshine 全部五种 5 ms profile 成功：stereo、5.1 normal/HQ、7.1 normal/HQ，raw packet 分别为 60/160/960/281/1280 bytes，均输出 120-frame 首包非静音 PCM。相同 Swift surface 对 iOS/tvOS/visionOS 26 simulator SDK 以 warnings-as-errors typecheck 通过，但这些平台仍只是编译证据。
 - Opus production 决策为系统 AudioToolbox `AudioConverter`，不链接 libopus；wrapper 从 RTSP 配置合成 `OpusHead`，输出实际 PCM frame count。libopus 1.6.1 仅作为 `Tools/OpusSpike/generate_fixture.c` 的本地合成 fixture 生成依赖，不进入 Xcode target。
+- Runtime provider contract 决策：拆分 pairing、session control、video receive、audio receive、remote input 五个 `Sendable` provider，使用 session/attempt ID 和 `AsyncThrowingStream` 传递有序事件；negotiated endpoint/media/input 配置为共享值类型。2.1 只建立接口与不变量，不提前打开 `AppModel` production capability gate。
+- `RuntimeProviders.swift` 已作为所有 App target 的 production source：共享 endpoint、video/audio/input negotiated configuration、channel readiness 和有序 event streams；Audio contract 对 Sunshine 五种 stream/coupled identity mapping 均通过，不合法 mapping 与 zero-port endpoint fail closed。
+- `NetworkByteChannel` actor 已封装真实 `NWConnection` TCP/UDP：connect/send/receive 均有正数 timeout，send/read 有硬上限，timeout/cancellation 取消底层 connection，空 complete read 进入 closed；错误只暴露类别/数字码，不包含 endpoint。真实 macOS TCP/UDP loopback 和确定性 mock tests 均通过。
+- `SessionResourceTracker` 统一拥有 session tasks 与 network/decoder/renderer/audio/input/timer resources：teardown 先取消任务并等待 grace period，再按逆注册顺序 shutdown resources；幂等返回同一 report，non-cooperative task 进入 `unfinishedTasks` 而不会被误报 clean。
+- `RuntimeDiagnosticsRecorder` 使用稳定 code/stage/severity 与 typed fields，敏感键/内容强制 `<redacted>`、host/address/URL 强制 `<private>`；stage token 用 monotonic nanoseconds 计算 duration，event ring buffer 有容量上限，旧 `DiagnosticsStore` 只接收已脱敏事件。
+- Network foundation failure coverage 包含 2/4-byte big-endian bounded frame decoder 的 fragmented/coalesced、oversized declaration、truncated EOF；外部 Task cancellation、connect/receive timeout 都会取消底层 driver；channel 纳入 `SessionResourceTracker` 后 teardown report clean 且 state 为 cancelled。

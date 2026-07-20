@@ -197,3 +197,12 @@
 - 修复 fixture validator：JSON 结构化放行键名精确为 `sha256` 的 64-hex 公开摘要，同时拒绝其他字段、64+ 长 hex 和 65 字符奇数长度绕过；self-test 与实际 fixture 扫描通过。
 - 更新 Opus dependency decision：选择 Apple AudioToolbox production path，不加入 libopus；待独立依赖检查与 strict validation 通过后勾选任务 1.7。
 - 完成并验收 OpenSpec 任务 1.7：production source/project 无 libopus 或 package dependency；checked-in stereo fixture、五 profile decoder 矩阵、fixture validator、OpenSpec strict validation 和 diff check 全部通过。当前 change 进度为 6/61，任务 1.1 保持授权信息阻塞，继续 2.x runtime foundation。
+- 创建并推送阶段 13 协议/依赖里程碑提交 `749d1b5 Validate runtime protocol dependencies` 到 `origin/main`，开始任务 2.1 production provider contracts；保持 AppModel fail-closed，直到真实实现和 8.x 注入完成。
+- 完成并独立验收 OpenSpec 任务 2.1：新增五类 `Sendable` runtime provider contracts 与 5 个 contract tests；完整 macOS tests 通过（真实 Keychain 仍 skipped），macOS 和固定 iPhone/iPad/tvOS/visionOS 隔离构建通过，所有 simulator 前后均为 Shutdown。change 进度 7/61。
+- 完成并独立验收 OpenSpec 任务 2.2：新增 cancellable/bounded/timed `NWConnection` channel 和 7 个 tests，含真实 TCP/UDP loopback；完整 warnings-as-errors tests、固定五平台 build、fixture/OpenSpec/diff gates 通过，simulator 前后保持 Shutdown。change 进度 8/61。
+- 完成并独立验收 OpenSpec 任务 2.3：新增 session task/resource ownership tracker 和 5 个 tests，覆盖 clean teardown、逆序 release、幂等、late registration 拒绝和 unfinished task 报告；完整 tests/跨平台 builds/OpenSpec/diff gates 通过。change 进度 9/61。
+- 完成并独立验收 OpenSpec 任务 2.4：新增 structured runtime diagnostics、敏感/私有字段 redaction、monotonic stage timing、bounded buffer 和 5 个 tests；完整 tests 与固定平台 builds 通过。change 进度 10/61。
+- 完成并独立验收 OpenSpec 任务 2.5：network tests 增至 13 个，覆盖 malformed frame、分片/合帧、timeout、外部 cancellation、TCP/UDP loopback 与 session-owned release；修复 `Data.removeFirst` 后非零 `startIndex` 导致的第二帧切片崩溃。完整 gates 通过；因 1.1 仍未完成，change 权威进度为 11/61。
+- 从 session catch-up、活动 goal、规划文件和 OpenSpec apply instructions 恢复阶段 13；确认 2.1–2.5 工作树尚未提交，先重新执行独立 foundation gate，再提交并推送后进入 3.1。
+- 重新独立验收 2.1–2.5 foundation：完整 macOS warnings-as-errors tests 通过，真实 Keychain 用例按约束 skipped；macOS、固定 iPhone/iPad/Apple TV/Vision Pro Debug 串行构建通过，四个 simulator 前后均为 Shutdown。
+- fixture self-test 通过；首次实际扫描误写目录为 `Tests/Fixtures/MoonlightProtocol`，已确认正确根目录为 `Tests/Fixtures/Moonlight` 并重新执行。OpenSpec strict validation、`git diff --check` 均通过。
