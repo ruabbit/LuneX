@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `24/61`：4.7 deterministic session state-machine matrix 已完成独立验收，下一项为 5.1 bounded video packet reordering/loss/access-unit assembly；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `25/61`：5.1 bounded video packet reordering/loss/access-unit assembly 已完成独立验收，下一项为 5.2 H.264/HEVC parameter-set parsing 与 VideoToolbox format construction；阶段 13 仍为 `in_progress`。
 
-4.7 已实现 generation-scoped `SessionControlEvent` reducer 和结构化 terminal evidence，success/partial/loss/reconnect/failure/termination/duplicate/stale/invalid 矩阵及完整跨平台独立验收通过；5.1 从 packet sequence/reorder window、frame boundary 与 loss/IDR contract 开始，不提前声称 VideoToolbox decode。
+5.1 已实现 plaintext RTP/NV parser、最多四个 multi-FEC block 的 bounded data-shard reorder、frame loss/IDR evidence、Sunshine short-header removal 与 H.264/HEVC/AV1 access-unit assembly；parity 仅丢弃而不声称 Reed-Solomon recovery，VideoToolbox format/decode 仍从 5.2 开始。
 
 ## 遇到的错误
 
@@ -102,3 +102,5 @@
 | 4.6 首次 focused tests 中既有 `/cancel` executor fixture 返回空 body | 1 | production 新增 Sunshine `status_code=200` + `cancel=1` 确认后，测试 fixture 同步为真实 XML contract 并新增拒绝 missing marker 回归 |
 | 4.6 fixture gate 误用不存在的 `validate_fixture_redaction.py` | 1 | 仓库实际脚本为 `Tools/validate_protocol_fixtures.py`；读取真实 `--help` 后按 positional fixture root 重跑 self-test 与全树扫描 |
 | 4.6 封版审计发现 remote termination 发布后仍有 teardown actor 重入窗口 | 1 | 在 provider actor 内同步锁定 `TerminalSession` 的 first-terminal trigger 和 remote-cancel 决策；后到 stop 只能复用该决策，新增 `cancel=0` 竞态回归 |
+| 5.1 首次 focused compile 将负向 parser 断言闭包的返回值视为 unused result | 1 | 在预期抛错的闭包中显式使用 `_ = try`，保持 warnings-as-errors 并重跑相同测试门禁 |
+| 5.1 generator byte-for-byte gate 使用 zsh 只读变量 `status` | 1 | 改用普通变量 `rc` 保存 `cmp` 退出码；生成器重跑后 project byte-for-byte 一致 |

@@ -287,3 +287,17 @@
 - 新增 `SessionStateMachineTests` 7 项，相关 state/recovery/negotiation/AppModel focused gate `31/31` 通过；完整 macOS warnings-as-errors tests 为 `167 total / 166 passed / 1 skipped / 0 failed`，唯一 skipped 是未启用 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip。
 - macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；fixture self-test/全树、OpenSpec strict、generator byte-for-byte、production/reference boundary 与 diff check 通过，四个 simulator 始终为 `Shutdown`。
 - OpenSpec 4.7 更新为完成，权威进度 `24/61`；下一项为 5.1 bounded video packet reordering、loss detection 与 codec access-unit assembly。AppModel production provider 接线仍属于 8.x，真实媒体和 Streaming 仍未声称完成。
+
+## 2026-07-21 阶段 13 任务 5.1 启动
+
+- 4.7 已以 `21471cc Add deterministic session state matrix` 提交并推送，`HEAD == origin/main`、工作树 clean 后进入 5.1。
+- 5.1 范围限定为 bounded video packet reordering、loss detection 和 codec access-unit assembly；5.2 parameter-set parsing/VideoToolbox format、5.4 decoder ownership 与 live video 均不提前实现或声称完成。
+- 先核对 repository protocol inventory、sanitized video fixture 与只读 Moonlight/Sunshine packet framing，再定义 sequence wrap、frame boundary、duplicate/late packet、gap/IDR 和 memory/time bound contract。
+
+## 2026-07-21 阶段 13 任务 5.1 完成
+
+- 新增 `VideoPacketAssembly.swift`、synthetic byte-exact fixture 和 9 项 tests：解析固定 RTP/NV header，处理 16/24/32-bit wrap、最多四个 multi-FEC block 的 data-shard reorder、duplicate/late/gap/timeout/capacity/metadata loss，并输出 IDR evidence。
+- H.264/HEVC access unit 保留 Annex-B trailing zero padding；AV1 使用 Sunshine short-header `lastPayloadLen` 精确截断。parity packet 明确丢弃，不复制或链接 GPL Reed-Solomon；receiver 必须在调用 parser 前完成可选 AES-GCM 认证解密。
+- focused assembly tests `9/9`、完整 macOS warnings-as-errors tests `176 total / 175 passed / 1 skipped / 0 failed`；唯一 skipped 仍是未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，未再次访问 Keychain。
+- macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；四个固定 simulator 前后均为 `Shutdown`，未创建或 boot 设备。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、diff/reference boundary、ENet revision/license/source match 与四 SDK strict C syntax 全部通过。OpenSpec 5.1 更新为完成，权威进度 `25/61`；下一项为 5.2 H.264/HEVC parameter-set parsing 与 VideoToolbox format construction。

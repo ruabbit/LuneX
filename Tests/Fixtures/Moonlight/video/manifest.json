@@ -1,1 +1,12 @@
-{"fixtures":[],"schemaVersion":1,"subsystem":"video"}
+{
+  "fixtures": [
+    {
+      "file": "packet-assembly.json",
+      "origin": "repository-generated from documented Sunshine packet framing",
+      "purpose": "byte-exact RTP/NV parsing, bounded reordering, and access-unit assembly",
+      "redaction": "fully synthetic packet and codec bytes"
+    }
+  ],
+  "schemaVersion": 1,
+  "subsystem": "video"
+}
