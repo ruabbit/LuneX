@@ -5,6 +5,12 @@
       "origin": "repository-generated",
       "redaction": "documentation-only host and synthetic headers",
       "purpose": "byte-exact RTSP/1.0 request and response codec"
+    },
+    {
+      "file": "negotiation.json",
+      "origin": "repository-generated from documented Sunshine behavior",
+      "redaction": "synthetic session and extension values",
+      "purpose": "DESCRIBE and SETUP negotiation parsing"
     }
   ],
   "schemaVersion": 1,

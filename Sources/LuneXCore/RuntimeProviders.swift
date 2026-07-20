@@ -38,7 +38,7 @@ struct RuntimeNetworkEndpoint: Codable, Equatable, Sendable {
     }
 }
 
-enum NegotiatedVideoCodec: String, Codable, Equatable, Sendable {
+enum NegotiatedVideoCodec: String, Codable, Equatable, Hashable, Sendable {
     case h264
     case hevc
     case av1

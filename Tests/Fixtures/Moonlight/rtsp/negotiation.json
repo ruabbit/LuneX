@@ -1,0 +1,18 @@
+{
+  "audioSetup": {
+    "pingPayload": "synthetic-ping",
+    "session": "DEADBEEFCAFE;timeout = 90",
+    "transport": "server_port=48000"
+  },
+  "controlSetup": {
+    "connectData": "305419896",
+    "session": "DEADBEEFCAFE;timeout = 90",
+    "transport": "RTP/AVP/UDP;unicast;server_port=47999"
+  },
+  "describeBody": "a=x-ss-general.featureFlags:5\na=x-ss-general.encryptionSupported:7\na=x-ss-general.encryptionRequested:1\na=x-nv-video[0].refPicInvalidation:1\nsprop-parameter-sets=AAAAAU\na=rtpmap:98 AV1/90000\na=fmtp:97 surround-params=642012345\na=fmtp:97 surround-params=642012345\na=fmtp:97 surround-params=85301234567\n",
+  "videoSetup": {
+    "pingPayload": "synthetic-ping",
+    "session": "DEADBEEFCAFE;timeout = 90",
+    "transport": "server_port=47998"
+  }
+}
