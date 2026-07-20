@@ -5,6 +5,12 @@
       "origin": "repository-generated from documented Sunshine packet framing",
       "purpose": "byte-exact RTP/NV parsing, bounded reordering, and access-unit assembly",
       "redaction": "fully synthetic packet and codec bytes"
+    },
+    {
+      "file": "parameter-sets.json",
+      "origin": "repository-generated from one local 64x64 black-frame encode",
+      "purpose": "Annex-B parameter-set parsing and CoreMedia format construction",
+      "redaction": "fully synthetic codec bytes with no host or user data"
     }
   ],
   "schemaVersion": 1,

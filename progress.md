@@ -301,3 +301,17 @@
 - focused assembly tests `9/9`、完整 macOS warnings-as-errors tests `176 total / 175 passed / 1 skipped / 0 failed`；唯一 skipped 仍是未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，未再次访问 Keychain。
 - macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；四个固定 simulator 前后均为 `Shutdown`，未创建或 boot 设备。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、diff/reference boundary、ENet revision/license/source match 与四 SDK strict C syntax 全部通过。OpenSpec 5.1 更新为完成，权威进度 `25/61`；下一项为 5.2 H.264/HEVC parameter-set parsing 与 VideoToolbox format construction。
+
+## 2026-07-21 阶段 13 任务 5.2 启动
+
+- 5.1 已以 `521d2b5 Add bounded video packet assembly` 独立提交并推送，`HEAD == origin/main`、工作树 clean 后进入 5.2。
+- Xcode 26.4 SDK 头文件确认 H.264 format 需要 raw SPS/PPS，HEVC 需要 raw VPS/SPS/PPS；两条 CoreMedia factory API 在 macOS/iOS/tvOS/visionOS 均可用，NAL length header 统一选择 4 bytes。
+- 使用本机 libx264/libx265 对纯黑 64x64 单帧生成完全合成的 Annex-B parameter-set fixture；不包含 host、用户、Keychain 或网络数据，也不把 FFmpeg/libx26x 链接到 production target。
+
+## 2026-07-21 阶段 13 任务 5.2 完成
+
+- 新增 `VideoFormatDescription.swift`：bounded 3/4-byte Annex-B splitter、H.264 SPS/PPS 和 HEVC VPS/SPS/PPS parser、forbidden-bit/HEVC temporal-id 校验、exact-duplicate 幂等与 conflicting-set fail-closed。
+- CoreMedia factory 使用同步有效的 nonoptional raw NAL pointer array创建 4-byte NAL-length H.264/HEVC format description；合成 64x64 fixture 在 getter round-trip 中 byte-exact。focused tests `5/5` 通过。
+- 完整 macOS warnings-as-errors tests `181 total / 180 passed / 1 skipped / 0 failed`；唯一 skipped 仍是未启用 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，未再次访问 Keychain。
+- macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；simulator 前后均为 `Shutdown`。fixture/OpenSpec/generator/diff/reference/ENet/four-SDK-C gates 全部通过。
+- OpenSpec 5.2 更新为完成，权威进度 `26/61`；下一项为 5.3 AV1 capability negotiation 和 unsupported-device fallback policy。VideoToolbox decompression-session ownership 与 decode callback 仍属于 5.4。

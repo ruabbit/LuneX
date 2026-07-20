@@ -270,3 +270,11 @@
 - Sunshine 为满足 negotiated minimum parity shard count 时可把单帧 `fecPercentage` 提升到 100 以上（字段本身是 UInt8），例如 1 data + 2 parity 使用 200；parser 因此接受 0...255，并继续用 data/parity/total shard 与内存上限约束。5.1 parser 的输入边界是已经完成可选 AES-GCM 认证解密的 plaintext RTP/NV datagram；协商与 receiver 接线不能把未认证 ciphertext 直接交给 assembler。
 - 5.1 最终独立验收：synthetic fixture 与 focused assembly tests 9/9；完整 macOS warnings-as-errors tests `176 total / 175 passed / 1 explicit Keychain skip / 0 failed`；固定 macOS/iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build 全部通过，四个 simulator 构建前后均为 `Shutdown`。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、固定 MIT ENet revision/license/source 逐文件比对和四 SDK strict C syntax gate 全部通过。5.1 不证明 video receiver/AES-GCM 接线、FEC recovery、VideoToolbox format/decode、Metal delivery或 live Sunshine video。
+
+### 2026-07-21 阶段 13 Video Format 设计
+
+- Xcode 26.4 CoreMedia 头文件规定：`CMVideoFormatDescriptionCreateFromH264ParameterSets` 至少接收 SPS/PPS，HEVC 版本至少接收 VPS/SPS/PPS；输入是去除 Annex-B start code、保留 emulation-prevention bytes 的 raw NAL，返回 format description 可直接供后续 VideoToolbox decompression session 使用。
+- 5.2 parser 同时接受 3-byte/4-byte Annex-B start code，并去除 NAL 尾部 zero padding；access-unit bytes、单 NAL bytes、NAL count、parameter-set bytes 均有硬上限。H.264 forbidden-zero bit、HEVC two-byte header 和 nonzero temporal-id-plus-one 都必须合法。
+- 当前 Sunshine 单个 IDR 发送一组 VPS/SPS/PPS；5.2 对同一 access unit 内的 exact duplicate 幂等，对同类型不同 bytes fail closed，避免在未解析 parameter-set ID 的情况下把冲突配置交给 CoreMedia。跨 access-unit format-change ownership 留给 5.4/5.7 decoder state。
+- 5.2 最终独立验收：focused video-format tests `5/5`；合成 H.264/HEVC description 均由 CoreMedia 解析为 64x64，parameter-set getter byte-exact round-trip 且 NAL length header 为 4。完整 macOS warnings-as-errors tests `181 total / 180 passed / 1 explicit Keychain skip / 0 failed`。
+- macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build、fixture self-test/全树、OpenSpec strict、generator byte-for-byte、diff/reference/dependency boundary、ENet revision/source/license 和四 SDK strict C syntax gate 全部通过；四个 simulator 前后始终为 `Shutdown`。5.2 不证明 VTDecompressionSession、AV1 hardware support、decoded frame 或 live host video。

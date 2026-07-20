@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `25/61`：5.1 bounded video packet reordering/loss/access-unit assembly 已完成独立验收，下一项为 5.2 H.264/HEVC parameter-set parsing 与 VideoToolbox format construction；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `26/61`：5.2 H.264/HEVC parameter-set parsing 与 VideoToolbox format construction 已完成独立验收，下一项为 5.3 AV1 capability negotiation 与 unsupported-device fallback policy；阶段 13 仍为 `in_progress`。
 
-5.1 已实现 plaintext RTP/NV parser、最多四个 multi-FEC block 的 bounded data-shard reorder、frame loss/IDR evidence、Sunshine short-header removal 与 H.264/HEVC/AV1 access-unit assembly；parity 仅丢弃而不声称 Reed-Solomon recovery，VideoToolbox format/decode 仍从 5.2 开始。
+5.2 已实现 bounded Annex-B splitter、H.264 SPS/PPS 与 HEVC VPS/SPS/PPS parser、CoreMedia format-description factory 和 synthetic 64x64 round-trip；decoder session ownership 仍属于 5.4，AV1 support decision 从 5.3 开始。
 
 ## 遇到的错误
 
@@ -104,3 +104,4 @@
 | 4.6 封版审计发现 remote termination 发布后仍有 teardown actor 重入窗口 | 1 | 在 provider actor 内同步锁定 `TerminalSession` 的 first-terminal trigger 和 remote-cancel 决策；后到 stop 只能复用该决策，新增 `cancel=0` 竞态回归 |
 | 5.1 首次 focused compile 将负向 parser 断言闭包的返回值视为 unused result | 1 | 在预期抛错的闭包中显式使用 `_ = try`，保持 warnings-as-errors 并重跑相同测试门禁 |
 | 5.1 generator byte-for-byte gate 使用 zsh 只读变量 `status` | 1 | 改用普通变量 `rc` 保存 `cmp` 退出码；生成器重跑后 project byte-for-byte 一致 |
+| 5.2 CoreMedia factory pointer array 使用 optional inner pointer | 1 | 按 Xcode 26.4 Swift importer 的真实签名改为 `[UnsafePointer<UInt8>]`，再重跑 warnings-as-errors focused gate |

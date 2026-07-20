@@ -92,6 +92,7 @@ sources = [
   "Sources/LuneXNetworking/SessionRecovery.swift",
   "Sources/LuneXNetworking/SessionTeardown.swift",
   "Sources/LuneXNetworking/StreamNegotiation.swift",
+  "Sources/LuneXNetworking/VideoFormatDescription.swift",
   "Sources/LuneXNetworking/VideoPacketAssembly.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
@@ -142,6 +143,7 @@ test_support_sources = [
   "Sources/LuneXNetworking/SessionRecovery.swift",
   "Sources/LuneXNetworking/SessionTeardown.swift",
   "Sources/LuneXNetworking/StreamNegotiation.swift",
+  "Sources/LuneXNetworking/VideoFormatDescription.swift",
   "Sources/LuneXNetworking/VideoPacketAssembly.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
@@ -175,6 +177,7 @@ test_sources = [
   "Tests/LuneXCoreTests/SessionRecoveryTests.swift",
   "Tests/LuneXCoreTests/SessionStateMachineTests.swift",
   "Tests/LuneXCoreTests/StreamNegotiationTests.swift",
+  "Tests/LuneXCoreTests/VideoFormatDescriptionTests.swift",
   "Tests/LuneXCoreTests/VideoPacketAssemblyTests.swift"
 ]
 
