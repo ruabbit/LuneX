@@ -239,3 +239,13 @@
 - transient control/ENet/Network/URL errors 才可重试；pinned TLS、authenticated control frame、RTSP parse/protocol 与 invalid-state error 立即失败。公开 event 只使用固定 `control_unavailable` reason，不含 host、URL 或 raw error。
 - generation token 在每次 event publish 前校验；被新 session 替换的旧 RTSP attempt 即使处于 suspend/transact 边界，也不能发布迟到 `.rtspReady` 或 readiness。预算耗尽后本地 ENet/RTSP 已清理，并 best-effort 调用 `/cancel`。
 - 4.5 仍只恢复 control plane 并发布 `.control`，不会虚构 `.all`、`.negotiated` 或 Streaming；真实媒体/input channel 的健康输入和 live Sunshine reconnect 证据仍属于后续任务。
+
+### 2026-07-21 阶段 13 Cancellation Convergence 设计
+
+- 现有 provider 的停止路径是分裂的：显式 `stop`、consumer cancellation 和 replacement 只释放本地 ENet/RTSP，reconnect exhaustion 单独调用 `/cancel`，remote termination 又独立清理；这会造成远端 session 泄漏、重复 cleanup 和阻塞 I/O 下无法收敛。
+- 4.6 采用每个 generation 一个 teardown coordinator。local stop、consumer cancellation、replacement、terminal failure 和 reconnect exhaustion 都先使 generation 失效并取消 task，再立即释放 control/RTSP，最后 best-effort pinned `/cancel`；remote termination 复用本地 teardown 但不重复 `/cancel`。
+- Sunshine `/cancel` 的确定成功 contract 是 XML `status_code=200` 且 `cancel=1`。远端取消失败不能阻止本地资源释放；相同 generation 的并发 teardown caller 必须等待同一 operation，旧 generation 不能清除后来启动的 session。
+- teardown operation 使用 detached task，避免由 consumer cancellation 继承 cancelled state 后导致 `/cancel` 立即失败。测试 stub 会主动拒绝在 cancelled task 中执行 stop，锁定这一生产不变量。
+- 4.6 的 first-terminal-trigger-wins 语义已固定：local stop 先发生时发送一次 `/cancel` 且 remote event 不能迟到发布；host termination 先发生时本地资源只释放一次且 `/cancel` 为 0。后续竞态 caller 只等待同一 report。
+- 完整 deterministic evidence 最终为 160 项 macOS tests（159 pass、1 explicit Keychain skip）、五平台 warnings-as-errors build、四 SDK C syntax 及 clean-room/fixture/OpenSpec/generator/ENet gates。此证据仅证明 control-plane cancellation convergence，不证明 5.x media resource teardown。
+- 4.6 提交前复核发现：远端 termination event 发布后、teardown actor 建立 operation 前曾存在重入窗口，后到 local stop 可能先建立带 `/cancel` 的 operation。provider 现在先同步 claim `TerminalSession` 并冻结 trigger/cancelRemoteSession，再执行异步 teardown；first-terminal 决策不再跨 actor 悬空。

@@ -76,6 +76,44 @@ final class StreamNegotiationTests: XCTestCase {
         XCTAssertEqual(calls.map(\.pin), [request.host.pinnedIdentity, request.host.pinnedIdentity])
         XCTAssertTrue(calls.allSatisfy { $0.url.scheme == "https" })
         XCTAssertTrue(calls.allSatisfy { $0.url.port == HostEndpoint.defaultHTTPSPort })
+        XCTAssertEqual(URLComponents(url: calls[1].url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "uniqueid" })?.value, request.clientUniqueID)
+    }
+
+    func testCancelResponseRequiresExplicitSunshineConfirmation() throws {
+        XCTAssertNoThrow(try StreamLaunchResponseParser.parseCancel(Data(
+            "<root status_code=\"200\"><cancel>1</cancel></root>".utf8
+        )))
+
+        for xml in [
+            "<root status_code=\"200\"></root>",
+            "<root status_code=\"200\"><cancel>0</cancel></root>",
+            "<root status_code=\"503\"><cancel>1</cancel></root>",
+            "not xml"
+        ] {
+            XCTAssertThrowsError(try StreamLaunchResponseParser.parseCancel(Data(xml.utf8))) { error in
+                XCTAssertEqual((error as? StreamNegotiationFailure)?.code, .cancelRejected)
+            }
+        }
+    }
+
+    func testCoordinatorDisconnectsLocallyWhenRemoteCancelFails() async throws {
+        let request = try makeRequest()
+        let launchClient = FailingStopStreamLaunchClient()
+        let coordinator = StreamSessionCoordinator(launchClient: launchClient)
+        _ = try await coordinator.launch(request)
+
+        do {
+            _ = try await coordinator.stop(
+                host: request.host,
+                clientUniqueID: request.clientUniqueID
+            )
+            XCTFail("The scripted remote cancellation must fail.")
+        } catch let failure as StreamNegotiationFailure {
+            XCTAssertEqual(failure.code, .cancelRejected)
+        }
+        let snapshot = await coordinator.snapshot
+        XCTAssertEqual(snapshot.stage, .disconnected)
     }
 
     private func makeRequest(
@@ -121,13 +159,45 @@ private actor RecordingPinnedStreamRequestExecutor: PinnedHTTPSRequestExecuting 
         if url.path == "/launch" {
             data = Data("<root status_code=\"200\"><gamesession>123</gamesession></root>".utf8)
         } else {
-            data = Data()
+            data = Data("<root status_code=\"200\"><cancel>1</cancel></root>".utf8)
         }
         return (data, URLResponse(url: url, mimeType: "application/xml", expectedContentLength: data.count, textEncodingName: "utf-8"))
     }
 
     func recordedCalls() -> [Call] {
         calls
+    }
+}
+
+private actor FailingStopStreamLaunchClient: StreamLaunchClient {
+    func launch(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        StreamLaunchResponse(
+            sessionURL: "rtsp://example.invalid/session",
+            gameSessionID: "123",
+            rawValues: [:]
+        )
+    }
+
+    func resume(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        throw StreamNegotiationFailure(
+            code: .resumeRejected,
+            subsystem: "resume",
+            message: "Unexpected resume."
+        )
+    }
+
+    func stop(host: MoonlightHost, clientUniqueID: String) async throws {
+        throw StreamNegotiationFailure(
+            code: .cancelRejected,
+            subsystem: "stop",
+            message: "Scripted cancellation failure."
+        )
     }
 }
 

@@ -45,6 +45,8 @@ The control channel never reconnects by resetting an AES-GCM sequence under the 
 
 Channel health is a current set, not a monotonic readiness latch. Empty health is unavailable, a required-channel subset is degraded, and only a set satisfying every required control/video/audio/input channel permits streaming. Any control failure publishes an empty health set before recovery or terminal failure, and exhausted recovery performs local teardown plus a best-effort remote cancel without issuing a second launch.
 
+Every session generation owns one idempotent teardown coordinator. Local stop, stream-consumer cancellation, replacement, terminal failure, and reconnect exhaustion invalidate the generation before any suspension point, cancel its bootstrap task, stop ENet and RTSP to unblock in-flight work, and make one best-effort pinned `/cancel` request. A host termination uses the same local teardown but does not issue redundant remote cancellation. The first terminal trigger wins; later racing requests await the same teardown operation and cannot clear or stop a replacement generation. `/cancel` failure is reported only as teardown evidence and never prevents local resource release.
+
 ### Use VideoToolbox, CoreVideo, and Metal for video
 
 Packet assembly produces codec access units and configuration metadata. VideoToolbox returns `CVPixelBuffer` objects; `CVMetalTextureCache` exposes textures to the renderer without a CPU color conversion. Codec, resolution, bit-depth, colorspace, and HDR changes rebuild the affected format/decompression state. HDR output mapping remains a later change, but metadata must be preserved now.

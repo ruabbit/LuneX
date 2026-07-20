@@ -245,6 +245,22 @@ actor NetworkRTSPConnection: RTSPConnectionExecuting {
 actor MoonlightSessionControlProvider: SessionControlProvider {
     private static let clientVersion = "14"
 
+    private struct ActiveSession {
+        var sessionID: UUID
+        var token: UUID
+        var teardown: SessionControlTeardownCoordinator
+        var task: Task<Void, Never>?
+    }
+
+    private struct TerminalSession {
+        var sessionID: UUID
+        var token: UUID
+        var teardown: SessionControlTeardownCoordinator
+        var task: Task<Void, Never>?
+        var trigger: SessionControlTeardownTrigger
+        var cancelRemoteSession: Bool
+    }
+
     private let launchClient: any StreamLaunchClient
     private let connection: any RTSPConnectionExecuting
     private let controlChannel: any MoonlightControlChannelManaging
@@ -252,9 +268,8 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private let reconnectSleeper: any SessionReconnectSleeping
     private let keyMaterialGenerator: any RemoteInputKeyMaterialGenerating
     private let reconnectClassifier: SessionReconnectFailureClassifier
-    private var task: Task<Void, Never>?
-    private var taskToken: UUID?
-    private var activeSessionID: UUID?
+    private var activeSession: ActiveSession?
+    private var lastSession: TerminalSession?
 
     init(
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
@@ -278,72 +293,85 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         sessionID: UUID,
         request: StreamLaunchRequest
     ) async -> AsyncThrowingStream<SessionControlEvent, Error> {
-        if let previous = task {
-            task = nil
-            taskToken = nil
-            activeSessionID = nil
-            previous.cancel()
-            await previous.value
-            await controlChannel.stop()
-            await connection.cancel()
-        } else if activeSessionID != nil {
-            activeSessionID = nil
-            await controlChannel.stop()
-            await connection.cancel()
+        if let previous = activeSession {
+            await cancelSession(previous, trigger: .replacement)
         }
+
         let token = UUID()
-        activeSessionID = sessionID
-        taskToken = token
-        return AsyncThrowingStream { continuation in
-            task = Task {
-                await self.bootstrap(
-                    request,
-                    token: token,
-                    continuation: continuation
+        let teardown = SessionControlTeardownCoordinator(
+            launchClient: launchClient,
+            connection: connection,
+            controlChannel: controlChannel,
+            request: request
+        )
+        var continuation: AsyncThrowingStream<SessionControlEvent, Error>.Continuation!
+        let stream = AsyncThrowingStream<SessionControlEvent, Error> {
+            continuation = $0
+        }
+        let task = Task {
+            await self.bootstrap(
+                request,
+                token: token,
+                teardown: teardown,
+                continuation: continuation
+            )
+        }
+        activeSession = ActiveSession(
+            sessionID: sessionID,
+            token: token,
+            teardown: teardown,
+            task: task
+        )
+        continuation.onTermination = { @Sendable termination in
+            guard case .cancelled = termination else { return }
+            Task {
+                await self.cancelBootstrap(
+                    sessionID: sessionID,
+                    expectedToken: token
                 )
             }
-            continuation.onTermination = { @Sendable termination in
-                guard case .cancelled = termination else { return }
-                Task {
-                    await self.cancelBootstrap(
-                        sessionID: sessionID,
-                        expectedToken: token
-                    )
-                }
-            }
         }
+        return stream
     }
 
     func requestIDR(sessionID: UUID) async throws {
-        guard activeSessionID == sessionID else {
+        guard activeSession?.sessionID == sessionID else {
             throw ControlChannelError.invalidState
         }
         try await controlChannel.requestIDR()
     }
 
     func stop(sessionID: UUID) async {
-        guard activeSessionID == sessionID else { return }
-        let activeTask = task
-        task = nil
-        taskToken = nil
-        activeSessionID = nil
-        activeTask?.cancel()
-        await activeTask?.value
-        await controlChannel.stop()
-        await connection.cancel()
+        if let activeSession, activeSession.sessionID == sessionID {
+            await cancelSession(
+                activeSession,
+                trigger: .localStop,
+                cancelRemoteSession: true
+            )
+        } else if let lastSession, lastSession.sessionID == sessionID {
+            _ = await lastSession.teardown.teardown(
+                trigger: lastSession.trigger,
+                cancelRemoteSession: lastSession.cancelRemoteSession
+            )
+        }
+    }
+
+    func teardownSnapshot(sessionID: UUID) async -> SessionControlTeardownSnapshot? {
+        if let activeSession, activeSession.sessionID == sessionID {
+            return await activeSession.teardown.snapshot()
+        }
+        if let lastSession, lastSession.sessionID == sessionID {
+            return await lastSession.teardown.snapshot()
+        }
+        return nil
     }
 
     private func bootstrap(
         _ request: StreamLaunchRequest,
         token: UUID,
+        teardown: SessionControlTeardownCoordinator,
         continuation: AsyncThrowingStream<SessionControlEvent, Error>.Continuation
     ) async {
-        defer {
-            if taskToken == token {
-                task = nil
-                taskToken = nil
-            }
-        }
         do {
             try reconnectPolicy.validate()
             let parameters = try StreamNegotiator().makeParameters(from: request)
@@ -361,20 +389,25 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
 
             while !Task.isCancelled {
                 do {
-                    switch try await controlChannel.nextEvent() {
+                    let event = try await controlChannel.nextEvent()
+                    try ensureCurrent(token: token)
+                    switch event {
                     case .idle, .message:
                         continue
                     case let .terminated(reason):
-                        await controlChannel.stop()
-                        await connection.cancel()
-                        if taskToken == token {
-                            activeSessionID = nil
-                        }
                         try yield(
                             .terminated(reason: reason.description),
                             token: token,
                             continuation: continuation
                         )
+                        let terminalSession = claimTerminalSession(
+                            token: token,
+                            trigger: .remoteTermination,
+                            cancelRemoteSession: false
+                        )
+                        if let terminalSession {
+                            _ = await executeTeardown(terminalSession)
+                        }
                         continuation.finish()
                         return
                     }
@@ -393,12 +426,27 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             }
             try Task.checkCancellation()
         } catch {
-            await controlChannel.stop()
-            await connection.cancel()
-            if taskToken == token {
-                activeSessionID = nil
+            let cancelled = error is CancellationError
+                || Task.isCancelled
+                || activeSession?.token != token
+            let terminalSession = claimTerminalSession(
+                token: token,
+                trigger: .failure,
+                cancelRemoteSession: true
+            )
+            if let terminalSession {
+                _ = await executeTeardown(terminalSession)
+            } else {
+                _ = await teardown.teardown(
+                    trigger: .failure,
+                    cancelRemoteSession: true
+                )
             }
-            continuation.finish(throwing: error)
+            if cancelled {
+                continuation.finish()
+            } else {
+                continuation.finish(throwing: error)
+            }
         }
     }
 
@@ -518,10 +566,6 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             }
         }
 
-        try? await launchClient.stop(
-            host: request.host,
-            clientUniqueID: request.clientUniqueID
-        )
         throw StreamNegotiationFailure(
             code: .reconnectExhausted,
             subsystem: "reconnect",
@@ -564,7 +608,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     }
 
     private func ensureCurrent(token: UUID) throws {
-        guard !Task.isCancelled, taskToken == token else {
+        guard !Task.isCancelled, activeSession?.token == token else {
             throw CancellationError()
         }
     }
@@ -595,16 +639,60 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         sessionID: UUID,
         expectedToken: UUID
     ) async {
-        guard activeSessionID == sessionID,
-              taskToken == expectedToken else { return }
-        let activeTask = task
-        task = nil
-        taskToken = nil
-        activeSessionID = nil
-        activeTask?.cancel()
-        await activeTask?.value
-        await controlChannel.stop()
-        await connection.cancel()
+        guard let activeSession,
+              activeSession.sessionID == sessionID,
+              activeSession.token == expectedToken else { return }
+        await cancelSession(activeSession, trigger: .streamCancellation)
+    }
+
+    private func cancelSession(
+        _ session: ActiveSession,
+        trigger: SessionControlTeardownTrigger,
+        cancelRemoteSession: Bool = true
+    ) async {
+        guard let terminalSession = claimTerminalSession(
+            token: session.token,
+            trigger: trigger,
+            cancelRemoteSession: cancelRemoteSession
+        ) else {
+            return
+        }
+        terminalSession.task?.cancel()
+        _ = await executeTeardown(terminalSession)
+        await terminalSession.task?.value
+    }
+
+    private func claimTerminalSession(
+        token: UUID,
+        trigger: SessionControlTeardownTrigger,
+        cancelRemoteSession: Bool
+    ) -> TerminalSession? {
+        if let session = activeSession, session.token == token {
+            activeSession = nil
+            let terminalSession = TerminalSession(
+                sessionID: session.sessionID,
+                token: session.token,
+                teardown: session.teardown,
+                task: session.task,
+                trigger: trigger,
+                cancelRemoteSession: cancelRemoteSession
+            )
+            lastSession = terminalSession
+            return terminalSession
+        }
+        if let lastSession, lastSession.token == token {
+            return lastSession
+        }
+        return nil
+    }
+
+    private func executeTeardown(
+        _ session: TerminalSession
+    ) async -> SessionControlTeardownReport {
+        await session.teardown.teardown(
+            trigger: session.trigger,
+            cancelRemoteSession: session.cancelRemoteSession
+        )
     }
 
     private func setupStream(

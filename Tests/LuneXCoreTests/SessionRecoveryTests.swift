@@ -348,6 +348,7 @@ final class SessionRecoveryTests: XCTestCase {
         let secondEvents = try await collect(secondStream)
         let firstEvents = await firstCollector.value
         let launchResponses = await launchClient.recordedResponses()
+        let remoteCancelCount = await launchClient.stopCount()
 
         XCTAssertEqual(firstEvents, [.launchAccepted(launchResponses[0])])
         XCTAssertFalse(firstEvents.contains(.rtspReady))
@@ -358,6 +359,7 @@ final class SessionRecoveryTests: XCTestCase {
             .channelsReady(.control),
             .terminated(reason: "The host ended the streaming session.")
         ])
+        XCTAssertEqual(remoteCancelCount, 1)
     }
 
     private func makeRequest() -> StreamLaunchRequest {
@@ -635,6 +637,7 @@ private final class ScriptedKeyGenerator: RemoteInputKeyMaterialGenerating, @unc
 
 private actor ReplacementLaunchClient: StreamLaunchClient {
     private var responses: [StreamLaunchResponse] = []
+    private var stops = 0
 
     func launch(
         _ request: StreamLaunchRequest,
@@ -660,10 +663,16 @@ private actor ReplacementLaunchClient: StreamLaunchClient {
         )
     }
 
-    func stop(host: MoonlightHost, clientUniqueID: String) async throws {}
+    func stop(host: MoonlightHost, clientUniqueID: String) async throws {
+        stops += 1
+    }
 
     func recordedResponses() -> [StreamLaunchResponse] {
         responses
+    }
+
+    func stopCount() -> Int {
+        stops
     }
 }
 

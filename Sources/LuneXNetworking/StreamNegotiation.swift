@@ -60,6 +60,7 @@ enum StreamNegotiationFailureCode: String, Codable, Equatable, Sendable {
     case invalidBitrate
     case launchRejected
     case resumeRejected
+    case cancelRejected
     case reconnectExhausted
     case reconnectKeyGenerationFailed
     case transportUnavailable
@@ -182,7 +183,8 @@ struct HTTPStreamLaunchClient: StreamLaunchClient {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.timeoutInterval = 30
-        _ = try await requestExecutor.data(for: urlRequest, pinnedIdentity: host.pinnedIdentity)
+        let (data, _) = try await requestExecutor.data(for: urlRequest, pinnedIdentity: host.pinnedIdentity)
+        try StreamLaunchResponseParser.parseCancel(data)
     }
 }
 
@@ -231,6 +233,22 @@ enum StreamLaunchResponseParser {
             gameSessionID: delegate.values["gamesession"],
             rawValues: delegate.values
         )
+    }
+
+    static func parseCancel(_ data: Data) throws {
+        let delegate = SimpleMoonlightXMLDelegate()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+
+        guard parser.parse(),
+              delegate.statusCode == 200,
+              delegate.values["cancel"] == "1" else {
+            throw StreamNegotiationFailure(
+                code: .cancelRejected,
+                subsystem: "stop",
+                message: "Host did not confirm session cancellation."
+            )
+        }
     }
 }
 
@@ -414,9 +432,15 @@ actor StreamSessionCoordinator {
     func stop(host: MoonlightHost, clientUniqueID: String, now: Date = Date()) async throws -> StreamSessionSnapshot {
         snapshot.stage = .stopping
         snapshot.updatedAt = now
-        try await launchClient.stop(host: host, clientUniqueID: clientUniqueID)
-        snapshot.stage = .disconnected
-        snapshot.updatedAt = Date()
-        return snapshot
+        do {
+            try await launchClient.stop(host: host, clientUniqueID: clientUniqueID)
+            snapshot.stage = .disconnected
+            snapshot.updatedAt = Date()
+            return snapshot
+        } catch {
+            snapshot.stage = .disconnected
+            snapshot.updatedAt = Date()
+            throw error
+        }
     }
 }

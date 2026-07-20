@@ -137,8 +137,10 @@ final class RTSPBootstrapTests: XCTestCase {
         XCTAssertEqual(controlConnect?.encryptionKey, Data((0..<16).map(UInt8.init)))
         let controlStops = await control.stopCount()
         let rtspCancellations = await connection.cancelCount()
+        let remoteCancellations = await launchClient.stopCount()
         XCTAssertEqual(controlStops, 1)
         XCTAssertEqual(rtspCancellations, 1)
+        XCTAssertEqual(remoteCancellations, 0)
         XCTAssertFalse(events.contains { event in
             if case .channelsReady(.all) = event { return true }
             if case .negotiated = event { return true }
@@ -429,6 +431,7 @@ private actor BootstrapStubControlChannel: MoonlightControlChannelManaging {
 
 private actor BootstrapStubLaunchClient: StreamLaunchClient {
     private let response: StreamLaunchResponse
+    private var stops = 0
 
     init(response: StreamLaunchResponse) {
         self.response = response
@@ -448,7 +451,13 @@ private actor BootstrapStubLaunchClient: StreamLaunchClient {
         response
     }
 
-    func stop(host: MoonlightHost, clientUniqueID: String) async throws {}
+    func stop(host: MoonlightHost, clientUniqueID: String) async throws {
+        stops += 1
+    }
+
+    func stopCount() -> Int {
+        stops
+    }
 }
 
 private actor BootstrapStubRTSPConnection: RTSPConnectionExecuting {

@@ -255,3 +255,20 @@
 - macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建前后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
 - 自有 C bridge 与 pinned ENet 在 macOS/iOS simulator/tvOS simulator/visionOS simulator 四 SDK strict syntax gate 通过；fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production GPL/reference boundary、ENet revision/license/source match 全部通过。
 - OpenSpec 4.5 更新为完成，权威进度 `22/61`；下一项为 4.6 remote cancel/local cancellation convergence。live host reconnect、媒体/input readiness 与完整 streaming 仍未执行或声称完成。
+
+## 2026-07-21 阶段 13 任务 4.6 启动
+
+- 4.5 已以 `5f41652 Implement bounded session reconnect` 提交并推送，`HEAD == origin/main`、工作树 clean 后进入 4.6。
+- 4.6 范围限定为 remote/local cancellation convergence：显式 stop、stream consumer cancellation、replacement、remote termination、terminal failure 与 reconnect exhaustion 统一进入 generation-owned 幂等 teardown；不提前实现 4.7 完整状态矩阵或 5.x media runtime。
+- 验收重点为阻塞 launch/RTSP/reconnect sleep/resume 的取消收敛、重复 stop、remote/local race、`/cancel` failure 本地资源仍释放，以及旧 generation 不影响新 session。
+
+## 2026-07-21 阶段 13 任务 4.6 完成
+
+- 新增 generation-owned `SessionControlTeardownCoordinator`：local stop、consumer cancellation、replacement、terminal failure 和 reconnect exhaustion 都先使 active generation 失效、取消 bootstrap，再由 detached teardown operation 依次释放 ENet/RTSP 并 best-effort 调用 pinned `/cancel`；同 generation 并发 caller 复用一个 operation。
+- host termination 只执行本地 teardown，不重复 `/cancel`。`HTTPStreamLaunchClient.stop` 现在要求 Sunshine XML `status_code=200` 且 `cancel=1`；远端失败记录为 teardown evidence，但本地资源照常释放。`StreamSessionCoordinator` 在 cancel error 时也收敛到 `disconnected`。
+- 4.6 focused cancellation/HTTP/replacement gate 最终 15/15 通过；覆盖重复 stop、consumer cancellation、launch/RTSP transact/reconnect sleep/resume 阻塞取消、remote/local race、cancel failure、detached cleanup cancellation 隔离、replacement remote cancel 和 old generation suppression。
+- 完整 macOS warnings-as-errors tests 最终为 `160 total / 159 passed / 1 skipped / 0 failed`；唯一 skipped 仍是未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，未再次访问真实 Keychain。
+- macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；四 SDK strict C syntax、fixture self-test/扫描、OpenSpec strict、generator byte-for-byte、production GPL/reference boundary、pinned ENet revision/license/source/header 比对全部通过。
+- OpenSpec 4.6 更新为完成，权威进度 `23/61`；下一项为 4.7 deterministic state-machine tests。媒体/input readiness 与完整 Streaming 仍未实现或声称完成。
+- 4.6 封版审计修正 remote-termination/local-stop 重入竞态：session provider actor 在任何异步 teardown 前锁定 `TerminalSession`，后到请求复用首个 terminal trigger；新增用例证明远端终止后 stop 不发送 `/cancel`，focused cancellation suite `8/8`、RTSP/recovery/negotiation 扩展 gate `38/38` 通过，且显式清除了 `LUNEX_RUN_KEYCHAIN_TEST`。
+- 竞态修正后重新执行完整五平台 warnings-as-errors Debug build，macOS、固定 iPhone、固定 iPad、固定 Apple TV 与固定 Apple Vision Pro 全部通过；这些 simulator 始终保持 `Shutdown`，没有创建、boot 或重复启动设备。
