@@ -192,3 +192,6 @@
 - 动态 Sunshine stub 会实际解密 client challenge、构造 server response、签名 server secret、验证 client pairing secret/response hash，并检查最终请求的临时 pin 与 client identity；pin mismatch 不产生 `.completed`。
 - 配对 transport 的 progress snapshot 现在复用调用方 `attemptID`，与 provider task/cancel key 保持一致；focused 回归覆盖该不变量。
 - 3.4 的完成边界仅到返回已认证的 `PairingResult`。host repository 的原子持久化与 reload 确认属于 3.5，跨 stage cancellation/rollback 属于 3.6，真实 Sunshine pairing/re-pair 属于需显式授权的 3.7。
+- `PersistingPairingProvider` 将 authenticated transport completion 包在 repository commit 之后：先校验 host ID、paired state、exact certificate DER、声明 SHA-256 与实际 DER SHA-256，再 load previous hosts、save replacement、reload 并按 host ID 集合与目标 host exact equality 验证，最后才发布 `.completed`。
+- transport/crypto 失败在 repository I/O 前结束；save 失败不发布 completion；save 后 reload error/mismatch 会恢复整个 previous host snapshot 并重新读取确认。若恢复本身失败，返回独立 `rollbackFailed`，不会把不确定状态报告为 paired。
+- 3.5 的确定性验收覆盖 exact save/reload、transport failure 零写入、save failure 保留旧 pin、reload mismatch rollback、伪造 SHA-256 在 repository access 前拒绝。JSON production repository 继续使用既有 atomic write，真实 Keychain 不参与。

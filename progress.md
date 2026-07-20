@@ -213,3 +213,6 @@
 - 3.4 提交前审计发现 progress snapshot 曾由状态机生成独立 UUID；已让 `PairingStateMachine` 接收并发布请求 `attemptID`，新增 transport 回归断言，focused `PairingTransportTests` 4/4 通过。
 - 3.4 完整 gate 以 `exit_code=0` 完成：完整 macOS tests 通过且真实 Keychain 用例 skipped；macOS、固定 iPhone 17 Pro、固定 iPad Pro、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 通过；fixture self-test/扫描、OpenSpec strict validation、`git diff --check` 通过。
 - 验收结束时四个固定 simulator 均为 `Shutdown`，未创建或启动额外设备。OpenSpec 权威进度更新为 15/61；3.5 host pin 持久提交尚未开始，3.7 live pairing 未执行。
+- 完成并独立验收 OpenSpec 任务 3.5：新增 `PersistingPairingProvider` 与 5 个 transaction tests；authenticated result 的 exact DER/SHA/host state 必须 save 后 reload 验证成功才向调用方发布 `.completed`。
+- 3.5 首次 focused build 因调用另一文件 private `Data.hexString` 失败；改用 production/test 局部 SHA-256 hex helper 后 focused tests 5/5 通过，并将错误写入 `task_plan.md`。
+- 3.5 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation 与 diff check 全部成功；真实 Keychain skipped，固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 16/61。
