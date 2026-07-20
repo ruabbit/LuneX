@@ -1,12 +1,12 @@
 ## 1. Protocol and dependency decisions
 
 - [ ] 1.1 Inventory the exact Sunshine version and protocol features used by the designated local test host without changing host state
-- [ ] 1.2 Document clean-room protocol boundaries and confirm no GPL source or linked artifact enters the production target
-- [ ] 1.3 Create sanitized pairing, RTSP, control, media, and input fixture directories with redaction checks
-- [ ] 1.4 Spike Security-framework client key operations and Sunshine-compatible self-signed certificate encoding
-- [ ] 1.5 Decide repository-owned DER encoding versus a permissively licensed ASN.1 dependency and record the license decision
-- [ ] 1.6 Spike system Opus decoding against representative Sunshine packet framing
-- [ ] 1.7 Decide AudioToolbox versus a narrowly wrapped permissive libopus fallback and record the license decision
+- [x] 1.2 Document clean-room protocol boundaries and confirm no GPL source or linked artifact enters the production target
+- [x] 1.3 Create sanitized pairing, RTSP, control, media, and input fixture directories with redaction checks
+- [x] 1.4 Spike Security-framework client key operations and Sunshine-compatible self-signed certificate encoding
+- [x] 1.5 Decide repository-owned DER encoding versus a permissively licensed ASN.1 dependency and record the license decision
+- [x] 1.6 Spike system Opus decoding against representative Sunshine packet framing
+- [x] 1.7 Decide AudioToolbox versus a narrowly wrapped permissive libopus fallback and record the license decision
 
 ## 2. Runtime architecture and network foundation
 

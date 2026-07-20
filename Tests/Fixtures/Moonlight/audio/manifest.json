@@ -1,0 +1,12 @@
+{
+  "fixtures": [
+    {
+      "expectedResult": "non-silent interleaved stereo PCM; first packet may be shortened by decoder priming",
+      "origin": "generated 997 Hz sine wave; never captured from a host",
+      "path": "stereo-5ms-opus.json",
+      "redaction": "not applicable; fully synthetic media"
+    }
+  ],
+  "schemaVersion": 1,
+  "subsystem": "audio"
+}

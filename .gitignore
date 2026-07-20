@@ -4,6 +4,7 @@ xcuserdata/
 DerivedData/
 build/
 .build/
+__pycache__/
 
 # Local upstream reference checkouts used for research only.
 references/

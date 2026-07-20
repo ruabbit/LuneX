@@ -187,3 +187,13 @@
 - 创建 OpenSpec change `implement-moonlight-session-runtime`，包含 proposal、design、5 个 capability specs 和 61 项依赖有序任务，作为所有平台体验修复的第一阻塞阶段。
 - 继续遵守 Keychain 约束：正常开发与测试使用文件/in-memory fallback，不重复运行已完成的一次性真实 Keychain 验证。
 - 创建并推送规划提交 `fb725d3 Plan end-to-end Moonlight runtime completion` 到 `origin/main`；新 change strict validation 通过并处于 `ready` 状态。
+- 重新创建活动目标并开始阶段 13；只读盘点 Sunshine `serverinfo`、Bonjour、公开 Web UI 认证边界和 codec mode mask，未配对、launch 或修改 host。
+- 完成 OpenSpec 任务 1.2、1.3：新增 clean-room 边界、协议清单、pairing/RTSP/control/video/audio/input fixture 目录和自动脱敏校验器；任务 1.1 因 Sunshine 语义版本需要授权读取而保持未完成。
+- 从磁盘跟踪文件、活动 goal 和 OpenSpec apply instructions 恢复阶段 13：目标仍为 active，change 为 `spec-driven`、进度 `2/61`，工作树仅含阶段 13 未提交变更；下一项为不触发 Keychain 的 Security.framework identity/certificate spike。
+- 完成并独立验收 OpenSpec 任务 1.4：新增 `Tools/IdentitySpike`，以 Security.framework 临时 RSA-2048 key 构造和解析 X.509 v3 自签证书，连续三次完成证书/挑战验签；验证无 Keychain、identity store、host I/O 或密钥落盘。
+- 新增 `docs/runtime/dependency-decisions.md`，记录固定 profile 仓库自有 DER writer 决策草案；待依赖与 strict validation 验收后勾选任务 1.5。
+- 完成并验收 OpenSpec 任务 1.5：静态检查确认无 Swift package、Xcode package product 或 ASN.1 第三方依赖；Security.framework spike、fixture validator、OpenSpec strict validation 和 `git diff --check` 全部通过。
+- 完成并独立验收 OpenSpec 任务 1.6：新增合成 5 ms raw Opus fixture、AudioToolbox packet decoder spike 和开发用 multistream fixture generator；macOS 实测 Sunshine stereo/5.1/7.1 normal/HQ 全部解码为非静音 PCM，iOS/tvOS/visionOS SDK typecheck 通过。
+- 修复 fixture validator：JSON 结构化放行键名精确为 `sha256` 的 64-hex 公开摘要，同时拒绝其他字段、64+ 长 hex 和 65 字符奇数长度绕过；self-test 与实际 fixture 扫描通过。
+- 更新 Opus dependency decision：选择 Apple AudioToolbox production path，不加入 libopus；待独立依赖检查与 strict validation 通过后勾选任务 1.7。
+- 完成并验收 OpenSpec 任务 1.7：production source/project 无 libopus 或 package dependency；checked-in stereo fixture、五 profile decoder 矩阵、fixture validator、OpenSpec strict validation 和 diff check 全部通过。当前 change 进度为 6/61，任务 1.1 保持授权信息阻塞，继续 2.x runtime foundation。

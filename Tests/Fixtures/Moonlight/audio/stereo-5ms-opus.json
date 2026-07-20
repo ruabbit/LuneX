@@ -1,0 +1,15 @@
+{
+  "base64Payload": "7J/YdJTjgflNbd/l/iXPXddlXAbkwV9FYrMEjCWZlvQnC2pDJ1dgnbkVOo/ZUhsLp4sPsix1FA/9tvyR",
+  "bitrate": 96000,
+  "channelCount": 2,
+  "coupledStreamCount": 1,
+  "encoderApplication": "restricted-lowdelay",
+  "expectedDecodedFrames": 240,
+  "frameDurationMilliseconds": 5,
+  "generation": "ffmpeg lavfi sine frequency 997 at 48000 Hz; libopus CBR",
+  "origin": "synthetic",
+  "sampleRate": 48000,
+  "sha256": "01ec7d7a17b4ef22a10a08851288c4a96e5c8ccc97f14d695aca659e00e08b80",
+  "streamCount": 1,
+  "version": 1
+}

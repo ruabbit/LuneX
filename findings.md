@@ -153,3 +153,19 @@
 - `SpatialAudioController`、mobile continuity policy、PiP state coordinator 和 UIKit lifecycle monitor 没有生产调用方；iOS/iPadOS scene/resize/PiP/background/EDR 未形成运行闭环。
 - `RuntimeCapabilityAvailability.current` 仍将 pairing 和 stream transport 设为 false；真实配对、RTSP/control、VideoToolbox/音频 decode 与输入发送是所有后续体验的阻塞依赖。
 - 因上述证据，原阶段 5–9 从 `complete` 修正为 `partial`，并建立阶段 13–20 的端到端路线图。
+
+### 2026-07-21 阶段 13 协议盘点
+
+- 只读 Bonjour 与 `serverinfo` 确认一台可用 Sunshine host，协议 `appversion=7.1.431.-1`、兼容 GFE `3.23.0.74`、HTTPS 47984、当前无活动游戏；Web UI 使用 Basic Auth，未尝试认证。
+- `servercodecmodesupport=0x001F0301`：H.264、HEVC、HEVC Main10、AV1 Main8/Main10、H.264 4:4:4、HEVC 4:4:4 8/10-bit；不含 AV1 4:4:4。HEVC luma limit 为 `1869449984`。
+- `appversion` 是 Sunshine 模拟的 GameStream 协议版本，不是发布语义版本；上游 `nvhttp.h` 也明确该字段是 protocol version。精确 Sunshine release version 需要已授权 Web config GET 或主机侧 `sunshine --version`，任务 1.1 暂不勾选。
+- 当前 Xcode production target 无 SPM product、moonlight-common-c、FFmpeg、SDL、Qt 或 libopus 链接；`references/` 保持 Git/Xcode 外只读研究区。
+- 阶段 13 恢复后确认 OpenSpec `implement-moonlight-session-runtime` 为 `spec-driven`、进度 `2/61`；任务 1.4 的身份 spike 必须生成非永久 RSA-2048 `SecKey`、构造可由 `SecCertificateCreateWithData` 解析的 X.509 v3 自签证书，并使用证书公钥验证证书签名和独立 payload 签名，全程不访问 Keychain 或 identity store。
+- Security.framework identity spike 以 `-warnings-as-errors` 编译并连续运行三次通过：每次生成 RSA-2048 临时 key、724-byte X.509 DER，证书公钥与生成公钥一致，证书签名和 challenge 签名均验证成功；源码禁止项扫描确认无 `SecItem*`、永久 key 或 identity-store 调用。
+- X.509 依赖决策倾向仓库自有的固定 profile DER writer：只编码 v3、正随机 serial、CN、20 年 validity、RSA SPKI、SHA256WithRSA，完成证书仍由 Security.framework 解析；无需引入通用 ASN.1 依赖，live Sunshine 接受性仍需后续授权 pairing gate 证明。
+- Opus spike 的协议输入边界已确认：Moonlight 接收路径先对 12-byte RTP header、FEC/ordering 和可选 AES 做处理，然后把单个 raw Opus payload 交给 decoder；不能用 Ogg/CAF 文件解码代替 packet-level 验证。
+- 当前 Sunshine stereo profile 为 48 kHz、2 channels、1 stream/1 coupled stream、96 kbps CBR、restricted-lowdelay；默认 5 ms 为 240 samples/frame。5.1/7.1 使用独立 multistream mapping 和不同 coupled-stream 配置，Apple 系统 decoder 的 stereo 结果不能代表 surround 支持。
+- AudioConverter 首次 raw stereo Opus 解码已返回 PCM，但首包只输出 120/240 frames，反映 2.5 ms decoder priming；生产 jitter/sync 层不得假设每个 packet 同步产生固定长度 PCM，需按实际输出 frame count 建时钟。
+- 多声道代表性要求：Sunshine 的 5.1/7.1 encoder 直接使用 Moonlight speaker-order identity mapping（分别 `[0...5]`、`[0...7]`）；常规 Ogg/FFmpeg 5.1 `OpusHead` 使用 Vorbis-order mapping `[0,4,1,2,3,5]`，不能直接充当 Sunshine multistream fixture。合成 fixture 必须显式使用 Sunshine 的 streams/coupledStreams/mapping。
+- AudioToolbox runtime spike 在 macOS 解码 Sunshine 全部五种 5 ms profile 成功：stereo、5.1 normal/HQ、7.1 normal/HQ，raw packet 分别为 60/160/960/281/1280 bytes，均输出 120-frame 首包非静音 PCM。相同 Swift surface 对 iOS/tvOS/visionOS 26 simulator SDK 以 warnings-as-errors typecheck 通过，但这些平台仍只是编译证据。
+- Opus production 决策为系统 AudioToolbox `AudioConverter`，不链接 libopus；wrapper 从 RTSP 配置合成 `OpusHead`，输出实际 PCM frame count。libopus 1.6.1 仅作为 `Tools/OpusSpike/generate_fixture.c` 的本地合成 fixture 生成依赖，不进入 Xcode target。
