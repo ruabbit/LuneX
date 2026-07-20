@@ -225,3 +225,8 @@
 - 4.1 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation、diff check 全部成功；真实 Keychain skipped，四个固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 18/61。
 - 完成并独立验收 OpenSpec 任务 4.2：新增 Sunshine DESCRIBE/SETUP typed parsers、synthetic negotiation fixture 和 4 个 tests；解析 feature/encryption/codec/Opus、session/port/ping/connect values，并拒绝 malformed/duplicate/missing negotiated fields。
 - 4.2 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation、diff check 全部成功；真实 Keychain skipped，四个固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 19/61。
+- 完成并独立验收 OpenSpec 任务 4.3：新增 `RTSPBootstrap.swift` 和 8 个 bootstrap tests，支持 `rtsp://`/`rtspenc://` endpoint、Sunshine OPTIONS/DESCRIBE、AES-GCM encrypted RTSP framing、CSeq/status fail-closed 和 task/session token 生命周期。
+- 4.3 修正 session truth：`StreamSessionCoordinator.markTransportStarted` 必须满足全部 required channel readiness；`AppModel` 不再因 `/launch` response 手动进入 Streaming，在 8.x production provider 注入前保持明确 fail-closed。
+- 4.3 协议审查补齐 `X-GS-ClientVersion: 14` 与 `Host` headers；加密 framing 与本地只读参考中的 24-byte header、BE sequence、LE nonce、`C/R`/`H/R` origin separation 一致，未复制或链接 GPL production source。
+- 4.3 focused tests 17/17 通过；完整 macOS warnings-as-errors tests 通过且真实 Keychain test skipped。macOS、固定 iPhone 17 Pro、固定 iPad Pro、固定 Apple TV、固定 Apple Vision Pro 隔离 Debug build 全部通过。
+- fixture self-test/扫描、OpenSpec strict validation、generator consistency、`git diff --check` 全部通过；验收前后四个固定 simulator 均为 `Shutdown`，未创建或启动额外设备。OpenSpec 权威进度更新为 20/61，下一项为 4.4 control channel。

@@ -163,6 +163,7 @@ protocol PairingRuntimeProvider: Sendable {
 
 enum SessionControlEvent: Equatable, Sendable {
     case launchAccepted(StreamLaunchResponse)
+    case rtspReady
     case negotiated(NegotiatedSessionConfiguration)
     case channelsReady(SessionChannelReadiness)
     case reconnecting(attempt: Int, reason: String)

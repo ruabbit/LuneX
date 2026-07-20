@@ -332,11 +332,11 @@ final class AppModel {
 
         do {
             _ = try await streamSessionCoordinator.launch(request)
-            _ = try await streamSessionCoordinator.markTransportStarted()
-            session.phase = .streaming
-            renderState.policy = .active
-            navigationSelection = .stream
-            diagnostics.record("Streaming \(app.name) from \(host.name)", subsystem: "stream")
+            throw StreamNegotiationFailure(
+                code: .transportUnavailable,
+                subsystem: "rtsp",
+                message: "Launch was accepted, but no session control provider is connected."
+            )
         } catch {
             let message = String(describing: error)
             streamLaunchUI.errorMessage = message

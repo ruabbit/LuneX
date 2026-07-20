@@ -307,12 +307,17 @@ actor StreamSessionCoordinator {
         }
     }
 
-    func markTransportStarted(now: Date = Date()) throws -> StreamSessionSnapshot {
-        guard snapshot.stage == .readyForTransport else {
+    func markTransportStarted(
+        readiness: SessionChannelReadiness,
+        requiredChannels: SessionChannelReadiness = .all,
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard snapshot.stage == .readyForTransport,
+              readiness.satisfies(requiredChannels) else {
             throw StreamNegotiationFailure(
                 code: .invalidTransition,
                 subsystem: "transport",
-                message: "Transport can only start after launch is ready."
+                message: "Streaming requires launch plus every required transport channel."
             )
         }
         snapshot.stage = .streaming

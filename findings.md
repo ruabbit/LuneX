@@ -154,6 +154,15 @@
 - `RuntimeCapabilityAvailability.current` 仍将 pairing 和 stream transport 设为 false；真实配对、RTSP/control、VideoToolbox/音频 decode 与输入发送是所有后续体验的阻塞依赖。
 - 因上述证据，原阶段 5–9 从 `complete` 修正为 `partial`，并建立阶段 13–20 的端到端路线图。
 
+### 2026-07-21 RTSP bootstrap
+
+- Moonlight encrypted RTSP framing uses a 24-byte prefix: big-endian high-bit type/length, big-endian sequence, 16-byte GCM tag, then ciphertext. The 12-byte nonce stores the sequence little-endian in bytes 0...3 and separates client/host origins with `C/R` and `H/R` in bytes 10...11.
+- Modern Sunshine RTSP requests require the normal `CSeq` plus GameStream client version `14` and the target `Host`; DESCRIBE additionally sends `Accept: application/sdp` and the epoch `If-Modified-Since` value.
+- `MoonlightSessionControlProvider` now publishes `.launchAccepted` immediately after authenticated HTTPS launch, but publishes `.rtspReady` only after a valid session URL, RTSP connect, 200 OPTIONS, 200 DESCRIBE, exact CSeq matching, and bounded SDP parse all succeed.
+- `/launch` and `.rtspReady` still do not publish `.negotiated`, `.channelsReady`, or UI Streaming. The production AppModel remains deliberately fail-closed until the complete provider graph is injected in 8.x.
+- Encrypted RTSP uses the negotiated 16-byte remote input key through CryptoKit AES-GCM; invalid key size, unencrypted type bit, inconsistent length, wrong origin nonce, tag mutation, non-200 status, and CSeq mismatch all fail closed.
+- RTSP bootstrap task ownership uses session/token identity, cancels replaced or abandoned attempts, clears the Network.framework channel and key material, and prevents an older attempt from clearing newer state.
+
 ### 2026-07-21 阶段 13 协议盘点
 
 - OpenSpec `implement-moonlight-session-runtime` 的正确完成计数为 11/61：1.2–1.7 共 6 项、2.1–2.5 共 5 项；1.1 仍因缺少已授权 Sunshine release semantic version 证据而保持未完成。此前进度日志中的 12/61 是计数错误，不改变已完成任务本身。

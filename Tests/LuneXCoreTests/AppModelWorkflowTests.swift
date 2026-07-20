@@ -115,6 +115,56 @@ final class AppModelWorkflowTests: XCTestCase {
         let launchCount = await launchClient.currentLaunchCount()
         XCTAssertEqual(launchCount, 0)
     }
+
+    func testLaunchAcceptanceAloneNeverReportsStreaming() async throws {
+        let host = MoonlightHost(
+            id: UUID(uuidString: "E7919769-7548-45D0-AF14-B516694D7AE5")!,
+            name: "Test Host",
+            address: "moon.local",
+            pairingState: .paired,
+            reachability: .online,
+            pinnedIdentity: PinnedHostIdentity(
+                certificateSHA256: "existing-cert",
+                serverCertificateDER: Data([1, 2, 3]),
+                pairedAt: Date(timeIntervalSince1970: 10)
+            )
+        )
+        let launchClient = StubStreamLaunchClient()
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(hosts: [host]),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
+            runtimeCapabilities: RuntimeCapabilityAvailability(
+                pairingTransportAvailable: false,
+                streamTransportAvailable: true
+            ),
+            clientIdentityStore: InMemoryClientIdentityStore(),
+            clientUniqueID: "test-client",
+            remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data(repeating: 0xAA, count: 16))
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        await model.launchSelectedApp()
+
+        XCTAssertFalse(model.session.isStreaming)
+        guard case .failed = model.session.phase else {
+            return XCTFail("Launch-only flow must fail closed while the session provider is disconnected.")
+        }
+        XCTAssertEqual(model.navigationSelection, .library)
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertTrue(model.streamLaunchUI.errorMessage?.contains("no session control provider") == true)
+        let launchCount = await launchClient.currentLaunchCount()
+        XCTAssertEqual(launchCount, 1)
+    }
 }
 
 private struct StubServerInfoClient: ServerInfoClient {
