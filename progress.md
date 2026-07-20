@@ -186,3 +186,4 @@
 - 创建 `docs/runtime-completion-roadmap.md`，明确真实 runtime → macOS input → HDR → spatial audio → mobile continuity → tvOS/visionOS → UX → Release 验证的依赖顺序。
 - 创建 OpenSpec change `implement-moonlight-session-runtime`，包含 proposal、design、5 个 capability specs 和 61 项依赖有序任务，作为所有平台体验修复的第一阻塞阶段。
 - 继续遵守 Keychain 约束：正常开发与测试使用文件/in-memory fallback，不重复运行已完成的一次性真实 Keychain 验证。
+- 创建并推送规划提交 `fb725d3 Plan end-to-end Moonlight runtime completion` 到 `origin/main`；新 change strict validation 通过并处于 `ready` 状态。
