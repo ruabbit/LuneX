@@ -11,8 +11,10 @@ enum SunshineRTSPNegotiationError: Error, Equatable, Sendable {
     case missingSession
     case duplicateHeader(String)
     case invalidSession
+    case conflictingSession
     case missingTransport
     case invalidServerPort
+    case missingControlConnectData
     case invalidExtensionValue(String)
 }
 

@@ -61,7 +61,7 @@ final class RTSPBootstrapTests: XCTestCase {
         ))
     }
 
-    func testBootstrapPublishesRTSPReadyOnlyAfterOptionsAndDescribe() async throws {
+    func testBootstrapSetsUpAndPublishesControlReadinessWithoutClaimingAllChannels() async throws {
         let launchResponse = StreamLaunchResponse(
             sessionURL: "rtsp://moon.local/session",
             gameSessionID: "session-1",
@@ -70,11 +70,23 @@ final class RTSPBootstrapTests: XCTestCase {
         let launchClient = BootstrapStubLaunchClient(response: launchResponse)
         let connection = BootstrapStubRTSPConnection(responses: [
             response(cSeq: "1"),
-            response(cSeq: "2", body: Data("v=0\r\na=x-ss-general.featureFlags:0\r\n".utf8))
+            response(cSeq: "2", body: Data("v=0\r\na=x-ss-general.featureFlags:0\r\n".utf8)),
+            setupResponse(cSeq: "3", session: "session-token", port: 48_000),
+            setupResponse(cSeq: "4", session: "session-token", port: 47_998),
+            setupResponse(
+                cSeq: "5",
+                session: "session-token",
+                port: 47_999,
+                connectData: 0x1234_5678
+            )
+        ])
+        let control = BootstrapStubControlChannel(events: [
+            .terminated(HostTerminationReason(code: 0x8003_0023, kind: .graceful))
         ])
         let provider = MoonlightSessionControlProvider(
             launchClient: launchClient,
-            connection: connection
+            connection: connection,
+            controlChannel: control
         )
 
         let events = try await collect(await provider.start(
@@ -82,10 +94,24 @@ final class RTSPBootstrapTests: XCTestCase {
             request: makeRequest()
         ))
 
-        XCTAssertEqual(events, [.launchAccepted(launchResponse), .rtspReady])
+        XCTAssertEqual(events, [
+            .launchAccepted(launchResponse),
+            .rtspReady,
+            .channelsReady(.control),
+            .terminated(reason: "The host ended the streaming session.")
+        ])
         let requests = await connection.recordedRequests()
-        XCTAssertEqual(requests.map(\.method), ["OPTIONS", "DESCRIBE"])
-        XCTAssertEqual(requests.map { $0.headerValues(named: "CSeq") }, [["1"], ["2"]])
+        XCTAssertEqual(requests.map(\.method), ["OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP"])
+        XCTAssertEqual(requests.map(\.target), [
+            "rtsp://moon.local/session",
+            "rtsp://moon.local/session",
+            "streamid=audio/0/0",
+            "streamid=video/0/0",
+            "streamid=control/13/0"
+        ])
+        XCTAssertEqual(requests.map { $0.headerValues(named: "CSeq") }, [
+            ["1"], ["2"], ["3"], ["4"], ["5"]
+        ])
         XCTAssertTrue(requests.allSatisfy {
             $0.headerValues(named: "X-GS-ClientVersion") == ["14"]
         })
@@ -95,11 +121,90 @@ final class RTSPBootstrapTests: XCTestCase {
         let endpoint = await connection.recordedEndpoint()
         XCTAssertEqual(endpoint?.networkEndpoint.host, "moon.local")
         XCTAssertEqual(endpoint?.encrypted, false)
+        XCTAssertEqual(requests[2].headerValues(named: "Session"), [])
+        XCTAssertEqual(requests[3].headerValues(named: "Session"), ["session-token"])
+        XCTAssertEqual(requests[4].headerValues(named: "Session"), ["session-token"])
+        XCTAssertTrue(requests[2...4].allSatisfy {
+            $0.headerValues(named: "Transport") == ["unicast;X-GS-ClientPort=50000-50001"]
+        })
+        let controlConnect = await control.recordedConnect()
+        XCTAssertEqual(controlConnect?.endpoint, RuntimeNetworkEndpoint(
+            host: "moon.local",
+            port: 47_999,
+            transport: .udp
+        ))
+        XCTAssertEqual(controlConnect?.connectData, 0x1234_5678)
+        XCTAssertEqual(controlConnect?.encryptionKey, Data((0..<16).map(UInt8.init)))
+        let controlStops = await control.stopCount()
+        let rtspCancellations = await connection.cancelCount()
+        XCTAssertEqual(controlStops, 1)
+        XCTAssertEqual(rtspCancellations, 1)
         XCTAssertFalse(events.contains { event in
-            if case .channelsReady = event { return true }
+            if case .channelsReady(.all) = event { return true }
             if case .negotiated = event { return true }
             return false
         })
+    }
+
+    func testBootstrapFailsClosedOnConflictingSetupSession() async {
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            response(cSeq: "2", body: Data("v=0\r\n".utf8)),
+            setupResponse(cSeq: "3", session: "audio-session", port: 48_000),
+            setupResponse(cSeq: "4", session: "different-session", port: 47_998)
+        ])
+        let control = BootstrapStubControlChannel(events: [])
+        let provider = MoonlightSessionControlProvider(
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: control
+        )
+
+        let result = await collectFailure(await provider.start(
+            sessionID: UUID(),
+            request: makeRequest()
+        ))
+
+        XCTAssertEqual(result.events, [.launchAccepted(launchResponse), .rtspReady])
+        XCTAssertEqual(result.error as? SunshineRTSPNegotiationError, .conflictingSession)
+        let controlConnect = await control.recordedConnect()
+        XCTAssertNil(controlConnect)
+    }
+
+    func testBootstrapFailsClosedWhenControlConnectDataIsMissing() async {
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            response(cSeq: "2", body: Data("v=0\r\n".utf8)),
+            setupResponse(cSeq: "3", session: "session-token", port: 48_000),
+            setupResponse(cSeq: "4", session: "session-token", port: 47_998),
+            setupResponse(cSeq: "5", session: "session-token", port: 47_999)
+        ])
+        let control = BootstrapStubControlChannel(events: [])
+        let provider = MoonlightSessionControlProvider(
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: control
+        )
+
+        let result = await collectFailure(await provider.start(
+            sessionID: UUID(),
+            request: makeRequest()
+        ))
+
+        XCTAssertEqual(result.events, [.launchAccepted(launchResponse), .rtspReady])
+        XCTAssertEqual(result.error as? SunshineRTSPNegotiationError, .missingControlConnectData)
+        let controlConnect = await control.recordedConnect()
+        XCTAssertNil(controlConnect)
     }
 
     func testBootstrapFailsClosedOnMissingSessionURLAfterLaunchAccepted() async {
@@ -233,6 +338,23 @@ final class RTSPBootstrapTests: XCTestCase {
         )
     }
 
+    private func setupResponse(
+        cSeq: String,
+        session: String,
+        port: UInt16,
+        connectData: UInt32? = nil
+    ) -> RTSPResponse {
+        var headers = [
+            RTSPHeader(name: "CSeq", value: cSeq),
+            RTSPHeader(name: "Session", value: session),
+            RTSPHeader(name: "Transport", value: "server_port=\(port)")
+        ]
+        if let connectData {
+            headers.append(RTSPHeader(name: "X-SS-Connect-Data", value: String(connectData)))
+        }
+        return RTSPResponse(statusCode: 200, reasonPhrase: "OK", headers: headers)
+    }
+
     private func collect(
         _ stream: AsyncThrowingStream<SessionControlEvent, Error>
     ) async throws -> [SessionControlEvent] {
@@ -255,6 +377,53 @@ final class RTSPBootstrapTests: XCTestCase {
         } catch {
             return (events, error)
         }
+    }
+}
+
+private struct BootstrapControlConnect: Equatable, Sendable {
+    var endpoint: RuntimeNetworkEndpoint
+    var connectData: UInt32
+    var encryptionKey: Data
+}
+
+private actor BootstrapStubControlChannel: MoonlightControlChannelManaging {
+    private var events: [MoonlightControlEvent]
+    private var connectCall: BootstrapControlConnect?
+    private var stops = 0
+
+    init(events: [MoonlightControlEvent]) {
+        self.events = events
+    }
+
+    func connect(
+        endpoint: RuntimeNetworkEndpoint,
+        connectData: UInt32,
+        encryptionKey: Data
+    ) async throws {
+        connectCall = BootstrapControlConnect(
+            endpoint: endpoint,
+            connectData: connectData,
+            encryptionKey: encryptionKey
+        )
+    }
+
+    func nextEvent() async throws -> MoonlightControlEvent {
+        guard !events.isEmpty else { throw ControlChannelError.disconnected(data: 0) }
+        return events.removeFirst()
+    }
+
+    func requestIDR() async throws {}
+
+    func stop() async {
+        stops += 1
+    }
+
+    func recordedConnect() -> BootstrapControlConnect? {
+        connectCall
+    }
+
+    func stopCount() -> Int {
+        stops
     }
 }
 

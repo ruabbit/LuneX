@@ -15,6 +15,33 @@ def q(value)
   value.to_s.inspect
 end
 
+def source_file?(path)
+  path.end_with?(".swift", ".c")
+end
+
+def file_type(path)
+  return "sourcecode.swift" if path.end_with?(".swift")
+  return "sourcecode.c.c" if path.end_with?(".c")
+
+  "folder.assetcatalog"
+end
+
+def third_party_enet?(path)
+  path.start_with?("ThirdParty/ENet/")
+end
+
+c_sources = [
+  "Sources/LuneXNetworking/CInterop/LuneXENetBridge.c",
+  "ThirdParty/ENet/callbacks.c",
+  "ThirdParty/ENet/compress.c",
+  "ThirdParty/ENet/host.c",
+  "ThirdParty/ENet/list.c",
+  "ThirdParty/ENet/packet.c",
+  "ThirdParty/ENet/peer.c",
+  "ThirdParty/ENet/protocol.c",
+  "ThirdParty/ENet/unix.c"
+]
+
 sources = [
   "Sources/LuneXApp/LuneXApp.swift",
   "Sources/LuneXApp/RootView.swift",
@@ -49,6 +76,8 @@ sources = [
   "Sources/LuneXNetworking/HostDiscovery.swift",
   "Sources/LuneXNetworking/AppCatalog.swift",
   "Sources/LuneXNetworking/BoundedFrameDecoder.swift",
+  "Sources/LuneXNetworking/ControlChannel.swift",
+  "Sources/LuneXNetworking/ENetControlTransport.swift",
   "Sources/LuneXNetworking/HostEndpoint.swift",
   "Sources/LuneXNetworking/NetworkChannels.swift",
   "Sources/LuneXNetworking/Pairing.swift",
@@ -63,7 +92,7 @@ sources = [
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
-]
+] + c_sources
 
 test_support_sources = [
   "Sources/LuneXCore/AppModel.swift",
@@ -94,6 +123,8 @@ test_support_sources = [
   "Sources/LuneXNetworking/HostDiscovery.swift",
   "Sources/LuneXNetworking/AppCatalog.swift",
   "Sources/LuneXNetworking/BoundedFrameDecoder.swift",
+  "Sources/LuneXNetworking/ControlChannel.swift",
+  "Sources/LuneXNetworking/ENetControlTransport.swift",
   "Sources/LuneXNetworking/HostEndpoint.swift",
   "Sources/LuneXNetworking/NetworkChannels.swift",
   "Sources/LuneXNetworking/Pairing.swift",
@@ -108,7 +139,7 @@ test_support_sources = [
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
-]
+] + c_sources
 
 test_sources = [
   "Tests/LuneXCoreTests/AppCatalogTests.swift",
@@ -118,6 +149,7 @@ test_sources = [
   "Tests/LuneXCoreTests/ClientIdentityLifecycleTests.swift",
   "Tests/LuneXCoreTests/ControllerAndDiagnosticsTests.swift",
   "Tests/LuneXCoreTests/ContinuityPolicyTests.swift",
+  "Tests/LuneXCoreTests/ControlChannelTests.swift",
   "Tests/LuneXCoreTests/DiscoveryTests.swift",
   "Tests/LuneXCoreTests/LifecycleRenderPolicyTests.swift",
   "Tests/LuneXCoreTests/NetworkChannelTests.swift",
@@ -206,7 +238,7 @@ build_files = {}
 (sources + resources + test_sources).each do |path|
   key = "file:#{path}"
   file_refs[path] = uuid(key)
-  last_known = path.end_with?(".swift") ? "sourcecode.swift" : "folder.assetcatalog"
+  last_known = file_type(path)
   objects << "#{file_refs[path]} /* #{File.basename(path)} */ = {isa = PBXFileReference; lastKnownFileType = #{last_known}; path = #{q(path)}; sourceTree = \"<group>\"; };"
 end
 
@@ -218,7 +250,8 @@ targets.each do |target|
   (sources + resources).each do |path|
     id = uuid("build:#{target[:name]}:#{path}")
     build_files[[target[:name], path]] = id
-    objects << "#{id} /* #{File.basename(path)} in #{path.end_with?(".swift") ? "Sources" : "Resources"} */ = {isa = PBXBuildFile; fileRef = #{file_refs[path]} /* #{File.basename(path)} */; };"
+    compiler_settings = third_party_enet?(path) ? " settings = {COMPILER_FLAGS = \"-Wno-unused-parameter -Wno-shorten-64-to-32\"; };" : ""
+    objects << "#{id} /* #{File.basename(path)} in #{source_file?(path) ? "Sources" : "Resources"} */ = {isa = PBXBuildFile; fileRef = #{file_refs[path]} /* #{File.basename(path)} */;#{compiler_settings} };"
   end
 end
 
@@ -239,7 +272,8 @@ objects << "#{test_product_id} /* #{test_target[:product]} */ = {isa = PBXFileRe
 (test_support_sources + test_sources).each do |path|
   id = uuid("build:#{test_target[:name]}:#{path}")
   build_files[[test_target[:name], path]] = id
-  objects << "#{id} /* #{File.basename(path)} in Sources */ = {isa = PBXBuildFile; fileRef = #{file_refs[path]} /* #{File.basename(path)} */; };"
+  compiler_settings = third_party_enet?(path) ? " settings = {COMPILER_FLAGS = \"-Wno-unused-parameter -Wno-shorten-64-to-32\"; };" : ""
+  objects << "#{id} /* #{File.basename(path)} in Sources */ = {isa = PBXBuildFile; fileRef = #{file_refs[path]} /* #{File.basename(path)} */;#{compiler_settings} };"
 end
 
 group_ids = {
@@ -285,7 +319,7 @@ targets.each do |target|
   debug = uuid("config:#{target[:name]}:Debug")
   release = uuid("config:#{target[:name]}:Release")
 
-  source_builds = sources.map { |path| "#{build_files[[target[:name], path]]} /* #{File.basename(path)} in Sources */" }.join(",\n\t\t\t\t")
+  source_builds = sources.select { |path| source_file?(path) }.map { |path| "#{build_files[[target[:name], path]]} /* #{File.basename(path)} in Sources */" }.join(",\n\t\t\t\t")
   resource_builds = resources.map { |path| "#{build_files[[target[:name], path]]} /* #{File.basename(path)} in Resources */" }.join(",\n\t\t\t\t")
 
   objects << "#{sources_phase} /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (\n\t\t\t\t#{source_builds}\n\t\t\t); runOnlyForDeploymentPostprocessing = 0; };"
@@ -298,11 +332,15 @@ targets.each do |target|
     settings = {
       "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" => "AccentColor",
       "CODE_SIGN_STYLE" => "Automatic",
+      "CLANG_C_LANGUAGE_STANDARD" => "c11",
       "CURRENT_PROJECT_VERSION" => "1",
       "DEVELOPMENT_TEAM" => "",
       "ENABLE_HARDENED_RUNTIME" => "YES",
       "ENABLE_USER_SCRIPT_SANDBOXING" => "NO",
       "GENERATE_INFOPLIST_FILE" => "YES",
+      "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) __APPLE_USE_RFC_3542=1 ENET_BUILDING_LIB=1 HAS_FCNTL=1 HAS_IOCTL=1 HAS_POLL=1 HAS_GETNAMEINFO=1 HAS_GETADDRINFO=1 HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1",
+      "GCC_TREAT_WARNINGS_AS_ERRORS" => "YES",
+      "HEADER_SEARCH_PATHS" => "$(PROJECT_DIR)/ThirdParty/ENet/include",
       "INFOPLIST_KEY_CFBundleDisplayName" => "LuneX",
       "INFOPLIST_KEY_NSHumanReadableCopyright" => "Copyright © 2026 LuneX.",
       "MARKETING_VERSION" => "0.1.0",
@@ -313,6 +351,7 @@ targets.each do |target|
       "SWIFT_EMIT_LOC_STRINGS" => "YES",
       "SWIFT_OPTIMIZATION_LEVEL" => optimization,
       "SWIFT_STRICT_CONCURRENCY" => "complete",
+      "SWIFT_OBJC_BRIDGING_HEADER" => "Sources/LuneXNetworking/CInterop/LuneX-Bridging-Header.h",
       "SWIFT_VERSION" => "6.0",
       target[:deployment_key] => target[:deployment]
     }.merge(target[:extra])
@@ -341,10 +380,14 @@ objects << "#{test_frameworks_phase} /* Frameworks */ = {isa = PBXFrameworksBuil
   optimization = cfg == "Debug" ? "-Onone" : "-O"
   settings = {
     "CODE_SIGN_STYLE" => "Automatic",
+    "CLANG_C_LANGUAGE_STANDARD" => "c11",
     "CURRENT_PROJECT_VERSION" => "1",
     "DEVELOPMENT_TEAM" => "",
     "ENABLE_USER_SCRIPT_SANDBOXING" => "NO",
     "GENERATE_INFOPLIST_FILE" => "YES",
+    "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) __APPLE_USE_RFC_3542=1 ENET_BUILDING_LIB=1 HAS_FCNTL=1 HAS_IOCTL=1 HAS_POLL=1 HAS_GETNAMEINFO=1 HAS_GETADDRINFO=1 HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1",
+    "GCC_TREAT_WARNINGS_AS_ERRORS" => "YES",
+    "HEADER_SEARCH_PATHS" => "$(PROJECT_DIR)/ThirdParty/ENet/include",
     "MARKETING_VERSION" => "0.1.0",
     "PRODUCT_BUNDLE_IDENTIFIER" => test_target[:bundle],
     "PRODUCT_NAME" => "$(TARGET_NAME)",
@@ -352,6 +395,7 @@ objects << "#{test_frameworks_phase} /* Frameworks */ = {isa = PBXFrameworksBuil
     "SUPPORTED_PLATFORMS" => test_target[:platforms],
     "SWIFT_OPTIMIZATION_LEVEL" => optimization,
     "SWIFT_STRICT_CONCURRENCY" => "complete",
+    "SWIFT_OBJC_BRIDGING_HEADER" => "Sources/LuneXNetworking/CInterop/LuneX-Bridging-Header.h",
     "SWIFT_VERSION" => "6.0",
     "WRAPPER_EXTENSION" => "xctest",
     test_target[:deployment_key] => test_target[:deployment]

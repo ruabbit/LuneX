@@ -1,1 +1,12 @@
-{"fixtures":[],"schemaVersion":1,"subsystem":"control"}
+{
+  "fixtures": [
+    {
+      "file": "encrypted-vectors.json",
+      "origin": "repository-generated with Node.js OpenSSL AES-128-GCM",
+      "purpose": "byte-exact encrypted control framing and nonce origin separation",
+      "redaction": "synthetic key, sequence, packet type, and payload"
+    }
+  ],
+  "schemaVersion": 1,
+  "subsystem": "control"
+}

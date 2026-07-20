@@ -25,7 +25,7 @@ LuneX production targets shall contain independently written Swift/Objective-C b
 - The generated Xcode project has no Swift Package Manager product dependency.
 - The production source list contains no `moonlight-common-c`, libopus, FFmpeg, SDL, or Qt source or binary.
 - `references/` is excluded from Git and Xcode target generation.
-- Current application code uses Apple frameworks and repository-owned Swift sources.
+- Current application code uses Apple frameworks, repository-owned Swift/C bridge sources, and the reviewed MIT ENet control-transport dependency recorded in `dependency-decisions.md`.
 
 ## Review gate for a new dependency
 

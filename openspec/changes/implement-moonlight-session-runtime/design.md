@@ -35,9 +35,9 @@ Each binary/XML/RTSP boundary will have sanitized fixtures, length limits, malfo
 
 Private-key operations remain in Security framework and persisted by the existing identity-store abstraction. A spike will determine whether the required self-signed X.509 encoding can be implemented with a small repository-owned DER encoder or needs a vetted permissively licensed ASN.1 package. No dependency is accepted before license, maintenance, platform, and deterministic-encoding review.
 
-### Use Network.framework and structured cancellation
+### Use native transports with a narrow ENet control dependency
 
-TCP/UDP channels use Network.framework wrappers exposing async sequences and explicit cancellation. A session cancellation tree owns every connection, receive loop, keepalive timer, decoder callback bridge, and input queue. Disconnect waits for teardown and reports any ownership leak in tests.
+TCP and ordinary UDP channels use Network.framework wrappers exposing async sequences and explicit cancellation. Current Sunshine control traffic requires the ENet reliable-UDP protocol, which Network.framework does not implement. The control channel therefore uses a narrowly wrapped, fixed MIT-licensed ENet source revision; the Swift runtime sees only opaque connect, send, service, and disconnect operations. A session cancellation tree owns every connection, receive loop, keepalive timer, decoder callback bridge, and input queue. Disconnect waits for teardown and reports any ownership leak in tests.
 
 ### Use VideoToolbox, CoreVideo, and Metal for video
 
@@ -59,6 +59,7 @@ The first task compares system AudioToolbox/AVFoundation Opus support with the p
 - [Risk] UDP loss and decoder resynchronization can create false streaming states. → Mitigation: readiness and health are channel-derived, with IDR requests, bounded queues, and sustained-frame live gates.
 - [Risk] Live tests could alter the user's host session. → Mitigation: opt-in configuration, designated test app, isolated identity where possible, clean-stop cleanup, and no automatic execution.
 - [Risk] Session actors can retain callback resources. → Mitigation: explicit ownership graph, cancellation tests, weak callback bridges, and teardown counters.
+- [Risk] Reimplementing ENet over raw UDP would create an untested reliability stack, while an unpinned dependency could drift. → Mitigation: vendor the reviewed MIT revision, retain its notice, expose a minimal C bridge, and run cross-SDK compile plus deterministic control-channel tests.
 
 ## Migration Plan
 

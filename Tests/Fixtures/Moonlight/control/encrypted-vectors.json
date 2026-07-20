@@ -1,0 +1,14 @@
+{
+  "origin": "repository-generated with Node.js OpenSSL AES-128-GCM",
+  "schemaVersion": 1,
+  "vectors": [
+    {
+      "clientNonceHex": "04 03 02 01 00 00 00 00 00 00 43 43",
+      "frameHex": "01 00 1a 00 04 03 02 01 39 03 62 32 06 d7 86 aa b0 bc 51 f7 f7 cf f8 20 12 df 6a 1b b4 4f",
+      "keyHex": "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f",
+      "payloadHex": "00 00",
+      "sequence": 16909060,
+      "type": 770
+    }
+  ]
+}

@@ -115,3 +115,51 @@ multichannel matrix where the generator is available, cross-SDK typechecks, and
 later production decoder tests. A libopus fallback requires a new explicit
 decision only if deterministic or authorized live tests expose a system-decoder
 compatibility gap; it must not be added opportunistically.
+
+## ENet control transport
+
+**Decision:** vendor `cgutman/enet` commit
+`aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1` and expose only a repository-owned
+opaque C bridge for the Sunshine control channel.
+
+**Status:** approved for the production control runtime.
+
+### Why Network.framework is insufficient
+
+Current Sunshine GameStream protocol `7.1.431` negotiates the control stream as
+ENet reliable UDP. Network.framework can provide UDP datagrams, but it does not
+implement the ENet handshake, channels, acknowledgement, retransmission,
+fragmentation, peer timeout, or ping state machine. Sending control payloads as
+raw UDP would compile but would not interoperate, and independently recreating
+ENet would add a large reliability protocol with no product advantage.
+
+### Version, license, and notice
+
+- Repository: `https://github.com/cgutman/enet.git`.
+- Revision: `aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1`.
+- License: MIT, copyright Lee Salzman; the complete upstream `LICENSE` is
+  retained beside the vendored source and must ship with required notices.
+- Scope: eight portable C implementation files and their public headers; no
+  Moonlight GPL source or compiled artifact is included.
+
+### Wrapped API and platform evidence
+
+Swift does not import or manipulate ENet structs. `LuneXENetBridge` exposes an
+opaque connection plus bounded connect, reliable/unreliable send, event service,
+and disconnect calls. Control message encryption, validation, state, diagnostics,
+and cancellation remain repository-owned Swift.
+
+The fixed revision passes `clang -std=c11 -Wall -Wextra -Werror` syntax checks
+against macOS 26.4, iOS Simulator 26.4, tvOS Simulator 26.4, and visionOS
+Simulator 26.4 after suppressing only the upstream unused-parameter warning.
+The fork contains Apple IPv6, QoS/DSCP, and socket workarounds used by its
+maintainers for Moonlight-compatible transports.
+
+### Update and removal strategy
+
+Updates require a new pinned revision, license diff, upstream change review,
+cross-SDK strict compile, deterministic loopback/control codec tests, and the
+authorized Sunshine interoperability gate. The dependency can be removed if
+Sunshine negotiates a documented control transport implemented by an Apple
+framework or if a separately reviewed native replacement proves full ENet wire
+compatibility and reliability behavior.

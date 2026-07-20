@@ -247,16 +247,19 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
 
     private let launchClient: any StreamLaunchClient
     private let connection: any RTSPConnectionExecuting
+    private let controlChannel: any MoonlightControlChannelManaging
     private var task: Task<Void, Never>?
     private var taskToken: UUID?
     private var activeSessionID: UUID?
 
     init(
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
-        connection: any RTSPConnectionExecuting = NetworkRTSPConnection()
+        connection: any RTSPConnectionExecuting = NetworkRTSPConnection(),
+        controlChannel: any MoonlightControlChannelManaging = MoonlightControlChannel()
     ) {
         self.launchClient = launchClient
         self.connection = connection
+        self.controlChannel = controlChannel
     }
 
     func start(
@@ -269,9 +272,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             activeSessionID = nil
             previous.cancel()
             await previous.value
+            await controlChannel.stop()
             await connection.cancel()
         } else if activeSessionID != nil {
             activeSessionID = nil
+            await controlChannel.stop()
             await connection.cancel()
         }
         let token = UUID()
@@ -298,11 +303,10 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     }
 
     func requestIDR(sessionID: UUID) async throws {
-        throw StreamNegotiationFailure(
-            code: .transportUnavailable,
-            subsystem: "control",
-            message: "Control channel is not operational yet."
-        )
+        guard activeSessionID == sessionID else {
+            throw ControlChannelError.invalidState
+        }
+        try await controlChannel.requestIDR()
     }
 
     func stop(sessionID: UUID) async {
@@ -313,6 +317,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         activeSessionID = nil
         activeTask?.cancel()
         await activeTask?.value
+        await controlChannel.stop()
         await connection.cancel()
     }
 
@@ -360,8 +365,59 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             )
             _ = try SunshineSessionDescriptionParser.parse(describe)
             continuation.yield(.rtspReady)
-            continuation.finish()
+
+            let audioSetup = try await setupStream(
+                .audio,
+                cSeq: "3",
+                endpoint: endpoint,
+                sessionToken: nil
+            )
+            let videoSetup = try await setupStream(
+                .video,
+                cSeq: "4",
+                endpoint: endpoint,
+                sessionToken: audioSetup.sessionToken
+            )
+            guard videoSetup.sessionToken == audioSetup.sessionToken else {
+                throw SunshineRTSPNegotiationError.conflictingSession
+            }
+            let controlSetup = try await setupStream(
+                .control,
+                cSeq: "5",
+                endpoint: endpoint,
+                sessionToken: audioSetup.sessionToken
+            )
+            guard controlSetup.sessionToken == audioSetup.sessionToken else {
+                throw SunshineRTSPNegotiationError.conflictingSession
+            }
+            guard let connectData = controlSetup.controlConnectData else {
+                throw SunshineRTSPNegotiationError.missingControlConnectData
+            }
+            try await controlChannel.connect(
+                endpoint: controlSetup.endpoint(host: endpoint.networkEndpoint.host),
+                connectData: connectData,
+                encryptionKey: request.remoteInputKey.key
+            )
+            continuation.yield(.channelsReady(.control))
+
+            while !Task.isCancelled {
+                switch try await controlChannel.nextEvent() {
+                case .idle, .message:
+                    continue
+                case let .terminated(reason):
+                    await controlChannel.stop()
+                    await connection.cancel()
+                    if taskToken == token {
+                        activeSessionID = nil
+                    }
+                    continuation.yield(.terminated(reason: reason.description))
+                    continuation.finish()
+                    return
+                }
+            }
+            try Task.checkCancellation()
         } catch {
+            await controlChannel.stop()
             await connection.cancel()
             if taskToken == token {
                 activeSessionID = nil
@@ -393,7 +449,37 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         activeSessionID = nil
         activeTask?.cancel()
         await activeTask?.value
+        await controlChannel.stop()
         await connection.cancel()
+    }
+
+    private func setupStream(
+        _ kind: RTSPSetupStreamKind,
+        cSeq: String,
+        endpoint: RTSPSessionEndpoint,
+        sessionToken: String?
+    ) async throws -> RTSPSetupStreamParameters {
+        let target: String
+        switch kind {
+        case .audio:
+            target = "streamid=audio/0/0"
+        case .video:
+            target = "streamid=video/0/0"
+        case .control:
+            target = "streamid=control/13/0"
+        }
+        var headers = requestHeaders(cSeq: cSeq, endpoint: endpoint) + [
+            RTSPHeader(name: "Transport", value: "unicast;X-GS-ClientPort=50000-50001"),
+            RTSPHeader(name: "If-Modified-Since", value: "Thu, 01 Jan 1970 00:00:00 GMT")
+        ]
+        if let sessionToken {
+            headers.append(RTSPHeader(name: "Session", value: sessionToken))
+        }
+        let response = try await transact(
+            RTSPRequest(method: "SETUP", target: target, headers: headers),
+            expectedCSeq: cSeq
+        )
+        return try RTSPSetupResponseParser.parse(response, kind: kind)
     }
 
     private func transact(
