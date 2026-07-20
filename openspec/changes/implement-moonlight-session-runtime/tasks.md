@@ -28,7 +28,7 @@
 
 ## 4. Launch, RTSP, and session control
 
-- [ ] 4.1 Implement byte-safe RTSP request/response models, parser limits, and serializer fixtures
+- [x] 4.1 Implement byte-safe RTSP request/response models, parser limits, and serializer fixtures
 - [ ] 4.2 Implement Sunshine session description and negotiated stream-parameter parsing
 - [ ] 4.3 Implement launch-to-RTSP transition without reporting streaming from `/launch` alone
 - [ ] 4.4 Implement control-channel setup, keepalive, IDR request, termination, and host error messages

@@ -220,3 +220,6 @@
 - 新增六阶段 blocking Sunshine stub cancellation、真实 hanging HTTP `URLSession.data(for:)` cancellation、save 后 blocked reload rollback tests；focused pairing suites 12/12 通过，URLSession 取消在本地测试中快速收敛。
 - 3.6 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation、diff check 全部成功；真实 Keychain skipped，四个固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 17/61。
 - 任务 3.7 仍需显式授权的 isolated Sunshine test identity 与 host state；本轮未执行 live pairing/re-pair，继续推进不改变 host state 的 4.x RTSP/control 实现。
+- 完成并独立验收 OpenSpec 任务 4.1：新增 byte-safe RTSP/1.0 models、bounded prefix/exact decoder、serializer、repository-generated wire fixtures 和 6 个 tests；覆盖 binary body、fragment/coalesce、header lookup、malformed limits、injection 与 length mismatch。
+- 4.1 focused tests/fixture scan 通过；提交前审计修正 prefix decoder 对大 coalesced buffer 的错误总长判断，并把 delimiter 查找改为无临时数组比较，新增 combined buffer 大于单 frame 上限的回归。
+- 4.1 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation、diff check 全部成功；真实 Keychain skipped，四个固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 18/61。

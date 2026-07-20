@@ -199,3 +199,11 @@
 - `MoonlightPairingProvider` 在 `CancellationError` 和底层返回其他 error 但 task 已 cancelled 两种路径都发布 stage `.cancelled`/failure `.cancelled`，随后 finish throwing；不会发布 `.completed`。`URLSession.data(for:)` 的 task cancellation 会触发 ephemeral session 收敛和 defer invalidation。
 - `PersistingPairingProvider` 同样拥有 wrapper task；取消发生在 authenticated save 后、reload 前/期间时，会恢复并 reload 验证 previous host snapshot，然后才返回 cancelled。若 rollback 失败则显式报告 `rollbackFailed`，不声称旧 pin 已安全恢复。
 - 3.6 确定性覆盖六个 request stage、重复 cancel、active-attempt cleanup、真实本地 hanging HTTP URLSession cancellation，以及 save 后 blocked reload cancellation rollback；没有 live host I/O。
+
+### 2026-07-21 阶段 13 RTSP/Control
+
+- 4.1 使用独立 Swift value model 实现 RTSP/1.0 request/response/header/body；body 始终保持 `Data`，不会因 NUL、非 UTF-8 或内嵌 `CRLFCRLF` 被字符串逻辑截断。
+- `RTSPMessageCodec.decodePrefix` 以 `CRLFCRLF` 和唯一合法 `Content-Length` 计算单条消息边界，支持 fragmented/coalesced input；1 MiB message、64 KiB header、960 KiB body、8 KiB start line、128 headers 和单 header name/value 均有硬限制。prefix 限制只作用于第一条 frame，不误拒绝后续 coalesced bytes；`decodeExact` 单独拒绝 trailing data。
+- parser/serializer 仅接受 RTSP/1.0、ASCII token/header/start-line 安全集，拒绝 LF-only、header injection、重复/非十进制 Content-Length、声明长度不符、非法 status/target/version；header 顺序、大小写与非 Content-Length 重复项保持不变，并提供 case-insensitive lookup。
+- RTSP fixtures 是 repository-generated JSON escaped wire strings，只使用 `example.invalid` 与 synthetic header，无真实 host/session/certificate 数据；fixture decode 后 serialize byte-exact，统一 redaction validator 通过。
+- 4.2 只读协议盘点：Sunshine `DESCRIBE` body 提供 SDP attributes 与一个或两个 `a=fmtp:97 surround-params=` 项；stereo 固定为 48 kHz、1 stream、1 coupled stream，surround 参数携带 channel/stream/coupled/mapping。`SETUP` response 的 channel port 从 `Transport` header `server_port=` 取得，session ID 从 `Session` header 取得。

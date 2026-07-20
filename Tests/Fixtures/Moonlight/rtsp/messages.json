@@ -1,0 +1,4 @@
+{
+  "optionsRequest": "OPTIONS rtsp://example.invalid/session RTSP/1.0\r\nCSeq: 1\r\nX-LuneX-Fixture: generated\r\n\r\n",
+  "successResponse": "RTSP/1.0 200 OK\r\nCSeq: 1\r\nServer: synthetic-sunshine-compatible\r\n\r\n"
+}

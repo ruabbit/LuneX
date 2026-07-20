@@ -1,1 +1,12 @@
-{"fixtures":[],"schemaVersion":1,"subsystem":"rtsp"}
+{
+  "fixtures": [
+    {
+      "file": "messages.json",
+      "origin": "repository-generated",
+      "redaction": "documentation-only host and synthetic headers",
+      "purpose": "byte-exact RTSP/1.0 request and response codec"
+    }
+  ],
+  "schemaVersion": 1,
+  "subsystem": "rtsp"
+}
