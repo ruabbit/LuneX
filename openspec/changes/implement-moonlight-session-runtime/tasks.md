@@ -34,7 +34,7 @@
 - [x] 4.4 Implement control-channel setup, keepalive, IDR request, termination, and host error messages
 - [x] 4.5 Implement bounded reconnect and channel-health aggregation without duplicate host sessions
 - [x] 4.6 Implement remote cancel and local cancellation convergence with idempotent teardown
-- [ ] 4.7 Add deterministic state-machine tests covering success, partial readiness, loss, reconnect, and failure
+- [x] 4.7 Add deterministic state-machine tests covering success, partial readiness, loss, reconnect, and failure
 
 ## 5. Native video runtime
 

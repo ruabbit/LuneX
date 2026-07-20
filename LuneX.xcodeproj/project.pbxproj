@@ -516,6 +516,7 @@
 				1936E33DA062B17B3E4D5866 /* SessionResourceTrackerTests.swift in Sources */,
 				A8CFF45EB8B3BE31C8E9E08D /* SessionCancellationTests.swift in Sources */,
 				08BF0C08DD43FF92379E72F2 /* SessionRecoveryTests.swift in Sources */,
+				E152B1E8C2BA4A59573117D6 /* SessionStateMachineTests.swift in Sources */,
 				BEC37FA319210002E45EEBEC /* StreamNegotiationTests.swift in Sources */
 			); runOnlyForDeploymentPostprocessing = 0; };
 		63DF5880D21F53811AE8A4D8 /* unix.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "ThirdParty/ENet/unix.c"; sourceTree = "<group>"; };
@@ -778,6 +779,7 @@
 				D13D385B7C5D3B25E331207B /* SessionResourceTrackerTests.swift */,
 				E7DC7936552A9B359D6E3DB3 /* SessionCancellationTests.swift */,
 				AC60616CA34AD28E525B2653 /* SessionRecoveryTests.swift */,
+				FA2A252B41360D3C1CCAFA9D /* SessionStateMachineTests.swift */,
 				E5F4371F9A47B38E2727DCD1 /* StreamNegotiationTests.swift */
 			); name = Tests; sourceTree = "<group>"; };
 		A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/AppModelWorkflowTests.swift"; sourceTree = "<group>"; };
@@ -970,6 +972,7 @@
 		E094A6B170094EFB8E98C64E /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
 		E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HostAndPersistenceTests.swift"; sourceTree = "<group>"; };
 		E118B51C36F89088F16C11BF /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBF2FCD8F8F190A2CD96920 /* InputDiagnostics.swift */; };
+		E152B1E8C2BA4A59573117D6 /* SessionStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2A252B41360D3C1CCAFA9D /* SessionStateMachineTests.swift */; };
 		E1862A01B9DF3E5C21EB7CD5 /* AudioSessionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */; };
 		E29320AAC5AB607075FA1DDA /* BoundedFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB71532D3E0C8C031A920E10 /* BoundedFrameDecoder.swift */; };
 		E2AD4561832E48E548C2E084 /* RTSPMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA161CDCBA58595C0DFFB1DD /* RTSPMessage.swift */; };
@@ -1155,6 +1158,7 @@
 			}; name = Debug; };
 		F9742610154D45B4E260C7D5 /* AppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */; };
 		F9BC23D6CCB8CC27D1E3C2EA /* PairingPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06CE224A03FC7F5335F22344 /* PairingPersistenceTests.swift */; };
+		FA2A252B41360D3C1CCAFA9D /* SessionStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/SessionStateMachineTests.swift"; sourceTree = "<group>"; };
 		FB43824D4AD972A315152898 /* list.c in Sources */ = {isa = PBXBuildFile; fileRef = C72D8E8A5B0B2B4AC571D122 /* list.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		FB9F573E862DCA22185062FC /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */; };

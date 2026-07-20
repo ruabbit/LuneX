@@ -32,7 +32,12 @@ final class SessionRecoveryTests: XCTestCase {
                 resumeResults: []
             )
         )
-        _ = try await coordinator.launch(makeRequest())
+        let ready = try await coordinator.launch(makeRequest())
+        _ = try await coordinator.apply(.rtspReady, sessionID: ready.sessionID)
+        _ = try await coordinator.apply(
+            .negotiated(makeStateMachineNegotiatedConfiguration(sessionID: ready.sessionID)),
+            sessionID: ready.sessionID
+        )
 
         let streaming = try await coordinator.updateChannelHealth(.all)
         XCTAssertEqual(streaming.stage, .streaming)

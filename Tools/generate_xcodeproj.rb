@@ -171,6 +171,7 @@ test_sources = [
   "Tests/LuneXCoreTests/SessionResourceTrackerTests.swift",
   "Tests/LuneXCoreTests/SessionCancellationTests.swift",
   "Tests/LuneXCoreTests/SessionRecoveryTests.swift",
+  "Tests/LuneXCoreTests/SessionStateMachineTests.swift",
   "Tests/LuneXCoreTests/StreamNegotiationTests.swift"
 ]
 

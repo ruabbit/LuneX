@@ -272,3 +272,18 @@
 - OpenSpec 4.6 更新为完成，权威进度 `23/61`；下一项为 4.7 deterministic state-machine tests。媒体/input readiness 与完整 Streaming 仍未实现或声称完成。
 - 4.6 封版审计修正 remote-termination/local-stop 重入竞态：session provider actor 在任何异步 teardown 前锁定 `TerminalSession`，后到请求复用首个 terminal trigger；新增用例证明远端终止后 stop 不发送 `/cancel`，focused cancellation suite `8/8`、RTSP/recovery/negotiation 扩展 gate `38/38` 通过，且显式清除了 `LUNEX_RUN_KEYCHAIN_TEST`。
 - 竞态修正后重新执行完整五平台 warnings-as-errors Debug build，macOS、固定 iPhone、固定 iPad、固定 Apple TV 与固定 Apple Vision Pro 全部通过；这些 simulator 始终保持 `Shutdown`，没有创建、boot 或重复启动设备。
+
+## 2026-07-21 阶段 13 任务 4.7 启动
+
+- 4.6 已以 `52a19ac Converge session cancellation teardown` 提交并推送，`HEAD == origin/main`、工作树 clean 后进入 4.7。
+- 4.7 范围限定为 deterministic session state-machine matrix：分别验证 provider event sequence、`StreamSessionCoordinator` transport truth 与 `AppModel` UI-derived phase；不提前实现 5.x media packet/decode runtime。
+- 验收矩阵覆盖 success、partial readiness、required-channel loss、bounded reconnect success/exhaustion、non-retryable failure、remote termination reason、local stop、replacement generation、duplicate event idempotency 与 invalid transition fail-closed。
+
+## 2026-07-21 阶段 13 任务 4.7 完成
+
+- `StreamSessionCoordinator` 新增 generation-scoped `SessionControlEvent` reducer；snapshot 保存 negotiated configuration、reconnect attempt 和 remote termination reason。Streaming 只允许在 launch accepted、RTSP ready、validated negotiated config 且全部 required channels healthy 后进入。
+- required-channel loss 立即退出 Streaming；新 reconnect attempt 清空健康集和旧 negotiated config，必须重新收到 RTSP/negotiated/all-ready 才恢复。stale generation、未知 readiness bit 和非法顺序均 fail closed 且不污染当前 snapshot。
+- duplicate launch/RTSP/negotiated/health/reconnect/termination 保持 snapshot 完全不变；remote termination 后迟到 failure 保留 first-terminal reason，本地 stop 幂等且只调用一次 remote cancel client。
+- 新增 `SessionStateMachineTests` 7 项，相关 state/recovery/negotiation/AppModel focused gate `31/31` 通过；完整 macOS warnings-as-errors tests 为 `167 total / 166 passed / 1 skipped / 0 failed`，唯一 skipped 是未启用 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip。
+- macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；fixture self-test/全树、OpenSpec strict、generator byte-for-byte、production/reference boundary 与 diff check 通过，四个 simulator 始终为 `Shutdown`。
+- OpenSpec 4.7 更新为完成，权威进度 `24/61`；下一项为 5.1 bounded video packet reordering、loss detection 与 codec access-unit assembly。AppModel production provider 接线仍属于 8.x，真实媒体和 Streaming 仍未声称完成。

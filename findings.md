@@ -249,3 +249,13 @@
 - 4.6 的 first-terminal-trigger-wins 语义已固定：local stop 先发生时发送一次 `/cancel` 且 remote event 不能迟到发布；host termination 先发生时本地资源只释放一次且 `/cancel` 为 0。后续竞态 caller 只等待同一 report。
 - 完整 deterministic evidence 最终为 160 项 macOS tests（159 pass、1 explicit Keychain skip）、五平台 warnings-as-errors build、四 SDK C syntax 及 clean-room/fixture/OpenSpec/generator/ENet gates。此证据仅证明 control-plane cancellation convergence，不证明 5.x media resource teardown。
 - 4.6 提交前复核发现：远端 termination event 发布后、teardown actor 建立 operation 前曾存在重入窗口，后到 local stop 可能先建立带 `/cancel` 的 operation。provider 现在先同步 claim `TerminalSession` 并冻结 trigger/cancelRemoteSession，再执行异步 teardown；first-terminal 决策不再跨 actor 悬空。
+
+### 2026-07-21 阶段 13 Deterministic Session State Machine
+
+- 4.5/4.6 已覆盖 provider event sequence、reconnect 与 teardown，但 `StreamSessionCoordinator` 目前只有 launch/health/stop 的分散 mutation API，没有统一消费 `SessionControlEvent`，也没有保存 negotiated configuration、reconnect attempt 或 remote termination reason。
+- 4.7 将新增 generation-scoped event reducer：launch accepted、RTSP ready、negotiated、channel health、reconnect 与 remote termination 都必须经过合法 transition；stale generation 只被拒绝，不能把 replacement 标记失败。
+- 新 reducer 的 Streaming 门严格为 validated negotiated configuration + health 满足全部 configured required channels；partial/duplicate events 保持非 Streaming，required-channel loss 立即进入 reconnecting，恢复时必须重新 RTSP/negotiated 后才能回到 Streaming。
+- AppModel 仍在 8.3 前保持未连接 production `SessionControlProvider` 的 fail-closed 状态；4.7 只验证其现有 UI 层不会因 launch response 报 Streaming，不提前把 provider 注入或完整应用接线标记完成。
+- 4.7 完成后，`StreamSessionSnapshot` 会保留 validated negotiated configuration、current channel health、reconnect attempt、remote termination reason 与 structured failure；每次 `prepare` 使用明确 generation ID，旧 ID 的 event/failure 被拒绝且不改变 replacement snapshot。
+- reducer 的 duplicate contract 是 snapshot byte-for-value 不变：重复 launch/RTSP/negotiated/channel health/reconnect/termination 不刷新 `updatedAt`；remote termination 之后的迟到 failure 也不能覆盖 first terminal reason。本地 stop 同样幂等，只调用一次 remote cancel client。
+- 4.7 确定性矩阵 7/7 通过，相关 focused suites 31/31 通过；完整 macOS warnings-as-errors tests 为 167 total / 166 passed / 1 explicit Keychain skip / 0 failed，五平台 warnings-as-errors Debug build、fixture、OpenSpec、generator、clean-room/diff 与 simulator Shutdown gates 全部通过。

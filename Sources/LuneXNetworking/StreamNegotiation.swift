@@ -90,7 +90,10 @@ struct StreamSessionSnapshot: Codable, Equatable, Sendable {
     var stage: StreamNegotiationStage
     var parameters: StreamNegotiationParameters?
     var launchResponse: StreamLaunchResponse?
+    var negotiatedConfiguration: NegotiatedSessionConfiguration?
     var channelHealth: SessionChannelHealthSnapshot
+    var reconnectAttempt: Int?
+    var terminationReason: String?
     var failure: StreamNegotiationFailure?
     var updatedAt: Date
 }
@@ -312,10 +315,20 @@ struct StreamNegotiator: Sendable {
     }
 }
 
+private enum SessionControlProgress: Int, Sendable {
+    case idle
+    case launchAccepted
+    case rtspReady
+    case negotiated
+    case terminal
+}
+
 actor StreamSessionCoordinator {
     private let negotiator: StreamNegotiator
     private let launchClient: StreamLaunchClient
     private var healthAggregator: SessionChannelHealthAggregator
+    private var controlProgress: SessionControlProgress = .idle
+    private var lastReconnectAttempt = 0
     private(set) var snapshot: StreamSessionSnapshot
 
     init(
@@ -335,43 +348,67 @@ actor StreamSessionCoordinator {
             stage: .idle,
             parameters: nil,
             launchResponse: nil,
+            negotiatedConfiguration: nil,
             channelHealth: healthAggregator.snapshot,
+            reconnectAttempt: nil,
+            terminationReason: nil,
             failure: nil,
             updatedAt: now
         )
     }
 
-    func prepare(_ request: StreamLaunchRequest, now: Date = Date()) throws -> StreamSessionSnapshot {
+    func prepare(
+        _ request: StreamLaunchRequest,
+        sessionID: UUID = UUID(),
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard [.idle, .disconnected, .failed].contains(snapshot.stage) else {
+            throw invalidTransition("A new session cannot replace an active coordinator generation.")
+        }
+
+        snapshot.sessionID = sessionID
         snapshot.stage = .preparingParameters
         snapshot.hostID = request.host.id
         snapshot.appID = request.app.id
+        snapshot.parameters = nil
+        snapshot.launchResponse = nil
+        snapshot.negotiatedConfiguration = nil
         snapshot.failure = nil
         snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
+        snapshot.reconnectAttempt = nil
+        snapshot.terminationReason = nil
         snapshot.updatedAt = now
+        controlProgress = .idle
+        lastReconnectAttempt = 0
 
-        let parameters = try negotiator.makeParameters(from: request)
-        snapshot.parameters = parameters
-        snapshot.stage = .launching
-        snapshot.updatedAt = now
-        return snapshot
+        do {
+            let parameters = try negotiator.makeParameters(from: request)
+            snapshot.parameters = parameters
+            snapshot.stage = .launching
+            snapshot.updatedAt = now
+            return snapshot
+        } catch let failure as StreamNegotiationFailure {
+            transitionToFailure(failure, now: now)
+            throw failure
+        }
     }
 
     func launch(_ request: StreamLaunchRequest, now: Date = Date()) async throws -> StreamSessionSnapshot {
-        let prepared = try prepare(request, now: now)
-        guard let parameters = prepared.parameters else {
-            throw StreamNegotiationFailure(code: .invalidTransition, subsystem: "session", message: "Launch parameters are missing.")
-        }
-
         do {
+            let prepared = try prepare(request, now: now)
+            guard let parameters = prepared.parameters else {
+                throw invalidTransition("Launch parameters are missing.")
+            }
             let response = try await launchClient.launch(request, parameters: parameters)
-            snapshot.launchResponse = response
-            snapshot.stage = .readyForTransport
-            snapshot.updatedAt = Date()
-            return snapshot
+            return try apply(
+                .launchAccepted(response),
+                sessionID: prepared.sessionID,
+                now: Date()
+            )
         } catch let failure as StreamNegotiationFailure {
-            snapshot.stage = .failed
-            snapshot.failure = failure
-            snapshot.updatedAt = Date()
+            if snapshot.stage != .failed {
+                transitionToFailure(failure, now: Date())
+            }
             throw failure
         } catch {
             let failure = StreamNegotiationFailure(
@@ -379,11 +416,135 @@ actor StreamSessionCoordinator {
                 subsystem: "launch",
                 message: String(describing: error)
             )
-            snapshot.stage = .failed
-            snapshot.failure = failure
-            snapshot.updatedAt = Date()
+            transitionToFailure(failure, now: Date())
             throw failure
         }
+    }
+
+    func apply(
+        _ event: SessionControlEvent,
+        sessionID: UUID,
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard sessionID == snapshot.sessionID else {
+            throw invalidTransition("A stale session generation cannot mutate the active session.")
+        }
+
+        switch event {
+        case let .launchAccepted(response):
+            if controlProgress.rawValue >= SessionControlProgress.launchAccepted.rawValue,
+               snapshot.launchResponse == response,
+               [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) {
+                return snapshot
+            }
+            guard snapshot.stage == .launching, controlProgress == .idle else {
+                throw invalidTransition("Launch acceptance arrived outside the launching stage.")
+            }
+            snapshot.launchResponse = response
+            snapshot.stage = .readyForTransport
+            controlProgress = .launchAccepted
+
+        case .rtspReady:
+            if controlProgress.rawValue >= SessionControlProgress.rtspReady.rawValue,
+               [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) {
+                return snapshot
+            }
+            guard controlProgress == .launchAccepted,
+                  [.readyForTransport, .reconnecting].contains(snapshot.stage) else {
+                throw invalidTransition("RTSP readiness requires an accepted launch or resume generation.")
+            }
+            controlProgress = .rtspReady
+
+        case let .negotiated(configuration):
+            if controlProgress == .negotiated,
+               snapshot.negotiatedConfiguration == configuration,
+               [.readyForTransport, .reconnecting, .streaming].contains(snapshot.stage) {
+                return snapshot
+            }
+            guard controlProgress == .rtspReady,
+                  [.readyForTransport, .reconnecting].contains(snapshot.stage),
+                  configuration.sessionID == sessionID,
+                  configuration.requiredChannels == snapshot.channelHealth.requiredChannels else {
+                throw invalidTransition("Negotiated configuration does not match the active RTSP generation.")
+            }
+            do {
+                try configuration.validate()
+            } catch {
+                throw invalidTransition("Negotiated configuration failed runtime contract validation.")
+            }
+            snapshot.negotiatedConfiguration = configuration
+            controlProgress = .negotiated
+
+        case let .channelsReady(healthyChannels):
+            guard healthyChannels.subtracting(.all).isEmpty else {
+                throw invalidTransition("Channel health contains unsupported readiness bits.")
+            }
+            if healthyChannels.satisfies(snapshot.channelHealth.requiredChannels),
+               controlProgress != .negotiated {
+                throw invalidTransition("Streaming readiness arrived before negotiated configuration.")
+            }
+            if healthyChannels == snapshot.channelHealth.healthyChannels {
+                return snapshot
+            }
+            _ = try updateChannelHealth(healthyChannels, now: now)
+
+        case let .reconnecting(attempt, _):
+            guard attempt > 0,
+                  [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) else {
+                throw invalidTransition("Reconnect attempt arrived outside an active transport stage.")
+            }
+            if attempt == lastReconnectAttempt, snapshot.stage == .reconnecting {
+                return snapshot
+            }
+            guard attempt > lastReconnectAttempt else {
+                throw invalidTransition("Reconnect attempts must be strictly increasing.")
+            }
+            lastReconnectAttempt = attempt
+            snapshot.reconnectAttempt = attempt
+            snapshot.negotiatedConfiguration = nil
+            snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
+            snapshot.stage = .reconnecting
+            controlProgress = .launchAccepted
+
+        case let .terminated(reason):
+            if snapshot.stage == .disconnected,
+               controlProgress == .terminal,
+               snapshot.terminationReason == reason {
+                return snapshot
+            }
+            guard ![.idle, .disconnected, .failed].contains(snapshot.stage) else {
+                throw invalidTransition("Remote termination arrived outside an active session.")
+            }
+            snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
+            snapshot.stage = .disconnected
+            snapshot.terminationReason = reason
+            snapshot.failure = nil
+            controlProgress = .terminal
+        }
+
+        snapshot.updatedAt = now
+        return snapshot
+    }
+
+    func fail(
+        _ error: Error,
+        sessionID: UUID,
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard sessionID == snapshot.sessionID else {
+            throw invalidTransition("A stale session failure cannot mutate the active session.")
+        }
+        if [.disconnected, .failed].contains(snapshot.stage),
+           controlProgress == .terminal {
+            return snapshot
+        }
+        let failure = (error as? StreamNegotiationFailure) ?? StreamNegotiationFailure(
+            code: .transportUnavailable,
+            subsystem: "session.control",
+            message: "Session control failed."
+        )
+        transitionToFailure(failure, now: now)
+        return snapshot
     }
 
     func markTransportStarted(
@@ -393,6 +554,7 @@ actor StreamSessionCoordinator {
     ) throws -> StreamSessionSnapshot {
         guard snapshot.stage == .readyForTransport,
               requiredChannels == healthAggregator.snapshot.requiredChannels,
+              snapshot.negotiatedConfiguration != nil,
               readiness.satisfies(requiredChannels) else {
             throw StreamNegotiationFailure(
                 code: .invalidTransition,
@@ -410,12 +572,20 @@ actor StreamSessionCoordinator {
         _ healthyChannels: SessionChannelReadiness,
         now: Date = Date()
     ) throws -> StreamSessionSnapshot {
+        guard healthyChannels.subtracting(.all).isEmpty else {
+            throw invalidTransition("Channel health contains unsupported readiness bits.")
+        }
         guard [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) else {
             throw StreamNegotiationFailure(
                 code: .invalidTransition,
                 subsystem: "transport",
                 message: "Channel health is unavailable before launch transport begins."
             )
+        }
+
+        if healthyChannels.satisfies(snapshot.channelHealth.requiredChannels),
+           snapshot.negotiatedConfiguration == nil {
+            throw invalidTransition("Streaming requires a negotiated session configuration.")
         }
 
         let previousStage = snapshot.stage
@@ -430,17 +600,53 @@ actor StreamSessionCoordinator {
     }
 
     func stop(host: MoonlightHost, clientUniqueID: String, now: Date = Date()) async throws -> StreamSessionSnapshot {
+        if snapshot.stage == .disconnected {
+            return snapshot
+        }
+        if snapshot.stage == .idle {
+            snapshot.stage = .disconnected
+            snapshot.updatedAt = now
+            controlProgress = .terminal
+            return snapshot
+        }
         snapshot.stage = .stopping
         snapshot.updatedAt = now
         do {
             try await launchClient.stop(host: host, clientUniqueID: clientUniqueID)
-            snapshot.stage = .disconnected
-            snapshot.updatedAt = Date()
+            transitionToDisconnected(now: Date())
             return snapshot
         } catch {
-            snapshot.stage = .disconnected
-            snapshot.updatedAt = Date()
+            transitionToDisconnected(now: Date())
             throw error
         }
+    }
+
+    private func transitionToFailure(
+        _ failure: StreamNegotiationFailure,
+        now: Date
+    ) {
+        snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
+        snapshot.stage = .failed
+        snapshot.failure = failure
+        snapshot.terminationReason = nil
+        snapshot.updatedAt = now
+        controlProgress = .terminal
+    }
+
+    private func transitionToDisconnected(now: Date) {
+        snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
+        snapshot.stage = .disconnected
+        snapshot.failure = nil
+        snapshot.terminationReason = nil
+        snapshot.updatedAt = now
+        controlProgress = .terminal
+    }
+
+    private func invalidTransition(_ message: String) -> StreamNegotiationFailure {
+        StreamNegotiationFailure(
+            code: .invalidTransition,
+            subsystem: "session.state",
+            message: message
+        )
     }
 }

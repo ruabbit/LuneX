@@ -43,7 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `23/61`：4.6 remote cancel/local cancellation convergence 已完成独立验收，下一项为 4.7 deterministic session state-machine matrix；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `24/61`：4.7 deterministic session state-machine matrix 已完成独立验收，下一项为 5.1 bounded video packet reordering/loss/access-unit assembly；阶段 13 仍为 `in_progress`。
+
+4.7 已实现 generation-scoped `SessionControlEvent` reducer 和结构化 terminal evidence，success/partial/loss/reconnect/failure/termination/duplicate/stale/invalid 矩阵及完整跨平台独立验收通过；5.1 从 packet sequence/reorder window、frame boundary 与 loss/IDR contract 开始，不提前声称 VideoToolbox decode。
 
 ## 遇到的错误
 

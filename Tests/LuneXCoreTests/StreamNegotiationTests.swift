@@ -48,7 +48,15 @@ final class StreamNegotiationTests: XCTestCase {
         let coordinator = StreamSessionCoordinator(launchClient: launchClient)
 
         let ready = try await coordinator.launch(request)
-        let streaming = try await coordinator.markTransportStarted(readiness: .all)
+        _ = try await coordinator.apply(.rtspReady, sessionID: ready.sessionID)
+        _ = try await coordinator.apply(
+            .negotiated(makeStateMachineNegotiatedConfiguration(sessionID: ready.sessionID)),
+            sessionID: ready.sessionID
+        )
+        let streaming = try await coordinator.apply(
+            .channelsReady(.all),
+            sessionID: ready.sessionID
+        )
         let stopped = try await coordinator.stop(host: request.host, clientUniqueID: request.clientUniqueID)
 
         XCTAssertEqual(ready.stage, .readyForTransport)
