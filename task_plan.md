@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `26/61`：5.2 H.264/HEVC parameter-set parsing 与 VideoToolbox format construction 已完成独立验收，下一项为 5.3 AV1 capability negotiation 与 unsupported-device fallback policy；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `27/61`：5.3 AV1 capability negotiation 与 unsupported-device fallback policy 已完成独立验收，下一项为 5.4 VideoToolbox decompression-session ownership 与 callback-to-actor bridging；阶段 13 仍为 `in_progress`。
 
-5.2 已实现 bounded Annex-B splitter、H.264 SPS/PPS 与 HEVC VPS/SPS/PPS parser、CoreMedia format-description factory 和 synthetic 64x64 round-trip；decoder session ownership 仍属于 5.4，AV1 support decision 从 5.3 开始。
+5.3 已将 host `DESCRIBE` codec family、HDR/bit-depth 要求与可注入 device hardware-decode capability 合并为确定性选择；production 使用 `VTIsHardwareDecodeSupported`，HDR/10-bit 不允许降级到 H.264。decoder session ownership、AV1 format description 与帧解码仍属于 5.4。
 
 ## 遇到的错误
 
@@ -105,3 +105,5 @@
 | 5.1 首次 focused compile 将负向 parser 断言闭包的返回值视为 unused result | 1 | 在预期抛错的闭包中显式使用 `_ = try`，保持 warnings-as-errors 并重跑相同测试门禁 |
 | 5.1 generator byte-for-byte gate 使用 zsh 只读变量 `status` | 1 | 改用普通变量 `rc` 保存 `cmp` 退出码；生成器重跑后 project byte-for-byte 一致 |
 | 5.2 CoreMedia factory pointer array 使用 optional inner pointer | 1 | 按 Xcode 26.4 Swift importer 的真实签名改为 `[UnsafePointer<UInt8>]`，再重跑 warnings-as-errors focused gate |
+| 5.3 bootstrap codec 回归首次只观察到 H.264 host capability | 1 | 定位为 Swift 将 CRLF 视为单个字素，旧 `$0 == "\\r" || $0 == "\\n"` 不会切分；改用 `Character.isNewline` 并保留真实 CRLF bootstrap 回归 |
+| 5.3 四 SDK C syntax 脚本把文件列表放入 zsh 标量 | 1 | 改用 zsh 数组 `sources=(...)` 和 `for file in $sources`，重跑同一 strict syntax gate |

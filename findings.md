@@ -278,3 +278,13 @@
 - 当前 Sunshine 单个 IDR 发送一组 VPS/SPS/PPS；5.2 对同一 access unit 内的 exact duplicate 幂等，对同类型不同 bytes fail closed，避免在未解析 parameter-set ID 的情况下把冲突配置交给 CoreMedia。跨 access-unit format-change ownership 留给 5.4/5.7 decoder state。
 - 5.2 最终独立验收：focused video-format tests `5/5`；合成 H.264/HEVC description 均由 CoreMedia 解析为 64x64，parameter-set getter byte-exact round-trip 且 NAL length header 为 4。完整 macOS warnings-as-errors tests `181 total / 180 passed / 1 explicit Keychain skip / 0 failed`。
 - macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build、fixture self-test/全树、OpenSpec strict、generator byte-for-byte、diff/reference/dependency boundary、ENet revision/source/license 和四 SDK strict C syntax gate 全部通过；四个 simulator 前后始终为 `Shutdown`。5.2 不证明 VTDecompressionSession、AV1 hardware support、decoded frame 或 live host video。
+
+### 2026-07-21 阶段 13 AV1 Capability 与 Fallback 设计
+
+- Xcode 26.4 的 macOS/iOS/tvOS/visionOS SDK 均提供 `VTIsHardwareDecodeSupported`；该 API 只能证明系统存在对应 codec family 的硬件解码路径，不保证资源永远可分配，也不能在缺少真实 format description 时单独证明具体 AV1/HEVC profile 可创建 session。因此 5.3 用它做 launch 后、SETUP 前的设备门禁，5.4 仍需以 `VTDecompressionSessionCreate` 结果作为实际 decoder 证据。
+- `VideoCodecSelectionPolicy` 将 preference、host `DESCRIBE` codec set、requested bit depth/HDR 与可注入 device capability 合并。automatic/AV1 优先级固定为 AV1 -> HEVC -> H.264，HEVC 为 HEVC -> H.264，显式 H.264 不升级；host set 的输入顺序或 duplicate 不影响结果。
+- HDR 或 10-bit request 会从候选集中排除 H.264；AV1/HEVC 都没有 host+device 硬件交集时返回 structured `noCompatibleHardwareDecoder`，不能静默关闭 HDR 或降级成 SDR/H.264。SDR 8-bit 才允许最终 fallback H.264，并保留 unavailable-on-host 或 unsupported-by-device 原因。
+- `MoonlightSessionControlProvider` 不再丢弃 `DESCRIBE` codec 结果：每个 generation 在任何 SETUP 前执行 selection，并保存 bounded latest selection 供后续 video runtime 使用；reconnect 会清除旧选择并重新协商，stale generation 不能写入新 session。
+- bootstrap CRLF 回归暴露既有 SDP parser 缺陷：Swift 把 CRLF 视为一个 `Character`，旧的 CR/LF equality splitter 无法拆行，导致真实 CRLF body 只保留默认 H.264。parser 已改用 `Character.isNewline`，CRLF 的 HEVC/AV1 capability 识别和 fail-closed gate 均有端到端 stub coverage。
+- 5.3 focused selection/RTSP/SDP tests `24/24`，完整 macOS warnings-as-errors tests `191 total / 190 passed / 1 explicit Keychain skip / 0 failed`；五平台 warnings-as-errors Debug build、fixture/OpenSpec/generator/reference/ENet/四 SDK C syntax gates 全部通过，固定 simulators 前后均为 `Shutdown`。
+- 本任务不证明 AV1 sequence-header/format construction、VideoToolbox session/callback ownership、decoded frame、Metal delivery 或 live Sunshine video；这些边界继续分别属于 5.4-5.8。

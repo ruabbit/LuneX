@@ -148,6 +148,101 @@ final class RTSPBootstrapTests: XCTestCase {
         })
     }
 
+    func testBootstrapPersistsDeterministicAV1FallbackSelection() async throws {
+        let sessionID = UUID(uuidString: "0AD74D34-BDBC-4557-9183-40EAC7B68D38")!
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let describeResponse = response(
+            cSeq: "2",
+            body: Data("v=0\r\nsprop-parameter-sets=AAAAAU\r\na=rtpmap:98 AV1/90000\r\n".utf8)
+        )
+        let parsedDescription = try SunshineSessionDescriptionParser.parse(describeResponse)
+        XCTAssertEqual(parsedDescription.availableVideoCodecs, [.h264, .hevc, .av1])
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            describeResponse,
+            setupResponse(cSeq: "3", session: "session-token", port: 48_000),
+            setupResponse(cSeq: "4", session: "session-token", port: 47_998),
+            setupResponse(
+                cSeq: "5",
+                session: "session-token",
+                port: 47_999,
+                connectData: 0x1234_5678
+            )
+        ])
+        let provider = MoonlightSessionControlProvider(
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: BootstrapStubControlChannel(events: [
+                .terminated(HostTerminationReason(code: 0x8003_0023, kind: .graceful))
+            ]),
+            videoCodecSelectionPolicy: VideoCodecSelectionPolicy(
+                capabilityProvider: BootstrapVideoDecoderCapabilities([.h264, .hevc])
+            )
+        )
+
+        _ = try await collect(await provider.start(
+            sessionID: sessionID,
+            request: makeRequest()
+        ))
+        let selection = await provider.videoCodecSelection(sessionID: sessionID)
+
+        XCTAssertEqual(selection?.codec, .hevc)
+        XCTAssertEqual(
+            selection?.disposition,
+            .fallback(from: .av1, reason: .unsupportedByDevice(.av1))
+        )
+    }
+
+    func testBootstrapRejectsHDRWhenOnlyH264HardwareDecodeIsAvailable() async throws {
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let describeResponse = response(
+            cSeq: "2",
+            body: Data("v=0\r\nsprop-parameter-sets=AAAAAU\r\na=rtpmap:98 AV1/90000\r\n".utf8)
+        )
+        let parsedDescription = try SunshineSessionDescriptionParser.parse(describeResponse)
+        XCTAssertEqual(parsedDescription.availableVideoCodecs, [.h264, .hevc, .av1])
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            describeResponse
+        ])
+        let control = BootstrapStubControlChannel(events: [])
+        let provider = MoonlightSessionControlProvider(
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: control,
+            videoCodecSelectionPolicy: VideoCodecSelectionPolicy(
+                capabilityProvider: BootstrapVideoDecoderCapabilities([.h264])
+            )
+        )
+
+        let result = await collectFailure(await provider.start(
+            sessionID: UUID(),
+            request: makeRequest(supportsHDR: true)
+        ))
+
+        XCTAssertEqual(result.events, [.launchAccepted(launchResponse)])
+        XCTAssertEqual(
+            result.error as? VideoCodecSelectionError,
+            .noCompatibleHardwareDecoder(
+                hostCodecs: [.h264, .hevc, .av1],
+                bitDepth: 10,
+                isHDR: true
+            )
+        )
+        let requests = await connection.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), ["OPTIONS", "DESCRIBE"])
+        let controlConnect = await control.recordedConnect()
+        XCTAssertNil(controlConnect)
+    }
+
     func testBootstrapFailsClosedOnConflictingSetupSession() async {
         let launchResponse = StreamLaunchResponse(
             sessionURL: "rtsp://moon.local/session",
@@ -304,7 +399,7 @@ final class RTSPBootstrapTests: XCTestCase {
         XCTAssertEqual(snapshot.stage, .readyForTransport)
     }
 
-    private func makeRequest() -> StreamLaunchRequest {
+    private func makeRequest(supportsHDR: Bool = false) -> StreamLaunchRequest {
         StreamLaunchRequest(
             host: MoonlightHost(
                 id: UUID(uuidString: "AFDB6122-1C83-46C6-B0F4-607EE5135726")!,
@@ -318,7 +413,7 @@ final class RTSPBootstrapTests: XCTestCase {
                     pairedAt: Date(timeIntervalSince1970: 1)
                 )
             ),
-            app: RemoteApp(id: "1", name: "Desktop", supportsHDR: false, installPath: nil),
+            app: RemoteApp(id: "1", name: "Desktop", supportsHDR: supportsHDR, installPath: nil),
             preferences: .defaults,
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(
@@ -379,6 +474,18 @@ final class RTSPBootstrapTests: XCTestCase {
         } catch {
             return (events, error)
         }
+    }
+}
+
+private struct BootstrapVideoDecoderCapabilities: VideoDecoderCapabilityProviding {
+    var supportedCodecs: Set<NegotiatedVideoCodec>
+
+    init(_ supportedCodecs: Set<NegotiatedVideoCodec>) {
+        self.supportedCodecs = supportedCodecs
+    }
+
+    func supportsHardwareDecode(_ codec: NegotiatedVideoCodec) -> Bool {
+        supportedCodecs.contains(codec)
     }
 }
 

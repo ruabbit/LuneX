@@ -86,7 +86,7 @@ enum SunshineSessionDescriptionParser {
         }
         let lines = text.split(
             omittingEmptySubsequences: true,
-            whereSeparator: { $0 == "\r" || $0 == "\n" }
+            whereSeparator: \.isNewline
         ).map(String.init)
         guard lines.count <= maximumLineCount else {
             throw SunshineRTSPNegotiationError.tooManyDescriptionLines

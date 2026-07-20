@@ -268,8 +268,13 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private let reconnectSleeper: any SessionReconnectSleeping
     private let keyMaterialGenerator: any RemoteInputKeyMaterialGenerating
     private let reconnectClassifier: SessionReconnectFailureClassifier
+    private let videoCodecSelectionPolicy: VideoCodecSelectionPolicy
     private var activeSession: ActiveSession?
     private var lastSession: TerminalSession?
+    private var negotiatedVideoSelection: (
+        sessionID: UUID,
+        selection: VideoCodecSelection
+    )?
 
     init(
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
@@ -278,7 +283,8 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         reconnectPolicy: SessionReconnectPolicy = .standard,
         reconnectSleeper: any SessionReconnectSleeping = ContinuousSessionReconnectSleeper(),
         keyMaterialGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator(),
-        reconnectClassifier: SessionReconnectFailureClassifier = SessionReconnectFailureClassifier()
+        reconnectClassifier: SessionReconnectFailureClassifier = SessionReconnectFailureClassifier(),
+        videoCodecSelectionPolicy: VideoCodecSelectionPolicy = VideoCodecSelectionPolicy()
     ) {
         self.launchClient = launchClient
         self.connection = connection
@@ -287,6 +293,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         self.reconnectSleeper = reconnectSleeper
         self.keyMaterialGenerator = keyMaterialGenerator
         self.reconnectClassifier = reconnectClassifier
+        self.videoCodecSelectionPolicy = videoCodecSelectionPolicy
     }
 
     func start(
@@ -298,6 +305,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         }
 
         let token = UUID()
+        negotiatedVideoSelection = nil
         let teardown = SessionControlTeardownCoordinator(
             launchClient: launchClient,
             connection: connection,
@@ -364,6 +372,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             return await lastSession.teardown.snapshot()
         }
         return nil
+    }
+
+    func videoCodecSelection(sessionID: UUID) -> VideoCodecSelection? {
+        guard negotiatedVideoSelection?.sessionID == sessionID else { return nil }
+        return negotiatedVideoSelection?.selection
     }
 
     private func bootstrap(
@@ -457,6 +470,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         continuation: AsyncThrowingStream<SessionControlEvent, Error>.Continuation
     ) async throws {
         try ensureCurrent(token: token)
+        negotiatedVideoSelection = nil
         guard let sessionURL = response.sessionURL else {
             throw RTSPBootstrapError.invalidSessionURL
         }
@@ -485,7 +499,21 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             ),
             expectedCSeq: "2"
         )
-        _ = try SunshineSessionDescriptionParser.parse(describe)
+        let description = try SunshineSessionDescriptionParser.parse(describe)
+        let hdrRequested = request.preferences.hdrEnabled && request.app.supportsHDR
+        let videoSelection = try videoCodecSelectionPolicy.select(
+            hostCodecs: description.availableVideoCodecs,
+            bitDepth: hdrRequested ? 10 : 8,
+            isHDR: hdrRequested
+        )
+        try ensureCurrent(token: token)
+        guard let activeSession, activeSession.token == token else {
+            throw CancellationError()
+        }
+        negotiatedVideoSelection = (
+            sessionID: activeSession.sessionID,
+            selection: videoSelection
+        )
         try yield(.rtspReady, token: token, continuation: continuation)
 
         let audioSetup = try await setupStream(

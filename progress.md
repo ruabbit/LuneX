@@ -315,3 +315,19 @@
 - 完整 macOS warnings-as-errors tests `181 total / 180 passed / 1 skipped / 0 failed`；唯一 skipped 仍是未启用 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，未再次访问 Keychain。
 - macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；simulator 前后均为 `Shutdown`。fixture/OpenSpec/generator/diff/reference/ENet/four-SDK-C gates 全部通过。
 - OpenSpec 5.2 更新为完成，权威进度 `26/61`；下一项为 5.3 AV1 capability negotiation 和 unsupported-device fallback policy。VideoToolbox decompression-session ownership 与 decode callback 仍属于 5.4。
+
+## 2026-07-21 阶段 13 任务 5.3 启动
+
+- 5.2 已以 `b932dc7 Build native H264 and HEVC formats` 独立提交并推送，`HEAD == origin/main`、工作树 clean 后进入 5.3。
+- Xcode 26.4 五平台 SDK 均提供 `VTIsHardwareDecodeSupported`；生产 capability provider 将只把该 API 的硬件解码结果用于 H.264、HEVC、AV1 设备门禁，单测使用可注入 deterministic capability set。
+- 当前 RTSP `DESCRIBE` 已解析 host codec family 但丢弃结果；5.3 将选择策略接入真实 bootstrap 路径。HDR/10-bit 只允许 AV1/HEVC，不能静默降级为 SDR/H.264；VideoToolbox session ownership、AV1 format construction 与真实帧解码仍属于后续任务。
+
+## 2026-07-21 阶段 13 任务 5.3 完成
+
+- 新增 `VideoCodecSelection.swift`：可注入 device capability、确定性 AV1 -> HEVC -> H.264 preference/fallback、structured fallback/error 和三种 codec 到 CoreMedia type 的精确映射；production provider 使用 `VTIsHardwareDecodeSupported`。
+- `MoonlightSessionControlProvider` 在 `DESCRIBE` 后、任何 SETUP 前执行并保存 selection；HDR/10-bit 排除 H.264，没有 AV1/HEVC host+device 硬件交集时 fail closed。reconnect 清除旧 selection 后重新协商。
+- 新增 8 项 selection tests 和 2 项 bootstrap gate tests；同时由真实 CRLF response 发现并修复 SDP splitter 缺陷，改用 `Character.isNewline`。selection/RTSP/SDP focused gate 最终 `24/24` 通过。
+- 完整 macOS warnings-as-errors tests `191 total / 190 passed / 1 skipped / 0 failed`；唯一 skipped 仍是未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，未再次访问 Keychain。
+- macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建前后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。
+- OpenSpec 5.3 更新为完成，权威进度 `27/61`；下一项为 5.4 VideoToolbox decompression-session ownership 与 callback-to-actor bridging。AV1 format construction、真实 decoder/frame 和 live video 仍未由 5.3 证明。

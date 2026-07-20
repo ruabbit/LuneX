@@ -40,7 +40,7 @@
 
 - [x] 5.1 Implement bounded video packet reordering, loss detection, and codec access-unit assembly
 - [x] 5.2 Implement H.264 and HEVC parameter-set parsing and VideoToolbox format construction
-- [ ] 5.3 Implement AV1 capability negotiation and an explicit unsupported-device fallback policy
+- [x] 5.3 Implement AV1 capability negotiation and an explicit unsupported-device fallback policy
 - [ ] 5.4 Implement VideoToolbox decompression-session ownership and callback-to-actor bridging
 - [ ] 5.5 Implement zero-copy CVPixelBuffer-to-Metal texture delivery with a bounded frame queue
 - [ ] 5.6 Preserve negotiated colorspace, bit depth, mastering, and content-light metadata for the later HDR change
