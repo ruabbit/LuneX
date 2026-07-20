@@ -183,3 +183,12 @@
 - Pairing crypto 版本契约：server major `<7` 使用 SHA-1、`>=7` 使用 SHA-256；AES key 为 `digest(16-byte salt || 4-byte ASCII PIN)` 前 16 bytes；challenge cipher 为 AES-128-ECB/no-padding；client/server secret RSA signature 固定 SHA-256 PKCS#1 v1.5。
 - `crypto-vectors.json` 由 Python `hashlib` 与系统 `openssl enc -aes-128-ecb -nopad` 独立生成，覆盖 gen6/gen7 key derivation、challenge encryption、challenge-response digest/padding/encryption；fixture 使用空格分隔 synthetic bytes，统一脱敏 validator 通过。
 - `MoonlightPairingCrypto` 使用 CommonCrypto/Security.framework 实现版本化 digest、16-byte CSPRNG salt/nonce、bounded AES、certificate signature 提取、secret sign/verify 和 constant-time server-response compare；malformed length、非 ASCII PIN、错 key/block/signature/response 均 fail closed。
+
+### 2026-07-21 阶段 13 Pairing Transport
+
+- `MoonlightPairingProvider` 已按 `serverinfo`、HTTP `getservercert`、`clientchallenge`、`serverchallengeresp`、`clientpairingsecret`、HTTPS `pairchallenge` 顺序实现经过认证的配对 exchange；所有 HTTP/XML/hex/certificate/version 边界均有大小或结构检查，非 2xx HTTP 或非 200 XML status fail closed。
+- 前五个配对请求仍使用未加密 HTTP，这是 Moonlight PIN challenge 协议本身的引导顺序；只有从经过签名和 challenge-response 验证的 `plaincert` 得到 exact leaf DER 后，最终 HTTPS `pairchallenge` 才使用该临时 pin。
+- 最终 HTTPS 同时要求 exact server leaf pin 和 client TLS identity。`SecIdentityCreate(nil, certificate, privateKey)` 可直接从文件 fallback/in-memory 的 certificate DER 与 PKCS#1 private key 构造 mutual-TLS identity，无需再次写入 Keychain。
+- 动态 Sunshine stub 会实际解密 client challenge、构造 server response、签名 server secret、验证 client pairing secret/response hash，并检查最终请求的临时 pin 与 client identity；pin mismatch 不产生 `.completed`。
+- 配对 transport 的 progress snapshot 现在复用调用方 `attemptID`，与 provider task/cancel key 保持一致；focused 回归覆盖该不变量。
+- 3.4 的完成边界仅到返回已认证的 `PairingResult`。host repository 的原子持久化与 reload 确认属于 3.5，跨 stage cancellation/rollback 属于 3.6，真实 Sunshine pairing/re-pair 属于需显式授权的 3.7。

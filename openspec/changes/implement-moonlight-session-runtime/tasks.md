@@ -21,7 +21,7 @@
 - [x] 3.1 Implement native client keypair and certificate generation according to the approved identity decision
 - [x] 3.2 Validate generated identity signing, certificate parsing, persistence, reload, and explicit reset
 - [x] 3.3 Implement version-aware pairing digest, salt, AES, signature, and challenge primitives from deterministic vectors
-- [ ] 3.4 Implement the staged pairing request/response transport with pinned failure handling
+- [x] 3.4 Implement the staged pairing request/response transport with pinned failure handling
 - [ ] 3.5 Persist the server leaf pin only after every pairing verification succeeds
 - [ ] 3.6 Implement pairing cancellation and rollback without replacing a previously trusted pin
 - [ ] 3.7 Add opt-in live pairing and re-pair tests against an isolated Sunshine test identity

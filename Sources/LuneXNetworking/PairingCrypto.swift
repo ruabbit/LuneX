@@ -93,6 +93,10 @@ struct MoonlightPairingCrypto: Sendable {
         return try cryptAES128ECB(challenge, key: aesKey, operation: CCOperation(kCCEncrypt))
     }
 
+    func encryptAES128ECB(_ plaintext: Data, aesKey: Data) throws -> Data {
+        try cryptAES128ECB(plaintext, key: aesKey, operation: CCOperation(kCCEncrypt))
+    }
+
     func decryptAES128ECB(_ ciphertext: Data, aesKey: Data) throws -> Data {
         try cryptAES128ECB(ciphertext, key: aesKey, operation: CCOperation(kCCDecrypt))
     }

@@ -65,9 +65,13 @@ struct PairingResult: Codable, Equatable, Sendable {
 actor PairingStateMachine {
     private(set) var snapshot: PairingSnapshot
 
-    init(hostID: UUID, now: Date = Date()) {
+    init(
+        attemptID: UUID = UUID(),
+        hostID: UUID,
+        now: Date = Date()
+    ) {
         snapshot = PairingSnapshot(
-            attemptID: UUID(),
+            attemptID: attemptID,
             hostID: hostID,
             stage: .idle,
             digestAlgorithm: nil,
