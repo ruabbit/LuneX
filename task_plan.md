@@ -22,18 +22,26 @@
 | 2. 本机环境检查 | complete | Xcode/Swift/OpenSpec/模拟器/SDK 能力清单 |
 | 3. OpenSpec 需求整理 | complete | 全平台客户端 spec、第一阶段 change、任务清单 |
 | 4. 项目脚手架 | complete | SwiftUI 多平台 App 工程、共享核心模块、平台适配层、单测 target |
-| 5. macOS 核心体验 | complete | 窗口状态、屏幕变化、输入、渲染生命周期、HDR/EDR、音频入口 |
-| 6. iOS/iPadOS 核心体验 | complete | session 保活、窗口/场景尺寸、PiP/后台模式、输入与渲染入口 |
-| 7. 流媒体协议与会话核心 | complete | 主机发现、配对、启动会话、控制通道、视频/音频管线设计与实现 |
-| 8. tvOS/visionOS 适配 | complete | 平台入口、遥控器/手柄/空间音频/窗口模型适配 |
-| 9. 验证与迭代 | complete | 构建、单测、模拟器/本机运行、性能和回归验证 |
+| 5. macOS 核心体验 | partial | window lifecycle 与 Metal pause/throttle 已接线；真实 cursor capture、输入发送、HDR 和音频待完成 |
+| 6. iOS/iPadOS 核心体验 | partial | policy/model 与原生 UI 已有；scene/resize、PiP、后台 session、移动 EDR 未接线 |
+| 7. 流媒体协议与会话核心 | partial | host/app HTTPS 与状态骨架已有；真实 pairing、RTSP/control、解码和输入 transport 未实现 |
+| 8. tvOS/visionOS 适配 | partial | target、UI 和 adapter 骨架可构建；真实媒体、输入、HDR/空间音频未验证 |
+| 9. 验证与迭代 | partial | build/unit gates 已有；缺少真实 Sunshine 和真机端到端、性能、功耗与长时验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
+| 13. 真实 Moonlight session runtime | pending | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
+| 14. macOS 原生输入与生命周期闭环 | pending | `NSEvent`、cursor capture、焦点释放、统一 transform、decoder/renderer 后台节流 |
+| 15. 原生 HDR/EDR 管线 | pending | 10-bit、BT.2020/PQ、MDCV/CLL、EDR metadata、tone mapping 与跨屏验证 |
+| 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
+| 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
+| 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
+| 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
+| 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
-阶段 12 已完成并推送：真实 Keychain round-trip 只运行一次，后续 Debug 测试使用 `0600` 文件 fallback，Release 保持 Keychain；host pinned certificate 已接入 app-list/artwork/launch/stop HTTPS challenge；macOS window occlusion/focus/screen/resize/EDR 已驱动实际 render state。下一批仍需围绕真实 Moonlight pairing、RTSP/media transport、解码与输入发送创建独立 change。
+后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
 ## 遇到的错误
 
@@ -54,3 +62,4 @@
 | 并发跑多个 simulator build 触发 Xcode build database lock | 1 | 改为按固定 simulator ID 串行验证，避免共享 DerivedData build.db 锁冲突 |
 | 运行态日志检查误调用 zsh `log` 内建并假设 `hosts.json` 顶层为数组 | 1 | 改用 `/usr/bin/log show`，并用 `jq` 按实际 `{hosts:[...]}` 结构读取仅主机摘要 |
 | 跟踪文件合并补丁使用了不存在的 `findings.md` 标题上下文 | 1 | 读取实际文件尾部后按现有章节定位，分块更新 OpenSpec 与跟踪记录 |
+| 手工汇报 OpenSpec 新 change 任务数为 57，CLI 实际解析为 61 | 1 | 以 `openspec instructions apply` 的 `progress.total` 为权威并修正 `progress.md` |

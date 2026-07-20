@@ -143,3 +143,13 @@
 - macOS SwiftUI window 已通过 `AppKitLifecycleAttachment` 接到 AppKit monitor，覆盖 occlusion、key、screen、resize/live resize、backing scale、miniaturize 与 app activation；状态同步到 AppModel render policy、drawable pixel size 和 EDR headroom。
 - 运行态验证读取到实际 drawable `2560x1600`、EDR headroom `5.0`，并加载 3 台主机；Debug 文件 identity store 当前无持久化 identity，未访问 Keychain。
 - 最终正常测试结果为 58 total：57 passed、1 skipped（仅 opt-in Keychain）、0 failed。macOS Debug、macOS Release、固定 iPhone 17 Pro、固定 Apple TV、固定 Apple Vision Pro 隔离构建均通过，未启动目标模拟器。
+
+### 2026-07-21 最初体验要求复核
+
+- 复核采用三层证据：类型/策略存在、生产 App 已接线、真实 session 端到端生效。只有第三层满足时才可声明产品功能完成。
+- macOS window occlusion/key/screen/resize/backing/EDR monitor 已接入 SwiftUI window，并能驱动 Metal pause/throttle 和 drawable size。
+- macOS cursor policy 与 `InputMapper` 只有可测试算法；没有 `NSEvent` 生产采集、`NSCursor` hide/unhide、relative capture 或远程 input sender。
+- 当前 EDR 只读取 display headroom 并设置 layer 开关；没有 10-bit/colorspace/PQ/MDCV/CLL/tone mapping，且 stream HDR 与 display EDR capability 尚未分离。
+- `SpatialAudioController`、mobile continuity policy、PiP state coordinator 和 UIKit lifecycle monitor 没有生产调用方；iOS/iPadOS scene/resize/PiP/background/EDR 未形成运行闭环。
+- `RuntimeCapabilityAvailability.current` 仍将 pairing 和 stream transport 设为 false；真实配对、RTSP/control、VideoToolbox/音频 decode 与输入发送是所有后续体验的阻塞依赖。
+- 因上述证据，原阶段 5–9 从 `complete` 修正为 `partial`，并建立阶段 13–20 的端到端路线图。

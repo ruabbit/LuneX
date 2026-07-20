@@ -178,3 +178,11 @@
 - `./script/build_and_run.sh --verify` 通过；运行日志确认 lifecycle monitor attached、drawable `2560x1600`、EDR `5.0`、Debug 文件 store 无 identity、加载 3 台保存主机。当前 App 保持运行。
 - OpenSpec strict validate 1/1 passed，`git diff --check` 通过；3 个导入 pin 均为 726-byte DER，本地 hosts/settings/app catalog 文件权限均为 `0600`。OpenSpec 任务 1.1-4.3 已完成，4.4 等待提交与推送成功后勾选。
 - 创建并推送功能提交 `faf9ef9 Integrate pinned identity and macOS lifecycle` 到 `origin/main`（`f9b9adb..faf9ef9`）；OpenSpec 4.4 条件满足，阶段 12 与 change 任务更新为 complete。
+
+## 2026-07-21
+
+- 按最初体验要求重新审计完成口径，确认 macOS lifecycle/Metal 节流已接线，但 cursor capture、完整 HDR、空间音频、iOS/iPadOS lifecycle/PiP/后台连续性仍未形成真实 session 运行闭环。
+- 修正 `task_plan.md`：阶段 5–9 从 `complete` 改为 `partial`，新增阶段 13–20；后续以生产接线、确定性测试和授权 live-host/真机证据为完成门。
+- 创建 `docs/runtime-completion-roadmap.md`，明确真实 runtime → macOS input → HDR → spatial audio → mobile continuity → tvOS/visionOS → UX → Release 验证的依赖顺序。
+- 创建 OpenSpec change `implement-moonlight-session-runtime`，包含 proposal、design、5 个 capability specs 和 61 项依赖有序任务，作为所有平台体验修复的第一阻塞阶段。
+- 继续遵守 Keychain 约束：正常开发与测试使用文件/in-memory fallback，不重复运行已完成的一次性真实 Keychain 验证。
