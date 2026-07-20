@@ -7,6 +7,7 @@
 		0224014AC3B894A20BCB2673 /* HostEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82820A094B73B5239F4F5C6F /* HostEndpoint.swift */; };
 		02276D32D963C65B91F84E38 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DB7571B8334F5E7680A9B20 /* Assets.xcassets */; };
 		02D2B557F65B1CD49FF063A4 /* RuntimeDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CF15B10BE401A025E2333E /* RuntimeDiagnostics.swift */; };
+		031430A6955A102B063FF0B0 /* ClientIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */; };
 		065E0416F6D1E33EFDFB4E25 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE56A1032EA2BF2DCF72F321 /* RootView.swift */; };
 		0676B508055EC12E4BE2E829 /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
 		06BACFE0B8BDEBFAAE8A21D6 /* ContinuityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8557773DAB04C6CEEF7128A6 /* ContinuityPolicy.swift */; };
@@ -22,9 +23,11 @@
 		0C07A99EEEE4CCEE19CE4FB2 /* AppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */; };
 		0DB7571B8334F5E7680A9B20 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Resources/Assets.xcassets"; sourceTree = "<group>"; };
 		0F73711C56D06771BAD57280 /* RuntimeDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CF15B10BE401A025E2333E /* RuntimeDiagnostics.swift */; };
+		0F81D0E20FF2E606E3BD10C3 /* ClientIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */; };
 		0FB80636A33C8E3652C352C5 /* LuneXApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FE925D93939396C8853A8E /* LuneXApp.swift */; };
 		10387BC44480BADEDFF3ADE4 /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
 		1199300948F4C515B06854F6 /* BoundedFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB71532D3E0C8C031A920E10 /* BoundedFrameDecoder.swift */; };
+		11A4535FFD8F894FE33AFD56 /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		13F37678462B1A2328169961 /* LifecycleRenderPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/LifecycleRenderPolicyTests.swift"; sourceTree = "<group>"; };
 		1507F349832A04790D3C1273 /* Sources */ = {isa = PBXGroup; children = (
 				77FE925D93939396C8853A8E /* LuneXApp.swift */,
@@ -32,11 +35,14 @@
 				5A52A473DF63B8343293FC7A /* AppModel.swift */,
 				1F7F3BA9FD46B52A82C6F343 /* AppSettings.swift */,
 				97B249D70217EBBA15751AAF /* ClientIdentity.swift */,
+				D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */,
+				CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */,
 				2220525EC17385E564247B74 /* HostLibrary.swift */,
 				E750CEB84733E203CA3E6E48 /* Models.swift */,
 				CF4EBE3955C463936A71B8B9 /* RuntimeProviders.swift */,
 				620591FA7092BCEE22B47B90 /* SessionResourceTracker.swift */,
 				F6B08151BEDFF41608DB8852 /* SessionState.swift */,
+				A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */,
 				8557773DAB04C6CEEF7128A6 /* ContinuityPolicy.swift */,
 				F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */,
 				CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */,
@@ -60,6 +66,7 @@
 				82820A094B73B5239F4F5C6F /* HostEndpoint.swift */,
 				B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */,
 				C4E264A3CED5E104C8FC807B /* Pairing.swift */,
+				BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */,
 				B8016DE0A738B73CA67BC9E8 /* PinnedHTTPSClient.swift */,
 				A6E349041994EA416B05890A /* ServerInfo.swift */,
 				8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */,
@@ -84,10 +91,12 @@
 		1CE8A178B86B203A082A24ED /* LuneX-tvOS */ = {isa = PBXNativeTarget; buildConfigurationList = 1842E33381787F2350CEB4F4 /* Build configuration list for LuneX-tvOS */; buildPhases = (874D26083549C3755E04CDE7 /* Sources */, 99F72C5DB6580F7D7D98C8BD /* Frameworks */, BA7EEBEFE8AFD2B10C20C345 /* Resources */); buildRules = (); dependencies = (); name = "LuneX-tvOS"; productName = "LuneX-tvOS"; productReference = 621A12FBFB2EF39B0A7BBB71 /* LuneX-tvOS.app */; productType = "com.apple.product-type.application"; };
 		1DC7135D35CEF0B7AC647BA6 /* RuntimeDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/RuntimeDiagnosticsTests.swift"; sourceTree = "<group>"; };
 		1DE8EA0F3475EF9B49105498 /* PinnedHTTPSClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8016DE0A738B73CA67BC9E8 /* PinnedHTTPSClient.swift */; };
+		1F582C5C800BDCAFEAB0F5DD /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		1F7F3BA9FD46B52A82C6F343 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/AppSettings.swift"; sourceTree = "<group>"; };
 		2001C21ADE8E9595ED4395DE /* JSONFileStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */; };
 		20BE6E6A77E0B9ED3426DC00 /* AppKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */; };
 		2220525EC17385E564247B74 /* HostLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/HostLibrary.swift"; sourceTree = "<group>"; };
+		2241853F5DDD3179444F126D /* PairingCryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60235BA18CDDA4EF6C53362 /* PairingCryptoTests.swift */; };
 		23C944B7F6935AE80E901F50 /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
 		26AD0EF2EAD126EA75ED112C /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 				0FB80636A33C8E3652C352C5 /* LuneXApp.swift in Sources */,
@@ -95,11 +104,14 @@
 				87617E2E33694E4FDE29C6CF /* AppModel.swift in Sources */,
 				B9730359FDCF81D81487CF89 /* AppSettings.swift in Sources */,
 				31E8D9EFBCE1012B144E3729 /* ClientIdentity.swift in Sources */,
+				B1066791534E07B155F7AEFC /* ClientIdentityGenerator.swift in Sources */,
+				4530D73810EB9D47B19F2D0A /* ClientIdentityManager.swift in Sources */,
 				6C9560EAF7A8ED1C8FA8E723 /* HostLibrary.swift in Sources */,
 				BDD3FBDA64829560F425C42C /* Models.swift in Sources */,
 				85CBCEA791B5E7884EC58BC3 /* RuntimeProviders.swift in Sources */,
 				19F4AD72782A5D0E2E8D8F00 /* SessionResourceTracker.swift in Sources */,
 				CC23BDB54A1C393ABD5E01F9 /* SessionState.swift in Sources */,
+				455F622EFDDBC7F130913018 /* X509CertificateDER.swift in Sources */,
 				77AFAE14D6E388173018CC4B /* ContinuityPolicy.swift in Sources */,
 				A3C464852F3EC9D4F2E283F6 /* PlatformLifecycle.swift in Sources */,
 				54782C44322058C8A18A0937 /* AppKitLifecycleMonitor.swift in Sources */,
@@ -123,6 +135,7 @@
 				429C5C1D584F470FBDA3AD59 /* HostEndpoint.swift in Sources */,
 				CC3CDEFA97B7AF11A7B64F96 /* NetworkChannels.swift in Sources */,
 				6590CDED907F41D7CEBD0BEB /* Pairing.swift in Sources */,
+				37D56C1C563261A193F13C1F /* PairingCrypto.swift in Sources */,
 				981033605D6A88353DFEF83D /* PinnedHTTPSClient.swift in Sources */,
 				C655E0F213392D647EEB705C /* ServerInfo.swift in Sources */,
 				79670E720DBFB6D4682071F8 /* StreamNegotiation.swift in Sources */,
@@ -171,6 +184,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
 			}; name = Debug; };
 		376BD9E570B5F6A6DBBAC3DD /* RuntimeProviderContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/RuntimeProviderContractTests.swift"; sourceTree = "<group>"; };
+		37D56C1C563261A193F13C1F /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		3BA131918EA62604213BDFBD /* BoundedFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB71532D3E0C8C031A920E10 /* BoundedFrameDecoder.swift */; };
 		3C3BF9A09AC62AC9BDF739CF /* AudioSessionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */; };
 		3DA099E63DEC14B465121407 /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
@@ -189,10 +203,13 @@
 		436361201BAF89C73D446E90 /* DisplayHeadroom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863690481A7841758650A20A /* DisplayHeadroom.swift */; };
 		441BC7D4D6F3439321516A3E /* AudioRouteState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF039666FCCB2021028835D /* AudioRouteState.swift */; };
 		451E874BD14633FE7DC5231D /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
+		4530D73810EB9D47B19F2D0A /* ClientIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */; };
+		455F622EFDDBC7F130913018 /* X509CertificateDER.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */; };
 		46F689254D1891EE721C30AE /* GameControllerInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */; };
 		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastSwiftUpdateCheck = 2640; LastUpgradeCheck = 2640; TargetAttributes = {166FE8F98C01F0283B2688DF = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; 77D2F983F33D5AB45735CDF0 = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; 1CE8A178B86B203A082A24ED = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; 7AA4E5B57949BFBF5F95F321 = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; B8F9EB9BE31AF4E0571170C9 = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;};};}; buildConfigurationList = 479141CF4F7E78536D4D69BF /* Build configuration list for PBXProject */; compatibilityVersion = "Xcode 15.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 518DA81DB9B99529C0C0AEBE; productRefGroup = 547D009064F7C3F13BEF3460 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (166FE8F98C01F0283B2688DF, 77D2F983F33D5AB45735CDF0, 1CE8A178B86B203A082A24ED, 7AA4E5B57949BFBF5F95F321, B8F9EB9BE31AF4E0571170C9); };
 		479141CF4F7E78536D4D69BF /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (4A43692AD8BCEEB8B727C85B /* Debug */, C28449456A5A705A7479770B /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		47FE21B7A6C4DCFC74A2D659 /* ServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E349041994EA416B05890A /* ServerInfo.swift */; };
+		49F321639E8ED73E1BD91739 /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXDiagnostics/DiagnosticsStore.swift"; sourceTree = "<group>"; };
 		4A43692AD8BCEEB8B727C85B /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic; ENABLE_USER_SCRIPT_SANDBOXING = NO; GCC_NO_COMMON_BLOCKS = YES; SWIFT_OPTIMIZATION_LEVEL = -Onone; SWIFT_VERSION = 6.0; DEBUG_INFORMATION_FORMAT = dwarf; ONLY_ACTIVE_ARCH = YES;}; name = Debug; };
 		4B3298D4C3E56D5F52ED776B /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
@@ -226,12 +243,14 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 			}; name = Release; };
 		509B6EB9DC08AC023AD4E1E3 /* TVRemoteFocusInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */; };
+		50B03CE871B2A77E61BE1E23 /* ClientIdentityGenerationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E567EC0931E47947A8C65F4 /* ClientIdentityGenerationTests.swift */; };
 		518DA81DB9B99529C0C0AEBE = {isa = PBXGroup; children = (
 				1507F349832A04790D3C1273 /* Sources */,
 				A0937472EE5878FA82CB0F7E /* Tests */,
 				AAE953452CCD6DDD91445CEA /* Resources */,
 				547D009064F7C3F13BEF3460 /* Products */,
 			); sourceTree = "<group>"; };
+		520AF92B8152ADC6DCC69DFE /* ClientIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */; };
 		52588C27B85362A81133EA71 /* TVRemoteFocusInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */; };
 		538DC636041A5BD2304AD838 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 				91A89A56CD694D32BD707CD9 /* LuneXApp.swift in Sources */,
@@ -239,11 +258,14 @@
 				5D814A0C03A2078ED06927AF /* AppModel.swift in Sources */,
 				155D2E312C5B3E04C5844CE5 /* AppSettings.swift in Sources */,
 				B5EC264AB1E9B0C9158E259C /* ClientIdentity.swift in Sources */,
+				AD327387A5A9873708BB012A /* ClientIdentityGenerator.swift in Sources */,
+				031430A6955A102B063FF0B0 /* ClientIdentityManager.swift in Sources */,
 				E094A6B170094EFB8E98C64E /* HostLibrary.swift in Sources */,
 				F866A09D32829EAE7F324D20 /* Models.swift in Sources */,
 				D5BE12B8650DE7304F1E04B6 /* RuntimeProviders.swift in Sources */,
 				40B2CE3BAA2EC0803C6A42E9 /* SessionResourceTracker.swift in Sources */,
 				F353164B5988943E97D33BF4 /* SessionState.swift in Sources */,
+				99A072169B54FDD65A4C42C0 /* X509CertificateDER.swift in Sources */,
 				06BACFE0B8BDEBFAAE8A21D6 /* ContinuityPolicy.swift in Sources */,
 				B545480E72B7EDD648FA8DB7 /* PlatformLifecycle.swift in Sources */,
 				83ABFBC71A0D651358D1BF3F /* AppKitLifecycleMonitor.swift in Sources */,
@@ -267,6 +289,7 @@
 				83F089BA83ABF26A3D3362B8 /* HostEndpoint.swift in Sources */,
 				EA21698CC24024638F462655 /* NetworkChannels.swift in Sources */,
 				F780B06016984AB1F8C8AE63 /* Pairing.swift in Sources */,
+				11A4535FFD8F894FE33AFD56 /* PairingCrypto.swift in Sources */,
 				9DAC5477C73F34BAA351B8E2 /* PinnedHTTPSClient.swift in Sources */,
 				1A31D34EC141DC875BC75E45 /* ServerInfo.swift in Sources */,
 				EE25BBB09C926202AB9A992D /* StreamNegotiation.swift in Sources */,
@@ -284,6 +307,7 @@
 		5A52A473DF63B8343293FC7A /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/AppModel.swift"; sourceTree = "<group>"; };
 		5CA171E29E89AF03B70FC0E3 /* KeychainClientIdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6427B28229BB89A8E2F6B014 /* KeychainClientIdentityStore.swift */; };
 		5D16553A18599BEEB77DEC3B /* TVRemoteFocusInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */; };
+		5D61D474AFB87DED6AB2ED3B /* ClientIdentityLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1154EB7820E976561931CAC /* ClientIdentityLifecycleTests.swift */; };
 		5D814A0C03A2078ED06927AF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		5E3E9CBD480704E77CC42280 /* RuntimeProviderContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376BD9E570B5F6A6DBBAC3DD /* RuntimeProviderContractTests.swift */; };
 		5F30E763D9AE5D2A7C3216A5 /* ClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B249D70217EBBA15751AAF /* ClientIdentity.swift */; };
@@ -296,11 +320,14 @@
 				91F48A8AF584103D46926CDF /* AppModel.swift in Sources */,
 				0B2A80D1BEBAA8E701467FE0 /* AppSettings.swift in Sources */,
 				8726147B2CC1DF70D22CFB20 /* ClientIdentity.swift in Sources */,
+				78B4DCB5CCCE8884CF355395 /* ClientIdentityGenerator.swift in Sources */,
+				0F81D0E20FF2E606E3BD10C3 /* ClientIdentityManager.swift in Sources */,
 				6D26C862CE5D532CD74DDD23 /* HostLibrary.swift in Sources */,
 				06CCC38B37617EDA5BA4B103 /* Models.swift in Sources */,
 				3FE806EB84AD4AA5E6C637ED /* RuntimeProviders.swift in Sources */,
 				2E60523B199A7FF538480C05 /* SessionResourceTracker.swift in Sources */,
 				EAE72094F979FE7E7416961F /* SessionState.swift in Sources */,
+				C96D67AAC86412351BF3557B /* X509CertificateDER.swift in Sources */,
 				E48CBE2A7F00F84548F195DC /* ContinuityPolicy.swift in Sources */,
 				E7C68A141C49CAC87CF1B9AF /* PlatformLifecycle.swift in Sources */,
 				C45FCEA0C35E538EC6AFF71B /* DisplayHeadroom.swift in Sources */,
@@ -321,6 +348,7 @@
 				A5C89241C7D60009271BE1BD /* HostEndpoint.swift in Sources */,
 				8B433E000BC0C242D3C5601E /* NetworkChannels.swift in Sources */,
 				86A8D18A71F7A38EA11F69A4 /* Pairing.swift in Sources */,
+				49F321639E8ED73E1BD91739 /* PairingCrypto.swift in Sources */,
 				1DE8EA0F3475EF9B49105498 /* PinnedHTTPSClient.swift in Sources */,
 				17F36281F017DADE8B8B5B62 /* ServerInfo.swift in Sources */,
 				95652392B266E01D7D9C84FD /* StreamNegotiation.swift in Sources */,
@@ -329,6 +357,8 @@
 				E7CA5C07D4789409605B8EE0 /* AppCatalogTests.swift in Sources */,
 				964916DFE9B0D91D8BE72F72 /* AppModelWorkflowTests.swift in Sources */,
 				B5AD4050462EA1A4C3821D27 /* AudioPipelineTests.swift in Sources */,
+				50B03CE871B2A77E61BE1E23 /* ClientIdentityGenerationTests.swift in Sources */,
+				5D61D474AFB87DED6AB2ED3B /* ClientIdentityLifecycleTests.swift in Sources */,
 				C7BA81230C2E426B7859E0DF /* ControllerAndDiagnosticsTests.swift in Sources */,
 				6EBD829EF63753A1F5AD100B /* ContinuityPolicyTests.swift in Sources */,
 				9A22319E9908017D57D5E5E1 /* DiscoveryTests.swift in Sources */,
@@ -337,6 +367,7 @@
 				FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */,
 				DD789FA5FE8C125185872F0A /* InputAdapterTests.swift in Sources */,
 				A97D58BABC85A2E6F3E6D0C2 /* PairingStateMachineTests.swift in Sources */,
+				2241853F5DDD3179444F126D /* PairingCryptoTests.swift in Sources */,
 				5E3E9CBD480704E77CC42280 /* RuntimeProviderContractTests.swift in Sources */,
 				F7B76408EEBE975A62AC8DD5 /* RuntimeDiagnosticsTests.swift in Sources */,
 				1936E33DA062B17B3E4D5866 /* SessionResourceTrackerTests.swift in Sources */,
@@ -377,13 +408,16 @@
 		6C9560EAF7A8ED1C8FA8E723 /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
 		6D26C862CE5D532CD74DDD23 /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
 		6E1D29B5977A529005675A4C /* Build configuration list for LuneXCoreTests */ = {isa = XCConfigurationList; buildConfigurations = (6A4F36502B467756CF32F58B /* Debug */, 9385939EF0E8DA7C2B380B21 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		6E567EC0931E47947A8C65F4 /* ClientIdentityGenerationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ClientIdentityGenerationTests.swift"; sourceTree = "<group>"; };
 		6EBD829EF63753A1F5AD100B /* ContinuityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D0A723D4D2A55FC6AD152A8 /* ContinuityPolicyTests.swift */; };
 		6F49F3FF738DFF569AC19BFF /* MetalStreamSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXRendering/MetalStreamSurface.swift"; sourceTree = "<group>"; };
 		703151C5A088892773AB1F47 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E750CEB84733E203CA3E6E48 /* Models.swift */; };
+		707EFFCEE10F9D10FAF49DB5 /* X509CertificateDER.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */; };
 		7589372FFC0DF0BE688D79EF /* BoundedFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB71532D3E0C8C031A920E10 /* BoundedFrameDecoder.swift */; };
 		77AFAE14D6E388173018CC4B /* ContinuityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8557773DAB04C6CEEF7128A6 /* ContinuityPolicy.swift */; };
 		77D2F983F33D5AB45735CDF0 /* LuneX-iOS */ = {isa = PBXNativeTarget; buildConfigurationList = E60983968E906437AC65698E /* Build configuration list for LuneX-iOS */; buildPhases = (F398A5547E3E4E609D85DBAD /* Sources */, 3FF60EFC740DA002D10E7A1C /* Frameworks */, 7CD5305673A7AB0721EAB78D /* Resources */); buildRules = (); dependencies = (); name = "LuneX-iOS"; productName = "LuneX-iOS"; productReference = 7CDAA2F9E3F622B2A9291A02 /* LuneX-iOS.app */; productType = "com.apple.product-type.application"; };
 		77FE925D93939396C8853A8E /* LuneXApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXApp/LuneXApp.swift"; sourceTree = "<group>"; };
+		78B4DCB5CCCE8884CF355395 /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		79670E720DBFB6D4682071F8 /* StreamNegotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */; };
 		7AA4E5B57949BFBF5F95F321 /* LuneX-visionOS */ = {isa = PBXNativeTarget; buildConfigurationList = 66120997C0407A4B29558F97 /* Build configuration list for LuneX-visionOS */; buildPhases = (538DC636041A5BD2304AD838 /* Sources */, 2726DAE1144FCA0279421B11 /* Frameworks */, BE0126CD73E6B26C08676EFF /* Resources */); buildRules = (); dependencies = (); name = "LuneX-visionOS"; productName = "LuneX-visionOS"; productReference = 9F5F7C4AAE6A679AB865FE5E /* LuneX-visionOS.app */; productType = "com.apple.product-type.application"; };
 		7AA6F9A4C8E330551C186F90 /* AppKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */; };
@@ -411,11 +445,14 @@
 				402BB3CCD0AC6B43FB1690C1 /* AppModel.swift in Sources */,
 				951C0C659FE9428E0CA7B123 /* AppSettings.swift in Sources */,
 				E65E4F08101FA02275D810C7 /* ClientIdentity.swift in Sources */,
+				FB9F573E862DCA22185062FC /* ClientIdentityGenerator.swift in Sources */,
+				520AF92B8152ADC6DCC69DFE /* ClientIdentityManager.swift in Sources */,
 				451E874BD14633FE7DC5231D /* HostLibrary.swift in Sources */,
 				FEFC175E7A54E68CF8F4FD21 /* Models.swift in Sources */,
 				15D9DE883859E7793E9E6EDC /* RuntimeProviders.swift in Sources */,
 				977F7103680B68A3487BE000 /* SessionResourceTracker.swift in Sources */,
 				0B15ADEDB630B72B33FFF9EE /* SessionState.swift in Sources */,
+				D6551233E55ED59D09389862 /* X509CertificateDER.swift in Sources */,
 				CB28E6EF9E7A89FF16EB069C /* ContinuityPolicy.swift in Sources */,
 				95C9DE49F2BED263901FCC3C /* PlatformLifecycle.swift in Sources */,
 				7AA6F9A4C8E330551C186F90 /* AppKitLifecycleMonitor.swift in Sources */,
@@ -439,6 +476,7 @@
 				EEFB62DC61EC0F754114C07E /* HostEndpoint.swift in Sources */,
 				60BAD77B4AF9F8BFEB556D28 /* NetworkChannels.swift in Sources */,
 				E925F1199A69DDBC841BF9D4 /* Pairing.swift in Sources */,
+				1F582C5C800BDCAFEAB0F5DD /* PairingCrypto.swift in Sources */,
 				298858347400D5755BCC1BF8 /* PinnedHTTPSClient.swift in Sources */,
 				47FE21B7A6C4DCFC74A2D659 /* ServerInfo.swift in Sources */,
 				EAD8446434F86B653BCDDB95 /* StreamNegotiation.swift in Sources */,
@@ -451,6 +489,7 @@
 		91A89A56CD694D32BD707CD9 /* LuneXApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FE925D93939396C8853A8E /* LuneXApp.swift */; };
 		91F48A8AF584103D46926CDF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		924C8DA2F61A43C3704C2771 /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
+		9264492FF71009C9A2255068 /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		936AC5DDAECC9B0866E9A93F /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
 		9385939EF0E8DA7C2B380B21 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
@@ -501,6 +540,7 @@
 		97B249D70217EBBA15751AAF /* ClientIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ClientIdentity.swift"; sourceTree = "<group>"; };
 		981033605D6A88353DFEF83D /* PinnedHTTPSClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8016DE0A738B73CA67BC9E8 /* PinnedHTTPSClient.swift */; };
 		99653315A9F4B45A05EA9D0B /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
+		99A072169B54FDD65A4C42C0 /* X509CertificateDER.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */; };
 		99D1CE46E3A02FEFD83A16D6 /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */; };
 		99F72C5DB6580F7D7D98C8BD /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		9A22319E9908017D57D5E5E1 /* DiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 938BDD632F8585548B3C76DB /* DiscoveryTests.swift */; };
@@ -513,6 +553,8 @@
 				2ACF9C6C82903CEB2A8E982F /* AppCatalogTests.swift */,
 				A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */,
 				29601CEF411F6EC4ABEB07B8 /* AudioPipelineTests.swift */,
+				6E567EC0931E47947A8C65F4 /* ClientIdentityGenerationTests.swift */,
+				A1154EB7820E976561931CAC /* ClientIdentityLifecycleTests.swift */,
 				9E777E706BD746A05A169374 /* ControllerAndDiagnosticsTests.swift */,
 				2D0A723D4D2A55FC6AD152A8 /* ContinuityPolicyTests.swift */,
 				938BDD632F8585548B3C76DB /* DiscoveryTests.swift */,
@@ -521,6 +563,7 @@
 				E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */,
 				7D1E779DAD022CD933D8BA24 /* InputAdapterTests.swift */,
 				9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */,
+				B60235BA18CDDA4EF6C53362 /* PairingCryptoTests.swift */,
 				376BD9E570B5F6A6DBBAC3DD /* RuntimeProviderContractTests.swift */,
 				1DC7135D35CEF0B7AC647BA6 /* RuntimeDiagnosticsTests.swift */,
 				D13D385B7C5D3B25E331207B /* SessionResourceTrackerTests.swift */,
@@ -528,11 +571,14 @@
 			); name = Tests; sourceTree = "<group>"; };
 		A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/AppModelWorkflowTests.swift"; sourceTree = "<group>"; };
 		A11319EF185BB2B85CAC1E57 /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
+		A1154EB7820E976561931CAC /* ClientIdentityLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ClientIdentityLifecycleTests.swift"; sourceTree = "<group>"; };
 		A12D89B5B16AA0A305B1F4A0 /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBF2FCD8F8F190A2CD96920 /* InputDiagnostics.swift */; };
+		A2A5578CAB516B3991698205 /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		A3C464852F3EC9D4F2E283F6 /* PlatformLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */; };
 		A5C89241C7D60009271BE1BD /* HostEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82820A094B73B5239F4F5C6F /* HostEndpoint.swift */; };
 		A67F22941E8920B082B04ADF /* GameControllerInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */; };
 		A6E349041994EA416B05890A /* ServerInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/ServerInfo.swift"; sourceTree = "<group>"; };
+		A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/X509CertificateDER.swift"; sourceTree = "<group>"; };
 		A97D58BABC85A2E6F3E6D0C2 /* PairingStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */; };
 		A98BAC7E720E34687CF77B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DB7571B8334F5E7680A9B20 /* Assets.xcassets */; };
 		AAE953452CCD6DDD91445CEA /* Resources */ = {isa = PBXGroup; children = (
@@ -541,8 +587,10 @@
 		AB2F7B0256B25B107E605AE5 /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
 		AC349F5B341540E611AB734B /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */; };
 		ACB2C2E6A74F15E4D8F85B08 /* MetalStreamSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F49F3FF738DFF569AC19BFF /* MetalStreamSurface.swift */; };
+		AD327387A5A9873708BB012A /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		AE201EA99E5805E63FE9E765 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E264A3CED5E104C8FC807B /* Pairing.swift */; };
 		B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/NetworkChannels.swift"; sourceTree = "<group>"; };
+		B1066791534E07B155F7AEFC /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		B459B6C3ED1F4533FDF74D23 /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBF2FCD8F8F190A2CD96920 /* InputDiagnostics.swift */; };
 		B4D495670852ADB187BC96EB /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "AccentColor";
@@ -572,6 +620,7 @@
 		B5AD4050462EA1A4C3821D27 /* AudioPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29601CEF411F6EC4ABEB07B8 /* AudioPipelineTests.swift */; };
 		B5EC264AB1E9B0C9158E259C /* ClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B249D70217EBBA15751AAF /* ClientIdentity.swift */; };
 		B601B7590C059F6B675A3852 /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBF2FCD8F8F190A2CD96920 /* InputDiagnostics.swift */; };
+		B60235BA18CDDA4EF6C53362 /* PairingCryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/PairingCryptoTests.swift"; sourceTree = "<group>"; };
 		B69F2CEAF853881227B884CB /* GameControllerInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */; };
 		B744671D7E21B14B8E60A98E /* AudioRouteState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF039666FCCB2021028835D /* AudioRouteState.swift */; };
 		B8016DE0A738B73CA67BC9E8 /* PinnedHTTPSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/PinnedHTTPSClient.swift"; sourceTree = "<group>"; };
@@ -584,6 +633,7 @@
 				A98BAC7E720E34687CF77B2E /* Assets.xcassets in Resources */
 			); runOnlyForDeploymentPostprocessing = 0; };
 		BAAA8579B871B6D444EB8588 /* NetworkChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ADFE46A1EFC63457BC1BEB9 /* NetworkChannelTests.swift */; };
+		BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/PairingCrypto.swift"; sourceTree = "<group>"; };
 		BDD3FBDA64829560F425C42C /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E750CEB84733E203CA3E6E48 /* Models.swift */; };
 		BE0126CD73E6B26C08676EFF /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
 				1877C00243EF3A9C0C2F8F8E /* Assets.xcassets in Resources */
@@ -601,8 +651,10 @@
 		C655E0F213392D647EEB705C /* ServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E349041994EA416B05890A /* ServerInfo.swift */; };
 		C7BA81230C2E426B7859E0DF /* ControllerAndDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E777E706BD746A05A169374 /* ControllerAndDiagnosticsTests.swift */; };
 		C7DE417FDF8C079F3C08C40A /* RuntimeDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CF15B10BE401A025E2333E /* RuntimeDiagnostics.swift */; };
+		C8A64F17573ECE7B492C0A03 /* ClientIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */; };
 		C8CF15B10BE401A025E2333E /* RuntimeDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXDiagnostics/RuntimeDiagnostics.swift"; sourceTree = "<group>"; };
 		C96A071634C7A6A6E63C651F /* AudioRouteState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF039666FCCB2021028835D /* AudioRouteState.swift */; };
+		C96D67AAC86412351BF3557B /* X509CertificateDER.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */; };
 		C994DB7F13DDBA251D06AA0D /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
 		CAB3AF3CEA282C5D459AE7DA /* Build configuration list for LuneX-macOS */ = {isa = XCConfigurationList; buildConfigurations = (95FCA7E866C06C3209756F7F /* Debug */, F60F94A75308D32AD4AC9B15 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/AppCatalog.swift"; sourceTree = "<group>"; };
@@ -611,6 +663,7 @@
 		CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPlatform/UIKitLifecycleMonitor.swift"; sourceTree = "<group>"; };
 		CC23BDB54A1C393ABD5E01F9 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B08151BEDFF41608DB8852 /* SessionState.swift */; };
 		CC3CDEFA97B7AF11A7B64F96 /* NetworkChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */; };
+		CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ClientIdentityManager.swift"; sourceTree = "<group>"; };
 		CEDC8ED47CF018CD0F3F5A56 /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
 		CF4EBE3955C463936A71B8B9 /* RuntimeProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/RuntimeProviders.swift"; sourceTree = "<group>"; };
 		CF6C4861E915DE66E95360AD /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
@@ -643,10 +696,12 @@
 			}; name = Debug; };
 		D13D385B7C5D3B25E331207B /* SessionResourceTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/SessionResourceTrackerTests.swift"; sourceTree = "<group>"; };
 		D20DEA241DD214988F8D7029 /* PinnedHTTPSClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8016DE0A738B73CA67BC9E8 /* PinnedHTTPSClient.swift */; };
+		D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ClientIdentityGenerator.swift"; sourceTree = "<group>"; };
 		D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/TouchInputAdapter.swift"; sourceTree = "<group>"; };
 		D515373AF432ACDBB07CBCE5 /* JSONFileStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */; };
 		D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/MacInputAdapter.swift"; sourceTree = "<group>"; };
 		D5BE12B8650DE7304F1E04B6 /* RuntimeProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4EBE3955C463936A71B8B9 /* RuntimeProviders.swift */; };
+		D6551233E55ED59D09389862 /* X509CertificateDER.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */; };
 		D747B6E1D4385A59D6CA07BB /* InputMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34D24A0912E7D927AEB04D7E /* InputMapper.swift */; };
 		D76541BC2CB99720732B8F10 /* LuneXCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "LuneXCoreTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D7E37AC044EED0F2CA68A0E0 /* StreamNegotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */; };
@@ -713,11 +768,14 @@
 				0AAED94A904742324D2F3981 /* AppModel.swift in Sources */,
 				86812B849941DBEA8E1C5720 /* AppSettings.swift in Sources */,
 				5F30E763D9AE5D2A7C3216A5 /* ClientIdentity.swift in Sources */,
+				9264492FF71009C9A2255068 /* ClientIdentityGenerator.swift in Sources */,
+				C8A64F17573ECE7B492C0A03 /* ClientIdentityManager.swift in Sources */,
 				10387BC44480BADEDFF3ADE4 /* HostLibrary.swift in Sources */,
 				703151C5A088892773AB1F47 /* Models.swift in Sources */,
 				FFFBBD03D995B6047F9FBDC6 /* RuntimeProviders.swift in Sources */,
 				325318E14EE44697C492D741 /* SessionResourceTracker.swift in Sources */,
 				FC75DAD852DDC7F8B3803C94 /* SessionState.swift in Sources */,
+				707EFFCEE10F9D10FAF49DB5 /* X509CertificateDER.swift in Sources */,
 				F386E16A415C41DA99D71C67 /* ContinuityPolicy.swift in Sources */,
 				09930649637843C32301218C /* PlatformLifecycle.swift in Sources */,
 				20BE6E6A77E0B9ED3426DC00 /* AppKitLifecycleMonitor.swift in Sources */,
@@ -741,6 +799,7 @@
 				0224014AC3B894A20BCB2673 /* HostEndpoint.swift in Sources */,
 				3F5B0CC8467F29757A7BADB6 /* NetworkChannels.swift in Sources */,
 				AE201EA99E5805E63FE9E765 /* Pairing.swift in Sources */,
+				A2A5578CAB516B3991698205 /* PairingCrypto.swift in Sources */,
 				D20DEA241DD214988F8D7029 /* PinnedHTTPSClient.swift in Sources */,
 				32CE222BD6A648D8BB0834BD /* ServerInfo.swift in Sources */,
 				D7E37AC044EED0F2CA68A0E0 /* StreamNegotiation.swift in Sources */,
@@ -801,6 +860,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
 			}; name = Debug; };
 		F9742610154D45B4E260C7D5 /* AppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */; };
+		FB9F573E862DCA22185062FC /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */; };
 		FC75DAD852DDC7F8B3803C94 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B08151BEDFF41608DB8852 /* SessionState.swift */; };
 		FDDCB8C9A43F3B2D6A61E288 /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };

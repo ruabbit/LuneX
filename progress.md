@@ -206,3 +206,6 @@
 - 从 session catch-up、活动 goal、规划文件和 OpenSpec apply instructions 恢复阶段 13；确认 2.1–2.5 工作树尚未提交，先重新执行独立 foundation gate，再提交并推送后进入 3.1。
 - 重新独立验收 2.1–2.5 foundation：完整 macOS warnings-as-errors tests 通过，真实 Keychain 用例按约束 skipped；macOS、固定 iPhone/iPad/Apple TV/Vision Pro Debug 串行构建通过，四个 simulator 前后均为 Shutdown。
 - fixture self-test 通过；首次实际扫描误写目录为 `Tests/Fixtures/MoonlightProtocol`，已确认正确根目录为 `Tests/Fixtures/Moonlight` 并重新执行。OpenSpec strict validation、`git diff --check` 均通过。
+- 完成并独立验收 OpenSpec 任务 3.1：新增 production Security.framework RSA-2048/X.509 v3 identity generator 和 2 个 tests，验证 PKCS#1 私钥重建、证书解析、公私钥匹配及每次生成材料不同；完整 macOS tests 与固定五平台 warnings-as-errors build 通过，真实 Keychain skipped，simulator 保持 Shutdown。
+- 完成并独立验收 OpenSpec 任务 3.2：新增 production identity validator/manager 和 5 个 lifecycle tests，覆盖证书自签验证、篡改拒绝、错配 key 拒绝、JSON persistence/reload/reuse、显式 reset 与无效旧身份不替换；完整 macOS tests 与固定五平台 warnings-as-errors build 通过，真实 Keychain skipped，simulator 保持 Shutdown。
+- 完成并独立验收 OpenSpec 任务 3.3：新增共享 bounded X.509 envelope parser、CommonCrypto/Security pairing primitives、gen6/gen7 Python/OpenSSL 合成向量和 5 个 tests；完整 macOS tests、固定五平台 warnings-as-errors build、fixture self-test/扫描通过，真实 Keychain skipped，simulator 保持 Shutdown。

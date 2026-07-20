@@ -1,1 +1,12 @@
-{"fixtures":[],"schemaVersion":1,"subsystem":"pairing"}
+{
+  "fixtures": [
+    {
+      "expectedResult": "byte-exact SHA-1/SHA-256 derivation and AES-128-ECB output",
+      "origin": "fully synthetic Python hashlib and OpenSSL vectors",
+      "path": "crypto-vectors.json",
+      "redaction": "not applicable; contains no captured identity, host, or credential material"
+    }
+  ],
+  "schemaVersion": 1,
+  "subsystem": "pairing"
+}
