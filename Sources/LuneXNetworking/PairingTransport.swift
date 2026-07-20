@@ -262,9 +262,14 @@ private final class PairingXMLDelegate: NSObject, XMLParserDelegate {
 }
 
 actor MoonlightPairingProvider: PairingRuntimeProvider {
+    private struct Attempt {
+        var token: UUID
+        var task: Task<Void, Never>
+    }
+
     private let executor: any PairingRequestExecuting
     private let now: @Sendable () -> Date
-    private var attempts: [UUID: Task<Void, Never>] = [:]
+    private var attempts: [UUID: Attempt] = [:]
 
     init(
         executor: any PairingRequestExecuting = URLSessionPairingRequestExecutor(),
@@ -277,21 +282,39 @@ actor MoonlightPairingProvider: PairingRuntimeProvider {
     func pair(
         _ request: PairingRuntimeRequest
     ) async -> AsyncThrowingStream<PairingRuntimeEvent, Error> {
-        attempts[request.attemptID]?.cancel()
+        attempts.removeValue(forKey: request.attemptID)?.task.cancel()
+        let token = UUID()
         return AsyncThrowingStream { continuation in
             let task = Task {
-                await self.runPairing(request, continuation: continuation)
+                await self.runPairing(
+                    request,
+                    token: token,
+                    continuation: continuation
+                )
             }
-            attempts[request.attemptID] = task
+            attempts[request.attemptID] = Attempt(token: token, task: task)
+            continuation.onTermination = { @Sendable _ in
+                Task {
+                    await self.cancelPairing(
+                        attemptID: request.attemptID,
+                        expectedToken: token
+                    )
+                }
+            }
         }
     }
 
     func cancelPairing(attemptID: UUID) async {
-        attempts.removeValue(forKey: attemptID)?.cancel()
+        attempts.removeValue(forKey: attemptID)?.task.cancel()
+    }
+
+    func activeAttemptCount() -> Int {
+        attempts.count
     }
 
     private func runPairing(
         _ request: PairingRuntimeRequest,
+        token: UUID,
         continuation: AsyncThrowingStream<PairingRuntimeEvent, Error>.Continuation
     ) async {
         let stateMachine = PairingStateMachine(
@@ -453,9 +476,19 @@ actor MoonlightPairingProvider: PairingRuntimeProvider {
                 code: .cancelled,
                 message: "Pairing was cancelled."
             )
-            continuation.yield(.progress(await stateMachine.fail(failure, now: now())))
+            continuation.yield(.progress(await stateMachine.cancel(now: now())))
             continuation.finish(throwing: failure)
         } catch {
+            if Task.isCancelled {
+                let failure = PairingFailure(
+                    code: .cancelled,
+                    message: "Pairing was cancelled."
+                )
+                continuation.yield(.progress(await stateMachine.cancel(now: now())))
+                continuation.finish(throwing: failure)
+                removeAttempt(request.attemptID, expectedToken: token)
+                return
+            }
             let code: PairingFailureCode = error as? PairingTransportError == .certificateMismatch
                 ? .certificateMismatch
                 : .transportFailed
@@ -466,7 +499,23 @@ actor MoonlightPairingProvider: PairingRuntimeProvider {
             continuation.yield(.progress(await stateMachine.fail(failure, now: now())))
             continuation.finish(throwing: failure)
         }
-        attempts.removeValue(forKey: request.attemptID)
+        removeAttempt(request.attemptID, expectedToken: token)
+    }
+
+    private func cancelPairing(
+        attemptID: UUID,
+        expectedToken: UUID
+    ) {
+        guard attempts[attemptID]?.token == expectedToken else { return }
+        attempts.removeValue(forKey: attemptID)?.task.cancel()
+    }
+
+    private func removeAttempt(
+        _ attemptID: UUID,
+        expectedToken: UUID
+    ) {
+        guard attempts[attemptID]?.token == expectedToken else { return }
+        attempts.removeValue(forKey: attemptID)
     }
 
     private func fetchServerInfo(endpoint: HostEndpoint) async throws -> PairingXMLResponse {

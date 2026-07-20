@@ -107,6 +107,51 @@ final class PairingPersistenceTests: XCTestCase {
         XCTAssertEqual(snapshot.hosts, [fixture.originalHost])
     }
 
+    func testCancellationAfterSaveRollsBackAndCleansAttempt() async throws {
+        let fixture = try makeFixture()
+        let repository = PairingCommitRepository(
+            hosts: [fixture.originalHost],
+            failureMode: .blockFirstReloadAfterSave
+        )
+        let provider = PersistingPairingProvider(
+            provider: CompletedPairingProvider(result: fixture.result),
+            repository: repository
+        )
+        let collector = Task { () -> ([PairingRuntimeEvent], PairingFailure?) in
+            var events: [PairingRuntimeEvent] = []
+            do {
+                let stream = await provider.pair(fixture.request)
+                for try await event in stream {
+                    events.append(event)
+                }
+                return (events, nil)
+            } catch let failure as PairingFailure {
+                return (events, failure)
+            } catch {
+                return (events, PairingFailure(
+                    code: .transportFailed,
+                    message: String(describing: error)
+                ))
+            }
+        }
+
+        try await waitForBlockedReload(repository)
+        await provider.cancelPairing(attemptID: fixture.request.attemptID)
+        await provider.cancelPairing(attemptID: fixture.request.attemptID)
+        let outcome = await collector.value
+
+        XCTAssertEqual(outcome.1?.code, .cancelled)
+        XCTAssertFalse(outcome.0.contains { event in
+            if case .completed = event { return true }
+            return false
+        })
+        let snapshot = await repository.snapshot()
+        XCTAssertEqual(snapshot.hosts, [fixture.originalHost])
+        XCTAssertEqual(snapshot.saveCount, 2)
+        let activeAttemptCount = await provider.activeAttemptCount()
+        XCTAssertEqual(activeAttemptCount, 0)
+    }
+
     private func collect(
         _ provider: any PairingRuntimeProvider,
         request: PairingRuntimeRequest
@@ -174,6 +219,18 @@ final class PairingPersistenceTests: XCTestCase {
             result: result
         )
     }
+
+    private func waitForBlockedReload(
+        _ repository: PairingCommitRepository
+    ) async throws {
+        for _ in 0..<1_000 {
+            if (await repository.snapshot()).loadCount >= 2 {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        throw PairingPersistenceTestError.timeout
+    }
 }
 
 private struct PairingPersistenceFixture {
@@ -217,6 +274,7 @@ private actor PairingCommitRepository: HostRepository {
         case none
         case failFirstSave
         case mismatchFirstReloadAfterSave
+        case blockFirstReloadAfterSave
     }
 
     private var hosts: [MoonlightHost]
@@ -241,6 +299,12 @@ private actor PairingCommitRepository: HostRepository {
             hasReturnedMismatch = true
             return []
         }
+        if failureMode == .blockFirstReloadAfterSave,
+           saveCount == 1,
+           !hasReturnedMismatch {
+            hasReturnedMismatch = true
+            try await Task.sleep(for: .seconds(60))
+        }
         return hosts
     }
 
@@ -259,6 +323,7 @@ private actor PairingCommitRepository: HostRepository {
 
 private enum PairingPersistenceTestError: Error {
     case synthetic
+    case timeout
 }
 
 private extension Data {

@@ -23,7 +23,7 @@
 - [x] 3.3 Implement version-aware pairing digest, salt, AES, signature, and challenge primitives from deterministic vectors
 - [x] 3.4 Implement the staged pairing request/response transport with pinned failure handling
 - [x] 3.5 Persist the server leaf pin only after every pairing verification succeeds
-- [ ] 3.6 Implement pairing cancellation and rollback without replacing a previously trusted pin
+- [x] 3.6 Implement pairing cancellation and rollback without replacing a previously trusted pin
 - [ ] 3.7 Add opt-in live pairing and re-pair tests against an isolated Sunshine test identity
 
 ## 4. Launch, RTSP, and session control

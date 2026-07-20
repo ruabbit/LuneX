@@ -157,10 +157,13 @@ actor PairingStateMachine {
 
     @discardableResult
     func cancel(now: Date = Date()) -> PairingSnapshot {
-        fail(
-            PairingFailure(code: .cancelled, message: "Pairing was cancelled."),
-            now: now
+        snapshot.stage = .cancelled
+        snapshot.failure = PairingFailure(
+            code: .cancelled,
+            message: "Pairing was cancelled."
         )
+        snapshot.updatedAt = now
+        return snapshot
     }
 
     private static func isValidPIN(_ pin: String) -> Bool {

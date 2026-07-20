@@ -195,3 +195,7 @@
 - `PersistingPairingProvider` 将 authenticated transport completion 包在 repository commit 之后：先校验 host ID、paired state、exact certificate DER、声明 SHA-256 与实际 DER SHA-256，再 load previous hosts、save replacement、reload 并按 host ID 集合与目标 host exact equality 验证，最后才发布 `.completed`。
 - transport/crypto 失败在 repository I/O 前结束；save 失败不发布 completion；save 后 reload error/mismatch 会恢复整个 previous host snapshot 并重新读取确认。若恢复本身失败，返回独立 `rollbackFailed`，不会把不确定状态报告为 paired。
 - 3.5 的确定性验收覆盖 exact save/reload、transport failure 零写入、save failure 保留旧 pin、reload mismatch rollback、伪造 SHA-256 在 repository access 前拒绝。JSON production repository 继续使用既有 atomic write，真实 Keychain 不参与。
+- Pairing cancellation 现在以 request `attemptID` 加内部 generation token 管理；同 ID replacement、显式 cancel、stream termination 和正常 finish 都只清理对应 generation，旧任务不能误删或取消后来创建的 attempt。
+- `MoonlightPairingProvider` 在 `CancellationError` 和底层返回其他 error 但 task 已 cancelled 两种路径都发布 stage `.cancelled`/failure `.cancelled`，随后 finish throwing；不会发布 `.completed`。`URLSession.data(for:)` 的 task cancellation 会触发 ephemeral session 收敛和 defer invalidation。
+- `PersistingPairingProvider` 同样拥有 wrapper task；取消发生在 authenticated save 后、reload 前/期间时，会恢复并 reload 验证 previous host snapshot，然后才返回 cancelled。若 rollback 失败则显式报告 `rollbackFailed`，不声称旧 pin 已安全恢复。
+- 3.6 确定性覆盖六个 request stage、重复 cancel、active-attempt cleanup、真实本地 hanging HTTP URLSession cancellation，以及 save 后 blocked reload cancellation rollback；没有 live host I/O。

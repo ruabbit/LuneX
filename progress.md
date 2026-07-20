@@ -216,3 +216,7 @@
 - 完成并独立验收 OpenSpec 任务 3.5：新增 `PersistingPairingProvider` 与 5 个 transaction tests；authenticated result 的 exact DER/SHA/host state 必须 save 后 reload 验证成功才向调用方发布 `.completed`。
 - 3.5 首次 focused build 因调用另一文件 private `Data.hexString` 失败；改用 production/test 局部 SHA-256 hex helper 后 focused tests 5/5 通过，并将错误写入 `task_plan.md`。
 - 3.5 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation 与 diff check 全部成功；真实 Keychain skipped，固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 16/61。
+- 完成并独立验收 OpenSpec 任务 3.6：transport/persistence provider 使用 attempt generation token 管理任务；取消 stage 明确为 `.cancelled`，同 ID replacement/stream termination/重复 cancel 幂等清理，旧 attempt 不影响新 attempt。
+- 新增六阶段 blocking Sunshine stub cancellation、真实 hanging HTTP `URLSession.data(for:)` cancellation、save 后 blocked reload rollback tests；focused pairing suites 12/12 通过，URLSession 取消在本地测试中快速收敛。
+- 3.6 完整 gate 通过：全量 macOS warnings-as-errors tests、macOS/iPhone/iPad/tvOS/visionOS Debug build、fixture self-test/扫描、OpenSpec strict validation、diff check 全部成功；真实 Keychain skipped，四个固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 17/61。
+- 任务 3.7 仍需显式授权的 isolated Sunshine test identity 与 host state；本轮未执行 live pairing/re-pair，继续推进不改变 host state 的 4.x RTSP/control 实现。

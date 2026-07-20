@@ -9,8 +9,14 @@ enum PairingPersistenceError: Error, Equatable, Sendable {
 }
 
 actor PersistingPairingProvider: PairingRuntimeProvider {
+    private struct Attempt {
+        var token: UUID
+        var task: Task<Void, Never>
+    }
+
     private let provider: any PairingRuntimeProvider
     private let repository: any HostRepository
+    private var attempts: [UUID: Attempt] = [:]
 
     init(
         provider: any PairingRuntimeProvider,
@@ -23,19 +29,40 @@ actor PersistingPairingProvider: PairingRuntimeProvider {
     func pair(
         _ request: PairingRuntimeRequest
     ) async -> AsyncThrowingStream<PairingRuntimeEvent, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
-                await self.forwardPairing(request, continuation: continuation)
+        attempts.removeValue(forKey: request.attemptID)?.task.cancel()
+        let token = UUID()
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                await self.forwardPairing(
+                    request,
+                    token: token,
+                    continuation: continuation
+                )
+            }
+            attempts[request.attemptID] = Attempt(token: token, task: task)
+            continuation.onTermination = { @Sendable _ in
+                Task {
+                    await self.cancelPairing(
+                        attemptID: request.attemptID,
+                        expectedToken: token
+                    )
+                }
             }
         }
     }
 
     func cancelPairing(attemptID: UUID) async {
+        attempts.removeValue(forKey: attemptID)?.task.cancel()
         await provider.cancelPairing(attemptID: attemptID)
+    }
+
+    func activeAttemptCount() -> Int {
+        attempts.count
     }
 
     private func forwardPairing(
         _ request: PairingRuntimeRequest,
+        token: UUID,
         continuation: AsyncThrowingStream<PairingRuntimeEvent, Error>.Continuation
     ) async {
         do {
@@ -53,9 +80,22 @@ actor PersistingPairingProvider: PairingRuntimeProvider {
                 }
             }
             continuation.finish()
+        } catch is CancellationError {
+            continuation.finish(throwing: PairingFailure(
+                code: .cancelled,
+                message: "Pairing was cancelled."
+            ))
         } catch {
-            continuation.finish(throwing: error)
+            if Task.isCancelled {
+                continuation.finish(throwing: PairingFailure(
+                    code: .cancelled,
+                    message: "Pairing was cancelled."
+                ))
+            } else {
+                continuation.finish(throwing: error)
+            }
         }
+        removeAttempt(request.attemptID, expectedToken: token)
     }
 
     private func commit(
@@ -64,9 +104,12 @@ actor PersistingPairingProvider: PairingRuntimeProvider {
     ) async throws -> PairingResult {
         try validate(result, expectedHostID: expectedHostID)
 
+        try Task.checkCancellation()
         let previousHosts: [MoonlightHost]
         do {
             previousHosts = try await repository.loadHosts()
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw PairingPersistenceError.repositoryLoadFailed
         }
@@ -78,14 +121,24 @@ actor PersistingPairingProvider: PairingRuntimeProvider {
             updatedHosts.append(result.host)
         }
 
+        try Task.checkCancellation()
         do {
             try await repository.saveHosts(updatedHosts)
+        } catch is CancellationError {
+            do {
+                try await rollback(to: previousHosts)
+            } catch {
+                throw PairingPersistenceError.rollbackFailed
+            }
+            throw CancellationError()
         } catch {
             throw PairingPersistenceError.repositorySaveFailed
         }
 
         do {
+            try Task.checkCancellation()
             let reloadedHosts = try await repository.loadHosts()
+            try Task.checkCancellation()
             guard Self.sameHosts(reloadedHosts, updatedHosts),
                   let reloadedHost = reloadedHosts.first(where: { $0.id == expectedHostID }),
                   reloadedHost == result.host else {
@@ -97,6 +150,13 @@ actor PersistingPairingProvider: PairingRuntimeProvider {
             return persistedResult
         } catch let error as PairingPersistenceError {
             throw error
+        } catch is CancellationError {
+            do {
+                try await rollback(to: previousHosts)
+            } catch {
+                throw PairingPersistenceError.rollbackFailed
+            }
+            throw CancellationError()
         } catch {
             do {
                 try await rollback(to: previousHosts)
@@ -135,6 +195,23 @@ actor PersistingPairingProvider: PairingRuntimeProvider {
         guard Self.sameHosts(restored, hosts) else {
             throw PairingPersistenceError.rollbackFailed
         }
+    }
+
+    private func cancelPairing(
+        attemptID: UUID,
+        expectedToken: UUID
+    ) async {
+        guard attempts[attemptID]?.token == expectedToken else { return }
+        attempts.removeValue(forKey: attemptID)?.task.cancel()
+        await provider.cancelPairing(attemptID: attemptID)
+    }
+
+    private func removeAttempt(
+        _ attemptID: UUID,
+        expectedToken: UUID
+    ) {
+        guard attempts[attemptID]?.token == expectedToken else { return }
+        attempts.removeValue(forKey: attemptID)
     }
 
     private static func sameHosts(
