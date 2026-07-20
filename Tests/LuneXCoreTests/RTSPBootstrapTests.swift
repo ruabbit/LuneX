@@ -441,6 +441,13 @@ private actor BootstrapStubLaunchClient: StreamLaunchClient {
         response
     }
 
+    func resume(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        response
+    }
+
     func stop(host: MoonlightHost, clientUniqueID: String) async throws {}
 }
 

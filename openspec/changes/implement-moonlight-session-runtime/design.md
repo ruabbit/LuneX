@@ -39,6 +39,12 @@ Private-key operations remain in Security framework and persisted by the existin
 
 TCP and ordinary UDP channels use Network.framework wrappers exposing async sequences and explicit cancellation. Current Sunshine control traffic requires the ENet reliable-UDP protocol, which Network.framework does not implement. The control channel therefore uses a narrowly wrapped, fixed MIT-licensed ENet source revision; the Swift runtime sees only opaque connect, send, service, and disconnect operations. A session cancellation tree owns every connection, receive loop, keepalive timer, decoder callback bridge, and input queue. Disconnect waits for teardown and reports any ownership leak in tests.
 
+### Reconnect through resume with fresh authenticated session material
+
+The control channel never reconnects by resetting an AES-GCM sequence under the same `rikey`. An uncertain send or a peer-side sequence reset could otherwise reuse a nonce. Every bounded recovery attempt generates a fresh 16-byte `rikey` and UInt32 `rikeyid`, calls the pinned HTTPS `/resume` endpoint rather than `/launch`, and rebuilds RTSP plus control transport from the returned session URL. The default retry delays are 100, 250, and 500 milliseconds; transport failures may retry, while certificate pin, authenticated-frame, parser, and invalid-state failures fail immediately.
+
+Channel health is a current set, not a monotonic readiness latch. Empty health is unavailable, a required-channel subset is degraded, and only a set satisfying every required control/video/audio/input channel permits streaming. Any control failure publishes an empty health set before recovery or terminal failure, and exhausted recovery performs local teardown plus a best-effort remote cancel without issuing a second launch.
+
 ### Use VideoToolbox, CoreVideo, and Metal for video
 
 Packet assembly produces codec access units and configuration metadata. VideoToolbox returns `CVPixelBuffer` objects; `CVMetalTextureCache` exposes textures to the renderer without a CPU color conversion. Codec, resolution, bit-depth, colorspace, and HDR changes rebuild the affected format/decompression state. HDR output mapping remains a later change, but metadata must be preserved now.
@@ -75,4 +81,4 @@ The first task compares system AudioToolbox/AVFoundation Opus support with the p
 - Whether Security framework plus a small DER layer is sufficient for the exact client certificate accepted by the target Sunshine version.
 - Whether system Opus decoding accepts Sunshine's negotiated packet framing on every target platform.
 - Which AV1 hardware/software fallback policy is acceptable on devices without supported VideoToolbox AV1 decode.
-- The initial reconnect time and packet-buffer budgets, to be set from live LAN measurements rather than guessed.
+- Whether the deterministic 100/250/500 ms reconnect delays should be tuned after authorized live LAN measurements; the three-attempt bound remains mandatory.

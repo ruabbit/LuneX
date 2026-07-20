@@ -89,6 +89,7 @@ sources = [
   "Sources/LuneXNetworking/RTSPMessage.swift",
   "Sources/LuneXNetworking/RTSPSessionDescription.swift",
   "Sources/LuneXNetworking/ServerInfo.swift",
+  "Sources/LuneXNetworking/SessionRecovery.swift",
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
@@ -136,6 +137,7 @@ test_support_sources = [
   "Sources/LuneXNetworking/RTSPMessage.swift",
   "Sources/LuneXNetworking/RTSPSessionDescription.swift",
   "Sources/LuneXNetworking/ServerInfo.swift",
+  "Sources/LuneXNetworking/SessionRecovery.swift",
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXPersistence/JSONFileStores.swift",
   "Sources/LuneXPersistence/KeychainClientIdentityStore.swift"
@@ -165,6 +167,7 @@ test_sources = [
   "Tests/LuneXCoreTests/RuntimeProviderContractTests.swift",
   "Tests/LuneXCoreTests/RuntimeDiagnosticsTests.swift",
   "Tests/LuneXCoreTests/SessionResourceTrackerTests.swift",
+  "Tests/LuneXCoreTests/SessionRecoveryTests.swift",
   "Tests/LuneXCoreTests/StreamNegotiationTests.swift"
 ]
 

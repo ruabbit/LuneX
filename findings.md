@@ -226,3 +226,16 @@
 - `MoonlightSessionControlProvider` 现在按 `OPTIONS`、`DESCRIBE`、`SETUP audio/0/0`、`SETUP video/0/0`、`SETUP control/13/0` 顺序执行，后两次 SETUP 必须复用 audio response 的 bounded Session token；control response 缺失 `X-SS-Connect-Data` 或任一 Session 冲突均 fail closed。
 - control actor 连接 48-channel ENet、发送 reliable Start A/B、以 100 ms service loop驱动 ENet ping/retransmission、在 urgent channel 发送 IDR，并在 remote termination/disconnect/local stop 清除 key/sequence 与释放 C connection。session event 只发布 `.channelsReady(.control)`，不会发布 `.all`、`.negotiated` 或 `Streaming`。
 - 4.4 deterministic evidence 包含 Node/OpenSSL 独立 AES-GCM exact-wire fixture、origin/key/type/length/tag mutation、start/IDR sequence 与 channel、keepalive service、termination mapping、disconnect cleanup、SETUP/header/token/connect-data 和 partial-readiness tests。ANNOUNCE/PLAY、媒体 readiness、reconnect/cancellation convergence 与 live Sunshine 互操作仍属于后续任务，不能由 4.4 的 build/tests 推导完成。
+
+### 2026-07-21 阶段 13 Bounded Reconnect 设计
+
+- control transport 不能在同一 16-byte `rikey` 下把 AES-GCM sequence 重置后直接重连；发送结果不确定或任一方向重置 sequence 都可能造成 nonce reuse。恢复必须生成新的 `rikey`/`rikeyid`，通过已配对 HTTPS `/resume` 创建新的 launch-session material，再重建 RTSP 与 control channel。
+- Sunshine `/resume` 不启动新的 app process，要求 `rikey` 与 `rikeyid`，成功返回 `resume=1` 和 `sessionUrl0`；因此它满足“不重复 `/launch`、不创建 duplicate host app session”的恢复边界。初始 `/launch` 调用次数必须始终为 1，后续只允许 bounded `/resume`。
+- required-channel health 需要成为显式状态，而不是只累计一次 `.channelsReady`：`healthy` 为空是 unavailable，真子集是 degraded，满足 `required` 才是 ready/canStream。任何 required channel 丢失都必须立刻让 coordinator 退出 streaming truth。
+- control disconnect、ENet/Network/URL transport 暂态错误可进入 bounded reconnect；TLS pin/authentication、AES-GCM frame authentication、协议/parse/invalid-state 错误必须立即 fail closed。公开 reconnect reason 使用固定脱敏 code，不传播 host、URL 或底层错误文本。
+- control sequence 必须在等待可能产生不确定发送结果的 ENet `send()` 之前消费；这样即使 driver 返回 error，当前 key 下后续发送也不会复用同一个 nonce。
+- 4.5 production runtime 已实现三次 bounded `/resume` recovery（100/250/500 ms），每次使用 Security `SecRandomCopyBytes` 生成未使用过的 16-byte key/UInt32 ID；初始 `/launch` 固定一次，resume response 必须明确 `resume=1` 并提供可用 session URL。
+- `SessionChannelHealthSnapshot` 的 status/canStream 由 required/healthy set 实时派生：empty 为 unavailable、真子集为 degraded、满足 required 才 ready；streaming 中任一 required channel 丢失都会切到 reconnecting，control error 在重试分类前先发布空健康集。
+- transient control/ENet/Network/URL errors 才可重试；pinned TLS、authenticated control frame、RTSP parse/protocol 与 invalid-state error 立即失败。公开 event 只使用固定 `control_unavailable` reason，不含 host、URL 或 raw error。
+- generation token 在每次 event publish 前校验；被新 session 替换的旧 RTSP attempt 即使处于 suspend/transact 边界，也不能发布迟到 `.rtspReady` 或 readiness。预算耗尽后本地 ENet/RTSP 已清理，并 best-effort 调用 `/cancel`。
+- 4.5 仍只恢复 control plane 并发布 `.control`，不会虚构 `.all`、`.negotiated` 或 Streaming；真实媒体/input channel 的健康输入和 live Sunshine reconnect 证据仍属于后续任务。

@@ -19,6 +19,7 @@
 		06BACFE0B8BDEBFAAE8A21D6 /* ContinuityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8557773DAB04C6CEEF7128A6 /* ContinuityPolicy.swift */; };
 		06CCC38B37617EDA5BA4B103 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E750CEB84733E203CA3E6E48 /* Models.swift */; };
 		06CE224A03FC7F5335F22344 /* PairingPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/PairingPersistenceTests.swift"; sourceTree = "<group>"; };
+		08BF0C08DD43FF92379E72F2 /* SessionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC60616CA34AD28E525B2653 /* SessionRecoveryTests.swift */; };
 		09930649637843C32301218C /* PlatformLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */; };
 		0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/InputEvents.swift"; sourceTree = "<group>"; };
 		0A36B4A91F07644BB31E7A68 /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
@@ -90,6 +91,7 @@
 				BA161CDCBA58595C0DFFB1DD /* RTSPMessage.swift */,
 				E07F4D4E61BC812205275C2A /* RTSPSessionDescription.swift */,
 				A6E349041994EA416B05890A /* ServerInfo.swift */,
+				681CDF76621660A5CB58CC57 /* SessionRecovery.swift */,
 				8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */,
 				F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */,
 				6427B28229BB89A8E2F6B014 /* KeychainClientIdentityStore.swift */,
@@ -132,6 +134,7 @@
 		2220525EC17385E564247B74 /* HostLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/HostLibrary.swift"; sourceTree = "<group>"; };
 		2241853F5DDD3179444F126D /* PairingCryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60235BA18CDDA4EF6C53362 /* PairingCryptoTests.swift */; };
 		23C944B7F6935AE80E901F50 /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
+		2404D2BFB1803FA4A5439BAD /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
 		2413959FF6A951F56D8A789F /* PairingPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD8DB1FC579838127AC329D /* PairingPersistence.swift */; };
 		25183216D7DC6ADA569228B6 /* callbacks.c in Sources */ = {isa = PBXBuildFile; fileRef = B315A2E144291C0C6E464F3E /* callbacks.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		265ED2A218A1036C56367315 /* RTSPBootstrapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/RTSPBootstrapTests.swift"; sourceTree = "<group>"; };
@@ -182,6 +185,7 @@
 				448BB4B0B0BD0A55E57FD493 /* RTSPMessage.swift in Sources */,
 				14E7750C4C211B1C67A94D93 /* RTSPSessionDescription.swift in Sources */,
 				C655E0F213392D647EEB705C /* ServerInfo.swift in Sources */,
+				C07707ED42EE088824211341 /* SessionRecovery.swift in Sources */,
 				79670E720DBFB6D4682071F8 /* StreamNegotiation.swift in Sources */,
 				D515373AF432ACDBB07CBCE5 /* JSONFileStores.swift in Sources */,
 				2EC655D5BE240705D7E4841C /* KeychainClientIdentityStore.swift in Sources */,
@@ -265,6 +269,7 @@
 		3F17322C5E9089B0323E054A /* GameControllerInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */; };
 		3F5B0CC8467F29757A7BADB6 /* NetworkChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */; };
 		3FE806EB84AD4AA5E6C637ED /* RuntimeProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4EBE3955C463936A71B8B9 /* RuntimeProviders.swift */; };
+		3FEC44A841E5D724B9821E98 /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
 		3FF60EFC740DA002D10E7A1C /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		402BB3CCD0AC6B43FB1690C1 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		40B2CE3BAA2EC0803C6A42E9 /* SessionResourceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620591FA7092BCEE22B47B90 /* SessionResourceTracker.swift */; };
@@ -382,6 +387,7 @@
 				E2AD4561832E48E548C2E084 /* RTSPMessage.swift in Sources */,
 				3E1F6AB4EE13B4F2CC5E3672 /* RTSPSessionDescription.swift in Sources */,
 				1A31D34EC141DC875BC75E45 /* ServerInfo.swift in Sources */,
+				3FEC44A841E5D724B9821E98 /* SessionRecovery.swift in Sources */,
 				EE25BBB09C926202AB9A992D /* StreamNegotiation.swift in Sources */,
 				670AE96A22664AA3ACA17784 /* JSONFileStores.swift in Sources */,
 				F125D3176FDBF769056F50F1 /* KeychainClientIdentityStore.swift in Sources */,
@@ -466,6 +472,7 @@
 				6BE9B0F95E48753D00F7D0A2 /* RTSPMessage.swift in Sources */,
 				AF37EB92B6E50CA6E57D03F3 /* RTSPSessionDescription.swift in Sources */,
 				17F36281F017DADE8B8B5B62 /* ServerInfo.swift in Sources */,
+				F4B3E3133274A685A8A4BEEF /* SessionRecovery.swift in Sources */,
 				95652392B266E01D7D9C84FD /* StreamNegotiation.swift in Sources */,
 				C0A1A2F7BDC9DFE181BBCBEF /* JSONFileStores.swift in Sources */,
 				F06598331012C73833FFB82B /* KeychainClientIdentityStore.swift in Sources */,
@@ -501,6 +508,7 @@
 				5E3E9CBD480704E77CC42280 /* RuntimeProviderContractTests.swift in Sources */,
 				F7B76408EEBE975A62AC8DD5 /* RuntimeDiagnosticsTests.swift in Sources */,
 				1936E33DA062B17B3E4D5866 /* SessionResourceTrackerTests.swift in Sources */,
+				08BF0C08DD43FF92379E72F2 /* SessionRecoveryTests.swift in Sources */,
 				BEC37FA319210002E45EEBEC /* StreamNegotiationTests.swift in Sources */
 			); runOnlyForDeploymentPostprocessing = 0; };
 		63DF5880D21F53811AE8A4D8 /* unix.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "ThirdParty/ENet/unix.c"; sourceTree = "<group>"; };
@@ -514,6 +522,7 @@
 		670AE96A22664AA3ACA17784 /* JSONFileStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */; };
 		670E657BBBC675F9D14F3296 /* TVRemoteFocusInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */; };
 		6731217C20065BAB179BED54 /* MetalStreamSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F49F3FF738DFF569AC19BFF /* MetalStreamSurface.swift */; };
+		681CDF76621660A5CB58CC57 /* SessionRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/SessionRecovery.swift"; sourceTree = "<group>"; };
 		684C18432A5442649DB9462A /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
 		68A3A4020701765AF7E8ED38 /* RTSPSessionDescriptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551164683B50D9BFCCAB64FA /* RTSPSessionDescriptionTests.swift */; };
 		6A4F36502B467756CF32F58B /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
@@ -544,6 +553,7 @@
 		6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/TVRemoteFocusInputAdapter.swift"; sourceTree = "<group>"; };
 		6BE9B0F95E48753D00F7D0A2 /* RTSPMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA161CDCBA58595C0DFFB1DD /* RTSPMessage.swift */; };
 		6C9560EAF7A8ED1C8FA8E723 /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
+		6C97C7023B948D424333B80D /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
 		6D26C862CE5D532CD74DDD23 /* HostLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2220525EC17385E564247B74 /* HostLibrary.swift */; };
 		6E1D29B5977A529005675A4C /* Build configuration list for LuneXCoreTests */ = {isa = XCConfigurationList; buildConfigurations = (6A4F36502B467756CF32F58B /* Debug */, 9385939EF0E8DA7C2B380B21 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		6E567EC0931E47947A8C65F4 /* ClientIdentityGenerationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ClientIdentityGenerationTests.swift"; sourceTree = "<group>"; };
@@ -628,6 +638,7 @@
 				00084FC7C6315474D009EEEE /* RTSPMessage.swift in Sources */,
 				BB0DA9203FA1514429C0504D /* RTSPSessionDescription.swift in Sources */,
 				47FE21B7A6C4DCFC74A2D659 /* ServerInfo.swift in Sources */,
+				2404D2BFB1803FA4A5439BAD /* SessionRecovery.swift in Sources */,
 				EAD8446434F86B653BCDDB95 /* StreamNegotiation.swift in Sources */,
 				2001C21ADE8E9595ED4395DE /* JSONFileStores.swift in Sources */,
 				5CA171E29E89AF03B70FC0E3 /* KeychainClientIdentityStore.swift in Sources */,
@@ -755,6 +766,7 @@
 				376BD9E570B5F6A6DBBAC3DD /* RuntimeProviderContractTests.swift */,
 				1DC7135D35CEF0B7AC647BA6 /* RuntimeDiagnosticsTests.swift */,
 				D13D385B7C5D3B25E331207B /* SessionResourceTrackerTests.swift */,
+				AC60616CA34AD28E525B2653 /* SessionRecoveryTests.swift */,
 				E5F4371F9A47B38E2727DCD1 /* StreamNegotiationTests.swift */
 			); name = Tests; sourceTree = "<group>"; };
 		A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/AppModelWorkflowTests.swift"; sourceTree = "<group>"; };
@@ -784,6 +796,7 @@
 		AB2F7B0256B25B107E605AE5 /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
 		AC24AE9A7186639B4D40F2EB /* LuneXENetBridge.c in Sources */ = {isa = PBXBuildFile; fileRef = 5FB3B5F46FA829F94852FCCA /* LuneXENetBridge.c */; };
 		AC349F5B341540E611AB734B /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */; };
+		AC60616CA34AD28E525B2653 /* SessionRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/SessionRecoveryTests.swift"; sourceTree = "<group>"; };
 		ACB2C2E6A74F15E4D8F85B08 /* MetalStreamSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F49F3FF738DFF569AC19BFF /* MetalStreamSurface.swift */; };
 		AD327387A5A9873708BB012A /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		AE201EA99E5805E63FE9E765 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E264A3CED5E104C8FC807B /* Pairing.swift */; };
@@ -853,6 +866,7 @@
 		BE6EB9CEC4DEE01C6D2676F3 /* PairingPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD8DB1FC579838127AC329D /* PairingPersistence.swift */; };
 		BEC37FA319210002E45EEBEC /* StreamNegotiationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F4371F9A47B38E2727DCD1 /* StreamNegotiationTests.swift */; };
 		C074C5FC2CA67383E73B761C /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		C07707ED42EE088824211341 /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
 		C0A1A2F7BDC9DFE181BBCBEF /* JSONFileStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */; };
 		C178F47B546699EC4C186CF4 /* AudioSessionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */; };
 		C1ED206A3CA9D8C5FDA3DDFF /* packet.c in Sources */ = {isa = PBXBuildFile; fileRef = 39D1CB9323FAA340C52CA094 /* packet.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
@@ -1045,6 +1059,7 @@
 				BC24310149796EF55F9E5FF0 /* RTSPMessage.swift in Sources */,
 				A1545BA78A7BB2D246B078FD /* RTSPSessionDescription.swift in Sources */,
 				32CE222BD6A648D8BB0834BD /* ServerInfo.swift in Sources */,
+				6C97C7023B948D424333B80D /* SessionRecovery.swift in Sources */,
 				D7E37AC044EED0F2CA68A0E0 /* StreamNegotiation.swift in Sources */,
 				18F3663B971C24530C1CF1EC /* JSONFileStores.swift in Sources */,
 				60B0BC7E6D2A38A166826089 /* KeychainClientIdentityStore.swift in Sources */,
@@ -1060,6 +1075,7 @@
 			); runOnlyForDeploymentPostprocessing = 0; };
 		F3C70F67A71EB13E2A2A7B49 /* PairingTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959150EFED4D92A51573DF2D /* PairingTransport.swift */; };
 		F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPersistence/JSONFileStores.swift"; sourceTree = "<group>"; };
+		F4B3E3133274A685A8A4BEEF /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
 		F60F94A75308D32AD4AC9B15 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "AccentColor";
 				CODE_SIGN_STYLE = "Automatic";

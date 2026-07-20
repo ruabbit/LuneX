@@ -248,6 +248,10 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private let launchClient: any StreamLaunchClient
     private let connection: any RTSPConnectionExecuting
     private let controlChannel: any MoonlightControlChannelManaging
+    private let reconnectPolicy: SessionReconnectPolicy
+    private let reconnectSleeper: any SessionReconnectSleeping
+    private let keyMaterialGenerator: any RemoteInputKeyMaterialGenerating
+    private let reconnectClassifier: SessionReconnectFailureClassifier
     private var task: Task<Void, Never>?
     private var taskToken: UUID?
     private var activeSessionID: UUID?
@@ -255,11 +259,19 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     init(
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
         connection: any RTSPConnectionExecuting = NetworkRTSPConnection(),
-        controlChannel: any MoonlightControlChannelManaging = MoonlightControlChannel()
+        controlChannel: any MoonlightControlChannelManaging = MoonlightControlChannel(),
+        reconnectPolicy: SessionReconnectPolicy = .standard,
+        reconnectSleeper: any SessionReconnectSleeping = ContinuousSessionReconnectSleeper(),
+        keyMaterialGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator(),
+        reconnectClassifier: SessionReconnectFailureClassifier = SessionReconnectFailureClassifier()
     ) {
         self.launchClient = launchClient
         self.connection = connection
         self.controlChannel = controlChannel
+        self.reconnectPolicy = reconnectPolicy
+        self.reconnectSleeper = reconnectSleeper
+        self.keyMaterialGenerator = keyMaterialGenerator
+        self.reconnectClassifier = reconnectClassifier
     }
 
     func start(
@@ -333,86 +345,50 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             }
         }
         do {
+            try reconnectPolicy.validate()
             let parameters = try StreamNegotiator().makeParameters(from: request)
             let launch = try await launchClient.launch(request, parameters: parameters)
-            continuation.yield(.launchAccepted(launch))
-            guard let sessionURL = launch.sessionURL else {
-                throw RTSPBootstrapError.invalidSessionURL
-            }
-            let endpoint = try RTSPSessionEndpoint.parse(sessionURL)
-            try await connection.connect(
-                endpoint: endpoint,
-                encryptionKey: request.remoteInputKey.key
+            try yield(.launchAccepted(launch), token: token, continuation: continuation)
+            try await establishTransport(
+                request: request,
+                response: launch,
+                token: token,
+                continuation: continuation
             )
-            _ = try await transact(
-                RTSPRequest(
-                    method: "OPTIONS",
-                    target: endpoint.target,
-                    headers: requestHeaders(cSeq: "1", endpoint: endpoint)
-                ),
-                expectedCSeq: "1"
-            )
-            let describe = try await transact(
-                RTSPRequest(
-                    method: "DESCRIBE",
-                    target: endpoint.target,
-                    headers: requestHeaders(cSeq: "2", endpoint: endpoint) + [
-                        RTSPHeader(name: "Accept", value: "application/sdp"),
-                        RTSPHeader(name: "If-Modified-Since", value: "Thu, 01 Jan 1970 00:00:00 GMT")
-                    ]
-                ),
-                expectedCSeq: "2"
-            )
-            _ = try SunshineSessionDescriptionParser.parse(describe)
-            continuation.yield(.rtspReady)
 
-            let audioSetup = try await setupStream(
-                .audio,
-                cSeq: "3",
-                endpoint: endpoint,
-                sessionToken: nil
-            )
-            let videoSetup = try await setupStream(
-                .video,
-                cSeq: "4",
-                endpoint: endpoint,
-                sessionToken: audioSetup.sessionToken
-            )
-            guard videoSetup.sessionToken == audioSetup.sessionToken else {
-                throw SunshineRTSPNegotiationError.conflictingSession
-            }
-            let controlSetup = try await setupStream(
-                .control,
-                cSeq: "5",
-                endpoint: endpoint,
-                sessionToken: audioSetup.sessionToken
-            )
-            guard controlSetup.sessionToken == audioSetup.sessionToken else {
-                throw SunshineRTSPNegotiationError.conflictingSession
-            }
-            guard let connectData = controlSetup.controlConnectData else {
-                throw SunshineRTSPNegotiationError.missingControlConnectData
-            }
-            try await controlChannel.connect(
-                endpoint: controlSetup.endpoint(host: endpoint.networkEndpoint.host),
-                connectData: connectData,
-                encryptionKey: request.remoteInputKey.key
-            )
-            continuation.yield(.channelsReady(.control))
+            var activeRequest = request
+            var usedKeyMaterial: Set<RemoteInputKeyMaterial> = [request.remoteInputKey]
 
             while !Task.isCancelled {
-                switch try await controlChannel.nextEvent() {
-                case .idle, .message:
-                    continue
-                case let .terminated(reason):
-                    await controlChannel.stop()
-                    await connection.cancel()
-                    if taskToken == token {
-                        activeSessionID = nil
+                do {
+                    switch try await controlChannel.nextEvent() {
+                    case .idle, .message:
+                        continue
+                    case let .terminated(reason):
+                        await controlChannel.stop()
+                        await connection.cancel()
+                        if taskToken == token {
+                            activeSessionID = nil
+                        }
+                        try yield(
+                            .terminated(reason: reason.description),
+                            token: token,
+                            continuation: continuation
+                        )
+                        continuation.finish()
+                        return
                     }
-                    continuation.yield(.terminated(reason: reason.description))
-                    continuation.finish()
-                    return
+                } catch {
+                    try Task.checkCancellation()
+                    try ensureCurrent(token: token)
+                    try yield(.channelsReady([]), token: token, continuation: continuation)
+                    guard reconnectClassifier.isRetryable(error) else { throw error }
+                    activeRequest = try await recoverTransport(
+                        request: activeRequest,
+                        usedKeyMaterial: &usedKeyMaterial,
+                        token: token,
+                        continuation: continuation
+                    )
                 }
             }
             try Task.checkCancellation()
@@ -423,6 +399,184 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
                 activeSessionID = nil
             }
             continuation.finish(throwing: error)
+        }
+    }
+
+    private func establishTransport(
+        request: StreamLaunchRequest,
+        response: StreamLaunchResponse,
+        token: UUID,
+        continuation: AsyncThrowingStream<SessionControlEvent, Error>.Continuation
+    ) async throws {
+        try ensureCurrent(token: token)
+        guard let sessionURL = response.sessionURL else {
+            throw RTSPBootstrapError.invalidSessionURL
+        }
+        let endpoint = try RTSPSessionEndpoint.parse(sessionURL)
+        try await connection.connect(
+            endpoint: endpoint,
+            encryptionKey: request.remoteInputKey.key
+        )
+        try ensureCurrent(token: token)
+        _ = try await transact(
+            RTSPRequest(
+                method: "OPTIONS",
+                target: endpoint.target,
+                headers: requestHeaders(cSeq: "1", endpoint: endpoint)
+            ),
+            expectedCSeq: "1"
+        )
+        let describe = try await transact(
+            RTSPRequest(
+                method: "DESCRIBE",
+                target: endpoint.target,
+                headers: requestHeaders(cSeq: "2", endpoint: endpoint) + [
+                    RTSPHeader(name: "Accept", value: "application/sdp"),
+                    RTSPHeader(name: "If-Modified-Since", value: "Thu, 01 Jan 1970 00:00:00 GMT")
+                ]
+            ),
+            expectedCSeq: "2"
+        )
+        _ = try SunshineSessionDescriptionParser.parse(describe)
+        try yield(.rtspReady, token: token, continuation: continuation)
+
+        let audioSetup = try await setupStream(
+            .audio,
+            cSeq: "3",
+            endpoint: endpoint,
+            sessionToken: nil
+        )
+        let videoSetup = try await setupStream(
+            .video,
+            cSeq: "4",
+            endpoint: endpoint,
+            sessionToken: audioSetup.sessionToken
+        )
+        guard videoSetup.sessionToken == audioSetup.sessionToken else {
+            throw SunshineRTSPNegotiationError.conflictingSession
+        }
+        let controlSetup = try await setupStream(
+            .control,
+            cSeq: "5",
+            endpoint: endpoint,
+            sessionToken: audioSetup.sessionToken
+        )
+        guard controlSetup.sessionToken == audioSetup.sessionToken else {
+            throw SunshineRTSPNegotiationError.conflictingSession
+        }
+        guard let connectData = controlSetup.controlConnectData else {
+            throw SunshineRTSPNegotiationError.missingControlConnectData
+        }
+        try await controlChannel.connect(
+            endpoint: controlSetup.endpoint(host: endpoint.networkEndpoint.host),
+            connectData: connectData,
+            encryptionKey: request.remoteInputKey.key
+        )
+        try yield(.channelsReady(.control), token: token, continuation: continuation)
+    }
+
+    private func recoverTransport(
+        request: StreamLaunchRequest,
+        usedKeyMaterial: inout Set<RemoteInputKeyMaterial>,
+        token: UUID,
+        continuation: AsyncThrowingStream<SessionControlEvent, Error>.Continuation
+    ) async throws -> StreamLaunchRequest {
+        for attempt in 1...reconnectPolicy.maximumAttempts {
+            try ensureCurrent(token: token)
+            try yield(
+                .reconnecting(attempt: attempt, reason: "control_unavailable"),
+                token: token,
+                continuation: continuation
+            )
+            await controlChannel.stop()
+            await connection.cancel()
+            try await reconnectSleeper.sleep(for: reconnectPolicy.delay(forAttempt: attempt))
+            try ensureCurrent(token: token)
+
+            var resumedRequest = request
+            resumedRequest.remoteInputKey = try freshKeyMaterial(excluding: &usedKeyMaterial)
+            let parameters = try StreamNegotiator().makeParameters(from: resumedRequest)
+
+            do {
+                let response = try await launchClient.resume(
+                    resumedRequest,
+                    parameters: parameters
+                )
+                try await establishTransport(
+                    request: resumedRequest,
+                    response: response,
+                    token: token,
+                    continuation: continuation
+                )
+                return resumedRequest
+            } catch {
+                await controlChannel.stop()
+                await connection.cancel()
+                try Task.checkCancellation()
+                try ensureCurrent(token: token)
+                guard reconnectClassifier.isRetryable(error) else { throw error }
+            }
+        }
+
+        try? await launchClient.stop(
+            host: request.host,
+            clientUniqueID: request.clientUniqueID
+        )
+        throw StreamNegotiationFailure(
+            code: .reconnectExhausted,
+            subsystem: "reconnect",
+            message: "Required session channels did not recover within the retry budget."
+        )
+    }
+
+    private func freshKeyMaterial(
+        excluding usedKeyMaterial: inout Set<RemoteInputKeyMaterial>
+    ) throws -> RemoteInputKeyMaterial {
+        for _ in 0..<4 {
+            let candidate: RemoteInputKeyMaterial
+            do {
+                candidate = try keyMaterialGenerator.generate()
+            } catch {
+                throw StreamNegotiationFailure(
+                    code: .reconnectKeyGenerationFailed,
+                    subsystem: "reconnect",
+                    message: "Failed to generate reconnect key material."
+                )
+            }
+            guard candidate.key.count == 16,
+                  candidate.keyID >= 0,
+                  candidate.keyID <= Int(UInt32.max) else {
+                throw StreamNegotiationFailure(
+                    code: .reconnectKeyGenerationFailed,
+                    subsystem: "reconnect",
+                    message: "Failed to generate valid reconnect key material."
+                )
+            }
+            if usedKeyMaterial.insert(candidate).inserted {
+                return candidate
+            }
+        }
+        throw StreamNegotiationFailure(
+            code: .reconnectKeyGenerationFailed,
+            subsystem: "reconnect",
+            message: "Failed to generate unique reconnect key material."
+        )
+    }
+
+    private func ensureCurrent(token: UUID) throws {
+        guard !Task.isCancelled, taskToken == token else {
+            throw CancellationError()
+        }
+    }
+
+    private func yield(
+        _ event: SessionControlEvent,
+        token: UUID,
+        continuation: AsyncThrowingStream<SessionControlEvent, Error>.Continuation
+    ) throws {
+        try ensureCurrent(token: token)
+        if case .terminated = continuation.yield(event) {
+            throw CancellationError()
         }
     }
 

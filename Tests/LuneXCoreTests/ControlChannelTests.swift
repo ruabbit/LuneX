@@ -133,6 +133,35 @@ final class ControlChannelTests: XCTestCase {
         XCTAssertEqual(disconnects, 1)
     }
 
+    func testUncertainSendFailureConsumesSequenceBeforeRetry() async throws {
+        let key = Data(repeating: 0x5A, count: 16)
+        let driver = ControlDriverStub(serviceEvents: [], failingSendCalls: [3])
+        let channel = MoonlightControlChannel(driver: driver)
+        try await channel.connect(
+            endpoint: RuntimeNetworkEndpoint(host: "example.invalid", port: 47_999, transport: .udp),
+            connectData: 0,
+            encryptionKey: key
+        )
+
+        do {
+            try await channel.requestIDR()
+            XCTFail("The scripted third send must fail.")
+        } catch let error as ENetTransportError {
+            XCTAssertEqual(error, .sendFailed)
+        }
+        try await channel.requestIDR()
+
+        let sends = await driver.recordedSends()
+        let frames = try sends.map {
+            try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
+        }
+        XCTAssertEqual(frames.map(\.sequence), [0, 1, 2, 3])
+        XCTAssertEqual(frames.suffix(2).map(\.message), [
+            MoonlightControlProtocol.requestIDR,
+            MoonlightControlProtocol.requestIDR
+        ])
+    }
+
     func testHostTerminationReasonsAreActionableAndMalformedPayloadFails() throws {
         let cases: [(UInt32, HostTerminationKind, String)] = [
             (0x8003_0023, .graceful, "ended the streaming session"),
@@ -202,10 +231,15 @@ private actor ControlDriverStub: ENetConnectionDriving {
     private var sends: [ControlSendCall] = []
     private var serviceEvents: [ENetServiceEvent]
     private var serviceTimeouts: [UInt32] = []
+    private let failingSendCalls: Set<Int>
     private var disconnects = 0
 
-    init(serviceEvents: [ENetServiceEvent]) {
+    init(
+        serviceEvents: [ENetServiceEvent],
+        failingSendCalls: Set<Int> = []
+    ) {
         self.serviceEvents = serviceEvents
+        self.failingSendCalls = failingSendCalls
     }
 
     func connect(
@@ -226,6 +260,9 @@ private actor ControlDriverStub: ENetConnectionDriving {
 
     func send(_ payload: Data, channelID: UInt8, reliable: Bool) async throws {
         sends.append(ControlSendCall(payload: payload, channelID: channelID, reliable: reliable))
+        if failingSendCalls.contains(sends.count) {
+            throw ENetTransportError.sendFailed
+        }
     }
 
     func service(timeoutMilliseconds: UInt32) async throws -> ENetServiceEvent {

@@ -237,3 +237,21 @@
 - 4.4 focused control/RTSP/negotiation tests `19/19` 通过；全量 macOS warnings-as-errors tests 通过且真实 Keychain test skipped。macOS、固定 iPhone 17 Pro、固定 iPad Pro、固定 Apple TV、固定 Apple Vision Pro 隔离 Debug build 全部通过。
 - ENet vendor revision/license/source逐文件匹配只读 review clone；自有 C bridge 与 vendor C 在 macOS/iOS simulator/tvOS simulator/visionOS simulator 四 SDK strict syntax gate 通过，第三方 warning suppression 保持 PBXBuildFile scoped，production source graph 无 GPL/reference 输入。
 - fixture validator self-test/全树、generator consistency、OpenSpec strict validation、`git diff --check` 与 dependency/source/license audit 全部通过；验收前后四个固定 simulator 均为 `Shutdown`。OpenSpec 权威进度更新为 `21/61`，下一项为 4.5 bounded reconnect/channel health。
+
+## 2026-07-21 阶段 13 任务 4.5 启动
+
+- 已从磁盘恢复活动目标与 OpenSpec `implement-moonlight-session-runtime`，核对 `HEAD == origin/main == 63dec2d`、工作树 clean、权威进度 `21/61`，4.4 已完成并推送。
+- 已读取 proposal、design、五份 spec 与 tasks；当前执行 4.5 `Implement bounded reconnect and channel-health aggregation without duplicate host sessions`。
+- 已核对只读 Moonlight iOS/Sunshine 行为：恢复使用 `/resume`，必须提供 fresh `rikey`/`rikeyid`，成功返回 `resume=1`/`sessionUrl0`；不会重新启动 app。direct ENet same-key sequence reset 被拒绝为 AES-GCM nonce 风险。
+- 4.5 验收计划：先实现 health/retry/key contracts、HTTP `/resume`、RTSP/control recovery 与 sequence consumption，再运行 focused fault/race tests；通过后才执行完整跨平台 build/test/fixture/OpenSpec/license/source/simulator-state gate，最后更新 22/61、提交并推送。
+
+## 2026-07-21 阶段 13 任务 4.5 完成
+
+- 新增 `SessionRecovery.swift`：required-channel health snapshot/aggregator、三次 100/250/500 ms reconnect policy、可注入 sleeper、Security random remote-input key generator 与 fail-closed transient error classifier。
+- `HTTPStreamLaunchClient` 新增独立 `/resume` contract；resume 必须返回 `resume=1`，同时支持 Sunshine `sessionUrl0`。`MoonlightSessionControlProvider` 在 control 丢失时先发布空健康集，仅调用 `/resume`，每次使用 fresh key，重建 RTSP/control；不重复 `/launch`。
+- control AES-GCM sequence 改为在等待 ENet send 前消费，避免不确定 send failure 后复用 nonce。`StreamSessionCoordinator` 现在持有 current health，required channel 丢失后从 streaming 进入 reconnecting，只有全部 required 恢复才回到 streaming。
+- 4.5 focused control/RTSP/recovery tests 最终 `29/29` 通过；覆盖 exact `/resume` query/marker、SecureRandom generator、policy validation、eventually succeeds、三次 exhaustion、best-effort cancel、non-retryable frame/authentication、duplicate key、one launch、fresh keys、health truth、sequence consumption 与 old-attempt late publish suppression。
+- 完整 macOS warnings-as-errors tests 最终 `150 total / 149 passed / 1 skipped / 0 failed`；skipped 仅为显式 opt-in 真实 Keychain round-trip，`LUNEX_RUN_KEYCHAIN_TEST` 未设置，未再次访问 Keychain。
+- macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建前后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
+- 自有 C bridge 与 pinned ENet 在 macOS/iOS simulator/tvOS simulator/visionOS simulator 四 SDK strict syntax gate 通过；fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production GPL/reference boundary、ENet revision/license/source match 全部通过。
+- OpenSpec 4.5 更新为完成，权威进度 `22/61`；下一项为 4.6 remote cancel/local cancellation convergence。live host reconnect、媒体/input readiness 与完整 streaming 仍未执行或声称完成。

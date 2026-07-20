@@ -144,6 +144,14 @@ private actor StubStreamLaunchClient: StreamLaunchClient {
         )
     }
 
+    func resume(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse {
+        StreamLaunchResponse(
+            sessionURL: "rtsp://\(request.host.address)/session",
+            gameSessionID: nil,
+            rawValues: ["resume": "1"]
+        )
+    }
+
     func stop(host: MoonlightHost, clientUniqueID: String) async throws {
         stopCount += 1
     }

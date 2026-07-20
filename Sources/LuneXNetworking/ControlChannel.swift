@@ -349,8 +349,8 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging {
             key: encryptionKey,
             origin: .client
         )
+        nextSequence += 1
         try await driver.send(frame, channelID: channelID, reliable: true)
         guard connected else { throw ControlChannelError.invalidState }
-        nextSequence += 1
     }
 }

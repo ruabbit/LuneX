@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteInputKeyMaterial: Codable, Equatable, Sendable {
+struct RemoteInputKeyMaterial: Codable, Equatable, Hashable, Sendable {
     var keyID: Int
     var key: Data
 
@@ -47,6 +47,7 @@ enum StreamNegotiationStage: String, Codable, Equatable, Sendable {
     case launching
     case readyForTransport
     case streaming
+    case reconnecting
     case stopping
     case disconnected
     case failed
@@ -58,6 +59,9 @@ enum StreamNegotiationFailureCode: String, Codable, Equatable, Sendable {
     case invalidResolution
     case invalidBitrate
     case launchRejected
+    case resumeRejected
+    case reconnectExhausted
+    case reconnectKeyGenerationFailed
     case transportUnavailable
     case invalidTransition
 }
@@ -85,12 +89,14 @@ struct StreamSessionSnapshot: Codable, Equatable, Sendable {
     var stage: StreamNegotiationStage
     var parameters: StreamNegotiationParameters?
     var launchResponse: StreamLaunchResponse?
+    var channelHealth: SessionChannelHealthSnapshot
     var failure: StreamNegotiationFailure?
     var updatedAt: Date
 }
 
 protocol StreamLaunchClient: Sendable {
     func launch(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse
+    func resume(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse
     func stop(host: MoonlightHost, clientUniqueID: String) async throws
 }
 
@@ -102,6 +108,29 @@ struct HTTPStreamLaunchClient: StreamLaunchClient {
     }
 
     func launch(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse {
+        try await launchOrResume(
+            request,
+            parameters: parameters,
+            path: "/launch",
+            operation: .launch
+        )
+    }
+
+    func resume(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse {
+        try await launchOrResume(
+            request,
+            parameters: parameters,
+            path: "/resume",
+            operation: .resume
+        )
+    }
+
+    private func launchOrResume(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters,
+        path: String,
+        operation: StreamLaunchResponseParser.Operation
+    ) async throws -> StreamLaunchResponse {
         let endpoint = try HostEndpointParser.parse(request.host.address)
         var queryItems = [
             URLQueryItem(name: "uniqueid", value: request.clientUniqueID),
@@ -127,14 +156,18 @@ struct HTTPStreamLaunchClient: StreamLaunchClient {
             ])
         }
 
-        guard let url = MoonlightHTTPURLBuilder.secureURL(endpoint: endpoint, path: "/launch", queryItems: queryItems) else {
-            throw StreamNegotiationFailure(code: .launchRejected, subsystem: "launch", message: "Failed to construct launch URL.")
+        guard let url = MoonlightHTTPURLBuilder.secureURL(endpoint: endpoint, path: path, queryItems: queryItems) else {
+            throw StreamNegotiationFailure(
+                code: operation == .launch ? .launchRejected : .resumeRejected,
+                subsystem: operation.rawValue,
+                message: "Failed to construct session request URL."
+            )
         }
 
         var urlRequest = URLRequest(url: url)
         urlRequest.timeoutInterval = 30
         let (data, _) = try await requestExecutor.data(for: urlRequest, pinnedIdentity: request.host.pinnedIdentity)
-        return try StreamLaunchResponseParser.parse(data)
+        return try StreamLaunchResponseParser.parse(data, operation: operation)
     }
 
     func stop(host: MoonlightHost, clientUniqueID: String) async throws {
@@ -154,25 +187,47 @@ struct HTTPStreamLaunchClient: StreamLaunchClient {
 }
 
 enum StreamLaunchResponseParser {
-    static func parse(_ data: Data) throws -> StreamLaunchResponse {
+    enum Operation: String, Equatable, Sendable {
+        case launch
+        case resume
+    }
+
+    static func parse(
+        _ data: Data,
+        operation: Operation = .launch
+    ) throws -> StreamLaunchResponse {
         let delegate = SimpleMoonlightXMLDelegate()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
 
         guard parser.parse() else {
-            throw StreamNegotiationFailure(code: .launchRejected, subsystem: "launch", message: "Invalid launch response.")
+            throw StreamNegotiationFailure(
+                code: operation == .launch ? .launchRejected : .resumeRejected,
+                subsystem: operation.rawValue,
+                message: "Invalid session response."
+            )
         }
 
         if let statusCode = delegate.statusCode, statusCode != 200 {
             throw StreamNegotiationFailure(
-                code: .launchRejected,
-                subsystem: "launch",
-                message: delegate.statusMessage ?? "Launch request was rejected."
+                code: operation == .launch ? .launchRejected : .resumeRejected,
+                subsystem: operation.rawValue,
+                message: delegate.statusMessage ?? "Session request was rejected."
+            )
+        }
+
+        if operation == .resume, delegate.values["resume"] != "1" {
+            throw StreamNegotiationFailure(
+                code: .resumeRejected,
+                subsystem: operation.rawValue,
+                message: "Host did not accept session resume."
             )
         }
 
         return StreamLaunchResponse(
-            sessionURL: delegate.values["sessionurl"] ?? delegate.values["rtspurl"],
+            sessionURL: delegate.values["sessionurl0"]
+                ?? delegate.values["sessionurl"]
+                ?? delegate.values["rtspurl"],
             gameSessionID: delegate.values["gamesession"],
             rawValues: delegate.values
         )
@@ -242,15 +297,19 @@ struct StreamNegotiator: Sendable {
 actor StreamSessionCoordinator {
     private let negotiator: StreamNegotiator
     private let launchClient: StreamLaunchClient
+    private var healthAggregator: SessionChannelHealthAggregator
     private(set) var snapshot: StreamSessionSnapshot
 
     init(
         negotiator: StreamNegotiator = StreamNegotiator(),
         launchClient: StreamLaunchClient,
+        requiredChannels: SessionChannelReadiness = .all,
         now: Date = Date()
     ) {
         self.negotiator = negotiator
         self.launchClient = launchClient
+        let healthAggregator = SessionChannelHealthAggregator(requiredChannels: requiredChannels)
+        self.healthAggregator = healthAggregator
         self.snapshot = StreamSessionSnapshot(
             sessionID: UUID(),
             hostID: nil,
@@ -258,6 +317,7 @@ actor StreamSessionCoordinator {
             stage: .idle,
             parameters: nil,
             launchResponse: nil,
+            channelHealth: healthAggregator.snapshot,
             failure: nil,
             updatedAt: now
         )
@@ -268,6 +328,7 @@ actor StreamSessionCoordinator {
         snapshot.hostID = request.host.id
         snapshot.appID = request.app.id
         snapshot.failure = nil
+        snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
         snapshot.updatedAt = now
 
         let parameters = try negotiator.makeParameters(from: request)
@@ -313,6 +374,7 @@ actor StreamSessionCoordinator {
         now: Date = Date()
     ) throws -> StreamSessionSnapshot {
         guard snapshot.stage == .readyForTransport,
+              requiredChannels == healthAggregator.snapshot.requiredChannels,
               readiness.satisfies(requiredChannels) else {
             throw StreamNegotiationFailure(
                 code: .invalidTransition,
@@ -320,7 +382,31 @@ actor StreamSessionCoordinator {
                 message: "Streaming requires launch plus every required transport channel."
             )
         }
+        snapshot.channelHealth = healthAggregator.replaceHealthyChannels(readiness)
         snapshot.stage = .streaming
+        snapshot.updatedAt = now
+        return snapshot
+    }
+
+    func updateChannelHealth(
+        _ healthyChannels: SessionChannelReadiness,
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) else {
+            throw StreamNegotiationFailure(
+                code: .invalidTransition,
+                subsystem: "transport",
+                message: "Channel health is unavailable before launch transport begins."
+            )
+        }
+
+        let previousStage = snapshot.stage
+        snapshot.channelHealth = healthAggregator.replaceHealthyChannels(healthyChannels)
+        if snapshot.channelHealth.canStream {
+            snapshot.stage = .streaming
+        } else if previousStage == .streaming || previousStage == .reconnecting {
+            snapshot.stage = .reconnecting
+        }
         snapshot.updatedAt = now
         return snapshot
     }
