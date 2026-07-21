@@ -61,12 +61,14 @@ struct SessionLifecycleApplication: Equatable, Sendable {
 protocol SessionVideoProcessing: Sendable {
     func consume(_ event: VideoReceiveEvent) async throws -> Bool
     func updateColorMetadata(_ metadata: VideoColorMetadata) async throws
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws
     func stop() async
 }
 
 protocol SessionVideoProcessorCreating: Sendable {
     func makeVideoProcessor(
         sessionID: UUID,
+        mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
         controlProvider: any SessionControlProvider
     ) async throws -> any SessionVideoProcessing
@@ -122,6 +124,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var inputProvider: any RemoteInputProvider
         var readiness: SessionChannelReadiness
         var lifecycleApplication: SessionLifecycleApplication?
+        var lifecycleReservation: SessionLifecycleApplication?
     }
 
     private struct TeardownOperation {
@@ -228,6 +231,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
 
             let videoProcessor = try await videoProcessorFactory.makeVideoProcessor(
                 sessionID: sessionID,
+                mediaGeneration: mediaGeneration,
                 configuration: configuration.video,
                 controlProvider: controlProvider
             )
@@ -298,7 +302,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 audioProcessor: audioProcessor,
                 inputProvider: remoteInputProvider,
                 readiness: [.input],
-                lifecycleApplication: nil
+                lifecycleApplication: nil,
+                lifecycleReservation: nil
             )
             startingSession = nil
             cancelledStartingGenerations.remove(mediaGeneration)
@@ -435,14 +440,44 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard active.generation == application.mediaGeneration else {
             throw SessionMediaEnvironmentError.staleLifecycleApplication
         }
-        if let current = active.lifecycleApplication {
-            if application == current { return }
-            guard application.lifecycleRevision > current.lifecycleRevision else {
+        let currentRevision = [
+            active.lifecycleApplication?.lifecycleRevision,
+            active.lifecycleReservation?.lifecycleRevision
+        ].compactMap { $0 }.max()
+        let isExactCurrent = application == active.lifecycleApplication
+            || application == active.lifecycleReservation
+        if !isExactCurrent, let currentRevision {
+            guard application.lifecycleRevision > currentRevision else {
                 throw SessionMediaEnvironmentError.staleLifecycleApplication
             }
         }
-        active.lifecycleApplication = application
+        active.lifecycleReservation = application
         self.active = active
+
+        do {
+            try await active.videoProcessor.applyLifecycle(application)
+        } catch {
+            if var current = self.active,
+               current.sessionID == application.sessionID,
+               current.generation == application.mediaGeneration,
+               current.lifecycleReservation == application {
+                current.lifecycleReservation = nil
+                self.active = current
+            }
+            throw error
+        }
+
+        guard var current = self.active,
+              current.sessionID == application.sessionID,
+              current.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard current.lifecycleReservation == application else {
+            throw SessionMediaEnvironmentError.staleLifecycleApplication
+        }
+        current.lifecycleApplication = application
+        current.lifecycleReservation = nil
+        self.active = current
     }
 
     func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {

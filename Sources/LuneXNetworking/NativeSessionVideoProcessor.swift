@@ -9,10 +9,14 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
 
     func makeVideoProcessor(
         sessionID: UUID,
+        mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
         controlProvider: any SessionControlProvider
     ) async throws -> any SessionVideoProcessing {
-        presentationSource.beginSession(sessionID)
+        presentationSource.beginSession(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
         let source = presentationSource
         do {
             let pipeline = try VideoDecodePipeline.make(
@@ -22,12 +26,17 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
                     provider: controlProvider
                 ),
                 decoderEventSink: { event in
-                    source.consume(event, sessionID: sessionID)
+                    source.consume(
+                        event,
+                        sessionID: sessionID,
+                        mediaGeneration: mediaGeneration
+                    )
                 }
             )
             do {
                 return try NativeSessionVideoProcessor(
                     sessionID: sessionID,
+                    mediaGeneration: mediaGeneration,
                     configuration: configuration,
                     pipeline: pipeline,
                     presentationSource: presentationSource
@@ -37,7 +46,10 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
                 throw error
             }
         } catch {
-            presentationSource.clear(sessionID: sessionID)
+            presentationSource.clear(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration
+            )
             throw error
         }
     }
@@ -45,18 +57,24 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
 
 actor NativeSessionVideoProcessor: SessionVideoProcessing {
     private let sessionID: UUID
+    private let mediaGeneration: UInt64
     private let pipeline: VideoDecodePipeline
     private let presentationSource: StreamVideoPresentationSource
     private var assembler: NormalizedVideoAccessUnitAssembler
+    private var lifecycleApplication: SessionLifecycleApplication?
+    private var isDrainingTransport = false
+    private var needsResumeRecovery = false
     private var isStopped = false
 
     init(
         sessionID: UUID,
+        mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
         pipeline: VideoDecodePipeline,
         presentationSource: StreamVideoPresentationSource
     ) throws {
         self.sessionID = sessionID
+        self.mediaGeneration = mediaGeneration
         self.pipeline = pipeline
         self.presentationSource = presentationSource
         assembler = try NormalizedVideoAccessUnitAssembler(codec: configuration.codec)
@@ -64,28 +82,33 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
 
     func consume(_ event: VideoReceiveEvent) async throws -> Bool {
         guard !isStopped else { throw VideoDecodePipelineError.stopped }
+        guard !isDrainingTransport else { return false }
         var submittedFrame = false
-        switch event {
-        case let .packet(packet):
-            for assemblyEvent in assembler.ingest(packet) {
-                if case .submitted = try await pipeline.consume(assemblyEvent) {
-                    submittedFrame = true
+        do {
+            switch event {
+            case let .packet(packet):
+                for assemblyEvent in assembler.ingest(packet) {
+                    if case .submitted = try await pipeline.consume(assemblyEvent) {
+                        submittedFrame = true
+                    }
+                }
+            case let .packetLoss(expected, received):
+                let loss = VideoFrameLoss(
+                    firstFrameIndex: expected,
+                    lastFrameIndex: received,
+                    reason: .superseded,
+                    requiresIDR: true
+                )
+                _ = try await pipeline.consume(.frameLost(loss))
+            case .closed:
+                for assemblyEvent in assembler.finish() {
+                    if case .submitted = try await pipeline.consume(assemblyEvent) {
+                        submittedFrame = true
+                    }
                 }
             }
-        case let .packetLoss(expected, received):
-            let loss = VideoFrameLoss(
-                firstFrameIndex: expected,
-                lastFrameIndex: received,
-                reason: .superseded,
-                requiresIDR: true
-            )
-            _ = try await pipeline.consume(.frameLost(loss))
-        case .closed:
-            for assemblyEvent in assembler.finish() {
-                if case .submitted = try await pipeline.consume(assemblyEvent) {
-                    submittedFrame = true
-                }
-            }
+        } catch VideoDecodePipelineError.submissionInvalidated {
+            return false
         }
         return submittedFrame
     }
@@ -95,12 +118,70 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
         _ = try await pipeline.updateColorMetadata(metadata)
     }
 
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        guard !isStopped else { throw VideoDecodePipelineError.stopped }
+        guard application.sessionID == sessionID,
+              application.mediaGeneration == mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleLifecycleApplication
+        }
+        if let current = lifecycleApplication {
+            if application != current {
+                guard application.lifecycleRevision > current.lifecycleRevision else {
+                    throw SessionMediaEnvironmentError.staleLifecycleApplication
+                }
+            } else if !needsResumeRecovery {
+                return
+            }
+        }
+        lifecycleApplication = application
+
+        let shouldDrain: Bool
+        switch application.directive.videoProcessing {
+        case .submitDecodedVideo:
+            shouldDrain = false
+        case .inactive, .drainTransportWithoutDecoding:
+            shouldDrain = true
+        }
+
+        if shouldDrain {
+            isDrainingTransport = true
+            needsResumeRecovery = false
+            assembler.reset()
+            presentationSource.discardFrames(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration
+            )
+            await pipeline.pauseForLifecycle()
+            return
+        }
+
+        guard isDrainingTransport || needsResumeRecovery else { return }
+        isDrainingTransport = false
+        needsResumeRecovery = true
+        assembler.reset()
+        presentationSource.discardFrames(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        do {
+            try await pipeline.resumeAfterLifecyclePause()
+        } catch {
+            guard lifecycleApplication == application else { return }
+            throw error
+        }
+        guard lifecycleApplication == application, !isStopped else { return }
+        needsResumeRecovery = false
+    }
+
     func stop() async {
         guard !isStopped else { return }
         isStopped = true
         assembler.reset()
         await pipeline.stop()
-        presentationSource.clear(sessionID: sessionID)
+        presentationSource.clear(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
     }
 }
 

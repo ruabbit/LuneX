@@ -838,3 +838,19 @@
 - 首轮focused在测试启动前因新增media error未同步`ApplicationDiagnostics`穷尽switch而失败，结果`/tmp/LuneX-14-2_2-focused.T8m4Rx/LifecycleApplication.xcresult`；补稳定`media_lifecycle_stale`安全诊断和回归后，focused通过`24/24`，结果`/tmp/LuneX-14-2_2-focused-r2.W5n9Lc/LifecycleApplication.xcresult`。
 - 完整macOS suite通过`390 total / 389 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_2-full.R3q7Hs/LuneXCoreTests.xcresult`；唯一skip经test tree确认仍为一次性真实Keychain测试，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - macOS和固定iPhone/iPad/Apple TV/Apple Vision Pro Debug warnings-as-errors构建全部通过，目录前缀`/tmp/LuneX-14-2_2-builds.*`。全部5个OpenSpec strict、generator byte-stability、whitespace与固定simulator唯一/Shutdown/全局Booted=0通过。OpenSpec 2.2标记完成，权威进度`6/29`；下一项为2.3实际video pause/clear/IDR恢复。
+
+## 2026-07-21 阶段 14 任务 2.3 启动
+
+- 2.2已以`a5061f4`独立提交并推送，确认`HEAD == origin/main`且工作树clean。2.3沿receiver consumer、native processor、decode pipeline和presentation source真实所有权链实现drain/pause/clear/IDR恢复。
+- 审计发现presentation source只校验session UUID和decoder generation；同UUID replacement可能让旧callback与新decoder generation编号碰撞，因此本任务同时加入media generation fence。
+- 首轮focused命令在编译前因误用无test action的`LuneX-macOS` scheme终止，且命令尾部使用了zsh只读变量`status`；结果目录`/tmp/LuneX-14-2_3-focused.baExrT`。已确认改用`LuneXCoreTests`和普通变量`rc`在新目录重跑。
+- 第二轮focused进入Swift编译后只发现新测试在`XCTAssertEqual`非并发autoclosure内直接`await` actor属性，结果`/tmp/LuneX-14-2_3-focused-r2.JqZ90f/LifecycleVideo.xcresult`；改为先await局部值再同步断言。
+- 五平台build前只读simulator审计再次误把`as $ids`写在对象literal字段内，`jq`编译失败但原始JSON已保存且没有设备操作；这是14.1.2已知错误的重复，已改为对象外先绑定并规定后续复用固定脚本。
+
+## 2026-07-21 阶段 14 任务 2.3 完成
+
+- lifecycle application现在通过environment的revision reservation调用generation-owned video processor；receiver consumer持续读取，processor在pause期间重置partial assembly并跳过decode submission。恢复只通过既有session control provider请求一个fresh IDR，重复active directive不重复请求。
+- `VideoDecodePipeline`新增可恢复pause/resume、paused access-unit drop、lifecycle-token submission invalidation和IDR合并；pause中途作废的submission不会误触发session teardown。presentation source同时按session/media/decoder generation过滤，并记录已作废decoder generation以拒绝极晚旧`sessionStarted`与frame。
+- 最终focused Swift 6/Clang warnings-as-errors gate通过`26/26`，无skip，结果`/tmp/LuneX-14-2_3-focused-r5.qApHqK/LifecycleVideo.xcresult`。完整macOS通过`393 total / 392 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_3-full.PObxun/LuneXCoreTests.xcresult`；唯一skip经test tree精确确认是`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。
+- macOS与固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV、Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-2_3-builds.Y4xnSH`。构建前后simulator JSON逐字节一致，四个名称各一、固定UUID均`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
+- 5个OpenSpec change strict validation、generator byte-stability、whitespace与production/reference边界全部通过；project SHA-256前后均为`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`。OpenSpec 2.3标记完成，权威进度`7/29`；下一项为2.4完整lifecycle状态/竞态矩阵。

@@ -551,11 +551,16 @@ final class SessionMediaEnvironmentTests: XCTestCase {
     func testPresentationSourceRejectsStaleDecoderAndSessionFrames() throws {
         let source = StreamVideoPresentationSource()
         let sessionID = UUID()
+        let mediaGeneration: UInt64 = 7
         let pixelBuffer = try makePixelBuffer()
-        source.beginSession(sessionID)
+        source.beginSession(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
         source.consume(
             .sessionStarted(generation: 3, colorMetadata: .rec709VideoRange()),
-            sessionID: sessionID
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
         )
         source.consume(.frame(DecodedVideoFrame(
             generation: 3,
@@ -565,7 +570,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             duration: CMTime(value: 1, timescale: 60),
             infoFlags: [],
             colorMetadata: .rec709VideoRange()
-        )), sessionID: sessionID)
+        )), sessionID: sessionID, mediaGeneration: mediaGeneration)
         source.consume(.frame(DecodedVideoFrame(
             generation: 2,
             frameID: 11,
@@ -574,7 +579,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             duration: CMTime(value: 1, timescale: 60),
             infoFlags: [],
             colorMetadata: .rec709VideoRange()
-        )), sessionID: sessionID)
+        )), sessionID: sessionID, mediaGeneration: mediaGeneration)
         source.consume(.frame(DecodedVideoFrame(
             generation: 3,
             frameID: 12,
@@ -583,15 +588,166 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             duration: CMTime(value: 1, timescale: 60),
             infoFlags: [],
             colorMetadata: .rec709VideoRange()
-        )), sessionID: UUID())
+        )), sessionID: UUID(), mediaGeneration: mediaGeneration)
 
         let active = source.snapshot()
         XCTAssertEqual(active.latestFrameID, 10)
         XCTAssertEqual(active.publishedFrameCount, 1)
         XCTAssertEqual(active.staleFrameDropCount, 2)
-        source.clear(sessionID: sessionID)
+        source.clear(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
         XCTAssertNil(source.currentFrame())
         XCTAssertNil(source.snapshot().sessionID)
+    }
+
+    func testPresentationSourceRejectsPriorMediaGenerationWithReusedSessionID() throws {
+        let source = StreamVideoPresentationSource()
+        let sessionID = UUID()
+        let pixelBuffer = try makePixelBuffer()
+        source.beginSession(sessionID: sessionID, mediaGeneration: 1)
+        source.consume(
+            .sessionStarted(generation: 1, colorMetadata: .rec709VideoRange()),
+            sessionID: sessionID,
+            mediaGeneration: 1
+        )
+
+        source.beginSession(sessionID: sessionID, mediaGeneration: 2)
+        source.consume(
+            .sessionStarted(generation: 1, colorMetadata: .rec709VideoRange()),
+            sessionID: sessionID,
+            mediaGeneration: 2
+        )
+        source.consume(.frame(DecodedVideoFrame(
+            generation: 1,
+            frameID: 41,
+            pixelBuffer: pixelBuffer,
+            presentationTimeStamp: .zero,
+            duration: CMTime(value: 1, timescale: 60),
+            infoFlags: [],
+            colorMetadata: .rec709VideoRange()
+        )), sessionID: sessionID, mediaGeneration: 1)
+        source.consume(.frame(DecodedVideoFrame(
+            generation: 1,
+            frameID: 42,
+            pixelBuffer: pixelBuffer,
+            presentationTimeStamp: .zero,
+            duration: CMTime(value: 1, timescale: 60),
+            infoFlags: [],
+            colorMetadata: .rec709VideoRange()
+        )), sessionID: sessionID, mediaGeneration: 2)
+
+        let snapshot = source.snapshot()
+        XCTAssertEqual(snapshot.sessionID, sessionID)
+        XCTAssertEqual(snapshot.mediaGeneration, 2)
+        XCTAssertEqual(snapshot.latestFrameID, 42)
+        XCTAssertEqual(snapshot.staleFrameDropCount, 1)
+    }
+
+    func testNativeVideoProcessorDrainsAndClearsUntilFreshIDRResume() async throws {
+        let source = StreamVideoPresentationSource()
+        let control = RecordingLifecycleControlProvider()
+        let sessionID = UUID()
+        let mediaGeneration: UInt64 = 9
+        let configuration = makeConfiguration(sessionID: sessionID).video
+        let processor = try await NativeSessionVideoProcessorFactory(
+            presentationSource: source
+        ).makeVideoProcessor(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            configuration: configuration,
+            controlProvider: control
+        )
+        source.consume(
+            .sessionStarted(generation: 1, colorMetadata: .rec709VideoRange()),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        source.consume(.frame(DecodedVideoFrame(
+            generation: 1,
+            frameID: 55,
+            pixelBuffer: try makePixelBuffer(),
+            presentationTimeStamp: .zero,
+            duration: CMTime(value: 1, timescale: 60),
+            infoFlags: [],
+            colorMetadata: .rec709VideoRange()
+        )), sessionID: sessionID, mediaGeneration: mediaGeneration)
+        XCTAssertEqual(source.snapshot().latestFrameID, 55)
+
+        let paused = SessionLifecycleApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            lifecycleRevision: 1,
+            directive: SessionLifecycleDirectiveResolver.resolve(
+                isStreamActive: true,
+                isVisible: false,
+                isFocused: false,
+                drawableSize: PixelSize(width: 1_920, height: 1_080)
+            )
+        )
+        try await processor.applyLifecycle(paused)
+        XCTAssertNil(source.currentFrame())
+        XCTAssertNil(source.snapshot().decoderGeneration)
+        let becameReady = try await processor.consume(.packet(ReceivedVideoPacket(
+            sequenceNumber: 1,
+            frameIndex: 1,
+            receiveTimeNanoseconds: 1,
+            isFirstPacket: true,
+            isLastPacket: true,
+            payload: Data([0xFF])
+        )))
+        XCTAssertFalse(becameReady)
+        let pausedIDRCount = await control.idrCount
+        XCTAssertEqual(pausedIDRCount, 0)
+        source.consume(
+            .sessionStarted(generation: 1, colorMetadata: .rec709VideoRange()),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        source.consume(.frame(DecodedVideoFrame(
+            generation: 1,
+            frameID: 56,
+            pixelBuffer: try makePixelBuffer(),
+            presentationTimeStamp: .zero,
+            duration: CMTime(value: 1, timescale: 60),
+            infoFlags: [],
+            colorMetadata: .rec709VideoRange()
+        )), sessionID: sessionID, mediaGeneration: mediaGeneration)
+        XCTAssertNil(source.currentFrame())
+
+        let resumed = SessionLifecycleApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            lifecycleRevision: 2,
+            directive: SessionLifecycleDirectiveResolver.resolve(
+                isStreamActive: true,
+                isVisible: true,
+                isFocused: true,
+                drawableSize: PixelSize(width: 1_920, height: 1_080)
+            )
+        )
+        try await processor.applyLifecycle(resumed)
+        try await processor.applyLifecycle(resumed)
+        let resumedIDRCount = await control.idrCount
+        XCTAssertEqual(resumedIDRCount, 1)
+        XCTAssertNil(source.currentFrame())
+        source.consume(
+            .sessionStarted(generation: 2, colorMetadata: .rec709VideoRange()),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        source.consume(.frame(DecodedVideoFrame(
+            generation: 2,
+            frameID: 57,
+            pixelBuffer: try makePixelBuffer(),
+            presentationTimeStamp: .zero,
+            duration: CMTime(value: 1, timescale: 60),
+            infoFlags: [],
+            colorMetadata: .rec709VideoRange()
+        )), sessionID: sessionID, mediaGeneration: mediaGeneration)
+        XCTAssertEqual(source.snapshot().latestFrameID, 57)
+        await processor.stop()
     }
 
     func testNativeAudioProcessorConnectsOpusFixtureToSessionAudioGraph() async throws {
@@ -826,6 +982,28 @@ private struct MediaEnvironmentControlProvider: SessionControlProvider {
     }
 }
 
+private actor RecordingLifecycleControlProvider: SessionControlProvider {
+    private(set) var idrCount = 0
+
+    func start(
+        sessionID: UUID,
+        request: StreamLaunchRequest
+    ) async -> AsyncThrowingStream<SessionControlEvent, Error> {
+        _ = sessionID
+        _ = request
+        return AsyncThrowingStream { $0.finish() }
+    }
+
+    func requestIDR(sessionID: UUID) async throws {
+        _ = sessionID
+        idrCount &+= 1
+    }
+
+    func stop(sessionID: UUID) async {
+        _ = sessionID
+    }
+}
+
 private final class ControlledVideoReceiveProvider: VideoReceiveProvider, @unchecked Sendable {
     private typealias Continuation = AsyncThrowingStream<VideoReceiveEvent, Error>.Continuation
     private let lock = NSLock()
@@ -1033,10 +1211,12 @@ private struct RecordingVideoProcessorFactory: SessionVideoProcessorCreating {
 
     func makeVideoProcessor(
         sessionID: UUID,
+        mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
         controlProvider: any SessionControlProvider
     ) async throws -> any SessionVideoProcessing {
         _ = sessionID
+        _ = mediaGeneration
         _ = configuration
         _ = controlProvider
         await calls.append("video.processor.start")
@@ -1060,6 +1240,11 @@ private actor RecordingVideoProcessor: SessionVideoProcessing {
     func updateColorMetadata(_ metadata: VideoColorMetadata) async throws {
         _ = metadata
         await calls.append("video.metadata")
+    }
+
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
+        await calls.append("video.lifecycle")
     }
 
     func stop() async {

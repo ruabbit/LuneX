@@ -9,7 +9,7 @@
 
 - [x] 2.1 Define closed render, video-processing, presentation, and input lifecycle directives from active/visible/focused/drawable state
 - [x] 2.2 Add generation-scoped lifecycle application to the session media environment without exposing providers to SwiftUI
-- [ ] 2.3 Pause decoded-video submission while draining transport, clear presentation, and request a fresh IDR on visible resume
+- [x] 2.3 Pause decoded-video submission while draining transport, clear presentation, and request a fresh IDR on visible resume
 - [ ] 2.4 Add occlusion, focus, zero-drawable, resume, stop, replacement, and stale-directive lifecycle tests
 
 ## 3. Ordered macOS session input coordination

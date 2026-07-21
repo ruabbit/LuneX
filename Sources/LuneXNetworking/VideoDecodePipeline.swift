@@ -18,6 +18,7 @@ enum VideoDecodePipelineError: Error, Equatable, Sendable, CustomStringConvertib
     case invalidFrameRate(Int)
     case codecMismatch(expected: NegotiatedVideoCodec, received: NegotiatedVideoCodec)
     case stopped
+    case submissionInvalidated
 
     var description: String {
         switch self {
@@ -27,6 +28,8 @@ enum VideoDecodePipelineError: Error, Equatable, Sendable, CustomStringConvertib
             return "Video access unit codec \(received.rawValue) does not match \(expected.rawValue)."
         case .stopped:
             return "The video decode pipeline has already stopped."
+        case .submissionInvalidated:
+            return "The video submission was invalidated by a lifecycle transition."
         }
     }
 }
@@ -38,10 +41,12 @@ enum VideoDecodeRecoveryReason: Equatable, Sendable {
     case malformedIDR
     case decoderFrameDropped
     case decoderFailure(VideoDecoderError)
+    case lifecycleResume
 }
 
 enum VideoDecodePipelineDropReason: Equatable, Sendable {
     case awaitingIDR
+    case lifecyclePaused
 }
 
 enum VideoDecodePipelineResult: Equatable, Sendable {
@@ -57,6 +62,7 @@ struct VideoDecodePipelineSnapshot: Equatable, Sendable {
     var isAwaitingIDR: Bool
     var hasOutstandingIDRRequest: Bool
     var isStopped: Bool
+    var isLifecyclePaused: Bool
     var sessionCreationCount: UInt64
     var decoderResetCount: UInt64
     var formatChangeCount: UInt64
@@ -67,6 +73,8 @@ struct VideoDecodePipelineSnapshot: Equatable, Sendable {
     var decoderDroppedFrameCount: UInt64
     var decoderFailureCount: UInt64
     var teardownCount: UInt64
+    var lifecyclePauseCount: UInt64
+    var lifecycleResumeCount: UInt64
 }
 
 actor VideoDecodePipeline {
@@ -83,6 +91,7 @@ actor VideoDecodePipeline {
     private var isAwaitingIDR = true
     private var hasOutstandingIDRRequest = false
     private var isStopped = false
+    private var isLifecyclePaused = false
     private var lifecycleToken: UInt64 = 0
     private var recoveryGeneration: UInt64 = 0
     private var sessionCreationCount: UInt64 = 0
@@ -95,6 +104,8 @@ actor VideoDecodePipeline {
     private var decoderDroppedFrameCount: UInt64 = 0
     private var decoderFailureCount: UInt64 = 0
     private var teardownCount: UInt64 = 0
+    private var lifecyclePauseCount: UInt64 = 0
+    private var lifecycleResumeCount: UInt64 = 0
 
     static func make(
         configuration: NegotiatedVideoStreamConfiguration,
@@ -145,6 +156,20 @@ actor VideoDecodePipeline {
 
     func consume(_ event: VideoAccessUnitAssemblyEvent) async throws -> VideoDecodePipelineResult {
         guard !isStopped else { throw VideoDecodePipelineError.stopped }
+        if isLifecyclePaused {
+            switch event {
+            case let .accessUnit(accessUnit):
+                droppedAccessUnitCount &+= 1
+                return .dropped(
+                    frameIndex: accessUnit.frameIndex,
+                    reason: .lifecyclePaused
+                )
+            case .frameLost:
+                return .ignored
+            case let .packetDiscarded(reason):
+                return .packetDiscarded(reason)
+            }
+        }
         switch event {
         case let .accessUnit(accessUnit):
             return try await submit(accessUnit)
@@ -173,9 +198,37 @@ actor VideoDecodePipeline {
         return .recoveryRequested(.colorMetadataChanged)
     }
 
+    func pauseForLifecycle() async {
+        guard !isStopped, !isLifecyclePaused else { return }
+        isLifecyclePaused = true
+        lifecycleToken &+= 1
+        recoveryGeneration &+= 1
+        let hadActiveDecoder = activeDecoderGeneration != nil
+        activeDecoderGeneration = nil
+        isAwaitingIDR = true
+        hasOutstandingIDRRequest = false
+        lifecyclePauseCount &+= 1
+        if hadActiveDecoder {
+            await decoder.stop()
+        }
+    }
+
+    func resumeAfterLifecyclePause() async throws {
+        guard !isStopped else { throw VideoDecodePipelineError.stopped }
+        guard isLifecyclePaused || (isAwaitingIDR && !hasOutstandingIDRRequest) else {
+            return
+        }
+        if isLifecyclePaused {
+            isLifecyclePaused = false
+            lifecycleResumeCount &+= 1
+        }
+        try await beginRecovery(.lifecycleResume)
+    }
+
     func stop() async {
         guard !isStopped else { return }
         isStopped = true
+        isLifecyclePaused = false
         lifecycleToken &+= 1
         recoveryGeneration &+= 1
         activeDecoderGeneration = nil
@@ -194,6 +247,7 @@ actor VideoDecodePipeline {
             isAwaitingIDR: isAwaitingIDR,
             hasOutstandingIDRRequest: hasOutstandingIDRRequest,
             isStopped: isStopped,
+            isLifecyclePaused: isLifecyclePaused,
             sessionCreationCount: sessionCreationCount,
             decoderResetCount: decoderResetCount,
             formatChangeCount: formatChangeCount,
@@ -203,7 +257,9 @@ actor VideoDecodePipeline {
             droppedAccessUnitCount: droppedAccessUnitCount,
             decoderDroppedFrameCount: decoderDroppedFrameCount,
             decoderFailureCount: decoderFailureCount,
-            teardownCount: teardownCount
+            teardownCount: teardownCount,
+            lifecyclePauseCount: lifecyclePauseCount,
+            lifecycleResumeCount: lifecycleResumeCount
         )
     }
 
@@ -226,15 +282,14 @@ actor VideoDecodePipeline {
         let token = lifecycleToken
         do {
             _ = try await decoder.decode(compressedSample(from: accessUnit))
-            guard !isStopped, lifecycleToken == token else {
-                throw VideoDecodePipelineError.stopped
-            }
+            try validateSubmission(token: token)
             return .submitted(
                 frameIndex: accessUnit.frameIndex,
                 generation: generation,
                 replacedSession: false
             )
         } catch let error as VideoDecoderError {
+            try validateSubmission(token: token)
             try? await beginRecovery(.decoderFailure(error))
             throw error
         }
@@ -273,13 +328,9 @@ actor VideoDecodePipeline {
                     formatDescription: description,
                     colorMetadata: configuration.colorMetadata
                 )
-                guard !isStopped, lifecycleToken == token else {
-                    throw VideoDecodePipelineError.stopped
-                }
+                try validateSubmission(token: token)
             } catch {
-                guard !isStopped, lifecycleToken == token else {
-                    throw VideoDecodePipelineError.stopped
-                }
+                try validateSubmission(token: token)
                 try? await beginRecovery(.malformedIDR)
                 throw error
             }
@@ -298,13 +349,9 @@ actor VideoDecodePipeline {
         }
         do {
             _ = try await decoder.decode(compressedSample(from: accessUnit))
-            guard !isStopped, lifecycleToken == token else {
-                throw VideoDecodePipelineError.stopped
-            }
+            try validateSubmission(token: token)
         } catch let error as VideoDecoderError {
-            guard !isStopped, lifecycleToken == token else {
-                throw VideoDecodePipelineError.stopped
-            }
+            try validateSubmission(token: token)
             try? await beginRecovery(.decoderFailure(error))
             throw error
         }
@@ -348,6 +395,7 @@ actor VideoDecodePipeline {
             await decoder.stop()
         }
         guard !isStopped,
+              !isLifecyclePaused,
               lifecycleToken == token,
               recoveryGeneration == recovery else { return }
         guard !hasOutstandingIDRRequest else { return }
@@ -370,6 +418,13 @@ actor VideoDecodePipeline {
               lifecycleToken == token,
               recoveryGeneration == recovery else { return }
         _ = reason
+    }
+
+    private func validateSubmission(token: UInt64) throws {
+        guard !isStopped else { throw VideoDecodePipelineError.stopped }
+        guard lifecycleToken == token else {
+            throw VideoDecodePipelineError.submissionInvalidated
+        }
     }
 
     fileprivate func receiveDecoderEvent(_ event: VideoDecoderEvent) async {

@@ -183,6 +183,71 @@ final class VideoDecodePipelineTests: XCTestCase {
         await pipeline.stop()
     }
 
+    func testLifecyclePauseDropsSubmissionAndResumeRequestsFreshIDR() async throws {
+        let fixture = try loadFixture()
+        let requester = PipelineIDRRequester()
+        let factory = PipelineSessionFactory()
+        let pipeline = try makePipeline(
+            codec: .h264,
+            colorMetadata: .rec709VideoRange(),
+            requester: requester,
+            factory: factory
+        )
+        _ = try await pipeline.consume(.accessUnit(try accessUnit(
+            frameIndex: 1,
+            codec: .h264,
+            frameType: .instantaneousDecoderRefresh,
+            payloadHex: fixture.h264.accessUnitHex
+        )))
+
+        await pipeline.pauseForLifecycle()
+        let pausedFrame = try await pipeline.consume(.accessUnit(try accessUnit(
+            frameIndex: 2,
+            codec: .h264,
+            frameType: .instantaneousDecoderRefresh,
+            payloadHex: fixture.h264.accessUnitHex
+        )))
+        XCTAssertEqual(
+            pausedFrame,
+            .dropped(frameIndex: 2, reason: .lifecyclePaused)
+        )
+        var snapshot = await pipeline.snapshot()
+        XCTAssertTrue(snapshot.isLifecyclePaused)
+        XCTAssertTrue(snapshot.isAwaitingIDR)
+        XCTAssertNil(snapshot.activeDecoderGeneration)
+        XCTAssertEqual(snapshot.lifecyclePauseCount, 1)
+        XCTAssertEqual(factory.sessions[0].finishCount, 1)
+        let pausedRequestCount = await requester.count
+        XCTAssertEqual(pausedRequestCount, 0)
+
+        try await pipeline.resumeAfterLifecyclePause()
+        try await pipeline.resumeAfterLifecyclePause()
+        snapshot = await pipeline.snapshot()
+        XCTAssertFalse(snapshot.isLifecyclePaused)
+        XCTAssertTrue(snapshot.isAwaitingIDR)
+        XCTAssertTrue(snapshot.hasOutstandingIDRRequest)
+        XCTAssertEqual(snapshot.lifecycleResumeCount, 1)
+        XCTAssertEqual(snapshot.idrRequestCount, 1)
+        let resumedRequestCount = await requester.count
+        XCTAssertEqual(resumedRequestCount, 1)
+
+        let recovered = try await pipeline.consume(.accessUnit(try accessUnit(
+            frameIndex: 3,
+            codec: .h264,
+            frameType: .instantaneousDecoderRefresh,
+            payloadHex: fixture.h264.accessUnitHex
+        )))
+        XCTAssertEqual(
+            recovered,
+            .submitted(frameIndex: 3, generation: 2, replacedSession: true)
+        )
+        snapshot = await pipeline.snapshot()
+        XCTAssertFalse(snapshot.isAwaitingIDR)
+        XCTAssertFalse(snapshot.hasOutstandingIDRRequest)
+        XCTAssertEqual(factory.sessions.count, 2)
+        await pipeline.stop()
+    }
+
     func testDecoderDropStopsGenerationAndRequestsOneIDR() async throws {
         let fixture = try loadFixture()
         let requester = PipelineIDRRequester()
