@@ -31,7 +31,7 @@
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
-| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`9/29`；generation-scoped application input sink完成，下一步实现bounded FIFO |
+| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`10/29`；generation-owned bounded FIFO完成，下一步实现focus-loss `releaseAll` barrier |
 | 15. 原生 HDR/EDR 管线 | pending | 10-bit、BT.2020/PQ、MDCV/CLL、EDR metadata、tone mapping 与跨屏验证 |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
@@ -45,7 +45,7 @@
 
 当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。
 
-阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`9/29`。3.1新增main-actor `ApplicationInputSink`，AppModel在media ownership建立时内部固定generation并只接受event；environment按session/generation/input readiness二次校验，同UUID replacement拒绝旧input application。focused `4/4`、完整macOS `398 passed + 1 Keychain skip`和五平台Debug构建通过。下一项为3.2实现同步platform sample进入的generation-owned bounded FIFO和单consumer顺序delivery。每项继续独立实现、验收、提交和推送。
+阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`10/29`。3.2新增main-actor同步admission、固定容量O(1)环形FIFO和每generation单consumer；队列冻结enqueue-time坐标/cursor/shortcut策略，in-flight计入容量且旧generation token被拒绝。focused `13/13`、完整macOS `402 passed + 1 Keychain skip`和五平台Debug构建通过。下一项为3.3实现focus-loss admission closure与共享held-input `releaseAll` barrier。每项继续独立实现、验收、提交和推送。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -205,9 +205,11 @@
 | 14.2.3第二轮focused compile发现新测试在XCTest autoclosure内直接`await` actor属性 | 1 | production源码无编译错误；先await到局部值再做同步断言，以新隔离目录重跑 |
 | 14.2.4五平台构建前后原始simulator JSON的`cmp`失败 | 1 | 差异仅为三个runtime的`lastUsage`时间；改为规范化设备身份/状态字段后逐字节一致，并独立验证固定名称/UUID唯一、全部`Shutdown`且全局`Booted=0` |
 | 14.3.1首轮focused唯一失败把通用input诊断中的`session`单词视为泄漏 | 1 | 文案无UUID或generation值且沿用既有安全input摘要；删除过严断言，保留category/code/action和无generation检查后以新目录重跑 |
+| 14.3.2恢复时误用不存在的`LuneX` scheme枚举destination | 1 | 命令在编译前失败且未触及simulator；沿用工程实际四个App scheme执行五平台构建 |
+| 14.3.2首次production/reference扫描包含不存在的`Apps`目录并让`references/`匹配`Preferences/` | 1 | 改为只扫描实际production目录，并使用路径边界模式，避免缺目录与子串假阳性 |
 
 ## 当前执行点（2026-07-21）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
-- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`9/29`；generation-scoped application input sink完成，下一项为3.2 bounded platform FIFO。
+- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`10/29`；generation-owned bounded platform FIFO完成，下一项为3.3 focus-loss admission closure与共享`releaseAll` barrier。

@@ -881,3 +881,16 @@
 - 最终focused warnings-as-errors通过`4/4`，结果`/tmp/LuneX-14-3_1-focused-r3.POmEvA/ApplicationInputSink.xcresult`。完整macOS通过`399 total / 398 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_1-full-r2.lX9rRJ/LuneXCoreTests.xcresult`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_1-builds-r2.hIfFhv`。规范化simulator清单前后逐字节一致，名称/UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
 - 5个OpenSpec strict、generator byte-stability、whitespace及production/reference边界通过；project SHA-256前后均为`a0e3396cfb500e432cc10403c5dc23660a228a821fb0922b8744d34422301e5e`。OpenSpec 3.1标记完成，权威进度`9/29`；下一项为3.2 bounded generation-owned FIFO。
+
+## 2026-07-21 阶段 14 任务 3.2 启动
+
+- 3.1已以`bed004e`独立提交并推送，确认`HEAD == origin/main`且工作树clean。3.2使用main-actor同步admission和每generation单一consumer，避免每个`NSEvent`创建可能重排的unstructured task。
+- 队列元素冻结enqueue-time coordinate snapshot、cursor policy和shortcut forwarding policy；容量同时计算in-flight与queued sample。当前任务实现FIFO与backpressure，不提前实现3.3 focus release barrier或3.4完整failure/teardown convergence。
+
+## 2026-07-21 阶段 14 任务 3.2 完成
+
+- 新增`MacSessionInputCoordinator`：同步main-actor admission、opaque generation token、固定容量O(1)环形FIFO、每代单consumer与有界唤醒stream；旧token、inactive generation和包含in-flight的容量溢出均同步拒绝。
+- focused warnings-as-errors通过`13/13`，结果`/tmp/LuneX-14-3_2-focused-r2.6M84eP/MacSessionInputCoordinator.xcresult`。完整macOS通过`403 total / 402 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_2-full.Vvimeo/LuneXCoreTests.xcresult`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部退出成功，证据根目录`/tmp/LuneX-14-3_2-builds.q9O7ei`。规范化simulator清单前后逐字节一致，名称/UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
+- 5个OpenSpec change strict、generator byte-stability、whitespace与production/reference边界通过；project SHA-256两次生成前后均为`abdb7ba6c28d50f959111b1cfa3784e1d0c929552095c8f4eb3c5cdd40cdbc80`。OpenSpec 3.2标记完成，权威进度`10/29`；下一项为3.3 focus-loss admission closure与共享held-input `releaseAll` barrier。
+- 3.2不宣称旧不可取消sink send已完成等待式teardown：replacement后旧delivery可继续悬挂，但generation fence阻止其修改新状态。该收敛属于3.4；focus release属于3.3。
