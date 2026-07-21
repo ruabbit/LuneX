@@ -1130,12 +1130,20 @@ final class RemoteInputDeliveryTests: XCTestCase {
             capabilities: [],
             supportedButtons: .standard
         )), sessionID: sessionID)
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var iterator = feedback.makeAsyncIterator()
         await source.yield(.motionRate(
             controllerIndex: 0,
             motionType: .accelerometer,
             reportRateHz: 120
         ))
-        try await Task.sleep(nanoseconds: 2_000_000)
+        let diagnostic = await iterator.next()
+        XCTAssertEqual(diagnostic, .diagnostic(RemoteInputFeedbackDiagnostic(
+            controllerID: "limited",
+            controllerIndex: 0,
+            command: .motionRate,
+            reason: .unsupportedCapability
+        )))
 
         await assertProviderError(.invalidControllerEvent) {
             try await provider.send(.controllerMotion(ControllerMotionInputEvent(
@@ -1154,6 +1162,142 @@ final class RemoteInputDeliveryTests: XCTestCase {
             )), sessionID: sessionID)
         }
         await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testUnsupportedAndUnavailableRemoteFeedbackPublishTypedDiagnostics() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x44, count: 16))
+        )
+        try await provider.send(.controllerConnected(ControllerConnectionInputEvent(
+            controllerID: "diagnostic-controller",
+            playerIndex: 1,
+            type: .unknown,
+            capabilities: [],
+            supportedButtons: .standard
+        )), sessionID: sessionID)
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var iterator = feedback.makeAsyncIterator()
+
+        await source.yield(.rumble(controllerIndex: 0, lowFrequency: 1, highFrequency: 2))
+        await source.yield(.triggerRumble(controllerIndex: 0, leftMotor: 3, rightMotor: 4))
+        await source.yield(.led(controllerIndex: 0, red: 5, green: 6, blue: 7))
+        await source.yield(.rumble(controllerIndex: 1, lowFrequency: 8, highFrequency: 9))
+
+        let expected: [RemoteInputFeedback] = [
+            .diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: "diagnostic-controller",
+                controllerIndex: 0,
+                command: .rumble,
+                reason: .unsupportedCapability
+            )),
+            .diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: "diagnostic-controller",
+                controllerIndex: 0,
+                command: .triggerRumble,
+                reason: .unsupportedCapability
+            )),
+            .diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: "diagnostic-controller",
+                controllerIndex: 0,
+                command: .led,
+                reason: .unsupportedCapability
+            )),
+            .diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: nil,
+                controllerIndex: 1,
+                command: .rumble,
+                reason: .controllerUnavailable
+            ))
+        ]
+        for expectedFeedback in expected {
+            let receivedFeedback = await iterator.next()
+            XCTAssertEqual(receivedFeedback, expectedFeedback)
+        }
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testDiagnosticFeedbackStreamRetainsOnlyNewestSixtyFourValues() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub(usesUnboundedBuffer: true)
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x54, count: 16))
+        )
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var expected: [RemoteInputFeedback] = []
+
+        for value in 0..<66 {
+            let controllerIndex = UInt8(value % RemoteInputWireCodec.maximumControllerCount)
+            let diagnostic = RemoteInputFeedback.diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: nil,
+                controllerIndex: controllerIndex,
+                command: .rumble,
+                reason: .controllerUnavailable
+            ))
+            expected.append(diagnostic)
+            await source.yield(.rumble(
+                controllerIndex: controllerIndex,
+                lowFrequency: UInt16(value),
+                highFrequency: UInt16(value)
+            ))
+        }
+        await source.finish()
+        try await waitForDeactivationCount(1, sender: sender)
+
+        var received: [RemoteInputFeedback] = []
+        for await value in feedback {
+            received.append(value)
+        }
+        XCTAssertEqual(received, Array(expected.suffix(64)))
+    }
+
+    func testStoppedFeedbackGenerationCannotPublishIntoReplacementSession() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let firstSessionID = UUID()
+        try await provider.startInput(
+            sessionID: firstSessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x55, count: 16))
+        )
+        await provider.stopInput(sessionID: firstSessionID)
+
+        let replacementSessionID = UUID()
+        try await provider.startInput(
+            sessionID: replacementSessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x56, count: 16))
+        )
+        let feedback = await provider.feedback(sessionID: replacementSessionID)
+        var iterator = feedback.makeAsyncIterator()
+
+        await source.yield(
+            .rumble(controllerIndex: 0, lowFrequency: 1, highFrequency: 2),
+            streamIndex: 0
+        )
+        await source.yield(
+            .led(controllerIndex: 1, red: 3, green: 4, blue: 5),
+            streamIndex: 1
+        )
+
+        let received = await iterator.next()
+        XCTAssertEqual(received, .diagnostic(RemoteInputFeedbackDiagnostic(
+            controllerID: nil,
+            controllerIndex: 1,
+            command: .led,
+            reason: .controllerUnavailable
+        )))
+        await provider.stopInput(sessionID: replacementSessionID)
     }
 
     func testReleaseAllSynthesizesReverseOrderedKeyPointerAndControllerNeutralState() async throws {
@@ -1512,6 +1656,108 @@ final class RemoteInputDeliveryTests: XCTestCase {
         await provider.stopInput(sessionID: sessionID)
     }
 
+    func testReleaseReservationBypassesFullNormalQueueWithoutOwningRejectedKey() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 40_000_000])
+        let provider = MoonlightRemoteInputProvider(
+            sender: sender,
+            deliveryLimits: RemoteInputDeliveryLimits(
+                maximumPendingEvents: 1,
+                maximumPendingPackets: 1,
+                maximumPendingCalls: 1
+            )
+        )
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x45, count: 16))
+        )
+        let firstDown = KeyboardInputEvent(
+            rawKeyCode: 0x50,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )
+        let secondDown = KeyboardInputEvent(
+            rawKeyCode: 0x51,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )
+        let rejectedDown = KeyboardInputEvent(
+            rawKeyCode: 0x52,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )
+
+        let first = Task { try await provider.send(.keyboard(firstDown), sessionID: sessionID) }
+        try await waitForSendCount(1, sender: sender)
+        let second = Task { try await provider.send(.keyboard(secondDown), sessionID: sessionID) }
+        try await Task.sleep(nanoseconds: 2_000_000)
+        await assertProviderError(.queueFull) {
+            try await provider.send(.keyboard(rejectedDown), sessionID: sessionID)
+        }
+        let release = Task { await provider.releaseAll(sessionID: sessionID) }
+
+        try await first.value
+        try await second.value
+        await release.value
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 4)
+        XCTAssertEqual(sends.map { readLittleEndianUInt16([UInt8]($0.packet.bytes), offset: 9) }, [
+            firstDown.rawKeyCode,
+            secondDown.rawKeyCode,
+            secondDown.rawKeyCode,
+            firstDown.rawKeyCode
+        ])
+        XCTAssertTrue(sends.suffix(2).allSatisfy { [UInt8]($0.packet.bytes)[11] == 0 })
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testDuplicateHeldTransitionsAndWrongSessionReleasePreserveOwnership() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x46, count: 16))
+        )
+        let keyDown = KeyboardInputEvent(
+            rawKeyCode: 0x53,
+            characters: nil,
+            isDown: true,
+            modifiers: .shift,
+            isRepeat: false
+        )
+        try await provider.send(.keyboard(keyDown), sessionID: sessionID)
+        try await provider.send(.keyboard(keyDown), sessionID: sessionID)
+        try await provider.send(
+            .pointer(.button(button: .left, isDown: true, point: nil)),
+            sessionID: sessionID
+        )
+        try await provider.send(
+            .pointer(.button(button: .left, isDown: true, point: nil)),
+            sessionID: sessionID
+        )
+
+        await provider.releaseAll(sessionID: UUID())
+        let sendsAfterWrongSessionRelease = await sender.recordedSends()
+        XCTAssertEqual(sendsAfterWrongSessionRelease.count, 4)
+        await provider.releaseAll(sessionID: sessionID)
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 6)
+        XCTAssertEqual(sends.suffix(2).map(\.channelID), [
+            RemoteInputWireCodec.keyboardChannel,
+            RemoteInputWireCodec.mouseChannel
+        ])
+        await provider.stopInput(sessionID: sessionID)
+    }
+
     func testProviderStopRejectsLateSendAndDeactivatesOnce() async throws {
         let sender = InputSenderStub()
         let provider = MoonlightRemoteInputProvider(sender: sender)
@@ -1757,24 +2003,40 @@ private actor InputSenderStub: AuthenticatedInputFrameSending {
 }
 
 private actor InputFeedbackSourceStub: RemoteControllerFeedbackStreaming {
-    private var continuation: AsyncStream<RemoteControllerFeedbackMessage>.Continuation?
+    private let usesUnboundedBuffer: Bool
+    private var continuations: [AsyncStream<RemoteControllerFeedbackMessage>.Continuation] = []
+
+    init(usesUnboundedBuffer: Bool = false) {
+        self.usesUnboundedBuffer = usesUnboundedBuffer
+    }
 
     func controllerFeedbackMessages() async -> AsyncStream<RemoteControllerFeedbackMessage> {
         var createdContinuation: AsyncStream<RemoteControllerFeedbackMessage>.Continuation!
+        let bufferingPolicy: AsyncStream<RemoteControllerFeedbackMessage>.Continuation.BufferingPolicy =
+            usesUnboundedBuffer ? .unbounded : .bufferingNewest(64)
         let stream = AsyncStream(
-            bufferingPolicy: .bufferingNewest(64)
+            bufferingPolicy: bufferingPolicy
         ) { createdContinuation = $0 }
-        continuation = createdContinuation
+        continuations.append(createdContinuation)
         return stream
     }
 
-    func yield(_ message: RemoteControllerFeedbackMessage) {
-        continuation?.yield(message)
+    func yield(_ message: RemoteControllerFeedbackMessage, streamIndex: Int? = nil) {
+        if let streamIndex {
+            guard continuations.indices.contains(streamIndex) else { return }
+            continuations[streamIndex].yield(message)
+        } else {
+            continuations.last?.yield(message)
+        }
     }
 
-    func finish() {
-        continuation?.finish()
-        continuation = nil
+    func finish(streamIndex: Int? = nil) {
+        if let streamIndex {
+            guard continuations.indices.contains(streamIndex) else { return }
+            continuations[streamIndex].finish()
+        } else {
+            continuations.last?.finish()
+        }
     }
 }
 

@@ -582,3 +582,19 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部退出成功。构建后四个固定simulator仍各一个可用实例且全部`Shutdown`，未创建或主动boot任何设备。
 - fixture validator self-test/全树、全部四个OpenSpec change strict validation、generator SHA-256 byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对、四SDK strict C syntax与Node independent release reconstruction全部通过。
 - OpenSpec 7.5更新为完成，权威进度`42/61`，下一项为7.6 serialization/ordering/backpressure/focus-loss/remote-feedback verification suite。当前证据只证明provider release serialization、ownership与teardown；不证明平台focus lifecycle已接线或Sunshine实际收到release。
+
+## 2026-07-21 阶段 13 任务 7.6 启动
+
+- 7.5已以`3f95977 Release held remote input state`独立提交并推送，确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`42/61`后进入7.6。
+- 覆盖矩阵确认现有suite已覆盖wire/auth/order/coalescing/backpressure/controller/release/failure主要路径，但remote feedback spec的unsupported-capability diagnostic仍为空白；7.6将补typed diagnostic及满队列release reservation、重复held transition和wrong-session isolation回归。
+- 首次7.6定向warnings-as-errors gate完成`40`项：`39 passed / 1 failed`。唯一失败是新queue-reservation测试把wire中little-endian键码按big-endian读取，实际发送顺序仍为`0x50, 0x51, 0x51, 0x50`；已修正测试解码，不修改生产codec。
+- 继续补充provider feedback输出`.bufferingNewest(64)`的确定性溢出回归，以及stop/replacement后旧feedback stream不能污染新generation的隔离回归；测试上游可显式使用unbounded buffer，使容量断言只归因于被测provider。
+- 第二次7.6定向gate完成`42`项：`41 passed / 1 failed`；queue reservation和旧generation隔离均通过。容量测试在provider仍处理上游时开始消费，因生产/消费并行而收到全部66项；改为等待feedback-source teardown触发的sender deactivation完成标记后再读取已关闭stream，从而确定性验证静止缓冲区的latest-64语义。
+- 最终7.6定向Swift 6 warnings-as-errors gate通过`42/42`、零skip/零失败；扩展wire/delivery/platform-adapter/control/provider-contract/session-cancellation/session-state gate通过`91/91`、零skip/零失败。
+
+## 2026-07-21 阶段 13 任务 7.6 完成
+
+- 完整macOS Swift 6 warnings-as-errors gate通过：`327 total / 326 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-7_6-full-macos.1Dudba/LuneXCoreTests.xcresult`；始终使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部退出成功；四个固定simulator最终各为唯一可用同名实例且全部`Shutdown`，未创建或主动boot设备。
+- fixture validator self-test/全树、全部四个OpenSpec change strict validation、generator SHA-256 byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对、四SDK strict C syntax与Node independent input/release reconstruction全部通过。
+- OpenSpec 7.6更新为完成，权威进度`43/61`。7.7需要授权live Sunshine keyboard/pointer/controller/feedback证据，不能以fixture替代；下一项可离线任务为8.1 production provider availability injection。

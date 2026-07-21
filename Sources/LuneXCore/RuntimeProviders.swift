@@ -258,11 +258,31 @@ struct ControllerLEDFeedback: Equatable, Sendable {
     var blue: UInt8
 }
 
+enum RemoteControllerFeedbackCommand: String, Equatable, Sendable {
+    case rumble
+    case triggerRumble
+    case motionRate
+    case led
+}
+
+enum RemoteInputFeedbackDiagnosticReason: String, Equatable, Sendable {
+    case controllerUnavailable
+    case unsupportedCapability
+}
+
+struct RemoteInputFeedbackDiagnostic: Equatable, Sendable {
+    var controllerID: String?
+    var controllerIndex: UInt8
+    var command: RemoteControllerFeedbackCommand
+    var reason: RemoteInputFeedbackDiagnosticReason
+}
+
 enum RemoteInputFeedback: Equatable, Sendable {
     case rumble(ControllerRumbleFeedback)
     case triggerRumble(ControllerTriggerFeedback)
     case led(ControllerLEDFeedback)
     case motionRate(controllerID: String, motionType: ControllerMotionType, reportRateHz: Int)
+    case diagnostic(RemoteInputFeedbackDiagnostic)
 }
 
 protocol RemoteInputProvider: Sendable {

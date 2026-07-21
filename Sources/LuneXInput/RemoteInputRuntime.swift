@@ -416,9 +416,10 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         let feedback: RemoteInputFeedback
         switch message {
         case let .rumble(controllerIndex, lowFrequency, highFrequency):
-            guard let controllerID = controllerRegistry.controllerID(
+            guard let controllerID = feedbackControllerID(
                 at: controllerIndex,
-                requiring: .rumble
+                requiring: .rumble,
+                command: .rumble
             ) else { return }
             feedback = .rumble(ControllerRumbleFeedback(
                 controllerID: controllerID,
@@ -426,9 +427,10 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 highFrequency: normalizedMotor(highFrequency)
             ))
         case let .triggerRumble(controllerIndex, leftMotor, rightMotor):
-            guard let controllerID = controllerRegistry.controllerID(
+            guard let controllerID = feedbackControllerID(
                 at: controllerIndex,
-                requiring: .triggerRumble
+                requiring: .triggerRumble,
+                command: .triggerRumble
             ) else { return }
             feedback = .triggerRumble(ControllerTriggerFeedback(
                 controllerID: controllerID,
@@ -436,7 +438,15 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 rightMotor: normalizedMotor(rightMotor)
             ))
         case let .motionRate(controllerIndex, motionType, reportRateHz):
-            guard let controllerID = controllerRegistry.setMotionRate(
+            let requiredCapability: RemoteControllerCapabilities = motionType == .accelerometer
+                ? .accelerometer
+                : .gyroscope
+            guard feedbackControllerID(
+                at: controllerIndex,
+                requiring: requiredCapability,
+                command: .motionRate
+            ) != nil,
+            let controllerID = controllerRegistry.setMotionRate(
                 controllerIndex: controllerIndex,
                 motionType: motionType,
                 reportRateHz: reportRateHz
@@ -447,9 +457,10 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 reportRateHz: Int(reportRateHz)
             )
         case let .led(controllerIndex, red, green, blue):
-            guard let controllerID = controllerRegistry.controllerID(
+            guard let controllerID = feedbackControllerID(
                 at: controllerIndex,
-                requiring: .rgbLED
+                requiring: .rgbLED,
+                command: .led
             ) else { return }
             feedback = .led(ControllerLEDFeedback(
                 controllerID: controllerID,
@@ -458,6 +469,39 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 blue: blue
             ))
         }
+        publishFeedback(feedback)
+    }
+
+    private func feedbackControllerID(
+        at controllerIndex: UInt8,
+        requiring capability: RemoteControllerCapabilities,
+        command: RemoteControllerFeedbackCommand
+    ) -> String? {
+        guard let controllerID = controllerRegistry.controllerID(at: controllerIndex) else {
+            publishFeedback(.diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: nil,
+                controllerIndex: controllerIndex,
+                command: command,
+                reason: .controllerUnavailable
+            )))
+            return nil
+        }
+        guard controllerRegistry.controllerID(
+            at: controllerIndex,
+            requiring: capability
+        ) != nil else {
+            publishFeedback(.diagnostic(RemoteInputFeedbackDiagnostic(
+                controllerID: controllerID,
+                controllerIndex: controllerIndex,
+                command: command,
+                reason: .unsupportedCapability
+            )))
+            return nil
+        }
+        return controllerID
+    }
+
+    private func publishFeedback(_ feedback: RemoteInputFeedback) {
         for continuation in feedbackContinuations.values {
             continuation.yield(feedback)
         }
