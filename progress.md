@@ -959,3 +959,28 @@
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors最终重跑全部通过，证据根目录`/tmp/LuneX-14-4_2-builds-final.WDEInh`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
 - 5个OpenSpec strict、generator byte-stability（SHA-256 `e1eac0d6538ff7f5ecff19a0d40ffa967a8d0c0d0cddb0fab281788c8f1fa9d2`）、whitespace与production/reference边界通过。OpenSpec 4.2标记完成，权威进度`15/29`；下一项4.3实现pointer/button/scroll/backing conversion。
 - 4.2证明真实AppKit键盘事件采集类型和翻译可工作，但capture view尚未嵌入`MetalStreamSurface`、绑定session generation或调用coordinator enqueue；不声称live Sunshine收到任何键盘事件。
+
+## 2026-07-21 阶段 14 任务 4.3 恢复
+
+- 从文件化计划和session catchup恢复：`HEAD`为已推送的`1c6184e`，工作树只有`MacInputAdapter.swift`与`MacStreamInputCaptureView.swift`的pointer/button/scroll初稿；OpenSpec权威进度仍为`15/29`。
+- 当前补丁尚未增加测试、编译或运行任何focused/full/five-platform验收，因此4.3保持未完成；既往4.2证据不能替代当前实现的验收。
+- 下一步读取change全部context files，复核view-to-backing转换、按钮状态时序、absolute letterbox拒绝和scroll归一化，再补确定性测试并运行独立质量门。
+- 生产复核发现absolute模式在视频内button-down后若于fit letterbox释放，原初稿会丢弃button-up并可能滞留远端held state；已改为仅拒绝无效absolute down，无效位置的up仍发送`point: nil`以保持释放平衡。
+- 已补AppKit真实事件路由、嵌套view/non-zero bounds backing转换、五键映射、drag按钮集合、reset、unsupported button、precise/line scroll及relative/absolute adapter矩阵；尚未编译，4.3仍保持未完成。
+- 首轮focused warnings-as-errors共`46`项，新增4.3测试全部通过，但既有focus FIFO测试仍使用旧语义的`absolute button-down + nil point`，现被新adapter正确drop，导致预期操作序列少一个button事件；结果`/tmp/LuneX-14-4_3-focused.UhDQWC/PointerCapture.xcresult`保留为失败证据。
+- 已把该回归输入改为有效absolute点并断言映射坐标；下一轮必须使用新隔离DerivedData重新验证，不沿用首轮结果。
+- 第二轮focused Swift/Clang warnings-as-errors结构化通过`46/46`、无skip，结果`/tmp/LuneX-14-4_3-focused-r2.tdCOzt/PointerCapture.xcresult`；覆盖capture view、adapter和coordinator回归。
+- 代码复核确认movement button snapshot当前不进入wire held ownership，显式button transition才更新provider held state；letterbox down drop与outside up释放不会被movement绕过。下一门为完整macOS suite，4.3仍未勾选。
+- 完整macOS Swift/Clang warnings-as-errors套件结构化通过`441 total / 440 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_3-full.O3Kbrf/LuneXCoreTests.xcresult`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。
+- 完整测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。下一门为修改后五平台Debug构建与simulator identity/state守卫，4.3仍未勾选。
+- 修改后macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug Swift/Clang warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-4_3-builds.AV2kXY`。
+- 构建前后规范化simulator identity/state JSON逐字节一致；四个固定名称/UUID各唯一且全部`Shutdown`，全局`Booted=0`，未create、boot、run或shutdown任何设备。下一门为OpenSpec/generator/repository边界与最终diff审查。
+
+## 2026-07-21 阶段 14 任务 4.3 完成
+
+- `MacStreamInputCaptureView`现覆盖mouse move/drag、left/right/middle/back/forward down/up与scroll；独立维护pressed-button集合，reset只清本地tracking，远端释放仍由ordered `releaseAll`负责。
+- absolute点经window-to-flipped-view再到backing pixels转换并减去实际view backing bounds原点；relative button/scroll不要求absolute point。fit letterbox拒绝absolute movement/down/scroll，但无效位置button-up仍发送`point:nil`避免远端held state滞留。
+- focused gate最终`46/46`，结果`/tmp/LuneX-14-4_3-focused-r2.tdCOzt/PointerCapture.xcresult`；完整macOS `441 total / 440 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_3-full.O3Kbrf/LuneXCoreTests.xcresult`。
+- 五平台Debug warnings-as-errors通过，证据`/tmp/LuneX-14-4_3-builds.AV2kXY`；规范化simulator状态前后逐字节一致，固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+- 5个OpenSpec strict、generator双跑byte-stability（SHA-256 `e1eac0d6538ff7f5ecff19a0d40ffa967a8d0c0d0cddb0fab281788c8f1fa9d2`）、whitespace与真实`references/`路径边界通过。OpenSpec 4.3标记完成，权威进度`16/29`；下一项为4.4 actual stream-surface attachment/detach。
+- 4.3不证明view已附着active stream、真实Sunshine已收到事件、物理鼠标Y方向/加速手感或多显示器硬件映射；分别保留给4.4/5.2与6.5，阶段13仍为`54/61 in_progress`。

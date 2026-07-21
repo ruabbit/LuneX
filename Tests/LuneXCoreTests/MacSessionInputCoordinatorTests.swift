@@ -159,7 +159,11 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
             snapshot: snapshot(revision: 1, sourceWidth: 100)
         )
         let buttonDown = envelope(
-            .button(button: .left, isDown: true, localPoint: nil),
+            .button(
+                button: .left,
+                isDown: true,
+                localPoint: RemotePoint(x: 50, y: 50)
+            ),
             snapshot: snapshot(revision: 1, sourceWidth: 100)
         )
 
@@ -194,7 +198,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
             .event(.pointer(.button(
                 button: .left,
                 isDown: true,
-                point: nil
+                point: RemotePoint(x: 50, y: 50)
             ))),
             .release
         ])

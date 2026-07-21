@@ -740,3 +740,13 @@
 - The adapter now translates supported macOS virtual keys to reviewed Win32 VK values before constructing a remote event. ANSI/ISO, modifier, keypad, F1-F20, navigation, Help, and Context Menu mappings are explicit; unknown or semantically uncertain keys fail closed rather than serializing `NSEvent.keyCode`.
 - Final focused warnings-as-errors tests pass `33/33`; the complete macOS suite passes `428 total / 427 passed / 1 explicit Keychain skip / 0 failed`. Five final isolated Debug app builds pass, normalized simulator state is unchanged with every fixed device unique and `Shutdown`, and global `Booted=0`.
 - Five OpenSpec changes validate strict, generator SHA-256 is stable at `e1eac0d6538ff7f5ecff19a0d40ffa967a8d0c0d0cddb0fab281788c8f1fa9d2`, and whitespace/reference boundaries pass. Pointer capture remains task 4.3; actual surface/session attachment remains task 4.4/5.2; no live Sunshine receipt is claimed.
+# 2026-07-21 阶段 14 任务 4.3 恢复复核
+
+- OpenSpec要求事件来源严格限定于实际stream view；AppKit层只发repository-owned值样本，绝对坐标使用`convertToBacking`并在enqueue时与同一revision coordinate snapshot冻结。
+- relative pointer/button/scroll不依赖absolute point；absolute button/scroll必须与movement共用`InputMapper`，fit黑边或无效drawable点应fail closed，不能把黑边点击clamp到远端画面。
+- AppKit `scrollingDeltaX/Y`已经体现用户的自然滚动设置。当前采用Moonlight-qt macOS路径相同的precise每事件`[-1, 1]` clamp后乘Win32 `WHEEL_DELTA=120`，non-precise归一为单步`-120/0/+120`；这仍是确定性合同证据，不是物理滚轮方向手感证据。
+- `buttonNumber`约定为0 left、1 right、2 middle、3 back、4 forward；其他按钮保持本地。view维护独立pressed-button集合以标注后续movement，但reset不伪造button-up，远端held-state释放继续由coordinator/provider ordered `releaseAll`负责。
+- detached/stale view隔离不由4.3视图单独承担；4.4负责actual surface attachment/detach，既有generation-owned coordinator负责旧token/admission拒绝。
+- 复核现有wire/runtime确认movement中的`PointerButtonSet`只用于兼容coalescing边界，当前gen5 movement codec不序列化该集合；remote held-pointer ownership只由显式button transition更新。因此letterbox down被drop后，后续movement不会隐式创建远端held button；无效位置up仍需发送以释放此前有效down。
+- 4.3最终确定性验收通过：focused `46/46`，完整macOS `441 total / 440 passed / 1 explicit Keychain skip / 0 failed`，五平台Debug warnings-as-errors通过，simulator规范化状态前后逐字节一致，5个OpenSpec strict与generator byte-stability通过。
+- 4.3只证明AppKit事件采集、值转换和adapter/coordinator确定性行为；capture view尚未附着到真实`MetalStreamSurface`，cursor/lifecycle尚未由该view拥有，真实Sunshine receipt、鼠标Y方向手感与多屏硬件映射仍未证明。

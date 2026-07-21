@@ -71,6 +71,103 @@ final class InputAdapterTests: XCTestCase {
         )))
     }
 
+    func testMacButtonMapsAbsolutePointAndRejectsInvalidDown() {
+        let adapter = makeMacAdapter(capturesRelativePointer: false)
+
+        XCTAssertEqual(
+            adapter.button(.left, isDown: true, localPoint: RemotePoint(x: 400, y: 300)),
+            InputAdapterOutput(
+                event: .pointer(.button(
+                    button: .left,
+                    isDown: true,
+                    point: RemotePoint(x: 960, y: 540)
+                )),
+                policy: .deliver
+            )
+        )
+        XCTAssertEqual(
+            adapter.button(.left, isDown: true, localPoint: RemotePoint(x: 400, y: 50)),
+            InputAdapterOutput(
+                event: nil,
+                policy: .drop(reason: "Pointer button is outside a drawable video region")
+            )
+        )
+    }
+
+    func testMacAbsoluteButtonReleaseCannotBeStrandedByLetterbox() {
+        let adapter = makeMacAdapter(capturesRelativePointer: false)
+
+        XCTAssertEqual(
+            adapter.button(.left, isDown: false, localPoint: RemotePoint(x: 400, y: 50)),
+            InputAdapterOutput(
+                event: .pointer(.button(button: .left, isDown: false, point: nil)),
+                policy: .deliver
+            )
+        )
+        XCTAssertEqual(
+            adapter.button(.right, isDown: false, localPoint: nil),
+            InputAdapterOutput(
+                event: .pointer(.button(button: .right, isDown: false, point: nil)),
+                policy: .deliver
+            )
+        )
+    }
+
+    func testMacRelativeButtonDoesNotRequireAbsolutePoint() {
+        let adapter = makeMacAdapter(capturesRelativePointer: true)
+
+        XCTAssertEqual(
+            adapter.button(.back, isDown: true, localPoint: nil),
+            InputAdapterOutput(
+                event: .pointer(.button(button: .back, isDown: true, point: nil)),
+                policy: .deliver
+            )
+        )
+    }
+
+    func testMacScrollMapsAbsolutePointAndRejectsLetterbox() {
+        let adapter = makeMacAdapter(capturesRelativePointer: false)
+
+        XCTAssertEqual(
+            adapter.scroll(MacScrollSample(
+                localPoint: RemotePoint(x: 400, y: 300),
+                deltaX: 120,
+                deltaY: -120
+            )),
+            InputAdapterOutput(
+                event: .pointer(.scroll(
+                    deltaX: 120,
+                    deltaY: -120,
+                    point: RemotePoint(x: 960, y: 540)
+                )),
+                policy: .deliver
+            )
+        )
+        XCTAssertEqual(
+            adapter.scroll(MacScrollSample(
+                localPoint: RemotePoint(x: 400, y: 50),
+                deltaX: 0,
+                deltaY: 120
+            )),
+            InputAdapterOutput(
+                event: nil,
+                policy: .drop(reason: "Scroll is outside a drawable video region")
+            )
+        )
+    }
+
+    func testMacRelativeScrollDoesNotRequireAbsolutePoint() {
+        let adapter = makeMacAdapter(capturesRelativePointer: true)
+
+        XCTAssertEqual(
+            adapter.scroll(MacScrollSample(localPoint: nil, deltaX: -120, deltaY: 120)),
+            InputAdapterOutput(
+                event: .pointer(.scroll(deltaX: -120, deltaY: 120, point: nil)),
+                policy: .deliver
+            )
+        )
+    }
+
     func testMacKeyboardReservesSystemShortcutsByDefault() {
         let adapter = MacInputAdapter(
             mapper: makeMapper(),
@@ -298,5 +395,17 @@ final class InputAdapterTests: XCTestCase {
             mode: .fit
         )
         return InputMapper(snapshot: snapshot!)
+    }
+
+    private func makeMacAdapter(capturesRelativePointer: Bool) -> MacInputAdapter {
+        MacInputAdapter(
+            mapper: makeMapper(),
+            cursorPolicy: CursorCapturePolicy(
+                hidesSystemCursor: capturesRelativePointer,
+                capturesRelativePointer: capturesRelativePointer,
+                usesRemotePointer: capturesRelativePointer,
+                reason: nil
+            )
+        )
     }
 }

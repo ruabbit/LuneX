@@ -323,7 +323,26 @@ struct MacInputAdapter: Sendable {
     }
 
     func button(_ button: PointerButton, isDown: Bool, localPoint: RemotePoint?) -> InputAdapterOutput {
-        let remotePoint = localPoint.flatMap { mapper.remotePoint(localX: $0.x, localY: $0.y) }
+        let remotePoint: RemotePoint?
+        if cursorPolicy.capturesRelativePointer {
+            remotePoint = nil
+        } else {
+            if let localPoint,
+               let mappedPoint = mapper.remotePoint(
+                localX: localPoint.x,
+                localY: localPoint.y
+               ) {
+                remotePoint = mappedPoint
+            } else if isDown {
+                return InputAdapterOutput(
+                    event: nil,
+                    policy: .drop(reason: "Pointer button is outside a drawable video region")
+                )
+            } else {
+                // Never strand a remote held button when release occurs in a letterbox.
+                remotePoint = nil
+            }
+        }
         return InputAdapterOutput(
             event: .pointer(.button(button: button, isDown: isDown, point: remotePoint)),
             policy: .deliver
@@ -331,7 +350,22 @@ struct MacInputAdapter: Sendable {
     }
 
     func scroll(_ sample: MacScrollSample) -> InputAdapterOutput {
-        let remotePoint = sample.localPoint.flatMap { mapper.remotePoint(localX: $0.x, localY: $0.y) }
+        let remotePoint: RemotePoint?
+        if cursorPolicy.capturesRelativePointer {
+            remotePoint = nil
+        } else {
+            guard let localPoint = sample.localPoint,
+                  let mappedPoint = mapper.remotePoint(
+                    localX: localPoint.x,
+                    localY: localPoint.y
+                  ) else {
+                return InputAdapterOutput(
+                    event: nil,
+                    policy: .drop(reason: "Scroll is outside a drawable video region")
+                )
+            }
+            remotePoint = mappedPoint
+        }
         return InputAdapterOutput(
             event: .pointer(.scroll(deltaX: sample.deltaX, deltaY: sample.deltaY, point: remotePoint)),
             policy: .deliver

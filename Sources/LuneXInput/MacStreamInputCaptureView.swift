@@ -1,6 +1,38 @@
 #if os(macOS)
 import AppKit
 
+enum MacPointerButtonTranslator {
+    static func button(for buttonNumber: Int) -> PointerButton? {
+        switch buttonNumber {
+        case 0: return .left
+        case 1: return .right
+        case 2: return .middle
+        case 3: return .back
+        case 4: return .forward
+        default: return nil
+        }
+    }
+}
+
+enum MacScrollDeltaNormalizer {
+    private static let wheelDelta = 120.0
+
+    static func remoteDelta(_ value: Double, hasPreciseDeltas: Bool) -> Double? {
+        guard value.isFinite else { return nil }
+        let normalized: Double
+        if hasPreciseDeltas {
+            normalized = min(max(value, -1), 1)
+        } else if value > 0 {
+            normalized = 1
+        } else if value < 0 {
+            normalized = -1
+        } else {
+            normalized = 0
+        }
+        return normalized * wheelDelta
+    }
+}
+
 @MainActor
 final class MacStreamInputCaptureView: NSView {
     typealias SampleHandler = @MainActor (MacPlatformInputSample) -> Void
@@ -10,6 +42,7 @@ final class MacStreamInputCaptureView: NSView {
     private let sampleHandler: SampleHandler
     private let captureExitHandler: @MainActor () -> Void
     private var pressedModifierKeyCodes: Set<UInt16> = []
+    private var pressedPointerButtons: PointerButtonSet = []
     private var reservedShortcutsByKeyCode: [UInt16: MacReservedShortcut] = [:]
 
     init(
@@ -96,9 +129,121 @@ final class MacStreamInputCaptureView: NSView {
         )))
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        emitPointerMovement(event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        emitPointerMovement(event)
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        emitPointerMovement(event)
+    }
+
+    override func otherMouseDragged(with event: NSEvent) {
+        emitPointerMovement(event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        emitButton(.left, isDown: true, event: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        emitButton(.left, isDown: false, event: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        emitButton(.right, isDown: true, event: event)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        emitButton(.right, isDown: false, event: event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        guard let button = MacPointerButtonTranslator.button(for: event.buttonNumber) else {
+            super.otherMouseDown(with: event)
+            return
+        }
+        emitButton(button, isDown: true, event: event)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        guard let button = MacPointerButtonTranslator.button(for: event.buttonNumber) else {
+            super.otherMouseUp(with: event)
+            return
+        }
+        emitButton(button, isDown: false, event: event)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let deltaX = MacScrollDeltaNormalizer.remoteDelta(
+            Double(event.scrollingDeltaX),
+            hasPreciseDeltas: event.hasPreciseScrollingDeltas
+        ), let deltaY = MacScrollDeltaNormalizer.remoteDelta(
+            Double(event.scrollingDeltaY),
+            hasPreciseDeltas: event.hasPreciseScrollingDeltas
+        ), deltaX != 0 || deltaY != 0 else {
+            return
+        }
+        sampleHandler(.scroll(MacScrollSample(
+            localPoint: backingPoint(for: event),
+            deltaX: deltaX,
+            deltaY: deltaY
+        )))
+    }
+
     func resetTransientInputState() {
         pressedModifierKeyCodes.removeAll(keepingCapacity: true)
+        pressedPointerButtons = []
         reservedShortcutsByKeyCode.removeAll(keepingCapacity: true)
+    }
+
+    private func emitPointerMovement(_ event: NSEvent) {
+        let deltaX = Double(event.deltaX)
+        let deltaY = Double(event.deltaY)
+        guard deltaX.isFinite, deltaY.isFinite else { return }
+        sampleHandler(.pointerMove(MacPointerSample(
+            localPoint: backingPoint(for: event),
+            deltaX: deltaX,
+            deltaY: deltaY,
+            buttons: pressedPointerButtons
+        )))
+    }
+
+    private func emitButton(_ button: PointerButton, isDown: Bool, event: NSEvent) {
+        let buttonSet = pointerButtonSet(for: button)
+        if isDown {
+            pressedPointerButtons.insert(buttonSet)
+        } else {
+            pressedPointerButtons.remove(buttonSet)
+        }
+        sampleHandler(.button(
+            button: button,
+            isDown: isDown,
+            localPoint: backingPoint(for: event)
+        ))
+    }
+
+    private func backingPoint(for event: NSEvent) -> RemotePoint? {
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let backingPoint = convertToBacking(localPoint)
+        let backingBounds = convertToBacking(bounds)
+        let x = Double(backingPoint.x - backingBounds.minX)
+        let y = Double(backingPoint.y - backingBounds.minY)
+        guard x.isFinite, y.isFinite else { return nil }
+        return RemotePoint(x: x, y: y)
+    }
+
+    private func pointerButtonSet(for button: PointerButton) -> PointerButtonSet {
+        switch button {
+        case .left: return .left
+        case .right: return .right
+        case .middle: return .middle
+        case .back: return .back
+        case .forward: return .forward
+        }
     }
 
     private func emitKeyboard(
