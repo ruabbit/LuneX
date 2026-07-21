@@ -36,7 +36,7 @@ flowchart LR
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
-| 15 | `in_progress`，OpenSpec `2/33` | 已完成production/API/platform/hardware边界inventory；immutable color signature、display revision、平台能力、mapping mode、surface/configuration identity和closed errors已通过确定性与五平台构建门 | actual decoded layout validator和production presenter接线仍未完成；仍无PQ/EDR mapping、float surface、动态跨屏reconfiguration或物理显示器验证 |
+| 15 | `in_progress`，OpenSpec `3/33` | 已完成边界inventory与immutable render/display/surface合同；actual NV12/P010 pixel format、plane geometry、bit depth/range、codec和source color/light metadata validator已通过确定性与五平台构建门 | validator尚未绑定generation-owned decoded/Metal frame；仍无color/PQ math、production presenter、float surface、动态跨屏reconfiguration或物理显示器验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
@@ -92,7 +92,7 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`已创建并通过strict validation，含`hdr-video-output-contract`、`edr-tone-mapping`和`hdr-display-adaptation`三项capability及33个任务；1.1 inventory已固化在`docs/runtime/hdr-edr-contract.md`，1.2已建立immutable render/display/surface value contract和closed errors，下一项1.3验证actual decoded layout与metadata兼容性。
+- OpenSpec `implement-native-hdr-edr-pipeline`已创建并通过strict validation，含`hdr-video-output-contract`、`edr-tone-mapping`和`hdr-display-adaptation`三项capability及33个任务；1.1 inventory和1.2 immutable render/display/surface合同已完成，1.3已验证actual decoded layout与source metadata兼容性，下一项1.4实现platform-neutral color/PQ/gamut reference math。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

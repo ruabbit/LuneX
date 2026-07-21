@@ -1,7 +1,8 @@
 @preconcurrency import CoreMedia
 import Foundation
 
-enum VideoColorMetadataError: Error, Equatable, Sendable, CustomStringConvertible {
+enum VideoColorMetadataError: Error, Equatable, Hashable, Sendable,
+    CustomStringConvertible {
     case invalidBitDepth(Int)
     case inconsistentDynamicRange
     case invalidMasteringDisplay

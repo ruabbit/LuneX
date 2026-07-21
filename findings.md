@@ -861,6 +861,13 @@
 - 当前测试树唯一显式opt-in环境开关是`LUNEX_RUN_KEYCHAIN_TEST`；normal suite将显式移除该变量，预期唯一skip为一次性真实Keychain round-trip。
 - 测试树尚无live-host XCTest环境开关或test case，因为阶段13的OpenSpec 9.2仍未实现；6.1只证明normal suite没有host/Keychain副作用，不能把缺失的live-host测试描述为disabled pass。
 
+# 2026-07-21 阶段 15 任务 1.3 验收结论
+
+- `HDRDecodedVideoContractValidator`读取actual `CVPixelBuffer`而非仅相信VideoToolbox destination attributes；支持格式严格为8-bit NV12 video-range和10-bit P010 video-range，并验证image/luma/chroma geometry。
+- decoded pixel layout是bit depth/range事实来源，generation-owned `VideoColorMetadata`是primaries/transfer/matrix/MDCV/CLL语义来源；两者不一致即fail closed。HDR10只允许HEVC/AV1，H.264 HDR被拒绝；SDR只允许8-bit Rec.709。
+- 返回的`HDRValidatedDecodedVideoContract`保留codec、dimensions、explicit pixel layout和完整immutable color signature，因此MDCV、CLL与maximum-full-frame-luminance不会在验证后丢失。actual frame/generation binding留给2.1，Metal plane/texture/device validation留给2.2。
+- focused `8/8`、完整macOS `490 total / 489 passed / 1 Keychain skip / 0 failed`、五平台Debug warnings-as-errors和只读simulator不变门通过；这些证据不代表renderer或物理HDR输出已完成。
+
 # 2026-07-21 阶段 15 任务 1.2 验收结论
 
 - `HDRRenderColorSignature`复制validated source metadata形成immutable/hashable identity，覆盖bit depth、dynamic range、primaries、transfer、matrix、range、MDCV、CLL和maximum full-frame luminance；它不在1.2重复拥有或重新解释raw metadata。

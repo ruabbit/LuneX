@@ -1201,3 +1201,18 @@
 - macOS、固定iPhone、iPad、tvOS与visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-1_2-builds.MjyUqg`）；simulator前后规范化状态逐字节一致，四个固定设备均唯一、可用、`Shutdown`且全局`Booted=0`，未执行设备create/clone/boot/launch/shutdown/delete。
 - repository gates位于`/tmp/LuneX-15-1_2-repo-gates-final.6fIeqD`：OpenSpec strict `6/6`、generator三次稳定且SHA-256为`be87633006a8ab40568fa6b9bb0be5de3018c40a93f80fbf1d9438775aaac0d9`、production/reference边界、无Swift Package、精确Keychain skip与`git diff --check`通过。
 - OpenSpec 1.2标记完成，权威进度`2/33`。本证据不证明actual `CVPixelBuffer`布局、production presenter、shader readback、layer runtime property或物理HDR/SDR亮度与颜色；下一项1.3实现actual decoded layout/metadata compatibility validator。
+
+## 2026-07-21 阶段 15 任务 1.3 启动
+
+- 1.2已以`1d4d9bc Define immutable HDR render contracts`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`2/33`。
+- 1.3限定为actual CoreVideo pixel format/plane geometry、bit depth/range、negotiated codec与primaries/transfer/matrix/light metadata compatibility validator；不绑定frame generation/signature、不修改mapper/queue/presenter或AppModel。
+- production只接受8-bit NV12 video-range Rec.709 SDR和HEVC/AV1 10-bit P010 video-range BT.2020/PQ HDR10。真实pixel buffer读取与可注入layout错误路径都必须确定性覆盖。
+
+## 2026-07-21 阶段 15 任务 1.3 完成
+
+- 新增`HDRDecodedVideoContractValidator`，从actual `CVPixelBuffer`读取pixel format、image/plane尺寸并只接受8-bit NV12 video-range或10-bit P010 video-range；full-range、BGRA、错误plane count/geometry和bit-depth mismatch均返回typed closed failure。
+- validator将HDR10限定为HEVC/AV1 + 10-bit + BT.2020/PQ/BT.2020，并将SDR限定为8-bit Rec.709；`VideoColorMetadata.validate()`继续验证MDCV、CLL和maximum-full-frame-luminance边界。返回contract保留codec和完整immutable `HDRRenderColorSignature`，不从mutable CoreVideo attachment猜测新语义。
+- focused结果`8/8`（`/tmp/LuneX-15-1_3-focused.dJioYj/HDRDecodedVideoContract.xcresult`）；完整macOS suite为`490 total / 489 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-1_3-full.K1E4Eu/LuneXCoreTests.xcresult`），日志零源码诊断。唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、固定iPhone、iPad、tvOS与visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-1_3-builds-final.fyVqH8`）；simulator前后规范化SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定四设备均唯一、可用、`Shutdown`且全局`Booted=0`，未执行create/clone/boot/launch/shutdown/delete。
+- repository gates位于`/tmp/LuneX-15-1_3-repo-gates-final.4UGNTO`：OpenSpec strict `6/6`、generator运行前和三次运行SHA-256均为`1e2fc40dec8a16717f09efad32859318c3b377db6135edd04f82bde2d9767cae`、project无漂移、production/reference边界、无Swift Package及`git diff --check`通过。
+- OpenSpec 1.3标记完成，权威进度`3/33`。本证据不证明frame generation/signature binding、Metal texture layout/device ownership、renderer、shader或物理HDR；下一项1.4实现platform-neutral video-range、Rec.709/BT.2020 matrix、SDR transfer、PQ与gamut reference math。
