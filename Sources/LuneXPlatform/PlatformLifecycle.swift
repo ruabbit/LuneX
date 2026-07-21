@@ -32,6 +32,28 @@ final class PlatformLifecycleState {
         activeSurfaceAttachmentID = attachmentID
     }
 
+    func updateSurface(
+        displayID: String?,
+        headroom: DisplayHeadroom,
+        drawableSize: PixelSize
+    ) {
+        self.displayID = displayID
+        self.headroom = headroom
+        self.drawableSize = drawableSize
+        updateRenderPolicy()
+    }
+
+    func clearSurfaceAttachment(_ attachmentID: UUID) -> Bool {
+        guard releaseSurfaceAttachment(attachmentID) else { return false }
+        isVisible = false
+        isFocused = false
+        displayID = nil
+        headroom = DisplayHeadroom()
+        drawableSize = .zero
+        updateRenderPolicy()
+        return true
+    }
+
     @discardableResult
     func releaseSurfaceAttachment(_ attachmentID: UUID) -> Bool {
         guard activeSurfaceAttachmentID == attachmentID else { return false }

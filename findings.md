@@ -782,3 +782,19 @@
 - captured old `onWindowChange` closure在replacement后即使迟到调用，也因view identity fence被拒绝；coordinator update后的actual key event与capture-exit只进入最新closures。
 - cursor owner新增relative-to-hide-only transition证明：先恢复pointer association但保持cursor hidden，最终release才执行一次unhide；不在4.5接入session eligibility。
 - 验收通过focused `28/28`、完整macOS `451 total / 450 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`与边界门均通过。
+
+# 2026-07-21 阶段 14 任务 5.1 调查
+
+- `window.contentView.bounds * window.backingScaleFactor`只在stream surface恰好铺满content view且无独立bounds变换时近似正确；actual source必须是当前`MacStreamInputCaptureView.convertToBacking(bounds)`。
+- window resize notifications不足以覆盖SwiftUI内部layout变化，因此actual surface需在frame/bounds size改变时主动通知attachment owner；screen/backing/live-resize与application screen-parameter通知仍由window monitor统一重新查询当前view。
+- `MetalStreamSurface.apply`当前从`StreamRenderState.coordinateSnapshot`写回`MTKView.drawableSize`。5.2接线前该snapshot可能滞后，继续写回会覆盖5.1刚测得的实际像素尺寸；5.1应由view/backing geometry单向决定drawable，renderer只消费而不反向定义它。
+- replacement可以发生在同一`NSWindow`内，因此monitor attach幂等键必须同时包含window identity与surface identity；只比较window会保留旧surface geometry source。
+
+# 2026-07-21 阶段 14 任务 5.1 验收结论
+
+- `AppKitLifecycleMonitor`现必须同时绑定current `NSWindow`与actual `NSView`；同一window内surface replacement也会移除旧observer/source并重新claim attachment。
+- drawable严格来自`surface.convertToBacking(surface.bounds)`并做finite/positive/Int-range校验；结果同步写入`PlatformLifecycleState`与actual `MTKView.drawableSize`。window content size不再参与。
+- `MacStreamInputCaptureView`在frame/bounds size变化时通知当前attachment owner；window resize/end-live-resize/screen/backing及application screen-parameter通知也重新查询当前view、screen name与三个EDR headroom值。
+- `MetalStreamSurface.apply`不再把可能滞后的render coordinate snapshot写回drawable。5.1证明几何检测和surface配置，不证明5.2已把lifecycle geometry发布给AppModel coordinate snapshot或active media/input session。
+- 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
+- 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

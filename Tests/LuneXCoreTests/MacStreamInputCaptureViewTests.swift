@@ -416,13 +416,15 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         owner.detach(from: replacementView)
         XCTAssertEqual(monitor.detachCount, 3)
         XCTAssertNil(replacementView.onWindowChange)
+        XCTAssertNil(replacementView.onGeometryChange)
     }
 
     func testLifecycleMonitorClearsStateWhenActualSurfaceDetaches() {
         let lifecycle = PlatformLifecycleState()
         let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
-        let window = makeWindow(contentView: NSView())
-        monitor.attach(to: window)
+        let surface = makeView()
+        let window = makeWindow(contentView: surface)
+        monitor.attach(to: window, surface: surface)
         lifecycle.isVisible = true
         lifecycle.isFocused = true
         lifecycle.drawableSize = PixelSize(width: 640, height: 480)
@@ -432,6 +434,8 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
 
         XCTAssertFalse(lifecycle.isVisible)
         XCTAssertFalse(lifecycle.isFocused)
+        XCTAssertNil(lifecycle.displayID)
+        XCTAssertEqual(lifecycle.headroom, DisplayHeadroom())
         XCTAssertEqual(lifecycle.drawableSize, .zero)
     }
 
@@ -439,10 +443,12 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         let lifecycle = PlatformLifecycleState()
         let oldMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
         let replacementMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
-        let oldWindow = makeWindow(contentView: NSView())
-        let replacementWindow = makeWindow(contentView: NSView())
-        oldMonitor.attach(to: oldWindow)
-        replacementMonitor.attach(to: replacementWindow)
+        let oldSurface = makeView()
+        let replacementSurface = makeView()
+        let oldWindow = makeWindow(contentView: oldSurface)
+        let replacementWindow = makeWindow(contentView: replacementSurface)
+        oldMonitor.attach(to: oldWindow, surface: oldSurface)
+        replacementMonitor.attach(to: replacementWindow, surface: replacementSurface)
         lifecycle.isVisible = true
         lifecycle.isFocused = true
         lifecycle.drawableSize = PixelSize(width: 640, height: 480)
@@ -458,6 +464,96 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertFalse(lifecycle.isVisible)
         XCTAssertFalse(lifecycle.isFocused)
         XCTAssertEqual(lifecycle.drawableSize, .zero)
+    }
+
+    func testLifecycleUsesActualSurfaceBackingGeometryInsteadOfWindowContent() {
+        let lifecycle = PlatformLifecycleState()
+        let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+        let surface = MacStreamInputCaptureView(
+            frame: NSRect(x: 31, y: 47, width: 213, height: 117),
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: root)
+        root.addSubview(surface)
+
+        monitor.attach(to: window, surface: surface)
+
+        let expected = backingPixelSize(of: surface)
+        XCTAssertEqual(lifecycle.drawableSize, expected)
+        XCTAssertEqual(
+            surface.drawableSize,
+            CGSize(width: expected.width, height: expected.height)
+        )
+        XCTAssertNotEqual(lifecycle.drawableSize, backingPixelSize(of: root))
+        XCTAssertEqual(lifecycle.displayID, window.screen?.localizedName)
+    }
+
+    func testSurfaceFrameAndBoundsChangesRefreshCurrentGeometry() {
+        let lifecycle = PlatformLifecycleState()
+        let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let owner = MacStreamSurfaceAttachmentOwner(lifecycleMonitor: monitor)
+        let surface = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 200, height: 100),
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: surface)
+        XCTAssertTrue(surface.window === window)
+        owner.attach(to: surface)
+
+        surface.setFrameSize(NSSize(width: 321, height: 179))
+        XCTAssertEqual(lifecycle.drawableSize, backingPixelSize(of: surface))
+
+        surface.setBoundsSize(NSSize(width: 160, height: 90))
+        XCTAssertEqual(lifecycle.drawableSize, backingPixelSize(of: surface))
+    }
+
+    func testSameWindowSurfaceReplacementChangesGeometrySource() {
+        let lifecycle = PlatformLifecycleState()
+        let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+        let first = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 100, height: 80),
+            sampleHandler: { _ in }
+        )
+        let replacement = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 300, height: 180),
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: root)
+        root.addSubview(first)
+        root.addSubview(replacement)
+
+        monitor.attach(to: window, surface: first)
+        XCTAssertEqual(lifecycle.drawableSize, backingPixelSize(of: first))
+        monitor.attach(to: window, surface: replacement)
+        XCTAssertEqual(lifecycle.drawableSize, backingPixelSize(of: replacement))
+    }
+
+    func testWindowAndApplicationDisplayNotificationsRefreshActualSurface() async {
+        let lifecycle = PlatformLifecycleState()
+        let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let surface = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 200, height: 100),
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: surface)
+        monitor.attach(to: window, surface: surface)
+        let notifications: [(Notification.Name, Any?)] = [
+            (NSWindow.didResizeNotification, window),
+            (NSWindow.didEndLiveResizeNotification, window),
+            (NSWindow.didChangeBackingPropertiesNotification, window),
+            (NSWindow.didChangeScreenNotification, window),
+            (NSApplication.didChangeScreenParametersNotification, nil)
+        ]
+
+        for (index, notification) in notifications.enumerated() {
+            surface.setFrameSize(NSSize(width: 210 + index, height: 110 + index))
+            NotificationCenter.default.post(name: notification.0, object: notification.1)
+            await Task.yield()
+            XCTAssertEqual(lifecycle.drawableSize, backingPixelSize(of: surface))
+            XCTAssertEqual(lifecycle.displayID, window.screen?.localizedName)
+        }
     }
 
     func testInputAdmissionOwnsResponderOnlyWhileEnabledAndAttached() throws {
@@ -666,6 +762,14 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         )
     }
 
+    private func backingPixelSize(of view: NSView) -> PixelSize {
+        let backingBounds = view.convertToBacking(view.bounds)
+        return PixelSize(
+            width: Int(backingBounds.width.rounded()),
+            height: Int(backingBounds.height.rounded())
+        )
+    }
+
     private func cgMouseEvent(
         type: CGEventType,
         buttonNumber: Int,
@@ -782,10 +886,17 @@ private struct RecordedPointerButtonTransition {
 @MainActor
 private final class RecordingAppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     private(set) var attachedWindowIDs: [ObjectIdentifier] = []
+    private(set) var attachedSurfaceIDs: [ObjectIdentifier] = []
+    private(set) var geometryChangeCount = 0
     private(set) var detachCount = 0
 
-    func attach(to window: NSWindow) {
+    func attach(to window: NSWindow, surface: NSView) {
         attachedWindowIDs.append(ObjectIdentifier(window))
+        attachedSurfaceIDs.append(ObjectIdentifier(surface))
+    }
+
+    func surfaceGeometryDidChange() {
+        geometryChangeCount += 1
     }
 
     func detach() {

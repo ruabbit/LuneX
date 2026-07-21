@@ -1026,3 +1026,20 @@
 - cursor relative-to-hide-only transition、responder transfer、actual event latest-closure routing、attachment replacement与dismantle cleanup均有AppKit-focused回归；本项不提前接入5.2/5.3 active session/cursor policy。
 - focused `28/28`（`/tmp/LuneX-14-4_5-focused.ZiDrwr/AppKitFocused.xcresult`）；完整macOS `451 total / 450 passed / 1 Keychain skip / 0 failed`（`/tmp/LuneX-14-4_5-full.ns7pyI/LuneXCoreTests.xcresult`）；五平台Debug通过（`/tmp/LuneX-14-4_5-builds.WacHba`）。
 - 5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 4.5标记完成，权威进度`18/29`；第4节Native AppKit capture/cursor ownership已完成，下一项5.1 actual stream-view geometry。阶段13仍为`54/61 in_progress`。
+
+## 2026-07-21 阶段 14 任务 5.1 启动
+
+- 4.5已以`f311ac1`独立提交并推送，确认`HEAD == origin/main`且工作树clean。5.1负责actual stream-view backing geometry与display/headroom state，不提前执行5.2 AppModel/media lifecycle application。
+- 当前monitor仍从`window.contentView.bounds * backingScaleFactor`派生drawable，无法表示嵌套/缩放后的actual Metal surface；`MetalStreamSurface.apply`又可能用旧render coordinate snapshot反向覆盖`MTKView.drawableSize`。本项将让monitor绑定window+surface，统一处理view geometry、screen、backing和live-resize变化，并移除旧snapshot对actual drawable的覆盖。
+- 5.1首轮focused包装器错误分支误用zsh只读变量`status`，但保留日志显示真实构建在测试前失败：attachment owner的weak optional view传入新`attach(window,surface:)`前未unwrap。已在observe边界guard当前view并将包装器变量改为`exit_code`，下一轮使用全新DerivedData。
+- 修正后focused macOS Swift/Clang warnings-as-errors通过`38/38`、无skip，结果`/tmp/LuneX-14-5_1-focused-r2.qCiegh/SurfaceGeometry.xcresult`；覆盖actual backing geometry、Metal drawable同步、frame/bounds、same-window replacement及五类window/application display通知。
+- 完整macOS suite通过`455 total / 454 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-5_1-full.7R2U3Q/LuneXCoreTests.xcresult`；测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug Swift/Clang warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-5_1-builds.BgYKnF`；simulator前后规范化identity/state逐字节一致，固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+
+## 2026-07-21 阶段 14 任务 5.1 完成
+
+- lifecycle attachment现绑定actual window+Metal surface；drawable由surface backing bounds派生并同步MTKView，不再读取window content bounds。same-window replacement也会切换geometry source。
+- surface frame/bounds变化和window resize/end-live-resize/screen/backing、application screen-parameter通知均刷新当前display name、EDR headroom与drawable；detach清display/headroom/drawable且受attachment lease保护。
+- 删除已无production调用的零尺寸`AppKitLifecycleAttachment`，并移除render snapshot对actual drawable的反向写入。5.2的AppModel/media/input application仍保持未完成。
+- focused `38/38`（`/tmp/LuneX-14-5_1-focused-r2.qCiegh/SurfaceGeometry.xcresult`）；完整macOS `455 total / 454 passed / 1 Keychain skip / 0 failed`（`/tmp/LuneX-14-5_1-full.7R2U3Q/LuneXCoreTests.xcresult`）；五平台Debug通过（`/tmp/LuneX-14-5_1-builds.BgYKnF`）。
+- 5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 5.1标记完成，权威进度`19/29`；下一项5.2 application/media integration。阶段13仍为`54/61 in_progress`。

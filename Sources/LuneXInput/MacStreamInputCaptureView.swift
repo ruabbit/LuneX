@@ -53,6 +53,7 @@ final class MacStreamInputCaptureView: MTKView {
     }
     var forwardsSystemShortcuts: Bool
     var onWindowChange: (@MainActor (NSWindow?) -> Void)?
+    var onGeometryChange: (@MainActor () -> Void)?
 
     private let sampleHandler: SampleHandler
     private let captureExitHandler: @MainActor () -> Void
@@ -87,6 +88,18 @@ final class MacStreamInputCaptureView: MTKView {
         super.viewDidMoveToWindow()
         onWindowChange?(window)
         requestFirstResponderIfNeeded()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let changed = frame.size != newSize
+        super.setFrameSize(newSize)
+        if changed { onGeometryChange?() }
+    }
+
+    override func setBoundsSize(_ newSize: NSSize) {
+        let changed = bounds.size != newSize
+        super.setBoundsSize(newSize)
+        if changed { onGeometryChange?() }
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

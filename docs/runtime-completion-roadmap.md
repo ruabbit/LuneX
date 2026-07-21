@@ -35,7 +35,7 @@ flowchart LR
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
-| 14 | `in_progress`，OpenSpec `18/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle/application input sink、bounded coordinator、balanced cursor owner、keyboard/pointer/button/scroll capture、actual Metal surface attachment，以及cursor/responder/dismantle回归矩阵 | input admission与cursor仍未接入active session，actual stream-view geometry、application/media integration与live hardware证明尚未完成 |
+| 14 | `in_progress`，OpenSpec `19/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle/application input sink、bounded coordinator、balanced cursor owner、actual capture surface、responder/dismantle，以及stream-view backing/display/live-resize检测 | lifecycle/input/cursor仍未接入active session，application/media integration与live hardware证明尚未完成 |
 | 15 | `pending` | 已保留bit depth/colorspace/MDCV/CLL并读取display headroom | 尚无10-bit EDR输出、PQ映射、tone mapping或跨屏硬件验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
@@ -76,6 +76,7 @@ flowchart LR
 - `MacStreamInputCaptureView`是macOS-only flipped first responder，直接override key/flags/key-equivalent事件并同步产出值样本；左右modifier独立跟踪，repeat不伪造key-up，reserved shortcut分类跨key-up保留，Escape始终本地并触发一次capture-exit callback。`MacVirtualKeyTranslator`只输出明确的Win32 VK映射，未知或语义不确定的macOS key fail closed。
 - `MacStreamInputCaptureView`现直接继承`MTKView`并成为SwiftUI实际Metal stream surface；surface attachment owner跟随真实window attach/detach，清理callback、transient input、Metal delegate与presentation pause。共享attachment lease阻止旧coordinator迟到dismantle清除replacement lifecycle。input admission仍默认关闭，actual stream-view backing geometry和active-session input wiring分别留给5.1与5.2。
 - enabled capture在附着或点击actual surface时幂等请求first responder；disabled默认不抢焦点，关闭admission或dismantle只在surface自身持有时释放responder，并清transient tracking。重复dismantle显式关闭admission且不会重放事件或再次清理replacement。
+- lifecycle monitor现同时绑定current window与actual Metal surface；drawable从`surface.convertToBacking(surface.bounds)`派生并同步到`MTKView`。surface frame/bounds、window resize/end-live-resize/screen/backing和application screen-parameter变化均重新读取当前screen EDR与surface pixels；旧render coordinate snapshot不再反向覆盖actual drawable。将该state应用到AppModel/media/input仍属于5.2。
 
 ## 阶段 15：HDR 和 EDR
 

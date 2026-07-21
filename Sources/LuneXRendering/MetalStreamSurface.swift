@@ -146,6 +146,10 @@ final class MacStreamSurfaceAttachmentOwner {
             guard let self, let view, self.view === view else { return }
             self.observe(window)
         }
+        view.onGeometryChange = { [weak self, weak view] in
+            guard let self, let view, self.view === view else { return }
+            self.lifecycleMonitor.surfaceGeometryDidChange()
+        }
         observe(view.window)
     }
 
@@ -153,6 +157,7 @@ final class MacStreamSurfaceAttachmentOwner {
         guard let view else { return }
         if let candidate, view !== candidate { return }
         view.onWindowChange = nil
+        view.onGeometryChange = nil
         view.resetTransientInputState()
         self.view = nil
         if isMonitoringWindow {
@@ -163,6 +168,7 @@ final class MacStreamSurfaceAttachmentOwner {
     }
 
     private func observe(_ window: NSWindow?) {
+        guard let view else { return }
         guard let window else {
             guard isMonitoringWindow else { return }
             lifecycleMonitor.detach()
@@ -173,7 +179,7 @@ final class MacStreamSurfaceAttachmentOwner {
         guard !isMonitoringWindow || observedWindow !== window else { return }
         observedWindow = window
         isMonitoringWindow = true
-        lifecycleMonitor.attach(to: window)
+        lifecycleMonitor.attach(to: window, surface: view)
     }
 }
 
@@ -297,12 +303,6 @@ struct MetalStreamSurface: NSViewRepresentable {
             view.preferredFramesPerSecond = 15
         case .idle, .paused:
             view.isPaused = true
-        }
-        if let snapshot = state.coordinateSnapshot {
-            view.drawableSize = CGSize(
-                width: snapshot.drawableSize.width,
-                height: snapshot.drawableSize.height
-            )
         }
         if let layer = view.layer as? CAMetalLayer {
             DisplayHeadroomReader.configure(layer, forHDRStream: state.headroom.supportsEDR)

@@ -31,7 +31,7 @@
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
-| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`18/29`；AppKit capture/cursor/responder/attachment/dismantle矩阵完成，下一步接入actual surface几何 |
+| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`19/29`；actual surface backing/display/live-resize检测完成，下一步连接AppModel/media/input coordinator |
 | 15. 原生 HDR/EDR 管线 | pending | 10-bit、BT.2020/PQ、MDCV/CLL、EDR metadata、tone mapping 与跨屏验证 |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
@@ -45,7 +45,7 @@
 
 当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。
 
-阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`18/29`。4.5补齐cursor transition、actual responder acquisition/release、event handler replacement、stale window callback和重复dismantle矩阵；dismantle现显式关闭input admission。focused `28/28`、完整macOS `450 passed + 1 Keychain skip`和五平台Debug构建通过。默认admission仍关闭，cursor/session policy尚未接线。下一项5.1从actual stream view派生drawable geometry与display state，并覆盖screen/backing/live-resize变化；每项继续独立实现、验收、提交和推送。
+阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`19/29`。5.1让monitor绑定当前window与actual Metal surface，从`convertToBacking(bounds)`派生drawable并同步MTKView；surface frame/bounds、window resize/live-resize/screen/backing和application screen-parameter变化均刷新同一display/headroom/geometry state。focused `38/38`、完整macOS `454 passed + 1 Keychain skip`和五平台Debug构建通过。下一项5.2把这些lifecycle directives连接到`AppModel`、renderer、presentation source、media environment与active input coordinator；每项继续独立实现、验收、提交和推送。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -211,6 +211,7 @@
 | 14.4.3首轮focused gate的既有FIFO测试使用`absolute button-down + nil point` | 1 | 按新fail-closed合同改用有效absolute点并断言映射坐标，以新隔离DerivedData重跑 |
 | 14.4.4首轮focused继承`MTKView`后沿用failable `init?(coder:)` | 1 | 按Xcode 26.4 `MTKView`真实签名改为unavailable non-failable `init(coder:)`并以新目录重跑 |
 | 14.4.4第二轮focused的test target缺少surface/monitor production sources且断言形成`NSWindow??` | 1 | 同步generator test-support列表并显式unwrap window，以新隔离DerivedData重跑 |
+| 14.5.1首轮focused包装器误用zsh只读`status`且新monitor调用传入weak optional view | 1 | 从保留日志定位真实Swift错误，在observe边界guard当前view，并改用`exit_code`后以新目录重跑 |
 | 14.3.3首次从工具缓存读取full xcresult路径时混入截断警告前缀 | 1 | 不重跑测试，直接使用已输出的明确证据目录读取结构化summary，确认`408/407/1/0` |
 | 14.3.3最终focused复核命令尝试先删除可能存在的result bundle而被本地安全策略拒绝 | 1 | 不删除任何路径，改用全新的`FinalCoordinator2.xcresult`执行并通过`8/8` |
 | 14.4.2首轮focused测试factory把optional characters传给`NSEvent.keyEvent` | 1 | production无编译错误；测试对无字符的`flagsChanged`事件传空字符串，并在新隔离目录重跑 |

@@ -1,11 +1,12 @@
 #if os(macOS)
 import AppKit
+import MetalKit
 import OSLog
-import SwiftUI
 
 @MainActor
 protocol AppKitLifecycleMonitoring: AnyObject {
-    func attach(to window: NSWindow)
+    func attach(to window: NSWindow, surface: NSView)
+    func surfaceGeometryDidChange()
     func detach()
 }
 
@@ -13,6 +14,7 @@ protocol AppKitLifecycleMonitoring: AnyObject {
 final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     private let logger = Logger(subsystem: "dev.lunex.client.macos", category: "window.lifecycle")
     private weak var window: NSWindow?
+    private weak var surface: NSView?
     private let lifecycle: PlatformLifecycleState
     private let attachmentID = UUID()
     private var observers: [NSObjectProtocol] = []
@@ -21,17 +23,20 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
         self.lifecycle = lifecycle
     }
 
-    func attach(to window: NSWindow) {
-        if self.window === window, !observers.isEmpty {
+    func attach(to window: NSWindow, surface: NSView) {
+        if self.window === window,
+           self.surface === surface,
+           !observers.isEmpty {
             refreshVisibility()
             refreshFocus()
-            refreshDisplay()
+            refreshSurfaceState()
             return
         }
         detach(resetLifecycle: false)
         self.window = window
+        self.surface = surface
         lifecycle.claimSurfaceAttachment(attachmentID)
-        logger.info("Attached lifecycle monitor to window")
+        logger.info("Attached lifecycle monitor to stream surface")
 
         let center = NotificationCenter.default
         observers = [
@@ -52,22 +57,22 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
             },
             center.addObserver(forName: NSWindow.didChangeScreenNotification, object: window, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.refreshDisplay()
+                    self?.refreshSurfaceState()
                 }
             },
             center.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: window, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.refreshDrawableSize()
+                    self?.refreshSurfaceState()
                 }
             },
             center.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.refreshDrawableSize()
+                    self?.refreshSurfaceState()
                 }
             },
             center.addObserver(forName: NSWindow.didChangeBackingPropertiesNotification, object: window, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.refreshDisplay()
+                    self?.refreshSurfaceState()
                 }
             },
             center.addObserver(forName: NSWindow.didMiniaturizeNotification, object: window, queue: .main) { [weak self] _ in
@@ -92,16 +97,19 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
             },
             center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.refreshDisplay()
+                    self?.refreshSurfaceState()
                 }
             }
         ]
 
         refreshVisibility()
         refreshFocus()
-        refreshDisplay()
-        refreshDrawableSize()
+        refreshSurfaceState()
         logger.info("Lifecycle ready: visible=\(self.lifecycle.isVisible, privacy: .public) focused=\(self.lifecycle.isFocused, privacy: .public) drawable=\(self.lifecycle.drawableSize.width, privacy: .public)x\(self.lifecycle.drawableSize.height, privacy: .public) EDR=\(self.lifecycle.headroom.current, privacy: .public)")
+    }
+
+    func surfaceGeometryDidChange() {
+        refreshSurfaceState()
     }
 
     func detach() {
@@ -109,18 +117,15 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     }
 
     private func detach(resetLifecycle: Bool) {
-        let wasAttached = window != nil || !observers.isEmpty
+        let wasAttached = window != nil || surface != nil || !observers.isEmpty
         let center = NotificationCenter.default
         observers.forEach(center.removeObserver)
         observers.removeAll()
         window = nil
+        surface = nil
         guard resetLifecycle,
               wasAttached,
-              lifecycle.releaseSurfaceAttachment(attachmentID) else { return }
-        lifecycle.isVisible = false
-        lifecycle.isFocused = false
-        lifecycle.drawableSize = .zero
-        lifecycle.updateRenderPolicy()
+              lifecycle.clearSurfaceAttachment(attachmentID) else { return }
     }
 
     private func refreshVisibility() {
@@ -140,74 +145,34 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
         setFocused(window?.isKeyWindow == true && NSApp.isActive)
     }
 
-    private func refreshDisplay() {
-        lifecycle.displayID = window?.screen?.localizedName
-        lifecycle.headroom = DisplayHeadroomReader.read(screen: window?.screen)
-        logger.debug("Display changed; EDR current=\(self.lifecycle.headroom.current, privacy: .public) potential=\(self.lifecycle.headroom.potential, privacy: .public)")
-        refreshDrawableSize()
-        lifecycle.updateRenderPolicy()
-    }
-
-    private func refreshDrawableSize() {
-        guard let window else { return }
-        let scale = window.backingScaleFactor
-        lifecycle.drawableSize = PixelSize(
-            width: Int((window.contentView?.bounds.width ?? 0) * scale),
-            height: Int((window.contentView?.bounds.height ?? 0) * scale)
+    private func refreshSurfaceState() {
+        guard let window,
+              let surface,
+              surface.window === window else { return }
+        let backingBounds = surface.convertToBacking(surface.bounds)
+        let drawableSize = PixelSize(
+            width: pixelDimension(backingBounds.width),
+            height: pixelDimension(backingBounds.height)
         )
-        logger.debug("Drawable changed: \(self.lifecycle.drawableSize.width, privacy: .public)x\(self.lifecycle.drawableSize.height, privacy: .public)")
-        lifecycle.updateRenderPolicy()
-    }
-}
-
-@MainActor
-struct AppKitLifecycleAttachment: NSViewRepresentable {
-    let lifecycle: PlatformLifecycleState
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(lifecycle: lifecycle)
-    }
-
-    func makeNSView(context: Context) -> WindowObservationView {
-        let view = WindowObservationView()
-        view.onWindowChange = { [weak coordinator = context.coordinator] window in
-            guard let window else {
-                coordinator?.monitor.detach()
-                return
-            }
-            coordinator?.monitor.attach(to: window)
+        if let metalView = surface as? MTKView {
+            metalView.drawableSize = CGSize(
+                width: drawableSize.width,
+                height: drawableSize.height
+            )
         }
-        return view
+        lifecycle.updateSurface(
+            displayID: window.screen?.localizedName,
+            headroom: DisplayHeadroomReader.read(screen: window.screen),
+            drawableSize: drawableSize
+        )
+        logger.debug("Surface changed: display=\(self.lifecycle.displayID ?? "none", privacy: .public) drawable=\(drawableSize.width, privacy: .public)x\(drawableSize.height, privacy: .public) EDR=\(self.lifecycle.headroom.current, privacy: .public)")
     }
 
-    func updateNSView(_ nsView: WindowObservationView, context: Context) {
-        if let window = nsView.window {
-            context.coordinator.monitor.attach(to: window)
-        }
-    }
-
-    static func dismantleNSView(_ nsView: WindowObservationView, coordinator: Coordinator) {
-        coordinator.monitor.detach()
-        nsView.onWindowChange = nil
-    }
-
-    @MainActor
-    final class Coordinator {
-        let monitor: AppKitLifecycleMonitor
-
-        init(lifecycle: PlatformLifecycleState) {
-            monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
-        }
-    }
-}
-
-@MainActor
-final class WindowObservationView: NSView {
-    var onWindowChange: ((NSWindow?) -> Void)?
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        onWindowChange?(window)
+    private func pixelDimension(_ value: CGFloat) -> Int {
+        guard value.isFinite,
+              value > 0,
+              value <= CGFloat(Int.max) else { return 0 }
+        return Int(value.rounded())
     }
 }
 #endif

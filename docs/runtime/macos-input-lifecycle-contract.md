@@ -155,20 +155,20 @@ assuming observer removal cancels an already queued callback.
 
 ## Current repository gaps
 
-- `AppKitLifecycleMonitor` observes the relevant window/application signals,
-  but publishes drawable size from `window.contentView.bounds` instead of the
-  actual stream view and only updates render policy.
-- The lifecycle attachment is a zero-sized background view on the navigation
-  root, separate from `MetalStreamSurface`.
-- `StreamMetalPresenter.mtkView(_:drawableSizeWillChange:)` discards the actual
-  drawable size, and rendering independently recomputes fit/fill placement.
-- `InputMapper` independently recomputes fit/fill scale and clamps letterbox
-  input to the remote image edge instead of rejecting it.
-- No first-responder event capture view, balanced cursor owner, active-session
-  input sink, generation-owned platform FIFO, or focus-release barrier exists.
-- Lifecycle visibility does not yet pause VideoToolbox submission, clear queued
-  presentation, or request a fresh IDR on resume.
+- The actual `MacStreamInputCaptureView` now owns Metal presentation, AppKit
+  events, window attachment, and backing-pixel geometry. Screen, backing,
+  surface layout, and live-resize changes refresh one lifecycle display state.
+- Renderer and input mapping now share a revisioned fit/fill coordinate
+  resolver, and fit-mode letterbox input is rejected instead of clamped.
+- First-responder capture, balanced cursor ownership, the active-session input
+  sink, generation-owned FIFO, focus-release barrier, and decoder pause/resume
+  policies exist with deterministic tests.
+- The remaining stage 14 gap is production application integration: current
+  lifecycle directives and input samples are not yet connected through
+  `AppModel` to the active media environment, renderer/presentation source,
+  session input coordinator, cursor eligibility, or user-facing diagnostics.
 
-These gaps are assigned to stage 14 tasks 1.2 through 5.5. Production stream
-availability remains fail closed while concrete video and audio receivers are
-absent; this inventory does not satisfy any live-host acceptance task.
+Those integration gaps are assigned to stage 14 tasks 5.2 through 5.5.
+Production stream availability remains fail closed while concrete video and
+audio receivers are absent; this inventory does not satisfy any live-host or
+hardware acceptance task.
