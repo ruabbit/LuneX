@@ -113,5 +113,92 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         XCTAssertEqual(store.events.count, 1)
         XCTAssertTrue(store.events[0].message.contains("remoteInputKey=<redacted>"))
         XCTAssertFalse(store.events[0].message.contains("secret"))
+        XCTAssertEqual(store.events[0].category, .input)
+        XCTAssertEqual(store.events[0].severity, .info)
+        XCTAssertEqual(store.events[0].code, "complete")
+    }
+
+    @MainActor
+    func testApplicationDiagnosticsClassifyEveryRuntimeFailureDomain() {
+        let pairing = ApplicationDiagnosticFactory.pairingFailure(PairingFailure(
+            code: .invalidPIN,
+            message: "host detail must not be copied"
+        ))
+        let transport = ApplicationDiagnosticFactory.streamFailure(NetworkChannelError.closed)
+        let decoder = ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession)
+        let audio = ApplicationDiagnosticFactory.streamFailure(OpusDecoderError.closed)
+        let input = ApplicationDiagnosticFactory.streamFailure(RemoteInputRuntimeError.deliveryFailed)
+
+        XCTAssertEqual(pairing.category, .pairing)
+        XCTAssertEqual(pairing.action, .verifyPIN)
+        XCTAssertEqual(transport.category, .transport)
+        XCTAssertEqual(transport.action, .retryStream)
+        XCTAssertEqual(decoder.category, .decoder)
+        XCTAssertEqual(decoder.action, .reviewStreamSettings)
+        XCTAssertEqual(audio.category, .audio)
+        XCTAssertEqual(audio.action, .checkAudioOutput)
+        XCTAssertEqual(input.category, .input)
+        XCTAssertEqual(input.action, .reconnectInput)
+    }
+
+    @MainActor
+    func testUnknownFailureNeverCopiesSecretBearingDescription() {
+        let diagnostic = ApplicationDiagnosticFactory.streamFailure(
+            SecretBearingDiagnosticError()
+        )
+        let store = DiagnosticsStore()
+
+        store.record(diagnostic)
+
+        let event = store.events[0]
+        XCTAssertEqual(event.code, "session_failed")
+        XCTAssertEqual(event.message, "The streaming transport stopped unexpectedly.")
+        XCTAssertFalse(event.message.contains("1234"))
+        XCTAssertFalse(event.message.localizedCaseInsensitiveContains("authorization"))
+    }
+
+    @MainActor
+    func testPlainDiagnosticMessagesAlsoRejectEmbeddedSecrets() {
+        let store = DiagnosticsStore()
+
+        store.record("Request failed Authorization: Basic private-value")
+
+        XCTAssertEqual(store.events[0].message, "<redacted>")
+    }
+
+    @MainActor
+    func testActionableStoreIsBoundedAndRetainsRecoveryAction() {
+        let store = DiagnosticsStore(capacity: 2)
+        store.record("first")
+        store.record(ApplicationDiagnosticFactory.streamUnavailable)
+        store.record(ApplicationDiagnosticFactory.streamFailure(OpusDecoderError.closed))
+
+        XCTAssertEqual(store.events.count, 2)
+        XCTAssertEqual(store.events.map(\.category), [.transport, .audio])
+        XCTAssertEqual(store.latestActionableEvent?.action, .checkAudioOutput)
+    }
+
+    @MainActor
+    func testControllerFeedbackDiagnosticDoesNotExposeControllerIdentity() {
+        let diagnostic = ApplicationDiagnosticFactory.remoteFeedback(
+            RemoteInputFeedbackDiagnostic(
+                controllerID: "private-controller-id",
+                controllerIndex: 3,
+                command: .rumble,
+                reason: .unsupportedCapability
+            )
+        )
+
+        XCTAssertEqual(diagnostic.category, .input)
+        XCTAssertEqual(diagnostic.severity, .warning)
+        XCTAssertEqual(diagnostic.action, .useSupportedController)
+        XCTAssertFalse(diagnostic.summary.contains("private-controller-id"))
+        XCTAssertFalse(diagnostic.code.contains("3"))
+    }
+}
+
+private struct SecretBearingDiagnosticError: Error, CustomStringConvertible {
+    var description: String {
+        "Authorization: Basic secret; PIN=1234"
     }
 }

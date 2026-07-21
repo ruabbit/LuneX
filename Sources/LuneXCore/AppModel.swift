@@ -16,6 +16,7 @@ struct PairingUIState: Equatable {
     var pin: String = ""
     var isRunning = false
     var message: String?
+    var actionMessage: String?
 }
 
 private enum PairingApplicationError: Error {
@@ -37,6 +38,7 @@ struct StreamLaunchUIState: Equatable {
     var selectedAppID: RemoteApp.ID?
     var isLaunching = false
     var errorMessage: String?
+    var actionMessage: String?
 }
 
 struct RuntimeProviderAvailability: OptionSet, Equatable, Sendable {
@@ -255,8 +257,13 @@ final class AppModel {
             diagnostics.record("Loaded persisted client identity", subsystem: "identity")
             logger.info("Loaded persisted client identity")
         } catch {
-            diagnostics.record("Failed to load client identity: \(error)", subsystem: "identity")
-            logger.error("Failed to load client identity: \(String(describing: error), privacy: .public)")
+            diagnostics.record(
+                "The persisted client identity could not be loaded.",
+                subsystem: "identity",
+                severity: .error,
+                code: "identity_load_failed"
+            )
+            logger.error("Failed to load client identity")
         }
     }
 
@@ -275,8 +282,13 @@ final class AppModel {
             diagnostics.record("Loaded \(hosts.count) saved hosts")
             logger.info("Loaded \(self.hosts.count, privacy: .public) saved hosts")
         } catch {
-            diagnostics.record("Failed to load hosts: \(error)", subsystem: "hosts")
-            logger.error("Failed to load hosts: \(String(describing: error), privacy: .public)")
+            diagnostics.record(
+                "The saved host library could not be loaded.",
+                subsystem: "hosts",
+                severity: .error,
+                code: "host_library_load_failed"
+            )
+            logger.error("Failed to load saved hosts")
         }
     }
 
@@ -286,7 +298,12 @@ final class AppModel {
             updateRenderPreferences()
             diagnostics.record("Loaded stream and platform settings", subsystem: "settings")
         } catch {
-            diagnostics.record("Failed to load settings: \(error)", subsystem: "settings")
+            diagnostics.record(
+                "Stream and platform settings could not be loaded.",
+                subsystem: "settings",
+                severity: .error,
+                code: "settings_load_failed"
+            )
         }
     }
 
@@ -299,7 +316,12 @@ final class AppModel {
             }
             diagnostics.record("Loaded cached app lists for \(snapshots.count) hosts", subsystem: "apps")
         } catch {
-            diagnostics.record("Failed to load cached apps: \(error)", subsystem: "apps")
+            diagnostics.record(
+                "Cached app lists could not be loaded.",
+                subsystem: "apps",
+                severity: .error,
+                code: "app_cache_load_failed"
+            )
         }
     }
 
@@ -309,7 +331,12 @@ final class AppModel {
             updateRenderPreferences()
             diagnostics.record("Saved settings", subsystem: "settings")
         } catch {
-            diagnostics.record("Failed to save settings: \(error)", subsystem: "settings")
+            diagnostics.record(
+                "Stream and platform settings could not be saved.",
+                subsystem: "settings",
+                severity: .error,
+                code: "settings_save_failed"
+            )
         }
     }
 
@@ -317,9 +344,14 @@ final class AppModel {
         do {
             hosts = try await hostLibraryManager.addManualHost(name: name, address: address)
             selectedHostID = hosts.first { $0.address == address }?.id ?? selectedHostID ?? hosts.first?.id
-            diagnostics.record("Added host \(address)", subsystem: "hosts")
+            diagnostics.record("Added a host", subsystem: "hosts", code: "host_added")
         } catch {
-            diagnostics.record("Failed to add host \(address): \(error)", subsystem: "hosts")
+            diagnostics.record(
+                "The host could not be added.",
+                subsystem: "hosts",
+                severity: .error,
+                code: "host_add_failed"
+            )
         }
     }
 
@@ -333,19 +365,26 @@ final class AppModel {
             }
             diagnostics.record("Removed host", subsystem: "hosts")
         } catch {
-            diagnostics.record("Failed to remove host: \(error)", subsystem: "hosts")
+            diagnostics.record(
+                "The selected host could not be removed.",
+                subsystem: "hosts",
+                severity: .error,
+                code: "host_remove_failed"
+            )
         }
     }
 
     func beginPairing(host: MoonlightHost) async {
         guard runtimeProviders.pairing != nil else {
+            let diagnostic = ApplicationDiagnosticFactory.pairingUnavailable
             pairingUI = PairingUIState(
                 hostID: host.id,
                 stage: .failed,
-                message: "Pairing is unavailable until authenticated Moonlight transport is installed."
+                message: diagnostic.summary,
+                actionMessage: diagnostic.action?.label
             )
             session.phase = .disconnected
-            diagnostics.record("Blocked placeholder pairing for \(host.name); pinned identity was preserved", subsystem: "pairing")
+            diagnostics.record(diagnostic)
             return
         }
 
@@ -376,8 +415,7 @@ final class AppModel {
             guard pairingUI.attemptID == attemptID else { return }
             failPairingAttempt(
                 attemptID: attemptID,
-                message: "Client identity could not be prepared.",
-                diagnostic: "Client identity preparation failed"
+                diagnostic: ApplicationDiagnosticFactory.pairingIdentityUnavailable
             )
         }
     }
@@ -396,16 +434,14 @@ final class AppModel {
         guard let provider = runtimeProviders.pairing else {
             failPairingAttempt(
                 attemptID: attemptID,
-                message: "Pairing is unavailable until authenticated Moonlight transport is installed.",
-                diagnostic: "Pairing provider became unavailable"
+                diagnostic: ApplicationDiagnosticFactory.pairingUnavailable
             )
             return
         }
         guard let identity = preparedPairingIdentity else {
             failPairingAttempt(
                 attemptID: attemptID,
-                message: "Client identity is not ready. Start pairing again.",
-                diagnostic: "Pairing request rejected without prepared identity"
+                diagnostic: ApplicationDiagnosticFactory.pairingIdentityUnavailable
             )
             return
         }
@@ -439,9 +475,12 @@ final class AppModel {
                           snapshot.hostID == hostID else {
                         throw PairingApplicationError.invalidAuthenticatedCompletion
                     }
+                    if let failure = snapshot.failure {
+                        throw failure
+                    }
                     pairingUI.stage = snapshot.stage
-                    pairingUI.message = snapshot.failure?.message
-                        ?? pairingMessage(for: snapshot.stage, hostName: host.name)
+                    pairingUI.message = pairingMessage(for: snapshot.stage, hostName: host.name)
+                    pairingUI.actionMessage = nil
                 case let .completed(result):
                     try validatePairingCompletion(result, expectedHostID: hostID)
                     completedResult = result
@@ -460,8 +499,7 @@ final class AppModel {
             }
             failPairingAttempt(
                 attemptID: attemptID,
-                message: "Authenticated pairing failed. Try again.",
-                diagnostic: "Authenticated pairing failed for \(host.name)"
+                diagnostic: ApplicationDiagnosticFactory.pairingFailure(error)
             )
             await provider.cancelPairing(attemptID: attemptID)
         }
@@ -492,10 +530,19 @@ final class AppModel {
             try await appCatalogRepository.saveSnapshots(snapshots)
             streamLaunchUI.selectedAppID = snapshot.apps.first?.id
             appCatalogUI.lastUpdatedAt = snapshot.updatedAt
-            diagnostics.record("Loaded \(snapshot.apps.count) apps from \(host.name)", subsystem: "apps")
+            diagnostics.record(
+                "Loaded \(snapshot.apps.count) apps",
+                subsystem: "apps",
+                code: "app_catalog_refreshed"
+            )
         } catch {
-            appCatalogUI.errorMessage = String(describing: error)
-            diagnostics.record("Failed to refresh apps from \(host.name): \(error)", subsystem: "apps")
+            appCatalogUI.errorMessage = "The app catalog could not be refreshed."
+            diagnostics.record(
+                "The app catalog could not be refreshed.",
+                subsystem: "apps",
+                severity: .error,
+                code: "app_catalog_refresh_failed"
+            )
         }
     }
 
@@ -520,12 +567,13 @@ final class AppModel {
 
         guard isStreamTransportAvailable,
               let sessionControlProvider = runtimeProviders.sessionControl else {
-            let message = "Streaming is unavailable until Moonlight media transport is installed."
-            streamLaunchUI.errorMessage = message
+            let diagnostic = ApplicationDiagnosticFactory.streamUnavailable
+            streamLaunchUI.errorMessage = diagnostic.summary
+            streamLaunchUI.actionMessage = diagnostic.action?.label
             session.activeHostID = nil
             session.phase = .disconnected
             renderState.policy = .idle
-            diagnostics.record("Blocked launch of \(app.name) on \(host.name): media transport unavailable", subsystem: "stream.transport")
+            diagnostics.record(diagnostic)
             return
         }
 
@@ -543,7 +591,17 @@ final class AppModel {
                 optimizeGameSettings: true
             )
         } catch {
-            failStreamSession(error, sessionID: nil)
+            let contextualError: Error
+            if error is StreamNegotiationFailure {
+                contextualError = error
+            } else {
+                contextualError = StreamNegotiationFailure(
+                    code: .invalidInputKey,
+                    subsystem: "stream.input",
+                    message: "Remote input key generation failed."
+                )
+            }
+            failStreamSession(contextualError, sessionID: nil)
             return
         }
 
@@ -560,6 +618,7 @@ final class AppModel {
             activeMediaReadiness = []
             streamLaunchUI.isLaunching = true
             streamLaunchUI.errorMessage = nil
+            streamLaunchUI.actionMessage = nil
             session.activeHostID = host.id
             session.lastError = nil
             navigationSelection = .stream
@@ -621,6 +680,8 @@ final class AppModel {
         await sessionControlProvider.stop(sessionID: sessionID)
         _ = try? await streamSessionCoordinator.completeLocalStop(sessionID: sessionID)
         diagnostics.record("Stopped stream session", subsystem: "stream")
+        streamLaunchUI.errorMessage = nil
+        streamLaunchUI.actionMessage = nil
         session.activeHostID = nil
         session.lastError = nil
         session.phase = .disconnected
@@ -633,7 +694,12 @@ final class AppModel {
               activeMediaReadiness.contains(.input) else {
             throw SessionMediaEnvironmentError.inactiveSession
         }
-        try await sessionMediaEnvironment.sendInput(event, sessionID: sessionID)
+        do {
+            try await sessionMediaEnvironment.sendInput(event, sessionID: sessionID)
+        } catch {
+            diagnostics.record(ApplicationDiagnosticFactory.streamFailure(error))
+            throw error
+        }
     }
 
     func toggleDemoSession() {
@@ -690,19 +756,19 @@ final class AppModel {
 
     private func failPairingAttempt(
         attemptID: UUID,
-        message: String,
-        diagnostic: String
+        diagnostic: ApplicationDiagnostic
     ) {
         guard pairingUI.attemptID == attemptID else { return }
         pairingUI.attemptID = nil
         pairingUI.stage = .failed
         pairingUI.pin = ""
         pairingUI.isRunning = false
-        pairingUI.message = message
+        pairingUI.message = diagnostic.summary
+        pairingUI.actionMessage = diagnostic.action?.label
         preparedPairingIdentity = nil
-        let failure = SessionError(subsystem: "pairing", message: message)
+        let failure = SessionError(subsystem: diagnostic.subsystem, message: diagnostic.summary)
         session.phase = .failed(failure)
-        diagnostics.record(diagnostic, subsystem: "pairing")
+        diagnostics.record(diagnostic)
     }
 
     private func validatePairingCompletion(
@@ -748,12 +814,21 @@ final class AppModel {
             activeControlReadiness = []
             activeMediaReadiness = []
             streamLaunchUI.isLaunching = false
+            streamLaunchUI.errorMessage = nil
+            streamLaunchUI.actionMessage = nil
             session.activeHostID = nil
             session.lastError = nil
             session.phase = .disconnected
             renderState.policy = .idle
             if let reason = snapshot.terminationReason {
-                diagnostics.record(reason, subsystem: "stream.control")
+                _ = reason
+                diagnostics.record(ApplicationDiagnostic(
+                    category: .transport,
+                    severity: .info,
+                    code: "host_terminated_session",
+                    summary: "The host ended the streaming session.",
+                    action: nil
+                ))
             }
 
         case .resolvingHost, .validatingPairing, .preparingParameters, .launching:
@@ -782,9 +857,11 @@ final class AppModel {
             renderState.policy = .idle
 
         case .failed:
-            let message = snapshot.failure?.message ?? "Session control failed."
             failStreamSession(
-                SessionError(subsystem: snapshot.failure?.subsystem ?? "stream", message: message),
+                snapshot.failure ?? SessionError(
+                    subsystem: "stream.control",
+                    message: "Session control failed."
+                ),
                 sessionID: snapshot.sessionID
             )
         }
@@ -918,6 +995,9 @@ final class AppModel {
             }
         case let .feedback(feedback):
             latestRemoteInputFeedback = feedback
+            if case let .diagnostic(inputDiagnostic) = feedback {
+                diagnostics.record(ApplicationDiagnosticFactory.remoteFeedback(inputDiagnostic))
+            }
         }
     }
 
@@ -983,25 +1063,11 @@ final class AppModel {
             return
         }
 
-        let sessionError: SessionError
-        if let error = error as? SessionError {
-            sessionError = error
-        } else if let failure = error as? StreamNegotiationFailure {
-            sessionError = SessionError(
-                subsystem: failure.subsystem,
-                message: failure.message
-            )
-        } else if error is SessionApplicationError {
-            sessionError = SessionError(
-                subsystem: "stream.control",
-                message: "Session control ended unexpectedly."
-            )
-        } else {
-            sessionError = SessionError(
-                subsystem: "stream.control",
-                message: "Session control failed."
-            )
-        }
+        let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
+        let sessionError = SessionError(
+            subsystem: diagnostic.subsystem,
+            message: diagnostic.summary
+        )
 
         activeStreamSessionID = nil
         activeMediaSessionID = nil
@@ -1010,11 +1076,12 @@ final class AppModel {
         latestRemoteInputFeedback = nil
         streamLaunchUI.isLaunching = false
         streamLaunchUI.errorMessage = sessionError.message
+        streamLaunchUI.actionMessage = diagnostic.action?.label
         session.activeHostID = nil
         session.lastError = sessionError
         session.phase = .failed(sessionError)
         renderState.policy = .idle
-        diagnostics.record(sessionError.message, subsystem: sessionError.subsystem)
+        diagnostics.record(diagnostic)
     }
 
     private func updateRenderPreferences() {

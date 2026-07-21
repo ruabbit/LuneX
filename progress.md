@@ -677,3 +677,22 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，根目录`/tmp/LuneX-8_4-platform-builds-r4.90Lsdh`。四个固定simulator构建前后均唯一且为`Shutdown`，未创建或主动boot设备。
 - fixture validator self-test/全树、4个OpenSpec change strict validation、generator SHA-256 byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对与四SDK strict C syntax全部通过。
 - OpenSpec 8.4更新为完成，权威进度`47/61`。production仍缺具体video/audio network receiver，因此stream availability继续fail closed；5.8/6.7/7.7和9.2-9.3 live证据、阶段15 HDR与阶段16空间音频均未被此验收替代。下一项为8.5 actionable diagnostics。
+
+## 2026-07-21 阶段 13 任务 8.5 启动
+
+- 8.4已以`5a0065e Connect unified media environment`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`47/61`后进入8.5。
+- 现有底层`RuntimeDiagnosticsRecorder`支持severity、stage、code、字段隐私与secret redaction，但AppModel和SwiftUI主要消费字符串型`DiagnosticsStore`；pairing/session/media失败尚未稳定分类为pairing/transport/decoder/audio/input，也没有一致的用户恢复建议。
+- 8.5范围限定为无秘密、可执行的应用诊断模型、错误分类和原生UI呈现；不得把endpoint、PIN、证书、session key、packet payload或底层错误任意字符串直接暴露给UI，不改变production provider可用性和live证据边界。
+- 首轮定向warnings-as-errors编译在测试启动前失败：三处`failPairingAttempt`实参将factory静态值简写为`ApplicationDiagnostic`成员。已改用完整`ApplicationDiagnosticFactory.*`限定名；失败证据保留在`/tmp/LuneX-8_5-targeted.sBydHN/ActionableDiagnostics.xcresult`，下一轮使用新隔离目录。
+- 第二轮定向门完成编译并运行`35`项，`34 passed / 1 failed`；唯一失败是既有input-key测试依赖错误文案含`failed`。现将未知key-generator错误按launch request上下文收敛为typed `invalidInputKey`，测试改验input类别/code/action与安全摘要；失败证据为`/tmp/LuneX-8_5-targeted-r2.gqlNH9/ActionableDiagnostics.xcresult`。
+- 第三轮定向Swift 6 warnings-as-errors门通过`35/35`，结果`/tmp/LuneX-8_5-targeted-r3.WPVd6C/ActionableDiagnostics.xcresult`。门后审计继续移除pairing progress的raw failure message，并在DiagnosticsStore统一append边界加入嵌入secret过滤；新增plain-message redaction回归后需再次复验。
+- 最终定向Swift 6 warnings-as-errors门通过`37/37`，结果`/tmp/LuneX-8_5-targeted-r4.uq3yAO/ActionableDiagnostics.xcresult`；新增回归确认raw pairing failure和普通diagnostic message中的secret marker均不会进入UI可见事件。
+- macOS产品target Swift 6 warnings-as-errors构建通过，隔离DerivedData为`/tmp/LuneX-8_5-macos-build.B1Am9X`；该证据只证明当前应用target可编译，8.5仍需扩展/完整测试、五平台构建与仓库门禁后才能勾选。
+
+## 2026-07-21 阶段 13 任务 8.5 完成
+
+- 最终生产差异审计确认pairing/session/media底层任意错误字符串不再直达UI；正常stop和remote termination补充清除陈旧`errorMessage`/`actionMessage`。进一步移除通用AppModel诊断中的host地址/名称与任意persistence/catalog错误文本，并从audio snapshot诊断移除输出设备名；最终定向Swift 6 warnings-as-errors门通过`48/48`，结果`/tmp/LuneX-8_5-targeted-r6.eL0Y01/ActionableDiagnostics.xcresult`。
+- 修改后的完整macOS门通过`365 total / 364 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_5-full-r2.63vSlE/LuneXCoreTests.xcresult`；全程使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- 修改后的macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，根目录`/tmp/LuneX-8_5-platform-builds-r2.0YDpJn`；构建前后四个simulator各唯一且为`Shutdown`，未创建或主动boot设备。
+- fixture validator self-test/全树、全部OpenSpec strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对、四SDK strict C syntax与固定simulator唯一/Shutdown复核全部通过，最终门禁目录`/tmp/LuneX-8_5-repo-gates-r4.uUbuvL`。
+- OpenSpec 8.5更新为完成，权威进度`48/61`。production仍缺具体video/audio network receiver，因此stream availability保持fail closed；3.7/5.8/6.7/7.7与9.2-9.3 live证据、阶段15 HDR、阶段16空间音频和阶段17移动连续性均未被本次验收替代。下一项为8.6。

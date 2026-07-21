@@ -202,7 +202,8 @@ final class AudioPipelineTests: XCTestCase {
         ))
 
         XCTAssertEqual(diagnostics.events.last?.subsystem, "audio")
-        XCTAssertEqual(diagnostics.events.last?.message, "Audio running: 48000 Hz, 2 ch, Built-in Output")
+        XCTAssertEqual(diagnostics.events.last?.message, "Audio running: 48000 Hz, 2 ch, output available")
+        XCTAssertFalse(diagnostics.events.last?.message.contains("Built-in Output") == true)
     }
 
     private func makePCM(sequence: UInt16, timestamp: UInt32) -> DecodedPCMBuffer {

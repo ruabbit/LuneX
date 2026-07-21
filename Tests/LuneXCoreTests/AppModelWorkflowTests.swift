@@ -134,6 +134,9 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.selectedHost?.pinnedIdentity)
         XCTAssertEqual(model.session.phase, .disconnected)
         XCTAssertTrue(model.pairingUI.message?.contains("unavailable") == true)
+        XCTAssertEqual(model.pairingUI.actionMessage, ApplicationDiagnosticAction.updateBuild.label)
+        XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .pairing)
+        XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "pairing_provider_unavailable")
     }
 
     func testPairingUIConsumesProgressAndAuthenticatedCompletion() async throws {
@@ -244,7 +247,44 @@ final class AppModelWorkflowTests: XCTestCase {
             guard case .failed = model.session.phase else {
                 return XCTFail("Invalid or incomplete pairing completion must fail closed.")
             }
+            XCTAssertEqual(model.pairingUI.actionMessage, ApplicationDiagnosticAction.pairAgain.label)
+            XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .pairing)
+            XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "pairing_failed")
         }
+    }
+
+    func testPairingFailureProgressDoesNotExposeProviderMessage() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+        model.pairingUI.pin = "9753"
+        let submitTask = Task { await model.submitPairingPIN() }
+        for _ in 0..<100 where provider.currentRequestCount() == 0 {
+            await Task.yield()
+        }
+        let request = try XCTUnwrap(provider.latestRequest())
+        provider.yieldFailure(
+            PairingFailure(
+                code: .invalidPIN,
+                message: "PIN=9753 Authorization: Basic private-value"
+            ),
+            for: request
+        )
+        await submitTask.value
+
+        XCTAssertEqual(model.pairingUI.message, "The host rejected the pairing request.")
+        XCTAssertEqual(model.pairingUI.actionMessage, ApplicationDiagnosticAction.verifyPIN.label)
+        XCTAssertFalse(model.diagnostics.events.contains { $0.message.contains("9753") })
+        XCTAssertFalse(model.diagnostics.events.contains {
+            $0.message.localizedCaseInsensitiveContains("authorization")
+        })
     }
 
     func testPairingIdentityFailureStopsBeforeRuntimeRequest() async throws {
@@ -443,6 +483,9 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
         XCTAssertEqual(model.navigationSelection, .library)
         XCTAssertTrue(model.streamLaunchUI.errorMessage?.contains("unavailable") == true)
+        XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.updateBuild.label)
+        XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .transport)
+        XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "stream_provider_unavailable")
         let launchCount = await launchClient.currentLaunchCount()
         XCTAssertEqual(launchCount, 0)
     }
@@ -789,6 +832,8 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
+        model.streamLaunchUI.errorMessage = "stale failure"
+        model.streamLaunchUI.actionMessage = "stale action"
 
         await model.stopStream()
         provider.yield(.channelsReady(.all), sessionID: record.sessionID)
@@ -798,6 +843,8 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.hasActiveStreamSession)
         XCTAssertEqual(model.session.phase, .disconnected)
         XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertNil(model.streamLaunchUI.errorMessage)
+        XCTAssertNil(model.streamLaunchUI.actionMessage)
     }
 
     func testDuplicateLaunchDoesNotStartAnotherSessionGeneration() async throws {
@@ -853,7 +900,59 @@ final class AppModelWorkflowTests: XCTestCase {
             }
             XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
             XCTAssertEqual(model.renderState.policy, .idle)
+            XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .transport)
+            XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.retryStream.label)
         }
+    }
+
+    func testMediaAndControllerFailuresSurfaceSafeActionableDiagnostics() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(automaticallyReady: false)
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 18,
+                    key: Data(repeating: 0xC8, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 1 }
+
+        mediaEnvironment.yieldFeedback(.diagnostic(RemoteInputFeedbackDiagnostic(
+            controllerID: "must-not-appear",
+            controllerIndex: 4,
+            command: .led,
+            reason: .unsupportedCapability
+        )), sessionID: record.sessionID)
+        await waitUntil { model.diagnostics.latestActionableEvent?.severity == .warning }
+        let feedbackEvent = try XCTUnwrap(model.diagnostics.latestActionableEvent)
+        XCTAssertEqual(feedbackEvent.category, .input)
+        XCTAssertFalse(feedbackEvent.message.contains("must-not-appear"))
+
+        mediaEnvironment.finish(
+            sessionID: record.sessionID,
+            throwing: VideoDecoderError.noActiveSession
+        )
+        await launchTask.value
+
+        let failureEvent = try XCTUnwrap(model.diagnostics.latestActionableEvent)
+        XCTAssertEqual(failureEvent.category, .decoder)
+        XCTAssertEqual(failureEvent.code, "video_pipeline_failed")
+        XCTAssertEqual(failureEvent.action, .reviewStreamSettings)
+        XCTAssertEqual(
+            model.streamLaunchUI.actionMessage,
+            ApplicationDiagnosticAction.reviewStreamSettings.label
+        )
+        XCTAssertFalse(failureEvent.message.contains("must-not-appear"))
     }
 
     func testDefaultInputKeyGenerationUsesFreshMaterialForEveryLaunch() async throws {
@@ -903,7 +1002,13 @@ final class AppModelWorkflowTests: XCTestCase {
         guard case .failed = model.session.phase else {
             return XCTFail("Input-key generation failure must fail the session before launch.")
         }
-        XCTAssertTrue(model.streamLaunchUI.errorMessage?.contains("failed") == true)
+        XCTAssertEqual(
+            model.streamLaunchUI.errorMessage,
+            "Remote input is no longer available for this session."
+        )
+        XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .input)
+        XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "invalidInputKey")
+        XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.reconnectInput.label)
         XCTAssertEqual(model.renderState.policy, .idle)
     }
 
@@ -1732,6 +1837,20 @@ private final class ControlledPairingProvider: PairingRuntimeProvider, @unchecke
             digestAlgorithm: .sha256,
             failure: nil,
             updatedAt: Date(timeIntervalSince1970: 200)
+        )))
+    }
+
+    func yieldFailure(
+        _ failure: PairingFailure,
+        for request: PairingRuntimeRequest
+    ) {
+        continuation(for: request.attemptID)?.yield(.progress(PairingSnapshot(
+            attemptID: request.attemptID,
+            hostID: request.host.id,
+            stage: .failed,
+            digestAlgorithm: .sha256,
+            failure: failure,
+            updatedAt: Date(timeIntervalSince1970: 201)
         )))
     }
 

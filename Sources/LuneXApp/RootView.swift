@@ -472,6 +472,11 @@ private struct PairingPanel: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    if let action = appModel.pairingUI.actionMessage {
+                        Label(action, systemImage: "arrow.forward.circle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 } else {
                     ContentUnavailableView("Select a Host", systemImage: "key")
                 }
@@ -617,6 +622,11 @@ private struct StreamLaunchPanel: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
+                    if let action = appModel.streamLaunchUI.actionMessage {
+                        Label(action, systemImage: "arrow.forward.circle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 } else {
                     ContentUnavailableView("Select an App", systemImage: "play.fill")
                 }
@@ -673,7 +683,10 @@ private struct StreamStatusOverlay: View {
                 StatusPill(label: "Spatial gated", systemImage: "airpodspro")
             }
 
-            Text(appModel.diagnostics.latestSummary)
+            Text(
+                appModel.diagnostics.latestActionableEvent?.message
+                    ?? appModel.diagnostics.latestSummary
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -721,10 +734,13 @@ private struct DiagnosticsView: View {
                     ContentUnavailableView("No Diagnostics", systemImage: "waveform.path.ecg")
                 } else {
                     ForEach(appModel.diagnostics.events.reversed()) { event in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text(event.subsystem)
+                                Label(event.category.label, systemImage: event.category.systemImage)
                                     .font(.caption)
+                                    .foregroundStyle(color(for: event.severity))
+                                Text(event.code)
+                                    .font(.caption2.monospaced())
                                     .foregroundStyle(.secondary)
                                 Spacer()
                                 Text(event.date.formatted(date: .omitted, time: .standard))
@@ -732,11 +748,24 @@ private struct DiagnosticsView: View {
                                     .foregroundStyle(.tertiary)
                             }
                             Text(event.message)
+                            if let action = event.action {
+                                Label(action.label, systemImage: "arrow.forward.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .padding(.vertical, 4)
                     }
                 }
             }
+        }
+    }
+
+    private func color(for severity: RuntimeDiagnosticSeverity) -> Color {
+        switch severity {
+        case .debug, .info: .secondary
+        case .warning: .orange
+        case .error: .red
         }
     }
 }

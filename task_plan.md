@@ -43,7 +43,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `47/61`：8.4已将video/audio/input receiver、native processor、SwiftUI frame presentation、input/feedback与逆序teardown纳入同一generation-scoped media environment；control只能贡献`.control`，video/audio分别在VideoToolbox提交和PCM graph schedule后才贡献readiness，receiver创建不能提前报告Streaming。consumer取消、feedback/receiver结束、pending startup stop、reconnect、local/remote stop与failure均收敛到单一teardown operation。production仍缺具体video/audio network receiver，因此默认stream availability继续fail closed。3.7、5.8、6.7与7.7仍分别需要授权live pairing、sustained-video、audible hardware与input/feedback证据并保持未完成；下一项为8.5无秘密actionable diagnostics，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `48/61`：8.5已将pairing/transport/decoder/audio/input失败收敛为有界、类型化、可执行且经过secret redaction的应用诊断，SwiftUI只显示安全摘要、code、severity与恢复动作；正常stop/远端断开会清除陈旧错误动作。production仍缺具体video/audio network receiver，因此默认stream availability继续fail closed。3.7、5.8、6.7与7.7仍分别需要授权live pairing、sustained-video、audible hardware与input/feedback证据并保持未完成；下一项为8.6缺失required production provider时的fail-closed证明，阶段13仍为 `in_progress`。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -184,3 +184,12 @@
 | 8.4首轮app-target平台构建发现internal `makeCoordinator()`返回private presenter | 1 | presenter改为fileprivate；中止会重复同错的后续平台，重跑脚本增加`set -e`确保首错即停 |
 | 8.4 presenter改为fileprivate仍低于internal protocol witness可见级别 | 1 | 改为module-internal final class；类型仍不公开到模块外且满足SwiftUI associated type witness |
 | 8.4 app-target实现编译发现`configure`访问MainActor MTKView且sRGB为optional | 1 | `configure`显式标记`@MainActor`，输出色彩空间使用sRGB或确定的device-RGB fallback |
+| 8.5首轮定向编译把factory静态diagnostic简写为参数类型成员 | 1 | 三处改用完整`ApplicationDiagnosticFactory.*`限定名；首轮测试未启动，保留失败xcresult后用新隔离目录复验 |
+| 8.5第二轮唯一失败仍断言错误文案包含`failed` | 1 | launch request上下文将未知key-generator错误收敛为typed `invalidInputKey`，测试改验input类别/code/action和安全摘要，不依赖任意英文子串 |
+| 8.5首轮仓库门禁把fixture根目录误写为`Fixtures` | 1 | 实际根目录为`Tests/Fixtures/Moonlight`；self-test通过，后续门禁尚未执行，改正参数后用新隔离目录完整重跑 |
+| 8.5最终simulator jq复核在`and`后丢失根对象上下文 | 1 | 产品/OpenSpec/generator/boundary/ENet/C门已通过；将输入保存为`$root`后重新从头执行仓库与simulator门禁 |
+
+## 当前执行点（2026-07-21）
+
+- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`48/61`；8.5已完成全部验收，下一项为8.6 required production provider缺失时保持fail closed。
+- 8.6验收要求：pairing缺provider时不接触identity/network，stream缺control/video/audio/input任一项时不创建session、不报告Streaming且给出稳定诊断；production inventory继续因缺video/audio receiver而truthfully unavailable。

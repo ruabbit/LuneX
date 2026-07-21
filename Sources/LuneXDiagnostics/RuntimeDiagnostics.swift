@@ -1,6 +1,6 @@
 import Foundation
 
-enum RuntimeDiagnosticSeverity: String, Codable, Equatable, Sendable {
+enum RuntimeDiagnosticSeverity: String, Codable, Equatable, Hashable, Sendable {
     case debug
     case info
     case warning
