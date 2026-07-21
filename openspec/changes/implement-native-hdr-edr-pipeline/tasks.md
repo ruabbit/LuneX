@@ -10,7 +10,7 @@
 ## 2. Generation-owned decoded and Metal frame contract
 
 - [x] 2.1 Bind immutable color signatures and render-configuration compatibility to decoded and mapped Metal frames without duplicating raw metadata ownership
-- [ ] 2.2 Make the Metal mapper validate 8-bit and 10-bit CoreVideo plane layouts, Metal formats, dimensions, device ownership, and color signatures
+- [x] 2.2 Make the Metal mapper validate 8-bit and 10-bit CoreVideo plane layouts, Metal formats, dimensions, device ownership, and color signatures
 - [ ] 2.3 Extend the bounded frame queue to reject stale color/display revisions and flush incompatible frames on generation or render-contract changes
 - [ ] 2.4 Add SDR/HDR mapping, layout mismatch, stale generation/revision, replacement, cache flush, and teardown tests
 

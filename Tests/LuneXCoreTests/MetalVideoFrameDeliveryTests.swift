@@ -32,10 +32,12 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
             XCTAssertEqual(mapped.luma.texture.pixelFormat, expectedFormats.0)
             XCTAssertEqual(mapped.luma.texture.width, 64)
             XCTAssertEqual(mapped.luma.texture.height, 64)
+            XCTAssertEqual(mapped.luma.texture.device.registryID, device.registryID)
             XCTAssertEqual(mapped.chroma.role, .chroma)
             XCTAssertEqual(mapped.chroma.texture.pixelFormat, expectedFormats.1)
             XCTAssertEqual(mapped.chroma.texture.width, 32)
             XCTAssertEqual(mapped.chroma.texture.height, 32)
+            XCTAssertEqual(mapped.chroma.texture.device.registryID, device.registryID)
             XCTAssertTrue(
                 CVMetalTextureGetTexture(mapped.luma.coreVideoTexture) === mapped.luma.texture
             )
@@ -44,6 +46,133 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
             )
         }
         mapper.flush()
+    }
+
+    func testMapperRejectsPixelLayoutAndColorSignatureMismatches() throws {
+        let mapper = try CVMetalVideoFrameMapper(
+            device: XCTUnwrap(MTLCreateSystemDefaultDevice())
+        )
+        let eightBitBuffer = try makeMetalPixelBuffer()
+        let tenBitBuffer = try makeMetalPixelBuffer(
+            format: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+        )
+
+        XCTAssertThrowsError(try mapper.map(decodedFrame(
+            generation: 1,
+            frameID: 1,
+            pixelBuffer: eightBitBuffer,
+            colorMetadata: .hdr10VideoRange()
+        ))) { error in
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .invalidDecodedContract(.incompatibleBitDepth(expected: 10, actual: 8))
+            )
+        }
+        XCTAssertThrowsError(try mapper.map(decodedFrame(
+            generation: 1,
+            frameID: 2,
+            pixelBuffer: tenBitBuffer,
+            colorMetadata: .rec709VideoRange()
+        ))) { error in
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .invalidDecodedContract(.incompatibleBitDepth(expected: 8, actual: 10))
+            )
+        }
+
+        var invalidSDR = VideoColorMetadata.rec709VideoRange()
+        invalidSDR.colorPrimaries = .ituR2020
+        XCTAssertThrowsError(try mapper.map(decodedFrame(
+            generation: 1,
+            frameID: 3,
+            pixelBuffer: eightBitBuffer,
+            colorMetadata: invalidSDR
+        ))) { error in
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .invalidDecodedContract(.incompatiblePrimaries(
+                    expected: .ituR709,
+                    actual: .ituR2020
+                ))
+            )
+        }
+    }
+
+    func testPlaneContractsAndTextureValidationAreFormatDimensionAndDeviceExplicit() throws {
+        let frameContract = HDRValidatedDecodedFrameContract(
+            pixelLayout: .nv12VideoRange8,
+            width: 65,
+            height: 49,
+            colorSignature: HDRRenderColorSignature(metadata: .rec709VideoRange())
+        )
+        let planes = MetalVideoFrameContractResolver.planeContracts(for: frameContract)
+
+        XCTAssertEqual(planes.luma, MetalVideoPlaneContract(
+            role: .luma,
+            pixelFormat: .r8Unorm,
+            dimensions: HDRDecodedPlaneDimensions(width: 65, height: 49)
+        ))
+        XCTAssertEqual(planes.chroma, MetalVideoPlaneContract(
+            role: .chroma,
+            pixelFormat: .rg8Unorm,
+            dimensions: HDRDecodedPlaneDimensions(width: 33, height: 25)
+        ))
+        XCTAssertNoThrow(try MetalVideoFrameContractResolver.validateTexture(
+            MetalVideoTextureDescriptor(
+                pixelFormat: .r8Unorm,
+                width: 65,
+                height: 49,
+                deviceRegistryID: 12
+            ),
+            against: planes.luma,
+            deviceRegistryID: 12
+        ))
+
+        XCTAssertThrowsError(try MetalVideoFrameContractResolver.validateTexture(
+            MetalVideoTextureDescriptor(
+                pixelFormat: .r8Unorm,
+                width: 64,
+                height: 49,
+                deviceRegistryID: 12
+            ),
+            against: planes.luma,
+            deviceRegistryID: 12
+        )) { error in
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .unexpectedMetalTextureDimensions(.luma)
+            )
+        }
+        XCTAssertThrowsError(try MetalVideoFrameContractResolver.validateTexture(
+            MetalVideoTextureDescriptor(
+                pixelFormat: .r16Unorm,
+                width: 65,
+                height: 49,
+                deviceRegistryID: 12
+            ),
+            against: planes.luma,
+            deviceRegistryID: 12
+        )) { error in
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .unexpectedMetalTexturePixelFormat(.luma)
+            )
+        }
+        XCTAssertThrowsError(try MetalVideoFrameContractResolver.validateTexture(
+            MetalVideoTextureDescriptor(
+                pixelFormat: .rg8Unorm,
+                width: 33,
+                height: 25,
+                deviceRegistryID: 11
+            ),
+            against: planes.chroma,
+            deviceRegistryID: 12
+        )) { error in
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .unexpectedMetalTextureDevice(.chroma)
+            )
+        }
     }
 
     func testDecodedAndMappedFramesRetainImmutableRenderBinding() throws {
@@ -299,7 +428,8 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
     private func decodedFrame(
         generation: UInt64,
         frameID: UInt64,
-        pixelBuffer: CVPixelBuffer
+        pixelBuffer: CVPixelBuffer,
+        colorMetadata: VideoColorMetadata = .rec709VideoRange()
     ) -> DecodedVideoFrame {
         DecodedVideoFrame(
             generation: generation,
@@ -308,19 +438,23 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
             presentationTimeStamp: .invalid,
             duration: .invalid,
             infoFlags: [],
-            colorMetadata: .rec709VideoRange()
+            colorMetadata: colorMetadata
         )
     }
 
-    private func makeMetalPixelBuffer() throws -> CVPixelBuffer {
+    private func makeMetalPixelBuffer(
+        format: OSType = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    ) throws -> CVPixelBuffer {
+        let bitDepth: VideoOutputBitDepth = format
+            == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange ? .ten : .eight
         let attributes = VideoToolboxDecompressionSessionFactory
-            .destinationAttributes(for: .eight) as CFDictionary
+            .destinationAttributes(for: bitDepth) as CFDictionary
         var pixelBuffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(
             kCFAllocatorDefault,
             64,
             64,
-            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            format,
             attributes,
             &pixelBuffer
         )

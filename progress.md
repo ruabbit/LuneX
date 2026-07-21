@@ -1281,3 +1281,19 @@
 - 未完成门重跑时，按最新mtime选中了同范围并发验收流的不同证据目录布局，边界/diff/status已执行但最终hash文件名不存在而退出；源码未变化，后续固定核对`D3aZxd`与`4udJFX`，不再按mtime猜测。
 - final2 focused/full xcresult、唯一Keychain skip与五个平台成功日志已直接读回；其build目录未保留所记录的simulator before/after JSON，因此不以该目录复证inventory，改用本轮`/tmp/LuneX-15-2_1-builds.bEQNit`中前后逐字节一致的快照作为2.1 simulator证据。
 - `bEQNit` simulator快照已再次`cmp`并验证固定设备/`Booted=0`；随后OpenSpec artifact读回误按顶层`.valid`而非`.items[].valid`退出，后续仅按真实schema重跑尚未完成的repository检查。
+
+## 2026-07-21 阶段 15 任务 2.2 启动
+
+- 2.1实现已以`db45bcd`推送，补充验收读回以`60bb957`推送；`HEAD == origin/main`且工作树clean，OpenSpec权威进度`7/33`。
+- 现有mapper能创建8/10-bit Metal planes并合并检查texture尺寸/format/device，但只要求CoreVideo plane尺寸为正，没有复用1.3 exact image/luma/chroma geometry，也没有在texture创建前验证actual pixel layout与frozen color signature。
+- 本轮大补丁遇到同范围并发实现后被原子拒绝且无部分写入；审计后沿用其`validateForMetalMapping`、explicit plane contracts与dimension/format/device validators，不创建第二套合同。
+- `HDRDecodedVideoContractTests + MetalVideoFrameDeliveryTests` focused warnings-as-errors通过`17/17`、零skip/失败（`/tmp/LuneX-15-2_2-focused.lT2uQr/MetalMapping.xcresult`）。
+- 完整macOS suite通过`516 total / 515 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-2_2-full.iEyO5I/LuneXCoreTests.xcresult`），唯一skip精确为允许的真实Keychain round-trip，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`且日志零warning/error。
+- macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-2_2-builds.3TxwnW`）；simulator前后规范化SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
+
+## 2026-07-21 阶段 15 任务 2.2 完成
+
+- `validateForMetalMapping`让decoder与mapper共享8/10-bit video-range、exact luma/chroma geometry及完整metadata规则；mapper在texture创建前比较validated signature与2.1 frozen binding，并以explicit plane contracts约束`.r8/.rg8`或`.r16/.rg16`。
+- mapped texture分别typed验证dimensions、pixel format与active device registry ownership，不再以单一layout错误混合三种失败；真实VideoToolbox 8/10-bit frame仍保持zero-copy CoreVideo texture ownership。
+- focused `17/17`、完整macOS `516 total / 515 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors和只读simulator不变门通过。repository gates位于`/tmp/LuneX-15-2_2-repo.sKcOvW`：OpenSpec strict `6/6`、fixture self-test/全树、generator三次稳定且SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace边界通过。
+- OpenSpec 2.2标记完成，权威进度`8/33`。本项不证明2.3 queue color/display revision rejection与flush、Metal shader、production presenter/surface或物理HDR显示；下一项2.3。

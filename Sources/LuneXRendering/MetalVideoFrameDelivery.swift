@@ -11,11 +11,16 @@ enum MetalFrameDeliveryError: Error, Equatable, Sendable, CustomStringConvertibl
     case invalidQueueCapacity(Int)
     case textureCacheCreationFailed(CVReturn)
     case unsupportedPixelFormat(OSType)
+    case invalidDecodedContract(HDRDecodedVideoContractError)
+    case invalidPixelBufferDimensions
     case invalidPlaneCount(Int)
     case invalidPlaneDimensions(MetalVideoPlaneRole)
+    case incompatibleColorSignature
     case textureCreationFailed(plane: MetalVideoPlaneRole, status: CVReturn)
     case missingMetalTexture(MetalVideoPlaneRole)
-    case unexpectedMetalTextureLayout(MetalVideoPlaneRole)
+    case unexpectedMetalTextureDimensions(MetalVideoPlaneRole)
+    case unexpectedMetalTexturePixelFormat(MetalVideoPlaneRole)
+    case unexpectedMetalTextureDevice(MetalVideoPlaneRole)
 
     var description: String {
         switch self {
@@ -25,16 +30,94 @@ enum MetalFrameDeliveryError: Error, Equatable, Sendable, CustomStringConvertibl
             return "CoreVideo could not create the Metal texture cache (\(status))."
         case let .unsupportedPixelFormat(format):
             return "CVPixelBuffer format \(format) is unsupported by the zero-copy Metal path."
+        case let .invalidDecodedContract(error):
+            return "The decoded frame is incompatible with Metal mapping: \(error.description)"
+        case .invalidPixelBufferDimensions:
+            return "The decoded pixel buffer dimensions are invalid."
         case let .invalidPlaneCount(count):
             return "The decoded pixel buffer has \(count) planes instead of two."
         case let .invalidPlaneDimensions(plane):
             return "The decoded \(plane) plane has invalid dimensions."
+        case .incompatibleColorSignature:
+            return "The decoded frame color signature changed before Metal mapping."
         case let .textureCreationFailed(plane, status):
             return "CoreVideo could not map the \(plane) plane to Metal (\(status))."
         case let .missingMetalTexture(plane):
             return "CoreVideo returned no Metal texture for the \(plane) plane."
-        case let .unexpectedMetalTextureLayout(plane):
-            return "CoreVideo returned an unexpected Metal layout for the \(plane) plane."
+        case let .unexpectedMetalTextureDimensions(plane):
+            return "CoreVideo returned unexpected Metal texture dimensions for the \(plane) plane."
+        case let .unexpectedMetalTexturePixelFormat(plane):
+            return "CoreVideo returned an unexpected Metal pixel format for the \(plane) plane."
+        case let .unexpectedMetalTextureDevice(plane):
+            return "CoreVideo returned the \(plane) plane on an unexpected Metal device."
+        }
+    }
+}
+
+struct MetalVideoPlaneContract: Equatable, Sendable {
+    let role: MetalVideoPlaneRole
+    let pixelFormat: MTLPixelFormat
+    let dimensions: HDRDecodedPlaneDimensions
+}
+
+struct MetalVideoTextureDescriptor: Equatable, Sendable {
+    let pixelFormat: MTLPixelFormat
+    let width: Int
+    let height: Int
+    let deviceRegistryID: UInt64
+}
+
+enum MetalVideoFrameContractResolver {
+    static func planeContracts(
+        for frameContract: HDRValidatedDecodedFrameContract
+    ) -> (luma: MetalVideoPlaneContract, chroma: MetalVideoPlaneContract) {
+        let formats: (luma: MTLPixelFormat, chroma: MTLPixelFormat)
+        switch frameContract.pixelLayout {
+        case .nv12VideoRange8:
+            formats = (.r8Unorm, .rg8Unorm)
+        case .p010VideoRange10:
+            formats = (.r16Unorm, .rg16Unorm)
+        }
+        return (
+            MetalVideoPlaneContract(
+                role: .luma,
+                pixelFormat: formats.luma,
+                dimensions: HDRDecodedPlaneDimensions(
+                    width: frameContract.width,
+                    height: frameContract.height
+                )
+            ),
+            MetalVideoPlaneContract(
+                role: .chroma,
+                pixelFormat: formats.chroma,
+                dimensions: HDRDecodedPlaneDimensions(
+                    width: frameContract.width / 2 + frameContract.width % 2,
+                    height: frameContract.height / 2 + frameContract.height % 2
+                )
+            )
+        )
+    }
+
+    static func validateTexture(
+        _ texture: MetalVideoTextureDescriptor,
+        against planeContract: MetalVideoPlaneContract,
+        deviceRegistryID: UInt64
+    ) throws {
+        guard texture.width == planeContract.dimensions.width,
+              texture.height == planeContract.dimensions.height else {
+            throw MetalFrameDeliveryError.unexpectedMetalTextureDimensions(
+                planeContract.role
+            )
+        }
+        guard texture.pixelFormat == planeContract.pixelFormat else {
+            throw MetalFrameDeliveryError.unexpectedMetalTexturePixelFormat(
+                planeContract.role
+            )
+        }
+        guard texture.deviceRegistryID == deviceRegistryID else {
+            throw MetalFrameDeliveryError.unexpectedMetalTextureDevice(
+                planeContract.role
+            )
         }
     }
 }
@@ -67,11 +150,6 @@ protocol MetalVideoFrameMapping: Sendable {
 }
 
 final class CVMetalVideoFrameMapper: MetalVideoFrameMapping, @unchecked Sendable {
-    private struct PlaneLayout {
-        var luma: MTLPixelFormat
-        var chroma: MTLPixelFormat
-    }
-
     let device: any MTLDevice
 
     private let lock = NSLock()
@@ -96,21 +174,27 @@ final class CVMetalVideoFrameMapper: MetalVideoFrameMapping, @unchecked Sendable
     func map(_ frame: DecodedVideoFrame) throws -> MetalVideoFrame {
         try lock.withLock {
             let pixelBuffer = frame.pixelBuffer
-            let layout = try planeLayout(
-                for: CVPixelBufferGetPixelFormatType(pixelBuffer)
-            )
-            let planeCount = CVPixelBufferGetPlaneCount(pixelBuffer)
-            guard planeCount == 2 else {
-                throw MetalFrameDeliveryError.invalidPlaneCount(planeCount)
+            let frameContract: HDRValidatedDecodedFrameContract
+            do {
+                frameContract = try HDRDecodedVideoContractValidator.validateForMetalMapping(
+                    pixelBuffer: pixelBuffer,
+                    colorMetadata: frame.colorMetadata
+                )
+            } catch let error as HDRDecodedVideoContractError {
+                throw metalDeliveryError(for: error)
             }
+            guard frameContract.colorSignature == frame.renderBinding.colorSignature else {
+                throw MetalFrameDeliveryError.incompatibleColorSignature
+            }
+            let planeContracts = MetalVideoFrameContractResolver.planeContracts(
+                for: frameContract
+            )
             let luma = try makePlane(
-                role: .luma,
-                pixelFormat: layout.luma,
+                contract: planeContracts.luma,
                 pixelBuffer: pixelBuffer
             )
             let chroma = try makePlane(
-                role: .chroma,
-                pixelFormat: layout.chroma,
+                contract: planeContracts.chroma,
                 pixelBuffer: pixelBuffer
             )
             return MetalVideoFrame(
@@ -131,26 +215,35 @@ final class CVMetalVideoFrameMapper: MetalVideoFrameMapping, @unchecked Sendable
         CVMetalTextureCacheFlush(textureCache, 0)
     }
 
-    private func planeLayout(for format: OSType) throws -> PlaneLayout {
-        switch format {
-        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
-            return PlaneLayout(luma: .r8Unorm, chroma: .rg8Unorm)
-        case kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange:
-            return PlaneLayout(luma: .r16Unorm, chroma: .rg16Unorm)
+    private func metalDeliveryError(
+        for error: HDRDecodedVideoContractError
+    ) -> MetalFrameDeliveryError {
+        switch error {
+        case let .unsupportedPixelFormat(format):
+            return .unsupportedPixelFormat(format)
+        case .invalidDimensions:
+            return .invalidPixelBufferDimensions
+        case let .invalidPlaneCount(count):
+            return .invalidPlaneCount(count)
+        case .invalidPlaneDimensions(.luma):
+            return .invalidPlaneDimensions(.luma)
+        case .invalidPlaneDimensions(.chroma):
+            return .invalidPlaneDimensions(.chroma)
         default:
-            throw MetalFrameDeliveryError.unsupportedPixelFormat(format)
+            return .invalidDecodedContract(error)
         }
     }
 
     private func makePlane(
-        role: MetalVideoPlaneRole,
-        pixelFormat: MTLPixelFormat,
+        contract: MetalVideoPlaneContract,
         pixelBuffer: CVPixelBuffer
     ) throws -> MetalVideoTexturePlane {
+        let role = contract.role
         let planeIndex = role.rawValue
         let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, planeIndex)
         let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, planeIndex)
-        guard width > 0, height > 0 else {
+        guard width == contract.dimensions.width,
+              height == contract.dimensions.height else {
             throw MetalFrameDeliveryError.invalidPlaneDimensions(role)
         }
 
@@ -160,7 +253,7 @@ final class CVMetalVideoFrameMapper: MetalVideoFrameMapping, @unchecked Sendable
             textureCache,
             pixelBuffer,
             nil,
-            pixelFormat,
+            contract.pixelFormat,
             width,
             height,
             planeIndex,
@@ -175,12 +268,16 @@ final class CVMetalVideoFrameMapper: MetalVideoFrameMapping, @unchecked Sendable
         guard let texture = CVMetalTextureGetTexture(coreVideoTexture) else {
             throw MetalFrameDeliveryError.missingMetalTexture(role)
         }
-        guard texture.width == width,
-              texture.height == height,
-              texture.pixelFormat == pixelFormat,
-              texture.device.registryID == device.registryID else {
-            throw MetalFrameDeliveryError.unexpectedMetalTextureLayout(role)
-        }
+        try MetalVideoFrameContractResolver.validateTexture(
+            MetalVideoTextureDescriptor(
+                pixelFormat: texture.pixelFormat,
+                width: texture.width,
+                height: texture.height,
+                deviceRegistryID: texture.device.registryID
+            ),
+            against: contract,
+            deviceRegistryID: device.registryID
+        )
         return MetalVideoTexturePlane(
             role: role,
             coreVideoTexture: coreVideoTexture,

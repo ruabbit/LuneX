@@ -969,3 +969,15 @@
 - display revision、mapping mode和surface contract属于active configuration而不是decoded frame binding；将其塞入frame会把异步显示状态错误绑定到解码时刻，相关queue revision和flush由2.3实现。
 - `DecodedVideoFrame`在初始化时创建唯一`HDRFrameRenderBinding`快照；外部metadata后续变化不会改变frame signature。`MetalVideoFrame`不再复制raw metadata，只通过其不可变decoded frame暴露同一binding。
 - matching SDR/NV12与HDR10/P010真实decoder-to-Metal帧均通过configuration compatibility；generation变化返回typed `staleDecoderGeneration`，signature变化返回不泄露metadata的`staleColorSignature`。
+
+# 2026-07-21 阶段 15 任务 2.2 mapper contract 调查
+
+- `CVMetalVideoFrameMapper`已选择8-bit `.r8Unorm/.rg8Unorm`和10-bit `.r16Unorm/.rg16Unorm`，并在CoreVideo映射后比较texture尺寸、format及`device.registryID`；此前所有不一致共用`unexpectedMetalTextureLayout`，不能确定性区分失败边界。
+- mapper此前只验证plane count为2和每个plane非零，未证明luma等于image尺寸、chroma等于ceil-half尺寸。2.2把1.3 validator拆出不含codec的`validateForMetalMapping`，让decoder contract与mapper共享pixel layout、exact planes和metadata规则。
+- mapper在创建texture前验证actual CoreVideo layout、single-owner raw metadata与2.1冻结signature一致；`MetalVideoPlaneContract`随后明确每个plane的expected format/dimensions，mapped texture分别typed验证dimensions、pixel format与active Metal device ownership。
+
+# 2026-07-21 阶段 15 任务 2.2 验收结论
+
+- frame contract仍保留单一raw metadata ownership：mapper读取decoded frame现有metadata并生成validated signature，只将其与immutable binding比较，不在`MetalVideoFrame`复制raw metadata。
+- 8-bit NV12和10-bit P010实际pixel buffer均通过exact plane geometry并映射到对应Metal formats；bit-depth/metadata、primaries、plane、texture dimensions/format/device任一不一致均在对应typed边界fail closed，后续current-generation frame仍可继续尝试。
+- deterministic tests、macOS suite与五平台build证明mapper合同和compile safety，不证明queue revision isolation、shader color output、EDR surface signaling或物理显示效果。

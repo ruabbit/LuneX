@@ -62,6 +62,13 @@ struct HDRValidatedDecodedVideoContract: Hashable, Sendable {
     let colorSignature: HDRRenderColorSignature
 }
 
+struct HDRValidatedDecodedFrameContract: Hashable, Sendable {
+    let pixelLayout: HDRDecodedPixelLayout
+    let width: Int
+    let height: Int
+    let colorSignature: HDRRenderColorSignature
+}
+
 enum HDRDecodedVideoContractError: Error, Equatable, Hashable, Sendable,
     CustomStringConvertible {
     case unsupportedPixelFormat(OSType)
@@ -111,6 +118,31 @@ enum HDRDecodedVideoContractError: Error, Equatable, Hashable, Sendable,
 }
 
 enum HDRDecodedVideoContractValidator {
+    static func validateForMetalMapping(
+        pixelBuffer: CVPixelBuffer,
+        colorMetadata: VideoColorMetadata
+    ) throws -> HDRValidatedDecodedFrameContract {
+        try validateForMetalMapping(
+            layout: HDRDecodedPixelBufferLayout(pixelBuffer: pixelBuffer),
+            colorMetadata: colorMetadata
+        )
+    }
+
+    static func validateForMetalMapping(
+        layout: HDRDecodedPixelBufferLayout,
+        colorMetadata: VideoColorMetadata
+    ) throws -> HDRValidatedDecodedFrameContract {
+        let pixelLayout = try decodedPixelLayout(for: layout.pixelFormat)
+        try validatePlanes(layout)
+        try validateColorMetadata(colorMetadata, pixelLayout: pixelLayout)
+        return HDRValidatedDecodedFrameContract(
+            pixelLayout: pixelLayout,
+            width: layout.width,
+            height: layout.height,
+            colorSignature: HDRRenderColorSignature(metadata: colorMetadata)
+        )
+    }
+
     static func validate(
         pixelBuffer: CVPixelBuffer,
         codec: NegotiatedVideoCodec,
@@ -128,19 +160,17 @@ enum HDRDecodedVideoContractValidator {
         codec: NegotiatedVideoCodec,
         colorMetadata: VideoColorMetadata
     ) throws -> HDRValidatedDecodedVideoContract {
-        let pixelLayout = try decodedPixelLayout(for: layout.pixelFormat)
-        try validatePlanes(layout)
-        try validateColorMetadata(
-            colorMetadata,
-            pixelLayout: pixelLayout,
-            codec: codec
+        let frameContract = try validateForMetalMapping(
+            layout: layout,
+            colorMetadata: colorMetadata
         )
+        try validateCodec(codec, dynamicRange: frameContract.colorSignature.dynamicRange)
         return HDRValidatedDecodedVideoContract(
-            pixelLayout: pixelLayout,
-            width: layout.width,
-            height: layout.height,
+            pixelLayout: frameContract.pixelLayout,
+            width: frameContract.width,
+            height: frameContract.height,
             codec: codec,
-            colorSignature: HDRRenderColorSignature(metadata: colorMetadata)
+            colorSignature: frameContract.colorSignature
         )
     }
 
@@ -185,8 +215,7 @@ enum HDRDecodedVideoContractValidator {
 
     private static func validateColorMetadata(
         _ metadata: VideoColorMetadata,
-        pixelLayout: HDRDecodedPixelLayout,
-        codec: NegotiatedVideoCodec
+        pixelLayout: HDRDecodedPixelLayout
     ) throws {
         guard metadata.bitDepth == pixelLayout.bitDepth else {
             throw HDRDecodedVideoContractError.incompatibleBitDepth(
@@ -204,9 +233,6 @@ enum HDRDecodedVideoContractValidator {
                     expected: 10,
                     actual: metadata.bitDepth
                 )
-            }
-            guard codec == .hevc || codec == .av1 else {
-                throw HDRDecodedVideoContractError.incompatibleCodec(codec, .hdr10)
             }
             guard metadata.colorPrimaries == .ituR2020 else {
                 throw HDRDecodedVideoContractError.incompatiblePrimaries(
@@ -262,6 +288,15 @@ enum HDRDecodedVideoContractValidator {
             try metadata.validate()
         } catch let error as VideoColorMetadataError {
             throw HDRDecodedVideoContractError.invalidColorMetadata(error)
+        }
+    }
+
+    private static func validateCodec(
+        _ codec: NegotiatedVideoCodec,
+        dynamicRange: HDRSourceDynamicRange
+    ) throws {
+        guard dynamicRange != .hdr10 || codec == .hevc || codec == .av1 else {
+            throw HDRDecodedVideoContractError.incompatibleCodec(codec, dynamicRange)
         }
     }
 }
