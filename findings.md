@@ -909,5 +909,11 @@
 - 路线图现统一记录阶段14的production连接、normal/跨平台构建、strict/generator/dependency、analyzer/sanitizer/resource和simulator证据，并明确唯一剩余6.5的授权Sunshine/物理输入/多显示器checklist；OpenSpec权威进度`28/29 in_progress`。
 - 1.1至6.4与6.6已完成；6.5没有live host receipt或硬件手感/跨屏证据，不能archive change或把阶段14标记complete。阶段15至20的确定性工作可继续，但其证据不能替代6.5。
 - 阶段13仍为`54/61 in_progress`且7项live/hardware任务不变；阶段14的fake provider、AppKit通知、模拟器、analyzer和sanitizer证据均未被描述为Sunshine端到端通过。
+
+# 2026-07-21 阶段 14 离线阶段级自验
+
+- 从已推送`3ef99ee`与全新DerivedData重跑完整macOS suite，结构化通过`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`，日志零warning/error；结果`/tmp/LuneX-14-stage-acceptance.ce4byY/Stage14Acceptance.xcresult`。
+- 同一门重新确认OpenSpec strict `5/5`、project SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、`HEAD == origin/main`以及固定simulator可用且`Shutdown`、全局`Booted=0`。
+- 阶段级离线自验通过不等于阶段complete；6.5仍无授权Sunshine receipt、物理输入与多显示器证据，OpenSpec保持`28/29 in_progress`。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

@@ -1162,3 +1162,9 @@
 - 阶段14路线图已同步production、normal/五平台、strict/generator/dependency、analyzer/ASan/TSan/malloc与simulator证据，补充6.5授权Sunshine版本/test app、物理键鼠、focus/occlusion、resize和不同scale多显示器的逐项checklist。
 - OpenSpec 6.6标记完成，权威进度`28/29 in_progress`；6.5未执行，change不可archive且阶段不标记complete。阶段13仍为`54/61`和7项live/hardware缺口，不做跨阶段证据替代。
 - 6.1至6.4均已逐项独立提交推送；本项完成strict/diff验收和独立提交推送后，将再执行一次阶段14级离线自验，然后创建并推进阶段15 `implement-native-hdr-edr-pipeline`。
+
+## 2026-07-21 阶段 14 离线阶段级自验
+
+- 在已推送`3ef99ee`、clean tree和全新DerivedData上，完整macOS suite通过`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`且日志零诊断（`/tmp/LuneX-14-stage-acceptance.ce4byY/Stage14Acceptance.xcresult`）。
+- OpenSpec strict `5/5`、project hash稳定、HEAD/远端一致；只读复核固定simulator全部可用且`Shutdown`，全局`Booted=0`。
+- 阶段14 offline acceptance通过，但状态仍为`28/29 in_progress`，唯一6.5真实Sunshine/硬件门保持pending；下一步进入阶段15 OpenSpec提案和确定性实现。
