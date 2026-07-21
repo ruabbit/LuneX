@@ -710,3 +710,14 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，根目录`/tmp/LuneX-8_6-platform-builds.E5pqLP`；构建前后四个simulator各唯一且为`Shutdown`，未创建或主动boot设备。
 - fixture validator self-test/全树、4个OpenSpec change strict validation、generator逐字节一致、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对与四SDK strict C syntax全部通过，最终门禁目录`/tmp/LuneX-8_6-repo-gates-r2.bTa33D`。首次simulator `jq all`表达式和首次OpenSpec JSON断言错误均在执行状态修改前停止，已记录并用新表达式/新隔离目录完整复验。
 - OpenSpec 8.6更新为完成，权威进度`49/61`。production仍因缺具体video/audio network receiver保持fail closed；3.7/5.8/6.7/7.7与9.2-9.3 live证据仍未完成。下一项为9.1禁用live-host和真实Keychain路径的正常离线测试。
+
+## 2026-07-21 阶段 13 任务 9.1 启动
+
+- 全仓库测试环境开关审计确认普通XCTest目前只有`LUNEX_RUN_KEYCHAIN_TEST=1`可启用真实Keychain round-trip；9.2所需live-host XCTest尚未实现，因此默认套件没有可被环境误触发的discovery/pairing/launch网络路径。
+- 9.1使用全新隔离DerivedData/xcresult并显式`env -u LUNEX_RUN_KEYCHAIN_TEST`运行完整macOS套件；唯一允许的skip必须是已验证过一次、后续按用户约束不再访问的真实Keychain测试。
+
+## 2026-07-21 阶段 13 任务 9.1 完成
+
+- 独立完整macOS Swift 6/Clang warnings-as-errors离线套件通过`366 total / 365 passed / 1 skipped / 0 failed`，结果`/tmp/LuneX-9_1-offline.vWMJzq/OfflineTests.xcresult`；命令显式使用`env -u LUNEX_RUN_KEYCHAIN_TEST`。
+- 通过xcresult tests树精确确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，提示为一次性授权Keychain验证；没有其他skip、expected failure或失败。
+- OpenSpec 9.1更新为完成，权威进度`50/61`。当前没有9.2 live-host XCTest，且production仍缺具体video/audio receiver，因此9.1不替代3.7/5.8/6.7/7.7/9.2/9.3；下一可执行项为9.4 Debug/Release五平台构建。

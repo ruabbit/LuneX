@@ -43,7 +43,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `49/61`：8.6已用执行级矩阵证明pairing provider缺失时不启动identity provision，control/video/audio/input任一stream provider缺失时不生成input key、不创建session、不启动control/media/legacy launch，也不离开library或报告Streaming。production仍缺具体video/audio network receiver，因此默认stream availability继续fail closed。3.7、5.8、6.7与7.7仍分别需要授权live pairing、sustained-video、audible hardware与input/feedback证据并保持未完成；下一项为9.1禁用live-host与真实Keychain路径的正常离线测试，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `50/61`：9.1已在未设置任何live-host开关且显式移除`LUNEX_RUN_KEYCHAIN_TEST`的环境中完成全部正常macOS测试，唯一skip精确确认为真实Keychain round-trip。production仍缺具体video/audio network receiver，且仓库尚无9.2 live-host XCTest，因此默认stream availability继续fail closed，3.7、5.8、6.7、7.7、9.2与9.3保持未完成；下一可执行项为9.4 Debug/Release五平台构建，阶段13仍为 `in_progress`。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -195,5 +195,5 @@
 
 ## 当前执行点（2026-07-21）
 
-- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`49/61`；8.6已完成全部验收，下一项为9.1禁用live-host与真实Keychain路径的正常离线测试。
+- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`50/61`；9.1已完成独立离线验收，下一可执行项为9.4 Debug/Release五平台构建。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。

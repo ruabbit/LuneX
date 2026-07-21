@@ -585,3 +585,9 @@
 - A four-case matrix removes session control, video receive, audio receive, or remote input one at a time. Every case remains disconnected, idle, and in the library while input-key generation, control start, media-environment start, and legacy launch counts all stay zero; the application emits `stream_provider_unavailable`.
 - Final evidence is `28/28` targeted, `84/84` expanded, and `366 total / 365 passed / 1 explicit Keychain skip / 0 failed` complete macOS. All five Debug warnings-as-errors builds, fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates, and fixed-simulator uniqueness/Shutdown checks passed.
 - No production availability was widened. The factory still lacks concrete video/audio network receivers, so the default app cannot claim a stream session; authorized live pairing, sustained video, audible hardware audio, delivered input/feedback, and end-to-end interoperability remain unproven.
+
+### OpenSpec 9.1 offline verification acceptance (2026-07-21)
+
+- The current XCTest source has one opt-in integration environment variable: `LUNEX_RUN_KEYCHAIN_TEST=1`. No live-host integration XCTest exists yet, so the normal suite contains no environment-triggered discovery, pairing, launch, or streaming operation.
+- A fresh isolated macOS warnings-as-errors run with `LUNEX_RUN_KEYCHAIN_TEST` explicitly removed passed `366 total / 365 passed / 1 skipped / 0 failed`. The xcresult test tree identifies the sole skip as `testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()` and its expected one-time authorization message.
+- This is complete evidence for the deterministic offline suite only. It does not satisfy the missing opt-in live-host test implementation, authorized host-state capture, sustained media, hardware audio, delivered input, reconnect, or end-to-end tasks.

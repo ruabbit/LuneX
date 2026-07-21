@@ -78,7 +78,7 @@
 
 ## 9. Verification and tracking
 
-- [ ] 9.1 Run normal tests with live-host and real-Keychain integration paths disabled
+- [x] 9.1 Run normal tests with live-host and real-Keychain integration paths disabled
 - [ ] 9.2 Run opt-in live interoperability gates once per approved host state and capture redacted evidence
 - [ ] 9.3 Verify authenticated pairing, sustained video, synchronized audio, delivered input, reconnect, and clean stop end to end
 - [ ] 9.4 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with isolated DerivedData
