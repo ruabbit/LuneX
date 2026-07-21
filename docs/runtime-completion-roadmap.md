@@ -92,7 +92,7 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`当前`8/33`；第1组foundation、2.1 immutable frame binding及2.2 exact mapper contract完成，下一项2.3 queue revision rejection/flush。
+- OpenSpec `implement-native-hdr-edr-pipeline`当前`9/33`；第1组foundation及2.1-2.3 generation/configuration-owned frame contract完成，下一项2.4扩大mapping/revision/replacement/teardown测试矩阵。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

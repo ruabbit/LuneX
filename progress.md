@@ -1297,3 +1297,26 @@
 - mapped texture分别typed验证dimensions、pixel format与active device registry ownership，不再以单一layout错误混合三种失败；真实VideoToolbox 8/10-bit frame仍保持zero-copy CoreVideo texture ownership。
 - focused `17/17`、完整macOS `516 total / 515 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors和只读simulator不变门通过。repository gates位于`/tmp/LuneX-15-2_2-repo.sKcOvW`：OpenSpec strict `6/6`、fixture self-test/全树、generator三次稳定且SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace边界通过。
 - OpenSpec 2.2标记完成，权威进度`8/33`。本项不证明2.3 queue color/display revision rejection与flush、Metal shader、production presenter/surface或物理HDR显示；下一项2.3。
+
+## 2026-07-21 阶段 15 任务 2.3 启动
+
+- 2.2已以`48b2359 Validate Metal video frame contracts`独立提交并推送，`HEAD == origin/main`且工作树clean；OpenSpec权威进度`8/33`。
+- queue调用面仅限当前类型与测试，因此删除generation-only decoder-event消费旁路，改为显式`HDRRenderConfigurationIdentity` apply/enqueue/dequeue/stop API；这防止后续presentation绕过color/display revision ownership。
+- configuration transition清queued frame并flush mapper；queued entry保存映射时configuration，enqueue/dequeue依次拒绝stale generation、color signature、display revision与其余mapping/surface contract，stale调用不能清除replacement queue。
+- focused warnings-as-errors通过`10/10`、零skip/失败（`/tmp/LuneX-15-2_3-focused.ttjPti/QueueRevisions.xcresult`）。
+- 完整macOS suite通过`517 total / 516 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-2_3-full.lv2SaQ/LuneXCoreTests.xcresult`），唯一skip精确为允许的真实Keychain round-trip，日志零warning/error。
+- 首轮五平台包装器在首个build前因Bash同一`local`声明提前引用`n`而被`set -u`拒绝；仅生成只读simulator before快照，没有执行xcodebuild或任何设备状态命令。后续分行赋值并从新目录完整重跑。
+- 最终macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-2_3-builds-final.B23yJ4`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
+
+## 2026-07-21 阶段 15 任务 2.3 完成
+
+- `BoundedMetalFrameQueue`现由完整`HDRRenderConfigurationIdentity`而非generation单独驱动；queued entry绑定映射时configuration，所有配置变化先清旧entry并flush mapper，再发布replacement identity。
+- enqueue/dequeue依次typed拒绝stale generation、color signature、display revision及mapping/surface contract。stale dequeue返回nil但保留current queue，current configuration随后仍能取得replacement frame；各类drop与generation/render-contract reset分别计数。
+- focused `10/10`、完整macOS `517 total / 516 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors和simulator不变门通过。repository gates位于`/tmp/LuneX-15-2_3-repo.9QB8QY`：OpenSpec strict `6/6`、fixtures、generator三次稳定且SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace边界通过。
+- OpenSpec 2.3标记完成，权威进度`9/33`。本项不证明2.4扩大matrix、shader/renderer/presenter、surface signaling或物理HDR行为；下一项2.4。
+
+## 2026-07-21 阶段 15 任务 2.3 启动
+
+- 从`48b2359`恢复，确认`HEAD == origin/main`、初始工作树clean且无运行中的build/git进程；OpenSpec权威进度`8/33`。
+- 2.3范围限定为bounded Metal frame queue对active immutable render configuration的所有权、generation/color/display/mapping-surface mismatch拒绝，以及generation/render-contract切换时的queued-frame清理和texture-cache flush；不提前实现2.4完整矩阵、shader、presenter或surface runtime wiring。
+- 只读审计期间检测到共享执行流写入`MetalVideoFrameDelivery.swift`而未同步测试；保留并审计该来源不明修改，不回退。当前实现方向为queue持有active configuration、调用方在enqueue/dequeue携带configuration identity、切换时清队列/flush；下一步补齐编译兼容与focused行为测试。

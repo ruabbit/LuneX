@@ -981,3 +981,22 @@
 - frame contract仍保留单一raw metadata ownership：mapper读取decoded frame现有metadata并生成validated signature，只将其与immutable binding比较，不在`MetalVideoFrame`复制raw metadata。
 - 8-bit NV12和10-bit P010实际pixel buffer均通过exact plane geometry并映射到对应Metal formats；bit-depth/metadata、primaries、plane、texture dimensions/format/device任一不一致均在对应typed边界fail closed，后续current-generation frame仍可继续尝试。
 - deterministic tests、macOS suite与五平台build证明mapper合同和compile safety，不证明queue revision isolation、shader color output、EDR surface signaling或物理显示效果。
+
+# 2026-07-21 阶段 15 任务 2.3 queue revision 调查
+
+- decoder generation不能单独代表render compatibility：同一generation下display headroom/revision、mapping mode或surface contract都可变化。queue因此持有完整active `HDRRenderConfigurationIdentity`，decoded frame仍只持有2.1 generation/color binding。
+- 每个queued entry记录映射时configuration。apply新configuration时actor先丢弃旧entry并flush mapper cache，再发布新active identity；同一identity重复apply为no-op，stale enqueue/dequeue只增加typed counter而不清replacement frame。
+- color、display与mapping/surface transition分别计数；generation replacement与same-generation render-contract replacement的discard counter保持独立，便于后续5.3 diagnostics不把显示变化误报为decoder reset。
+
+# 2026-07-21 阶段 15 任务 2.3 验收结论
+
+- generation-only `consume(VideoDecoderEvent)`被移除，因为decoder event不携带display/mapping/surface revision，保留该入口会成为绕过render configuration ownership的隐式路径；后续5.1必须显式提供resolver产出的configuration。
+- same-generation color、display和surface transition均会丢弃旧queued entry并flush texture cache；旧configuration请求只计入对应stale counter，不改变active identity或清除新entry。
+- 该确定性actor证据证明有序revision isolation，不证明实际display/headroom callback已产生configuration、renderer已消费queue或真实HDR surface已切换。
+
+# 2026-07-21 阶段 15 任务 2.3 调查
+
+- 旧`BoundedMetalFrameQueue`只拥有`activeGeneration`，decoder event的`colorMetadata`未形成render configuration ownership；enqueue只拒绝generation mismatch，display revision、mapping mode与surface contract在异步边界完全不可见。
+- 2.3采用调用方显式传入`HDRRenderConfigurationIdentity`的边界：queue保存单一active configuration，frame仍只保存decode-time generation/color binding；enqueue先比较调用方configuration与active identity，再比较frame binding，mapper只在全部匹配后运行。
+- configuration identity变化必须在actor内原子丢弃queued frames、分类累计generation或render-contract reset并flush mapper cache；完全相同configuration重复应用保持幂等，不无谓清帧或flush。stop只接受精确active identity，旧session/display callback不能清除replacement ownership。
+- display revision不绑定进decoded frame；旧display work通过enqueue/dequeue携带的configuration identity与active identity比较后拒绝。这样不会把窗口移动或headroom状态错误冻结在解码时刻。

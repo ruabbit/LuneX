@@ -301,6 +301,8 @@ struct MetalFrameQueueConfiguration: Equatable, Sendable {
 
 struct MetalFrameQueueSnapshot: Equatable, Sendable {
     var activeGeneration: UInt64?
+    var activeColorSignature: HDRRenderColorSignature?
+    var activeDisplayRevision: HDRDisplayRevision?
     var capacity: Int
     var queuedFrameCount: Int
     var enqueuedFrameCount: UInt64
@@ -308,29 +310,66 @@ struct MetalFrameQueueSnapshot: Equatable, Sendable {
     var capacityDropCount: UInt64
     var latestFrameSupersededCount: UInt64
     var staleGenerationDropCount: UInt64
+    var staleColorSignatureDropCount: UInt64
+    var staleDisplayRevisionDropCount: UInt64
+    var staleRenderContractDropCount: UInt64
     var generationResetDropCount: UInt64
+    var renderContractResetDropCount: UInt64
 }
 
 enum MetalFrameQueueResult: Equatable, Sendable {
-    case generationStarted(generation: UInt64, discardedFrames: Int)
-    case enqueued(generation: UInt64, frameID: UInt64, evictedFrames: Int)
+    case configurationStarted(
+        generation: UInt64,
+        displayRevision: HDRDisplayRevision,
+        discardedFrames: Int
+    )
+    case enqueued(
+        generation: UInt64,
+        displayRevision: HDRDisplayRevision,
+        frameID: UInt64,
+        evictedFrames: Int
+    )
     case rejectedInactive(frameID: UInt64)
-    case rejectedStale(generation: UInt64, frameID: UInt64)
-    case generationStopped(generation: UInt64, discardedFrames: Int)
+    case rejectedStaleGeneration(expected: UInt64, actual: UInt64, frameID: UInt64)
+    case rejectedStaleColorSignature(generation: UInt64, frameID: UInt64)
+    case rejectedStaleDisplayRevision(
+        expected: HDRDisplayRevision,
+        actual: HDRDisplayRevision,
+        frameID: UInt64
+    )
+    case rejectedStaleRenderContract(
+        generation: UInt64,
+        displayRevision: HDRDisplayRevision,
+        frameID: UInt64
+    )
+    case configurationStopped(
+        generation: UInt64,
+        displayRevision: HDRDisplayRevision,
+        discardedFrames: Int
+    )
     case ignored
 }
 
 actor BoundedMetalFrameQueue {
+    private struct QueuedFrame: @unchecked Sendable {
+        let frame: MetalVideoFrame
+        let configuration: HDRRenderConfigurationIdentity
+    }
+
     private let configuration: MetalFrameQueueConfiguration
     private let mapper: any MetalVideoFrameMapping
-    private var activeGeneration: UInt64?
-    private var queuedFrames: [MetalVideoFrame] = []
+    private var activeRenderConfiguration: HDRRenderConfigurationIdentity?
+    private var queuedFrames: [QueuedFrame] = []
     private var enqueuedFrameCount: UInt64 = 0
     private var deliveredFrameCount: UInt64 = 0
     private var capacityDropCount: UInt64 = 0
     private var latestFrameSupersededCount: UInt64 = 0
     private var staleGenerationDropCount: UInt64 = 0
+    private var staleColorSignatureDropCount: UInt64 = 0
+    private var staleDisplayRevisionDropCount: UInt64 = 0
+    private var staleRenderContractDropCount: UInt64 = 0
     private var generationResetDropCount: UInt64 = 0
+    private var renderContractResetDropCount: UInt64 = 0
 
     init(
         configuration: MetalFrameQueueConfiguration = .realtime,
@@ -347,27 +386,52 @@ actor BoundedMetalFrameQueue {
     }
 
     @discardableResult
-    func startGeneration(_ generation: UInt64) -> MetalFrameQueueResult {
-        guard activeGeneration != generation else { return .ignored }
+    func applyRenderConfiguration(
+        _ renderConfiguration: HDRRenderConfigurationIdentity
+    ) -> MetalFrameQueueResult {
+        guard activeRenderConfiguration != renderConfiguration else { return .ignored }
         let discardedFrames = queuedFrames.count
-        generationResetDropCount &+= UInt64(discardedFrames)
+        if let activeRenderConfiguration,
+           activeRenderConfiguration.decoderGeneration == renderConfiguration.decoderGeneration {
+            renderContractResetDropCount &+= UInt64(discardedFrames)
+        } else {
+            generationResetDropCount &+= UInt64(discardedFrames)
+        }
         queuedFrames.removeAll(keepingCapacity: true)
         mapper.flush()
-        activeGeneration = generation
-        return .generationStarted(
-            generation: generation,
+        activeRenderConfiguration = renderConfiguration
+        return .configurationStarted(
+            generation: renderConfiguration.decoderGeneration,
+            displayRevision: renderConfiguration.displayRevision,
             discardedFrames: discardedFrames
         )
     }
 
     @discardableResult
-    func enqueue(_ decodedFrame: DecodedVideoFrame) throws -> MetalFrameQueueResult {
-        guard let activeGeneration else {
+    func enqueue(
+        _ decodedFrame: DecodedVideoFrame,
+        configuration renderConfiguration: HDRRenderConfigurationIdentity
+    ) throws -> MetalFrameQueueResult {
+        guard let activeRenderConfiguration else {
             return .rejectedInactive(frameID: decodedFrame.frameID)
         }
-        guard decodedFrame.generation == activeGeneration else {
-            staleGenerationDropCount &+= 1
-            return .rejectedStale(
+        if let rejection = rejectMismatch(
+            actual: renderConfiguration,
+            expected: activeRenderConfiguration,
+            frameID: decodedFrame.frameID
+        ) {
+            return rejection
+        }
+        guard decodedFrame.generation == activeRenderConfiguration.decoderGeneration else {
+            return rejectGeneration(
+                expected: activeRenderConfiguration.decoderGeneration,
+                actual: decodedFrame.generation,
+                frameID: decodedFrame.frameID
+            )
+        }
+        guard decodedFrame.renderBinding.colorSignature
+                == activeRenderConfiguration.colorSignature else {
+            return rejectColorSignature(
                 generation: decodedFrame.generation,
                 frameID: decodedFrame.frameID
             )
@@ -379,54 +443,66 @@ actor BoundedMetalFrameQueue {
             queuedFrames.removeFirst(evictionCount)
             capacityDropCount &+= UInt64(evictionCount)
         }
-        queuedFrames.append(mappedFrame)
+        queuedFrames.append(QueuedFrame(
+            frame: mappedFrame,
+            configuration: activeRenderConfiguration
+        ))
         enqueuedFrameCount &+= 1
         return .enqueued(
-            generation: activeGeneration,
+            generation: activeRenderConfiguration.decoderGeneration,
+            displayRevision: activeRenderConfiguration.displayRevision,
             frameID: decodedFrame.frameID,
             evictedFrames: evictionCount
         )
     }
 
-    func dequeueLatest() -> MetalVideoFrame? {
-        guard let latestFrame = queuedFrames.last else { return nil }
+    func dequeueLatest(
+        configuration renderConfiguration: HDRRenderConfigurationIdentity
+    ) -> MetalVideoFrame? {
+        guard let activeRenderConfiguration,
+              let latestFrame = queuedFrames.last else { return nil }
+        guard rejectMismatch(
+            actual: renderConfiguration,
+            expected: activeRenderConfiguration,
+            frameID: latestFrame.frame.frameID
+        ) == nil else {
+            return nil
+        }
+        guard latestFrame.configuration == activeRenderConfiguration else {
+            staleRenderContractDropCount &+= 1
+            queuedFrames.removeAll(keepingCapacity: true)
+            mapper.flush()
+            return nil
+        }
         let supersededCount = queuedFrames.count - 1
         latestFrameSupersededCount &+= UInt64(supersededCount)
         deliveredFrameCount &+= 1
         queuedFrames.removeAll(keepingCapacity: true)
-        return latestFrame
+        return latestFrame.frame
     }
 
     @discardableResult
-    func stopGeneration(_ generation: UInt64) -> MetalFrameQueueResult {
-        guard generation == activeGeneration else { return .ignored }
+    func stopRenderConfiguration(
+        _ renderConfiguration: HDRRenderConfigurationIdentity
+    ) -> MetalFrameQueueResult {
+        guard renderConfiguration == activeRenderConfiguration else { return .ignored }
         let discardedFrames = queuedFrames.count
         generationResetDropCount &+= UInt64(discardedFrames)
         queuedFrames.removeAll(keepingCapacity: true)
-        activeGeneration = nil
+        activeRenderConfiguration = nil
         mapper.flush()
-        return .generationStopped(
-            generation: generation,
+        return .configurationStopped(
+            generation: renderConfiguration.decoderGeneration,
+            displayRevision: renderConfiguration.displayRevision,
             discardedFrames: discardedFrames
         )
     }
 
-    func consume(_ event: VideoDecoderEvent) throws -> MetalFrameQueueResult {
-        switch event {
-        case let .sessionStarted(generation, _):
-            return startGeneration(generation)
-        case let .frame(frame):
-            return try enqueue(frame)
-        case let .sessionStopped(generation):
-            return stopGeneration(generation)
-        case .frameDropped, .failure:
-            return .ignored
-        }
-    }
-
     func snapshot() -> MetalFrameQueueSnapshot {
         MetalFrameQueueSnapshot(
-            activeGeneration: activeGeneration,
+            activeGeneration: activeRenderConfiguration?.decoderGeneration,
+            activeColorSignature: activeRenderConfiguration?.colorSignature,
+            activeDisplayRevision: activeRenderConfiguration?.displayRevision,
             capacity: configuration.capacity,
             queuedFrameCount: queuedFrames.count,
             enqueuedFrameCount: enqueuedFrameCount,
@@ -434,7 +510,72 @@ actor BoundedMetalFrameQueue {
             capacityDropCount: capacityDropCount,
             latestFrameSupersededCount: latestFrameSupersededCount,
             staleGenerationDropCount: staleGenerationDropCount,
-            generationResetDropCount: generationResetDropCount
+            staleColorSignatureDropCount: staleColorSignatureDropCount,
+            staleDisplayRevisionDropCount: staleDisplayRevisionDropCount,
+            staleRenderContractDropCount: staleRenderContractDropCount,
+            generationResetDropCount: generationResetDropCount,
+            renderContractResetDropCount: renderContractResetDropCount
+        )
+    }
+
+    private func rejectMismatch(
+        actual: HDRRenderConfigurationIdentity,
+        expected: HDRRenderConfigurationIdentity,
+        frameID: UInt64
+    ) -> MetalFrameQueueResult? {
+        guard actual.decoderGeneration == expected.decoderGeneration else {
+            return rejectGeneration(
+                expected: expected.decoderGeneration,
+                actual: actual.decoderGeneration,
+                frameID: frameID
+            )
+        }
+        guard actual.colorSignature == expected.colorSignature else {
+            return rejectColorSignature(
+                generation: actual.decoderGeneration,
+                frameID: frameID
+            )
+        }
+        guard actual.displayRevision == expected.displayRevision else {
+            staleDisplayRevisionDropCount &+= 1
+            return .rejectedStaleDisplayRevision(
+                expected: expected.displayRevision,
+                actual: actual.displayRevision,
+                frameID: frameID
+            )
+        }
+        guard actual == expected else {
+            staleRenderContractDropCount &+= 1
+            return .rejectedStaleRenderContract(
+                generation: actual.decoderGeneration,
+                displayRevision: actual.displayRevision,
+                frameID: frameID
+            )
+        }
+        return nil
+    }
+
+    private func rejectGeneration(
+        expected: UInt64,
+        actual: UInt64,
+        frameID: UInt64
+    ) -> MetalFrameQueueResult {
+        staleGenerationDropCount &+= 1
+        return .rejectedStaleGeneration(
+            expected: expected,
+            actual: actual,
+            frameID: frameID
+        )
+    }
+
+    private func rejectColorSignature(
+        generation: UInt64,
+        frameID: UInt64
+    ) -> MetalFrameQueueResult {
+        staleColorSignatureDropCount &+= 1
+        return .rejectedStaleColorSignature(
+            generation: generation,
+            frameID: frameID
         )
     }
 }

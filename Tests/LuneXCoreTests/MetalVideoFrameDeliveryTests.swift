@@ -244,10 +244,18 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
             mapper: mapper
         )
         let pixelBuffer = try makeMetalPixelBuffer()
-        let startResult = await queue.startGeneration(11)
+        let renderConfiguration = try makeConfiguration(
+            generation: 11,
+            metadata: .rec709VideoRange()
+        )
+        let startResult = await queue.applyRenderConfiguration(renderConfiguration)
         XCTAssertEqual(
             startResult,
-            .generationStarted(generation: 11, discardedFrames: 0)
+            .configurationStarted(
+                generation: 11,
+                displayRevision: HDRDisplayRevision(rawValue: 1),
+                discardedFrames: 0
+            )
         )
 
         for frameID in UInt64(1)...3 {
@@ -255,11 +263,12 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
                 generation: 11,
                 frameID: frameID,
                 pixelBuffer: pixelBuffer
-            ))
+            ), configuration: renderConfiguration)
             XCTAssertEqual(
                 result,
                 .enqueued(
                     generation: 11,
+                    displayRevision: HDRDisplayRevision(rawValue: 1),
                     frameID: frameID,
                     evictedFrames: frameID == 3 ? 1 : 0
                 )
@@ -271,14 +280,14 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
         XCTAssertEqual(snapshot.enqueuedFrameCount, 3)
         XCTAssertEqual(snapshot.capacityDropCount, 1)
 
-        let latestCandidate = await queue.dequeueLatest()
+        let latestCandidate = await queue.dequeueLatest(configuration: renderConfiguration)
         let latest = try XCTUnwrap(latestCandidate)
         XCTAssertEqual(latest.frameID, 3)
         snapshot = await queue.snapshot()
         XCTAssertEqual(snapshot.queuedFrameCount, 0)
         XCTAssertEqual(snapshot.deliveredFrameCount, 1)
         XCTAssertEqual(snapshot.latestFrameSupersededCount, 1)
-        let emptyLatest = await queue.dequeueLatest()
+        let emptyLatest = await queue.dequeueLatest(configuration: renderConfiguration)
         XCTAssertNil(emptyLatest)
     }
 
@@ -288,38 +297,58 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
         )
         let queue = try BoundedMetalFrameQueue(mapper: mapper)
         let pixelBuffer = try makeMetalPixelBuffer()
-        _ = await queue.startGeneration(1)
+        let firstConfiguration = try makeConfiguration(
+            generation: 1,
+            metadata: .rec709VideoRange()
+        )
+        let replacementConfiguration = try makeConfiguration(
+            generation: 2,
+            metadata: .rec709VideoRange(),
+            displayRevision: 2
+        )
+        _ = await queue.applyRenderConfiguration(firstConfiguration)
         _ = try await queue.enqueue(decodedFrame(
             generation: 1,
             frameID: 1,
             pixelBuffer: pixelBuffer
-        ))
-        let replacementResult = await queue.startGeneration(2)
+        ), configuration: firstConfiguration)
+        let replacementResult = await queue.applyRenderConfiguration(replacementConfiguration)
         XCTAssertEqual(
             replacementResult,
-            .generationStarted(generation: 2, discardedFrames: 1)
+            .configurationStarted(
+                generation: 2,
+                displayRevision: HDRDisplayRevision(rawValue: 2),
+                discardedFrames: 1
+            )
         )
 
         let stale = try await queue.enqueue(decodedFrame(
             generation: 1,
             frameID: 2,
             pixelBuffer: pixelBuffer
-        ))
-        XCTAssertEqual(stale, .rejectedStale(generation: 1, frameID: 2))
+        ), configuration: firstConfiguration)
+        XCTAssertEqual(
+            stale,
+            .rejectedStaleGeneration(expected: 2, actual: 1, frameID: 2)
+        )
         XCTAssertEqual(mapper.mapCount, 1)
-        let staleStopResult = await queue.stopGeneration(1)
+        let staleStopResult = await queue.stopRenderConfiguration(firstConfiguration)
         XCTAssertEqual(staleStopResult, .ignored)
-        let activeStopResult = await queue.stopGeneration(2)
+        let activeStopResult = await queue.stopRenderConfiguration(replacementConfiguration)
         XCTAssertEqual(
             activeStopResult,
-            .generationStopped(generation: 2, discardedFrames: 0)
+            .configurationStopped(
+                generation: 2,
+                displayRevision: HDRDisplayRevision(rawValue: 2),
+                discardedFrames: 0
+            )
         )
 
         let inactive = try await queue.enqueue(decodedFrame(
             generation: 2,
             frameID: 3,
             pixelBuffer: pixelBuffer
-        ))
+        ), configuration: replacementConfiguration)
         XCTAssertEqual(inactive, .rejectedInactive(frameID: 3))
         let snapshot = await queue.snapshot()
         XCTAssertNil(snapshot.activeGeneration)
@@ -328,37 +357,186 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(mapper.flushCount, 2)
     }
 
-    func testDecoderEventsDriveQueueGenerationAndTeardown() async throws {
+    func testRenderConfigurationDrivesQueueLifecycleAndTeardown() async throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let queue = try BoundedMetalFrameQueue(
             mapper: CVMetalVideoFrameMapper(device: device)
         )
         let pixelBuffer = try makeMetalPixelBuffer()
-
-        let startResult = try await queue.consume(.sessionStarted(
+        let renderConfiguration = try makeConfiguration(
             generation: 4,
-            colorMetadata: .rec709VideoRange()
-        ))
+            metadata: .rec709VideoRange()
+        )
+
+        let startResult = await queue.applyRenderConfiguration(renderConfiguration)
         XCTAssertEqual(
             startResult,
-            .generationStarted(generation: 4, discardedFrames: 0)
+            .configurationStarted(
+                generation: 4,
+                displayRevision: HDRDisplayRevision(rawValue: 1),
+                discardedFrames: 0
+            )
         )
-        let frameResult = try await queue.consume(.frame(decodedFrame(
+        let frameResult = try await queue.enqueue(decodedFrame(
             generation: 4,
             frameID: 40,
             pixelBuffer: pixelBuffer
-        )))
+        ), configuration: renderConfiguration)
         XCTAssertEqual(
             frameResult,
-            .enqueued(generation: 4, frameID: 40, evictedFrames: 0)
+            .enqueued(
+                generation: 4,
+                displayRevision: HDRDisplayRevision(rawValue: 1),
+                frameID: 40,
+                evictedFrames: 0
+            )
         )
-        let stopResult = try await queue.consume(.sessionStopped(generation: 4))
+        let stopResult = await queue.stopRenderConfiguration(renderConfiguration)
         XCTAssertEqual(
             stopResult,
-            .generationStopped(generation: 4, discardedFrames: 1)
+            .configurationStopped(
+                generation: 4,
+                displayRevision: HDRDisplayRevision(rawValue: 1),
+                discardedFrames: 1
+            )
         )
-        let emptyLatest = await queue.dequeueLatest()
+        let emptyLatest = await queue.dequeueLatest(configuration: renderConfiguration)
         XCTAssertNil(emptyLatest)
+    }
+
+    func testColorDisplayAndSurfaceTransitionsFlushAndRejectStaleWork() async throws {
+        let mapper = CountingMetalFrameMapper(
+            delegate: try CVMetalVideoFrameMapper(device: XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        )
+        let queue = try BoundedMetalFrameQueue(mapper: mapper)
+        let sdrBuffer = try makeMetalPixelBuffer()
+        let hdrBuffer = try makeMetalPixelBuffer(
+            format: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+        )
+        let sdr = try makeConfiguration(
+            generation: 7,
+            metadata: .rec709VideoRange()
+        )
+        let hdr = try makeConfiguration(
+            generation: 7,
+            metadata: .hdr10VideoRange()
+        )
+        let movedDisplay = try makeConfiguration(
+            generation: 7,
+            metadata: .hdr10VideoRange(),
+            displayRevision: 2
+        )
+        let sdrFallback = try makeConfiguration(
+            generation: 7,
+            metadata: .hdr10VideoRange(),
+            displayRevision: 2,
+            mappingMode: .hdrToSDR
+        )
+
+        _ = await queue.applyRenderConfiguration(sdr)
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 1,
+            pixelBuffer: sdrBuffer
+        ), configuration: sdr)
+        let hdrTransition = await queue.applyRenderConfiguration(hdr)
+        XCTAssertEqual(
+            hdrTransition,
+            .configurationStarted(
+                generation: 7,
+                displayRevision: HDRDisplayRevision(rawValue: 1),
+                discardedFrames: 1
+            )
+        )
+        let staleColor = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 2,
+            pixelBuffer: sdrBuffer
+        ), configuration: sdr)
+        XCTAssertEqual(
+            staleColor,
+            .rejectedStaleColorSignature(generation: 7, frameID: 2)
+        )
+
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 3,
+            pixelBuffer: hdrBuffer,
+            colorMetadata: .hdr10VideoRange()
+        ), configuration: hdr)
+        let displayTransition = await queue.applyRenderConfiguration(movedDisplay)
+        XCTAssertEqual(
+            displayTransition,
+            .configurationStarted(
+                generation: 7,
+                displayRevision: HDRDisplayRevision(rawValue: 2),
+                discardedFrames: 1
+            )
+        )
+        let staleDisplay = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 4,
+            pixelBuffer: hdrBuffer,
+            colorMetadata: .hdr10VideoRange()
+        ), configuration: hdr)
+        XCTAssertEqual(
+            staleDisplay,
+            .rejectedStaleDisplayRevision(
+                expected: HDRDisplayRevision(rawValue: 2),
+                actual: HDRDisplayRevision(rawValue: 1),
+                frameID: 4
+            )
+        )
+
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 5,
+            pixelBuffer: hdrBuffer,
+            colorMetadata: .hdr10VideoRange()
+        ), configuration: movedDisplay)
+        let surfaceTransition = await queue.applyRenderConfiguration(sdrFallback)
+        XCTAssertEqual(
+            surfaceTransition,
+            .configurationStarted(
+                generation: 7,
+                displayRevision: HDRDisplayRevision(rawValue: 2),
+                discardedFrames: 1
+            )
+        )
+        let staleSurface = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 6,
+            pixelBuffer: hdrBuffer,
+            colorMetadata: .hdr10VideoRange()
+        ), configuration: movedDisplay)
+        XCTAssertEqual(
+            staleSurface,
+            .rejectedStaleRenderContract(
+                generation: 7,
+                displayRevision: HDRDisplayRevision(rawValue: 2),
+                frameID: 6
+            )
+        )
+
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 7,
+            frameID: 7,
+            pixelBuffer: hdrBuffer,
+            colorMetadata: .hdr10VideoRange()
+        ), configuration: sdrFallback)
+        let staleDequeue = await queue.dequeueLatest(configuration: movedDisplay)
+        XCTAssertNil(staleDequeue)
+        let current = await queue.dequeueLatest(configuration: sdrFallback)
+        XCTAssertEqual(current?.frameID, 7)
+
+        let snapshot = await queue.snapshot()
+        XCTAssertEqual(snapshot.activeColorSignature, sdrFallback.colorSignature)
+        XCTAssertEqual(snapshot.activeDisplayRevision, HDRDisplayRevision(rawValue: 2))
+        XCTAssertEqual(snapshot.staleColorSignatureDropCount, 1)
+        XCTAssertEqual(snapshot.staleDisplayRevisionDropCount, 1)
+        XCTAssertEqual(snapshot.staleRenderContractDropCount, 2)
+        XCTAssertEqual(snapshot.renderContractResetDropCount, 3)
+        XCTAssertGreaterThanOrEqual(mapper.flushCount, 4)
     }
 
     func testUnsupportedFormatAndInvalidCapacityFailClosed() async throws {
@@ -464,20 +642,24 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
 
     private func makeConfiguration(
         generation: UInt64,
-        metadata: VideoColorMetadata
+        metadata: VideoColorMetadata,
+        displayRevision: UInt64 = 1,
+        mappingMode: HDRMappingMode? = nil
     ) throws -> HDRRenderConfigurationIdentity {
         let isHDR = metadata.isHDR
+        let resolvedMappingMode = mappingMode ?? (isHDR ? .hdrEDR : .sdr)
+        let usesEDRSurface = resolvedMappingMode == .hdrEDR
         return try HDRRenderConfigurationIdentity(
             decoderGeneration: generation,
             colorSignature: HDRRenderColorSignature(metadata: metadata),
-            displayRevision: HDRDisplayRevision(rawValue: 1),
-            mappingMode: isHDR ? .hdrEDR : .sdr,
+            displayRevision: HDRDisplayRevision(rawValue: displayRevision),
+            mappingMode: resolvedMappingMode,
             surfaceContract: HDRSurfaceContract(
-                drawablePixelFormat: isHDR ? .rgba16Float : .bgra8UnormSRGB,
-                outputColorSpace: isHDR ? .extendedLinearDisplayP3 : .sRGB,
-                outputGamut: isHDR ? .displayP3 : .sRGB,
-                extendedRangeIntent: isHDR ? .enabled : .disabled,
-                metadataMode: isHDR ? .hdr10 : .none
+                drawablePixelFormat: usesEDRSurface ? .rgba16Float : .bgra8UnormSRGB,
+                outputColorSpace: usesEDRSurface ? .extendedLinearDisplayP3 : .sRGB,
+                outputGamut: usesEDRSurface ? .displayP3 : .sRGB,
+                extendedRangeIntent: usesEDRSurface ? .enabled : .disabled,
+                metadataMode: usesEDRSurface ? .hdr10 : .none
             )
         )
     }
