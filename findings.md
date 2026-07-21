@@ -814,5 +814,19 @@
 - media input readiness激活`MacSessionInputCoordinator`并直接继承当前focus eligibility；actual surface handler同步提交冻结的sample/snapshot/cursor/shortcut envelope。focus loss关闭admission并完成ordered release，input readiness loss、stop、remote termination、reconnect和media failure终止generation。
 - 最终focused warnings-as-errors为`79/79`（`/tmp/LuneX-14-5_2-focused-final2.otpayx/IntegrationFocused.xcresult`）；完整macOS为`459 total / 458 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_2-full-final2.wc1urd/LuneXCoreTests.xcresult`）。唯一skip精确为一次性真实Keychain测试，命令显式移除环境变量。
 - 最终五平台Debug warnings-as-errors build-only通过（`/tmp/LuneX-14-5_2-builds-final2.pe158p`）；simulator前后规范化identity/state逐字节一致，固定设备各唯一且`Shutdown`、全局`Booted=0`。本项仍不启用actual capture/cursor，5.3和6.5/live Sunshine边界保持未完成。
+
+# 2026-07-21 阶段 14 任务 5.3 调查
+
+- `preferRelativeMouseMode=false`不能等同于关闭input admission：direct模式仍需从actual surface接收键盘、绝对pointer、button和scroll，只是不隐藏cursor、不解除pointer association；relative模式才获取balanced cursor ownership。
+- 真实admission必须同时要求当前session已streaming、media/input generation有效、input readiness存在、最新lifecycle允许input且coordinate snapshot有效。持久化`preferRelativeMouseMode`只决定relative/direct映射，`captureSystemShortcuts`独立决定可转发reserved shortcut。
+- `MacCursorCaptureOwner`应由actual surface coordinator持有并在window attachment变化时应用；policy更新、focus/visibility loss、Escape、detach与dismantle都必须先关闭admission再恢复cursor。AppModel不直接持有`NSCursor`或`NSView`。
+
+# 2026-07-21 阶段 14 任务 5.3 验收结论
+
+- AppModel只在streaming session、匹配media generation、input readiness、active coordinator generation、lifecycle input-open和有效coordinate snapshot同时成立时发布`admitsInput=true`；任何一项丢失都先关闭surface admission，provider/generation仍由既有ordered teardown负责。
+- direct模式保持actual surface admission并使用absolute mapping，不隐藏cursor也不改变pointer association；relative模式使用delta mapping并由共享`MacCursorCaptureBroker`平衡进程级cursor资源。新surface lease生效后，旧coordinator迟到dismantle不能恢复replacement cursor。
+- `captureSystemShortcuts`同时应用到AppKit key-equivalent入口和enqueue-time envelope；Escape始终本地，仅在relative policy下立即释放cursor并把当前设置切换为direct，不会误禁用direct admission。
+- 最终surface focused warnings-as-errors为`33/33`（`/tmp/LuneX-14-5_3-surface-final.PK4kyI/Surface.xcresult`）；完整macOS为`466 total / 465 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_3-full-final2.yUoJpc/LuneXCoreTests.xcresult`）。唯一skip仍为显式禁用的真实Keychain round-trip。
+- macOS、固定iPhone/iPad/Apple TV/Apple Vision Pro Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-14-5_3-builds-final2.6keHqh`）；simulator规范化状态前后逐字节一致，固定实例唯一且全部`Shutdown`、全局`Booted=0`。5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、diff与production/reference边界通过。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

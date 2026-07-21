@@ -95,4 +95,35 @@ final class AppKitCursorSystemOperations: MacCursorSystemOperating {
         CGAssociateMouseAndMouseCursorPosition(enabled ? 1 : 0) == .success
     }
 }
+
+@MainActor
+final class MacCursorCaptureBroker {
+    static let shared = MacCursorCaptureBroker(
+        owner: MacCursorCaptureOwner(operations: AppKitCursorSystemOperations())
+    )
+
+    private let owner: MacCursorCaptureOwner
+    private var activeLeaseID: UUID?
+
+    init(owner: MacCursorCaptureOwner) {
+        self.owner = owner
+    }
+
+    @discardableResult
+    func apply(_ policy: CursorCapturePolicy, leaseID: UUID) -> Bool {
+        activeLeaseID = leaseID
+        return owner.apply(policy)
+    }
+
+    @discardableResult
+    func release(leaseID: UUID) -> Bool {
+        guard activeLeaseID == leaseID else { return true }
+        activeLeaseID = nil
+        return owner.releaseCapture()
+    }
+
+    func snapshot() -> MacCursorCaptureSnapshot {
+        owner.snapshot()
+    }
+}
 #endif

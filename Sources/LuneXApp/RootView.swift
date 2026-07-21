@@ -648,8 +648,12 @@ private struct StreamWorkspaceView: View {
                 renderState: appModel.renderState,
                 presentationSource: appModel.videoPresentationSource,
                 lifecycle: platformLifecycle,
+                inputPolicy: appModel.macInputSurfacePolicy,
                 inputSampleHandler: { sample in
                     _ = appModel.submitMacPlatformInput(sample)
+                },
+                captureExitHandler: {
+                    appModel.exitMacRelativePointerCapture()
                 }
             )
                 .ignoresSafeArea()

@@ -618,6 +618,8 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         let view = MacStreamInputCaptureView(
             sampleHandler: { coordinator.handle($0) }
         )
+        let window = makeWindow(contentView: view)
+        XCTAssertTrue(view.window === window)
 
         view.keyDown(with: try keyEvent(
             type: .keyDown,
@@ -628,6 +630,8 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         coordinator.exitCapture()
         coordinator.update(
             renderState: StreamRenderState(),
+            inputPolicy: directSurfacePolicy,
+            view: view,
             inputSampleHandler: { replacementRecorder.samples.append($0) },
             captureExitHandler: { replacementExitCount += 1 }
         )
@@ -645,6 +649,197 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(replacementExitCount, 1)
     }
 
+    func testSurfaceCaptureControllerKeepsDirectAdmissionWithoutCursorOwnership() {
+        let operations = SurfaceCursorOperationsStub()
+        let broker = MacCursorCaptureBroker(
+            owner: MacCursorCaptureOwner(operations: operations)
+        )
+        let controller = MacStreamSurfaceCaptureController(broker: broker)
+        let view = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: view)
+        XCTAssertTrue(view.window === window)
+
+        controller.update(relativeSurfacePolicy, for: view)
+        XCTAssertTrue(view.isInputCaptureEnabled)
+        XCTAssertEqual(operations.calls, [.association(false), .hide])
+
+        controller.update(directSurfacePolicy, for: view)
+        XCTAssertTrue(view.isInputCaptureEnabled)
+        XCTAssertEqual(operations.calls, [
+            .association(false),
+            .hide,
+            .association(true),
+            .unhide
+        ])
+        XCTAssertFalse(broker.snapshot().ownsHiddenCursor)
+        XCTAssertFalse(broker.snapshot().ownsPointerDisassociation)
+    }
+
+    func testReplacementCaptureLeaseRejectsStaleSurfaceRelease() {
+        let operations = SurfaceCursorOperationsStub()
+        let broker = MacCursorCaptureBroker(
+            owner: MacCursorCaptureOwner(operations: operations)
+        )
+        let firstController = MacStreamSurfaceCaptureController(broker: broker)
+        let replacementController = MacStreamSurfaceCaptureController(broker: broker)
+        let firstView = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let replacementView = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let firstWindow = makeWindow(contentView: firstView)
+        let replacementWindow = makeWindow(contentView: replacementView)
+        XCTAssertTrue(firstView.window === firstWindow)
+        XCTAssertTrue(replacementView.window === replacementWindow)
+
+        firstController.update(relativeSurfacePolicy, for: firstView)
+        replacementController.update(relativeSurfacePolicy, for: replacementView)
+        firstController.detach(from: firstView)
+
+        XCTAssertTrue(replacementView.isInputCaptureEnabled)
+        XCTAssertTrue(broker.snapshot().ownsHiddenCursor)
+        XCTAssertTrue(broker.snapshot().ownsPointerDisassociation)
+        XCTAssertEqual(operations.calls, [.association(false), .hide])
+
+        replacementController.detach(from: replacementView)
+        XCTAssertEqual(operations.calls, [
+            .association(false),
+            .hide,
+            .association(true),
+            .unhide
+        ])
+    }
+
+    func testStaleCoordinatorDismantleCannotReleaseReplacementCursorLease() {
+        let operations = SurfaceCursorOperationsStub()
+        let broker = MacCursorCaptureBroker(
+            owner: MacCursorCaptureOwner(operations: operations)
+        )
+        let firstCoordinator = makeSurfaceCoordinator(cursorBroker: broker)
+        let replacementCoordinator = makeSurfaceCoordinator(cursorBroker: broker)
+        let firstView = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { firstCoordinator.handle($0) }
+        )
+        let replacementView = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { replacementCoordinator.handle($0) }
+        )
+        let firstWindow = makeWindow(contentView: firstView)
+        let replacementWindow = makeWindow(contentView: replacementView)
+        XCTAssertTrue(firstView.window === firstWindow)
+        XCTAssertTrue(replacementView.window === replacementWindow)
+
+        firstCoordinator.captureController.update(relativeSurfacePolicy, for: firstView)
+        firstCoordinator.attachmentOwner.attach(to: firstView)
+        replacementCoordinator.captureController.update(
+            relativeSurfacePolicy,
+            for: replacementView
+        )
+        replacementCoordinator.attachmentOwner.attach(to: replacementView)
+
+        MetalStreamSurface.dismantleNSView(
+            firstView,
+            coordinator: firstCoordinator
+        )
+
+        XCTAssertTrue(replacementView.isInputCaptureEnabled)
+        XCTAssertTrue(broker.snapshot().ownsHiddenCursor)
+        XCTAssertTrue(broker.snapshot().ownsPointerDisassociation)
+        XCTAssertEqual(operations.calls, [.association(false), .hide])
+
+        MetalStreamSurface.dismantleNSView(
+            replacementView,
+            coordinator: replacementCoordinator
+        )
+        XCTAssertEqual(operations.calls, [
+            .association(false),
+            .hide,
+            .association(true),
+            .unhide
+        ])
+    }
+
+    func testCaptureControllerCanMovePolicyToReplacementViewAfterDetach() {
+        let operations = SurfaceCursorOperationsStub()
+        let broker = MacCursorCaptureBroker(
+            owner: MacCursorCaptureOwner(operations: operations)
+        )
+        let controller = MacStreamSurfaceCaptureController(broker: broker)
+        let firstView = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let replacementView = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        controller.update(relativeSurfacePolicy, for: firstView)
+        controller.attachmentDidChange(for: firstView, isAttached: true)
+        controller.attachmentDidChange(for: firstView, isAttached: false)
+        controller.attachmentDidChange(for: replacementView, isAttached: true)
+
+        XCTAssertFalse(firstView.isInputCaptureEnabled)
+        XCTAssertTrue(replacementView.isInputCaptureEnabled)
+        XCTAssertTrue(broker.snapshot().ownsHiddenCursor)
+        XCTAssertTrue(broker.snapshot().ownsPointerDisassociation)
+        XCTAssertEqual(operations.calls, [
+            .association(false),
+            .hide,
+            .association(true),
+            .unhide,
+            .association(false),
+            .hide
+        ])
+
+        controller.detach(from: replacementView)
+    }
+
+    func testCursorAssociationFailureKeepsSurfaceAdmissionClosed() {
+        let operations = SurfaceCursorOperationsStub(failingAssociationCalls: [1])
+        let broker = MacCursorCaptureBroker(
+            owner: MacCursorCaptureOwner(operations: operations)
+        )
+        let controller = MacStreamSurfaceCaptureController(broker: broker)
+        let view = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: view)
+        XCTAssertTrue(view.window === window)
+
+        controller.update(relativeSurfacePolicy, for: view)
+
+        XCTAssertFalse(view.isInputCaptureEnabled)
+        XCTAssertEqual(broker.snapshot().transitionFailureCount, 1)
+        XCTAssertFalse(broker.snapshot().ownsHiddenCursor)
+        XCTAssertFalse(broker.snapshot().ownsPointerDisassociation)
+    }
+
+    func testEscapeDoesNotDisableDirectPointerAdmission() {
+        let broker = MacCursorCaptureBroker(
+            owner: MacCursorCaptureOwner(operations: SurfaceCursorOperationsStub())
+        )
+        let controller = MacStreamSurfaceCaptureController(broker: broker)
+        let view = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: view)
+        XCTAssertTrue(view.window === window)
+        controller.update(directSurfacePolicy, for: view)
+
+        controller.exitRelativeCapture()
+
+        XCTAssertTrue(view.isInputCaptureEnabled)
+    }
+
     func testRepeatedDismantleClosesAdmissionAndClearsSurfaceOwnership() throws {
         let lifecycle = PlatformLifecycleState()
         let recorder = MacInputSampleRecorder()
@@ -658,6 +853,13 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         let window = makeWindow(contentView: view)
         coordinator.presenter.configure(view)
         coordinator.attachmentOwner.attach(to: view)
+        coordinator.update(
+            renderState: StreamRenderState(),
+            inputPolicy: directSurfacePolicy,
+            view: view,
+            inputSampleHandler: { recorder.samples.append($0) },
+            captureExitHandler: {}
+        )
         lifecycle.isVisible = true
         lifecycle.isFocused = true
         lifecycle.drawableSize = PixelSize(width: 320, height: 240)
@@ -751,14 +953,42 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
     private func makeSurfaceCoordinator(
         lifecycle: PlatformLifecycleState = PlatformLifecycleState(),
         inputSampleHandler: @escaping MacStreamInputCaptureView.SampleHandler = { _ in },
-        captureExitHandler: @escaping @MainActor () -> Void = {}
+        captureExitHandler: @escaping @MainActor () -> Void = {},
+        cursorBroker: MacCursorCaptureBroker = .shared
     ) -> MacStreamSurfaceCoordinator {
         MacStreamSurfaceCoordinator(
             presentationSource: StreamVideoPresentationSource(),
             renderState: StreamRenderState(),
             lifecycle: lifecycle,
             inputSampleHandler: inputSampleHandler,
-            captureExitHandler: captureExitHandler
+            captureExitHandler: captureExitHandler,
+            cursorBroker: cursorBroker
+        )
+    }
+
+    private var relativeSurfacePolicy: MacInputSurfacePolicy {
+        MacInputSurfacePolicy(
+            admitsInput: true,
+            cursorPolicy: CursorCapturePolicyResolver.resolve(
+                isStreamActive: true,
+                isVisible: true,
+                isFocused: true,
+                prefersRemotePointer: true
+            ),
+            forwardsSystemShortcuts: true
+        )
+    }
+
+    private var directSurfacePolicy: MacInputSurfacePolicy {
+        MacInputSurfacePolicy(
+            admitsInput: true,
+            cursorPolicy: CursorCapturePolicyResolver.resolve(
+                isStreamActive: true,
+                isVisible: true,
+                isFocused: true,
+                prefersRemotePointer: false
+            ),
+            forwardsSystemShortcuts: false
         )
     }
 
@@ -842,6 +1072,37 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             drawableSize: PixelSize(width: 1920, height: 1080),
             mode: .fit
         )!
+    }
+}
+
+@MainActor
+private final class SurfaceCursorOperationsStub: MacCursorSystemOperating {
+    enum Call: Equatable {
+        case hide
+        case unhide
+        case association(Bool)
+    }
+
+    private(set) var calls: [Call] = []
+    private let failingAssociationCalls: Set<Int>
+    private var associationCallCount = 0
+
+    init(failingAssociationCalls: Set<Int> = []) {
+        self.failingAssociationCalls = failingAssociationCalls
+    }
+
+    func hideCursor() {
+        calls.append(.hide)
+    }
+
+    func unhideCursor() {
+        calls.append(.unhide)
+    }
+
+    func setPointerAssociation(enabled: Bool) -> Bool {
+        associationCallCount += 1
+        calls.append(.association(enabled))
+        return !failingAssociationCalls.contains(associationCallCount)
     }
 }
 

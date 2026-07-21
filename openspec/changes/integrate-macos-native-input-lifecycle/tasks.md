@@ -32,7 +32,7 @@
 
 - [x] 5.1 Derive actual stream-view drawable geometry and display state across screen, backing, and live-resize notifications
 - [x] 5.2 Connect lifecycle directives to `AppModel`, renderer, presentation source, media environment, and active input coordinator
-- [ ] 5.3 Derive direct/relative capture eligibility from active session, focus, visibility, and persisted input settings
+- [x] 5.3 Derive direct/relative capture eligibility from active session, focus, visibility, and persisted input settings
 - [ ] 5.4 Surface privacy-bounded input/lifecycle diagnostics and clear stale actions on recovery or stop
 - [ ] 5.5 Add an application integration gate proving fake-provider delivery, focus release, occlusion pause/resume, resize mapping, and clean teardown
 

@@ -130,12 +130,17 @@ private extension RenderPolicy {
 @MainActor
 final class MacStreamSurfaceAttachmentOwner {
     private let lifecycleMonitor: any AppKitLifecycleMonitoring
+    private let attachmentHandler: @MainActor (MacStreamInputCaptureView, Bool) -> Void
     private weak var view: MacStreamInputCaptureView?
     private weak var observedWindow: NSWindow?
     private var isMonitoringWindow = false
 
-    init(lifecycleMonitor: any AppKitLifecycleMonitoring) {
+    init(
+        lifecycleMonitor: any AppKitLifecycleMonitoring,
+        attachmentHandler: @escaping @MainActor (MacStreamInputCaptureView, Bool) -> Void = { _, _ in }
+    ) {
         self.lifecycleMonitor = lifecycleMonitor
+        self.attachmentHandler = attachmentHandler
     }
 
     func attach(to view: MacStreamInputCaptureView) {
@@ -145,12 +150,14 @@ final class MacStreamSurfaceAttachmentOwner {
         view.onWindowChange = { [weak self, weak view] window in
             guard let self, let view, self.view === view else { return }
             self.observe(window)
+            self.attachmentHandler(view, window != nil)
         }
         view.onGeometryChange = { [weak self, weak view] in
             guard let self, let view, self.view === view else { return }
             self.lifecycleMonitor.surfaceGeometryDidChange()
         }
         observe(view.window)
+        attachmentHandler(view, view.window != nil)
     }
 
     func detach(from candidate: MacStreamInputCaptureView? = nil) {
@@ -158,6 +165,7 @@ final class MacStreamSurfaceAttachmentOwner {
         if let candidate, view !== candidate { return }
         view.onWindowChange = nil
         view.onGeometryChange = nil
+        attachmentHandler(view, false)
         view.resetTransientInputState()
         self.view = nil
         if isMonitoringWindow {
@@ -184,9 +192,99 @@ final class MacStreamSurfaceAttachmentOwner {
 }
 
 @MainActor
+final class MacStreamSurfaceCaptureController {
+    private let broker: MacCursorCaptureBroker
+    private let leaseID = UUID()
+    private weak var view: MacStreamInputCaptureView?
+    private var policy = MacInputSurfacePolicy.inactive
+    private var isAttached = false
+
+    init(broker: MacCursorCaptureBroker) {
+        self.broker = broker
+    }
+
+    func update(
+        _ policy: MacInputSurfacePolicy,
+        for view: MacStreamInputCaptureView
+    ) {
+        if self.view !== view {
+            detach()
+            self.view = view
+            isAttached = view.window != nil
+        }
+        self.policy = policy
+        applyCurrentPolicy()
+    }
+
+    func attachmentDidChange(
+        for view: MacStreamInputCaptureView,
+        isAttached: Bool
+    ) {
+        guard isAttached else {
+            guard self.view === view else { return }
+            view.isInputCaptureEnabled = false
+            self.isAttached = false
+            _ = broker.release(leaseID: leaseID)
+            self.view = nil
+            return
+        }
+        guard self.view == nil || self.view === view else { return }
+        self.view = view
+        self.isAttached = true
+        applyCurrentPolicy()
+    }
+
+    func exitRelativeCapture() {
+        guard policy.cursorPolicy.capturesRelativePointer,
+              let view else { return }
+        view.isInputCaptureEnabled = false
+        _ = broker.apply(
+            CursorCapturePolicyResolver.resolve(
+                isStreamActive: false,
+                isVisible: false,
+                isFocused: false,
+                prefersRemotePointer: false
+            ),
+            leaseID: leaseID
+        )
+    }
+
+    func detach(from candidate: MacStreamInputCaptureView? = nil) {
+        guard let view else { return }
+        if let candidate, view !== candidate { return }
+        view.isInputCaptureEnabled = false
+        _ = broker.release(leaseID: leaseID)
+        self.view = nil
+        isAttached = false
+        policy = .inactive
+    }
+
+    private func applyCurrentPolicy() {
+        guard let view else { return }
+        guard isAttached else {
+            view.isInputCaptureEnabled = false
+            _ = broker.release(leaseID: leaseID)
+            return
+        }
+        guard policy.admitsInput else {
+            view.isInputCaptureEnabled = false
+            _ = broker.apply(
+                MacInputSurfacePolicy.inactive.cursorPolicy,
+                leaseID: leaseID
+            )
+            return
+        }
+
+        let cursorReady = broker.apply(policy.cursorPolicy, leaseID: leaseID)
+        view.isInputCaptureEnabled = cursorReady
+    }
+}
+
+@MainActor
 final class MacStreamSurfaceCoordinator {
     let presenter: StreamMetalPresenter
     let attachmentOwner: MacStreamSurfaceAttachmentOwner
+    let captureController: MacStreamSurfaceCaptureController
     private var inputSampleHandler: MacStreamInputCaptureView.SampleHandler
     private var captureExitHandler: @MainActor () -> Void
 
@@ -195,14 +293,23 @@ final class MacStreamSurfaceCoordinator {
         renderState: StreamRenderState,
         lifecycle: PlatformLifecycleState,
         inputSampleHandler: @escaping MacStreamInputCaptureView.SampleHandler,
-        captureExitHandler: @escaping @MainActor () -> Void
+        captureExitHandler: @escaping @MainActor () -> Void,
+        cursorBroker: MacCursorCaptureBroker = .shared
     ) {
         presenter = StreamMetalPresenter(
             presentationSource: presentationSource,
             renderState: renderState
         )
+        let captureController = MacStreamSurfaceCaptureController(broker: cursorBroker)
+        self.captureController = captureController
         attachmentOwner = MacStreamSurfaceAttachmentOwner(
-            lifecycleMonitor: AppKitLifecycleMonitor(lifecycle: lifecycle)
+            lifecycleMonitor: AppKitLifecycleMonitor(lifecycle: lifecycle),
+            attachmentHandler: { view, isAttached in
+                captureController.attachmentDidChange(
+                    for: view,
+                    isAttached: isAttached
+                )
+            }
         )
         self.inputSampleHandler = inputSampleHandler
         self.captureExitHandler = captureExitHandler
@@ -210,10 +317,13 @@ final class MacStreamSurfaceCoordinator {
 
     func update(
         renderState: StreamRenderState,
+        inputPolicy: MacInputSurfacePolicy,
+        view: MacStreamInputCaptureView,
         inputSampleHandler: @escaping MacStreamInputCaptureView.SampleHandler,
         captureExitHandler: @escaping @MainActor () -> Void
     ) {
         presenter.update(renderState: renderState)
+        captureController.update(inputPolicy, for: view)
         self.inputSampleHandler = inputSampleHandler
         self.captureExitHandler = captureExitHandler
     }
@@ -223,11 +333,12 @@ final class MacStreamSurfaceCoordinator {
     }
 
     func exitCapture() {
+        captureController.exitRelativeCapture()
         captureExitHandler()
     }
 
     func detach(_ view: MacStreamInputCaptureView) {
-        view.isInputCaptureEnabled = false
+        captureController.detach(from: view)
         attachmentOwner.detach(from: view)
         view.delegate = nil
         view.isPaused = true
@@ -238,8 +349,7 @@ struct MetalStreamSurface: NSViewRepresentable {
     let renderState: StreamRenderState
     let presentationSource: StreamVideoPresentationSource
     let lifecycle: PlatformLifecycleState
-    var isInputCaptureEnabled = false
-    var forwardsSystemShortcuts = false
+    var inputPolicy = MacInputSurfacePolicy.inactive
     var inputSampleHandler: MacStreamInputCaptureView.SampleHandler = { _ in }
     var captureExitHandler: @MainActor () -> Void = {}
 
@@ -257,8 +367,8 @@ struct MetalStreamSurface: NSViewRepresentable {
         let view = MacStreamInputCaptureView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
-            isInputCaptureEnabled: isInputCaptureEnabled,
-            forwardsSystemShortcuts: forwardsSystemShortcuts,
+            isInputCaptureEnabled: false,
+            forwardsSystemShortcuts: inputPolicy.forwardsSystemShortcuts,
             captureExitHandler: { context.coordinator.exitCapture() },
             sampleHandler: { context.coordinator.handle($0) }
         )
@@ -269,18 +379,20 @@ struct MetalStreamSurface: NSViewRepresentable {
             DisplayHeadroomReader.configure(layer, forHDRStream: renderState.headroom.supportsEDR)
         }
         context.coordinator.presenter.configure(view)
+        context.coordinator.captureController.update(inputPolicy, for: view)
         context.coordinator.attachmentOwner.attach(to: view)
         return view
     }
 
     func updateNSView(_ view: MacStreamInputCaptureView, context: Context) {
+        view.forwardsSystemShortcuts = inputPolicy.forwardsSystemShortcuts
         context.coordinator.update(
             renderState: renderState,
+            inputPolicy: inputPolicy,
+            view: view,
             inputSampleHandler: inputSampleHandler,
             captureExitHandler: captureExitHandler
         )
-        view.isInputCaptureEnabled = isInputCaptureEnabled
-        view.forwardsSystemShortcuts = forwardsSystemShortcuts
         context.coordinator.attachmentOwner.attach(to: view)
         apply(renderState, to: view)
         if view.isPaused { view.draw() }

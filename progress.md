@@ -1061,3 +1061,16 @@
 - 完整macOS suite结构化通过`459 total / 458 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-5_2-full-final2.wc1urd/LuneXCoreTests.xcresult`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors build-only全部通过，证据`/tmp/LuneX-14-5_2-builds-final2.pe158p`。构建前后simulator规范化JSON逐字节一致，固定实例唯一且全部`Shutdown`，全局`Booted=0`。
 - 5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 5.2标记完成，权威进度`20/29`；下一项5.3 persisted capture/cursor eligibility，阶段13仍为`54/61 in_progress`。
+
+## 2026-07-21 阶段 14 任务 5.3 启动
+
+- 5.2已以`69584be Connect macOS lifecycle to active session`独立提交并通过SSH 443推送；确认`HEAD == origin/main`、工作树clean后进入5.3。
+- 5.3范围限定为active session/input readiness/lifecycle/geometry与持久化输入设置派生actual surface admission、direct/relative映射、shortcut forwarding和balanced cursor application；privacy diagnostics属于5.4，完整application gate属于5.5，live Sunshine/hardware receipt属于6.5。
+
+## 2026-07-21 阶段 14 任务 5.3 完成
+
+- actual `MetalStreamSurface`现消费AppModel发布的`MacInputSurfacePolicy`：direct与relative均可admit input，只有relative通过共享lease broker隐藏cursor并解除pointer association；association获取失败fail closed。settings变更即时更新relative/direct与shortcut policy，Escape只退出relative。
+- 封版审阅补齐双coordinator replacement和同coordinator view replacement：旧attachment/dismantle只释放匹配lease，不能通过inactive policy重取全局cursor ownership，也不能因残留旧view identity拒绝新surface。
+- 最终surface focused `33/33`（`/tmp/LuneX-14-5_3-surface-final.PK4kyI/Surface.xcresult`）；完整macOS `466 total / 465 passed / 1 Keychain skip / 0 failed`（`/tmp/LuneX-14-5_3-full-final2.yUoJpc/LuneXCoreTests.xcresult`），测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 最终五平台Debug warnings-as-errors通过（`/tmp/LuneX-14-5_3-builds-final2.6keHqh`）；simulator前后规范化状态逐字节一致，固定实例唯一且全部`Shutdown`、全局`Booted=0`。OpenSpec strict `5/5`、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、diff/reference边界通过。
+- OpenSpec 5.3标记完成，权威进度`21/29`；下一项5.4为privacy-bounded input/lifecycle diagnostics与recovery/stop stale action清理。阶段13仍为`54/61 in_progress`，本项不声称live Sunshine receipt或物理cursor手感证明。

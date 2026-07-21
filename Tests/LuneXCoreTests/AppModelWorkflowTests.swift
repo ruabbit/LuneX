@@ -1334,6 +1334,98 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(failureEvent.message.contains("must-not-appear"))
     }
 
+    func testMacSurfacePolicyDerivesSessionLifecycleGeometryAndInputSettings() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 35,
+                    key: Data(repeating: 0x35, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.macInputSurfacePolicy.admitsInput }
+
+        XCTAssertTrue(model.macInputSurfacePolicy.cursorPolicy.capturesRelativePointer)
+        XCTAssertTrue(model.macInputSurfacePolicy.cursorPolicy.hidesSystemCursor)
+        XCTAssertTrue(model.macInputSurfacePolicy.forwardsSystemShortcuts)
+
+        model.settings.input.preferRelativeMouseMode = false
+        model.settings.input.captureSystemShortcuts = false
+        XCTAssertTrue(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertFalse(model.macInputSurfacePolicy.cursorPolicy.capturesRelativePointer)
+        XCTAssertFalse(model.macInputSurfacePolicy.cursorPolicy.hidesSystemCursor)
+        XCTAssertFalse(model.macInputSurfacePolicy.forwardsSystemShortcuts)
+
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.pointerMove(MacPointerSample(
+                localPoint: RemotePoint(x: 1_280, y: 720),
+                deltaX: 9,
+                deltaY: -3,
+                buttons: []
+            ))),
+            .accepted
+        )
+        await waitUntil { mediaEnvironment.currentSentInputApplications().count == 1 }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().first?.event,
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 1_920, y: 1_080),
+                referenceSize: PixelSize(width: 3_840, height: 2_160),
+                buttons: []
+            ))
+        )
+
+        lifecycle.isFocused = false
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.pointerMove(MacPointerSample(
+                localPoint: RemotePoint(x: 1_280, y: 720),
+                deltaX: 1,
+                deltaY: 1,
+                buttons: []
+            ))),
+            .rejected(.admissionClosed)
+        )
+
+        lifecycle.isFocused = true
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        await waitUntil { model.macInputSurfacePolicy.admitsInput }
+        lifecycle.drawableSize = .zero
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+
+        model.settings.input.preferRelativeMouseMode = true
+        model.exitMacRelativePointerCapture()
+        XCTAssertFalse(model.settings.input.preferRelativeMouseMode)
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+    }
+
     func testDefaultInputKeyGenerationUsesFreshMaterialForEveryLaunch() async throws {
         let firstKey = RemoteInputKeyMaterial(keyID: 1, key: Data(repeating: 0x11, count: 16))
         let secondKey = RemoteInputKeyMaterial(keyID: 2, key: Data(repeating: 0x22, count: 16))

@@ -7,6 +7,23 @@ struct CursorCapturePolicy: Codable, Equatable, Sendable {
     var reason: String?
 }
 
+struct MacInputSurfacePolicy: Equatable, Sendable {
+    var admitsInput: Bool
+    var cursorPolicy: CursorCapturePolicy
+    var forwardsSystemShortcuts: Bool
+
+    static let inactive = MacInputSurfacePolicy(
+        admitsInput: false,
+        cursorPolicy: CursorCapturePolicyResolver.resolve(
+            isStreamActive: false,
+            isVisible: false,
+            isFocused: false,
+            prefersRemotePointer: false
+        ),
+        forwardsSystemShortcuts: false
+    )
+}
+
 enum CursorCapturePolicyResolver {
     static func resolve(
         isStreamActive: Bool,

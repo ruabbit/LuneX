@@ -122,7 +122,13 @@ enum ProductionRuntimeProviderFactory {
 final class AppModel: ApplicationInputSink {
     private let logger = Logger(subsystem: "dev.lunex.client", category: "app.model")
     var hosts: [MoonlightHost] = []
-    var settings = AppSettings.defaults
+    var settings = AppSettings.defaults {
+        didSet {
+            if settings.input != oldValue.input {
+                refreshMacInputSurfacePolicy()
+            }
+        }
+    }
     var session = StreamingSessionState()
     var renderState = StreamRenderState()
     var diagnostics = DiagnosticsStore()
@@ -133,6 +139,7 @@ final class AppModel: ApplicationInputSink {
     var appCatalogUI = AppCatalogUIState()
     var streamLaunchUI = StreamLaunchUIState()
     var latestRemoteInputFeedback: RemoteInputFeedback?
+    private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
 
     let videoPresentationSource: StreamVideoPresentationSource
 
@@ -164,13 +171,6 @@ final class AppModel: ApplicationInputSink {
             isVisible: false,
             isFocused: false,
             drawableSize: .zero
-        )
-    @ObservationIgnored private var latestMacCursorPolicy =
-        CursorCapturePolicyResolver.resolve(
-            isStreamActive: false,
-            isVisible: false,
-            isFocused: false,
-            prefersRemotePointer: false
         )
     @ObservationIgnored private var appliedLifecycleApplication: SessionLifecycleApplication?
     @ObservationIgnored private var lifecycleApplicationTask: Task<Void, Never>?
@@ -301,17 +301,12 @@ final class AppModel: ApplicationInputSink {
         hasPlatformLifecycle = true
         latestLifecycleRevision &+= 1
         latestLifecycleDirective = directive
-        latestMacCursorPolicy = CursorCapturePolicyResolver.resolve(
-            isStreamActive: lifecycle.isStreamActive,
-            isVisible: lifecycle.isVisible,
-            isFocused: lifecycle.isFocused,
-            prefersRemotePointer: false
-        )
         renderState.policy = directive.renderPolicy
         renderState.transform.drawableSize = lifecycle.drawableSize
         renderState.headroom = lifecycle.headroom
         applyInputLifecycle(directive.input)
         clearPresentationIfRequired(directive.presentation)
+        refreshMacInputSurfacePolicy()
         scheduleLifecycleApplication()
     }
 
@@ -326,6 +321,7 @@ final class AppModel: ApplicationInputSink {
               activeMediaSessionID == sessionID,
               activeMediaGeneration != nil,
               activeMediaReadiness.contains(.input),
+              macInputSurfacePolicy.admitsInput,
               let coordinateSnapshot = renderState.coordinateSnapshot else {
             return .rejected(.admissionClosed)
         }
@@ -333,8 +329,8 @@ final class AppModel: ApplicationInputSink {
             MacInputSampleEnvelope(
                 sample: sample,
                 coordinateSnapshot: coordinateSnapshot,
-                cursorPolicy: latestMacCursorPolicy,
-                forwardsSystemShortcuts: false
+                cursorPolicy: macInputSurfacePolicy.cursorPolicy,
+                forwardsSystemShortcuts: macInputSurfacePolicy.forwardsSystemShortcuts
             ),
             generation: generation
         )
@@ -347,6 +343,12 @@ final class AppModel: ApplicationInputSink {
 
     func macSessionInputSnapshot() -> MacSessionInputCoordinatorSnapshot {
         macSessionInputCoordinator.snapshot()
+    }
+
+    func exitMacRelativePointerCapture() {
+        guard settings.input.preferRelativeMouseMode else { return }
+        settings.input.preferRelativeMouseMode = false
+        refreshMacInputSurfacePolicy()
     }
 
     func loadHosts() async {
@@ -372,6 +374,7 @@ final class AppModel: ApplicationInputSink {
         do {
             settings = try await settingsRepository.loadSettings()
             updateRenderPreferences()
+            refreshMacInputSurfacePolicy()
             diagnostics.record("Loaded stream and platform settings", subsystem: "settings")
         } catch {
             diagnostics.record(
@@ -405,6 +408,7 @@ final class AppModel: ApplicationInputSink {
         do {
             try await settingsRepository.saveSettings(settings)
             updateRenderPreferences()
+            refreshMacInputSurfacePolicy()
             diagnostics.record("Saved settings", subsystem: "settings")
         } catch {
             diagnostics.record(
@@ -915,6 +919,7 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func applySessionSnapshot(_ snapshot: StreamSessionSnapshot) {
+        defer { refreshMacInputSurfacePolicy() }
         switch snapshot.stage {
         case .idle, .disconnected:
             activeStreamSessionID = nil
@@ -1078,6 +1083,7 @@ final class AppModel: ApplicationInputSink {
             height: configuration.video.height
         )
         renderState.transform.sourceSize = activeDecodedSourceSize ?? .zero
+        refreshMacInputSurfacePolicy()
         appliedLifecycleApplication = nil
         let lifecycleTask = scheduleLifecycleApplication()
         await lifecycleTask?.value
@@ -1312,6 +1318,7 @@ final class AppModel: ApplicationInputSink {
         }
         activeMacInputGeneration = generation
         applyInputLifecycle(latestLifecycleDirective.input)
+        refreshMacInputSurfacePolicy()
     }
 
     private func terminateMacInputGeneration(
@@ -1319,6 +1326,7 @@ final class AppModel: ApplicationInputSink {
     ) async {
         guard let generation = activeMacInputGeneration else { return }
         activeMacInputGeneration = nil
+        refreshMacInputSurfacePolicy()
         _ = await macSessionInputCoordinator.terminate(
             generation: generation,
             reason: reason
@@ -1402,7 +1410,36 @@ final class AppModel: ApplicationInputSink {
         session.lastError = sessionError
         session.phase = .failed(sessionError)
         renderState.policy = .idle
+        refreshMacInputSurfacePolicy()
         diagnostics.record(diagnostic)
+    }
+
+    private func refreshMacInputSurfacePolicy() {
+        let lifecycleAllowsInput: Bool
+        if case .open = latestLifecycleDirective.input {
+            lifecycleAllowsInput = true
+        } else {
+            lifecycleAllowsInput = false
+        }
+        let admitsInput = hasPlatformLifecycle
+            && session.isStreaming
+            && lifecycleAllowsInput
+            && activeStreamSessionID != nil
+            && activeMediaSessionID == activeStreamSessionID
+            && activeMediaGeneration != nil
+            && activeMediaReadiness.contains(.input)
+            && activeMacInputGeneration != nil
+            && renderState.coordinateSnapshot != nil
+        macInputSurfacePolicy = MacInputSurfacePolicy(
+            admitsInput: admitsInput,
+            cursorPolicy: CursorCapturePolicyResolver.resolve(
+                isStreamActive: admitsInput,
+                isVisible: admitsInput,
+                isFocused: admitsInput,
+                prefersRemotePointer: settings.input.preferRelativeMouseMode
+            ),
+            forwardsSystemShortcuts: settings.input.captureSystemShortcuts
+        )
     }
 
     private func updateRenderPreferences() {
