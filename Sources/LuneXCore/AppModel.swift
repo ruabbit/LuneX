@@ -23,6 +23,10 @@ private enum PairingApplicationError: Error {
     case invalidAuthenticatedCompletion
 }
 
+private enum SessionApplicationError: Error {
+    case incompleteControlStream
+}
+
 struct AppCatalogUIState: Equatable {
     var isRefreshing = false
     var lastUpdatedAt: Date?
@@ -137,6 +141,7 @@ final class AppModel {
     private let clientIdentityProvisioner: any ClientIdentityProvisioning
     private var clientUniqueID: String
     private var preparedPairingIdentity: ClientIdentityMaterial?
+    private var activeStreamSessionID: UUID?
     private let remoteInputKeyOverride: RemoteInputKeyMaterial?
     private let remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
 
@@ -199,6 +204,10 @@ final class AppModel {
 
     var isStreamTransportAvailable: Bool {
         runtimeProviderAvailability.streamTransportAvailable
+    }
+
+    var hasActiveStreamSession: Bool {
+        activeStreamSessionID != nil
     }
 
     var isPairingPINValid: Bool {
@@ -483,7 +492,12 @@ final class AppModel {
             return
         }
 
-        guard isStreamTransportAvailable else {
+        guard activeStreamSessionID == nil else {
+            return
+        }
+
+        guard isStreamTransportAvailable,
+              let sessionControlProvider = runtimeProviders.sessionControl else {
             let message = "Streaming is unavailable until Moonlight media transport is installed."
             streamLaunchUI.errorMessage = message
             session.activeHostID = nil
@@ -493,16 +507,10 @@ final class AppModel {
             return
         }
 
-        streamLaunchUI.isLaunching = true
-        streamLaunchUI.errorMessage = nil
-        session.activeHostID = host.id
-        session.phase = .connecting(stage: "Negotiating \(app.name)")
-        updateRenderPreferences()
-        defer { streamLaunchUI.isLaunching = false }
-
+        let request: StreamLaunchRequest
         do {
             let remoteInputKey = try remoteInputKeyOverride ?? remoteInputKeyGenerator.generate()
-            let request = StreamLaunchRequest(
+            request = StreamLaunchRequest(
                 host: host,
                 app: app,
                 preferences: settings.stream,
@@ -512,36 +520,79 @@ final class AppModel {
                 controllerBitmap: 0,
                 optimizeGameSettings: true
             )
-            _ = try await streamSessionCoordinator.launch(request)
-            throw StreamNegotiationFailure(
-                code: .transportUnavailable,
-                subsystem: "rtsp",
-                message: "Launch was accepted, but no session control provider is connected."
-            )
         } catch {
-            let message = String(describing: error)
-            streamLaunchUI.errorMessage = message
-            session.lastError = SessionError(subsystem: "stream", message: message)
-            session.phase = .failed(SessionError(subsystem: "stream", message: message))
-            renderState.policy = .idle
-            diagnostics.record("Launch failed: \(message)", subsystem: "stream")
+            failStreamSession(error, sessionID: nil)
+            return
+        }
+
+        let sessionID = UUID()
+        do {
+            let snapshot = try await streamSessionCoordinator.prepare(
+                request,
+                sessionID: sessionID
+            )
+            activeStreamSessionID = sessionID
+            streamLaunchUI.isLaunching = true
+            streamLaunchUI.errorMessage = nil
+            session.activeHostID = host.id
+            session.lastError = nil
+            navigationSelection = .stream
+            applySessionSnapshot(snapshot)
+
+            var receivedTerminalEvent = false
+            let events = await sessionControlProvider.start(
+                sessionID: sessionID,
+                request: request
+            )
+            for try await event in events {
+                guard activeStreamSessionID == sessionID else { return }
+                let snapshot = try await streamSessionCoordinator.apply(
+                    event,
+                    sessionID: sessionID
+                )
+                applySessionSnapshot(snapshot)
+                if case .terminated = event {
+                    receivedTerminalEvent = true
+                }
+            }
+
+            guard activeStreamSessionID == sessionID else { return }
+            guard receivedTerminalEvent else {
+                throw SessionApplicationError.incompleteControlStream
+            }
+            activeStreamSessionID = nil
+            streamLaunchUI.isLaunching = false
+        } catch {
+            guard activeStreamSessionID == nil || activeStreamSessionID == sessionID else {
+                return
+            }
+            guard activeStreamSessionID == sessionID else {
+                failStreamSession(error, sessionID: nil)
+                return
+            }
+            _ = try? await streamSessionCoordinator.fail(
+                error,
+                sessionID: sessionID
+            )
+            failStreamSession(error, sessionID: sessionID)
+            await sessionControlProvider.stop(sessionID: sessionID)
         }
     }
 
     func stopStream() async {
-        guard let host = selectedHost else {
-            session.phase = .disconnected
-            renderState.policy = .idle
+        guard let sessionID = activeStreamSessionID,
+              let sessionControlProvider = runtimeProviders.sessionControl else {
             return
         }
-
+        activeStreamSessionID = nil
+        streamLaunchUI.isLaunching = false
         session.phase = .stopping
-        do {
-            _ = try await streamSessionCoordinator.stop(host: host, clientUniqueID: clientUniqueID)
-            diagnostics.record("Stopped stream on \(host.name)", subsystem: "stream")
-        } catch {
-            diagnostics.record("Stop command failed: \(error)", subsystem: "stream")
-        }
+        _ = try? await streamSessionCoordinator.beginLocalStop(sessionID: sessionID)
+        await sessionControlProvider.stop(sessionID: sessionID)
+        _ = try? await streamSessionCoordinator.completeLocalStop(sessionID: sessionID)
+        diagnostics.record("Stopped stream session", subsystem: "stream")
+        session.activeHostID = nil
+        session.lastError = nil
         session.phase = .disconnected
         renderState.policy = .idle
     }
@@ -649,6 +700,111 @@ final class AppModel {
         case .cancelled:
             return "Pairing was cancelled."
         }
+    }
+
+    private func applySessionSnapshot(_ snapshot: StreamSessionSnapshot) {
+        switch snapshot.stage {
+        case .idle, .disconnected:
+            activeStreamSessionID = nil
+            streamLaunchUI.isLaunching = false
+            session.activeHostID = nil
+            session.lastError = nil
+            session.phase = .disconnected
+            renderState.policy = .idle
+            if let reason = snapshot.terminationReason {
+                diagnostics.record(reason, subsystem: "stream.control")
+            }
+
+        case .resolvingHost, .validatingPairing, .preparingParameters, .launching:
+            session.phase = .connecting(stage: "Launching Stream")
+            renderState.policy = .idle
+
+        case .readyForTransport:
+            session.phase = .connecting(stage: pendingTransportMessage(for: snapshot))
+            renderState.policy = .idle
+
+        case .streaming:
+            streamLaunchUI.isLaunching = false
+            session.phase = .streaming
+            renderState.policy = .active
+            updateRenderPreferences()
+
+        case .reconnecting:
+            streamLaunchUI.isLaunching = false
+            let suffix = snapshot.reconnectAttempt.map { " (Attempt \($0))" } ?? ""
+            session.phase = .connecting(stage: "Reconnecting\(suffix)")
+            renderState.policy = .idle
+
+        case .stopping:
+            streamLaunchUI.isLaunching = false
+            session.phase = .stopping
+            renderState.policy = .idle
+
+        case .failed:
+            let message = snapshot.failure?.message ?? "Session control failed."
+            failStreamSession(
+                SessionError(subsystem: snapshot.failure?.subsystem ?? "stream", message: message),
+                sessionID: snapshot.sessionID
+            )
+        }
+    }
+
+    private func pendingTransportMessage(for snapshot: StreamSessionSnapshot) -> String {
+        guard snapshot.negotiatedConfiguration != nil else {
+            return "Negotiating Stream Transport"
+        }
+
+        let healthy = snapshot.channelHealth.healthyChannels
+        let required = snapshot.channelHealth.requiredChannels
+        let channels: [(SessionChannelReadiness, String)] = [
+            (.control, "Control"),
+            (.video, "Video"),
+            (.audio, "Audio"),
+            (.input, "Input")
+        ]
+        let pending = channels.compactMap { channel, name in
+            required.contains(channel) && !healthy.contains(channel) ? name : nil
+        }
+        return pending.isEmpty
+            ? "Confirming Stream Readiness"
+            : "Waiting for \(pending.joined(separator: ", "))"
+    }
+
+    private func failStreamSession(_ error: Error, sessionID: UUID?) {
+        if let sessionID,
+           activeStreamSessionID != nil,
+           activeStreamSessionID != sessionID {
+            return
+        }
+
+        let sessionError: SessionError
+        if let error = error as? SessionError {
+            sessionError = error
+        } else if let failure = error as? StreamNegotiationFailure {
+            sessionError = SessionError(
+                subsystem: failure.subsystem,
+                message: failure.message
+            )
+        } else if error is SessionApplicationError {
+            sessionError = SessionError(
+                subsystem: "stream.control",
+                message: "Session control ended unexpectedly."
+            )
+        } else {
+            sessionError = SessionError(
+                subsystem: "stream.control",
+                message: "Session control failed."
+            )
+        }
+
+        activeStreamSessionID = nil
+        streamLaunchUI.isLaunching = false
+        streamLaunchUI.errorMessage = sessionError.message
+        session.activeHostID = nil
+        session.lastError = sessionError
+        session.phase = .failed(sessionError)
+        renderState.policy = .idle
+        diagnostics.record(sessionError.message, subsystem: sessionError.subsystem)
     }
 
     private func updateRenderPreferences() {

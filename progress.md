@@ -629,3 +629,25 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部通过；最终四个固定simulator各为唯一可用同名实例且全部`Shutdown`，未创建或主动boot设备。
 - fixture validator self-test/全树、全部4个OpenSpec change strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对和四SDK strict C syntax全部通过。
 - OpenSpec 8.2更新为完成，权威进度`45/61`。该验收不代表3.7 live Sunshine pairing/re-pair证据；下一项为8.3 launch/stop UI消费session actor事件并从channel readiness派生phase。
+
+## 2026-07-21 阶段 13 任务 8.3 启动
+
+- 8.2已以`33cbdb3 Connect authenticated pairing UI`独立提交并推送，确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`45/61`后进入8.3。
+- AppModel改为只启动注入的`SessionControlProvider`，将全部event交给generation-scoped `StreamSessionCoordinator.prepare/apply/fail`；旧coordinator HTTP launch client不再位于应用launch路径，避免重复`/launch`。
+- 本地stop先失效AppModel session ownership，再由provider执行transport teardown；coordinator新增纯状态的begin/complete local-stop，不发送第二次remote cancel。测试将覆盖partial readiness、完整streaming、remote termination、local stop、duplicate launch和异常/incomplete event stream。
+
+## 2026-07-21 OpenSpec 8.3 定向验收
+
+- Session catch-up确认唯一未同步失败是三处XCTest assertion把`await`置于同步autoclosure。已改为先读取actor-isolated launch count到局部值，再调用断言。
+- 修正后的Swift 6 warnings-as-errors定向门通过`28/28`：`AppModelWorkflowTests + SessionStateMachineTests`零失败，结果`/tmp/LuneX-8_3-targeted.YoHao2/SessionApplication.xcresult`。
+- 扩展验收前继续补充AppModel层remote termination完整清理、reconnect readiness truth、invalid event order fail-closed与provider stop ownership回归。
+
+## 2026-07-21 阶段 13 任务 8.3 完成
+
+- AppModel现只启动注入的session-control provider，coordinator仅作为generation-scoped reducer；应用launch路径不再调用legacy HTTP launch client，避免第二次`/launch`。本地stop由provider独占transport teardown，reducer begin/complete stop不发送第二次`/cancel`。
+- Streaming UI与render active严格要求validated negotiated configuration和control/video/audio/input全部ready；launch accepted、RTSP ready、partial readiness、reconnect均保持非streaming。remote termination、late event、duplicate launch、invalid order、provider throw/incomplete、pre-start参数失败均有确定性回归。
+- 最终定向Swift 6 warnings-as-errors gate通过`31/31`，结果`/tmp/LuneX-8_3-targeted-prep.E3wdGa/SessionApplication.xcresult`；扩展session/application gate通过`76/76`，结果`/tmp/LuneX-8_3-expanded.cRdUFi/ExpandedSessionApplication.xcresult`。
+- 完整macOS gate通过`344 total / 343 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_3-full-macos.XSr3wo/LuneXCoreTests.xcresult`。全程使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors build全部通过，根目录`/tmp/LuneX-8_3-platform-builds.41TB2V`；四个固定simulator前后均唯一且为`Shutdown`，未创建或主动boot额外设备。
+- fixture self-test/全树、全部4个OpenSpec对象strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对和四SDK strict C syntax全部通过。
+- OpenSpec 8.3更新为完成，权威进度`46/61`。该验收不代表8.4统一video/audio/input lifetime或任何live Sunshine端到端证据；下一项为8.4。

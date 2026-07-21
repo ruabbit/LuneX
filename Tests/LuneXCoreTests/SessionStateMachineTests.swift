@@ -207,6 +207,31 @@ final class SessionStateMachineTests: XCTestCase {
         XCTAssertEqual(stopCount, 1)
     }
 
+    func testProviderOwnedLocalStopChangesStateWithoutSendingAnotherCancel() async throws {
+        let client = StateMachineLaunchClient()
+        let coordinator = StreamSessionCoordinator(launchClient: client)
+        let request = makeStateMachineRequest()
+        let sessionID = UUID()
+        _ = try await makeStreaming(
+            coordinator: coordinator,
+            request: request,
+            sessionID: sessionID
+        )
+
+        let stopping = try await coordinator.beginLocalStop(sessionID: sessionID)
+        let duplicateBegin = try await coordinator.beginLocalStop(sessionID: sessionID)
+        let stopped = try await coordinator.completeLocalStop(sessionID: sessionID)
+        let duplicateComplete = try await coordinator.completeLocalStop(sessionID: sessionID)
+        let stopCount = await client.stopCount()
+
+        XCTAssertEqual(stopping.stage, .stopping)
+        XCTAssertEqual(stopping.channelHealth.status, .unavailable)
+        XCTAssertEqual(stopping, duplicateBegin)
+        XCTAssertEqual(stopped.stage, .disconnected)
+        XCTAssertEqual(stopped, duplicateComplete)
+        XCTAssertEqual(stopCount, 0)
+    }
+
     func testOldGenerationCannotMutateReplacementState() async throws {
         let coordinator = StreamSessionCoordinator(launchClient: StateMachineLaunchClient())
         let request = makeStateMachineRequest()

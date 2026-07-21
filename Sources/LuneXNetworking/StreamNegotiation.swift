@@ -647,25 +647,58 @@ actor StreamSessionCoordinator {
     }
 
     func stop(host: MoonlightHost, clientUniqueID: String, now: Date = Date()) async throws -> StreamSessionSnapshot {
+        let sessionID = snapshot.sessionID
+        let stopping = try beginLocalStop(sessionID: sessionID, now: now)
+        if stopping.stage == .disconnected {
+            return stopping
+        }
+        do {
+            try await launchClient.stop(host: host, clientUniqueID: clientUniqueID)
+            return try completeLocalStop(sessionID: sessionID, now: Date())
+        } catch {
+            _ = try? completeLocalStop(sessionID: sessionID, now: Date())
+            throw error
+        }
+    }
+
+    func beginLocalStop(
+        sessionID: UUID,
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard sessionID == snapshot.sessionID else {
+            throw invalidTransition("A stale session cannot begin local stop.")
+        }
         if snapshot.stage == .disconnected {
             return snapshot
         }
         if snapshot.stage == .idle {
-            snapshot.stage = .disconnected
-            snapshot.updatedAt = now
-            controlProgress = .terminal
+            transitionToDisconnected(now: now)
             return snapshot
         }
+        if snapshot.stage == .stopping {
+            return snapshot
+        }
+        snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
         snapshot.stage = .stopping
         snapshot.updatedAt = now
-        do {
-            try await launchClient.stop(host: host, clientUniqueID: clientUniqueID)
-            transitionToDisconnected(now: Date())
-            return snapshot
-        } catch {
-            transitionToDisconnected(now: Date())
-            throw error
+        return snapshot
+    }
+
+    func completeLocalStop(
+        sessionID: UUID,
+        now: Date = Date()
+    ) throws -> StreamSessionSnapshot {
+        guard sessionID == snapshot.sessionID else {
+            throw invalidTransition("A stale session cannot complete local stop.")
         }
+        if snapshot.stage == .disconnected {
+            return snapshot
+        }
+        guard snapshot.stage == .stopping else {
+            throw invalidTransition("Local stop completion requires a stopping session.")
+        }
+        transitionToDisconnected(now: now)
+        return snapshot
     }
 
     private func transitionToFailure(

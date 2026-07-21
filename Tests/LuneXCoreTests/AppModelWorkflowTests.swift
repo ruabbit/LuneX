@@ -447,59 +447,249 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(launchCount, 0)
     }
 
-    func testLaunchAcceptanceAloneNeverReportsStreaming() async throws {
-        let host = MoonlightHost(
-            id: UUID(uuidString: "E7919769-7548-45D0-AF14-B516694D7AE5")!,
-            name: "Test Host",
-            address: "moon.local",
-            pairingState: .paired,
-            reachability: .online,
-            pinnedIdentity: PinnedHostIdentity(
-                certificateSHA256: "existing-cert",
-                serverCertificateDER: Data([1, 2, 3]),
-                pairedAt: Date(timeIntervalSince1970: 10)
-            )
-        )
+    func testSessionUIRequiresNegotiationAndEveryRequiredChannel() async throws {
+        let provider = ControlledSessionControlProvider()
         let launchClient = StubStreamLaunchClient()
-        let model = AppModel(
-            hostLibraryManager: HostLibraryManager(
-                repository: InMemoryHostRepository(hosts: [host]),
-                serverInfoClient: StubServerInfoClient()
-            ),
-            settingsRepository: InMemoryAppSettingsRepository(),
-            appCatalogManager: AppCatalogManager(
-                appListClient: StubAppListClient(),
-                artworkCache: InMemoryArtworkCache()
-            ),
-            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
-            streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
-            runtimeProviders: completeStreamProviderInventory(),
-            clientIdentityStore: InMemoryClientIdentityStore(),
-            clientUniqueID: "test-client",
-            remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data(repeating: 0xAA, count: 16))
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: launchClient,
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 7,
+                    key: Data(repeating: 0xAA, count: 16)
+                ))
+            ])
         )
 
         await model.loadInitialState()
         await model.refreshAppsForSelectedHost()
-        await model.launchSelectedApp()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
 
+        XCTAssertTrue(model.hasActiveStreamSession)
+        XCTAssertEqual(model.navigationSelection, .stream)
         XCTAssertFalse(model.session.isStreaming)
-        guard case .failed = model.session.phase else {
-            return XCTFail("Launch-only flow must fail closed while the session provider is disconnected.")
-        }
-        XCTAssertEqual(model.navigationSelection, .library)
-        XCTAssertEqual(model.renderState.policy, .idle)
-        XCTAssertTrue(model.streamLaunchUI.errorMessage?.contains("no session control provider") == true)
         let launchCount = await launchClient.currentLaunchCount()
-        XCTAssertEqual(launchCount, 1)
+        XCTAssertEqual(launchCount, 0)
+
+        provider.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(.channelsReady(.control), sessionID: record.sessionID)
+        await waitUntil { model.session.phase.label.contains("Connecting") }
+        XCTAssertFalse(model.session.isStreaming)
+
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        await waitUntil { model.session.isStreaming }
+
+        XCTAssertTrue(model.session.isStreaming)
+        XCTAssertEqual(model.renderState.policy, .active)
+        XCTAssertFalse(model.streamLaunchUI.isLaunching)
+
+        provider.yield(
+            .terminated(reason: "The host ended the streaming session."),
+            sessionID: record.sessionID
+        )
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertFalse(model.streamLaunchUI.isLaunching)
+        XCTAssertNil(model.session.activeHostID)
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [])
+        XCTAssertTrue(model.diagnostics.events.contains {
+            $0.message == "The host ended the streaming session."
+        })
+    }
+
+    func testReconnectLeavesStreamingUntilFreshNegotiationAndFullReadiness() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 11,
+                    key: Data(repeating: 0xEE, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        provider.yield(
+            .reconnecting(attempt: 1, reason: "Control channel interrupted."),
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.session.phase.label.contains("Reconnecting") }
+        XCTAssertFalse(model.session.isStreaming)
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertTrue(model.hasActiveStreamSession)
+
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        provider.yield(.channelsReady(.control), sessionID: record.sessionID)
+        for _ in 0..<100 {
+            await Task.yield()
+        }
+        XCTAssertTrue(model.session.phase.label.contains("Reconnecting"))
+        XCTAssertFalse(model.session.isStreaming)
+        XCTAssertEqual(model.renderState.policy, .idle)
+
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        await waitUntil { model.session.isStreaming }
+        XCTAssertEqual(model.renderState.policy, .active)
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertEqual(model.session.phase, .disconnected)
+    }
+
+    func testInvalidSessionEventOrderFailsClosedAndStopsProviderOnce() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 12,
+                    key: Data(repeating: 0xF0, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        await launchTask.value
+
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertFalse(model.streamLaunchUI.isLaunching)
+        XCTAssertNil(model.session.activeHostID)
+        guard case .failed = model.session.phase else {
+            return XCTFail("Invalid session event order must fail closed.")
+        }
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testLocalStopInvalidatesLateSessionEventsAndStopsProviderOnce() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 8,
+                    key: Data(repeating: 0xBB, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        await model.stopStream()
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        await launchTask.value
+
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertEqual(model.renderState.policy, .idle)
+    }
+
+    func testDuplicateLaunchDoesNotStartAnotherSessionGeneration() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 9,
+                    key: Data(repeating: 0xCC, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        _ = try await waitForSessionStart(provider)
+
+        await model.launchSelectedApp()
+        XCTAssertEqual(provider.currentStartRecords().count, 1)
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
+    func testControlStreamFailureAndIncompleteEndFailClosed() async throws {
+        for ending in ControlledSessionControlProvider.Ending.allCases {
+            let provider = ControlledSessionControlProvider()
+            let model = makeLaunchReadyModel(
+                sessionControlProvider: provider,
+                launchClient: StubStreamLaunchClient(),
+                remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                    .success(RemoteInputKeyMaterial(
+                        keyID: 10,
+                        key: Data(repeating: 0xDD, count: 16)
+                    ))
+                ])
+            )
+
+            await model.loadInitialState()
+            await model.refreshAppsForSelectedHost()
+            let launchTask = Task { await model.launchSelectedApp() }
+            let record = try await waitForSessionStart(provider)
+            provider.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
+            provider.finish(sessionID: record.sessionID, ending: ending)
+            await launchTask.value
+
+            XCTAssertFalse(model.hasActiveStreamSession)
+            guard case .failed = model.session.phase else {
+                return XCTFail("A non-terminal control stream must fail closed.")
+            }
+            XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+            XCTAssertEqual(model.renderState.policy, .idle)
+        }
     }
 
     func testDefaultInputKeyGenerationUsesFreshMaterialForEveryLaunch() async throws {
         let firstKey = RemoteInputKeyMaterial(keyID: 1, key: Data(repeating: 0x11, count: 16))
         let secondKey = RemoteInputKeyMaterial(keyID: 2, key: Data(repeating: 0x22, count: 16))
         let keyGenerator = ScriptedInputKeyGenerator(results: [.success(firstKey), .success(secondKey)])
+        let provider = ControlledSessionControlProvider(automaticallyCompletes: true)
         let launchClient = StubStreamLaunchClient()
         let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
             launchClient: launchClient,
             remoteInputKeyGenerator: keyGenerator
         )
@@ -507,18 +697,23 @@ final class AppModelWorkflowTests: XCTestCase {
         await model.loadInitialState()
         await model.refreshAppsForSelectedHost()
         await model.launchSelectedApp()
-        await model.stopStream()
         await model.launchSelectedApp()
 
-        let launchedKeys = await launchClient.currentLaunchedKeys()
-        XCTAssertEqual(launchedKeys, [firstKey, secondKey])
+        XCTAssertEqual(provider.currentStartRecords().map(\.request.remoteInputKey), [
+            firstKey,
+            secondKey
+        ])
         XCTAssertEqual(keyGenerator.currentGenerationCount(), 2)
+        let launchCount = await launchClient.currentLaunchCount()
+        XCTAssertEqual(launchCount, 0)
     }
 
     func testInputKeyGenerationFailureStopsBeforeNetworkLaunch() async throws {
         let keyGenerator = ScriptedInputKeyGenerator(results: [.failure(InputKeyGeneratorTestError.failed)])
+        let provider = ControlledSessionControlProvider()
         let launchClient = StubStreamLaunchClient()
         let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
             launchClient: launchClient,
             remoteInputKeyGenerator: keyGenerator
         )
@@ -527,6 +722,7 @@ final class AppModelWorkflowTests: XCTestCase {
         await model.refreshAppsForSelectedHost()
         await model.launchSelectedApp()
 
+        XCTAssertEqual(provider.currentStartRecords().count, 0)
         let launchCount = await launchClient.currentLaunchCount()
         XCTAssertEqual(launchCount, 0)
         XCTAssertEqual(keyGenerator.currentGenerationCount(), 1)
@@ -537,7 +733,40 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.renderState.policy, .idle)
     }
 
+    func testParameterPreparationFailureIsVisibleWithoutStartingProvider() async throws {
+        let provider = ControlledSessionControlProvider()
+        let launchClient = StubStreamLaunchClient()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: launchClient,
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 13,
+                    key: Data(repeating: 0xF1, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        model.settings.stream.width = 0
+        await model.launchSelectedApp()
+
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertFalse(model.streamLaunchUI.isLaunching)
+        XCTAssertNil(model.session.activeHostID)
+        guard case .failed = model.session.phase else {
+            return XCTFail("Parameter preparation failure must be visible to the application.")
+        }
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertEqual(provider.currentStartRecords().count, 0)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [])
+        let launchCount = await launchClient.currentLaunchCount()
+        XCTAssertEqual(launchCount, 0)
+    }
+
     private func makeLaunchReadyModel(
+        sessionControlProvider: any SessionControlProvider,
         launchClient: StubStreamLaunchClient,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
     ) -> AppModel {
@@ -565,7 +794,9 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
-            runtimeProviders: completeStreamProviderInventory(),
+            runtimeProviders: completeStreamProviderInventory(
+                sessionControlProvider: sessionControlProvider
+            ),
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKeyGenerator: remoteInputKeyGenerator
@@ -596,6 +827,99 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func waitForSessionStart(
+        _ provider: ControlledSessionControlProvider
+    ) async throws -> ControlledSessionControlProvider.StartRecord {
+        for _ in 0..<100 where provider.currentStartRecords().isEmpty {
+            await Task.yield()
+        }
+        return try XCTUnwrap(provider.currentStartRecords().last)
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<100 {
+            if condition() { return }
+            await Task.yield()
+        }
+        XCTFail("Timed out waiting for application session state.")
+    }
+
+    private func driveSessionToStreaming(
+        _ provider: ControlledSessionControlProvider,
+        record: ControlledSessionControlProvider.StartRecord
+    ) {
+        provider.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+    }
+
+    private func makeSessionLaunchResponse() -> StreamLaunchResponse {
+        StreamLaunchResponse(
+            sessionURL: "rtsp://example.invalid/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+    }
+
+    private func makeSessionConfiguration(
+        sessionID: UUID,
+        keyMaterial: RemoteInputKeyMaterial
+    ) -> NegotiatedSessionConfiguration {
+        NegotiatedSessionConfiguration(
+            sessionID: sessionID,
+            controlEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 47_999,
+                transport: .udp
+            ),
+            videoEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 48_000,
+                transport: .udp
+            ),
+            audioEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 48_010,
+                transport: .udp
+            ),
+            inputEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 35_043,
+                transport: .tcp
+            ),
+            video: NegotiatedVideoStreamConfiguration(
+                codec: .hevc,
+                width: 3_840,
+                height: 2_160,
+                frameRate: 60,
+                colorMetadata: .rec709VideoRange(),
+                maximumPacketSize: 1_400
+            ),
+            audio: NegotiatedAudioStreamConfiguration(
+                sampleRate: 48_000,
+                channelCount: 2,
+                streamCount: 1,
+                coupledStreamCount: 1,
+                samplesPerFrame: 240,
+                channelMapping: [0, 1],
+                maximumPacketSize: 1_400
+            ),
+            input: NegotiatedInputConfiguration(
+                keyMaterial: keyMaterial,
+                encrypted: true,
+                maximumMessageSize: RemoteInputWireCodec.maximumPacketSize
+            ),
+            requiredChannels: .all
+        )
+    }
+
     private func makeUnpairedHost() -> MoonlightHost {
         MoonlightHost(
             id: UUID(uuidString: "C8A319F8-E79F-4F57-AC18-7663D52F1EF8")!,
@@ -615,11 +939,13 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
-    private func completeStreamProviderInventory() -> RuntimeProviderInventory {
+    private func completeStreamProviderInventory(
+        sessionControlProvider: (any SessionControlProvider)? = nil
+    ) -> RuntimeProviderInventory {
         let production = ProductionRuntimeProviderFactory.makeDefault()
         return RuntimeProviderInventory(
             pairing: production.pairing,
-            sessionControl: production.sessionControl,
+            sessionControl: sessionControlProvider ?? production.sessionControl,
             videoReceive: AvailabilityVideoReceiveProvider(),
             audioReceive: AvailabilityAudioReceiveProvider(),
             remoteInput: production.remoteInput
@@ -785,6 +1111,167 @@ private actor ControlledIdentityProvisioner: ClientIdentityProvisioning {
 
 private enum PairingTestError: Error {
     case identityFailure
+}
+
+private final class ControlledSessionControlProvider: SessionControlProvider, @unchecked Sendable {
+    struct StartRecord {
+        var sessionID: UUID
+        var request: StreamLaunchRequest
+    }
+
+    enum Ending: CaseIterable {
+        case incomplete
+        case failure
+    }
+
+    private typealias Continuation = AsyncThrowingStream<
+        SessionControlEvent,
+        Error
+    >.Continuation
+
+    private let lock = NSLock()
+    private let automaticallyCompletes: Bool
+    private var startRecords: [StartRecord] = []
+    private var continuations: [UUID: Continuation] = [:]
+    private var stoppedSessionIDs: [UUID] = []
+
+    init(automaticallyCompletes: Bool = false) {
+        self.automaticallyCompletes = automaticallyCompletes
+    }
+
+    func start(
+        sessionID: UUID,
+        request: StreamLaunchRequest
+    ) async -> AsyncThrowingStream<SessionControlEvent, Error> {
+        AsyncThrowingStream { continuation in
+            withLock {
+                startRecords.append(StartRecord(sessionID: sessionID, request: request))
+                continuations[sessionID] = continuation
+            }
+            guard automaticallyCompletes else { return }
+            continuation.yield(.launchAccepted(StreamLaunchResponse(
+                sessionURL: "rtsp://example.invalid/session",
+                gameSessionID: "session-1",
+                rawValues: [:]
+            )))
+            continuation.yield(.rtspReady)
+            continuation.yield(.negotiated(Self.configuration(
+                sessionID: sessionID,
+                keyMaterial: request.remoteInputKey
+            )))
+            continuation.yield(.channelsReady(.all))
+            continuation.yield(.terminated(reason: nil))
+            _ = withLock {
+                continuations.removeValue(forKey: sessionID)
+            }
+            continuation.finish()
+        }
+    }
+
+    func requestIDR(sessionID: UUID) async throws {
+        _ = sessionID
+    }
+
+    func stop(sessionID: UUID) async {
+        let continuation = withLock {
+            stoppedSessionIDs.append(sessionID)
+            return continuations.removeValue(forKey: sessionID)
+        }
+        continuation?.finish()
+    }
+
+    func yield(_ event: SessionControlEvent, sessionID: UUID) {
+        continuation(for: sessionID)?.yield(event)
+    }
+
+    func finish(
+        sessionID: UUID,
+        ending: Ending = .incomplete
+    ) {
+        let continuation = withLock {
+            continuations.removeValue(forKey: sessionID)
+        }
+        switch ending {
+        case .incomplete:
+            continuation?.finish()
+        case .failure:
+            continuation?.finish(throwing: StreamNegotiationFailure(
+                code: .transportUnavailable,
+                subsystem: "session.control",
+                message: "Session control failed."
+            ))
+        }
+    }
+
+    func currentStartRecords() -> [StartRecord] {
+        withLock { startRecords }
+    }
+
+    func currentStoppedSessionIDs() -> [UUID] {
+        withLock { stoppedSessionIDs }
+    }
+
+    private func continuation(for sessionID: UUID) -> Continuation? {
+        withLock { continuations[sessionID] }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+
+    private static func configuration(
+        sessionID: UUID,
+        keyMaterial: RemoteInputKeyMaterial
+    ) -> NegotiatedSessionConfiguration {
+        NegotiatedSessionConfiguration(
+            sessionID: sessionID,
+            controlEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 47_999,
+                transport: .udp
+            ),
+            videoEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 48_000,
+                transport: .udp
+            ),
+            audioEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 48_010,
+                transport: .udp
+            ),
+            inputEndpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 35_043,
+                transport: .tcp
+            ),
+            video: NegotiatedVideoStreamConfiguration(
+                codec: .hevc,
+                width: 3_840,
+                height: 2_160,
+                frameRate: 60,
+                colorMetadata: .rec709VideoRange(),
+                maximumPacketSize: 1_400
+            ),
+            audio: NegotiatedAudioStreamConfiguration(
+                sampleRate: 48_000,
+                channelCount: 2,
+                streamCount: 1,
+                coupledStreamCount: 1,
+                samplesPerFrame: 240,
+                channelMapping: [0, 1],
+                maximumPacketSize: 1_400
+            ),
+            input: NegotiatedInputConfiguration(
+                keyMaterial: keyMaterial,
+                encrypted: true,
+                maximumMessageSize: RemoteInputWireCodec.maximumPacketSize
+            ),
+            requiredChannels: .all
+        )
+    }
 }
 
 private final class ControlledPairingProvider: PairingRuntimeProvider, @unchecked Sendable {

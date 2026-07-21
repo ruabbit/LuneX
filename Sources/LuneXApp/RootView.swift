@@ -583,15 +583,29 @@ private struct StreamLaunchPanel: View {
                     LabeledContent("HDR", value: appModel.settings.stream.hdrEnabled && app.supportsHDR ? "Requested" : "Off")
 
                     if appModel.isStreamTransportAvailable {
-                        Button {
-                            Task {
-                                await appModel.launchSelectedApp()
+                        if appModel.hasActiveStreamSession {
+                            Button(role: .destructive) {
+                                Task {
+                                    await appModel.stopStream()
+                                }
+                            } label: {
+                                Label("Stop Stream", systemImage: "stop.circle")
                             }
-                        } label: {
-                            Label(appModel.streamLaunchUI.isLaunching ? "Launching" : "Launch Stream", systemImage: "play.circle.fill")
+                            .disabled(appModel.session.phase == .stopping)
+                        } else {
+                            Button {
+                                Task {
+                                    await appModel.launchSelectedApp()
+                                }
+                            } label: {
+                                Label(
+                                    appModel.streamLaunchUI.isLaunching ? "Launching" : "Launch Stream",
+                                    systemImage: "play.circle.fill"
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(appModel.streamLaunchUI.isLaunching || host.pairingState != .paired)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(appModel.streamLaunchUI.isLaunching || host.pairingState != .paired)
                     } else {
                         Label("Moonlight media transport unavailable", systemImage: "exclamationmark.triangle")
                             .font(.caption)

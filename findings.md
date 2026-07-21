@@ -515,3 +515,19 @@
 - Cancelling without an owned pairing attempt is a no-op, so selected-host observation cannot disconnect an unrelated stream. Duplicate submit is rejected while a request is running, and application rejection explicitly cancels provider work.
 - Final evidence is `25/25` targeted, `56 total / 55 passed / 1 explicit Keychain skip / 0 failed` expanded, and `337 total / 336 passed / 1 explicit Keychain skip / 0 failed` complete macOS. All five Debug builds and fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates passed; fixed simulators remained unique and `Shutdown`.
 - This proves deterministic application/provider integration. It does not prove a live Sunshine pairing or re-pair, which remains task 3.7, and does not prove stream readiness or media ownership, which remain 8.3-8.4.
+
+### OpenSpec 8.3 session application integration design (2026-07-21)
+
+- `MoonlightSessionControlProvider` already owns the launch/resume/RTSP/control teardown generation. `AppModel` must consume that provider stream and use `StreamSessionCoordinator` only as the ordered state reducer; calling the coordinator's legacy launch client would issue a second `/launch`.
+- Streaming UI truth is the reducer snapshot: launch acceptance, RTSP readiness, or partial channel health remain connecting. Only a validated negotiated configuration plus all required control/video/audio/input readiness can enter `Streaming`.
+- A provider-owned local stop must not invoke the coordinator's launch client for another `/cancel`. The reducer therefore needs generation-scoped begin/complete local-stop mutations, while the provider remains the sole transport teardown owner.
+- AppModel must invalidate its active session ID before awaiting provider stop. Late events from the stopped generation then cannot restore streaming or mutate a replacement generation.
+
+### OpenSpec 8.3 session application integration acceptance (2026-07-21)
+
+- `AppModel` now prepares a generation in `StreamSessionCoordinator`, starts exactly one injected `SessionControlProvider`, consumes its events, and derives the visible phase/render policy from reducer snapshots. The legacy launch client is not called from the application launch path.
+- Launch acceptance, RTSP readiness, partial channel health, and reconnect remain non-streaming. Only validated negotiation plus every required control/video/audio/input readiness bit enters Streaming; loss/reconnect immediately returns rendering to idle until fresh negotiation and full readiness recover.
+- Local stop invalidates application ownership before awaiting provider teardown and uses reducer-only begin/complete stop transitions, so no second remote cancel is sent. Remote termination performs full UI cleanup without a local stop; stale/late events cannot restore a stopped generation.
+- Invalid event order, provider throw, incomplete stream, input-key failure, and parameter preparation failure fail closed. Pre-start failure is visible but does not start/stop the provider; post-start failure stops the provider exactly once.
+- Final evidence: targeted `31/31`, expanded `76/76`, complete macOS `344 total / 343 passed / 1 explicit Keychain skip / 0 failed`, and all five Debug warnings-as-errors builds passed. Fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates passed, and fixed simulators remained unique and Shutdown.
+- This does not connect the concrete video/audio/input providers to the same session lifetime and does not prove live Sunshine media or input. Those boundaries remain 8.4, 5.8, 6.7, 7.7, and 9.2-9.3.
