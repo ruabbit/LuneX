@@ -1025,3 +1025,21 @@
 - shader uniform同时消费validated frame layout、immutable color signature、render configuration和signature-derived source peak。HDR-to-SDR不能接收current headroom大于1的CPU mapping后再仅在GPU强制为1，否则3.4 CPU/GPU oracle会使用不同合同；现已typed拒绝该组合。
 - pipeline cache必须可从同步`MTKViewDelegate.draw(in:)`直接调用。actor版本虽能通过独立并发测试，但会迫使renderer异步跳帧或阻塞桥接；最终改为锁保护同步LRU，昂贵创建在同一临界区完成以保证同key并发单建，且合法key空间严格限制为三个layout/mapping/output组合。
 - 真实factory/pipeline与五平台build证明ABI和pipeline construction可消费repository shader，但尚未编码render commands、绑定zero-copy planes/uniforms或验证pixel output；这些分别属于3.3和3.4。
+## 2026-07-21 阶段 15 任务 3.3 恢复与实现边界
+
+- 从已推送的 `34c71ed Bound HDR Metal pipeline states` 恢复；`HEAD == origin/main`、工作树 clean，且没有残留 `xcodebuild`、Metal、OpenSpec 或 Git 写进程。OpenSpec `implement-native-hdr-edr-pipeline` 为 spec-driven、`12/33`，下一项为 3.3。
+- 3.3 必须新增独立、可注入且由 active `HDRRenderConfigurationIdentity` 拥有的 Metal renderer；production `StreamMetalPresenter` 仍保持 Core Image 路径，直到 3.5 才替换，避免提前扩大行为面。
+- renderer 必须直接绑定 `MetalVideoFrame.luma.texture` / `chroma.texture`，不得从 `CVPixelBuffer` 重建 Core Image 或 CPU 中间帧；pipeline state 复用 3.2 的同步 bounded cache。
+- `ResolvedVideoRectangle.videoRect` 在 fill 模式可超出 drawable；实现需使用裁剪后的 viewport/scissor，并把 `sourceCropRect` 规范化后传给 shader。为保持 3.2 已冻结的 32-byte color uniform ABI，presentation geometry 使用独立 uniform buffer。
+- 3.3 的测试边界是 configuration replacement、stale generation/display revision、viewport/crop、zero-copy resource identity、提交/完成所有权和失败恢复；真实 shader pixel readback属于 3.4，production presenter替换属于3.5，EDR surface配置属于第4组。
+- 固定 simulator 只读基线：iPhone `23A27088-C19F-4F77-A455-4E50E393167E`、iPad `409A5908-8C39-4797-A41C-04503A05FA3D`、Apple TV `11D0B224-D778-4A13-A156-272A45AFF119`、Apple Vision Pro `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` 均唯一、available、`Shutdown`；3.3 仅 build-only，不 create/clone/boot/run/显式 shutdown/delete。
+- 共享执行流新增的3.3初版 focused `7/7`通过，已覆盖geometry ABI、fit/fill crop、zero-copy plane identity、stale frame/configuration、target/uniform rejection、真实offscreen encoder和同步submission failure。审计仍发现异步command completion没有回到renderer，无法证明replacement/stop后的late completion不恢复旧presentation ownership；需用ownership revision回调和延迟completion测试补齐。
+- pipeline state虽然只按layout/mapping/output key缓存，但HDR output-resource合同明确要求replacement释放renderer-owned pipeline资源；因此configuration replacement必须先失效ownership并flush cache，后续matching frame再按bounded key重建。该成本后续由阶段20测量，不能以推测优化放宽teardown合同。
+
+## 2026-07-21 阶段 15 任务 3.3 验收结论
+
+- renderer在command encoding前重新验证active immutable configuration、decoder generation、color signature、decoded plane layout、uniform semantics、source/drawable geometry、surface pixel format、Metal device及drawable texture identity；错误只暴露稳定分类，不携带host/display/frame内容。
+- 16-byte geometry uniform保持3.2的32-byte color uniform ABI不变；fit使用显式video viewport并由full-target clear保留黑边，fill使用full drawable viewport和标准化source crop，fragment index `0/1`直接绑定现有luma/chroma texture，不创建CIImage或CPU颜色中间帧。
+- command completion由单调ownership revision隔离；replacement和stop后的迟到完成只累计stale counter，不能恢复旧configuration或last-completed frame。同步GPU wait在调用线程回调，避免renderer持锁等待completion线程形成互等。
+- replacement、stop、同步提交失败和异步GPU失败都释放renderer-owned pipeline cache；Apple submitter验证command queue、pipeline、planes和target属于同一device，present只接受与target texture同一对象的`CAMetalDrawable`。
+- focused真实offscreen command completion、完整suite和五平台build只证明编码/所有权合同。像素与CPU reference vector容差属于3.4，production Core Image presenter替换属于3.5，surface colorspace/EDR intent属于4.x，物理亮度/颜色/信号仍需6.5。

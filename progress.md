@@ -1365,3 +1365,24 @@
 - 从`48b2359`恢复，确认`HEAD == origin/main`、初始工作树clean且无运行中的build/git进程；OpenSpec权威进度`8/33`。
 - 2.3范围限定为bounded Metal frame queue对active immutable render configuration的所有权、generation/color/display/mapping-surface mismatch拒绝，以及generation/render-contract切换时的queued-frame清理和texture-cache flush；不提前实现2.4完整矩阵、shader、presenter或surface runtime wiring。
 - 只读审计期间检测到共享执行流写入`MetalVideoFrameDelivery.swift`而未同步测试；保留并审计该来源不明修改，不回退。当前实现方向为queue持有active configuration、调用方在enqueue/dequeue携带configuration identity、切换时清队列/flush；下一步补齐编译兼容与focused行为测试。
+## 2026-07-21 阶段 15 任务 3.3 恢复
+
+- 运行 planning-with-files session catchup，确认未同步内容只是上一轮 `3.2` 已推送、`3.3` 尚未编辑的检查点；`git diff --stat` 为空。
+- 核对活动目标仍覆盖阶段 13–20，无需重复创建；仓库为 `main`，`HEAD/origin/main=34c71edb36976814914b29e18a54bcb2d5647377`，工作树 clean，无残留构建/Git写进程。
+- 读取 OpenSpec status/apply 指令及 proposal/design/specs/tasks；阶段 15 当前 `12/33`，开始 3.3 injectable generation/revision-owned Metal renderer。
+- 记录固定四类 simulator 的唯一、available、`Shutdown` 基线；本任务继续禁用真实 Keychain 测试并保持 simulator inventory 不变。
+- 检测并等待共享执行流的3.3 focused测试完成；证据`/tmp/LuneX-15-3_3-focused-result-second.eVOvYz/HDRMetalVideoRenderer.xcresult`为`7/7 passed, 0 skipped, 0 failed`。工作树包含同名renderer/test/shader/generator/project修改，已保留且开始审计，不回退来源不明改动。
+- 审计确认基础zero-copy/geometry/真实encoder合同成立，但异步completion ownership和replacement cache复用缺失；进入定向补强并新增late completion回归。
+- 3.3 首次 focused 编译失败：测试试图直接构造 `HDRMetalShaderUniforms` 的 raw 字段，但该类型只开放 validated contract/configuration/mapping initializer；production renderer 与 Metal shader 已编译。修复为通过合法 HDR contract 构造与 active SDR configuration 不匹配的 uniforms，继续验证 fail-closed，不增加测试专用后门。
+- 3.3 自审补充 HDR stale-signature fixture 后，测试 helper 因局部 `isHDR` 使单表达式函数变为多语句而缺少显式 `return`；编译器在测试执行前拒绝。补上显式返回后从新 DerivedData 重跑，不复用失败证据。
+- 随后检测到共享执行流把command submitter扩展为completion-handler合同并加入ownership revision及late-completion测试；保留该补强。同步wait路径改为GPU完成后在调用线程回调，避免renderer持锁等待时Metal completion线程反向等待同一锁；replacement/stop/command failure继续按spec flush renderer-owned pipeline cache。
+
+## 2026-07-21 阶段 15 任务 3.3 完成
+
+- 新增`HDRMetalVideoRenderer`、Apple command submitter和16-byte geometry uniforms；renderer按active generation/color/display/surface ownership验证zero-copy plane、uniform、geometry、device、target及drawable identity，使用明确viewport/scissor、black clear、fragment texture `0/1`和typed buffer `0`编码。异步completion以ownership revision隔离replacement/stop，相关failure和teardown释放pipeline cache。
+- 最终focused `9/9`且零失败（`/tmp/LuneX-15-3_3-focused-result-fifth.CxE888/HDRMetalVideoRenderer.xcresult`）；包含真实offscreen Metal command completion、fit/fill crop、same-generation stale HDR signature、zero-copy identity、invalid target/uniform、replacement/stop late completion和submission failure。
+- 完整macOS为`538 total / 537 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-3_3-full-result.LrPP7D/LuneXCoreTests.xcresult`）；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS及固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only均`0 warning / 0 error`（`/tmp/LuneX-15-3_3-builds.WgyE0u`）。四个固定simulator前后规范化清单逐字一致，SHA-256均为`c9a13bf461f160776b0acdf63b9562e684a4dd4f5a464fdbe978f2a233b6dbf3`，全部唯一、available且`Shutdown`，未执行设备管理命令。
+- repository gates位于`/tmp/LuneX-15-3_3-repo.CeDCBo`：OpenSpec strict `6/6`、fixture self/full、generator三次稳定、project SHA-256为`b340e4ea43bc866bb05d5f2842346cc87968ab282698148d7b406e3db73d0a1d`，production/reference/dependency/whitespace边界通过。
+- OpenSpec 3.3标记完成，权威进度`13/33`。本项不证明GPU pixel accuracy、production presenter切换、EDR surface signaling或物理HDR；下一项3.4执行offscreen shader readback并与CPU reference vectors比较。
+- 恢复后提交前独立复验再次通过：generator输出SHA-256仍为`b340e4ea43bc866bb05d5f2842346cc87968ab282698148d7b406e3db73d0a1d`，`git diff --check`通过；全新DerivedData下`HDRMetalVideoRendererTests`为`9/9 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_3-reverify.FiOY7J/HDRMetalVideoRenderer.xcresult`），命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。

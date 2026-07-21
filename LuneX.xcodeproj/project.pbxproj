@@ -5,6 +5,7 @@
   objectVersion = 77;
   objects = {
 		00084FC7C6315474D009EEEE /* RTSPMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA161CDCBA58595C0DFFB1DD /* RTSPMessage.swift */; };
+		006199BEFC9703CD86331955 /* HDRMetalVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */; };
 		01BFCCAAE0F68C179773503B /* host.c in Sources */ = {isa = PBXBuildFile; fileRef = 9D5A2F039AF5AC454CE4E1E0 /* host.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		0224014AC3B894A20BCB2673 /* HostEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82820A094B73B5239F4F5C6F /* HostEndpoint.swift */; };
 		02276D32D963C65B91F84E38 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DB7571B8334F5E7680A9B20 /* Assets.xcassets */; };
@@ -84,6 +85,7 @@
 				E17C5210160DA201868DD8DA /* HDRDecodedVideoContract.swift */,
 				951C4385277771C53E668B07 /* HDRLuminanceMapping.swift */,
 				09713A15F9C87AE6BAF402FC /* HDRMetalPipeline.swift */,
+				4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */,
 				32FD909C5E7642EE14FD9AEC /* HDRRenderContract.swift */,
 				04AAF62081DEF9C05A4DED8E /* HDRVideoShaders.metal */,
 				23EDB4BFB4ABA1B790E136DC /* MetalVideoFrameDelivery.swift */,
@@ -220,6 +222,7 @@
 				D521B75C8FD9FAC8D513B7F2 /* HDRDecodedVideoContract.swift in Sources */,
 				22BC96308F5790950CC4E7EC /* HDRLuminanceMapping.swift in Sources */,
 				93C849FCA39F0152E9260124 /* HDRMetalPipeline.swift in Sources */,
+				006199BEFC9703CD86331955 /* HDRMetalVideoRenderer.swift in Sources */,
 				6BB7E5C7C8CC00163B3AA14B /* HDRRenderContract.swift in Sources */,
 				632DD74A19BE3918A05E1E9A /* HDRVideoShaders.metal in Sources */,
 				8078135E63E86083D9D0BE45 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -423,6 +426,7 @@
 		4D01F1AFD08EF95771D6169C /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
 		4D0440A153CC09DAFCFA271E /* RemoteInputWireCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/RemoteInputWireCodec.swift"; sourceTree = "<group>"; };
 		4E0C760E5D80E64FBCA4D55A /* RemoteInputRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */; };
+		4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXRendering/HDRMetalVideoRenderer.swift"; sourceTree = "<group>"; };
 		4E563EAF4AF6BCC20BC60369 /* LuneX-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LuneX-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E9545952585E412E279F56E /* MetalStreamSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F49F3FF738DFF569AC19BFF /* MetalStreamSurface.swift */; };
 		4FA393E16ACA3B15586B2711 /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
@@ -472,6 +476,7 @@
 				AAE953452CCD6DDD91445CEA /* Resources */,
 				547D009064F7C3F13BEF3460 /* Products */,
 			); sourceTree = "<group>"; };
+		51BD3171CF455FD741203E0E /* HDRMetalVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */; };
 		520AF92B8152ADC6DCC69DFE /* ClientIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */; };
 		52588C27B85362A81133EA71 /* TVRemoteFocusInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */; };
 		533C6BF0CE0FC77B5AF48465 /* StreamCoordinateSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPlatform/StreamCoordinateSnapshot.swift"; sourceTree = "<group>"; };
@@ -502,6 +507,7 @@
 				1774213524F81F3699C4A0FB /* HDRDecodedVideoContract.swift in Sources */,
 				E1D13C87F378BA86E654E7A2 /* HDRLuminanceMapping.swift in Sources */,
 				471B0F4AAD82A5570440651A /* HDRMetalPipeline.swift in Sources */,
+				51BD3171CF455FD741203E0E /* HDRMetalVideoRenderer.swift in Sources */,
 				AA29A40578CDF8CFEFC593B9 /* HDRRenderContract.swift in Sources */,
 				71CE4D991A06CC10478CCC2E /* HDRVideoShaders.metal in Sources */,
 				F0B6B7E6BBCF9C4D2168DC28 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -629,6 +635,7 @@
 				612236FE3E89C6FAA0BD67C3 /* HDRDecodedVideoContract.swift in Sources */,
 				EB2C2B7C298D21BAF9374DD9 /* HDRLuminanceMapping.swift in Sources */,
 				49D4EB424AB36CEAEAA63F8D /* HDRMetalPipeline.swift in Sources */,
+				BF4C846DB5CE4B2E19974B57 /* HDRMetalVideoRenderer.swift in Sources */,
 				8AEE264397F38B797EA26753 /* HDRRenderContract.swift in Sources */,
 				1FBD1019CAD2EEA42CCDCADE /* HDRVideoShaders.metal in Sources */,
 				AB12D0E84ED679D2676C9160 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -719,6 +726,7 @@
 				283EB77ED6A3D7E562CAFD4E /* HDRDecodedVideoContractTests.swift in Sources */,
 				CE11836E191C009C99D43BE3 /* HDRLuminanceMappingTests.swift in Sources */,
 				7CC8D8F423DC5CD237893E1D /* HDRMetalPipelineTests.swift in Sources */,
+				721E3D1731C5D5DB6AAE4662 /* HDRMetalVideoRendererTests.swift in Sources */,
 				E22A1D43E619CA2AFA9EF728 /* HDRRenderContractTests.swift in Sources */,
 				DD789FA5FE8C125185872F0A /* InputAdapterTests.swift in Sources */,
 				A97D58BABC85A2E6F3E6D0C2 /* PairingStateMachineTests.swift in Sources */,
@@ -815,6 +823,7 @@
 		70FBA8531186D5D51C8A7C21 /* VideoDecompressionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4AFD13BCF45C8B5F76A060 /* VideoDecompressionSession.swift */; };
 		71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MetalVideoFrameDeliveryTests.swift"; sourceTree = "<group>"; };
 		71CE4D991A06CC10478CCC2E /* HDRVideoShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 04AAF62081DEF9C05A4DED8E /* HDRVideoShaders.metal */; };
+		721E3D1731C5D5DB6AAE4662 /* HDRMetalVideoRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95D31708C2BCDA06F43A325 /* HDRMetalVideoRendererTests.swift */; };
 		725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/SessionMediaEnvironment.swift"; sourceTree = "<group>"; };
 		72658DE06852BCF73C8CE96B /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
 		73C5A50224377A49BCA51041 /* AudioToolboxOpusDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC431C3BFB327CAA6B8E7939 /* AudioToolboxOpusDecoder.swift */; };
@@ -845,6 +854,7 @@
 		7D1E779DAD022CD933D8BA24 /* InputAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/InputAdapterTests.swift"; sourceTree = "<group>"; };
 		7DC19CFC616146A12EBE16BD /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */; };
 		7E44AE9CD91CF8AAECCCC2CC /* VideoPacketAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034D057B26B7D00AA2AD265F /* VideoPacketAssembly.swift */; };
+		7E95234B4545E4AFE6142C38 /* HDRMetalVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */; };
 		7EC49F1787E0F58A60DA427B /* SessionTeardown.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFA7F994587868FF358AAC05 /* SessionTeardown.swift */; };
 		7F07F080755ABD6DC2799457 /* ApplicationDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC7F7BAF41E28D7F93292D /* ApplicationDiagnostics.swift */; };
 		7F40071572B7AC57FA4485B7 /* LuneXApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FE925D93939396C8853A8E /* LuneXApp.swift */; };
@@ -894,6 +904,7 @@
 				B7FDEB713AE8A9FA4F26A01F /* HDRDecodedVideoContract.swift in Sources */,
 				CBD36E7F17C8D4B028D8FA6F /* HDRLuminanceMapping.swift in Sources */,
 				D9869678FF39BDE7B97B3215 /* HDRMetalPipeline.swift in Sources */,
+				7E95234B4545E4AFE6142C38 /* HDRMetalVideoRenderer.swift in Sources */,
 				F7B28D3ABBB7F439092D2856 /* HDRRenderContract.swift in Sources */,
 				F28616F7850D625457DBA0F5 /* HDRVideoShaders.metal in Sources */,
 				0E054FC81470415493E52B5C /* MetalVideoFrameDelivery.swift in Sources */,
@@ -1105,6 +1116,7 @@
 				C21FA814336F6DCCC133F9E5 /* HDRDecodedVideoContractTests.swift */,
 				5D5C5B513BABDD7E45B57AD8 /* HDRLuminanceMappingTests.swift */,
 				76BDE7F4EB1791673EDD56FB /* HDRMetalPipelineTests.swift */,
+				A95D31708C2BCDA06F43A325 /* HDRMetalVideoRendererTests.swift */,
 				1386EF0470C16F24BBE8D778 /* HDRRenderContractTests.swift */,
 				7D1E779DAD022CD933D8BA24 /* InputAdapterTests.swift */,
 				9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */,
@@ -1157,6 +1169,7 @@
 		A8990C76629DC5A2272BBB8F /* PairingTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959150EFED4D92A51573DF2D /* PairingTransport.swift */; };
 		A8CFF45EB8B3BE31C8E9E08D /* SessionCancellationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DC7936552A9B359D6E3DB3 /* SessionCancellationTests.swift */; };
 		A95CCCA68C4F1377FCCB07DA /* unix.c in Sources */ = {isa = PBXBuildFile; fileRef = 63DF5880D21F53811AE8A4D8 /* unix.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
+		A95D31708C2BCDA06F43A325 /* HDRMetalVideoRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HDRMetalVideoRendererTests.swift"; sourceTree = "<group>"; };
 		A97D58BABC85A2E6F3E6D0C2 /* PairingStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */; };
 		A98BAC7E720E34687CF77B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DB7571B8334F5E7680A9B20 /* Assets.xcassets */; };
 		AA29A40578CDF8CFEFC593B9 /* HDRRenderContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FD909C5E7642EE14FD9AEC /* HDRRenderContract.swift */; };
@@ -1249,6 +1262,7 @@
 		BE6EB9CEC4DEE01C6D2676F3 /* PairingPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD8DB1FC579838127AC329D /* PairingPersistence.swift */; };
 		BE7AB69420826BC30872D502 /* VideoCodecSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39657BF8E5A5BB7530B4EDDE /* VideoCodecSelection.swift */; };
 		BEC37FA319210002E45EEBEC /* StreamNegotiationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F4371F9A47B38E2727DCD1 /* StreamNegotiationTests.swift */; };
+		BF4C846DB5CE4B2E19974B57 /* HDRMetalVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */; };
 		C050244F381FB8AECBFBE492 /* MacSessionInputCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MacSessionInputCoordinatorTests.swift"; sourceTree = "<group>"; };
 		C074C5FC2CA67383E73B761C /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		C07707ED42EE088824211341 /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
@@ -1482,6 +1496,7 @@
 				6F01125BDE3AAE918093E5C7 /* HDRDecodedVideoContract.swift in Sources */,
 				E0D96F04285511622A3381E9 /* HDRLuminanceMapping.swift in Sources */,
 				3C6EBAE41501FDCEA6FE6AA9 /* HDRMetalPipeline.swift in Sources */,
+				FEA130B5EA63CC39E994281F /* HDRMetalVideoRenderer.swift in Sources */,
 				045BDC869E1D67A3F1E459B2 /* HDRRenderContract.swift in Sources */,
 				F794E1CEAC20B1B919A779E7 /* HDRVideoShaders.metal in Sources */,
 				8ABEB85CF6F368EA331363F9 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -1637,6 +1652,7 @@
 		FDBB316E133A028AEC33B7EC /* SessionTeardown.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFA7F994587868FF358AAC05 /* SessionTeardown.swift */; };
 		FDDCB8C9A43F3B2D6A61E288 /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
 		FE81B94E269F60C968BDE9A1 /* SessionMediaEnvironmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39EE678B8A2A21D8B358CB4 /* SessionMediaEnvironmentTests.swift */; };
+		FEA130B5EA63CC39E994281F /* HDRMetalVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */; };
 		FEFC175E7A54E68CF8F4FD21 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E750CEB84733E203CA3E6E48 /* Models.swift */; };
 		FFEC87CE8C08878EFA440FC8 /* AudioRuntimeRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1A7ED20A6C63D1DBDE4BA2 /* AudioRuntimeRecovery.swift */; };
 		FFFBBD03D995B6047F9FBDC6 /* RuntimeProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4EBE3955C463936A71B8B9 /* RuntimeProviders.swift */; };

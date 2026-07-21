@@ -28,6 +28,13 @@ struct VideoUniforms {
     float reserved;
 };
 
+struct GeometryUniforms {
+    float textureOriginX;
+    float textureOriginY;
+    float textureScaleX;
+    float textureScaleY;
+};
+
 struct RasterData {
     float4 position [[position]];
     float2 textureCoordinate;
@@ -192,7 +199,9 @@ float3 mapLuminance(float3 luminanceNits, float sourcePeakNits, float headroom) 
 
 } // namespace lunex
 
-vertex lunex::RasterData lunex_hdr_video_vertex(uint vertexID [[vertex_id]]) {
+vertex lunex::RasterData lunex_hdr_video_vertex(
+    uint vertexID [[vertex_id]],
+    constant lunex::GeometryUniforms &geometry [[buffer(0)]]) {
     constexpr float2 positions[] = {
         float2(-1.0f, -1.0f),
         float2(3.0f, -1.0f),
@@ -205,7 +214,12 @@ vertex lunex::RasterData lunex_hdr_video_vertex(uint vertexID [[vertex_id]]) {
     };
     lunex::RasterData output;
     output.position = float4(positions[vertexID], 0.0f, 1.0f);
-    output.textureCoordinate = textureCoordinates[vertexID];
+    output.textureCoordinate = float2(
+        geometry.textureOriginX
+            + textureCoordinates[vertexID].x * geometry.textureScaleX,
+        geometry.textureOriginY
+            + textureCoordinates[vertexID].y * geometry.textureScaleY
+    );
     return output;
 }
 
