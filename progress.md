@@ -1080,8 +1080,8 @@
 - session catch-up、文件化计划、active goal与OpenSpec已恢复并互相核对；`HEAD == origin/main == 0c461b1`且启动前工作树clean，阶段14权威进度`21/29`。
 - 5.4范围限定为privacy-bounded lifecycle/input语义诊断、同状态去重和恢复/停止后的当前action清理；历史事件继续保留，不提前执行5.5 application integration gate或6.x live hardware证明。
 - 测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，不再次访问真实Keychain；五平台build-only复用既有固定且Shutdown的simulator，不create、boot、run或shutdown设备。
-- 最终定向Swift/Clang warnings-as-errors门通过`49/49`、无skip，结果`/tmp/LuneX-14-5_4-focused-final.tFZbjY/Diagnostics.xcresult`；覆盖current-action/history分离、privacy固定payload、语义状态去重、真实provider send失败fail-closed、readiness恢复选择性清理与stop历史保留。
-- 完整macOS suite结构化通过`469 total / 468 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-5_4-full.Xzrlvl/LuneXCoreTests.xcresult`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，测试命令显式移除环境变量。
+- 最终定向Swift/Clang warnings-as-errors门通过`49/49`、无skip，结果`/tmp/LuneX-14-5_4-focused-final2.M5GVv9/Diagnostics.xcresult`；覆盖current-action/history分离、privacy固定payload、语义状态去重、真实provider send失败fail-closed、readiness恢复选择性清理与stop历史保留。
+- 完整macOS suite结构化通过`469 total / 468 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-5_4-full-final2.4322ka/LuneXCoreTests.xcresult`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，测试命令显式移除环境变量。
 - 五平台构建前只读simulator审计确认四个固定UUID各自唯一、可用且全部`Shutdown`，全局`Booted=0`；下一门为macOS与固定iPhone/iPad/tvOS/visionOS Debug warnings-as-errors build-only及构建后逐字节状态比较。
 - 5.4最终定向Swift/Clang warnings-as-errors门禁通过`49/49`、无skip，结果`/tmp/LuneX-14-5_4-focused-r3.pDAiXq/Diagnostics.xcresult`；覆盖current action按类别清理、历史保留、固定privacy payload、lifecycle/input状态去重、真实fake-provider send failure、readiness recovery、fatal decoder保留和stop清理。
 - input provider拒绝后AppModel以独立failed gate立即关闭surface admission，同时保留generation token供readiness loss/stop回收；恢复generation建立后才清input action。下一门为完整macOS suite。
@@ -1092,3 +1092,19 @@
 - 最终focused `49/49`（`/tmp/LuneX-14-5_4-focused-final2.M5GVv9/Diagnostics.xcresult`）；完整macOS `469 total / 468 passed / 1 Keychain skip / 0 failed`（`/tmp/LuneX-14-5_4-full-final2.4322ka/LuneXCoreTests.xcresult`），唯一skip精确为一次性真实Keychain测试。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors build-only全部通过，证据`/tmp/LuneX-14-5_4-builds-final2.Uw3Ahq`；构建前后simulator规范化JSON逐字节一致，固定实例唯一且全部`Shutdown`、全局`Booted=0`。
 - 5个OpenSpec strict、generator三次及生成前SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 5.4标记完成，权威进度`22/29`；下一项为5.5完整application integration gate，阶段13仍为`54/61 in_progress`。
+
+## 2026-07-21 阶段 14 任务 5.5 启动
+
+- 5.4已以`3cecf50 Publish bounded macOS lifecycle diagnostics`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`22/29`。
+- 5.5限定为单一application-level确定性集成门：同一fake session证明provider delivery、focus release、occlusion pause/resume、resize mapping和clean teardown，不把fake-provider观察声称为授权Sunshine host receipt。
+- 首次单项测试命令误用不存在的`LuneX` scheme，`xcodebuild`在编译前以65退出；该结果不属于源码失败。下一步先从工程读取实际scheme，再使用新的命令执行门禁。
+- 正确scheme下的首轮单项warnings-as-errors测试通过；补强generation断言后的复跑命令因包含不必要的临时`.xcresult`删除而被安全规则在启动前拒绝。后续使用唯一结果路径，不重复该清理方式。
+
+## 2026-07-21 阶段 14 任务 5.5 完成
+
+- 单一application-level门在同一fake session中串联keyboard delivery、focus release、occlusion pause/resume、1600x1200 resize后的fit坐标映射与local stop clean teardown；不新增production fake接口，也不将fake receipt声称为Sunshine host receipt。
+- fake environment不启动native video processor；测试显式注入presentation source并播入受控decoder generation，验证AppModel occlusion失效旧generation、resume接受新generation和stop清理source。该fixture不证明真实视频帧或Sunshine receipt。
+- 最终单项warnings-as-errors复跑`1/1`通过（`/tmp/LuneX-14-5_5-single-r2.moqTup/Integration-final-1784637488.xcresult`）；最终扩大focused五测试簇`92/92`通过（`/tmp/LuneX-14-5_5-focused-final.4mEnnV/Focused.xcresult`）。
+- 完整macOS `470 total / 469 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_5-full.G8yfCE/LuneXCoreTests.xcresult`），测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，唯一skip精确为真实Keychain round-trip。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-14-5_5-builds.aZ3I4a`）；前后simulator规范化JSON逐字节一致，四个固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
+- OpenSpec strict `5 passed / 0 failed`，generator生成前与三次生成SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`，project无漂移、whitespace、reference和ThirdParty边界通过（`/tmp/LuneX-14-5_5-repo-gates.lB9GkQ`）。OpenSpec 5.5标记完成，权威进度`23/29`；下一项6.1为normal tests/唯一Keychain skip门，阶段13仍为`54/61 in_progress`。

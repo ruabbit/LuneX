@@ -843,5 +843,17 @@
 - input recovery不会清decoder/audio fatal，focus或occlusion变化也不会清未恢复action；新session、streaming transport recovery、local stop和remote disconnect按明确scope清current presentation，历史事件不删除。
 - 最终focused为`49/49`（`/tmp/LuneX-14-5_4-focused-final2.M5GVv9/Diagnostics.xcresult`）；完整macOS为`469 total / 468 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_4-full-final2.4322ka/LuneXCoreTests.xcresult`），测试显式移除真实Keychain开关。
 - 五平台Debug warnings-as-errors build-only通过（`/tmp/LuneX-14-5_4-builds-final2.Uw3Ahq`）；simulator前后规范化状态逐字节一致，固定实例唯一且全部`Shutdown`、全局`Booted=0`。OpenSpec strict `5/5`、generator三次及生成前SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过，最终仓库门禁`/tmp/LuneX-14-5_4-repo-gates-final2.18qgSJ`。
+
+# 2026-07-21 阶段 14 任务 5.5 调查
+
+- 5.2至5.4已有分散的AppModel测试分别覆盖lifecycle application、fake input、focus release、geometry和stop，但尚无一个测试在同一session/generation内证明这些边界按真实application顺序组合后仍收敛。
+- 5.5优先复用`ControlledSessionControlProvider`和`ControlledSessionMediaEnvironment`，检查environment记录的generation-scoped lifecycle/input/release application、presentation source、coordinate mapping与最终snapshot；不新增production fake接口。
+
+# 2026-07-21 阶段 14 任务 5.5 验收结论
+
+- 新增单一AppModel集成门，在同一session/media/input generation中依次证明keyboard fake-provider delivery、focus-loss admission closure与一次release barrier、occlusion时drain-without-decode/clear、visible resume、16:9内容在4:3 drawable中的共享fit映射，以及local stop后的provider/environment/input资源清理。
+- fake media environment按设计不启动`NativeSessionVideoProcessor`，因此测试显式注入同一个presentation source并播入受控decoder generation，只验证AppModel在occlusion时失效旧generation、resume后接受新generation、stop时清理source；这不声称fake environment或Sunshine生成了真实视频帧。
+- 最终单项复跑`1/1`（`/tmp/LuneX-14-5_5-single-r2.moqTup/Integration-final-1784637488.xcresult`），最终扩大focused为`92/92`（`/tmp/LuneX-14-5_5-focused-final.4mEnnV/Focused.xcresult`），完整macOS为`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_5-full.G8yfCE/LuneXCoreTests.xcresult`）。
+- 五平台Debug warnings-as-errors build-only通过（`/tmp/LuneX-14-5_5-builds.aZ3I4a`）；simulator前后规范化identity/state逐字节一致，固定实例唯一、可用且全部`Shutdown`，全局`Booted=0`。OpenSpec strict `5/5`、generator生成前和三次生成SHA-256一致、diff/reference/ThirdParty边界通过，最终repository gates记录于`/tmp/LuneX-14-5_5-repo-gates.lB9GkQ`。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

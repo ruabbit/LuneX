@@ -250,6 +250,260 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.macSessionInputSnapshot().generation)
     }
 
+    func testMacApplicationIntegrationCoversInputLifecycleResizeAndTeardown() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let presentationSource = StreamVideoPresentationSource()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            videoPresentationSource: presentationSource,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 37,
+                    key: Data(repeating: 0x37, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        model.settings.input.preferRelativeMouseMode = false
+        model.settings.input.captureSystemShortcuts = false
+
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        model.applyPlatformLifecycle(lifecycle)
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil {
+            model.session.isStreaming
+                && model.macInputSurfacePolicy.admitsInput
+                && mediaEnvironment.currentLifecycleApplications().last?.directive.input == .open
+        }
+
+        let initialCoordinate = try XCTUnwrap(model.renderState.coordinateSnapshot)
+        let initialLifecycleRevision = try XCTUnwrap(
+            mediaEnvironment.currentLifecycleApplications().last?.lifecycleRevision
+        )
+        presentationSource.beginSession(sessionID: record.sessionID, mediaGeneration: 1)
+        presentationSource.consume(
+            .sessionStarted(generation: 11, colorMetadata: .rec709VideoRange()),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        XCTAssertEqual(initialCoordinate.drawableSize, PixelSize(width: 2_560, height: 1_440))
+        XCTAssertEqual(presentationSource.snapshot().sessionID, record.sessionID)
+        XCTAssertEqual(presentationSource.snapshot().decoderGeneration, 11)
+
+        let keySample = MacPlatformInputSample.keyboard(MacKeyboardSample(
+            rawKeyCode: 0,
+            characters: "a",
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        XCTAssertEqual(model.submitMacPlatformInput(keySample), .accepted)
+        await waitUntil { mediaEnvironment.currentSentInputApplications().count == 1 }
+        let deliveredKeyApplication = try XCTUnwrap(
+            mediaEnvironment.currentSentInputApplications().first
+        )
+        XCTAssertEqual(deliveredKeyApplication.sessionID, record.sessionID)
+        XCTAssertEqual(deliveredKeyApplication.mediaGeneration, 1)
+        XCTAssertEqual(
+            deliveredKeyApplication.event,
+            .keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x41,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            ))
+        )
+
+        lifecycle.isFocused = false
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertEqual(
+            model.submitMacPlatformInput(keySample),
+            .rejected(.admissionClosed)
+        )
+        let unfocusedDirective = SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: false,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        await waitUntil {
+            model.macSessionInputSnapshot().completedReleaseBarrierCount == 1
+                && mediaEnvironment.currentReleasedInputApplications().count == 1
+                && mediaEnvironment.currentLifecycleApplications().last?.directive
+                    == unfocusedDirective
+        }
+        let unfocusedLifecycleRevision = try XCTUnwrap(
+            mediaEnvironment.currentLifecycleApplications().last?.lifecycleRevision
+        )
+        let releaseApplication = try XCTUnwrap(
+            mediaEnvironment.currentReleasedInputApplications().first
+        )
+        XCTAssertEqual(releaseApplication.sessionID, record.sessionID)
+        XCTAssertEqual(releaseApplication.mediaGeneration, 1)
+        XCTAssertGreaterThan(unfocusedLifecycleRevision, initialLifecycleRevision)
+        XCTAssertEqual(unfocusedDirective.videoProcessing, .submitDecodedVideo)
+        XCTAssertEqual(unfocusedDirective.presentation, .throttled(reason: .notFocused))
+
+        lifecycle.isVisible = false
+        lifecycle.isFocused = true
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        let occludedDirective = SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: true,
+            isVisible: false,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        await waitUntil {
+            mediaEnvironment.currentLifecycleApplications().last?.directive
+                == occludedDirective
+        }
+        let occludedLifecycleRevision = try XCTUnwrap(
+            mediaEnvironment.currentLifecycleApplications().last?.lifecycleRevision
+        )
+        let occludedPresentationSnapshot = presentationSource.snapshot()
+        XCTAssertGreaterThan(occludedLifecycleRevision, unfocusedLifecycleRevision)
+        XCTAssertEqual(
+            occludedDirective.videoProcessing,
+            .drainTransportWithoutDecoding(reason: .notVisible)
+        )
+        XCTAssertEqual(occludedDirective.presentation, .clear(reason: .notVisible))
+        XCTAssertEqual(model.renderState.policy, .paused(reason: "Window or scene not visible"))
+        XCTAssertNil(occludedPresentationSnapshot.decoderGeneration)
+        XCTAssertNil(occludedPresentationSnapshot.latestFrameID)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertEqual(model.macSessionInputSnapshot().completedReleaseBarrierCount, 1)
+        XCTAssertTrue(model.hasActiveStreamSession)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [])
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [])
+
+        lifecycle.isVisible = true
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        let resumedDirective = SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        await waitUntil {
+            model.macInputSurfacePolicy.admitsInput
+                && mediaEnvironment.currentLifecycleApplications().last?.directive
+                    == resumedDirective
+        }
+        let resumedLifecycleRevision = try XCTUnwrap(
+            mediaEnvironment.currentLifecycleApplications().last?.lifecycleRevision
+        )
+        XCTAssertGreaterThan(resumedLifecycleRevision, occludedLifecycleRevision)
+        XCTAssertEqual(resumedDirective.videoProcessing, .submitDecodedVideo)
+        XCTAssertEqual(resumedDirective.presentation, .active)
+        presentationSource.consume(
+            .sessionStarted(generation: 12, colorMetadata: .rec709VideoRange()),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        XCTAssertEqual(presentationSource.snapshot().decoderGeneration, 12)
+
+        lifecycle.drawableSize = PixelSize(width: 1_600, height: 1_200)
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        await waitUntil {
+            guard let latest = mediaEnvironment.currentLifecycleApplications().last else {
+                return false
+            }
+            return latest.lifecycleRevision > resumedLifecycleRevision
+                && latest.directive == resumedDirective
+        }
+        let lifecycleApplications = mediaEnvironment.currentLifecycleApplications()
+        let lifecycleRevisions = lifecycleApplications.map(\.lifecycleRevision)
+        XCTAssertTrue(lifecycleApplications.allSatisfy {
+            $0.sessionID == record.sessionID && $0.mediaGeneration == 1
+        })
+        XCTAssertTrue(zip(lifecycleRevisions, lifecycleRevisions.dropFirst()).allSatisfy {
+            $0.0 < $0.1
+        })
+        let resizedCoordinate = try XCTUnwrap(model.renderState.coordinateSnapshot)
+        XCTAssertGreaterThan(resizedCoordinate.revision, initialCoordinate.revision)
+        XCTAssertEqual(resizedCoordinate.drawableSize, PixelSize(width: 1_600, height: 1_200))
+        XCTAssertEqual(resizedCoordinate.resolvedVideo.videoRect.x, 0, accuracy: 0.000_001)
+        XCTAssertEqual(resizedCoordinate.resolvedVideo.videoRect.y, 150, accuracy: 0.000_001)
+        XCTAssertEqual(resizedCoordinate.resolvedVideo.videoRect.width, 1_600, accuracy: 0.000_001)
+        XCTAssertEqual(resizedCoordinate.resolvedVideo.videoRect.height, 900, accuracy: 0.000_001)
+
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.pointerMove(MacPointerSample(
+                localPoint: RemotePoint(x: 400, y: 375),
+                deltaX: 99,
+                deltaY: -99,
+                buttons: []
+            ))),
+            .accepted
+        )
+        await waitUntil { mediaEnvironment.currentSentInputApplications().count == 2 }
+        let deliveredPointerApplication = try XCTUnwrap(
+            mediaEnvironment.currentSentInputApplications().last
+        )
+        XCTAssertEqual(deliveredPointerApplication.sessionID, record.sessionID)
+        XCTAssertEqual(deliveredPointerApplication.mediaGeneration, 1)
+        XCTAssertEqual(
+            deliveredPointerApplication.event,
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 960, y: 540),
+                referenceSize: PixelSize(width: 3_840, height: 2_160),
+                buttons: []
+            ))
+        )
+
+        await model.stopStream()
+        await launchTask.value
+
+        let mediaSnapshot = await mediaEnvironment.snapshot()
+        let presentationSnapshot = presentationSource.snapshot()
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertNil(mediaSnapshot.sessionID)
+        XCTAssertNil(mediaSnapshot.resourcePhase)
+        XCTAssertEqual(mediaSnapshot.activeResourceCount, 0)
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertNil(model.macSessionInputSnapshot().generation)
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertNil(presentationSnapshot.sessionID)
+        XCTAssertNil(presentationSnapshot.mediaGeneration)
+        XCTAssertEqual(
+            model.submitMacPlatformInput(keySample),
+            .rejected(.inactiveGeneration)
+        )
+
+        let stoppedLifecycle = makePlatformLifecycle(
+            isStreamActive: false,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 1_600, height: 1_200)
+        )
+        model.applyPlatformLifecycle(stoppedLifecycle)
+        await Task.yield()
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertNil(model.macSessionInputSnapshot().generation)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
     func testMacPlatformInputFailsClosedWithoutCurrentDrawableGeometry() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
@@ -1634,6 +1888,7 @@ final class AppModelWorkflowTests: XCTestCase {
         sessionControlProvider: any SessionControlProvider,
         sessionMediaEnvironment: any SessionMediaEnvironment =
             ControlledSessionMediaEnvironment(),
+        videoPresentationSource: StreamVideoPresentationSource? = nil,
         launchClient: StubStreamLaunchClient,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating,
         runtimeProviders: RuntimeProviderInventory? = nil
@@ -1666,6 +1921,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 sessionControlProvider: sessionControlProvider
             ),
             sessionMediaEnvironment: sessionMediaEnvironment,
+            videoPresentationSource: videoPresentationSource,
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKeyGenerator: remoteInputKeyGenerator
