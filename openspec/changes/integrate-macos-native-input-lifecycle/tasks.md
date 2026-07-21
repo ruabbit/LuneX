@@ -43,4 +43,4 @@
 - [x] 6.3 Run OpenSpec strict, generator, clean-room/dependency, static analyzer, ASan, TSan, malloc ownership, and resource-release gates
 - [x] 6.4 Verify fixed simulator identities remain unique and `Shutdown` without creating or explicitly booting devices
 - [ ] 6.5 Prove real macOS key, relative/direct pointer, scroll, focus release, occlusion resume, resize, and multi-display mapping against an authorized Sunshine host and hardware
-- [ ] 6.6 Update planning and roadmap evidence, document remaining hardware limits, commit each completed task, and push
+- [x] 6.6 Update planning and roadmap evidence, document remaining hardware limits, commit each completed task, and push

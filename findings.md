@@ -903,5 +903,11 @@
 - 6.2最终构建前、构建后和6.4当前三份规范化CoreSimulator快照逐字节一致，SHA-256均为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`；证据目录`/tmp/LuneX-14-6_4-simulator-audit.zJRuWk`。
 - iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro在全部available inventory中的名称各出现一次，固定UUID也各出现一次；四项均`isAvailable=true`、`Shutdown`，全部available设备`Booted=0`。
 - 本项仅执行`simctl list devices available -j`和结构化读取/比较，没有create、clone、boot、bootstatus、shutdown、delete、install、run、build或test；它证明模拟器inventory稳定性，不证明真机行为。
+
+# 2026-07-21 阶段 14 任务 6.6 验收结论
+
+- 路线图现统一记录阶段14的production连接、normal/跨平台构建、strict/generator/dependency、analyzer/sanitizer/resource和simulator证据，并明确唯一剩余6.5的授权Sunshine/物理输入/多显示器checklist；OpenSpec权威进度`28/29 in_progress`。
+- 1.1至6.4与6.6已完成；6.5没有live host receipt或硬件手感/跨屏证据，不能archive change或把阶段14标记complete。阶段15至20的确定性工作可继续，但其证据不能替代6.5。
+- 阶段13仍为`54/61 in_progress`且7项live/hardware任务不变；阶段14的fake provider、AppKit通知、模拟器、analyzer和sanitizer证据均未被描述为Sunshine端到端通过。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

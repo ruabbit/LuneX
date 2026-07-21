@@ -1156,3 +1156,9 @@
 - 6.2 before/after与6.4当前三份规范化simulator快照逐字节一致，SHA-256均为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`（`/tmp/LuneX-14-6_4-simulator-audit.zJRuWk`）。
 - 四个固定名称与UUID各唯一、可用且全部`Shutdown`，所有available simulator的`Booted=0`；本项仅只读list/compare，没有build/test或设备状态命令。
 - OpenSpec 6.4标记完成，权威进度`27/29`。6.5仍要求授权Sunshine host、物理鼠标和多显示器，不以模拟器/fixture替代；下一可执行项为6.6最终跟踪、剩余限制与提交推送。
+
+## 2026-07-21 阶段 14 任务 6.6 完成
+
+- 阶段14路线图已同步production、normal/五平台、strict/generator/dependency、analyzer/ASan/TSan/malloc与simulator证据，补充6.5授权Sunshine版本/test app、物理键鼠、focus/occlusion、resize和不同scale多显示器的逐项checklist。
+- OpenSpec 6.6标记完成，权威进度`28/29 in_progress`；6.5未执行，change不可archive且阶段不标记complete。阶段13仍为`54/61`和7项live/hardware缺口，不做跨阶段证据替代。
+- 6.1至6.4均已逐项独立提交推送；本项完成strict/diff验收和独立提交推送后，将再执行一次阶段14级离线自验，然后创建并推进阶段15 `implement-native-hdr-edr-pipeline`。
