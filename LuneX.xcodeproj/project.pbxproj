@@ -380,6 +380,7 @@
 		401CCE4EB6ABFD9501025EC7 /* VideoDecompressionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4AFD13BCF45C8B5F76A060 /* VideoDecompressionSession.swift */; };
 		402BB3CCD0AC6B43FB1690C1 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		403A2C8E4B815C9092FE8EC0 /* VideoCodecSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39657BF8E5A5BB7530B4EDDE /* VideoCodecSelection.swift */; };
+		408EB1E417041C0DB195A097 /* HDRColorPipelineDeterminismTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B452D3C20C42FCBAD3300E98 /* HDRColorPipelineDeterminismTests.swift */; };
 		40B2CE3BAA2EC0803C6A42E9 /* SessionResourceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620591FA7092BCEE22B47B90 /* SessionResourceTracker.swift */; };
 		41027C1F4921A223AF263FAF /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
 		411B250A7745E05178367E0C /* VideoPacketAssemblyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/VideoPacketAssemblyTests.swift"; sourceTree = "<group>"; };
@@ -695,6 +696,7 @@
 				90F976152B2E278F303C0FCB /* MediaClockSynchronizerTests.swift in Sources */,
 				BAAA8579B871B6D444EB8588 /* NetworkChannelTests.swift in Sources */,
 				FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */,
+				408EB1E417041C0DB195A097 /* HDRColorPipelineDeterminismTests.swift in Sources */,
 				F560BF8E91EA3926C7B1A4B4 /* HDRColorReferenceMathTests.swift in Sources */,
 				283EB77ED6A3D7E562CAFD4E /* HDRDecodedVideoContractTests.swift in Sources */,
 				CE11836E191C009C99D43BE3 /* HDRLuminanceMappingTests.swift in Sources */,
@@ -1066,6 +1068,7 @@
 				756C2F7D0E424A7D7F302393 /* MediaClockSynchronizerTests.swift */,
 				6ADFE46A1EFC63457BC1BEB9 /* NetworkChannelTests.swift */,
 				E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */,
+				B452D3C20C42FCBAD3300E98 /* HDRColorPipelineDeterminismTests.swift */,
 				C428F6D89FFF7F82B76FC6F1 /* HDRColorReferenceMathTests.swift */,
 				C21FA814336F6DCCC133F9E5 /* HDRDecodedVideoContractTests.swift */,
 				5D5C5B513BABDD7E45B57AD8 /* HDRLuminanceMappingTests.swift */,
@@ -1142,6 +1145,7 @@
 		B1066791534E07B155F7AEFC /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		B315A2E144291C0C6E464F3E /* callbacks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "ThirdParty/ENet/callbacks.c"; sourceTree = "<group>"; };
 		B31D344EC9A8D8C9D8045E5E /* unix.c in Sources */ = {isa = PBXBuildFile; fileRef = 63DF5880D21F53811AE8A4D8 /* unix.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
+		B452D3C20C42FCBAD3300E98 /* HDRColorPipelineDeterminismTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HDRColorPipelineDeterminismTests.swift"; sourceTree = "<group>"; };
 		B459B6C3ED1F4533FDF74D23 /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBF2FCD8F8F190A2CD96920 /* InputDiagnostics.swift */; };
 		B4D495670852ADB187BC96EB /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "AccentColor";

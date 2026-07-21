@@ -1245,3 +1245,17 @@
 - 五平台Debug warnings-as-errors通过（`/tmp/LuneX-15-1_5-builds.louq0p`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定设备均`Shutdown`且全局`Booted=0`。
 - repository gates位于`/tmp/LuneX-15-1_5-repo.z327fj`：OpenSpec strict `6/6`、generator三次稳定且project SHA-256为`6342e672d7af9aff2908bda8551eb10b22b20ba85cee844fe0e422f90920100d`、reference/dependency/whitespace门通过。
 - OpenSpec 1.5标记完成，权威进度`5/33`。未接入shader/renderer/surface且不证明物理HDR；下一项1.6。
+
+## 2026-07-21 阶段 15 任务 1.6 启动
+
+- 1.5已以`0e47f99 Implement HDR luminance mapping`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`5/33`。
+- 1.6新增有界确定性网格，覆盖8/10-bit code domain、BT.709/PQ monotonicity、D65 gamut cube round-trip、source-peak metadata truth table、multiple source/headroom shoulder continuity和decoded codec/dynamic-range组合。
+- 测试不使用随机输入，不访问Keychain/host/simulator runtime，也不把CPU contract描述为shader或物理HDR证明。
+
+## 2026-07-21 阶段 15 任务 1.6 完成
+
+- 新增有界deterministic grids覆盖8/10-bit code domain、4097点BT.709/PQ monotonicity、三gamut 5x5x5 cube round-trip、24组source/headroom shoulder、metadata fallback truth table及codec/dynamic-range组合。
+- 网格发现rounded BT.709 inverse transfer在0.081附近有向下跳变；production改用连续精确alpha/beta与`4.5*beta`cut，1.4+1.6联合focused重跑`14/14`（`/tmp/LuneX-15-1_6-focused-recheck.uRruj7/HDRFoundation.xcresult`）。
+- 完整macOS `512 total / 511 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-1_6-full.qqQNp2/LuneXCoreTests.xcresult`）；五平台Debug warnings-as-errors通过（`/tmp/LuneX-15-1_6-builds.Hdh9rO`），simulator前后哈希均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`。
+- repository gates位于`/tmp/LuneX-15-1_6-repo.luZbmL`：OpenSpec strict `6/6`、generator三次稳定且project SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace门通过。
+- OpenSpec 1.6标记完成，权威进度`6/33`。CPU合同不证明shader/physical HDR；下一项2.1。

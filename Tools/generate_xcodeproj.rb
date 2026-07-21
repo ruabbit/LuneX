@@ -223,6 +223,7 @@ test_sources = [
   "Tests/LuneXCoreTests/MediaClockSynchronizerTests.swift",
   "Tests/LuneXCoreTests/NetworkChannelTests.swift",
   "Tests/LuneXCoreTests/HostAndPersistenceTests.swift",
+  "Tests/LuneXCoreTests/HDRColorPipelineDeterminismTests.swift",
   "Tests/LuneXCoreTests/HDRColorReferenceMathTests.swift",
   "Tests/LuneXCoreTests/HDRDecodedVideoContractTests.swift",
   "Tests/LuneXCoreTests/HDRLuminanceMappingTests.swift",

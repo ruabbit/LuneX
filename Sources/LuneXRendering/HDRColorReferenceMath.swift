@@ -48,6 +48,9 @@ enum HDRColorReferenceMath {
     static let pqPeakLuminanceNits = 10_000.0
     static let maximumAbsoluteNonlinearComponent = 4.0
     static let maximumAbsoluteLinearComponent = 25_000.0
+    static let rec709Alpha = 1.099_296_826_809_442
+    static let rec709Beta = 0.018_053_968_510_807
+    static let rec709EncodedBreakpoint = 4.5 * rec709Beta
 
     static func normalizeVideoRange(
         lumaCode: Double,
@@ -114,9 +117,12 @@ enum HDRColorReferenceMath {
             throw HDRColorReferenceMathError.unboundedNonlinearValue
         }
         return try finite(map(value) { component in
-            component < 0.081
+            component < rec709EncodedBreakpoint
                 ? component / 4.5
-                : pow((component + 0.099) / 1.099, 1 / 0.45)
+                : pow(
+                    (component + rec709Alpha - 1) / rec709Alpha,
+                    1 / 0.45
+                )
         })
     }
 

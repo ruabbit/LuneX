@@ -861,6 +861,11 @@
 - 当前测试树唯一显式opt-in环境开关是`LUNEX_RUN_KEYCHAIN_TEST`；normal suite将显式移除该变量，预期唯一skip为一次性真实Keychain round-trip。
 - 测试树尚无live-host XCTest环境开关或test case，因为阶段13的OpenSpec 9.2仍未实现；6.1只证明normal suite没有host/Keychain副作用，不能把缺失的live-host测试描述为disabled pass。
 
+# 2026-07-21 阶段 15 任务 1.6 验收结论
+
+- deterministic monotonicity gate不是形式覆盖：它发现rounded BT.709常数在0.081附近产生实际下降；修复为连续精确alpha/beta后4097点网格通过，避免未来shader继承不单调CPU oracle。
+- code、transfer、gamut、source metadata、headroom和codec组合均使用固定有界网格，无随机性；完整suite与五平台构建通过。该门仍只证明CPU oracle，不证明Metal readback或显示器输出。
+
 # 2026-07-21 阶段 15 任务 1.5 验收结论
 
 - source peak优先使用mastering maximum与非零MaxCLL中的安全约束，并以basis区分mastering/content/equal/fallback；协议允许但超出显示参考范围的值被限制到100...10000 nits并标记clamped。

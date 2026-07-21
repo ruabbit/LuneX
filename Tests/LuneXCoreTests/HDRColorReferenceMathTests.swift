@@ -52,12 +52,22 @@ final class HDRColorReferenceMathTests: XCTestCase {
         let decoded = try HDRColorReferenceMath.decodeRec709(HDRColorVector(
             x: 0,
             y: 0.081,
-            z: 1
+            z: HDRColorReferenceMath.rec709EncodedBreakpoint
         ))
 
         assertClose(decoded.x, 0)
-        assertClose(decoded.y, 0.017_945_023_4, tolerance: 0.000_000_001)
-        assertClose(decoded.z, 1)
+        assertClose(decoded.y, 0.018, tolerance: 0.000_000_001)
+        assertClose(
+            decoded.z,
+            HDRColorReferenceMath.rec709Beta,
+            tolerance: 0.000_000_000_001
+        )
+        assertClose(
+            try HDRColorReferenceMath.decodeRec709(
+                HDRColorVector(x: 1, y: 1, z: 1)
+            ).x,
+            1
+        )
     }
 
     func testPQEOTFKnownLuminanceVectors() throws {

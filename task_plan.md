@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`5/33`；source peak与current-headroom shoulder完成，下一项1.6 deterministic contract tests |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`6/33`；color/luminance foundation与deterministic gates完成，下一项2.1 generation-owned frame binding |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`5/33`。1.1至1.4完成边界、immutable/decoded合同和color math；1.5从mastering/MaxCLL解析100...10000-nit source peak，缺失时使用1000-nit typed fallback，并实现保留100-nit reference white、连续单调、严格受current headroom限制的direct/shoulder/SDR mapping。focused `7/7`、完整macOS `504 total / 503 passed / 1 Keychain skip / 0 failed`和五平台Debug通过，但尚未接入shader/renderer。下一项1.6扩展deterministic contract tests。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`6/33`。1.1至1.5 foundation完成；1.6以确定性网格覆盖code domain、BT.709/PQ monotonicity、gamut cube、source/headroom continuity和codec组合，并发现、修复rounded BT.709 cut的下降跳变。联合focused `14/14`、完整macOS `512 total / 511 passed / 1 Keychain skip / 0 failed`和五平台Debug通过。下一项2.1将validated contract绑定generation-owned decoded/Metal frame。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -246,10 +246,14 @@
 | 15.1.3仓库门的`references/`扫描误命中`Preferences/`子串 | 1 | 实际命中仅为Moonlight plist路径；规则收紧为单词边界`\breferences/`后在新证据目录重跑全部门 |
 | 15.1.4首轮Rec.709 breakpoint测试把`0.081`误按线性分支期望`0.018` | 1 | 规范条件为`E' < 0.081`，边界应走幂函数并得到`0.0179450234`；修正known vector后用新DerivedData重跑 |
 | 15.1.5首轮focused编译被相等source-peak分支的未使用`content`绑定阻止 | 1 | warnings-as-errors在测试前失败；等值分支改为两值平均以明确双metadata来源，并用新DerivedData重跑 |
+| 15.1.6首轮focused编译对error existential数组使用了无法推断类型的简写case | 1 | 测试未运行；为每个case补完整enum类型限定后用新DerivedData重跑，不缩减网格 |
+| 15.1.6 monotonicity网格发现rounded BT.709 inverse transfer在`0.081`附近向下跳变 | 1 | 不放宽断言；改用连续BT.709精确`alpha/beta`与`4.5*beta`切点，并重跑1.4/1.6 focused和完整门 |
+| 15.1.6计算BT.709舍入公式交点时本机Python缺少SciPy | 1 | 不安装新依赖；改用stdlib确定性bisection确认双交点，最终采用规范连续精确常数而非移动舍入公式cut |
+| 15.1.6精确BT.709修复补丁遇到共享执行流已应用相同修改 | 1 | `apply_patch`上下文校验拒绝且未覆盖；审计现有alpha/beta/breakpoint与known-vector一致后沿用当前文件 |
 
 ## 当前执行点（2026-07-21）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`5/33`；1.1至1.5完成foundation与luminance mapping，下一项1.6为deterministic invalid/known-vector/continuity tests。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`6/33`；第1组color/luminance foundation完成，下一项2.1为generation-owned decoded/Metal frame contract。
