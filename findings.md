@@ -750,3 +750,21 @@
 - 复核现有wire/runtime确认movement中的`PointerButtonSet`只用于兼容coalescing边界，当前gen5 movement codec不序列化该集合；remote held-pointer ownership只由显式button transition更新。因此letterbox down被drop后，后续movement不会隐式创建远端held button；无效位置up仍需发送以释放此前有效down。
 - 4.3最终确定性验收通过：focused `46/46`，完整macOS `441 total / 440 passed / 1 explicit Keychain skip / 0 failed`，五平台Debug warnings-as-errors通过，simulator规范化状态前后逐字节一致，5个OpenSpec strict与generator byte-stability通过。
 - 4.3只证明AppKit事件采集、值转换和adapter/coordinator确定性行为；capture view尚未附着到真实`MetalStreamSurface`，cursor/lifecycle尚未由该view拥有，真实Sunshine receipt、鼠标Y方向手感与多屏硬件映射仍未证明。
+
+# 2026-07-21 阶段 14 任务 4.4 调查
+
+- 当前`MetalStreamSurface`的macOS `NSViewType`是普通`MTKView`，4.2/4.3的`MacStreamInputCaptureView`未进入真实view hierarchy；因此不能从现有单测推断App真正捕获事件。
+- 当前`AppKitLifecycleAttachment`位于`RootView`零尺寸background并长期观察整窗，`AppKitLifecycleMonitor.refreshDrawableSize()`也读取`window.contentView.bounds`；4.4应把window observation所有权移到actual Metal stream view，actual stream-view backing geometry本身按任务边界留给5.1。
+- 为保证hit testing与first responder事件直接到capture owner，actual surface应让`MacStreamInputCaptureView`继承`MTKView`，而不是在父capture view内嵌一个会成为鼠标命中目标的子`MTKView`。
+- representable coordinator需要显式attachment owner：同一view重复attach/detach幂等，stale view detach不能清理replacement；dismantle清window callback、transient input、Metal delegate并停止lifecycle observation。
+- actual surface在5.2接入application sink前必须保持input admission disabled，避免无后端时吞掉本地键鼠；view仍可完整接线并通过注入式handler测试，后续5.2/5.3再打开active-generation eligibility。
+- 提交前审阅发现不同SwiftUI coordinator可出现“replacement先attach、旧surface后dismantle”；若每个monitor直接清共享lifecycle，旧detach会短暂覆盖新surface状态。`PlatformLifecycleState`因此需要current attachment lease，只有当前attachment ID可以在detach时清visible/focus/drawable。
+
+# 2026-07-21 阶段 14 任务 4.4 验收结论
+
+- actual macOS stream surface现为`MacStreamInputCaptureView: MTKView`，鼠标hit testing、first responder事件和Metal presentation共享同一真实view；不再依赖整窗零尺寸background attachment。
+- `MacStreamSurfaceAttachmentOwner`只响应当前view/window，重复attach/detach幂等，stale candidate无法拆除replacement；dismantle清window callback、transient key/button tracking、Metal delegate并暂停surface。
+- 每个`AppKitLifecycleMonitor`持有独立attachment ID。replacement先claim后，旧monitor的迟到detach无法清除共享visible/focused/drawable状态；当前owner detach仍会闭合清零policy。
+- actual surface的input admission保持默认关闭，因为5.2尚未把sample handler接入active `AppModel`/session input coordinator；因此4.4不吞本地键鼠，也不声称Sunshine已收到输入。
+- `AppKitLifecycleMonitor.refreshDrawableSize()`仍读取`window.contentView.bounds`。actual stream-view backing pixels、screen/backing/live-resize原子几何属于5.1，不由4.4完成。
+- 最终验收为focused `30/30`、完整macOS `446 total / 445 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors通过；simulator状态前后逐字节一致，未创建、启动或关闭设备。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。

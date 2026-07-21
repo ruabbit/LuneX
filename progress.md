@@ -984,3 +984,29 @@
 - 五平台Debug warnings-as-errors通过，证据`/tmp/LuneX-14-4_3-builds.AV2kXY`；规范化simulator状态前后逐字节一致，固定实例唯一且全部`Shutdown`，全局`Booted=0`。
 - 5个OpenSpec strict、generator双跑byte-stability（SHA-256 `e1eac0d6538ff7f5ecff19a0d40ffa967a8d0c0d0cddb0fab281788c8f1fa9d2`）、whitespace与真实`references/`路径边界通过。OpenSpec 4.3标记完成，权威进度`16/29`；下一项为4.4 actual stream-surface attachment/detach。
 - 4.3不证明view已附着active stream、真实Sunshine已收到事件、物理鼠标Y方向/加速手感或多显示器硬件映射；分别保留给4.4/5.2与6.5，阶段13仍为`54/61 in_progress`。
+
+## 2026-07-21 阶段 14 任务 4.4 启动
+
+- 4.3已以`5698719`独立提交并推送，确认`HEAD == origin/main`且工作树clean。4.4只负责把capture与lifecycle observation附着到actual macOS stream surface并在SwiftUI replacement/dismantle时幂等拆卸。
+- 本项不提前实现5.2的AppModel/media/coordinator application integration；先调查`MetalStreamSurface`、`NSViewRepresentable`、`AppKitLifecycleMonitor`与现有cursor cleanup ownership，再确定最小attachment边界。
+- 首轮focused在测试启动前编译失败：`MTKView.init(coder:)`在Xcode 26.4为non-failable designated initializer，旧`NSView`子类的`init?`签名不能override。已改为unavailable non-failable `init(coder:)`，下一轮使用新隔离DerivedData。
+- 第二轮focused在测试启动前发现test target未编入`AppKitLifecycleMonitor.swift`和`MetalStreamSurface.swift`，新attachment owner不可见；同时`observedWindows.first`形成`NSWindow??`无法直接做identity比较。已同步generator test-support sources并显式unwrap断言，下一轮使用新目录。
+- 第三轮focused Swift/Clang warnings-as-errors结构化通过`29/29`、无skip，结果`/tmp/LuneX-14-4_4-focused-r3.eOtvN0/SurfaceAttachment.xcresult`；覆盖actual window callback、disabled admission、monitor reset、重复attach/detach与stale dismantle隔离。
+- macOS App target warnings-as-errors构建通过，隔离DerivedData为`/tmp/LuneX-14-4_4-macos-build.8vjQDF`，确认`RootView`条件初始化和`NSViewRepresentable` production conformance可编译。4.4仍需完整套件、五平台与仓库门禁后才完成。
+- 完整macOS suite结构化通过`445 total / 444 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_4-full.o2NK1V/LuneXCoreTests.xcresult`；唯一skip仍精确为一次性真实Keychain测试，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 下一门为当前源码和generator修改后的五平台Debug构建及simulator前后状态守卫；4.4仍未勾选。
+- 首轮五平台Debug warnings-as-errors与simulator状态门通过，证据`/tmp/LuneX-14-4_4-builds.CGpuoi`；但提交前审阅发现跨coordinator replacement可由旧monitor detach清零新surface共享lifecycle，因此该构建证据不再作为最终结果。
+- 已增加`PlatformLifecycleState` current attachment lease与“replacement先attach、旧monitor后detach”回归；只有当前attachment可在dismantle时清visible/focus/drawable。production已变化，focused/full/five-platform均须重跑。
+- lease修正后的最终focused warnings-as-errors通过`30/30`、无skip，结果`/tmp/LuneX-14-4_4-focused-final.wTD7bt/SurfaceAttachment.xcresult`；明确覆盖replacement monitor先取得共享lifecycle后旧dismantle零副作用。
+- lease修正后的完整macOS suite结构化通过`446 total / 445 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_4-full-final.EoPoDt/LuneXCoreTests.xcresult`；唯一skip精确为一次性真实Keychain测试，未访问真实Keychain。
+- lease修正后的最终macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug Swift/Clang warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-4_4-builds-final.fqr0Yj`。
+- 构建前后规范化simulator identity/state逐字节一致；四个固定名称/UUID各唯一且全部`Shutdown`，全局`Booted=0`，未create、boot、run或shutdown任何设备。
+
+## 2026-07-21 阶段 14 任务 4.4 完成
+
+- actual macOS `MetalStreamSurface`现直接创建`MacStreamInputCaptureView: MTKView`，capture与Metal presentation不再分属父子view；`RootView`移除整窗background lifecycle attachment，actual surface负责window observation。
+- attachment owner对同一view/window重复attach幂等，stale candidate detach无副作用；dismantle清callback、transient input state、Metal delegate并暂停surface。共享attachment lease保证replacement先attach后，旧coordinator迟到dismantle不能覆盖新surface lifecycle。
+- actual surface input admission仍默认关闭；5.1 actual stream-view backing geometry、5.2 active AppModel/media/input coordinator连接、5.3 capture eligibility和6.5 live Sunshine/hardware证明均保持未完成。
+- 最终focused为`30/30`（`/tmp/LuneX-14-4_4-focused-final.wTD7bt/SurfaceAttachment.xcresult`）；完整macOS为`446 total / 445 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-4_4-full-final.EoPoDt/LuneXCoreTests.xcresult`），测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 五平台Debug warnings-as-errors通过（`/tmp/LuneX-14-4_4-builds-final.fqr0Yj`），simulator状态前后逐字节一致。5个OpenSpec strict、generator三次SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。
+- OpenSpec 4.4标记完成，权威进度`17/29`；下一项为4.5 AppKit cursor transition、responder、event translation、attachment与dismantle测试矩阵。阶段13仍为`54/61 in_progress`，不以本次离线证据替代production video/audio receiver或授权live-host/hardware证据。

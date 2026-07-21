@@ -397,6 +397,7 @@
 		4D0440A153CC09DAFCFA271E /* RemoteInputWireCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/RemoteInputWireCodec.swift"; sourceTree = "<group>"; };
 		4E0C760E5D80E64FBCA4D55A /* RemoteInputRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */; };
 		4E563EAF4AF6BCC20BC60369 /* LuneX-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LuneX-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4E9545952585E412E279F56E /* MetalStreamSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F49F3FF738DFF569AC19BFF /* MetalStreamSurface.swift */; };
 		4FA393E16ACA3B15586B2711 /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
 		4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/GameControllerInputAdapter.swift"; sourceTree = "<group>"; };
 		4FF5B5DAD873E001E9585812 /* RTSPMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/RTSPMessageTests.swift"; sourceTree = "<group>"; };
@@ -584,8 +585,10 @@
 				E48CBE2A7F00F84548F195DC /* ContinuityPolicy.swift in Sources */,
 				E7C68A141C49CAC87CF1B9AF /* PlatformLifecycle.swift in Sources */,
 				6FA92D23F2CDADAB252B3FD8 /* StreamCoordinateSnapshot.swift in Sources */,
+				946ECF7163339B5969AAC777 /* AppKitLifecycleMonitor.swift in Sources */,
 				C45FCEA0C35E538EC6AFF71B /* DisplayHeadroom.swift in Sources */,
 				AB12D0E84ED679D2676C9160 /* MetalVideoFrameDelivery.swift in Sources */,
+				4E9545952585E412E279F56E /* MetalStreamSurface.swift in Sources */,
 				533CD52D290DFF185CEA547C /* StreamVideoPresentationSource.swift in Sources */,
 				B69F2CEAF853881227B884CB /* GameControllerInputAdapter.swift in Sources */,
 				3DA099E63DEC14B465121407 /* InputEvents.swift in Sources */,
@@ -939,6 +942,7 @@
 		938BDD632F8585548B3C76DB /* DiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/DiscoveryTests.swift"; sourceTree = "<group>"; };
 		93EC0224F36B9CC3D14BBF80 /* ApplicationInputSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E56FD49DB7FAF5DC60F3026 /* ApplicationInputSink.swift */; };
 		93F2964AC52214F522671B55 /* ApplicationInputSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E56FD49DB7FAF5DC60F3026 /* ApplicationInputSink.swift */; };
+		946ECF7163339B5969AAC777 /* AppKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */; };
 		951C0C659FE9428E0CA7B123 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7F3BA9FD46B52A82C6F343 /* AppSettings.swift */; };
 		95652392B266E01D7D9C84FD /* StreamNegotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */; };
 		959150EFED4D92A51573DF2D /* PairingTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/PairingTransport.swift"; sourceTree = "<group>"; };

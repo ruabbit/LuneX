@@ -26,10 +26,6 @@ struct RootView: View {
     private var platformRoot: some View {
         #if os(macOS)
         navigationRoot
-            .background {
-                AppKitLifecycleAttachment(lifecycle: platformLifecycle)
-                    .frame(width: 0, height: 0)
-            }
             .onChange(of: appModel.session.isStreaming, initial: true) { _, isStreaming in
                 platformLifecycle.setStreamActive(isStreaming)
                 appModel.applyPlatformLifecycle(platformLifecycle)
@@ -159,7 +155,11 @@ struct RootView: View {
         case .library:
             LibraryDashboardView()
         case .stream:
+            #if os(macOS)
+            StreamWorkspaceView(platformLifecycle: platformLifecycle)
+            #else
             StreamWorkspaceView()
+            #endif
         case .diagnostics:
             DiagnosticsView()
         case .settings:
@@ -637,14 +637,26 @@ private struct StreamLaunchPanel: View {
 
 private struct StreamWorkspaceView: View {
     @Environment(AppModel.self) private var appModel
+    #if os(macOS)
+    let platformLifecycle: PlatformLifecycleState
+    #endif
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            #if os(macOS)
+            MetalStreamSurface(
+                renderState: appModel.renderState,
+                presentationSource: appModel.videoPresentationSource,
+                lifecycle: platformLifecycle
+            )
+                .ignoresSafeArea()
+            #else
             MetalStreamSurface(
                 renderState: appModel.renderState,
                 presentationSource: appModel.videoPresentationSource
             )
                 .ignoresSafeArea()
+            #endif
 
             StreamStatusOverlay()
                 .padding(16)

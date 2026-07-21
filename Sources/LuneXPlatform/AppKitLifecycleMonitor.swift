@@ -4,10 +4,17 @@ import OSLog
 import SwiftUI
 
 @MainActor
-final class AppKitLifecycleMonitor {
+protocol AppKitLifecycleMonitoring: AnyObject {
+    func attach(to window: NSWindow)
+    func detach()
+}
+
+@MainActor
+final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     private let logger = Logger(subsystem: "dev.lunex.client.macos", category: "window.lifecycle")
     private weak var window: NSWindow?
     private let lifecycle: PlatformLifecycleState
+    private let attachmentID = UUID()
     private var observers: [NSObjectProtocol] = []
 
     init(lifecycle: PlatformLifecycleState) {
@@ -21,8 +28,9 @@ final class AppKitLifecycleMonitor {
             refreshDisplay()
             return
         }
-        detach()
+        detach(resetLifecycle: false)
         self.window = window
+        lifecycle.claimSurfaceAttachment(attachmentID)
         logger.info("Attached lifecycle monitor to window")
 
         let center = NotificationCenter.default
@@ -97,10 +105,22 @@ final class AppKitLifecycleMonitor {
     }
 
     func detach() {
+        detach(resetLifecycle: true)
+    }
+
+    private func detach(resetLifecycle: Bool) {
+        let wasAttached = window != nil || !observers.isEmpty
         let center = NotificationCenter.default
         observers.forEach(center.removeObserver)
         observers.removeAll()
         window = nil
+        guard resetLifecycle,
+              wasAttached,
+              lifecycle.releaseSurfaceAttachment(attachmentID) else { return }
+        lifecycle.isVisible = false
+        lifecycle.isFocused = false
+        lifecycle.drawableSize = .zero
+        lifecycle.updateRenderPolicy()
     }
 
     private func refreshVisibility() {

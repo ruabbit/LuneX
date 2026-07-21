@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import MetalKit
 
 enum MacPointerButtonTranslator {
     static func button(for buttonNumber: Int) -> PointerButton? {
@@ -34,10 +35,12 @@ enum MacScrollDeltaNormalizer {
 }
 
 @MainActor
-final class MacStreamInputCaptureView: NSView {
+final class MacStreamInputCaptureView: MTKView {
     typealias SampleHandler = @MainActor (MacPlatformInputSample) -> Void
 
+    var isInputCaptureEnabled: Bool
     var forwardsSystemShortcuts: Bool
+    var onWindowChange: (@MainActor (NSWindow?) -> Void)?
 
     private let sampleHandler: SampleHandler
     private let captureExitHandler: @MainActor () -> Void
@@ -47,26 +50,35 @@ final class MacStreamInputCaptureView: NSView {
 
     init(
         frame frameRect: NSRect = .zero,
+        device: (any MTLDevice)? = nil,
+        isInputCaptureEnabled: Bool = true,
         forwardsSystemShortcuts: Bool = false,
         captureExitHandler: @escaping @MainActor () -> Void = {},
         sampleHandler: @escaping SampleHandler
     ) {
+        self.isInputCaptureEnabled = isInputCaptureEnabled
         self.forwardsSystemShortcuts = forwardsSystemShortcuts
         self.captureExitHandler = captureExitHandler
         self.sampleHandler = sampleHandler
-        super.init(frame: frameRect)
+        super.init(frame: frameRect, device: device)
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    required init(coder: NSCoder) {
         fatalError("MacStreamInputCaptureView must be created programmatically")
     }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        onWindowChange?(window)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard event.type == .keyDown,
+        guard isInputCaptureEnabled,
+              event.type == .keyDown,
               let shortcut = reservedShortcutForKeyDown(event),
               shortcut.canBeForwarded else {
             return super.performKeyEquivalent(with: event)
@@ -81,6 +93,10 @@ final class MacStreamInputCaptureView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.keyDown(with: event)
+            return
+        }
         let shortcut = reservedShortcutForKeyDown(event)
         if let shortcut {
             reservedShortcutsByKeyCode[event.keyCode] = shortcut
@@ -95,6 +111,10 @@ final class MacStreamInputCaptureView: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.keyUp(with: event)
+            return
+        }
         let shortcut = reservedShortcutsByKeyCode.removeValue(forKey: event.keyCode)
         emitKeyboard(event, isDown: false, reservedShortcut: shortcut)
         if shouldRemainLocal(shortcut) {
@@ -103,6 +123,10 @@ final class MacStreamInputCaptureView: NSView {
     }
 
     override func flagsChanged(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.flagsChanged(with: event)
+            return
+        }
         guard let modifier = modifier(for: event.keyCode) else {
             return
         }
@@ -130,39 +154,72 @@ final class MacStreamInputCaptureView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.mouseMoved(with: event)
+            return
+        }
         emitPointerMovement(event)
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.mouseDragged(with: event)
+            return
+        }
         emitPointerMovement(event)
     }
 
     override func rightMouseDragged(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.rightMouseDragged(with: event)
+            return
+        }
         emitPointerMovement(event)
     }
 
     override func otherMouseDragged(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.otherMouseDragged(with: event)
+            return
+        }
         emitPointerMovement(event)
     }
 
     override func mouseDown(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.mouseDown(with: event)
+            return
+        }
         emitButton(.left, isDown: true, event: event)
     }
 
     override func mouseUp(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.mouseUp(with: event)
+            return
+        }
         emitButton(.left, isDown: false, event: event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.rightMouseDown(with: event)
+            return
+        }
         emitButton(.right, isDown: true, event: event)
     }
 
     override func rightMouseUp(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.rightMouseUp(with: event)
+            return
+        }
         emitButton(.right, isDown: false, event: event)
     }
 
     override func otherMouseDown(with event: NSEvent) {
-        guard let button = MacPointerButtonTranslator.button(for: event.buttonNumber) else {
+        guard isInputCaptureEnabled,
+              let button = MacPointerButtonTranslator.button(for: event.buttonNumber) else {
             super.otherMouseDown(with: event)
             return
         }
@@ -170,7 +227,8 @@ final class MacStreamInputCaptureView: NSView {
     }
 
     override func otherMouseUp(with event: NSEvent) {
-        guard let button = MacPointerButtonTranslator.button(for: event.buttonNumber) else {
+        guard isInputCaptureEnabled,
+              let button = MacPointerButtonTranslator.button(for: event.buttonNumber) else {
             super.otherMouseUp(with: event)
             return
         }
@@ -178,6 +236,10 @@ final class MacStreamInputCaptureView: NSView {
     }
 
     override func scrollWheel(with event: NSEvent) {
+        guard isInputCaptureEnabled else {
+            super.scrollWheel(with: event)
+            return
+        }
         guard let deltaX = MacScrollDeltaNormalizer.remoteDelta(
             Double(event.scrollingDeltaX),
             hasPreciseDeltas: event.hasPreciseScrollingDeltas

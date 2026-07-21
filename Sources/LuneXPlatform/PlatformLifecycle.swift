@@ -11,6 +11,7 @@ final class PlatformLifecycleState {
     var headroom = DisplayHeadroom()
     var renderPolicy: RenderPolicy = .idle
     private(set) var revision = 0
+    @ObservationIgnored private var activeSurfaceAttachmentID: UUID?
 
     func updateRenderPolicy() {
         renderPolicy = LifecycleRenderPolicyResolver.resolve(
@@ -25,6 +26,17 @@ final class PlatformLifecycleState {
     func setStreamActive(_ active: Bool) {
         isStreamActive = active
         updateRenderPolicy()
+    }
+
+    func claimSurfaceAttachment(_ attachmentID: UUID) {
+        activeSurfaceAttachmentID = attachmentID
+    }
+
+    @discardableResult
+    func releaseSurfaceAttachment(_ attachmentID: UUID) -> Bool {
+        guard activeSurfaceAttachmentID == attachmentID else { return false }
+        activeSurfaceAttachmentID = nil
+        return true
     }
 }
 

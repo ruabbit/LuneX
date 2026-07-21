@@ -339,6 +339,127 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         assertScrollSample(recorder.scrollSamples[1], matches: line)
     }
 
+    func testDisabledActualSurfaceDoesNotEmitInputSamples() throws {
+        let recorder = MacInputSampleRecorder()
+        let view = MacStreamInputCaptureView(
+            isInputCaptureEnabled: false,
+            sampleHandler: { recorder.samples.append($0) }
+        )
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown))
+        view.mouseMoved(with: try cgMouseEvent(
+            type: .mouseMoved,
+            buttonNumber: 0,
+            deltaX: 4,
+            deltaY: 2
+        ))
+        view.scrollWheel(with: try scrollEvent(units: .line, vertical: 1, horizontal: 0))
+
+        XCTAssertTrue(recorder.samples.isEmpty)
+    }
+
+    func testSurfaceWindowCallbackTracksActualViewAttachment() throws {
+        let view = makeView()
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        var observedWindows: [NSWindow?] = []
+        view.onWindowChange = { observedWindows.append($0) }
+
+        window.contentView = view
+        window.contentView = NSView()
+
+        XCTAssertEqual(observedWindows.count, 2)
+        let attachedWindow = try XCTUnwrap(observedWindows[0])
+        XCTAssertTrue(attachedWindow === window)
+        XCTAssertNil(observedWindows[1])
+    }
+
+    func testSurfaceAttachmentOwnerIsIdempotentAndRejectsStaleDismantle() {
+        let monitor = RecordingAppKitLifecycleMonitor()
+        let owner = MacStreamSurfaceAttachmentOwner(lifecycleMonitor: monitor)
+        let firstView = makeView()
+        let replacementView = makeView()
+        let firstWindow = makeWindow(contentView: firstView)
+        let replacementWindow = makeWindow(contentView: replacementView)
+
+        owner.attach(to: firstView)
+        owner.attach(to: firstView)
+        XCTAssertEqual(monitor.attachedWindowIDs, [ObjectIdentifier(firstWindow)])
+
+        owner.attach(to: replacementView)
+        XCTAssertEqual(monitor.detachCount, 1)
+        XCTAssertEqual(
+            monitor.attachedWindowIDs,
+            [ObjectIdentifier(firstWindow), ObjectIdentifier(replacementWindow)]
+        )
+
+        owner.detach(from: firstView)
+        XCTAssertEqual(monitor.detachCount, 1)
+
+        replacementWindow.contentView = NSView()
+        XCTAssertEqual(monitor.detachCount, 2)
+        replacementWindow.contentView = replacementView
+        XCTAssertEqual(
+            monitor.attachedWindowIDs,
+            [
+                ObjectIdentifier(firstWindow),
+                ObjectIdentifier(replacementWindow),
+                ObjectIdentifier(replacementWindow)
+            ]
+        )
+
+        owner.detach(from: replacementView)
+        owner.detach(from: replacementView)
+        XCTAssertEqual(monitor.detachCount, 3)
+        XCTAssertNil(replacementView.onWindowChange)
+    }
+
+    func testLifecycleMonitorClearsStateWhenActualSurfaceDetaches() {
+        let lifecycle = PlatformLifecycleState()
+        let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let window = makeWindow(contentView: NSView())
+        monitor.attach(to: window)
+        lifecycle.isVisible = true
+        lifecycle.isFocused = true
+        lifecycle.drawableSize = PixelSize(width: 640, height: 480)
+        lifecycle.updateRenderPolicy()
+
+        monitor.detach()
+
+        XCTAssertFalse(lifecycle.isVisible)
+        XCTAssertFalse(lifecycle.isFocused)
+        XCTAssertEqual(lifecycle.drawableSize, .zero)
+    }
+
+    func testReplacementMonitorOwnsSharedLifecycleBeforeOldDismantle() {
+        let lifecycle = PlatformLifecycleState()
+        let oldMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let replacementMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let oldWindow = makeWindow(contentView: NSView())
+        let replacementWindow = makeWindow(contentView: NSView())
+        oldMonitor.attach(to: oldWindow)
+        replacementMonitor.attach(to: replacementWindow)
+        lifecycle.isVisible = true
+        lifecycle.isFocused = true
+        lifecycle.drawableSize = PixelSize(width: 640, height: 480)
+        lifecycle.updateRenderPolicy()
+
+        oldMonitor.detach()
+
+        XCTAssertTrue(lifecycle.isVisible)
+        XCTAssertTrue(lifecycle.isFocused)
+        XCTAssertEqual(lifecycle.drawableSize, PixelSize(width: 640, height: 480))
+
+        replacementMonitor.detach()
+        XCTAssertFalse(lifecycle.isVisible)
+        XCTAssertFalse(lifecycle.isFocused)
+        XCTAssertEqual(lifecycle.drawableSize, .zero)
+    }
+
     private func makeView(
         recorder: MacInputSampleRecorder = MacInputSampleRecorder()
     ) -> MacStreamInputCaptureView {
@@ -385,6 +506,17 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             clickCount: 1,
             pressure: 1
         ))
+    }
+
+    private func makeWindow(contentView: NSView) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = contentView
+        return window
     }
 
     private func cgMouseEvent(
@@ -498,5 +630,19 @@ private final class MacInputSampleRecorder {
 private struct RecordedPointerButtonTransition {
     var button: PointerButton
     var isDown: Bool
+}
+
+@MainActor
+private final class RecordingAppKitLifecycleMonitor: AppKitLifecycleMonitoring {
+    private(set) var attachedWindowIDs: [ObjectIdentifier] = []
+    private(set) var detachCount = 0
+
+    func attach(to window: NSWindow) {
+        attachedWindowIDs.append(ObjectIdentifier(window))
+    }
+
+    func detach() {
+        detachCount += 1
+    }
 }
 #endif
