@@ -28,14 +28,80 @@ struct StreamLaunchUIState: Equatable {
     var errorMessage: String?
 }
 
-struct RuntimeCapabilityAvailability: Equatable, Sendable {
-    var pairingTransportAvailable: Bool
-    var streamTransportAvailable: Bool
+struct RuntimeProviderAvailability: OptionSet, Equatable, Sendable {
+    let rawValue: UInt8
 
-    static let current = RuntimeCapabilityAvailability(
-        pairingTransportAvailable: false,
-        streamTransportAvailable: false
-    )
+    static let pairing = RuntimeProviderAvailability(rawValue: 1 << 0)
+    static let sessionControl = RuntimeProviderAvailability(rawValue: 1 << 1)
+    static let videoReceive = RuntimeProviderAvailability(rawValue: 1 << 2)
+    static let audioReceive = RuntimeProviderAvailability(rawValue: 1 << 3)
+    static let remoteInput = RuntimeProviderAvailability(rawValue: 1 << 4)
+    static let requiredStream: RuntimeProviderAvailability = [
+        .sessionControl,
+        .videoReceive,
+        .audioReceive,
+        .remoteInput
+    ]
+
+    var pairingTransportAvailable: Bool {
+        contains(.pairing)
+    }
+
+    var streamTransportAvailable: Bool {
+        contains(.requiredStream)
+    }
+}
+
+struct RuntimeProviderInventory: Sendable {
+    let pairing: (any PairingRuntimeProvider)?
+    let sessionControl: (any SessionControlProvider)?
+    let videoReceive: (any VideoReceiveProvider)?
+    let audioReceive: (any AudioReceiveProvider)?
+    let remoteInput: (any RemoteInputProvider)?
+
+    init(
+        pairing: (any PairingRuntimeProvider)? = nil,
+        sessionControl: (any SessionControlProvider)? = nil,
+        videoReceive: (any VideoReceiveProvider)? = nil,
+        audioReceive: (any AudioReceiveProvider)? = nil,
+        remoteInput: (any RemoteInputProvider)? = nil
+    ) {
+        self.pairing = pairing
+        self.sessionControl = sessionControl
+        self.videoReceive = videoReceive
+        self.audioReceive = audioReceive
+        self.remoteInput = remoteInput
+    }
+
+    var availability: RuntimeProviderAvailability {
+        var result: RuntimeProviderAvailability = []
+        if pairing != nil { result.insert(.pairing) }
+        if sessionControl != nil { result.insert(.sessionControl) }
+        if videoReceive != nil { result.insert(.videoReceive) }
+        if audioReceive != nil { result.insert(.audioReceive) }
+        if remoteInput != nil { result.insert(.remoteInput) }
+        return result
+    }
+
+    static let unavailable = RuntimeProviderInventory()
+}
+
+enum ProductionRuntimeProviderFactory {
+    static func makeDefault() -> RuntimeProviderInventory {
+        let controlChannel = MoonlightControlChannel()
+        let pairingProvider = PersistingPairingProvider(
+            provider: MoonlightPairingProvider(),
+            repository: JSONFileHostRepository(fileURL: AppStorageLocations.hostsFile)
+        )
+        return RuntimeProviderInventory(
+            pairing: pairingProvider,
+            sessionControl: MoonlightSessionControlProvider(controlChannel: controlChannel),
+            remoteInput: MoonlightRemoteInputProvider(
+                sender: controlChannel,
+                feedbackSource: controlChannel
+            )
+        )
+    }
 }
 
 @MainActor
@@ -59,7 +125,7 @@ final class AppModel {
     private let appCatalogManager: AppCatalogManager
     private let appCatalogRepository: AppCatalogSnapshotRepository
     private let streamSessionCoordinator: StreamSessionCoordinator
-    private let runtimeCapabilities: RuntimeCapabilityAvailability
+    private let runtimeProviders: RuntimeProviderInventory
     private let clientIdentityStore: any ClientIdentityStore
     private var clientUniqueID: String
     private let remoteInputKeyOverride: RemoteInputKeyMaterial?
@@ -79,7 +145,7 @@ final class AppModel {
         streamSessionCoordinator: StreamSessionCoordinator = StreamSessionCoordinator(
             launchClient: HTTPStreamLaunchClient()
         ),
-        runtimeCapabilities: RuntimeCapabilityAvailability = .current,
+        runtimeProviders: RuntimeProviderInventory = ProductionRuntimeProviderFactory.makeDefault(),
         clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
         remoteInputKey: RemoteInputKeyMaterial? = nil,
@@ -90,7 +156,7 @@ final class AppModel {
         self.appCatalogManager = appCatalogManager
         self.appCatalogRepository = appCatalogRepository
         self.streamSessionCoordinator = streamSessionCoordinator
-        self.runtimeCapabilities = runtimeCapabilities
+        self.runtimeProviders = runtimeProviders
         self.clientIdentityStore = clientIdentityStore
         self.clientUniqueID = clientUniqueID
         self.remoteInputKeyOverride = remoteInputKey
@@ -111,12 +177,16 @@ final class AppModel {
         selectedApps.first { $0.id == streamLaunchUI.selectedAppID } ?? selectedApps.first
     }
 
+    var runtimeProviderAvailability: RuntimeProviderAvailability {
+        runtimeProviders.availability
+    }
+
     var isPairingTransportAvailable: Bool {
-        runtimeCapabilities.pairingTransportAvailable
+        runtimeProviderAvailability.pairingTransportAvailable
     }
 
     var isStreamTransportAvailable: Bool {
-        runtimeCapabilities.streamTransportAvailable
+        runtimeProviderAvailability.streamTransportAvailable
     }
 
     func loadInitialState() async {
@@ -220,7 +290,7 @@ final class AppModel {
     }
 
     func beginPairing(host: MoonlightHost) {
-        guard runtimeCapabilities.pairingTransportAvailable else {
+        guard isPairingTransportAvailable else {
             pairingUI = PairingUIState(
                 hostID: host.id,
                 pin: "",
@@ -246,7 +316,7 @@ final class AppModel {
               let host = hosts.first(where: { $0.id == hostID })
         else { return }
 
-        guard runtimeCapabilities.pairingTransportAvailable else {
+        guard isPairingTransportAvailable else {
             pairingUI.isRunning = false
             pairingUI.message = "Pairing is unavailable until authenticated Moonlight transport is installed."
             session.phase = .disconnected
@@ -302,7 +372,7 @@ final class AppModel {
             return
         }
 
-        guard runtimeCapabilities.streamTransportAvailable else {
+        guard isStreamTransportAvailable else {
             let message = "Streaming is unavailable until Moonlight media transport is installed."
             streamLaunchUI.errorMessage = message
             session.activeHostID = nil

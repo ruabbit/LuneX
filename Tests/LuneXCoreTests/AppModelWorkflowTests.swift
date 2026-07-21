@@ -2,6 +2,69 @@ import XCTest
 
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
+    func testProviderAvailabilityIsDerivedFromInjectedInventory() {
+        let unavailable = RuntimeProviderInventory.unavailable
+        XCTAssertEqual(unavailable.availability, [])
+        XCTAssertFalse(unavailable.availability.pairingTransportAvailable)
+        XCTAssertFalse(unavailable.availability.streamTransportAvailable)
+
+        let production = ProductionRuntimeProviderFactory.makeDefault()
+        XCTAssertEqual(production.availability, [.pairing, .sessionControl, .remoteInput])
+        XCTAssertTrue(production.availability.pairingTransportAvailable)
+        XCTAssertFalse(production.availability.streamTransportAvailable)
+
+        let complete = RuntimeProviderInventory(
+            pairing: production.pairing,
+            sessionControl: production.sessionControl,
+            videoReceive: AvailabilityVideoReceiveProvider(),
+            audioReceive: AvailabilityAudioReceiveProvider(),
+            remoteInput: production.remoteInput
+        )
+        XCTAssertEqual(complete.availability, [
+            .pairing,
+            .sessionControl,
+            .videoReceive,
+            .audioReceive,
+            .remoteInput
+        ])
+        XCTAssertTrue(complete.availability.streamTransportAvailable)
+
+        let withoutPairing = RuntimeProviderInventory(
+            sessionControl: complete.sessionControl,
+            videoReceive: complete.videoReceive,
+            audioReceive: complete.audioReceive,
+            remoteInput: complete.remoteInput
+        )
+        XCTAssertFalse(withoutPairing.availability.pairingTransportAvailable)
+        XCTAssertTrue(withoutPairing.availability.streamTransportAvailable)
+
+        let missingRequiredProvider = [
+            RuntimeProviderInventory(
+                videoReceive: complete.videoReceive,
+                audioReceive: complete.audioReceive,
+                remoteInput: complete.remoteInput
+            ),
+            RuntimeProviderInventory(
+                sessionControl: complete.sessionControl,
+                audioReceive: complete.audioReceive,
+                remoteInput: complete.remoteInput
+            ),
+            RuntimeProviderInventory(
+                sessionControl: complete.sessionControl,
+                videoReceive: complete.videoReceive,
+                remoteInput: complete.remoteInput
+            ),
+            RuntimeProviderInventory(
+                sessionControl: complete.sessionControl,
+                videoReceive: complete.videoReceive,
+                audioReceive: complete.audioReceive
+            )
+        ]
+        XCTAssertTrue(missingRequiredProvider.allSatisfy {
+            !$0.availability.streamTransportAvailable
+        })
+    }
+
     func testAppModelAppliesPlatformLifecycleToRenderState() {
         let model = AppModel(
             hostLibraryManager: HostLibraryManager(
@@ -49,6 +112,7 @@ final class AppModelWorkflowTests: XCTestCase {
             appCatalogManager: catalogManager,
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: streamCoordinator,
+            runtimeProviders: .unavailable,
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(
@@ -100,6 +164,7 @@ final class AppModelWorkflowTests: XCTestCase {
             appCatalogManager: catalogManager,
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
+            runtimeProviders: .unavailable,
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(
@@ -148,10 +213,7 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
-            runtimeCapabilities: RuntimeCapabilityAvailability(
-                pairingTransportAvailable: false,
-                streamTransportAvailable: true
-            ),
+            runtimeProviders: completeStreamProviderInventory(),
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data(repeating: 0xAA, count: 16))
@@ -243,13 +305,21 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
-            runtimeCapabilities: RuntimeCapabilityAvailability(
-                pairingTransportAvailable: false,
-                streamTransportAvailable: true
-            ),
+            runtimeProviders: completeStreamProviderInventory(),
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKeyGenerator: remoteInputKeyGenerator
+        )
+    }
+
+    private func completeStreamProviderInventory() -> RuntimeProviderInventory {
+        let production = ProductionRuntimeProviderFactory.makeDefault()
+        return RuntimeProviderInventory(
+            pairing: production.pairing,
+            sessionControl: production.sessionControl,
+            videoReceive: AvailabilityVideoReceiveProvider(),
+            audioReceive: AvailabilityAudioReceiveProvider(),
+            remoteInput: production.remoteInput
         )
     }
 }
@@ -343,4 +413,34 @@ private final class ScriptedInputKeyGenerator: RemoteInputKeyMaterialGenerating,
 private enum InputKeyGeneratorTestError: Error {
     case failed
     case exhausted
+}
+
+private struct AvailabilityVideoReceiveProvider: VideoReceiveProvider {
+    func receiveVideo(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        configuration: NegotiatedVideoStreamConfiguration
+    ) async -> AsyncThrowingStream<VideoReceiveEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func stopVideo(sessionID: UUID) async {
+    }
+}
+
+private struct AvailabilityAudioReceiveProvider: AudioReceiveProvider {
+    func receiveAudio(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        configuration: NegotiatedAudioStreamConfiguration
+    ) async -> AsyncThrowingStream<AudioReceiveEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func stopAudio(sessionID: UUID) async {
+    }
 }

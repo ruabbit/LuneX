@@ -598,3 +598,19 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部退出成功；四个固定simulator最终各为唯一可用同名实例且全部`Shutdown`，未创建或主动boot设备。
 - fixture validator self-test/全树、全部四个OpenSpec change strict validation、generator SHA-256 byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对、四SDK strict C syntax与Node independent input/release reconstruction全部通过。
 - OpenSpec 7.6更新为完成，权威进度`43/61`。7.7需要授权live Sunshine keyboard/pointer/controller/feedback证据，不能以fixture替代；下一项可离线任务为8.1 production provider availability injection。
+
+## 2026-07-21 阶段 13 任务 8.1 启动
+
+- 7.6已以`2e5d4af Complete remote input verification`独立提交并推送，确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`43/61`后进入8.1；7.7保持等待授权live Sunshine证据。
+- 8.1限定为typed provider inventory、由实际注入项推导availability以及production factory；不提前实现8.2 pairing UI执行、8.3 session event驱动或8.4 media/input lifetime wiring。
+- 审计确认production pairing、session-control与remote-input actor已存在，control可由后两者共享；production video/audio receive provider尚不存在，因此默认stream availability必须继续fail closed。
+- 恢复后首轮`AppModelWorkflowTests` Swift 6 warnings-as-errors定向验收通过`7/7`，结果`/tmp/LuneX-8_1-targeted.E65PRj/AppModelWorkflow.xcresult`；命令显式清除`LUNEX_RUN_KEYCHAIN_TEST`，没有访问真实Keychain。
+- 进一步审计确认五个provider protocol均为`Sendable`、production factory构造不触网不写文件且control/input共享同一`MoonlightControlChannel`。inventory字段收紧为不可变快照，并补充control/video/audio/input任一缺失均保持stream fail-closed、pairing独立于stream集合的回归。
+
+## 2026-07-21 阶段 13 任务 8.1 完成
+
+- 最终定向`AppModelWorkflowTests + RuntimeProviderContractTests` Swift 6 warnings-as-errors gate通过`12/12`；扩展pairing/application/session control/state/cancellation/recovery gate通过`51/51`，均零skip/零失败。
+- 完整macOS gate通过`328 total / 327 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_1-full-macos.pIcPDb/LuneXCoreTests.xcresult`；全程显式清除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部通过；没有创建或主动boot模拟器，最终四个固定实例均唯一且为`Shutdown`。
+- fixture validator self-test/全树、全部OpenSpec change strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对和四SDK strict C syntax全部通过。
+- OpenSpec 8.1更新为完成，权威进度`44/61`。当前production pairing显示available但`submitPairingPIN()`尚未消费provider，这是8.2必须立即修复的中间态；stream因缺production video/audio receiver继续truthfully unavailable。
