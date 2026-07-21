@@ -854,3 +854,16 @@
 - 最终focused Swift 6/Clang warnings-as-errors gate通过`26/26`，无skip，结果`/tmp/LuneX-14-2_3-focused-r5.qApHqK/LifecycleVideo.xcresult`。完整macOS通过`393 total / 392 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_3-full.PObxun/LuneXCoreTests.xcresult`；唯一skip经test tree精确确认是`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。
 - macOS与固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV、Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-2_3-builds.Y4xnSH`。构建前后simulator JSON逐字节一致，四个名称各一、固定UUID均`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
 - 5个OpenSpec change strict validation、generator byte-stability、whitespace与production/reference边界全部通过；project SHA-256前后均为`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`。OpenSpec 2.3标记完成，权威进度`7/29`；下一项为2.4完整lifecycle状态/竞态矩阵。
+
+## 2026-07-21 阶段 14 任务 2.4 启动
+
+- 2.3已以`ca37cfc`独立提交并推送，确认`HEAD == origin/main`且工作树clean。2.4覆盖occlusion、focus、zero-drawable、visible resume、stop、same-UUID replacement、stale revision和并发duplicate application。
+- 并发duplicate验收要求相同application共享一个in-flight effect，不能在processor副作用仍悬挂时提前发布applied snapshot；更高revision可取代旧reservation，旧awaiter恢复后必须得到stale且不能回退新状态。
+
+## 2026-07-21 阶段 14 任务 2.4 完成
+
+- environment现在让完全相同的pending lifecycle application共享一个effect task；effect成功且generation/revision reservation仍匹配时才发布snapshot。更高revision可以取代悬挂旧reservation，stop/failure清除operation owner，同UUID replacement不会被旧awaiter回写。
+- 新增occlusion/focus/zero-drawable/resume顺序、并发duplicate单effect、悬挂旧revision被新revision击败、stop后同UUID replacement隔离四类测试；既有stale revision/generation测试共同完成2.4矩阵。
+- focused warnings-as-errors gate通过`30/30`，无skip，结果`/tmp/LuneX-14-2_4-focused.s1IMBS/LifecycleMatrix.xcresult`。完整macOS通过`397 total / 396 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_4-full.FaICoD/LuneXCoreTests.xcresult`；测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-2_4-builds.ZOABSV`。原始simulator JSON只变化runtime `lastUsage`时间；规范化设备身份/状态前后逐字节一致，四个名称和固定UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
+- 5个OpenSpec change strict validation、generator byte-stability、whitespace和production/reference边界通过；project SHA-256前后均为`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`。OpenSpec 2.4标记完成，权威进度`8/29`；下一项为3.1 application input sink。

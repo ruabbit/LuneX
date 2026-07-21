@@ -35,7 +35,7 @@ flowchart LR
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
-| 14 | `in_progress`，OpenSpec `7/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped application及receiver-drain/decode-pause/presentation-clear/fresh-IDR恢复 | 尚缺完整lifecycle竞态矩阵，也未把真实`NSEvent`/cursor capture/focus release接入active remote input或AppModel |
+| 14 | `in_progress`，OpenSpec `8/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped application、receiver-drain/decode-pause/presentation-clear/fresh-IDR恢复及完整lifecycle竞态矩阵 | 尚未把真实`NSEvent`/cursor capture/focus release接入active remote input或AppModel |
 | 15 | `pending` | 已保留bit depth/colorspace/MDCV/CLL并读取display headroom | 尚无10-bit EDR输出、PQ映射、tone mapping或跨屏硬件验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
@@ -67,6 +67,7 @@ flowchart LR
 - `didBecomeKey` 后按用户设置启用远程鼠标；`didResignKey` 立即显示系统鼠标并发送 held key/button release。
 - 使用真实 `NSEvent` 采集键盘、相对/绝对鼠标、滚轮和按钮。
 - 换屏、backing scale 和 resize 后，以实际 decoded source size 与 drawable video rect 更新统一 `RenderTransform`。
+- lifecycle application只在generation/revision reservation仍有效且processor effect成功后发布；相同pending application共享一个effect，更高revision、stop和同UUID replacement均能阻止悬挂旧effect回写。
 
 ## 阶段 15：HDR 和 EDR
 

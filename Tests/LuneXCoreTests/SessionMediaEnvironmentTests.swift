@@ -379,6 +379,241 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         _ = await environment.stop(sessionID: sessionID)
     }
 
+    func testLifecycleStateSequenceAppliesOcclusionFocusZeroDrawableAndResume() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let applications = [
+            lifecycleApplication(
+                sessionID: sessionID,
+                generation: generation,
+                revision: 1,
+                isVisible: false,
+                isFocused: false,
+                drawableSize: PixelSize(width: 1_920, height: 1_080)
+            ),
+            lifecycleApplication(
+                sessionID: sessionID,
+                generation: generation,
+                revision: 2,
+                isVisible: true,
+                isFocused: false,
+                drawableSize: PixelSize(width: 1_920, height: 1_080)
+            ),
+            lifecycleApplication(
+                sessionID: sessionID,
+                generation: generation,
+                revision: 3,
+                isVisible: true,
+                isFocused: true,
+                drawableSize: .zero
+            ),
+            lifecycleApplication(
+                sessionID: sessionID,
+                generation: generation,
+                revision: 4,
+                isVisible: true,
+                isFocused: true,
+                drawableSize: PixelSize(width: 1_920, height: 1_080)
+            )
+        ]
+
+        for application in applications {
+            try await environment.applyLifecycle(application)
+        }
+
+        let applied = await processor.applications
+        XCTAssertEqual(applied, applications)
+        XCTAssertEqual(
+            applications.map(\.directive.videoProcessing),
+            [
+                .drainTransportWithoutDecoding(reason: .notVisible),
+                .submitDecodedVideo,
+                .drainTransportWithoutDecoding(reason: .drawableUnavailable),
+                .submitDecodedVideo
+            ]
+        )
+        let finalSnapshot = await environment.snapshot()
+        XCTAssertEqual(finalSnapshot.lifecycleApplication, applications.last)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testConcurrentDuplicateLifecycleApplicationSharesOnePendingEffect() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor(blockFirstApplication: true)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let application = lifecycleApplication(
+            sessionID: sessionID,
+            generation: generation,
+            revision: 1,
+            isVisible: false,
+            isFocused: false,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        let first = Task { try await environment.applyLifecycle(application) }
+        await waitUntil { await processor.applicationCount == 1 }
+        let duplicate = Task { try await environment.applyLifecycle(application) }
+        for _ in 0..<20 { await Task.yield() }
+
+        let pendingApplicationCount = await processor.applicationCount
+        let pendingSnapshot = await environment.snapshot()
+        XCTAssertEqual(pendingApplicationCount, 1)
+        XCTAssertNil(pendingSnapshot.lifecycleApplication)
+        await processor.resumeFirstApplication()
+        try await first.value
+        try await duplicate.value
+        let appliedSnapshot = await environment.snapshot()
+        XCTAssertEqual(appliedSnapshot.lifecycleApplication, application)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testNewerLifecycleRevisionWinsWhileOlderEffectIsSuspended() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor(blockFirstApplication: true)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let older = lifecycleApplication(
+            sessionID: sessionID,
+            generation: generation,
+            revision: 1,
+            isVisible: false,
+            isFocused: false,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        let newer = lifecycleApplication(
+            sessionID: sessionID,
+            generation: generation,
+            revision: 2,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        let olderTask = Task { try await environment.applyLifecycle(older) }
+        await waitUntil { await processor.applicationCount == 1 }
+
+        try await environment.applyLifecycle(newer)
+        let newerSnapshot = await environment.snapshot()
+        XCTAssertEqual(newerSnapshot.lifecycleApplication, newer)
+        await processor.resumeFirstApplication()
+        await XCTAssertThrowsErrorAsync(try await olderTask.value) { error in
+            XCTAssertEqual(error as? SessionMediaEnvironmentError, .staleLifecycleApplication)
+        }
+        let finalSnapshot = await environment.snapshot()
+        XCTAssertEqual(finalSnapshot.lifecycleApplication, newer)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testStopAndSameSessionReplacementRejectSuspendedLifecycleEffect() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor(blockFirstApplication: true)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        var stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let stale = lifecycleApplication(
+            sessionID: sessionID,
+            generation: firstGeneration,
+            revision: 1,
+            isVisible: false,
+            isFocused: false,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        let staleTask = Task { try await environment.applyLifecycle(stale) }
+        await waitUntil { await processor.applicationCount == 1 }
+        _ = await environment.stop(sessionID: sessionID)
+
+        stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let replacementGeneration = await environment.snapshot().generation
+        let replacement = lifecycleApplication(
+            sessionID: sessionID,
+            generation: replacementGeneration,
+            revision: 1,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        try await environment.applyLifecycle(replacement)
+        await processor.resumeFirstApplication()
+        await XCTAssertThrowsErrorAsync(try await staleTask.value) { error in
+            XCTAssertEqual(error as? SessionMediaEnvironmentError, .inactiveSession)
+        }
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        let replacementSnapshot = await environment.snapshot()
+        XCTAssertEqual(replacementSnapshot.lifecycleApplication, replacement)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
     func testStopUnblocksInputStartupAndRollsBackCleanly() async throws {
         let calls = MediaEnvironmentCallRecorder()
         let video = ControlledVideoReceiveProvider(calls: calls)
@@ -804,15 +1039,38 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         calls: MediaEnvironmentCallRecorder,
         video: ControlledVideoReceiveProvider,
         audio: ControlledAudioReceiveProvider,
-        input: ControlledRemoteInputProvider
+        input: ControlledRemoteInputProvider,
+        videoProcessorFactory: (any SessionVideoProcessorCreating)? = nil
     ) -> NativeSessionMediaEnvironment {
         NativeSessionMediaEnvironment(
             videoReceiveProvider: video,
             audioReceiveProvider: audio,
             remoteInputProvider: input,
-            videoProcessorFactory: RecordingVideoProcessorFactory(calls: calls),
+            videoProcessorFactory: videoProcessorFactory
+                ?? RecordingVideoProcessorFactory(calls: calls),
             audioProcessorFactory: RecordingAudioProcessorFactory(calls: calls),
             teardownGracePeriod: .seconds(1)
+        )
+    }
+
+    private func lifecycleApplication(
+        sessionID: UUID,
+        generation: UInt64,
+        revision: UInt64,
+        isVisible: Bool,
+        isFocused: Bool,
+        drawableSize: PixelSize
+    ) -> SessionLifecycleApplication {
+        SessionLifecycleApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            lifecycleRevision: revision,
+            directive: SessionLifecycleDirectiveResolver.resolve(
+                isStreamActive: true,
+                isVisible: isVisible,
+                isFocused: isFocused,
+                drawableSize: drawableSize
+            )
         )
     }
 
@@ -1002,6 +1260,59 @@ private actor RecordingLifecycleControlProvider: SessionControlProvider {
     func stop(sessionID: UUID) async {
         _ = sessionID
     }
+}
+
+private struct ControlledLifecycleVideoProcessorFactory: SessionVideoProcessorCreating {
+    let processor: ControlledLifecycleVideoProcessor
+
+    func makeVideoProcessor(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        configuration: NegotiatedVideoStreamConfiguration,
+        controlProvider: any SessionControlProvider
+    ) async throws -> any SessionVideoProcessing {
+        _ = sessionID
+        _ = mediaGeneration
+        _ = configuration
+        _ = controlProvider
+        return processor
+    }
+}
+
+private actor ControlledLifecycleVideoProcessor: SessionVideoProcessing {
+    private(set) var applications: [SessionLifecycleApplication] = []
+    private let blockFirstApplication: Bool
+    private var firstApplicationContinuation: CheckedContinuation<Void, Never>?
+
+    init(blockFirstApplication: Bool = false) {
+        self.blockFirstApplication = blockFirstApplication
+    }
+
+    var applicationCount: Int { applications.count }
+
+    func consume(_ event: VideoReceiveEvent) async throws -> Bool {
+        _ = event
+        return false
+    }
+
+    func updateColorMetadata(_ metadata: VideoColorMetadata) async throws {
+        _ = metadata
+    }
+
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        applications.append(application)
+        guard blockFirstApplication, applications.count == 1 else { return }
+        await withCheckedContinuation { continuation in
+            firstApplicationContinuation = continuation
+        }
+    }
+
+    func resumeFirstApplication() {
+        firstApplicationContinuation?.resume()
+        firstApplicationContinuation = nil
+    }
+
+    func stop() async {}
 }
 
 private final class ControlledVideoReceiveProvider: VideoReceiveProvider, @unchecked Sendable {

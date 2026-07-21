@@ -139,6 +139,11 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var tracker: SessionResourceTracker
     }
 
+    private struct LifecycleOperation {
+        var application: SessionLifecycleApplication
+        var task: Task<Void, Error>
+    }
+
     private let videoReceiveProvider: (any VideoReceiveProvider)?
     private let audioReceiveProvider: (any AudioReceiveProvider)?
     private let remoteInputProvider: (any RemoteInputProvider)?
@@ -151,6 +156,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     private var lastTeardownReport: SessionTeardownReport?
     private var lastStoppedSessionID: UUID?
     private var teardownOperation: TeardownOperation?
+    private var lifecycleOperation: LifecycleOperation?
     private var startingSession: StartingSession?
     private var cancelledStartingGenerations: Set<UInt64> = []
 
@@ -440,22 +446,37 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard active.generation == application.mediaGeneration else {
             throw SessionMediaEnvironmentError.staleLifecycleApplication
         }
-        let currentRevision = [
-            active.lifecycleApplication?.lifecycleRevision,
-            active.lifecycleReservation?.lifecycleRevision
-        ].compactMap { $0 }.max()
-        let isExactCurrent = application == active.lifecycleApplication
-            || application == active.lifecycleReservation
-        if !isExactCurrent, let currentRevision {
-            guard application.lifecycleRevision > currentRevision else {
-                throw SessionMediaEnvironmentError.staleLifecycleApplication
+        let effectTask: Task<Void, Error>
+        if let operation = lifecycleOperation,
+           operation.application == application,
+           active.lifecycleReservation == application {
+            effectTask = operation.task
+        } else {
+            if let reservation = active.lifecycleReservation {
+                guard application.lifecycleRevision > reservation.lifecycleRevision else {
+                    throw SessionMediaEnvironmentError.staleLifecycleApplication
+                }
+            } else if let current = active.lifecycleApplication {
+                if application == current { return }
+                guard application.lifecycleRevision > current.lifecycleRevision else {
+                    throw SessionMediaEnvironmentError.staleLifecycleApplication
+                }
             }
+            active.lifecycleReservation = application
+            self.active = active
+            let processor = active.videoProcessor
+            let task = Task {
+                try await processor.applyLifecycle(application)
+            }
+            lifecycleOperation = LifecycleOperation(
+                application: application,
+                task: task
+            )
+            effectTask = task
         }
-        active.lifecycleReservation = application
-        self.active = active
 
         do {
-            try await active.videoProcessor.applyLifecycle(application)
+            try await effectTask.value
         } catch {
             if var current = self.active,
                current.sessionID == application.sessionID,
@@ -463,6 +484,9 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                current.lifecycleReservation == application {
                 current.lifecycleReservation = nil
                 self.active = current
+            }
+            if lifecycleOperation?.application == application {
+                lifecycleOperation = nil
             }
             throw error
         }
@@ -472,12 +496,22 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
               current.generation == application.mediaGeneration else {
             throw SessionMediaEnvironmentError.inactiveSession
         }
+        if current.lifecycleApplication == application,
+           current.lifecycleReservation == nil {
+            if lifecycleOperation?.application == application {
+                lifecycleOperation = nil
+            }
+            return
+        }
         guard current.lifecycleReservation == application else {
             throw SessionMediaEnvironmentError.staleLifecycleApplication
         }
         current.lifecycleApplication = application
         current.lifecycleReservation = nil
         self.active = current
+        if lifecycleOperation?.application == application {
+            lifecycleOperation = nil
+        }
     }
 
     func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
@@ -526,6 +560,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard active.sessionID == sessionID else { return nil }
 
         self.active = nil
+        lifecycleOperation = nil
         active.continuation.finish()
         let operation = makeTeardownOperation(for: active)
         teardownOperation = operation
@@ -598,6 +633,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
               active.sessionID == sessionID,
               active.generation == generation else { return }
         self.active = nil
+        lifecycleOperation = nil
         active.continuation.finish(throwing: error)
         let operation = makeTeardownOperation(for: active)
         teardownOperation = operation
