@@ -11,6 +11,24 @@ final class RemoteInputDeliveryTests: XCTestCase {
         XCTAssertTrue(button.reliable)
         XCTAssertEqual(button.plaintext.bytes, try Data(hex: fixture.pointerButtonPacketHex))
 
+        let relativeMove = try onePacket(.pointer(.relativeMove(
+            deltaX: 300,
+            deltaY: -200,
+            buttons: []
+        )))
+        XCTAssertEqual(relativeMove.channelID, RemoteInputWireCodec.mouseChannel)
+        XCTAssertTrue(relativeMove.reliable)
+        XCTAssertEqual(relativeMove.plaintext.bytes, try Data(hex: fixture.relativeMovePacketHex))
+
+        let absoluteMove = try onePacket(.pointer(.absoluteMove(
+            point: RemotePoint(x: 960, y: 540),
+            referenceSize: PixelSize(width: 1920, height: 1080),
+            buttons: []
+        )))
+        XCTAssertEqual(absoluteMove.channelID, RemoteInputWireCodec.mouseChannel)
+        XCTAssertTrue(absoluteMove.reliable)
+        XCTAssertEqual(absoluteMove.plaintext.bytes, try Data(hex: fixture.absoluteMovePacketHex))
+
         let scroll = try RemoteInputWireCodec.outboundPackets(for: .pointer(.scroll(
             deltaX: 40,
             deltaY: -120,
@@ -105,13 +123,6 @@ final class RemoteInputDeliveryTests: XCTestCase {
         ))) { error in
             XCTAssertEqual(error as? RemoteInputCodecError, .clipboardTooLarge)
         }
-        XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .pointer(.relativeMove(
-            deltaX: 1,
-            deltaY: 1,
-            buttons: []
-        )))) { error in
-            XCTAssertEqual(error as? RemoteInputCodecError, .unsupportedEvent)
-        }
         XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .gameController(
             GameControllerInputEvent(
                 controllerID: "fixture",
@@ -122,6 +133,131 @@ final class RemoteInputDeliveryTests: XCTestCase {
             )
         ))) { error in
             XCTAssertEqual(error as? RemoteInputCodecError, .unsupportedEvent)
+        }
+    }
+
+    func testLargeRelativeMovementSplitsWithoutLosingEitherAxis() throws {
+        let expectedX = Int(Int16.max) * RemoteInputWireCodec.maximumRelativeMovementPackets
+        let expectedY = Int(Int16.min) * RemoteInputWireCodec.maximumRelativeMovementPackets
+        let packets = try RemoteInputWireCodec.outboundPackets(for: .pointer(.relativeMove(
+            deltaX: Double(expectedX),
+            deltaY: Double(expectedY),
+            buttons: [.left]
+        )))
+
+        XCTAssertEqual(packets.count, RemoteInputWireCodec.maximumRelativeMovementPackets)
+        XCTAssertTrue(packets.allSatisfy {
+            $0.channelID == RemoteInputWireCodec.mouseChannel && $0.reliable
+        })
+        let deltas = try packets.map { try relativeMovementDelta($0.plaintext) }
+        XCTAssertEqual(deltas.reduce(0) { $0 + Int($1.x) }, expectedX)
+        XCTAssertEqual(deltas.reduce(0) { $0 + Int($1.y) }, expectedY)
+    }
+
+    func testInvalidRelativeAndAbsoluteMovementFailsClosed() throws {
+        let maximumPositiveDelta = Double(Int16.max) * Double(RemoteInputWireCodec.maximumRelativeMovementPackets)
+        let maximumNegativeDelta = Double(Int16.min) * Double(RemoteInputWireCodec.maximumRelativeMovementPackets)
+        let invalidRelativeValues: [(Double, Double)] = [
+            (.nan, 0),
+            (0, .infinity),
+            (maximumPositiveDelta + 1, 0),
+            (0, maximumNegativeDelta - 1)
+        ]
+        for (deltaX, deltaY) in invalidRelativeValues {
+            XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .pointer(.relativeMove(
+                deltaX: deltaX,
+                deltaY: deltaY,
+                buttons: []
+            )))) { error in
+                XCTAssertEqual(error as? RemoteInputCodecError, .invalidEvent)
+            }
+        }
+
+        let invalidAbsoluteValues: [(RemotePoint, PixelSize)] = [
+            (RemotePoint(x: .nan, y: 0), PixelSize(width: 1920, height: 1080)),
+            (RemotePoint(x: -1, y: 0), PixelSize(width: 1920, height: 1080)),
+            (RemotePoint(x: 1921, y: 0), PixelSize(width: 1920, height: 1080)),
+            (RemotePoint(x: 1, y: 1), .zero),
+            (RemotePoint(x: 1, y: 1), PixelSize(width: Int(Int16.max) + 1, height: 1080))
+        ]
+        for (point, referenceSize) in invalidAbsoluteValues {
+            XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .pointer(.absoluteMove(
+                point: point,
+                referenceSize: referenceSize,
+                buttons: []
+            )))) { error in
+                XCTAssertEqual(error as? RemoteInputCodecError, .invalidEvent)
+            }
+        }
+    }
+
+    func testMovementCoalescerPreservesStateAndEventBarriers() {
+        let relative = RemoteInputEvent.pointer(.relativeMove(deltaX: 10, deltaY: -4, buttons: [.left]))
+        XCTAssertEqual(
+            RemoteInputMovementCoalescer.coalesce(
+                older: relative,
+                newer: .pointer(.relativeMove(deltaX: 5, deltaY: 2, buttons: [.left]))
+            ),
+            .pointer(.relativeMove(deltaX: 15, deltaY: -2, buttons: [.left]))
+        )
+        XCTAssertNil(RemoteInputMovementCoalescer.coalesce(
+            older: relative,
+            newer: .pointer(.relativeMove(deltaX: 5, deltaY: 2, buttons: []))
+        ))
+
+        let referenceSize = PixelSize(width: 1920, height: 1080)
+        let absolute = RemoteInputEvent.pointer(.absoluteMove(
+            point: RemotePoint(x: 100, y: 200),
+            referenceSize: referenceSize,
+            buttons: []
+        ))
+        XCTAssertEqual(
+            RemoteInputMovementCoalescer.coalesce(
+                older: absolute,
+                newer: .pointer(.absoluteMove(
+                    point: RemotePoint(x: 300, y: 400),
+                    referenceSize: referenceSize,
+                    buttons: []
+                ))
+            ),
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 300, y: 400),
+                referenceSize: referenceSize,
+                buttons: []
+            ))
+        )
+        XCTAssertNil(RemoteInputMovementCoalescer.coalesce(
+            older: absolute,
+            newer: .pointer(.absoluteMove(
+                point: RemotePoint(x: 300, y: 400),
+                referenceSize: PixelSize(width: 1280, height: 720),
+                buttons: []
+            ))
+        ))
+        XCTAssertNil(RemoteInputMovementCoalescer.coalesce(older: relative, newer: absolute))
+
+        let barriers: [RemoteInputEvent] = [
+            .keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x41,
+                characters: nil,
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            .pointer(.button(button: .left, isDown: false, point: nil)),
+            .pointer(.scroll(deltaX: 0, deltaY: 1, point: nil)),
+            .touch(TouchInputEvent(
+                id: 1,
+                phase: .moved,
+                point: RemotePoint(x: 1, y: 1),
+                pressure: 0.5,
+                referenceSize: referenceSize
+            )),
+            .clipboard(ClipboardInputEvent(text: "barrier"))
+        ]
+        for barrier in barriers {
+            XCTAssertNil(RemoteInputMovementCoalescer.coalesce(older: relative, newer: barrier))
+            XCTAssertNil(RemoteInputMovementCoalescer.coalesce(older: barrier, newer: relative))
         }
     }
 
@@ -302,6 +438,322 @@ final class RemoteInputDeliveryTests: XCTestCase {
         await provider.stopInput(sessionID: sessionID)
     }
 
+    func testProviderCoalescesPendingRelativeMovementAndCompletesEveryCallerAfterSend() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 100_000_000, 2: 50_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let completions = InputCompletionRecorder()
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 6, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let firstMove = Task {
+            try await provider.send(.pointer(.relativeMove(
+                deltaX: 10,
+                deltaY: 20,
+                buttons: [.left]
+            )), sessionID: sessionID)
+            await completions.record(1)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let secondMove = Task {
+            try await provider.send(.pointer(.relativeMove(
+                deltaX: 5,
+                deltaY: -4,
+                buttons: [.left]
+            )), sessionID: sessionID)
+            await completions.record(2)
+        }
+
+        try await waitForSendCount(2, sender: sender)
+        let completionsDuringPhysicalSend = await completions.values()
+        XCTAssertEqual(completionsDuringPhysicalSend, [])
+        try await barrier.value
+        try await firstMove.value
+        try await secondMove.value
+
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 2)
+        XCTAssertEqual(try relativeMovementDelta(sends[1].packet), RelativeMovementDelta(x: 15, y: 16))
+        let finalCompletions = await completions.values()
+        XCTAssertEqual(Set(finalCompletions), Set([1, 2]))
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderCoalescesPendingAbsoluteMovementUsingCapturedReferenceSize() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 100_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        let referenceSize = PixelSize(width: 1920, height: 1080)
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 7, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let firstMove = Task {
+            try await provider.send(.pointer(.absoluteMove(
+                point: RemotePoint(x: 100, y: 200),
+                referenceSize: referenceSize,
+                buttons: []
+            )), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let secondMove = Task {
+            try await provider.send(.pointer(.absoluteMove(
+                point: RemotePoint(x: 300, y: 400),
+                referenceSize: referenceSize,
+                buttons: []
+            )), sessionID: sessionID)
+        }
+
+        try await barrier.value
+        try await firstMove.value
+        try await secondMove.value
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 2)
+        let expected = try onePacket(.pointer(.absoluteMove(
+            point: RemotePoint(x: 300, y: 400),
+            referenceSize: referenceSize,
+            buttons: []
+        )))
+        XCTAssertEqual(sends[1].packet, expected.plaintext)
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderDoesNotCoalesceAcrossButtonSnapshotOrStateTransition() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 100_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 8, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let firstMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 1, deltaY: 2, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let buttonDown = Task {
+            try await provider.send(.pointer(.button(button: .left, isDown: true, point: nil)), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let secondMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 3, deltaY: 4, buttons: [.left])), sessionID: sessionID)
+        }
+
+        try await barrier.value
+        try await firstMove.value
+        try await buttonDown.value
+        try await secondMove.value
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 4)
+        XCTAssertEqual(try relativeMovementDelta(sends[1].packet), RelativeMovementDelta(x: 1, y: 2))
+        XCTAssertEqual(try relativeMovementDelta(sends[3].packet), RelativeMovementDelta(x: 3, y: 4))
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderFailsEveryCoalescedCallerOnTransportFailure() async throws {
+        let sender = InputSenderStub(
+            delayNanosecondsByCall: [1: 100_000_000, 2: 20_000_000],
+            failingCalls: [2]
+        )
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 9, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let firstMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 10, deltaY: 20, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let secondMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 5, deltaY: 6, buttons: [])), sessionID: sessionID)
+        }
+
+        try await barrier.value
+        await assertTaskError(.deliveryFailed, task: firstMove)
+        await assertTaskError(.deliveryFailed, task: secondMove)
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 2)
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(deactivateCount, 1)
+    }
+
+    func testProviderStopFailsCurrentAndEveryCoalescedCaller() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 200_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 10, count: 16))
+        )
+
+        let current = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let firstMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 1, deltaY: 2, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let secondMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 3, deltaY: 4, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+
+        await provider.stopInput(sessionID: sessionID)
+        await assertTaskError(.inactiveSession, task: current)
+        await assertTaskError(.inactiveSession, task: firstMove)
+        await assertTaskError(.inactiveSession, task: secondMove)
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(deactivateCount, 1)
+    }
+
+    func testProviderEnforcesCoalescedCallerBound() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 150_000_000])
+        let provider = MoonlightRemoteInputProvider(
+            sender: sender,
+            deliveryLimits: RemoteInputDeliveryLimits(
+                maximumPendingEvents: 2,
+                maximumPendingPackets: 1,
+                maximumPendingCalls: 2
+            )
+        )
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 11, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let firstMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 1, deltaY: 1, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let secondMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 2, deltaY: 2, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        await assertProviderError(.queueFull) {
+            try await provider.send(.pointer(.relativeMove(deltaX: 3, deltaY: 3, buttons: [])), sessionID: sessionID)
+        }
+
+        try await barrier.value
+        try await firstMove.value
+        try await secondMove.value
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 2)
+        XCTAssertEqual(try relativeMovementDelta(sends[1].packet), RelativeMovementDelta(x: 3, y: 3))
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderRejectsCoalescingThatWouldExceedPendingPacketBound() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 150_000_000])
+        let provider = MoonlightRemoteInputProvider(
+            sender: sender,
+            deliveryLimits: RemoteInputDeliveryLimits(
+                maximumPendingEvents: 2,
+                maximumPendingPackets: 1,
+                maximumPendingCalls: 10
+            )
+        )
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 12, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let pendingMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 1, deltaY: 0, buttons: [])), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        await assertProviderError(.queueFull) {
+            try await provider.send(.pointer(.relativeMove(
+                deltaX: Double(Int16.max),
+                deltaY: 0,
+                buttons: []
+            )), sessionID: sessionID)
+        }
+
+        try await barrier.value
+        try await pendingMove.value
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 2)
+        XCTAssertEqual(try relativeMovementDelta(sends[1].packet), RelativeMovementDelta(x: 1, y: 0))
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderFallsBackToSeparateDeliveriesWhenCombinedDeltaExceedsCodecBound() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [1: 150_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        let maximumDelta = Int(Int16.max) * RemoteInputWireCodec.maximumRelativeMovementPackets
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 13, count: 16))
+        )
+
+        let barrier = Task {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
+        }
+        try await waitForSendCount(1, sender: sender)
+        let maximumMove = Task {
+            try await provider.send(.pointer(.relativeMove(
+                deltaX: Double(maximumDelta),
+                deltaY: 0,
+                buttons: []
+            )), sessionID: sessionID)
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
+        let remainderMove = Task {
+            try await provider.send(.pointer(.relativeMove(deltaX: 1, deltaY: 0, buttons: [])), sessionID: sessionID)
+        }
+
+        try await barrier.value
+        try await maximumMove.value
+        try await remainderMove.value
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 1 + RemoteInputWireCodec.maximumRelativeMovementPackets + 1)
+        let movementDeltas = try sends.dropFirst().map { try relativeMovementDelta($0.packet) }
+        XCTAssertEqual(movementDeltas.reduce(0) { $0 + Int($1.x) }, maximumDelta + 1)
+        XCTAssertEqual(movementDeltas.reduce(0) { $0 + Int($1.y) }, 0)
+        await provider.stopInput(sessionID: sessionID)
+    }
+
     func testProviderRejectsWrongSessionAndFailsCurrentPendingAndLateSends() async throws {
         let sender = InputSenderStub(
             delayNanosecondsByCall: [1: 50_000_000],
@@ -348,8 +800,14 @@ final class RemoteInputDeliveryTests: XCTestCase {
             configuration: inputConfiguration(key: Data(repeating: 3, count: 16))
         )
         do {
-            try await provider.send(.pointer(.absoluteMove(point: RemotePoint(x: 1, y: 1), buttons: [])), sessionID: sessionID)
-            XCTFail("Expected unsupported pointer movement to fail.")
+            try await provider.send(.gameController(GameControllerInputEvent(
+                controllerID: "fixture",
+                playerIndex: 0,
+                element: .a,
+                value: 1,
+                isPressed: true
+            )), sessionID: sessionID)
+            XCTFail("Expected unsupported controller input to fail.")
         } catch let error as RemoteInputCodecError {
             XCTAssertEqual(error, .unsupportedEvent)
         }
@@ -382,6 +840,20 @@ final class RemoteInputDeliveryTests: XCTestCase {
         let packets = try RemoteInputWireCodec.outboundPackets(for: event)
         XCTAssertEqual(packets.count, 1)
         return try XCTUnwrap(packets.first)
+    }
+
+    private func relativeMovementDelta(
+        _ packet: RemoteInputPlaintextPacket
+    ) throws -> RelativeMovementDelta {
+        let bytes = [UInt8](packet.bytes)
+        guard bytes.count == 12,
+              Array(bytes[0...7]) == [0x00, 0x00, 0x00, 0x08, 0x07, 0x00, 0x00, 0x00] else {
+            throw RemoteInputCodecError.invalidPacket
+        }
+        return RelativeMovementDelta(
+            x: Int16(bitPattern: UInt16(bytes[8]) << 8 | UInt16(bytes[9])),
+            y: Int16(bitPattern: UInt16(bytes[10]) << 8 | UInt16(bytes[11]))
+        )
     }
 
     private func inputConfiguration(key: Data) -> NegotiatedInputConfiguration {
@@ -456,12 +928,31 @@ final class RemoteInputDeliveryTests: XCTestCase {
 }
 
 private struct OrderedInputFixture: Decodable {
+    var absoluteMovePacketHex: String
     var clipboardPacketsHex: [String]
     var horizontalScrollPacketHex: String
     var pointerButtonPacketHex: String
+    var relativeMovePacketHex: String
     var schemaVersion: Int
     var touchPacketHex: String
     var verticalScrollPacketHex: String
+}
+
+private struct RelativeMovementDelta: Equatable, Sendable {
+    var x: Int16
+    var y: Int16
+}
+
+private actor InputCompletionRecorder {
+    private var recordedValues: [Int] = []
+
+    func record(_ value: Int) {
+        recordedValues.append(value)
+    }
+
+    func values() -> [Int] {
+        recordedValues
+    }
 }
 
 private struct InputSendRecord: Equatable, Sendable {

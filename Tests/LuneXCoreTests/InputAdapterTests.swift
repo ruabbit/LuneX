@@ -64,7 +64,11 @@ final class InputAdapterTests: XCTestCase {
         ))
 
         XCTAssertEqual(output.policy, .deliver)
-        XCTAssertEqual(output.event, .pointer(.absoluteMove(point: RemotePoint(x: 960, y: 540), buttons: [])))
+        XCTAssertEqual(output.event, .pointer(.absoluteMove(
+            point: RemotePoint(x: 960, y: 540),
+            referenceSize: PixelSize(width: 1920, height: 1080),
+            buttons: []
+        )))
     }
 
     func testMacKeyboardReservesSystemShortcutsByDefault() {

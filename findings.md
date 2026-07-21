@@ -422,3 +422,17 @@
 - provider以最多256 pending events/8192 pending packets和4096 clipboard UTF-8 bytes设界；单一drain operation保证并发send仍为event FIFO，clipboard多packet不可插入。transport失败会失败current/pending、deactivate sender并拒绝late send；unsupported movement/controller在入队前拒绝且不破坏active input。
 - targeted `11/11`、expanded input/control/session `82/82`、最终完整macOS warnings-as-errors `292 total / 291 passed / 1 explicit Keychain skip / 0 failed`。最终macOS、固定iPhone/iPad/Apple TV/Vision Pro Debug build与全部静态门禁通过，四个固定simulator前后均为`Shutdown`。
 - 7.2证明authenticated ENet send边界与确定性ordering，不证明host已消费event、macOS raw key已映射Win32 VK、真实cursor capture、movement coalescing、controller feedback、focus-loss release或live Sunshine输入；这些仍属于7.3-7.7与阶段14。
+
+### 2026-07-21 阶段 13 Pointer Movement 与 Coalescing 设计
+
+- modern relative pointer packet使用gen5 magic `0x07`与big-endian Int16 x/y delta；absolute packet使用magic `0x05`以及big-endian x/y/unused/reference-width-1/reference-height-1。absolute event必须携带产生坐标时的source reference size，不能依赖发送时可能已变化的全局窗口状态。
+- relative coalescing累加同button snapshot的未发送delta，超出单packet Int16时按最多16包完整拆分；absolute coalescing只保留同reference size/button snapshot的最新位置。coalescing只检查FIFO队尾，因此任何keyboard/button/scroll/touch/clipboard或不同movement类型都会成为不可跨越的状态屏障。
+- 一个coalesced job可拥有多个等待send调用；物理packet成功后全部continuation完成，failure/stop时全部同样失败。除pending event和packet上限外还需要pending caller上限，避免大量合并调用绕过内存边界。
+
+### 2026-07-21 阶段 13 Pointer Movement 与 Coalescing 验收
+
+- relative gen5 packet为12 bytes：BE payload length `8`、LE magic `0x07`、BE Int16 x/y；absolute packet为18 bytes：BE payload length `14`、LE magic `0x05`、BE x/y/zero/reference-width-1/reference-height-1。repository fixture与Node Buffer独立重建逐byte一致。
+- relative单次最多完整拆分16包，正向边界`32767 * 16`与负向边界`-32768 * 16`均不丢余量；合并后超过codec边界时退回两个独立FIFO delivery。NaN、infinity、越界坐标/尺寸和超过显式packet bound的event结构化fail closed。
+- provider只在pending FIFO队尾合并同button snapshot relative movement，或同button/reference size absolute movement；keyboard、button、scroll、touch、clipboard、不同movement类型和不同状态均为barrier。absolute event在adapter生成时捕获source reference size，窗口后续resize不会改写已排队坐标语义。
+- 每个coalesced caller只在最终物理packet成功后完成；transport failure、stop、caller上限和packet上限都有确定性回归。最终targeted `29/29`、expanded input/control/session `97/97`；完整macOS warnings-as-errors `303 total / 302 passed / 1 explicit Keychain skip / 0 failed`。
+- macOS、固定iPhone/iPad/Apple TV/Vision Pro warnings-as-errors Debug build、fixture/OpenSpec/generator/reference/dependency/ENet/四SDK C与independent Node gates全部通过，固定simulator最终均为`Shutdown`。7.3不证明平台`NSEvent`/cursor capture、focus-loss release、controller feedback或live Sunshine movement消费。

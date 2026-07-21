@@ -81,6 +81,7 @@ enum RemoteInputWireCodec {
     static let minimumPacketSize = 8
     static let maximumPacketSize = 128
     static let maximumClipboardUTF8Bytes = 4_096
+    static let maximumRelativeMovementPackets = 16
 
     static let keyboardChannel: UInt8 = 0x02
     static let mouseChannel: UInt8 = 0x03
@@ -89,6 +90,8 @@ enum RemoteInputWireCodec {
 
     private static let keyboardDownMagic: UInt32 = 0x0000_0003
     private static let keyboardUpMagic: UInt32 = 0x0000_0004
+    private static let absolutePointerMagic: UInt32 = 0x0000_0005
+    private static let relativePointerMagic: UInt32 = 0x0000_0007
     private static let pointerButtonDownMagic: UInt32 = 0x0000_0008
     private static let pointerButtonUpMagic: UInt32 = 0x0000_0009
     private static let verticalScrollMagic: UInt32 = 0x0000_000A
@@ -123,14 +126,22 @@ enum RemoteInputWireCodec {
             return try serializeScroll(deltaX: deltaX, deltaY: deltaY).map {
                 outbound($0, channelID: mouseChannel)
             }
+        case let .pointer(.relativeMove(deltaX, deltaY, _)):
+            return try serializeRelativeMovement(deltaX: deltaX, deltaY: deltaY).map {
+                outbound($0, channelID: mouseChannel)
+            }
+        case let .pointer(.absoluteMove(point, referenceSize, _)):
+            return [outbound(
+                try serializeAbsoluteMovement(point: point, referenceSize: referenceSize),
+                channelID: mouseChannel
+            )]
         case let .touch(event):
             return [outbound(try serializeTouch(event), channelID: touchChannel)]
         case let .clipboard(event):
             return try serializeClipboard(event).map {
                 outbound($0, channelID: utf8Channel)
             }
-        case .pointer(.absoluteMove), .pointer(.relativeMove),
-             .virtualController, .gameController, .tvRemote, .focus:
+        case .virtualController, .gameController, .tvRemote, .focus:
             throw RemoteInputCodecError.unsupportedEvent
         }
     }
@@ -167,6 +178,76 @@ enum RemoteInputWireCodec {
         appendBigEndian(UInt32(5), to: &packet)
         appendLittleEndian(isDown ? pointerButtonDownMagic : pointerButtonUpMagic, to: &packet)
         packet.append(code)
+        return try RemoteInputPlaintextPacket(validating: packet)
+    }
+
+    private static func serializeRelativeMovement(
+        deltaX: Double,
+        deltaY: Double
+    ) throws -> [RemoteInputPlaintextPacket] {
+        guard deltaX.isFinite, deltaY.isFinite else {
+            throw RemoteInputCodecError.invalidEvent
+        }
+        let roundedX = deltaX.rounded(.toNearestOrAwayFromZero)
+        let roundedY = deltaY.rounded(.toNearestOrAwayFromZero)
+        let maximumPositiveDelta = Double(Int16.max) * Double(maximumRelativeMovementPackets)
+        let maximumNegativeDelta = Double(Int16.min) * Double(maximumRelativeMovementPackets)
+        guard (maximumNegativeDelta...maximumPositiveDelta).contains(roundedX),
+              (maximumNegativeDelta...maximumPositiveDelta).contains(roundedY),
+              let initialX = Int(exactly: roundedX),
+              let initialY = Int(exactly: roundedY) else {
+            throw RemoteInputCodecError.invalidEvent
+        }
+
+        var remainingX = initialX
+        var remainingY = initialY
+        var packets: [RemoteInputPlaintextPacket] = []
+        packets.reserveCapacity(maximumRelativeMovementPackets)
+        while remainingX != 0 || remainingY != 0 {
+            guard packets.count < maximumRelativeMovementPackets else {
+                throw RemoteInputCodecError.invalidEvent
+            }
+            let packetX = Int16(clamping: remainingX)
+            let packetY = Int16(clamping: remainingY)
+            var packet = Data()
+            appendBigEndian(UInt32(8), to: &packet)
+            appendLittleEndian(relativePointerMagic, to: &packet)
+            appendBigEndian(packetX, to: &packet)
+            appendBigEndian(packetY, to: &packet)
+            packets.append(try RemoteInputPlaintextPacket(validating: packet))
+            remainingX -= Int(packetX)
+            remainingY -= Int(packetY)
+        }
+        return packets
+    }
+
+    private static func serializeAbsoluteMovement(
+        point: RemotePoint,
+        referenceSize: PixelSize
+    ) throws -> RemoteInputPlaintextPacket {
+        guard referenceSize.width > 0,
+              referenceSize.height > 0,
+              referenceSize.width <= Int(Int16.max),
+              referenceSize.height <= Int(Int16.max),
+              point.x.isFinite,
+              point.y.isFinite,
+              (0...Double(referenceSize.width)).contains(point.x),
+              (0...Double(referenceSize.height)).contains(point.y),
+              let x = Int16(exactly: point.x.rounded(.toNearestOrAwayFromZero)),
+              let y = Int16(exactly: point.y.rounded(.toNearestOrAwayFromZero)),
+              let width = Int16(exactly: referenceSize.width - 1),
+              let height = Int16(exactly: referenceSize.height - 1) else {
+            throw RemoteInputCodecError.invalidEvent
+        }
+
+        var packet = Data()
+        appendBigEndian(UInt32(14), to: &packet)
+        appendLittleEndian(absolutePointerMagic, to: &packet)
+        appendBigEndian(x, to: &packet)
+        appendBigEndian(y, to: &packet)
+        appendBigEndian(Int16(0), to: &packet)
+        appendBigEndian(width, to: &packet)
+        appendBigEndian(height, to: &packet)
         return try RemoteInputPlaintextPacket(validating: packet)
     }
 

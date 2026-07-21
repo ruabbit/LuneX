@@ -36,24 +36,40 @@ enum RemoteInputRuntimeError: Error, Equatable, Sendable, CustomStringConvertibl
     }
 }
 
+struct RemoteInputDeliveryLimits: Equatable, Sendable {
+    static let production = RemoteInputDeliveryLimits(
+        maximumPendingEvents: 256,
+        maximumPendingPackets: 8_192,
+        maximumPendingCalls: 8_192
+    )
+
+    var maximumPendingEvents: Int
+    var maximumPendingPackets: Int
+    var maximumPendingCalls: Int
+}
+
 actor MoonlightRemoteInputProvider: RemoteInputProvider {
     private struct PendingDelivery {
+        var event: RemoteInputEvent
         var packets: [RemoteInputOutboundPacket]
-        var continuation: CheckedContinuation<Void, Error>
+        var continuations: [CheckedContinuation<Void, Error>]
     }
 
-    private static let maximumPendingEvents = 256
-    private static let maximumPendingPackets = 8_192
-
     private let sender: any AuthenticatedInputFrameSending
+    private let deliveryLimits: RemoteInputDeliveryLimits
     private var activeSessionID: UUID?
     private var generation: UInt64 = 0
     private var pending: [PendingDelivery] = []
     private var pendingPacketCount = 0
+    private var pendingCallCount = 0
     private var drainTask: Task<Void, Never>?
 
-    init(sender: any AuthenticatedInputFrameSending) {
+    init(
+        sender: any AuthenticatedInputFrameSending,
+        deliveryLimits: RemoteInputDeliveryLimits = .production
+    ) {
         self.sender = sender
+        self.deliveryLimits = deliveryLimits
     }
 
     func startInput(
@@ -89,17 +105,45 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         }
         let packets = try RemoteInputWireCodec.outboundPackets(for: event)
         guard !packets.isEmpty else { return }
-        guard pending.count < Self.maximumPendingEvents,
-              pendingPacketCount + packets.count <= Self.maximumPendingPackets else {
+
+        let coalescedEvent = pending.last.flatMap {
+            RemoteInputMovementCoalescer.coalesce(older: $0.event, newer: event)
+        }
+        let coalescedPackets = coalescedEvent.flatMap {
+            try? RemoteInputWireCodec.outboundPackets(for: $0)
+        }
+        let canCoalesce = coalescedEvent != nil && coalescedPackets != nil
+        let previousPacketCount = canCoalesce ? pending.last?.packets.count ?? 0 : 0
+        let nextPacketCount = canCoalesce ? coalescedPackets?.count ?? 0 : packets.count
+        let nextEventCount = pending.count + (canCoalesce ? 0 : 1)
+        guard deliveryLimits.maximumPendingEvents > 0,
+              deliveryLimits.maximumPendingPackets > 0,
+              deliveryLimits.maximumPendingCalls > 0,
+              nextEventCount <= deliveryLimits.maximumPendingEvents,
+              pendingCallCount < deliveryLimits.maximumPendingCalls,
+              pendingPacketCount - previousPacketCount + nextPacketCount <= deliveryLimits.maximumPendingPackets else {
             throw RemoteInputRuntimeError.queueFull
         }
 
         try await withCheckedThrowingContinuation { continuation in
-            pending.append(PendingDelivery(
-                packets: packets,
-                continuation: continuation
-            ))
-            pendingPacketCount += packets.count
+            if canCoalesce,
+               let coalescedEvent,
+               let coalescedPackets,
+               !pending.isEmpty {
+                pendingPacketCount -= pending[pending.count - 1].packets.count
+                pending[pending.count - 1].event = coalescedEvent
+                pending[pending.count - 1].packets = coalescedPackets
+                pending[pending.count - 1].continuations.append(continuation)
+                pendingPacketCount += coalescedPackets.count
+            } else {
+                pending.append(PendingDelivery(
+                    event: event,
+                    packets: packets,
+                    continuations: [continuation]
+                ))
+                pendingPacketCount += packets.count
+            }
+            pendingCallCount += 1
             startDrainIfNeeded()
         }
     }
@@ -144,6 +188,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
             }
             let delivery = pending.removeFirst()
             pendingPacketCount -= delivery.packets.count
+            pendingCallCount -= delivery.continuations.count
 
             do {
                 for packet in delivery.packets {
@@ -158,12 +203,16 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 guard drainGeneration == generation, activeSessionID != nil else {
                     throw CancellationError()
                 }
-                delivery.continuation.resume()
+                for continuation in delivery.continuations {
+                    continuation.resume()
+                }
             } catch {
                 let wasCancelled = Task.isCancelled || drainGeneration != generation
-                delivery.continuation.resume(throwing: wasCancelled
-                    ? RemoteInputRuntimeError.inactiveSession
-                    : RemoteInputRuntimeError.deliveryFailed)
+                for continuation in delivery.continuations {
+                    continuation.resume(throwing: wasCancelled
+                        ? RemoteInputRuntimeError.inactiveSession
+                        : RemoteInputRuntimeError.deliveryFailed)
+                }
                 guard !wasCancelled else {
                     drainTask = nil
                     return
@@ -184,8 +233,44 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         let queued = pending
         pending.removeAll(keepingCapacity: false)
         pendingPacketCount = 0
+        pendingCallCount = 0
         for delivery in queued {
-            delivery.continuation.resume(throwing: error)
+            for continuation in delivery.continuations {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+}
+
+enum RemoteInputMovementCoalescer {
+    static func coalesce(
+        older: RemoteInputEvent,
+        newer: RemoteInputEvent
+    ) -> RemoteInputEvent? {
+        switch (older, newer) {
+        case let (
+            .pointer(.relativeMove(oldX, oldY, oldButtons)),
+            .pointer(.relativeMove(newX, newY, newButtons))
+        ) where oldButtons == newButtons:
+            let combinedX = oldX + newX
+            let combinedY = oldY + newY
+            guard combinedX.isFinite, combinedY.isFinite else { return nil }
+            return .pointer(.relativeMove(
+                deltaX: combinedX,
+                deltaY: combinedY,
+                buttons: newButtons
+            ))
+        case let (
+            .pointer(.absoluteMove(_, oldReferenceSize, oldButtons)),
+            .pointer(.absoluteMove(newPoint, newReferenceSize, newButtons))
+        ) where oldReferenceSize == newReferenceSize && oldButtons == newButtons:
+            return .pointer(.absoluteMove(
+                point: newPoint,
+                referenceSize: newReferenceSize,
+                buttons: newButtons
+            ))
+        default:
+            return nil
         }
     }
 }

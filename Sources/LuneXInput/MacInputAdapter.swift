@@ -117,7 +117,11 @@ struct MacInputAdapter: Sendable {
         }
 
         return InputAdapterOutput(
-            event: .pointer(.absoluteMove(point: remotePoint, buttons: sample.buttons)),
+            event: .pointer(.absoluteMove(
+                point: remotePoint,
+                referenceSize: mapper.transform.sourceSize,
+                buttons: sample.buttons
+            )),
             policy: .deliver
         )
     }

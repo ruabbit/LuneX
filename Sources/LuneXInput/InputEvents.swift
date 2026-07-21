@@ -48,7 +48,7 @@ struct PointerButtonSet: OptionSet, Codable, Hashable, Sendable {
 }
 
 enum PointerInputEvent: Equatable, Sendable {
-    case absoluteMove(point: RemotePoint, buttons: PointerButtonSet)
+    case absoluteMove(point: RemotePoint, referenceSize: PixelSize, buttons: PointerButtonSet)
     case relativeMove(deltaX: Double, deltaY: Double, buttons: PointerButtonSet)
     case button(button: PointerButton, isDown: Bool, point: RemotePoint?)
     case scroll(deltaX: Double, deltaY: Double, point: RemotePoint?)

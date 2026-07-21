@@ -526,3 +526,19 @@
 - 最终macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；固定simulator构建前后均为`Shutdown`，未创建或启动第二个同类设备。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、Node independent ordered vector与四SDK strict C syntax gates全部通过。
 - OpenSpec 7.2更新为完成，权威进度`39/61`。该结果不证明movement/coalescing、controller/feedback、held-state release、平台key mapping/cursor capture或live Sunshine input；下一项为7.3 coalesced relative/absolute pointer movement。
+
+## 2026-07-21 阶段 13 任务 7.3 启动
+
+- 7.2已以`a3c2f4d Deliver ordered remote input events`独立提交并推送，`HEAD == origin/main`、工作树clean、OpenSpec权威进度`39/61`后进入7.3。
+- 只读核对moonlight-ios固定common revision `48d7f1a`：relative gen5 magic为`0x07`并累加/Int16分片，absolute magic为`0x05`并保留最新位置与reference dimensions。7.3将在现有bounded provider队尾做安全coalescing，不跨越任何状态转换。
+- 7.3第一次focused compile在测试helper处失败：`outboundPackets`返回`RemoteInputOutboundPacket`，测试误把数组直接传给只接受plaintext的delta decoder；已改为显式提取`.plaintext`，未改动production协议行为。
+
+## 2026-07-21 阶段 13 任务 7.3 完成
+
+- 新增gen5 relative/absolute mouse movement codec：relative使用LE magic `0x07`与BE Int16 delta，absolute使用LE magic `0x05`与BE coordinates/reference-size-minus-one；adapter把坐标生成时的source reference size固化进absolute event。
+- relative delta最多16包完整分片，正向`32767 * 16`与负向`-32768 * 16`极值均无丢失；合并后超过codec上限会退回独立FIFO delivery。invalid finite/range/reference输入与显式queue/caller/packet上限均fail closed。
+- provider只合并pending队尾兼容movement：relative要求相同button snapshot并累加，absolute要求相同button/reference size并保留最新坐标；keyboard/button/scroll/touch/clipboard、relative/absolute互换与状态变化全部形成barrier。所有coalesced continuation只在物理send成功后完成，failure/stop时全部一致失败。
+- final targeted warnings-as-errors `29/29`，expanded input/control/session `97/97`；完整macOS warnings-as-errors `303 total / 302 passed / 1 skipped / 0 failed`，唯一skip为未启用真实Keychain round-trip，本任务继续使用file/in-memory fallback。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个固定simulator最终均为`Shutdown`，没有创建或boot重复设备。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、四SDK strict C syntax与Node independent movement vector全部通过。
+- OpenSpec 7.3更新为完成，权威进度`40/61`。该结果不证明阶段14 `NSEvent`/cursor capture接线、7.4 controller feedback、7.5 held-state release或7.7 live Sunshine已消费movement；下一项为7.4 controller/motion/battery/LED/rumble/trigger-rumble handling。
