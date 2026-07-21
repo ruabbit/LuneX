@@ -3,7 +3,7 @@
 - [x] 1.1 Inventory current decoded formats, metadata ownership, renderer behavior, Apple EDR APIs, platform capability differences, and hardware proof limits without changing runtime behavior
 - [x] 1.2 Define immutable render color signatures, display revisions, platform output capabilities, mapping modes, surface contracts, and closed resolution errors
 - [x] 1.3 Implement decoded pixel-format, plane, bit-depth, range, codec, primaries, transfer, matrix, and metadata compatibility validation
-- [ ] 1.4 Implement platform-neutral video-range normalization, Rec.709/BT.2020 matrices, SDR transfer, ST 2084 PQ, gamut conversion, and finite-bound reference math
+- [x] 1.4 Implement platform-neutral video-range normalization, Rec.709/BT.2020 matrices, SDR transfer, ST 2084 PQ, gamut conversion, and finite-bound reference math
 - [ ] 1.5 Implement mastering/MaxCLL source-peak resolution and a monotonic reference-white-preserving EDR/SDR shoulder bounded by current headroom
 - [ ] 1.6 Add deterministic invalid-combination, known-vector, monotonicity, continuity, gamut, missing-metadata, headroom, and numeric-bound tests
 

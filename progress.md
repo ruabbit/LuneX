@@ -1216,3 +1216,17 @@
 - macOS、固定iPhone、iPad、tvOS与visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-1_3-builds-final.fyVqH8`）；simulator前后规范化SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定四设备均唯一、可用、`Shutdown`且全局`Booted=0`，未执行create/clone/boot/launch/shutdown/delete。
 - repository gates位于`/tmp/LuneX-15-1_3-repo-gates-final.4UGNTO`：OpenSpec strict `6/6`、generator运行前和三次运行SHA-256均为`1e2fc40dec8a16717f09efad32859318c3b377db6135edd04f82bde2d9767cae`、project无漂移、production/reference边界、无Swift Package及`git diff --check`通过。
 - OpenSpec 1.3标记完成，权威进度`3/33`。本证据不证明frame generation/signature binding、Metal texture layout/device ownership、renderer、shader或物理HDR；下一项1.4实现platform-neutral video-range、Rec.709/BT.2020 matrix、SDR transfer、PQ与gamut reference math。
+
+## 2026-07-21 阶段 15 任务 1.4 启动
+
+- 1.3已以`09d6533 Validate decoded HDR video contracts`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`3/33`。
+- 1.4实现pure Swift reference math：8/10-bit video-range normalization、Rec.709/BT.2020 non-constant-luminance YCbCr matrix、BT.709 inverse transfer、ST 2084 PQ EOTF和D65 sRGB/Display-P3/BT.2020 linear gamut conversion。
+- 输入code/finite bounds和输出finite结果必须fail closed；本项不实现1.5 source peak/headroom shoulder，不接入shader或production presenter。
+
+## 2026-07-21 阶段 15 任务 1.4 完成
+
+- 新增pure Swift `HDRColorReferenceMath`：8/10-bit video-range code normalization、Rec.709/BT.2020 non-constant-luminance YCbCr、BT.709 inverse transfer、ST 2084 PQ绝对nits EOTF和D65 sRGB/Display-P3/BT.2020 linear gamut conversion；非有限、code越界与过大linear input均typed fail closed。
+- focused `7/7`（`/tmp/LuneX-15-1_4-focused-final.aMIRAd/HDRColorReferenceMath.xcresult`）；完整macOS `497 total / 496 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-1_4-full.5aiVKx/LuneXCoreTests.xcresult`），唯一skip仍为真实Keychain opt-in且日志零源码诊断。
+- macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors通过（`/tmp/LuneX-15-1_4-builds.6aJ4jz`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，全部固定设备`Shutdown`且全局`Booted=0`。
+- repository gates位于`/tmp/LuneX-15-1_4-repo.lZwC8m`：OpenSpec strict `6/6`、generator三次稳定且project SHA-256为`fd2e7fba3373edcdb1abc50415dd44440fd37d20f26b87c4210756c37642b367`、reference/dependency/whitespace边界通过。
+- OpenSpec 1.4标记完成，权威进度`4/33`。本证据不证明1.5 source peak/headroom shoulder、Metal shader、production output或物理HDR；下一项1.5。

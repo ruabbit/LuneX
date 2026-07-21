@@ -861,6 +861,12 @@
 - 当前测试树唯一显式opt-in环境开关是`LUNEX_RUN_KEYCHAIN_TEST`；normal suite将显式移除该变量，预期唯一skip为一次性真实Keychain round-trip。
 - 测试树尚无live-host XCTest环境开关或test case，因为阶段13的OpenSpec 9.2仍未实现；6.1只证明normal suite没有host/Keychain副作用，不能把缺失的live-host测试描述为disabled pass。
 
+# 2026-07-21 阶段 15 任务 1.4 验收结论
+
+- reference math明确按8-bit `16/235/128/224`与10-bit四倍code值做video-range normalization；Rec.709和BT.2020使用各自non-constant-luminance矩阵，不依赖CoreImage隐式转换。
+- BT.709 inverse transfer在`E' < 0.081`走线性分支；ST 2084使用规范m1/m2/c1/c2/c3并输出`0...10000`绝对nits。D65 RGB-XYZ矩阵支持sRGB、Display-P3、BT.2020的线性互转且不提前clamp负gamut分量。
+- focused `7/7`、完整macOS `497/496+1 skip`和五平台build通过；CPU reference只证明确定性数学，不能替代shader readback、surface signaling或物理亮度/颜色验收。
+
 # 2026-07-21 阶段 15 任务 1.3 验收结论
 
 - `HDRDecodedVideoContractValidator`读取actual `CVPixelBuffer`而非仅相信VideoToolbox destination attributes；支持格式严格为8-bit NV12 video-range和10-bit P010 video-range，并验证image/luma/chroma geometry。

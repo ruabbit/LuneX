@@ -78,6 +78,7 @@
 				CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */,
 				CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */,
 				863690481A7841758650A20A /* DisplayHeadroom.swift */,
+				7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */,
 				E17C5210160DA201868DD8DA /* HDRDecodedVideoContract.swift */,
 				32FD909C5E7642EE14FD9AEC /* HDRRenderContract.swift */,
 				23EDB4BFB4ABA1B790E136DC /* MetalVideoFrameDelivery.swift */,
@@ -208,6 +209,7 @@
 				54782C44322058C8A18A0937 /* AppKitLifecycleMonitor.swift in Sources */,
 				41027C1F4921A223AF263FAF /* UIKitLifecycleMonitor.swift in Sources */,
 				6B02A5C0806ECD0917599BAE /* DisplayHeadroom.swift in Sources */,
+				DDBAB8F9C137CFCDB650E13C /* HDRColorReferenceMath.swift in Sources */,
 				D521B75C8FD9FAC8D513B7F2 /* HDRDecodedVideoContract.swift in Sources */,
 				6BB7E5C7C8CC00163B3AA14B /* HDRRenderContract.swift in Sources */,
 				8078135E63E86083D9D0BE45 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -478,6 +480,7 @@
 				83ABFBC71A0D651358D1BF3F /* AppKitLifecycleMonitor.swift in Sources */,
 				4FA393E16ACA3B15586B2711 /* UIKitLifecycleMonitor.swift in Sources */,
 				0B83E9551506F87EFADDE2E6 /* DisplayHeadroom.swift in Sources */,
+				72658DE06852BCF73C8CE96B /* HDRColorReferenceMath.swift in Sources */,
 				1774213524F81F3699C4A0FB /* HDRDecodedVideoContract.swift in Sources */,
 				AA29A40578CDF8CFEFC593B9 /* HDRRenderContract.swift in Sources */,
 				F0B6B7E6BBCF9C4D2168DC28 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -551,6 +554,7 @@
 				9F5F7C4AAE6A679AB865FE5E /* LuneX-visionOS.app */,
 				D76541BC2CB99720732B8F10 /* LuneXCoreTests.xctest */
 			); name = Products; sourceTree = "<group>"; };
+		54AC46810E33ABF803A11710 /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
 		551164683B50D9BFCCAB64FA /* RTSPSessionDescriptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/RTSPSessionDescriptionTests.swift"; sourceTree = "<group>"; };
 		55382DA4B93CC740EF5B1FAB /* host.c in Sources */ = {isa = PBXBuildFile; fileRef = 9D5A2F039AF5AC454CE4E1E0 /* host.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		558D80929E02769E4962D8AE /* MediaClockSynchronizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB90277F995A5405549A7E56 /* MediaClockSynchronizer.swift */; };
@@ -599,6 +603,7 @@
 				6FA92D23F2CDADAB252B3FD8 /* StreamCoordinateSnapshot.swift in Sources */,
 				946ECF7163339B5969AAC777 /* AppKitLifecycleMonitor.swift in Sources */,
 				C45FCEA0C35E538EC6AFF71B /* DisplayHeadroom.swift in Sources */,
+				CC03D101D0FF79503C139F65 /* HDRColorReferenceMath.swift in Sources */,
 				612236FE3E89C6FAA0BD67C3 /* HDRDecodedVideoContract.swift in Sources */,
 				8AEE264397F38B797EA26753 /* HDRRenderContract.swift in Sources */,
 				AB12D0E84ED679D2676C9160 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -684,6 +689,7 @@
 				90F976152B2E278F303C0FCB /* MediaClockSynchronizerTests.swift in Sources */,
 				BAAA8579B871B6D444EB8588 /* NetworkChannelTests.swift in Sources */,
 				FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */,
+				F560BF8E91EA3926C7B1A4B4 /* HDRColorReferenceMathTests.swift in Sources */,
 				283EB77ED6A3D7E562CAFD4E /* HDRDecodedVideoContractTests.swift in Sources */,
 				E22A1D43E619CA2AFA9EF728 /* HDRRenderContractTests.swift in Sources */,
 				DD789FA5FE8C125185872F0A /* InputAdapterTests.swift in Sources */,
@@ -778,6 +784,7 @@
 		70FBA8531186D5D51C8A7C21 /* VideoDecompressionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4AFD13BCF45C8B5F76A060 /* VideoDecompressionSession.swift */; };
 		71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MetalVideoFrameDeliveryTests.swift"; sourceTree = "<group>"; };
 		725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/SessionMediaEnvironment.swift"; sourceTree = "<group>"; };
+		72658DE06852BCF73C8CE96B /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
 		73C5A50224377A49BCA51041 /* AudioToolboxOpusDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC431C3BFB327CAA6B8E7939 /* AudioToolboxOpusDecoder.swift */; };
 		7489B6E9BAEAD8740608D0A4 /* LuneXENetBridge.c in Sources */ = {isa = PBXBuildFile; fileRef = 5FB3B5F46FA829F94852FCCA /* LuneXENetBridge.c */; };
 		756C2F7D0E424A7D7F302393 /* MediaClockSynchronizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MediaClockSynchronizerTests.swift"; sourceTree = "<group>"; };
@@ -793,6 +800,7 @@
 		7AA4E5B57949BFBF5F95F321 /* LuneX-visionOS */ = {isa = PBXNativeTarget; buildConfigurationList = 66120997C0407A4B29558F97 /* Build configuration list for LuneX-visionOS */; buildPhases = (538DC636041A5BD2304AD838 /* Sources */, 2726DAE1144FCA0279421B11 /* Frameworks */, BE0126CD73E6B26C08676EFF /* Resources */); buildRules = (); dependencies = (); name = "LuneX-visionOS"; productName = "LuneX-visionOS"; productReference = 9F5F7C4AAE6A679AB865FE5E /* LuneX-visionOS.app */; productType = "com.apple.product-type.application"; };
 		7AA6F9A4C8E330551C186F90 /* AppKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */; };
 		7AE20D097A3B7F40D3421860 /* RemoteInputWireCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0440A153CC09DAFCFA271E /* RemoteInputWireCodec.swift */; };
+		7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXRendering/HDRColorReferenceMath.swift"; sourceTree = "<group>"; };
 		7B5004DB977C81EDEBC6D312 /* StreamCoordinateSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533C6BF0CE0FC77B5AF48465 /* StreamCoordinateSnapshot.swift */; };
 		7B6BEA39712C64ADEB30283F /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
 		7CCAB43B2EACD71201FE1AA8 /* MetalVideoFrameDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */; };
@@ -848,6 +856,7 @@
 				7AA6F9A4C8E330551C186F90 /* AppKitLifecycleMonitor.swift in Sources */,
 				C5619EDB6EED435B9D855DEA /* UIKitLifecycleMonitor.swift in Sources */,
 				2EC989865E832B9E13DCD5F4 /* DisplayHeadroom.swift in Sources */,
+				54AC46810E33ABF803A11710 /* HDRColorReferenceMath.swift in Sources */,
 				B7FDEB713AE8A9FA4F26A01F /* HDRDecodedVideoContract.swift in Sources */,
 				F7B28D3ABBB7F439092D2856 /* HDRRenderContract.swift in Sources */,
 				0E054FC81470415493E52B5C /* MetalVideoFrameDelivery.swift in Sources */,
@@ -1048,6 +1057,7 @@
 				756C2F7D0E424A7D7F302393 /* MediaClockSynchronizerTests.swift */,
 				6ADFE46A1EFC63457BC1BEB9 /* NetworkChannelTests.swift */,
 				E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */,
+				C428F6D89FFF7F82B76FC6F1 /* HDRColorReferenceMathTests.swift */,
 				C21FA814336F6DCCC133F9E5 /* HDRDecodedVideoContractTests.swift */,
 				1386EF0470C16F24BBE8D778 /* HDRRenderContractTests.swift */,
 				7D1E779DAD022CD933D8BA24 /* InputAdapterTests.swift */,
@@ -1200,6 +1210,7 @@
 		C21FA814336F6DCCC133F9E5 /* HDRDecodedVideoContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HDRDecodedVideoContractTests.swift"; sourceTree = "<group>"; };
 		C28449456A5A705A7479770B /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic; ENABLE_USER_SCRIPT_SANDBOXING = NO; GCC_NO_COMMON_BLOCKS = YES; SWIFT_OPTIMIZATION_LEVEL = -O; SWIFT_VERSION = 6.0; DEBUG_INFORMATION_FORMAT = dwarf; ONLY_ACTIVE_ARCH = NO;}; name = Release; };
 		C36B7EDACE203F2FA7D24DBF /* MacSessionInputCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C050244F381FB8AECBFBE492 /* MacSessionInputCoordinatorTests.swift */; };
+		C428F6D89FFF7F82B76FC6F1 /* HDRColorReferenceMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HDRColorReferenceMathTests.swift"; sourceTree = "<group>"; };
 		C45FCEA0C35E538EC6AFF71B /* DisplayHeadroom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863690481A7841758650A20A /* DisplayHeadroom.swift */; };
 		C4E264A3CED5E104C8FC807B /* Pairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/Pairing.swift"; sourceTree = "<group>"; };
 		C5619EDB6EED435B9D855DEA /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
@@ -1226,12 +1237,14 @@
 		CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPlatform/AppKitLifecycleMonitor.swift"; sourceTree = "<group>"; };
 		CB8D0945B1F99D1DB9F70676 /* ENetControlTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D72967546AD0BED06F04DA /* ENetControlTransport.swift */; };
 		CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPlatform/UIKitLifecycleMonitor.swift"; sourceTree = "<group>"; };
+		CC03D101D0FF79503C139F65 /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
 		CC23BDB54A1C393ABD5E01F9 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B08151BEDFF41608DB8852 /* SessionState.swift */; };
 		CC3CDEFA97B7AF11A7B64F96 /* NetworkChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */; };
 		CC4326848A3FE357960B556E /* VideoFormatDescriptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A205AEC20136C947D2AC792 /* VideoFormatDescriptionTests.swift */; };
 		CC9E439469C759B67C72B433 /* RemoteInputRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */; };
 		CDB43AC042A8D8B9256F1E44 /* peer.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AB990EDF8496554BC8B7484 /* peer.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		CDC4FCF0D9801DC5C976E1F1 /* SessionMediaEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */; };
+		CE1B0D513047E17F9D39A6FB /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
 		CE6F3A814654B7BCB905BFFA /* callbacks.c in Sources */ = {isa = PBXBuildFile; fileRef = B315A2E144291C0C6E464F3E /* callbacks.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		CE88BFE04611C31B65054415 /* NativeSessionAudioProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */; };
 		CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ClientIdentityManager.swift"; sourceTree = "<group>"; };
@@ -1295,6 +1308,7 @@
 		DD5DF2872B4628D3E1FD3687 /* MediaClockSynchronizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB90277F995A5405549A7E56 /* MediaClockSynchronizer.swift */; };
 		DD789FA5FE8C125185872F0A /* InputAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1E779DAD022CD933D8BA24 /* InputAdapterTests.swift */; };
 		DDA6508FA14D6C3B5E5119B3 /* MacCursorCaptureOwner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABED38FF12DCB714ED141DB6 /* MacCursorCaptureOwner.swift */; };
+		DDBAB8F9C137CFCDB650E13C /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
 		DDD2F1FA28D46A6720B7B393 /* list.c in Sources */ = {isa = PBXBuildFile; fileRef = C72D8E8A5B0B2B4AC571D122 /* list.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		DE78DF2462D63C7DBD7E899E /* protocol.c in Sources */ = {isa = PBXBuildFile; fileRef = FCF248FE8535CFD51D28ECFF /* protocol.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		DE93D1826B1EE62EEFB3DDFD /* ENetControlTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D72967546AD0BED06F04DA /* ENetControlTransport.swift */; };
@@ -1404,6 +1418,7 @@
 				20BE6E6A77E0B9ED3426DC00 /* AppKitLifecycleMonitor.swift in Sources */,
 				15B8E7597BC64E3F76BBA1A6 /* UIKitLifecycleMonitor.swift in Sources */,
 				436361201BAF89C73D446E90 /* DisplayHeadroom.swift in Sources */,
+				CE1B0D513047E17F9D39A6FB /* HDRColorReferenceMath.swift in Sources */,
 				6F01125BDE3AAE918093E5C7 /* HDRDecodedVideoContract.swift in Sources */,
 				045BDC869E1D67A3F1E459B2 /* HDRRenderContract.swift in Sources */,
 				8ABEB85CF6F368EA331363F9 /* MetalVideoFrameDelivery.swift in Sources */,
@@ -1472,6 +1487,7 @@
 		F3C70F67A71EB13E2A2A7B49 /* PairingTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959150EFED4D92A51573DF2D /* PairingTransport.swift */; };
 		F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPersistence/JSONFileStores.swift"; sourceTree = "<group>"; };
 		F4B3E3133274A685A8A4BEEF /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
+		F560BF8E91EA3926C7B1A4B4 /* HDRColorReferenceMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C428F6D89FFF7F82B76FC6F1 /* HDRColorReferenceMathTests.swift */; };
 		F60F94A75308D32AD4AC9B15 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "AccentColor";
 				CODE_SIGN_STYLE = "Automatic";
