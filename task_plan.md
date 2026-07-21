@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`0/33`；proposal/design/3 specs/tasks已strict-valid，下一项1.1现状/API/平台/硬件证明边界inventory |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`1/33`；production/API/platform/hardware边界inventory完成，下一项1.2 immutable render/display/surface contract |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`已创建并通过strict validation，权威进度`0/33`。change将现有10-bit decode/Metal plane/metadata/headroom foundation连接为显式generation+display-revision color contract、Metal PQ/EDR mapping、surface/platform adapter、diagnostics和验证；6.5物理HDR/SDR显示器门保持独立。下一项1.1只做现状、Apple API、平台差异与硬件证明边界inventory，不改变runtime行为。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`1/33`。1.1已从production图和Xcode 26.4 SDK固化当前解码/metadata/Metal/presenter断点、macOS/iOS/tvOS/visionOS EDR API差异和确定性/硬件证明边界，未改变runtime行为。下一项1.2定义immutable render color signature、display revision、platform capability、mapping mode、surface contract和closed errors。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -233,10 +233,13 @@
 | 14.5.5首轮单一集成门假设fake media environment会启动native presentation source | 1 | fake environment按设计绕过`NativeSessionVideoProcessor`；改为显式注入并播入受控decoder generation，只验证AppModel的occlusion/resume/stop presentation清理，不声称fake environment产出真实帧 |
 | 14.6.2首次构建矩阵包装器由外层zsh破坏bash/jq引号 | 1 | 失败在任何xcodebuild/simulator操作前；改由执行工具直接选择bash。后续两轮发现AppIntents skip warning，最终以SwiftBuild公开`LM_SKIP_METADATA_EXTRACTION=YES`验证并取得十构建零诊断证据 |
 | 14.6.3 ASan日志扫描匹配命令行参数，汇总脚本用zsh保留`path`覆盖`PATH` | 2 | 不重跑已成功suite；日志扫描收紧到实际sanitizer报告前缀，汇总改为直接bash与`evidence_path`，结构化结果和所有证据重新核对通过 |
+| 15.1.1源码盘点误用已不存在的`Sources/LuneXCore/StreamRenderState.swift`与错误的media/UI路径 | 1 | 用`rg --files Sources`定位真实`PlatformLifecycle.swift`、`SessionMediaEnvironment.swift`与`LuneXApp/RootView.swift`后继续只读盘点 |
+| 15.1.1首次Swift stdin typecheck把换行作为字面`\\n`传入 | 1 | 改用`printf '%b'`向`swiftc -typecheck -`传递真实换行；macOS/iOS/visionOS成功，tvOS得到预期的EDR API unavailable诊断 |
+| 15.1.1首个跨平台API probe把CAMetalLayer EDR和UIScreen统一视为UIKit能力 | 1 | probe在tvOS编译前明确失败并证明layer/CAEDRMetadata unavailable；拆分验证确认tvOS有UIScreen headroom/颜色空间但无layer EDR，visionOS有layer EDR但UIScreen unavailable，写入平台矩阵 |
 
 ## 当前执行点（2026-07-21）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 已apply-ready且权威进度`0/33`；下一项1.1为decoded/metadata/renderer/Apple EDR API/平台能力与硬件证明边界inventory。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`1/33`；1.1 inventory完成，下一项1.2为immutable render/display/surface contract。

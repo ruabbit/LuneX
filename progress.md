@@ -1174,3 +1174,15 @@
 - 创建`implement-native-hdr-edr-pipeline`的proposal、design、三份capability spec和33项依赖有序tasks；OpenSpec strict validation通过且change为apply-ready，权威进度`0/33`。
 - HDR change明确连接现有metadata/P010/Metal plane/headroom foundation，替换actual fixed-sRGB presentation为显式Metal color/tone-map/surface contract；不引入第三方或GPL依赖。
 - 物理HDR/SDR显示器、亮度/颜色、HDR signaling、headroom和跨屏验证保留6.5，不由shader readback、模拟器或layer property替代。提案独立提交推送后进入1.1 inventory。
+
+## 2026-07-21 阶段 15 任务 1.1 完成
+
+- `docs/runtime/hdr-edr-contract.md`固化当前production数据流、未接线Metal mapper/queue、fixed-sRGB actual presenter、display-vs-stream HDR误接、Apple SDK 26.4 API矩阵和硬件证明边界；没有修改runtime源码。
+- warnings-as-errors SDK probe确认macOS/iOS完整headroom+layer EDR能力、tvOS仅UIScreen headroom/颜色空间且layer EDR unavailable、visionOS layer EDR可编译但UIScreen unavailable；首个统一probe在tvOS按真实availability失败后拆分验证，未放宽平台假设。
+- OpenSpec 1.1标记完成，权威进度`1/33`。下一项1.2定义immutable color/display/surface value contract和closed resolver errors。
+
+## 2026-07-21 阶段 15 任务 1.1 启动
+
+- OpenSpec提案已以`65c28eb Plan native HDR EDR pipeline`独立提交并推送，确认`HEAD == origin/main`且工作树clean；change权威进度`0/33`。
+- 1.1仅盘点decoded格式、metadata ownership、actual renderer、Apple EDR API、平台差异和物理硬件证明边界，不修改runtime行为；后续immutable合同与production实现分别从1.2开始。
+- Apple API结论以本机Xcode 26.4 SDK headers/module availability与严格typecheck为准；上游仓库只读，不复制代码。测试继续不访问真实Keychain，也不创建、启动或运行simulator。

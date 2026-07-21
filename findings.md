@@ -921,5 +921,11 @@
 - 创建`implement-native-hdr-edr-pipeline`，proposal、design、`hdr-video-output-contract`、`edr-tone-mapping`、`hdr-display-adaptation`三份spec和33项tasks均生成并通过strict validation，状态apply-ready。
 - 当前foundation已经请求VideoToolbox 8-bit NV12/10-bit P010并将plane映射为`.r8/.rg8`或`.r16/.rg16` Metal texture，`VideoColorMetadata`也跨decoder/frame保留；实际`StreamMetalPresenter`仍直接从`CVPixelBuffer`构造Core Image并固定输出sRGB，没有消费plane/headroom形成显式HDR pipeline。
 - 设计采用immutable generation+display-revision render configuration、显式video-range/矩阵/transfer/gamut/PQ/reference-white/headroom mapping、float EDR surface和typed fallback；无新第三方/GPL依赖。deterministic shader/simulator门不替代物理HDR/SDR亮度、信号、颜色或跨屏证明。
+
+# 2026-07-21 阶段 15 任务 1.1 验收结论
+
+- 新增`docs/runtime/hdr-edr-contract.md`，逐层记录negotiation/CoreMedia/VideoToolbox/decoded frame/Metal mapper/presentation source/actual presenter/display/surface/AppModel真实边界；确认production mapper/queue未接线，actual presenter仍Core Image固定sRGB，surface当前误以display headroom代替stream HDR eligibility。
+- Xcode 26.4 warnings-as-errors API probe确认：macOS有NSScreen current/potential/reference与layer EDR；iOS/iPadOS有UIScreen current/potential和layer EDR；tvOS有UIScreen headroom/颜色空间但layer EDR/CAEDRMetadata明确unavailable；visionOS有layer EDR但UIScreen明确unavailable。证据`/tmp/LuneX-15-1_1-api-probe.vhXWSN`及拆分probe输出。
+- 合同明确CAEDRMetadata HDR10 buffer value`1.0`在`opticalOutputScale=100`时对应100 nits、current而非potential headroom是安全输出bound，并列出deterministic与physical HDR/SDR/cross-display证据矩阵。1.1不改变production runtime。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
