@@ -507,3 +507,22 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过。Xcode构建后iPhone曾短暂显示Booted但在shutdown命令到达前已自动关闭；最终四个固定simulator均为`Shutdown`，未创建或启动第二个同类设备。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、Node/OpenSSL independent vector与四SDK strict C syntax gates全部通过。
 - OpenSpec 7.1更新为完成，权威进度`38/61`。该结果不证明transport delivery、ordering/backpressure、platform mapping、coalescing、focus-loss release或live Sunshine input；下一项为7.2 ordered keyboard/pointer-button/scroll/touch/clipboard delivery。
+
+## 2026-07-21 阶段 13 任务 7.2 启动
+
+- 7.1已以`bf5e111 Authenticate remote input events`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`38/61`后进入7.2。
+- ordered input必须复用`MoonlightControlChannel`actor拥有的control-wide sequence；provider只排队protocol plaintext，不能预先seal frame或持有第二个counter。start时还必须验证协商input key与当前control connection key一致。
+- 7.2范围为keyboard、pointer button、vertical/horizontal scroll、Sunshine touch和bounded UTF-8 clipboard的可靠有序delivery；relative/absolute pointer movement、coalescing、controller/feedback与focus-loss release继续保留7.3-7.5。
+- 首次定向测试误用`LuneX-macOS` scheme，因该scheme未配置Test action以exit 66结束；已核对工程scheme并改用`LuneXCoreTests`，不重复该失败命令。
+- 完成7.2第一轮production实现：新增pointer-button/双轴scroll/normalized touch/per-Unicode-scalar UTF-8 codec、clipboard 4096-byte上限、control共享sequence input发送与bounded FIFO provider；Touch adapter现在携带source reference size并严格clamp pressure到0...1。
+- 7.2 targeted warnings-as-errors最终`11/11`通过；覆盖五类事件混合顺序、clipboard多packet不被并发事件插入、wrong/inactive session、key mismatch、stop late send、transport fail current/pending、input uncertain-send sequence不复用及unsupported 7.3/7.4事件拒绝。扩大回归与完整封版门禁尚未运行，任务保持未勾选。
+- 首次静态fixture self-test拒绝新向量中的连续长hex；已改为空格分隔byte notation并保留byte-exact内存比较，未放宽secret validator。静态门禁将在修正后从头重跑。
+
+## 2026-07-21 阶段 13 任务 7.2 完成
+
+- 新增完整7.2 event codec与authenticated delivery：keyboard channel `0x02`、mouse `0x03`、touch `0x05`、UTF-8 `0x06`；pointer button、双轴scroll、normalized touch和逐Unicode scalar clipboard均为可靠发送，clipboard总UTF-8上限4096 bytes。
+- `MoonlightControlChannel`现在验证input key与active control key一致，并使用同一actor的control-wide sequence完成seal/send；不确定input send先消费sequence。`MoonlightRemoteInputProvider`用bounded FIFO和唯一drain task保证多packet event不可被actor reentrancy插入，transport failure后current/pending/late event全部fail closed。
+- targeted最终`11/11`，expanded input/control/session `82/82`；最终完整macOS warnings-as-errors为`292 total / 291 passed / 1 skipped / 0 failed`，唯一skip是未启用的一次性真实Keychain round-trip，本任务继续使用file/in-memory fallback。
+- 最终macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；固定simulator构建前后均为`Shutdown`，未创建或启动第二个同类设备。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、Node independent ordered vector与四SDK strict C syntax gates全部通过。
+- OpenSpec 7.2更新为完成，权威进度`39/61`。该结果不证明movement/coalescing、controller/feedback、held-state release、平台key mapping/cursor capture或live Sunshine input；下一项为7.3 coalesced relative/absolute pointer movement。

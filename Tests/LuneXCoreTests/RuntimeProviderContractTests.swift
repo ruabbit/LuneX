@@ -92,7 +92,7 @@ final class RuntimeProviderContractTests: XCTestCase {
             input: NegotiatedInputConfiguration(
                 keyMaterial: RemoteInputKeyMaterial(keyID: 7, key: Data(repeating: 0x11, count: 16)),
                 encrypted: true,
-                maximumMessageSize: 1_024
+                maximumMessageSize: RemoteInputWireCodec.maximumPacketSize
             ),
             requiredChannels: .all
         )

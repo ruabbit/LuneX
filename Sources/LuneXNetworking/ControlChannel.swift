@@ -11,6 +11,8 @@ enum ControlChannelError: Error, Equatable, Sendable, CustomStringConvertible {
     case disconnected(data: UInt32)
     case invalidTerminationPayload
     case invalidHDRMetadataPayload
+    case inputKeyMismatch
+    case inputNotActive
 
     var description: String {
         switch self {
@@ -32,6 +34,10 @@ enum ControlChannelError: Error, Equatable, Sendable, CustomStringConvertible {
             return "The host sent a malformed termination reason."
         case .invalidHDRMetadataPayload:
             return "The host sent malformed HDR mode or static metadata."
+        case .inputKeyMismatch:
+            return "The negotiated remote-input key does not match the active control session."
+        case .inputNotActive:
+            return "Authenticated remote input is not active on the control session."
         }
     }
 }
@@ -358,11 +364,12 @@ protocol MoonlightControlChannelManaging: Sendable {
     func stop() async
 }
 
-actor MoonlightControlChannel: MoonlightControlChannelManaging {
+actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInputFrameSending {
     private let driver: any ENetConnectionDriving
     private var encryptionKey = Data()
     private var nextSequence: UInt32 = 0
     private var connected = false
+    private var inputContext: AuthenticatedRemoteInputContext?
 
     init(driver: any ENetConnectionDriving = ENetConnectionDriver()) {
         self.driver = driver
@@ -435,9 +442,40 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging {
         )
     }
 
+    func activateInput(configuration: NegotiatedInputConfiguration) async throws {
+        guard connected else { throw ControlChannelError.invalidState }
+        guard configuration.keyMaterial.key == encryptionKey else {
+            throw ControlChannelError.inputKeyMismatch
+        }
+        inputContext = try AuthenticatedRemoteInputContext(configuration: configuration)
+    }
+
+    func sendInput(
+        _ packet: RemoteInputPlaintextPacket,
+        channelID: UInt8,
+        reliable: Bool
+    ) async throws {
+        guard connected else { throw ControlChannelError.invalidState }
+        guard let inputContext else { throw ControlChannelError.inputNotActive }
+        guard channelID < MoonlightControlProtocol.channelCount else {
+            throw ControlChannelError.invalidState
+        }
+        guard nextSequence < UInt32.max else { throw ControlChannelError.sequenceExhausted }
+        let sequence = nextSequence
+        let frame = try inputContext.seal(packet, controlSequence: sequence)
+        nextSequence += 1
+        try await driver.send(frame, channelID: channelID, reliable: reliable)
+        guard connected else { throw ControlChannelError.invalidState }
+    }
+
+    func deactivateInput() async {
+        inputContext = nil
+    }
+
     func stop() async {
         connected = false
         nextSequence = 0
+        inputContext = nil
         encryptionKey.removeAll(keepingCapacity: false)
         await driver.disconnect()
     }

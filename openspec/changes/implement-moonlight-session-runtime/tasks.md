@@ -60,7 +60,7 @@
 ## 7. Remote input runtime
 
 - [x] 7.1 Implement negotiated input key setup and byte-exact authenticated event serialization
-- [ ] 7.2 Implement ordered keyboard, pointer-button, scroll, touch, and clipboard delivery
+- [x] 7.2 Implement ordered keyboard, pointer-button, scroll, touch, and clipboard delivery
 - [ ] 7.3 Implement coalesced relative/absolute pointer movement without dropping state transitions
 - [ ] 7.4 Implement controller, motion, battery, LED, rumble, and trigger-rumble message handling
 - [ ] 7.5 Release held remote keys and buttons on focus loss, disconnect, or input-channel failure

@@ -406,3 +406,19 @@
 - negotiated input只接受16-byte AES key、UInt32范围key ID、`encrypted=true`和8...128-byte plaintext limit。AppModel默认每个独立launch用`SecRandomCopyBytes`生成新key/key ID，固定key仅作为显式测试override；随机源失败和invalid material都在网络launch前拒绝。
 - expanded input/control/session gate `70/70`；完整macOS warnings-as-errors gate `280 total / 279 passed / 1 explicit Keychain skip / 0 failed`。五平台Debug build、fixture/OpenSpec/generator/boundary/ENet/四SDK C gates通过，固定simulator最终均为`Shutdown`。
 - 7.1不证明event已进入ENet transport、不证明ordered delivery/backpressure/coalescing、平台键鼠触控映射、focus-loss release或live Sunshine输入；这些边界仍属于7.2-7.7与阶段14。
+
+### 2026-07-21 阶段 13 Ordered Remote Input 设计
+
+- modern encrypted input与start/IDR共享control AES-GCM key/sequence，但使用ENet channel区分流量：keyboard `0x02`、mouse `0x03`、touch `0x05`、UTF-8 `0x06`。因此7.2必须扩展现有control actor发送plaintext packet，不能建立独立input transport或sequence。
+- pointer button使用gen5 down/up magic `0x08/0x09`与1...5 button code；vertical scroll使用gen5 magic `0x0A`并重复big-endian Int16 amount，Sunshine horizontal scroll使用magic `0x55000001`。Touch使用magic `0x55000002`、little-endian pointer/Float32、normalized coordinates、bounded pressure和unknown rotation `0xFFFF`。
+- UTF-8 text/clipboard magic为`0x17`。为兼容host parsing，每个Unicode scalar单独形成packet并保持原文顺序；整个paste需要硬上限，空或超限/非法event fail closed。7.2先可靠发送所有支持event，运动coalescing与可丢弃policy留7.3/7.6。
+- `MoonlightRemoteInputProvider`必须显式保留一个drain task：actor在等待sender时会重入，单靠actor isolation无法防止另一个event插入clipboard多packet发送。codec错误在入队前拒绝且不破坏active input；真实sender失败则关闭input generation、失败current/pending并拒绝late send。
+- 7.2 production路径以`MoonlightControlChannel`作为`AuthenticatedInputFrameSending`：activation要求当前control已连接且input AES key逐byte匹配；input在同一actor内seal并先消费control-wide sequence后send，避免不确定发送后的nonce复用。
+
+### 2026-07-21 阶段 13 Ordered Remote Input 验收
+
+- byte-exact fixture覆盖left-button down、vertical `-120`、horizontal `40`、normalized touch `(0.5, 0.25, 0.75)`与`A`/emoji逐scalar UTF-8 packet；Node Buffer按字段宽度/端序独立重建后与fixture逐byte一致。fixture采用空格分隔byte notation以通过统一secret validator。
+- control actor在start A/B与IDR之后发送input仍使用连续sequence `0,1,2,3`；input uncertain send先消费sequence，下一control message使用新sequence。input activation要求active control和逐byte相同AES key，stop会清除input context。
+- provider以最多256 pending events/8192 pending packets和4096 clipboard UTF-8 bytes设界；单一drain operation保证并发send仍为event FIFO，clipboard多packet不可插入。transport失败会失败current/pending、deactivate sender并拒绝late send；unsupported movement/controller在入队前拒绝且不破坏active input。
+- targeted `11/11`、expanded input/control/session `82/82`、最终完整macOS warnings-as-errors `292 total / 291 passed / 1 explicit Keychain skip / 0 failed`。最终macOS、固定iPhone/iPad/Apple TV/Vision Pro Debug build与全部静态门禁通过，四个固定simulator前后均为`Shutdown`。
+- 7.2证明authenticated ENet send边界与确定性ordering，不证明host已消费event、macOS raw key已映射Win32 VK、真实cursor capture、movement coalescing、controller feedback、focus-loss release或live Sunshine输入；这些仍属于7.3-7.7与阶段14。

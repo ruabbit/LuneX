@@ -1,0 +1,11 @@
+{
+  "clipboardPacketsHex": [
+    "00 00 00 05 17 00 00 00 41",
+    "00 00 00 08 17 00 00 00 f0 9f 99 82"
+  ],
+  "horizontalScrollPacketHex": "00 00 00 06 01 00 00 55 00 28",
+  "pointerButtonPacketHex": "00 00 00 05 08 00 00 00 01",
+  "schemaVersion": 1,
+  "touchPacketHex": "00 00 00 20 02 00 00 55 03 00 ff ff 2a 00 00 00 00 00 00 3f 00 00 80 3e 00 00 40 3f 00 00 00 00 00 00 00 00",
+  "verticalScrollPacketHex": "00 00 00 0a 0a 00 00 00 ff 88 ff 88 00 00"
+}

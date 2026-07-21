@@ -4,6 +4,7 @@ enum RemoteInputEvent: Equatable, Sendable {
     case keyboard(KeyboardInputEvent)
     case pointer(PointerInputEvent)
     case touch(TouchInputEvent)
+    case clipboard(ClipboardInputEvent)
     case virtualController(VirtualControllerInputEvent)
     case gameController(GameControllerInputEvent)
     case tvRemote(TVRemoteInputEvent)
@@ -65,6 +66,11 @@ struct TouchInputEvent: Codable, Equatable, Hashable, Sendable {
     var phase: TouchPhase
     var point: RemotePoint
     var pressure: Double
+    var referenceSize: PixelSize
+}
+
+struct ClipboardInputEvent: Codable, Equatable, Hashable, Sendable {
+    var text: String
 }
 
 enum VirtualControllerControl: String, Codable, Hashable, Sendable {

@@ -5,6 +5,12 @@
       "origin": "repository-generated with Node.js OpenSSL AES-128-GCM",
       "path": "authenticated-keyboard-vectors.json",
       "redaction": "not applicable; synthetic key, sequence, and input event"
+    },
+    {
+      "expectedResult": "pointer-button, scroll, normalized touch, and per-scalar UTF-8 plaintext packets match independently reviewed protocol bytes",
+      "origin": "repository-generated from documented field widths and mixed-endian protocol layout",
+      "path": "ordered-event-vectors.json",
+      "redaction": "not applicable; synthetic input events only"
     }
   ],
   "schemaVersion": 1,

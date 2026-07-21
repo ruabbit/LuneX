@@ -2,8 +2,11 @@ import Foundation
 
 enum RemoteInputCodecError: Error, Equatable, Sendable, CustomStringConvertible {
     case invalidConfiguration
+    case invalidEvent
+    case unsupportedEvent
     case invalidPacket
     case packetTooLarge
+    case clipboardTooLarge
     case unexpectedControlType
     case invalidAuthenticatedFrame
 
@@ -11,10 +14,16 @@ enum RemoteInputCodecError: Error, Equatable, Sendable, CustomStringConvertible 
         switch self {
         case .invalidConfiguration:
             return "The negotiated remote-input encryption configuration is invalid."
+        case .invalidEvent:
+            return "The remote-input event contains an invalid or unrepresentable value."
+        case .unsupportedEvent:
+            return "The remote-input event is not supported by this delivery stage."
         case .invalidPacket:
             return "The remote-input event packet is malformed."
         case .packetTooLarge:
             return "The remote-input event packet exceeds the negotiated size limit."
+        case .clipboardTooLarge:
+            return "The clipboard text exceeds the bounded UTF-8 input limit."
         case .unexpectedControlType:
             return "The authenticated control frame does not contain remote-input data."
         case .invalidAuthenticatedFrame:
@@ -62,12 +71,69 @@ struct RemoteInputPlaintextPacket: Equatable, Sendable {
     }
 }
 
+struct RemoteInputOutboundPacket: Equatable, Sendable {
+    var plaintext: RemoteInputPlaintextPacket
+    var channelID: UInt8
+    var reliable: Bool
+}
+
 enum RemoteInputWireCodec {
     static let minimumPacketSize = 8
     static let maximumPacketSize = 128
+    static let maximumClipboardUTF8Bytes = 4_096
+
+    static let keyboardChannel: UInt8 = 0x02
+    static let mouseChannel: UInt8 = 0x03
+    static let touchChannel: UInt8 = 0x05
+    static let utf8Channel: UInt8 = 0x06
 
     private static let keyboardDownMagic: UInt32 = 0x0000_0003
     private static let keyboardUpMagic: UInt32 = 0x0000_0004
+    private static let pointerButtonDownMagic: UInt32 = 0x0000_0008
+    private static let pointerButtonUpMagic: UInt32 = 0x0000_0009
+    private static let verticalScrollMagic: UInt32 = 0x0000_000A
+    private static let horizontalScrollMagic: UInt32 = 0x5500_0001
+    private static let touchMagic: UInt32 = 0x5500_0002
+    private static let utf8Magic: UInt32 = 0x0000_0017
+    private static let supportedModifierMask = 0x1F
+
+    static func outboundPackets(for event: RemoteInputEvent) throws -> [RemoteInputOutboundPacket] {
+        switch event {
+        case let .keyboard(event):
+            guard event.modifiers.rawValue >= 0,
+                  event.modifiers.rawValue & ~supportedModifierMask == 0,
+                  let modifiers = UInt8(exactly: event.modifiers.rawValue) else {
+                throw RemoteInputCodecError.invalidEvent
+            }
+            return [outbound(
+                try serialize(RemoteKeyboardWireEvent(
+                    keyCode: event.rawKeyCode,
+                    isDown: event.isDown,
+                    modifiers: modifiers,
+                    flags: 0
+                )),
+                channelID: keyboardChannel
+            )]
+        case let .pointer(.button(button, isDown, _)):
+            return [outbound(
+                try serializePointerButton(button, isDown: isDown),
+                channelID: mouseChannel
+            )]
+        case let .pointer(.scroll(deltaX, deltaY, _)):
+            return try serializeScroll(deltaX: deltaX, deltaY: deltaY).map {
+                outbound($0, channelID: mouseChannel)
+            }
+        case let .touch(event):
+            return [outbound(try serializeTouch(event), channelID: touchChannel)]
+        case let .clipboard(event):
+            return try serializeClipboard(event).map {
+                outbound($0, channelID: utf8Channel)
+            }
+        case .pointer(.absoluteMove), .pointer(.relativeMove),
+             .virtualController, .gameController, .tvRemote, .focus:
+            throw RemoteInputCodecError.unsupportedEvent
+        }
+    }
 
     static func serialize(_ event: RemoteKeyboardWireEvent) throws -> RemoteInputPlaintextPacket {
         var packet = Data()
@@ -80,11 +146,155 @@ enum RemoteInputWireCodec {
         return try RemoteInputPlaintextPacket(validating: packet)
     }
 
+    private static func serializePointerButton(
+        _ button: PointerButton,
+        isDown: Bool
+    ) throws -> RemoteInputPlaintextPacket {
+        let code: UInt8
+        switch button {
+        case .left:
+            code = 1
+        case .middle:
+            code = 2
+        case .right:
+            code = 3
+        case .back:
+            code = 4
+        case .forward:
+            code = 5
+        }
+        var packet = Data()
+        appendBigEndian(UInt32(5), to: &packet)
+        appendLittleEndian(isDown ? pointerButtonDownMagic : pointerButtonUpMagic, to: &packet)
+        packet.append(code)
+        return try RemoteInputPlaintextPacket(validating: packet)
+    }
+
+    private static func serializeScroll(
+        deltaX: Double,
+        deltaY: Double
+    ) throws -> [RemoteInputPlaintextPacket] {
+        guard deltaX.isFinite, deltaY.isFinite else {
+            throw RemoteInputCodecError.invalidEvent
+        }
+        let horizontal = boundedScrollAmount(deltaX)
+        let vertical = boundedScrollAmount(deltaY)
+        var packets: [RemoteInputPlaintextPacket] = []
+        packets.reserveCapacity(2)
+        if vertical != 0 {
+            var packet = Data()
+            appendBigEndian(UInt32(10), to: &packet)
+            appendLittleEndian(verticalScrollMagic, to: &packet)
+            appendBigEndian(vertical, to: &packet)
+            appendBigEndian(vertical, to: &packet)
+            appendBigEndian(UInt16(0), to: &packet)
+            packets.append(try RemoteInputPlaintextPacket(validating: packet))
+        }
+        if horizontal != 0 {
+            var packet = Data()
+            appendBigEndian(UInt32(6), to: &packet)
+            appendLittleEndian(horizontalScrollMagic, to: &packet)
+            appendBigEndian(horizontal, to: &packet)
+            packets.append(try RemoteInputPlaintextPacket(validating: packet))
+        }
+        return packets
+    }
+
+    private static func serializeTouch(
+        _ event: TouchInputEvent
+    ) throws -> RemoteInputPlaintextPacket {
+        guard event.id >= 0,
+              let pointerID = UInt32(exactly: event.id),
+              event.referenceSize.width > 0,
+              event.referenceSize.height > 0,
+              event.point.x.isFinite,
+              event.point.y.isFinite,
+              event.pressure.isFinite,
+              (0...Double(event.referenceSize.width)).contains(event.point.x),
+              (0...Double(event.referenceSize.height)).contains(event.point.y),
+              (0...1).contains(event.pressure) else {
+            throw RemoteInputCodecError.invalidEvent
+        }
+        let normalizedX = Float(event.point.x / Double(event.referenceSize.width))
+        let normalizedY = Float(event.point.y / Double(event.referenceSize.height))
+        let pressure = Float(event.pressure)
+        guard normalizedX.isFinite, normalizedY.isFinite, pressure.isFinite else {
+            throw RemoteInputCodecError.invalidEvent
+        }
+
+        let phase: UInt8
+        switch event.phase {
+        case .began:
+            phase = 1
+        case .ended:
+            phase = 2
+        case .moved:
+            phase = 3
+        case .cancelled:
+            phase = 4
+        }
+
+        var packet = Data()
+        appendBigEndian(UInt32(32), to: &packet)
+        appendLittleEndian(touchMagic, to: &packet)
+        packet.append(phase)
+        packet.append(0)
+        appendLittleEndian(UInt16.max, to: &packet)
+        appendLittleEndian(pointerID, to: &packet)
+        appendLittleEndian(normalizedX, to: &packet)
+        appendLittleEndian(normalizedY, to: &packet)
+        appendLittleEndian(pressure, to: &packet)
+        appendLittleEndian(Float(0), to: &packet)
+        appendLittleEndian(Float(0), to: &packet)
+        return try RemoteInputPlaintextPacket(validating: packet)
+    }
+
+    private static func serializeClipboard(
+        _ event: ClipboardInputEvent
+    ) throws -> [RemoteInputPlaintextPacket] {
+        let utf8Count = event.text.utf8.count
+        guard utf8Count <= maximumClipboardUTF8Bytes else {
+            throw RemoteInputCodecError.clipboardTooLarge
+        }
+        guard utf8Count > 0 else { return [] }
+
+        return try event.text.unicodeScalars.map { scalar in
+            let utf8 = Data(String(scalar).utf8)
+            var packet = Data()
+            appendBigEndian(UInt32(4 + utf8.count), to: &packet)
+            appendLittleEndian(utf8Magic, to: &packet)
+            packet.append(utf8)
+            return try RemoteInputPlaintextPacket(validating: packet)
+        }
+    }
+
+    private static func outbound(
+        _ packet: RemoteInputPlaintextPacket,
+        channelID: UInt8
+    ) -> RemoteInputOutboundPacket {
+        RemoteInputOutboundPacket(plaintext: packet, channelID: channelID, reliable: true)
+    }
+
+    private static func boundedScrollAmount(_ value: Double) -> Int16 {
+        let rounded = value.rounded(.toNearestOrAwayFromZero)
+        let bounded = min(max(rounded, Double(Int16.min)), Double(Int16.max))
+        return Int16(bounded)
+    }
+
     private static func appendBigEndian(_ value: UInt32, to data: inout Data) {
         data.append(UInt8(truncatingIfNeeded: value >> 24))
         data.append(UInt8(truncatingIfNeeded: value >> 16))
         data.append(UInt8(truncatingIfNeeded: value >> 8))
         data.append(UInt8(truncatingIfNeeded: value))
+    }
+
+    private static func appendBigEndian(_ value: UInt16, to data: inout Data) {
+        data.append(UInt8(truncatingIfNeeded: value >> 8))
+        data.append(UInt8(truncatingIfNeeded: value))
+    }
+
+    private static func appendBigEndian(_ value: Int16, to data: inout Data) {
+        appendBigEndian(UInt16(bitPattern: value), to: &data)
     }
 
     private static func appendLittleEndian(_ value: UInt16, to data: inout Data) {
@@ -97,6 +307,10 @@ enum RemoteInputWireCodec {
         data.append(UInt8(truncatingIfNeeded: value >> 8))
         data.append(UInt8(truncatingIfNeeded: value >> 16))
         data.append(UInt8(truncatingIfNeeded: value >> 24))
+    }
+
+    private static func appendLittleEndian(_ value: Float, to data: inout Data) {
+        appendLittleEndian(value.bitPattern, to: &data)
     }
 }
 

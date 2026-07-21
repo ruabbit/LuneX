@@ -30,7 +30,8 @@ struct TouchInputAdapter: Sendable {
                 id: sample.id,
                 phase: sample.phase,
                 point: remotePoint,
-                pressure: max(0, sample.pressure)
+                pressure: min(max(0, sample.pressure), 1),
+                referenceSize: mapper.transform.sourceSize
             )),
             policy: .deliver
         )

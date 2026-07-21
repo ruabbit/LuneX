@@ -105,8 +105,26 @@ final class InputAdapterTests: XCTestCase {
             id: 2,
             phase: .moved,
             point: RemotePoint(x: 960, y: 540),
-            pressure: 0.5
+            pressure: 0.5,
+            referenceSize: PixelSize(width: 1920, height: 1080)
         )))
+    }
+
+    func testTouchInputClampsPressureToProtocolRange() {
+        let adapter = TouchInputAdapter(mapper: makeMapper())
+
+        let output = adapter.touch(TouchSample(
+            id: 3,
+            phase: .began,
+            localPoint: RemotePoint(x: 400, y: 300),
+            pressure: 1.5
+        ))
+
+        guard case let .touch(event) = output.event else {
+            return XCTFail("Expected a touch event.")
+        }
+        XCTAssertEqual(event.pressure, 1)
+        XCTAssertEqual(event.referenceSize, PixelSize(width: 1920, height: 1080))
     }
 
     func testVirtualControllerClampsAnalogValue() {
