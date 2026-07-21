@@ -77,6 +77,8 @@
 |------|---------|---------|
 | 2.1 repository gate用裸`references/`正则把`Library/Preferences/`中的字符子串误报为reference路径 | 1 | 保留已通过的OpenSpec/generator证据，将production扫描收紧为路径token边界后仅重跑未完成门 |
 | 2.1边界门恢复时按最新mtime选择到并发验收流的不同证据布局，找不到`project-before.sha256` | 1 | 停止推断最新目录，按`D3aZxd`与`4udJFX`固定路径分别核对并合并证据 |
+| 2.1 final2构建目录未保留其记录的simulator before/after JSON，读回脚本无法复证该哈希 | 1 | 不将缺失artifact算作通过；使用本轮`bEQNit`中已保留并`cmp`相同的快照作为simulator证据 |
+| 2.1证据读回误按顶层`.valid`检查OpenSpec JSON，实际schema为`.items[].valid` | 1 | simulator复证已完成；按真实JSON schema只重跑剩余repository/OpenSpec检查 |
 | Swift typecheck 使用 Obj-C 属性名 `listenerHeadTrackingEnabled` 失败 | 1 | 改用 Swift 属性名 `isListenerHeadTrackingEnabled`；visionOS 标记不可用，改为平台能力 gated |
 | 首次 macOS build 找不到 `Sources/Sources/...` 输入文件 | 1 | 修正 Xcode project 生成器的 group path，避免重复拼接 `Sources/` 和 `Resources/` |
 | 首次 iOS build 因 `UIScreen.main` 默认参数触发 Swift 6 actor isolation 错误 | 1 | 改为 `@MainActor` 且显式传入 `UIScreen`，符合 iOS 26 scene/window 上下文要求 |

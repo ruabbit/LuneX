@@ -1279,3 +1279,5 @@
 - repository gates通过（`/tmp/LuneX-15-2_1-repo.4udJFX`）：OpenSpec strict `6/6`、fixture self-test/全树、generator三次稳定且project SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、production/reference/dependency与whitespace边界全部通过。
 - OpenSpec 2.1标记完成，权威进度`7/33`。本项不证明2.2 mapper完整验证、2.3 queue revision/flush、Metal shader、production HDR输出或物理显示器行为；下一项2.2。
 - 未完成门重跑时，按最新mtime选中了同范围并发验收流的不同证据目录布局，边界/diff/status已执行但最终hash文件名不存在而退出；源码未变化，后续固定核对`D3aZxd`与`4udJFX`，不再按mtime猜测。
+- final2 focused/full xcresult、唯一Keychain skip与五个平台成功日志已直接读回；其build目录未保留所记录的simulator before/after JSON，因此不以该目录复证inventory，改用本轮`/tmp/LuneX-15-2_1-builds.bEQNit`中前后逐字节一致的快照作为2.1 simulator证据。
+- `bEQNit` simulator快照已再次`cmp`并验证固定设备/`Booted=0`；随后OpenSpec artifact读回误按顶层`.valid`而非`.items[].valid`退出，后续仅按真实schema重跑尚未完成的repository检查。
