@@ -920,3 +920,14 @@
 - 最终focused warnings-as-errors通过`11/11`，结果`/tmp/LuneX-14-3_4-focused-r2.kp6TJJ/Termination.xcresult`。修改后完整macOS通过`411 total / 410 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_4-full-r2.shEz9u/LuneXCoreTests.xcresult`；未访问真实Keychain。
 - 修改后macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_4-builds-r2.2QPSxQ`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
 - 5个OpenSpec strict、generator byte-stability、whitespace与production/reference边界通过。OpenSpec 3.4标记完成，权威进度`12/29`；下一项为3.5完整input coordination竞态矩阵。
+
+## 2026-07-21 阶段 14 任务 3.5 启动
+
+- 3.4已以`868e4f8`独立提交并推送，确认`HEAD == origin/main`且工作树clean。3.5只扩展确定性矩阵，覆盖全部external terminal reason、full-capacity focus barrier、terminal release failure及stale/inactive teardown隔离，不提前实现AppKit cursor/view。
+
+## 2026-07-21 阶段 14 任务 3.5 完成
+
+- 新增四组矩阵：input-channel failure/stop/remote termination/detach均一次release+cleanup；普通容量满时focus barrier仍可预约；terminal release失败仍完成关闭；stale/inactive teardown对replacement零副作用。
+- focused warnings-as-errors通过`15/15`，结果`/tmp/LuneX-14-3_5-focused.ejam0P/Matrix.xcresult`。完整macOS通过`415 total / 414 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_5-full.uXXjYE/LuneXCoreTests.xcresult`；未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_5-builds.XvlSHg`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+- OpenSpec 3.5标记完成，权威进度`13/29`；ordered macOS session input coordination小节完成，下一项4.1实现balanced AppKit cursor owner。

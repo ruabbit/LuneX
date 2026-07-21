@@ -402,6 +402,129 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         XCTAssertEqual(sink.releaseCallCount, 1)
     }
 
+    func testEveryExternalTerminalReasonReleasesAndCleansExactlyOnce() async throws {
+        let reasons: [MacSessionInputTerminationReason] = [
+            .inputChannelFailure,
+            .stop,
+            .remoteTermination,
+            .detached
+        ]
+        for reason in reasons {
+            let sink = ControlledApplicationInputSink()
+            let cleanup = CaptureCleanupRecorder()
+            let coordinator = MacSessionInputCoordinator(
+                sink: sink,
+                releaseCapture: { cleanup.releaseCapture() }
+            )
+            let generation = await coordinator.activate()
+            let result = await coordinator.terminate(
+                generation: generation,
+                reason: reason
+            )
+
+            XCTAssertEqual(
+                result,
+                .completed,
+                "Failed terminal reason: \(reason)"
+            )
+            XCTAssertNil(coordinator.snapshot().generation)
+            XCTAssertEqual(sink.releaseCallCount, 1)
+            XCTAssertEqual(cleanup.releaseCount, 1)
+        }
+    }
+
+    func testFocusBarrierBypassesFullOutstandingCapacity() async throws {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 1)
+        )
+        let generation = await coordinator.activate()
+        let sample = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 10,
+                characters: "b",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: generation),
+            .applied
+        )
+        XCTAssertTrue(coordinator.snapshot().hasPendingReleaseBarrier)
+        XCTAssertEqual(
+            coordinator.enqueue(sample, generation: generation),
+            .rejected(.admissionClosed)
+        )
+
+        sink.resumeFirstSend()
+        await waitUntil {
+            coordinator.snapshot().completedReleaseBarrierCount == 1
+        }
+        XCTAssertEqual(sink.operations.count, 2)
+        XCTAssertEqual(sink.operations.last, .release)
+    }
+
+    func testTerminalReleaseFailureStillCompletesCleanup() async throws {
+        let sink = ControlledApplicationInputSink(failsRelease: true)
+        let cleanup = CaptureCleanupRecorder()
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            releaseCapture: { cleanup.releaseCapture() }
+        )
+        let generation = await coordinator.activate()
+
+        let result = await coordinator.terminate(
+            generation: generation,
+            reason: .inputChannelFailure
+        )
+        XCTAssertEqual(result, .completed)
+        XCTAssertNil(coordinator.snapshot().generation)
+        XCTAssertEqual(coordinator.snapshot().releaseBarrierFailureCount, 1)
+        XCTAssertEqual(sink.releaseCallCount, 1)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+    }
+
+    func testStaleAndInactiveTerminationCannotAffectReplacement() async throws {
+        let sink = ControlledApplicationInputSink()
+        let cleanup = CaptureCleanupRecorder()
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            releaseCapture: { cleanup.releaseCapture() }
+        )
+        let firstGeneration = await coordinator.activate()
+        let replacementGeneration = await coordinator.activate()
+        let releaseCount = sink.releaseCallCount
+        let cleanupCount = cleanup.releaseCount
+
+        let staleResult = await coordinator.terminate(
+            generation: firstGeneration,
+            reason: .remoteTermination
+        )
+        XCTAssertEqual(staleResult, .staleGeneration)
+        XCTAssertEqual(coordinator.snapshot().generation, replacementGeneration)
+        XCTAssertTrue(coordinator.snapshot().acceptsInput)
+        XCTAssertEqual(sink.releaseCallCount, releaseCount)
+        XCTAssertEqual(cleanup.releaseCount, cleanupCount)
+
+        let deactivated = await coordinator.deactivate(
+            generation: replacementGeneration
+        )
+        XCTAssertTrue(deactivated)
+        let inactiveResult = await coordinator.terminate(
+            generation: replacementGeneration,
+            reason: .detached
+        )
+        XCTAssertEqual(inactiveResult, .inactiveGeneration)
+        XCTAssertEqual(sink.releaseCallCount, releaseCount + 1)
+        XCTAssertEqual(cleanup.releaseCount, cleanupCount + 1)
+    }
+
     func testQueuePolicyRejectsUnsafeCapacities() {
         XCTAssertThrowsError(try MacSessionInputQueuePolicy(maximumPendingSamples: 0))
         XCTAssertThrowsError(try MacSessionInputQueuePolicy(maximumPendingSamples: 4_097))
