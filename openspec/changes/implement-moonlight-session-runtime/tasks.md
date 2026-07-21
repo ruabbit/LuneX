@@ -63,7 +63,7 @@
 - [x] 7.2 Implement ordered keyboard, pointer-button, scroll, touch, and clipboard delivery
 - [x] 7.3 Implement coalesced relative/absolute pointer movement without dropping state transitions
 - [x] 7.4 Implement controller, motion, battery, LED, rumble, and trigger-rumble message handling
-- [ ] 7.5 Release held remote keys and buttons on focus loss, disconnect, or input-channel failure
+- [x] 7.5 Release held remote keys and buttons on focus loss, disconnect, or input-channel failure
 - [ ] 7.6 Add serialization, ordering, backpressure, focus-loss, and remote-feedback tests
 - [ ] 7.7 Prove keyboard, pointer, controller, and remote feedback against the authorized Sunshine test host
 

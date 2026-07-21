@@ -1156,6 +1156,362 @@ final class RemoteInputDeliveryTests: XCTestCase {
         await provider.stopInput(sessionID: sessionID)
     }
 
+    func testReleaseAllSynthesizesReverseOrderedKeyPointerAndControllerNeutralState() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x3A, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x41,
+            characters: "A",
+            isDown: true,
+            modifiers: .shift,
+            isRepeat: false
+        )), sessionID: sessionID)
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x42,
+            characters: "B",
+            isDown: true,
+            modifiers: [.shift, .control],
+            isRepeat: false
+        )), sessionID: sessionID)
+        try await provider.send(
+            .pointer(.button(button: .left, isDown: true, point: nil)),
+            sessionID: sessionID
+        )
+        try await provider.send(
+            .pointer(.button(button: .right, isDown: true, point: nil)),
+            sessionID: sessionID
+        )
+        try await provider.send(.controllerConnected(ControllerConnectionInputEvent(
+            controllerID: "release-controller",
+            playerIndex: 1,
+            type: .xbox,
+            capabilities: [.analogTriggers],
+            supportedButtons: .standard
+        )), sessionID: sessionID)
+        try await provider.send(.gameController(GameControllerInputEvent(
+            controllerID: "release-controller",
+            playerIndex: 1,
+            element: .a,
+            value: 1,
+            isPressed: true
+        )), sessionID: sessionID)
+        try await provider.send(.gameController(GameControllerInputEvent(
+            controllerID: "release-controller",
+            playerIndex: 1,
+            element: .leftThumbstickX,
+            value: 0.5,
+            isPressed: false
+        )), sessionID: sessionID)
+
+        let countBeforeRelease = await sender.recordedSends().count
+        await provider.releaseAll(sessionID: sessionID)
+        let sends = await sender.recordedSends()
+        let releaseSends = Array(sends.dropFirst(countBeforeRelease))
+        XCTAssertEqual(releaseSends.count, 5)
+        XCTAssertTrue(releaseSends.allSatisfy(\.reliable))
+        XCTAssertEqual(releaseSends.map(\.channelID), [
+            RemoteInputWireCodec.keyboardChannel,
+            RemoteInputWireCodec.keyboardChannel,
+            RemoteInputWireCodec.mouseChannel,
+            RemoteInputWireCodec.mouseChannel,
+            RemoteInputWireCodec.controllerChannelBase
+        ])
+        XCTAssertEqual([UInt8](releaseSends[0].packet.bytes), [
+            0x00, 0x00, 0x00, 0x0A, 0x04, 0x00, 0x00, 0x00,
+            0x00, 0x42, 0x00, 0x00, 0x00, 0x00
+        ])
+        XCTAssertEqual([UInt8](releaseSends[1].packet.bytes), [
+            0x00, 0x00, 0x00, 0x0A, 0x04, 0x00, 0x00, 0x00,
+            0x00, 0x41, 0x00, 0x00, 0x00, 0x00
+        ])
+        XCTAssertEqual([UInt8](releaseSends[2].packet.bytes), [
+            0x00, 0x00, 0x00, 0x05, 0x09, 0x00, 0x00, 0x00, 0x03
+        ])
+        XCTAssertEqual([UInt8](releaseSends[3].packet.bytes), [
+            0x00, 0x00, 0x00, 0x05, 0x09, 0x00, 0x00, 0x00, 0x01
+        ])
+        let controllerRelease = try controllerState(from: releaseSends[4].packet)
+        XCTAssertEqual(controllerRelease.activeMask, 1)
+        XCTAssertEqual(controllerRelease.buttons, 0)
+        XCTAssertEqual(controllerRelease.leftStickX, 0)
+
+        await provider.releaseAll(sessionID: sessionID)
+        let countAfterRepeatedRelease = await sender.recordedSends().count
+        XCTAssertEqual(countAfterRepeatedRelease, sends.count)
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testStopReleasesHeldInputsBeforeSingleDeactivation() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x3B, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x43,
+            characters: nil,
+            isDown: true,
+            modifiers: .command,
+            isRepeat: false
+        )), sessionID: sessionID)
+        try await provider.send(
+            .pointer(.button(button: .middle, isDown: true, point: nil)),
+            sessionID: sessionID
+        )
+
+        await provider.stopInput(sessionID: sessionID)
+        await provider.stopInput(sessionID: sessionID)
+        let sends = await sender.recordedSends()
+        let deactivationSendCounts = await sender.deactivationSendCounts()
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(sends.count, 4)
+        XCTAssertEqual(deactivationSendCounts, [4])
+        XCTAssertEqual(deactivateCount, 1)
+    }
+
+    func testStopWaitsForAcceptedKeyUpBeforeDeactivation() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [2: 40_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x3D, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x45,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )), sessionID: sessionID)
+
+        let keyUp = Task {
+            try await provider.send(.keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x45,
+                characters: nil,
+                isDown: false,
+                modifiers: [],
+                isRepeat: false
+            )), sessionID: sessionID)
+        }
+        try await waitForSendCount(2, sender: sender)
+        let stop = Task { await provider.stopInput(sessionID: sessionID) }
+        try await keyUp.value
+        await stop.value
+
+        let sends = await sender.recordedSends()
+        let deactivationSendCounts = await sender.deactivationSendCounts()
+        XCTAssertEqual(sends.count, 2)
+        XCTAssertEqual(deactivationSendCounts, [2])
+        XCTAssertEqual([UInt8](sends[1].packet.bytes)[4], 0x04)
+    }
+
+    func testConcurrentReleaseRequestsShareOneBatchAndStopWaitsForIt() async throws {
+        let sender = InputSenderStub(delayNanosecondsByCall: [2: 40_000_000])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x3F, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x46,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )), sessionID: sessionID)
+
+        let firstRelease = Task { await provider.releaseAll(sessionID: sessionID) }
+        try await waitForSendCount(2, sender: sender)
+        await assertProviderError(.inactiveSession) {
+            try await provider.send(.keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x49,
+                characters: nil,
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )), sessionID: sessionID)
+        }
+        let concurrentReleases = (0..<8).map { _ in
+            Task { await provider.releaseAll(sessionID: sessionID) }
+        }
+        let stop = Task { await provider.stopInput(sessionID: sessionID) }
+
+        await firstRelease.value
+        for release in concurrentReleases {
+            await release.value
+        }
+        await stop.value
+
+        let sends = await sender.recordedSends()
+        let deactivationSendCounts = await sender.deactivationSendCounts()
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(sends.count, 2)
+        XCTAssertEqual([UInt8](sends[1].packet.bytes)[4], 0x04)
+        XCTAssertEqual(deactivationSendCounts, [2])
+        XCTAssertEqual(deactivateCount, 1)
+    }
+
+    func testFeedbackDisconnectClearsHeldOwnershipBeforeReplacementSession() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let firstSession = UUID()
+        try await provider.startInput(
+            sessionID: firstSession,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x40, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x47,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )), sessionID: firstSession)
+
+        await source.finish()
+        try await waitForDeactivationCount(1, sender: sender)
+
+        let replacementSession = UUID()
+        try await provider.startInput(
+            sessionID: replacementSession,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x41, count: 16))
+        )
+        await provider.releaseAll(sessionID: replacementSession)
+        let sendsAfterReplacementRelease = await sender.recordedSends()
+        XCTAssertEqual(sendsAfterReplacementRelease.count, 1)
+        await provider.stopInput(sessionID: replacementSession)
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(deactivateCount, 2)
+    }
+
+    func testInputFailureClearsHeldOwnershipBeforeReplacementSession() async throws {
+        let sender = InputSenderStub(failingCalls: [2])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let firstSession = UUID()
+        try await provider.startInput(
+            sessionID: firstSession,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x42, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x48,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )), sessionID: firstSession)
+        await assertProviderError(.deliveryFailed) {
+            try await provider.send(
+                .pointer(.relativeMove(deltaX: 1, deltaY: 1, buttons: [])),
+                sessionID: firstSession
+            )
+        }
+        try await waitForDeactivationCount(1, sender: sender)
+
+        let replacementSession = UUID()
+        try await provider.startInput(
+            sessionID: replacementSession,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x43, count: 16))
+        )
+        await provider.releaseAll(sessionID: replacementSession)
+        let sendsAfterReplacementRelease = await sender.recordedSends()
+        XCTAssertEqual(sendsAfterReplacementRelease.count, 2)
+        await provider.stopInput(sessionID: replacementSession)
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(deactivateCount, 2)
+    }
+
+    func testReleaseTransportFailureClearsOwnershipAndFailsSession() async throws {
+        let sender = InputSenderStub(failingCalls: [2])
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x3C, count: 16))
+        )
+        try await provider.send(.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x44,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        )), sessionID: sessionID)
+
+        await provider.releaseAll(sessionID: sessionID)
+        await provider.releaseAll(sessionID: sessionID)
+        await assertProviderError(.inactiveSession) {
+            try await provider.send(.keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x44,
+                characters: nil,
+                isDown: false,
+                modifiers: [],
+                isRepeat: false
+            )), sessionID: sessionID)
+        }
+        let sendCount = await sender.recordedSends().count
+        let deactivateCount = await sender.deactivateCount()
+        XCTAssertEqual(sendCount, 2)
+        XCTAssertEqual(deactivateCount, 1)
+    }
+
+    func testHeldKeyStateIsBoundedAndReleaseReservationDrainsMaximumSet() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x3E, count: 16))
+        )
+        for rawKeyCode in 0..<256 {
+            try await provider.send(.keyboard(KeyboardInputEvent(
+                rawKeyCode: UInt16(rawKeyCode),
+                characters: nil,
+                isDown: true,
+                modifiers: .shift,
+                isRepeat: false
+            )), sessionID: sessionID)
+        }
+        await assertProviderError(.heldStateLimitReached) {
+            try await provider.send(.keyboard(KeyboardInputEvent(
+                rawKeyCode: 256,
+                characters: nil,
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )), sessionID: sessionID)
+        }
+
+        await provider.releaseAll(sessionID: sessionID)
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 512)
+        XCTAssertTrue(sends.suffix(256).allSatisfy { send in
+            let bytes = [UInt8](send.packet.bytes)
+            return send.channelID == RemoteInputWireCodec.keyboardChannel
+                && send.reliable
+                && bytes[4] == 0x04
+                && bytes[11] == 0
+        })
+        await provider.stopInput(sessionID: sessionID)
+    }
+
     func testProviderStopRejectsLateSendAndDeactivatesOnce() async throws {
         let sender = InputSenderStub()
         let provider = MoonlightRemoteInputProvider(sender: sender)
@@ -1242,6 +1598,14 @@ final class RemoteInputDeliveryTests: XCTestCase {
             try await Task.sleep(nanoseconds: 1_000_000)
         }
         XCTFail("Timed out waiting for the deterministic sender.")
+    }
+
+    private func waitForDeactivationCount(_ count: Int, sender: InputSenderStub) async throws {
+        for _ in 0..<200 {
+            if await sender.deactivateCount() >= count { return }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        XCTFail("Timed out waiting for input deactivation.")
     }
 
     private func assertAsyncError(
@@ -1335,6 +1699,7 @@ private actor InputSenderStub: AuthenticatedInputFrameSending {
     private let failingCalls: Set<Int>
     private var sends: [InputSendRecord] = []
     private var deactivations = 0
+    private var sendCountsAtDeactivation: [Int] = []
 
     init(
         activationDelayNanoseconds: UInt64 = 0,
@@ -1374,6 +1739,7 @@ private actor InputSenderStub: AuthenticatedInputFrameSending {
         if deactivationDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: deactivationDelayNanoseconds)
         }
+        sendCountsAtDeactivation.append(sends.count)
         deactivations += 1
     }
 
@@ -1383,6 +1749,10 @@ private actor InputSenderStub: AuthenticatedInputFrameSending {
 
     func deactivateCount() -> Int {
         deactivations
+    }
+
+    func deactivationSendCounts() -> [Int] {
+        sendCountsAtDeactivation
     }
 }
 

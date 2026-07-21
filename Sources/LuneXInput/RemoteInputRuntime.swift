@@ -21,6 +21,7 @@ enum RemoteInputRuntimeError: Error, Equatable, Sendable, CustomStringConvertibl
     case controllerNotRegistered
     case invalidControllerEvent
     case motionNotEnabled
+    case heldStateLimitReached
 
     var description: String {
         switch self {
@@ -44,6 +45,8 @@ enum RemoteInputRuntimeError: Error, Equatable, Sendable, CustomStringConvertibl
             return "The controller event contains invalid or unsupported state."
         case .motionNotEnabled:
             return "The host has not enabled this controller motion sensor."
+        case .heldStateLimitReached:
+            return "The bounded remote-input held-state limit is reached."
         }
     }
 }
@@ -62,10 +65,11 @@ struct RemoteInputDeliveryLimits: Equatable, Sendable {
 
 actor MoonlightRemoteInputProvider: RemoteInputProvider {
     private struct PendingDelivery {
-        var event: RemoteInputEvent
+        var event: RemoteInputEvent?
         var packets: [RemoteInputOutboundPacket]
         var continuations: [CheckedContinuation<Void, Error>]
         var allowsCoalescing: Bool
+        var affectsHeldState: Bool
     }
 
     private let sender: any AuthenticatedInputFrameSending
@@ -76,11 +80,15 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
     private var pending: [PendingDelivery] = []
     private var pendingPacketCount = 0
     private var pendingCallCount = 0
+    private var currentDeliveryAffectsHeldState = false
     private var drainTask: Task<Void, Never>?
     private var feedbackTask: Task<Void, Never>?
+    private var releaseOperation: (token: UUID, task: Task<Void, Never>)?
     private var isActivating = false
+    private var isStopping = false
     private var isTearingDown = false
     private var controllerRegistry = RemoteControllerRegistry()
+    private var heldInputState = RemoteHeldInputState()
     private var feedbackContinuations: [UUID: AsyncStream<RemoteInputFeedback>.Continuation] = [:]
 
     init(
@@ -98,7 +106,12 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         endpoint: RuntimeNetworkEndpoint,
         configuration: NegotiatedInputConfiguration
     ) async throws {
-        guard activeSessionID == nil, drainTask == nil, !isActivating, !isTearingDown else {
+        guard activeSessionID == nil,
+              drainTask == nil,
+              releaseOperation == nil,
+              !isActivating,
+              !isStopping,
+              !isTearingDown else {
             throw RemoteInputRuntimeError.inactiveSession
         }
         do {
@@ -123,6 +136,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         let inputGeneration = generation
         activeSessionID = sessionID
         controllerRegistry = RemoteControllerRegistry()
+        heldInputState = RemoteHeldInputState()
         if let feedbackSource {
             let stream = await feedbackSource.controllerFeedbackMessages()
             guard activeSessionID == sessionID, generation == inputGeneration else {
@@ -148,15 +162,23 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         guard activeSessionID == sessionID else {
             throw RemoteInputRuntimeError.sessionMismatch
         }
+        guard releaseOperation == nil, !isStopping else {
+            throw RemoteInputRuntimeError.inactiveSession
+        }
         var nextRegistry = controllerRegistry
+        var nextHeldInputState = heldInputState
         let resolution = try nextRegistry.resolve(event)
+        try nextHeldInputState.apply(event)
         let packets = try resolution.events.flatMap(RemoteInputWireCodec.outboundPackets)
         guard !packets.isEmpty else { return }
+        let affectsHeldState = Self.affectsHeldState(event, resolvedEvents: resolution.events)
 
         let coalescedEvent: RemoteInputEvent? = pending.last.flatMap { delivery -> RemoteInputEvent? in
-            guard delivery.allowsCoalescing, resolution.allowsCoalescing else { return nil }
+            guard let olderEvent = delivery.event,
+                  delivery.allowsCoalescing,
+                  resolution.allowsCoalescing else { return nil }
             return RemoteInputMovementCoalescer.coalesce(
-                older: delivery.event,
+                older: olderEvent,
                 newer: resolution.event
             )
         }
@@ -177,6 +199,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         }
 
         controllerRegistry = nextRegistry
+        heldInputState = nextHeldInputState
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             if canCoalesce,
                let coalescedEvent,
@@ -186,13 +209,16 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 pending[pending.count - 1].event = coalescedEvent
                 pending[pending.count - 1].packets = coalescedPackets
                 pending[pending.count - 1].continuations.append(continuation)
+                pending[pending.count - 1].affectsHeldState =
+                    pending[pending.count - 1].affectsHeldState || affectsHeldState
                 pendingPacketCount += coalescedPackets.count
             } else {
                 pending.append(PendingDelivery(
                     event: resolution.event,
                     packets: packets,
                     continuations: [continuation],
-                    allowsCoalescing: resolution.allowsCoalescing
+                    allowsCoalescing: resolution.allowsCoalescing,
+                    affectsHeldState: affectsHeldState
                 ))
                 pendingPacketCount += packets.count
             }
@@ -216,16 +242,77 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
     }
 
     func releaseAll(sessionID: UUID) async {
-        _ = sessionID
-        // Held-state tracking and synthesized release events are implemented in task 7.5.
+        guard activeSessionID == sessionID else { return }
+        if let releaseOperation {
+            await releaseOperation.task.value
+            return
+        }
+
+        let token = UUID()
+        let task = Task {
+            await self.performReleaseAll(sessionID: sessionID)
+        }
+        releaseOperation = (token, task)
+        await task.value
+        if releaseOperation?.token == token {
+            releaseOperation = nil
+        }
+    }
+
+    private func performReleaseAll(sessionID: UUID) async {
+        guard activeSessionID == sessionID else { return }
+
+        var nextHeldInputState = heldInputState
+        var nextControllerRegistry = controllerRegistry
+        let releaseEvents = nextHeldInputState.releaseEvents()
+            + nextControllerRegistry.releaseAllControllerStates()
+        let needsHeldStateBarrier = currentDeliveryAffectsHeldState
+            || pending.contains(where: \.affectsHeldState)
+        guard !releaseEvents.isEmpty || needsHeldStateBarrier else { return }
+
+        let packets: [RemoteInputOutboundPacket]
+        do {
+            packets = try releaseEvents.flatMap(RemoteInputWireCodec.outboundPackets)
+        } catch {
+            return
+        }
+        // Accepted sends keep the configured queue bounds. This one batch adds at most
+        // the fixed held-key, pointer-button, and controller release reservation.
+        heldInputState = nextHeldInputState
+        controllerRegistry = nextControllerRegistry
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                pending.append(PendingDelivery(
+                    event: releaseEvents.last,
+                    packets: packets,
+                    continuations: [continuation],
+                    allowsCoalescing: false,
+                    affectsHeldState: !releaseEvents.isEmpty
+                ))
+                pendingPacketCount += packets.count
+                pendingCallCount += 1
+                startDrainIfNeeded()
+            }
+        } catch {
+            // The drain path owns session failure, local held-state clearing, and transport teardown.
+        }
     }
 
     func stopInput(sessionID: UUID) async {
-        guard activeSessionID == sessionID else { return }
+        guard activeSessionID == sessionID, !isStopping else { return }
+        isStopping = true
+        await releaseAll(sessionID: sessionID)
+        guard activeSessionID == sessionID else {
+            let teardownTask = drainTask
+            await teardownTask?.value
+            isStopping = false
+            return
+        }
         activeSessionID = nil
         generation &+= 1
         isTearingDown = true
         controllerRegistry = RemoteControllerRegistry()
+        heldInputState = RemoteHeldInputState()
         failPending(with: RemoteInputRuntimeError.inactiveSession)
         let task = drainTask
         let inputFeedbackTask = feedbackTask
@@ -237,6 +324,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         await sender.deactivateInput()
         drainTask = nil
         feedbackTask = nil
+        isStopping = false
         isTearingDown = false
     }
 
@@ -257,6 +345,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
             let delivery = pending.removeFirst()
             pendingPacketCount -= delivery.packets.count
             pendingCallCount -= delivery.continuations.count
+            currentDeliveryAffectsHeldState = delivery.affectsHeldState
 
             do {
                 for packet in delivery.packets {
@@ -271,10 +360,12 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 guard drainGeneration == generation, activeSessionID != nil else {
                     throw CancellationError()
                 }
+                currentDeliveryAffectsHeldState = false
                 for continuation in delivery.continuations {
                     continuation.resume()
                 }
             } catch {
+                currentDeliveryAffectsHeldState = false
                 let wasCancelled = Task.isCancelled || drainGeneration != generation
                 for continuation in delivery.continuations {
                     continuation.resume(throwing: wasCancelled
@@ -290,6 +381,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 generation &+= 1
                 isTearingDown = true
                 controllerRegistry = RemoteControllerRegistry()
+                heldInputState = RemoteHeldInputState()
                 failPending(with: RemoteInputRuntimeError.deliveryFailed)
                 feedbackTask?.cancel()
                 feedbackTask = nil
@@ -300,6 +392,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 return
             }
         }
+        currentDeliveryAffectsHeldState = false
         drainTask = nil
     }
 
@@ -376,6 +469,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         generation &+= 1
         isTearingDown = true
         controllerRegistry = RemoteControllerRegistry()
+        heldInputState = RemoteHeldInputState()
         failPending(with: RemoteInputRuntimeError.deliveryFailed)
         let inputDrainTask = drainTask
         inputDrainTask?.cancel()
@@ -401,6 +495,21 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
 
     private func normalizedMotor(_ value: UInt16) -> Float {
         Float(value) / Float(UInt16.max)
+    }
+
+    private static func affectsHeldState(
+        _ event: RemoteInputEvent,
+        resolvedEvents: [RemoteInputEvent]
+    ) -> Bool {
+        switch event {
+        case .keyboard, .pointer(.button):
+            return true
+        default:
+            return resolvedEvents.contains { resolved in
+                if case .controllerState = resolved { return true }
+                return false
+            }
+        }
     }
 }
 
@@ -443,6 +552,64 @@ enum RemoteInputMovementCoalescer {
         default:
             return nil
         }
+    }
+}
+
+private struct RemoteHeldInputState: Sendable {
+    static let maximumHeldKeyCount = 256
+    static let maximumHeldPointerButtonCount = 5
+
+    private var keyboardEventsByKeyCode: [UInt16: KeyboardInputEvent] = [:]
+    private var keyboardPressOrder: [UInt16] = []
+    private var heldPointerButtons: Set<PointerButton> = []
+    private var pointerPressOrder: [PointerButton] = []
+
+    mutating func apply(_ event: RemoteInputEvent) throws {
+        switch event {
+        case let .keyboard(keyboard):
+            if keyboard.isDown {
+                if keyboardEventsByKeyCode[keyboard.rawKeyCode] == nil {
+                    guard keyboardEventsByKeyCode.count < Self.maximumHeldKeyCount else {
+                        throw RemoteInputRuntimeError.heldStateLimitReached
+                    }
+                    keyboardPressOrder.append(keyboard.rawKeyCode)
+                }
+                keyboardEventsByKeyCode[keyboard.rawKeyCode] = keyboard
+            } else {
+                keyboardEventsByKeyCode[keyboard.rawKeyCode] = nil
+                keyboardPressOrder.removeAll { $0 == keyboard.rawKeyCode }
+            }
+        case let .pointer(.button(button, isDown, _)):
+            if isDown {
+                if heldPointerButtons.insert(button).inserted {
+                    pointerPressOrder.append(button)
+                }
+            } else {
+                heldPointerButtons.remove(button)
+                pointerPressOrder.removeAll { $0 == button }
+            }
+        default:
+            break
+        }
+    }
+
+    mutating func releaseEvents() -> [RemoteInputEvent] {
+        var events: [RemoteInputEvent] = []
+        events.reserveCapacity(keyboardEventsByKeyCode.count + heldPointerButtons.count)
+        for keyCode in keyboardPressOrder.reversed() where keyboardEventsByKeyCode[keyCode] != nil {
+            events.append(.keyboard(KeyboardInputEvent(
+                rawKeyCode: keyCode,
+                characters: nil,
+                isDown: false,
+                modifiers: [],
+                isRepeat: false
+            )))
+        }
+        for button in pointerPressOrder.reversed() where heldPointerButtons.contains(button) {
+            events.append(.pointer(.button(button: button, isDown: false, point: nil)))
+        }
+        self = RemoteHeldInputState()
+        return events
     }
 }
 
@@ -622,6 +789,26 @@ private struct RemoteControllerRegistry: Sendable {
         guard let entry = entriesByIndex[controllerIndex],
               entry.capabilities.contains(capability) else { return nil }
         return entry.controllerID
+    }
+
+    mutating func releaseAllControllerStates() -> [RemoteInputEvent] {
+        let mask = activeGamepadMask
+        var events: [RemoteInputEvent] = []
+        for controllerIndex in entriesByIndex.keys.sorted() {
+            guard var entry = entriesByIndex[controllerIndex] else { continue }
+            let neutralStoredState = RemoteControllerState.empty(
+                controllerIndex: controllerIndex,
+                activeGamepadMask: 0
+            )
+            guard entry.state != neutralStoredState else { continue }
+            entry.state = neutralStoredState
+            entriesByIndex[controllerIndex] = entry
+            events.append(.controllerState(.empty(
+                controllerIndex: controllerIndex,
+                activeGamepadMask: mask
+            )))
+        }
+        return events
     }
 
     mutating func setMotionRate(

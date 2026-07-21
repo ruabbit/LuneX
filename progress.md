@@ -564,3 +564,21 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过。fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、四SDK strict C syntax与independent Node controller reconstruction全部通过。
 - 四个固定simulator最终均为`Shutdown`，且每个指定名称只有一个可用实例；未创建或重复启动设备。OpenSpec 7.4更新为完成，权威进度`41/61`，下一项为7.5 focus loss/disconnect/input failure时释放held remote keys/buttons。
 - 7.4只证明serialization、state accumulation、bounded feedback mapping与teardown，不证明Sunshine消费、物理`GCController` rumble/LED/sensor接线、7.5 held-state release或7.7 live互操作。
+
+## 2026-07-21 阶段 13 任务 7.5 启动
+
+- 7.4已以`29ce60b Implement controller input feedback`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`41/61`后进入7.5。
+- 7.5范围限定为provider-owned held key/pointer-button/controller state与ordered release batch：focus owner调用`releaseAll`，显式stop在deactivate前尝试release；input/control已失败时只能清除本地ownership并truthfully teardown，不能声称host收到release。
+- held key集合需要显式容量，重复keydown不能重复占用；合成key-up清空modifier mask，pointer按反向press order释放，controller保持连接/active mask但发送neutral state。release batch不得被并发event插入，并保留有界backpressure。
+- 恢复后首次定向测试命令因包含清理旧`/tmp`结果的`rm -rf`而被工具策略在进程创建前拒绝；未执行构建或测试。后续改用`mktemp`生成全新隔离目录，不再重复该清理方式。
+- 最后加入的共享`releaseOperation`已经在Swift 6 warnings-as-errors下重新编译，`RemoteInputDeliveryTests`保持`34/34`通过；结果为`/tmp/LuneX-7_5-latest.7vYTVe/RemoteInputDelivery.xcresult`。下一步补齐并发release合并与disconnect/failure replacement ownership回归。
+- 新增三项并发/断线回归后的首次编译失败：测试把跨actor的`await`直接放进`XCTAssertEqual`同步autoclosure。生产源码无诊断；修复为先读取actor值到局部常量再断言，不重复原写法。
+- 并发审计发现release批次在途时仍可接受新keydown并排在release之后，造成focus-loss调用返回后重新形成远端held state；provider现于共享`releaseOperation`或stop期间拒绝新输入。定向warnings-as-errors gate为`37/37`，`0 skipped / 0 failed`，结果`/tmp/LuneX-7_5-release-gate.CU1g2a/RemoteInputDelivery.xcresult`。
+- 扩展input/control/session gate覆盖wire codec、delivery、platform adapters、control、provider contract、session cancellation/state和diagnostics，结果`86/86`、`0 skipped / 0 failed`，xcresult为`/tmp/LuneX-7_5-expanded.NTU9u3/InputControlSession.xcresult`。
+
+## 2026-07-21 阶段 13 任务 7.5 完成
+
+- 完整macOS Swift 6 warnings-as-errors gate通过：`322 total / 321 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-7_5-full-macos.4RRgp9/LuneXCoreTests.xcresult`；通过`env -u LUNEX_RUN_KEYCHAIN_TEST`明确禁用真实Keychain路径。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部退出成功。构建后四个固定simulator仍各一个可用实例且全部`Shutdown`，未创建或主动boot任何设备。
+- fixture validator self-test/全树、全部四个OpenSpec change strict validation、generator SHA-256 byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对、四SDK strict C syntax与Node independent release reconstruction全部通过。
+- OpenSpec 7.5更新为完成，权威进度`42/61`，下一项为7.6 serialization/ordering/backpressure/focus-loss/remote-feedback verification suite。当前证据只证明provider release serialization、ownership与teardown；不证明平台focus lifecycle已接线或Sunshine实际收到release。
