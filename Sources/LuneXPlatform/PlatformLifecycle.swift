@@ -58,11 +58,102 @@ final class StreamRenderState {
     }
 }
 
-enum RenderPolicy: Equatable {
+enum RenderPolicy: Equatable, Sendable {
     case idle
     case active
     case throttled(reason: String)
     case paused(reason: String)
+}
+
+enum SessionLifecycleClosureReason: String, Equatable, Sendable {
+    case streamInactive
+    case notVisible
+    case drawableUnavailable
+    case notFocused
+}
+
+enum VideoProcessingDirective: Equatable, Sendable {
+    case inactive
+    case submitDecodedVideo
+    case drainTransportWithoutDecoding(reason: SessionLifecycleClosureReason)
+}
+
+enum PresentationLifecycleDirective: Equatable, Sendable {
+    case clear(reason: SessionLifecycleClosureReason)
+    case active
+    case throttled(reason: SessionLifecycleClosureReason)
+}
+
+enum InputLifecycleDirective: Equatable, Sendable {
+    case closed(reason: SessionLifecycleClosureReason, requiresReleaseBarrier: Bool)
+    case open
+}
+
+struct SessionLifecycleDirective: Equatable, Sendable {
+    let renderPolicy: RenderPolicy
+    let videoProcessing: VideoProcessingDirective
+    let presentation: PresentationLifecycleDirective
+    let input: InputLifecycleDirective
+}
+
+enum SessionLifecycleDirectiveResolver {
+    static func resolve(
+        isStreamActive: Bool,
+        isVisible: Bool,
+        isFocused: Bool,
+        drawableSize: PixelSize
+    ) -> SessionLifecycleDirective {
+        guard isStreamActive else {
+            return SessionLifecycleDirective(
+                renderPolicy: .idle,
+                videoProcessing: .inactive,
+                presentation: .clear(reason: .streamInactive),
+                input: .closed(reason: .streamInactive, requiresReleaseBarrier: false)
+            )
+        }
+
+        guard isVisible else {
+            return pausedDirective(
+                reason: .notVisible,
+                renderReason: "Window or scene not visible"
+            )
+        }
+
+        guard drawableSize.width > 0, drawableSize.height > 0 else {
+            return pausedDirective(
+                reason: .drawableUnavailable,
+                renderReason: "Drawable is not ready"
+            )
+        }
+
+        guard isFocused else {
+            return SessionLifecycleDirective(
+                renderPolicy: .throttled(reason: "Window or scene not focused"),
+                videoProcessing: .submitDecodedVideo,
+                presentation: .throttled(reason: .notFocused),
+                input: .closed(reason: .notFocused, requiresReleaseBarrier: true)
+            )
+        }
+
+        return SessionLifecycleDirective(
+            renderPolicy: .active,
+            videoProcessing: .submitDecodedVideo,
+            presentation: .active,
+            input: .open
+        )
+    }
+
+    private static func pausedDirective(
+        reason: SessionLifecycleClosureReason,
+        renderReason: String
+    ) -> SessionLifecycleDirective {
+        SessionLifecycleDirective(
+            renderPolicy: .paused(reason: renderReason),
+            videoProcessing: .drainTransportWithoutDecoding(reason: reason),
+            presentation: .clear(reason: reason),
+            input: .closed(reason: reason, requiresReleaseBarrier: true)
+        )
+    }
 }
 
 enum LifecycleRenderPolicyResolver {
@@ -72,21 +163,12 @@ enum LifecycleRenderPolicyResolver {
         isFocused: Bool,
         drawableSize: PixelSize
     ) -> RenderPolicy {
-        guard isStreamActive else { return .idle }
-
-        guard isVisible else {
-            return .paused(reason: "Window or scene not visible")
-        }
-
-        guard drawableSize.width > 0, drawableSize.height > 0 else {
-            return .paused(reason: "Drawable is not ready")
-        }
-
-        guard isFocused else {
-            return .throttled(reason: "Window or scene not focused")
-        }
-
-        return .active
+        SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: isStreamActive,
+            isVisible: isVisible,
+            isFocused: isFocused,
+            drawableSize: drawableSize
+        ).renderPolicy
     }
 }
 

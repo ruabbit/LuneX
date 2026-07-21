@@ -814,3 +814,15 @@
 - 完整macOS suite通过`381 total / 380 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-1_4-full.7Fq2Qs/LuneXCoreTests.xcresult`；测试树精确确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
 - 全部5个OpenSpec change strict通过；generator前后project SHA-256保持`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`，whitespace通过。任务只改测试，1.3刚通过的五平台production build仍适用，不重复运行相同App build作为新证据。
 - 固定iPhone/iPad/Apple TV/Apple Vision Pro均保持唯一且`Shutdown`，全局Booted为0，未create、boot或run simulator。OpenSpec 1.4标记完成，权威进度`4/29`；下一项为2.1生命周期directive。
+
+## 2026-07-21 阶段 14 任务 2.1 启动
+
+- 1.4已以`c252806`独立提交并推送，确认`HEAD == origin/main`且工作树clean。现有`LifecycleRenderPolicyResolver`只返回renderer policy，无法原子表达decoder submission、presentation clear/throttle与input release admission。
+- 2.1新增平台无关的闭合directive和reason枚举：inactive、occluded/hidden、drawable unavailable、visible unfocused与active focused五种优先级状态；本任务只建立值合同和确定性resolver，不接入media environment或提前声称decoder已暂停。
+
+## 2026-07-21 阶段 14 任务 2.1 完成
+
+- 新增`SessionLifecycleClosureReason`、`VideoProcessingDirective`、`PresentationLifecycleDirective`、`InputLifecycleDirective`与聚合`SessionLifecycleDirective`；legacy `LifecycleRenderPolicyResolver`委托给新resolver，避免render-only路径漂移。
+- focused Swift 6 warnings-as-errors gate通过`11/11`，结果`/tmp/LuneX-14-2_1-focused.P7k3Jd/LifecycleDirective.xcresult`。完整macOS suite通过`387 total / 386 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_1-full.K9t2Vn/LuneXCoreTests.xcresult`；测试树确认唯一skip仍为一次性真实Keychain测试。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，隔离目录前缀`/tmp/LuneX-14-2_1-builds.*`。只执行build，未boot或run simulator。
+- 全部5个OpenSpec change strict通过，generator前后project SHA-256保持`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`，whitespace通过；固定simulator名称/UUID各唯一、全部`Shutdown`且全局Booted为0。OpenSpec 2.1标记完成，权威进度`5/29`，下一项为2.2 generation-scoped application。
