@@ -31,8 +31,31 @@ final class PlatformLifecycleState {
 @Observable
 final class StreamRenderState {
     var policy: RenderPolicy = .idle
-    var transform = RenderTransform()
+    var transform: RenderTransform {
+        didSet { publishCoordinateSnapshot() }
+    }
+    private(set) var coordinateSnapshot: StreamCoordinateSnapshot?
     var headroom = DisplayHeadroom()
+    @ObservationIgnored private var coordinatePublisher: StreamCoordinateSnapshotPublisher
+
+    init(transform: RenderTransform = RenderTransform()) {
+        self.transform = transform
+        var publisher = StreamCoordinateSnapshotPublisher()
+        coordinateSnapshot = publisher.update(
+            sourceSize: transform.sourceSize,
+            drawableSize: transform.drawableSize,
+            mode: transform.mode
+        )
+        coordinatePublisher = publisher
+    }
+
+    private func publishCoordinateSnapshot() {
+        coordinateSnapshot = coordinatePublisher.update(
+            sourceSize: transform.sourceSize,
+            drawableSize: transform.drawableSize,
+            mode: transform.mode
+        )
+    }
 }
 
 enum RenderPolicy: Equatable {

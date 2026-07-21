@@ -114,6 +114,29 @@ final class InputAdapterTests: XCTestCase {
         )))
     }
 
+    func testFitMapperRejectsLetterboxPoint() {
+        let mapper = makeMapper()
+
+        XCTAssertNil(mapper.remotePoint(localX: 400, localY: 50))
+    }
+
+    func testFillMapperUsesResolvedSourceCrop() {
+        let snapshot = StreamCoordinateSnapshot.resolve(
+            revision: 9,
+            sourceSize: PixelSize(width: 1920, height: 1080),
+            drawableSize: PixelSize(width: 800, height: 600),
+            mode: .fill
+        )
+        let mapper = snapshot.map(InputMapper.init(snapshot:))
+
+        let left = mapper?.remotePoint(localX: 0, localY: 300)
+        let right = mapper?.remotePoint(localX: 800, localY: 300)
+        XCTAssertEqual(left?.x ?? .nan, 240, accuracy: 0.000_001)
+        XCTAssertEqual(left?.y ?? .nan, 540, accuracy: 0.000_001)
+        XCTAssertEqual(right?.x ?? .nan, 1680, accuracy: 0.000_001)
+        XCTAssertEqual(right?.y ?? .nan, 540, accuracy: 0.000_001)
+    }
+
     func testTouchInputClampsPressureToProtocolRange() {
         let adapter = TouchInputAdapter(mapper: makeMapper())
 
@@ -145,10 +168,12 @@ final class InputAdapterTests: XCTestCase {
     }
 
     private func makeMapper() -> InputMapper {
-        InputMapper(transform: RenderTransform(
+        let snapshot = StreamCoordinateSnapshot.resolve(
+            revision: 1,
             sourceSize: PixelSize(width: 1920, height: 1080),
             drawableSize: PixelSize(width: 800, height: 600),
             mode: .fit
-        ))
+        )
+        return InputMapper(snapshot: snapshot!)
     }
 }

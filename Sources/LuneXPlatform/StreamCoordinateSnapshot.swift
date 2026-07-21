@@ -153,6 +153,28 @@ struct StreamCoordinateSnapshot: Equatable, Sendable {
     let drawableSize: PixelSize
     let mode: RenderScaleMode
     let resolvedVideo: ResolvedVideoRectangle
+
+    static func resolve(
+        revision: UInt64,
+        sourceSize: PixelSize,
+        drawableSize: PixelSize,
+        mode: RenderScaleMode
+    ) -> StreamCoordinateSnapshot? {
+        guard let resolvedVideo = StreamVideoRectangleResolver.resolve(
+            sourceSize: sourceSize,
+            drawableSize: drawableSize,
+            mode: mode
+        ) else {
+            return nil
+        }
+        return StreamCoordinateSnapshot(
+            revision: revision,
+            sourceSize: sourceSize,
+            drawableSize: drawableSize,
+            mode: mode,
+            resolvedVideo: resolvedVideo
+        )
+    }
 }
 
 struct StreamCoordinateSnapshotPublisher: Sendable {
@@ -191,7 +213,8 @@ struct StreamCoordinateSnapshotPublisher: Sendable {
         }
         revision = nextRevision.partialValue
 
-        guard let resolvedVideo = StreamVideoRectangleResolver.resolve(
+        guard let updated = StreamCoordinateSnapshot.resolve(
+            revision: revision,
             sourceSize: sourceSize,
             drawableSize: drawableSize,
             mode: mode
@@ -199,13 +222,6 @@ struct StreamCoordinateSnapshotPublisher: Sendable {
             snapshot = nil
             return nil
         }
-        let updated = StreamCoordinateSnapshot(
-            revision: revision,
-            sourceSize: sourceSize,
-            drawableSize: drawableSize,
-            mode: mode,
-            resolvedVideo: resolvedVideo
-        )
         snapshot = updated
         return updated
     }

@@ -2,7 +2,7 @@
 
 - [x] 1.1 Inventory macOS event, modifier, shortcut, cursor, coordinate, and multi-window ownership contracts without changing runtime behavior
 - [x] 1.2 Implement immutable revisioned stream coordinate snapshots and a shared fit/fill video-rectangle resolver
-- [ ] 1.3 Make renderer presentation and `InputMapper` consume the same resolved coordinate contract
+- [x] 1.3 Make renderer presentation and `InputMapper` consume the same resolved coordinate contract
 - [ ] 1.4 Add deterministic fit, fill, letterbox rejection, crop, backing-scale, invalid-geometry, resize, and stale-revision tests
 
 ## 2. Session lifecycle directives

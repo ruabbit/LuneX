@@ -31,7 +31,7 @@ struct TouchInputAdapter: Sendable {
                 phase: sample.phase,
                 point: remotePoint,
                 pressure: min(max(0, sample.pressure), 1),
-                referenceSize: mapper.transform.sourceSize
+                referenceSize: mapper.snapshot.sourceSize
             )),
             policy: .deliver
         )
@@ -45,7 +45,7 @@ struct TouchInputAdapter: Sendable {
         return InputAdapterOutput(
             event: .pointer(.absoluteMove(
                 point: remotePoint,
-                referenceSize: mapper.transform.sourceSize,
+                referenceSize: mapper.snapshot.sourceSize,
                 buttons: sample.buttons
             )),
             policy: .deliver

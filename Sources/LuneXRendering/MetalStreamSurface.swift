@@ -6,7 +6,8 @@ import SwiftUI
 final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     private let presentationSource: StreamVideoPresentationSource
     private let lock = NSLock()
-    private var renderState: StreamRenderState
+    private var renderPolicy: RenderPolicy
+    private var coordinateSnapshot: StreamCoordinateSnapshot?
     private var commandQueue: (any MTLCommandQueue)?
     private var context: CIContext?
     private let outputColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
@@ -17,7 +18,8 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         renderState: StreamRenderState
     ) {
         self.presentationSource = presentationSource
-        self.renderState = renderState
+        renderPolicy = renderState.policy
+        coordinateSnapshot = renderState.coordinateSnapshot
     }
 
     @MainActor
@@ -32,7 +34,10 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     }
 
     func update(renderState: StreamRenderState) {
-        withLock { self.renderState = renderState }
+        withLock {
+            renderPolicy = renderState.policy
+            coordinateSnapshot = renderState.coordinateSnapshot
+        }
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -40,8 +45,10 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
-        let snapshot = withLock { (renderState, commandQueue, context) }
-        guard let commandQueue = snapshot.1,
+        let snapshot = withLock {
+            (renderPolicy, coordinateSnapshot, commandQueue, context)
+        }
+        guard let commandQueue = snapshot.2,
               let commandBuffer = commandQueue.makeCommandBuffer(),
               let drawable = view.currentDrawable,
               let descriptor = view.currentRenderPassDescriptor else { return }
@@ -54,7 +61,10 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         }
         encoder.endEncoding()
 
-        guard snapshot.0.policy == .active || snapshot.0.policy.isThrottled,
+        guard snapshot.0 == .active || snapshot.0.isThrottled,
+              let coordinateSnapshot = snapshot.1,
+              coordinateSnapshot.drawableSize.width == drawable.texture.width,
+              coordinateSnapshot.drawableSize.height == drawable.texture.height,
               let frame = presentationSource.currentFrame() else {
             commandBuffer.present(drawable)
             commandBuffer.commit()
@@ -68,10 +78,9 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         )
         let image = positioned(
             CIImage(cvPixelBuffer: frame.pixelBuffer),
-            in: bounds,
-            mode: snapshot.0.transform.mode
+            using: coordinateSnapshot.resolvedVideo
         )
-        snapshot.2?.render(
+        snapshot.3?.render(
             image,
             to: drawable.texture,
             commandBuffer: commandBuffer,
@@ -90,27 +99,20 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
 
     private func positioned(
         _ image: CIImage,
-        in bounds: CGRect,
-        mode: RenderScaleMode
+        using resolvedVideo: ResolvedVideoRectangle
     ) -> CIImage {
         guard image.extent.width > 0,
-              image.extent.height > 0,
-              bounds.width > 0,
-              bounds.height > 0 else { return image }
-        let horizontalScale = bounds.width / image.extent.width
-        let verticalScale = bounds.height / image.extent.height
-        let scale = mode == .fit
-            ? min(horizontalScale, verticalScale)
-            : max(horizontalScale, verticalScale)
-        let scaledWidth = image.extent.width * scale
-        let scaledHeight = image.extent.height * scale
-        let translationX = bounds.midX - scaledWidth / 2 - image.extent.minX * scale
-        let translationY = bounds.midY - scaledHeight / 2 - image.extent.minY * scale
+              image.extent.height > 0 else { return image }
+        let videoRect = resolvedVideo.videoRect
+        let horizontalScale = videoRect.width / image.extent.width
+        let verticalScale = videoRect.height / image.extent.height
+        let translationX = videoRect.minX - image.extent.minX * horizontalScale
+        let translationY = videoRect.minY - image.extent.minY * verticalScale
         return image.transformed(by: CGAffineTransform(
-            a: scale,
+            a: horizontalScale,
             b: 0,
             c: 0,
-            d: scale,
+            d: verticalScale,
             tx: translationX,
             ty: translationY
         ))
@@ -165,10 +167,10 @@ struct MetalStreamSurface: NSViewRepresentable {
         case .idle, .paused:
             view.isPaused = true
         }
-        if state.transform.drawableSize.width > 0, state.transform.drawableSize.height > 0 {
+        if let snapshot = state.coordinateSnapshot {
             view.drawableSize = CGSize(
-                width: state.transform.drawableSize.width,
-                height: state.transform.drawableSize.height
+                width: snapshot.drawableSize.width,
+                height: snapshot.drawableSize.height
             )
         }
         if let layer = view.layer as? CAMetalLayer {
@@ -211,6 +213,12 @@ struct MetalStreamSurface: UIViewRepresentable {
             view.preferredFramesPerSecond = 15
         case .idle, .paused:
             view.isPaused = true
+        }
+        if let snapshot = renderState.coordinateSnapshot {
+            view.drawableSize = CGSize(
+                width: snapshot.drawableSize.width,
+                height: snapshot.drawableSize.height
+            )
         }
         if let layer = view.layer as? CAMetalLayer {
             DisplayHeadroomReader.configure(layer, forHDRStream: renderState.headroom.supportsEDR)

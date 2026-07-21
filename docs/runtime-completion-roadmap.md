@@ -35,7 +35,7 @@ flowchart LR
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
-| 14 | `in_progress`，OpenSpec `2/29` | 已有AppKit window通知和平台input adapter类型；完成AppKit合同清单与immutable revisioned fit/fill geometry resolver | 尚未让renderer/mapper共享snapshot，也未把真实`NSEvent`/cursor capture/focus release接入active remote input与decoder生命周期 |
+| 14 | `in_progress`，OpenSpec `3/29` | 已有AppKit window通知和平台input adapter类型；完成AppKit合同、immutable revisioned fit/fill geometry resolver与renderer/input共享snapshot | 尚未补完整backing/resize/stale矩阵，也未把真实`NSEvent`/cursor capture/focus release接入active remote input与decoder生命周期 |
 | 15 | `pending` | 已保留bit depth/colorspace/MDCV/CLL并读取display headroom | 尚无10-bit EDR输出、PQ映射、tone mapping或跨屏硬件验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
@@ -61,7 +61,7 @@ flowchart LR
 ## 阶段 14：macOS 原生输入与生命周期
 
 - `docs/runtime/macos-input-lifecycle-contract.md`是AppKit输入、键码翻译、cursor平衡、坐标revision和多窗口generation所有权的实现合同；`NSEvent.keyCode`禁止直接写入远端wire。
-- `StreamCoordinateSnapshotPublisher`只在source/drawable/mode变化时递增revision，无效geometry或revision溢出清空snapshot；`StreamVideoRectangleResolver`统一产出fit letterbox与fill source crop。renderer/mapper消费接线属于后续1.3。
+- `StreamCoordinateSnapshotPublisher`只在source/drawable/mode变化时递增revision，无效geometry或revision溢出清空snapshot；`StreamVideoRectangleResolver`统一产出fit letterbox与fill source crop。`StreamMetalPresenter`与`InputMapper`现消费同一个immutable snapshot，texture尺寸与snapshot不一致时只清屏，fit黑边输入直接拒绝。
 - 把 `AppKitLifecycleMonitor` 输出同时接入 renderer、decoder、frame queue 和 input capture。
 - occluded/minimized 时停止 drawable acquisition 和帧提交，降低或暂停解码，但保持可恢复的 session/control 状态。
 - `didBecomeKey` 后按用户设置启用远程鼠标；`didResignKey` 立即显示系统鼠标并发送 held key/button release。

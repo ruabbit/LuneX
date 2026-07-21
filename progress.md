@@ -794,3 +794,11 @@
 - 新增`StreamCoordinateSnapshotTests`并同步generator/project；focused Swift 6/Clang warnings-as-errors测试通过`6/6`，无skip，结果`/tmp/LuneX-14-1_2-focused.v2yyeb/StreamCoordinateSnapshot.xcresult`。所有测试显式`env -u LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV和固定Apple Vision Pro Debug warnings-as-errors隔离构建全部通过，证据根目录`/tmp/LuneX-14-1_2-platforms.behknb`；只执行build，没有创建、boot或运行simulator。构建前后四个固定UUID均唯一且为`Shutdown`，全局Booted计数为0。
 - OpenSpec 1.2标记完成，权威进度`2/29`。resolver尚未接入renderer或`InputMapper`，生产letterbox拒绝和共享rectangle仍待1.3；下一项为1.3消费接线。
+
+## 2026-07-21 阶段 14 任务 1.3 完成
+
+- `StreamRenderState`接管revisioned snapshot publisher；`StreamMetalPresenter`锁内只保存render policy与immutable snapshot，按共享`resolvedVideo.videoRect`定位画面，并在snapshot drawable与真实texture尺寸不一致时clear-only。`InputMapper`、macOS与touch adapter改为消费同一snapshot，fit黑边拒绝且fill按共享crop映射。
+- focused Swift 6 warnings-as-errors gate首轮因浮点exact断言和缺source geometry的测试前置失败，修正测试后通过`17/17`，结果`/tmp/LuneX-14-1_3-focused-r2.849jv5/SharedCoordinateContract.xcresult`。完整macOS gate通过`375 total / 374 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-1_3-full.1e0xb6/LuneXCoreTests.xcresult`；全部测试使用`env -u LUNEX_RUN_KEYCHAIN_TEST`。
+- 首次五平台build误用不存在的`LuneX` scheme，在编译与simulator运行前一致终止；枚举工程后改用四个实际App scheme。macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV与固定Apple Vision Pro Debug warnings-as-errors构建全部通过，隔离根目录前缀`/tmp/LuneX-14-1_3-platforms-r2.*`。
+- 构建前后固定simulator均唯一、available且`Shutdown`，全局Booted为0；未create、boot或run simulator。全部5个OpenSpec change strict通过，generator前后project SHA-256同为`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`，whitespace、旧mapper transform扫描与production/reference边界通过。
+- OpenSpec 1.3标记完成，权威进度`3/29`。本任务不证明AppKit backing conversion、完整resize/stale revision矩阵或live Sunshine输入；下一项为1.4确定性坐标测试矩阵。

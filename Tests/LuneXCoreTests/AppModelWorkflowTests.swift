@@ -87,11 +87,13 @@ final class AppModelWorkflowTests: XCTestCase {
         lifecycle.drawableSize = PixelSize(width: 2560, height: 1440)
         lifecycle.headroom = DisplayHeadroom(potential: 2.0, current: 1.5, reference: 1.0)
         lifecycle.updateRenderPolicy()
+        model.renderState.transform.sourceSize = PixelSize(width: 1920, height: 1080)
 
         model.applyPlatformLifecycle(lifecycle)
 
         XCTAssertEqual(model.renderState.policy, .throttled(reason: "Window or scene not focused"))
         XCTAssertEqual(model.renderState.transform.drawableSize, PixelSize(width: 2560, height: 1440))
+        XCTAssertEqual(model.renderState.coordinateSnapshot?.drawableSize, PixelSize(width: 2560, height: 1440))
         XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
     }
 

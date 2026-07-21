@@ -96,6 +96,25 @@ final class StreamCoordinateSnapshotTests: XCTestCase {
         XCTAssertNil(publisher.snapshot)
     }
 
+    func testRenderStatePublishesImmutableSnapshotForTransformChanges() throws {
+        let state = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 1920, height: 1080),
+            drawableSize: PixelSize(width: 800, height: 600),
+            mode: .fit
+        ))
+        let first = try XCTUnwrap(state.coordinateSnapshot)
+
+        state.transform.drawableSize = PixelSize(width: 1600, height: 900)
+        let resized = try XCTUnwrap(state.coordinateSnapshot)
+        state.transform.drawableSize = .zero
+
+        XCTAssertEqual(first.revision, 1)
+        XCTAssertEqual(first.drawableSize, PixelSize(width: 800, height: 600))
+        XCTAssertEqual(resized.revision, 2)
+        XCTAssertEqual(resized.drawableSize, PixelSize(width: 1600, height: 900))
+        XCTAssertNil(state.coordinateSnapshot)
+    }
+
     private func assertRect(
         _ rect: StreamCoordinateRect,
         x: Double,

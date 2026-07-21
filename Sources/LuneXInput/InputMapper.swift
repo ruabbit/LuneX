@@ -1,36 +1,25 @@
 import Foundation
 
 struct InputMapper: Sendable {
-    var transform: RenderTransform
+    let snapshot: StreamCoordinateSnapshot
 
     func remotePoint(localX: Double, localY: Double) -> RemotePoint? {
-        guard transform.drawableSize.width > 0,
-              transform.drawableSize.height > 0,
-              transform.sourceSize.width > 0,
-              transform.sourceSize.height > 0
-        else { return nil }
-
-        let drawableWidth = Double(transform.drawableSize.width)
-        let drawableHeight = Double(transform.drawableSize.height)
-        let sourceWidth = Double(transform.sourceSize.width)
-        let sourceHeight = Double(transform.sourceSize.height)
-        let scale: Double
-
-        switch transform.mode {
-        case .fit:
-            scale = min(drawableWidth / sourceWidth, drawableHeight / sourceHeight)
-        case .fill:
-            scale = max(drawableWidth / sourceWidth, drawableHeight / sourceHeight)
+        let localPoint = StreamCoordinatePoint(x: localX, y: localY)
+        let resolved = snapshot.resolvedVideo
+        guard resolved.drawableBounds.contains(localPoint),
+              resolved.videoRect.contains(localPoint) else {
+            return nil
         }
 
-        let videoWidth = sourceWidth * scale
-        let videoHeight = sourceHeight * scale
-        let originX = (drawableWidth - videoWidth) / 2.0
-        let originY = (drawableHeight - videoHeight) / 2.0
-        let clampedX = min(max(localX, originX), originX + videoWidth) - originX
-        let clampedY = min(max(localY, originY), originY + videoHeight) - originY
-
-        return RemotePoint(x: clampedX / scale, y: clampedY / scale)
+        let sourceWidth = Double(snapshot.sourceSize.width)
+        let sourceHeight = Double(snapshot.sourceSize.height)
+        let sourceX = (localX - resolved.videoRect.minX) / resolved.scale
+        let sourceY = (localY - resolved.videoRect.minY) / resolved.scale
+        guard sourceX.isFinite, sourceY.isFinite else { return nil }
+        return RemotePoint(
+            x: min(max(sourceX, 0), sourceWidth),
+            y: min(max(sourceY, 0), sourceHeight)
+        )
     }
 }
 
