@@ -323,3 +323,14 @@
 - production propagation 现在覆盖 codec selection、session-scoped provider state、`SessionControlEvent`、`StreamSessionSnapshot`、negotiated configuration、decoder generation、decoded frame 与 Metal mapped frame；动态 update 先验证临时 configuration 再原子提交，reconnect 清除旧 metadata/configuration。
 - 5.6 focused gate `50/50`；完整 macOS warnings-as-errors tests `211 total / 210 passed / 1 explicit Keychain skip / 0 failed`。macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build、fixture/OpenSpec/generator/reference/ENet/四 SDK C syntax gates 均通过，固定 simulators 构建前后保持 `Shutdown`。
 - 该证据只证明 colorspace、bit depth 与 HDR static metadata 的正确保留，不证明 format-change/reset/IDR、EDR layer metadata、YUV-to-RGB/PQ shader、tone mapping、AppModel presentation 或 live Sunshine sustained video；这些边界继续由 5.7、5.8、8.x 与阶段 15承担。
+
+### 2026-07-21 阶段 13 Video Reset 与 IDR 协调设计
+
+- 5.1 assembler 已把 superseded、timeout、capacity、metadata conflict 和 malformed frame统一发布为 `requiresIDR` loss；5.4 decoder已能 generation-isolated drain/invalidate并发布 callback drop/failure；4.4 control provider已能发送 urgent IDR。当前缺口是没有 session-owned actor把三者组合，因此 packet loss之后仍可能把预测帧交给旧 decoder，也没有 production format-change ownership。
+- 5.7 将只在 `instantaneousDecoderRefresh` access unit上解析 H.264/HEVC parameter sets。首次 IDR或 parameter sets/bit-depth/HDR metadata变化时 drain旧 decoder并创建新 generation；相同 parameter sets与metadata的后续 IDR继续使用现有 session，避免无意义 reset。
+- assembler loss、active-generation decoder drop/failure或 metadata change会同步进入 awaiting-IDR状态并停止当前 decoder；等待期间所有非 IDR access unit均丢弃。重复 loss/drop只合并为一个 outstanding IDR request，收到并成功提交合法 IDR后才恢复预测帧。
+- 显式 stop必须在任何 suspension前锁定 stopped lifecycle、停止 decoder、detach event bridge并使迟到 IDR request completion/decoder callback不能重建 session。5.7 只证明确定性 fixture/runtime coordination，不证明网络 video receive provider、真实 Sunshine sustained decode或实际 drawable presentation。
+- 5.7 最终实现新增 session-owned `VideoDecodePipeline` 和精确 session-ID 的 control IDR adapter。首个合法 IDR 创建 generation；相同 parameter sets/metadata 的 IDR 复用；parameter set、bit depth 或 HDR metadata 变化先 drain/stop，下一 IDR 才建立新 generation。loss/drop 请求失败后可重试，重复事件只保留一个 outstanding IDR。
+- 96x64 H.264 format-change fixture 由本机 libx264 合成、移除 encoder SEI，并由 FFmpeg 与 CoreMedia 独立确认；它不含 host、用户、Keychain 或网络数据。staged audit另发现 decoder session创建挂起期间 `stop()` 可被迟到 IDR continuation覆盖，现已在 replace/decode异步边界后校验 lifecycle token，并加入确定性停止竞态回归。
+- 最终 pipeline-specific gate `10/10`，完整 macOS gate `221 total / 220 passed / 1 explicit Keychain skip / 0 failed`。修改后的五平台 warnings-as-errors build、fixture/OpenSpec/generator/reference/dependency/ENet/四 SDK C syntax门禁均通过，固定simulators前后保持 `Shutdown`。
+- macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build全部通过，构建后四个 simulator保持 `Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四 SDK C syntax门禁全部通过。该证据仍不等于 video socket provider、AppModel presentation、EDR mapping 或 live Sunshine sustained video。

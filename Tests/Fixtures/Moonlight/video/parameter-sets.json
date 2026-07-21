@@ -3,6 +3,9 @@
     "accessUnitHex": "00 00 00 01 67 42 c0 1f dc 42 6c 04 40 00 00 03 00 40 00 00 1e 23 c6 0c e0 00 00 00 01 68 ce 0f c8 00 00 00 01 65 88 84 3a 26 28 00 09 02 c9 c9 c9 d7 5d 75 d7 5d 75 d7 5d 75 e0",
     "expectedHeight": 64,
     "expectedWidth": 64,
+    "formatChangeAccessUnitHex": "00 00 00 01 67 42 c0 0a dc 62 6c 04 40 00 00 03 00 40 00 00 1e 23 c4 89 e0 00 00 00 01 68 ce 0f c8 00 00 01 65 88 84 3a 26 28 00 09 02 c9 c9 c9 c9 c9 d7 5d 75 d7 5d 75 d7 5d 75 d7 5d 75 e0",
+    "formatChangeExpectedHeight": 64,
+    "formatChangeExpectedWidth": 96,
     "pictureParameterSetHex": "68 ce 0f c8",
     "sequenceParameterSetHex": "67 42 c0 1f dc 42 6c 04 40 00 00 03 00 40 00 00 1e 23 c6 0c e0"
   },
@@ -14,6 +17,6 @@
     "sequenceParameterSetHex": "42 01 01 04 08 00 00 03 00 9d a8 00 00 03 00 00 ff a0 20 81 04 d9 6e 92 93 0b c0 5a 02 00 00 03 00 02 00 00 03 00 78 10",
     "videoParameterSetHex": "40 01 0c 01 ff ff 04 08 00 00 03 00 9d a8 00 00 03 00 00 ff ba 02 40"
   },
-  "origin": "repository-generated from one 64x64 black frame encoded by local libx264 and libx265; encoder SEI removed; independently decoded with FFmpeg; no host data",
-  "schemaVersion": 2
+  "origin": "repository-generated from 64x64 and 96x64 black frames encoded by local libx264 and libx265; encoder SEI removed; independently decoded with FFmpeg; no host data",
+  "schemaVersion": 3
 }

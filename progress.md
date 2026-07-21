@@ -381,3 +381,20 @@
 - macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
 - fixture validator self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定 ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。首次 C gate 的 zsh 标量文件列表错误已记录，并以数组逐文件复验通过。
 - OpenSpec 5.6 更新为完成，权威进度 `30/61`；下一项为 5.7 format-change、decoder-reset、IDR-request、dropped-frame 与 teardown tests。EDR/tone mapping、AppModel presentation 和 live Sunshine sustained video仍保持未完成。
+
+## 2026-07-21 阶段 13 任务 5.7 启动
+
+- 5.6 已以 `618d556 Preserve video color metadata` 独立提交并推送，确认 `HEAD == origin/main`、工作树 clean 后进入 5.7。
+- 盘点确认 assembler loss、generation-owned VideoToolbox decoder、Metal generation queue和 urgent control IDR接口均已存在，但没有 production coordinator负责 loss/format/metadata change后的 drain、IDR coalescing、预测帧阻断与恢复。
+- 5.7 范围限定为 session-owned video decode/reset coordinator及 format-change、decoder reset、IDR request、dropped frame、teardown race确定性测试；video socket接入、AppModel presentation和授权 live Sunshine sustained video仍分别属于后续 8.x、5.8。
+- 新增 `VideoDecodePipeline` 与 control-provider IDR adapter：首次/变化 IDR创建 generation，相同参数集复用 session；loss/drop/metadata change停止旧 generation、合并 outstanding IDR并阻断预测帧；stop在 suspension前锁定 lifecycle并 detach callback bridge。
+- 新增 96x64 repository-generated H.264 format-change fixture，encoder SEI已移除；FFmpeg独立解码通过，CoreMedia解析为预期 96x64。expanded focused warnings-as-errors gate `43/43` 通过，其中 8 项新 pipeline tests覆盖参数变化、IDR coalescing、metadata reset、decoder drop、session-ID routing、重复 stop、迟到 callback与 in-flight IDR teardown race。
+
+## 2026-07-21 阶段 13 任务 5.7 完成
+
+- 新增 session-owned `VideoDecodePipeline` 与 `SessionControlVideoIDRRequester`：首个合法 IDR 建立 decoder generation，相同 parameter sets/metadata复用；format、bit depth或HDR metadata变化先停止旧 generation，等待下一 IDR重建。loss/drop期间阻断预测帧并合并 outstanding IDR，发送失败允许后续重试。
+- staged audit发现 decoder session创建挂起时，`stop()` 虽先锁定stopped状态，迟到的IDR continuation仍可能重写active generation；现已在decoder replace/decode每个异步边界后校验lifecycle token，并新增挂起factory回归。Swift 6首次因Task闭包捕获XCTest `self`拒绝编译，改为Task前构造Sendable access unit后通过。
+- pipeline-specific最终回归为 `10/10`；修改后完整 macOS warnings-as-errors gate `221 total / 220 passed / 1 skipped / 0 failed`，唯一skip仍为显式opt-in真实Keychain round-trip，本轮通过 `env -u LUNEX_RUN_KEYCHAIN_TEST` 未再次访问Keychain。
+- macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build全部通过；原构建会话真实退出 `0`，四个 simulator构建后均为 `Shutdown`，未创建或boot新实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定 ENet revision/license/source/header逐文件比对和macOS/iOS Simulator/tvOS Simulator/visionOS Simulator strict C syntax gates全部通过。
+- OpenSpec 5.7更新为完成，权威进度 `31/61`。5.8需要授权 live Sunshine持续解码与clean stop证据，当前保持未完成；下一项可离线执行任务为6.1 bounded audio packet ordering与jitter-buffer policy。video socket/AppModel wiring、EDR mapping和live sustained video仍未声称完成。

@@ -95,6 +95,7 @@ sources = [
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXNetworking/VideoCodecSelection.swift",
   "Sources/LuneXNetworking/VideoColorMetadata.swift",
+  "Sources/LuneXNetworking/VideoDecodePipeline.swift",
   "Sources/LuneXNetworking/VideoDecompressionSession.swift",
   "Sources/LuneXNetworking/VideoFormatDescription.swift",
   "Sources/LuneXNetworking/VideoPacketAssembly.swift",
@@ -150,6 +151,7 @@ test_support_sources = [
   "Sources/LuneXNetworking/StreamNegotiation.swift",
   "Sources/LuneXNetworking/VideoCodecSelection.swift",
   "Sources/LuneXNetworking/VideoColorMetadata.swift",
+  "Sources/LuneXNetworking/VideoDecodePipeline.swift",
   "Sources/LuneXNetworking/VideoDecompressionSession.swift",
   "Sources/LuneXNetworking/VideoFormatDescription.swift",
   "Sources/LuneXNetworking/VideoPacketAssembly.swift",
@@ -188,6 +190,7 @@ test_sources = [
   "Tests/LuneXCoreTests/StreamNegotiationTests.swift",
   "Tests/LuneXCoreTests/VideoCodecSelectionTests.swift",
   "Tests/LuneXCoreTests/VideoColorMetadataTests.swift",
+  "Tests/LuneXCoreTests/VideoDecodePipelineTests.swift",
   "Tests/LuneXCoreTests/VideoDecompressionSessionTests.swift",
   "Tests/LuneXCoreTests/VideoFormatDescriptionTests.swift",
   "Tests/LuneXCoreTests/VideoPacketAssemblyTests.swift"

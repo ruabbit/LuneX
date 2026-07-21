@@ -44,7 +44,7 @@
 - [x] 5.4 Implement VideoToolbox decompression-session ownership and callback-to-actor bridging
 - [x] 5.5 Implement zero-copy CVPixelBuffer-to-Metal texture delivery with a bounded frame queue
 - [x] 5.6 Preserve negotiated colorspace, bit depth, mastering, and content-light metadata for the later HDR change
-- [ ] 5.7 Implement format-change, decoder-reset, IDR-request, dropped-frame, and teardown tests
+- [x] 5.7 Implement format-change, decoder-reset, IDR-request, dropped-frame, and teardown tests
 - [ ] 5.8 Prove sustained decoded video and clean stop on the authorized Sunshine test host
 
 ## 6. Native audio runtime

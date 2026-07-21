@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `30/61`：5.6 negotiated colorspace、bit depth、mastering 与 content-light metadata preservation 已完成独立验收，下一项为 5.7 format-change、decoder-reset、IDR-request、dropped-frame 与 teardown tests；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `31/61`：5.7 format-change、decoder-reset、IDR-request、dropped-frame 与 teardown 已完成独立验收。5.8 需要授权 live Sunshine sustained-video 证据，当前保持未完成；下一项可离线执行任务为 6.1 bounded audio packet ordering 与 jitter-buffer policy，阶段 13 仍为 `in_progress`。
 
-5.6 已实现 Rec.709/HDR10 typed contract、Sunshine `0x010E` mastering/content-light payload、Apple MDCV/CLL encoding，以及 provider/snapshot/config/decoder/Metal frame 的 immutable metadata propagation；format reset/IDR、EDR/tone mapping、AppModel wiring 和 live sustained video仍分别属于 5.7、阶段 15、8.x 与 5.8。
+5.7 已实现 session-owned `VideoDecodePipeline`：首个/变化 IDR 建立或重建 VideoToolbox generation，loss/drop/metadata change停止旧 generation、合并 IDR request 并阻断预测帧，stop 与迟到 callback/in-flight request 确定性收敛。EDR/tone mapping、AppModel video-provider wiring 和 live sustained video仍分别属于阶段 15、8.x 与 5.8。
 
 ## 遇到的错误
 
@@ -114,3 +114,7 @@
 | 5.6 focused compile 的 CoreMedia extension 测试使用 `as? CFString` 触发 always-succeeds warning | 1 | 在 warnings-as-errors 下改为通过 Foundation `String` bridge 比较 CoreMedia 常量，不屏蔽 Swift 6 诊断 |
 | 5.6 四 SDK C syntax 脚本再次把 vendor 文件列表放入 zsh 标量 | 1 | 改为 zsh 数组并逐文件调用 clang，避免把整串文件名作为一个路径；不修改 pinned vendor source |
 | 5.6 清理脚本使用 zsh 特殊变量名 `path`，覆盖 `PATH` 后找不到 `find` | 1 | 改用普通循环变量 `artifact`，继续只删除限定的 `.derived-data/5-6-*` 产物 |
+| 5.7 focused compile 在 XCTest autoclosure 内直接调用 `try await` | 1 | 先 await loss/metadata update结果到局部值，再传给同步 `XCTAssertEqual`，保持 Swift 6 warnings-as-errors |
+| 5.7 封版脚本的 zsh `${...}` 被外层 JavaScript 模板误解析 | 1 | 命令在 shell 启动前失败且未改动仓库；改用 `read -r sdk triple` 避免嵌套模板插值后再执行同一门禁 |
+| 5.7 staged audit发现 decoder session创建期间 stop可被迟到IDR恢复覆盖 | 1 | 在decoder replace/decode异步边界后校验pipeline lifecycle token，并增加session创建挂起时stop先锁定的确定性回归 |
+| 5.7 teardown竞态回归的 `Task` 闭包捕获非Sendable XCTest `self` | 1 | 在创建并发Task前同步构造access unit，闭包只捕获Sendable value与pipeline actor后复验 |
