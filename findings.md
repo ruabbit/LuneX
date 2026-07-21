@@ -351,3 +351,12 @@
 - 最终production decoder使用actor隔离的`AudioConverter`和窄`@unchecked Sendable` RAII owner；reset/close确定性，close幂等，closed/invalid payload/configuration均fail closed，OSStatus只以数值进入结构化错误。
 - synthetic stereo与Sunshine 5.1/7.1 normal/HQ四种multistream packet均通过production AudioToolbox实际解码并产生非静音PCM；focused `8/8`、expanded audio/RTSP/runtime `31/31`、完整macOS `240 total / 239 passed / 1 explicit Keychain skip / 0 failed`。
 - macOS、固定iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build全部通过，构建后四个simulator保持`Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四SDK C syntax门禁全部通过。该证据证明Opus-to-PCM边界，不证明AVAudioEngine scheduling、A/V sync、route handling或audible live output。
+
+### 2026-07-21 阶段 13 AVAudioEngine Graph 设计
+
+- `AVAudioPlayerNode.scheduleBuffer`的`.dataConsumed` completion只表示player已消费buffer data，适合释放queue ownership，不等于声音已经由硬件播放；audible/route证据必须保留给6.7。
+- 6.3使用48 kHz interleaved signed Int16 `AVAudioPCMBuffer`，直接连接player到main mixer；每包最大5760 frames、actor默认最多8个scheduled buffers。容量满时显式fail closed，不在本任务静默drop或冒充packet-loss concealment。
+- 每个schedule绑定pipeline generation与token；stop/reconfigure先推进generation并清空计数，旧AudioToolbox completion迟到后不能修改replacement graph状态。
+- 最终production client在configure时attach player并连接main mixer，start后启动engine/player，stop时停止player/engine、reset并清除configuration；pipeline失败reconfigure会停止partial graph、清空old queue/config/route，不能从failed/stopped状态直接restart。
+- byte-exact PCM factory回读、bounded scheduling、completion释放、late completion、backend failure transactional rollback、failed replacement和production graph construction均有回归。focused decoder+graph gate`18/18`，完整macOS gate`247 total / 246 passed / 1 explicit Keychain skip / 0 failed`。
+- macOS、固定iPhone/iPad/tvOS/visionOS最终warnings-as-errors Debug build与全部静态门禁通过；四个simulator保持`Shutdown`。该证据不证明A/V sync、route/interruption、loss concealment或audible hardware output。

@@ -429,3 +429,18 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator构建前后均为`Shutdown`，没有创建或boot新实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header和四SDK strict C syntax gates全部通过。
 - OpenSpec 6.2更新为完成，权威进度`33/61`。下一项为6.3 session-owned AVAudioEngine graph；6.2不证明PCM scheduling、A/V sync、route/interruption/underrun处理或audible live output。
+
+## 2026-07-21 阶段 13 任务 6.3 启动
+
+- 6.2已以`be5d98f Decode Opus with AudioToolbox`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`33/61`后进入6.3。
+- 现有`AVAudioEngineClient`只prepare/start空engine，未包含player node、PCM conversion或schedule。6.3限定为session-owned player-to-main-mixer graph、bounded PCM scheduling、completion与teardown ownership；A/V clock、route/interruption、underrun/loss继续属于6.4-6.5，audible hardware证据属于6.7。
+
+## 2026-07-21 阶段 13 任务 6.3 完成
+
+- production `AVAudioEngineClient`现在attach `AVAudioPlayerNode`并以48 kHz interleaved signed Int16 format连接main mixer；`AVAudioPCMBufferFactory`在1...5760 frames、1...8 channels和exact sample count边界内byte-exact复制decoded PCM。
+- `AudioSessionPipeline`默认拥有production client，最多保留8个scheduled buffers；每个schedule携带generation/token，`.dataConsumed` completion只释放对应ownership。stop/reconfigure推进generation并清空队列，迟到completion不能污染replacement graph。
+- staged audit修复失败reconfigure保留旧configuration并允许restart的问题；configure failure现在停止partial graph并清空queue/config/route，start只接受configured/running。backend schedule failure transactional rollback，production client stop后也拒绝绕过actor直接schedule。
+- focused decoder+graph warnings-as-errors gate`18/18`；expanded audio/RTSP/runtime/resource gate在新增最终边界前为`42/42`，最终完整macOS gate覆盖全部新增回归并为`247 total / 246 passed / 1 skipped / 0 failed`，唯一skip仍是真实Keychain opt-in。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro最终warnings-as-errors Debug build全部通过；四个simulator前后均为`Shutdown`，没有创建或boot新实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header和四SDK strict C syntax gates全部通过。
+- OpenSpec 6.3更新为完成，权威进度`34/61`。下一项为6.4 A/V clock与bounded resynchronization；6.3不证明同步、route/interruption/loss handling或audible live output。

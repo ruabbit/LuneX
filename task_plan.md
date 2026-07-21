@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `33/61`：6.2 approved AudioToolbox Opus decode与PCM format conversion已完成独立验收。5.8仍需要授权live Sunshine sustained-video证据并保持未完成；下一项为6.3 session-owned AVAudioEngine graph，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `34/61`：6.3 session-owned AVAudioEngine graph已完成独立验收。5.8仍需要授权live Sunshine sustained-video证据并保持未完成；下一项为6.4 audio/video clock selection、drift measurement与bounded resynchronization，阶段13仍为 `in_progress`。
 
-6.2已实现actor-owned `AudioToolboxOpusDecoder`：从negotiated mono/stereo/multistream configuration生成bounded `OpusHead`，输出48 kHz interleaved signed Int16 PCM并保留实际frame count、sequence与RTP timestamp。AVAudioEngine scheduling、A/V clock与route/interruption/underrun仍分别属于6.3-6.5。
+6.3已实现session-owned `AudioSessionPipeline` production graph：48 kHz interleaved signed Int16 PCM经`AVAudioPlayerNode`进入main mixer，scheduled buffer有界并以generation/token隔离迟到completion。A/V clock与route/interruption/underrun仍分别属于6.4-6.5。
 
 ## 遇到的错误
 
@@ -122,3 +122,6 @@
 | 6.1 checked-arithmetic补丁错误混入跨文件测试上下文 | 1 | `apply_patch` 整体拒绝且未产生修改；拆成production/test/plan精确file section后重新应用 |
 | 6.1 policy由未上限的 `samplesPerFrame` 直接计算纳秒可能整数溢出 | 1 | 使用 `multipliedReportingOverflow` 计算packet cadence/target/deadline，极端negotiated配置结构化fail closed |
 | 6.2 actor `deinit` 读取non-Sendable `AudioConverterRef`被Swift 6拒绝 | 1 | 用窄 `@unchecked Sendable` RAII owner封装opaque pointer并在owner deinit dispose；actor只持有/清空owner |
+| 6.3 `AVAudioPCMBuffer` factory在设置`frameLength`前读取`mDataByteSize`得到0 | 1 | 先把已验证且不超过capacity的frame count写入`frameLength`，再验证mutable buffer byte capacity并拷贝样本 |
+| 6.3 audit发现失败reconfigure保留旧configuration且允许再次start | 1 | configure failure停止partial graph、清空queue/configuration/route；start仅接受configured或running stage，并补replacement failure回归 |
+| 6.3 final audit发现stream config和production client stop边界过宽 | 1 | pipeline/client双层只接受48 kHz、1...8 channels；client stop清空configuration，禁止停止后绕过actor直接schedule |
