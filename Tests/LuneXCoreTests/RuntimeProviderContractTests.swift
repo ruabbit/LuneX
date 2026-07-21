@@ -85,8 +85,7 @@ final class RuntimeProviderContractTests: XCTestCase {
                 width: 3_840,
                 height: 2_160,
                 frameRate: 60,
-                bitDepth: 10,
-                isHDR: true,
+                colorMetadata: .hdr10VideoRange(),
                 maximumPacketSize: 1_400
             ),
             audio: makeAudio(channels: 2, streams: 1, coupled: 1),

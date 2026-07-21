@@ -62,6 +62,7 @@ final class RTSPBootstrapTests: XCTestCase {
     }
 
     func testBootstrapSetsUpAndPublishesControlReadinessWithoutClaimingAllChannels() async throws {
+        let sessionID = UUID()
         let launchResponse = StreamLaunchResponse(
             sessionURL: "rtsp://moon.local/session",
             gameSessionID: "session-1",
@@ -70,7 +71,10 @@ final class RTSPBootstrapTests: XCTestCase {
         let launchClient = BootstrapStubLaunchClient(response: launchResponse)
         let connection = BootstrapStubRTSPConnection(responses: [
             response(cSeq: "1"),
-            response(cSeq: "2", body: Data("v=0\r\na=x-ss-general.featureFlags:0\r\n".utf8)),
+            response(
+                cSeq: "2",
+                body: Data("v=0\r\na=x-ss-general.featureFlags:0\r\nsprop-parameter-sets=AAAAAU\r\n".utf8)
+            ),
             setupResponse(cSeq: "3", session: "session-token", port: 48_000),
             setupResponse(cSeq: "4", session: "session-token", port: 47_998),
             setupResponse(
@@ -80,26 +84,52 @@ final class RTSPBootstrapTests: XCTestCase {
                 connectData: 0x1234_5678
             )
         ])
+        let hdrMode = SunshineHDRModeMetadata(
+            isEnabled: true,
+            masteringDisplay: VideoMasteringDisplayMetadata(
+                displayPrimaries: [
+                    VideoChromaticityPoint(x: 34_000, y: 16_000),
+                    VideoChromaticityPoint(x: 13_250, y: 34_500),
+                    VideoChromaticityPoint(x: 7_500, y: 3_000)
+                ],
+                whitePoint: VideoChromaticityPoint(x: 15_635, y: 16_450),
+                maximumDisplayLuminanceNits: 1_000,
+                minimumDisplayLuminanceTenThousandths: 5
+            ),
+            contentLight: VideoContentLightMetadata(
+                maximumContentLightLevelNits: 1_200,
+                maximumFrameAverageLightLevelNits: 400
+            ),
+            maximumFullFrameLuminanceNits: 500
+        )
+        let expectedColorMetadata = try hdrMode.colorMetadata()
         let control = BootstrapStubControlChannel(events: [
+            .hdrMode(hdrMode),
             .terminated(HostTerminationReason(code: 0x8003_0023, kind: .graceful))
         ])
         let provider = MoonlightSessionControlProvider(
             launchClient: launchClient,
             connection: connection,
-            controlChannel: control
+            controlChannel: control,
+            videoCodecSelectionPolicy: VideoCodecSelectionPolicy(
+                capabilityProvider: BootstrapVideoDecoderCapabilities([.hevc])
+            )
         )
 
         let events = try await collect(await provider.start(
-            sessionID: UUID(),
-            request: makeRequest()
+            sessionID: sessionID,
+            request: makeRequest(supportsHDR: true)
         ))
 
         XCTAssertEqual(events, [
             .launchAccepted(launchResponse),
             .rtspReady,
             .channelsReady(.control),
+            .videoColorMetadata(expectedColorMetadata),
             .terminated(reason: "The host ended the streaming session.")
         ])
+        let preservedColorMetadata = await provider.videoColorMetadata(sessionID: sessionID)
+        XCTAssertEqual(preservedColorMetadata, expectedColorMetadata)
         let requests = await connection.recordedRequests()
         XCTAssertEqual(requests.map(\.method), ["OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP"])
         XCTAssertEqual(requests.map(\.target), [
@@ -189,8 +219,10 @@ final class RTSPBootstrapTests: XCTestCase {
             request: makeRequest()
         ))
         let selection = await provider.videoCodecSelection(sessionID: sessionID)
+        let colorMetadata = await provider.videoColorMetadata(sessionID: sessionID)
 
         XCTAssertEqual(selection?.codec, .hevc)
+        XCTAssertEqual(colorMetadata, .rec709VideoRange())
         XCTAssertEqual(
             selection?.disposition,
             .fallback(from: .av1, reason: .unsupportedByDevice(.av1))

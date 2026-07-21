@@ -17,6 +17,10 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
                 : (.r16Unorm, .rg16Unorm)
 
             XCTAssertTrue(mapped.decodedFrame.pixelBuffer === frame.pixelBuffer)
+            XCTAssertEqual(
+                mapped.decodedFrame.colorMetadata,
+                codec == .h264 ? .rec709VideoRange() : .hdr10VideoRange()
+            )
             XCTAssertEqual(mapped.luma.role, .luma)
             XCTAssertEqual(mapped.luma.texture.pixelFormat, expectedFormats.0)
             XCTAssertEqual(mapped.luma.texture.width, 64)
@@ -136,7 +140,7 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
 
         let startResult = try await queue.consume(.sessionStarted(
             generation: 4,
-            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+            colorMetadata: .rec709VideoRange()
         ))
         XCTAssertEqual(
             startResult,
@@ -207,10 +211,12 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
         let description = try VideoFormatDescriptionFactory.make(from: parameterSets)
         let events = MetalDecoderEventStore()
         let decoder = try VideoDecoder(eventSink: events.append)
-        let bitDepth: VideoOutputBitDepth = codec == .hevc ? .ten : .eight
+        let colorMetadata = codec == .hevc
+            ? VideoColorMetadata.hdr10VideoRange()
+            : .rec709VideoRange()
         _ = try await decoder.replaceSession(
             formatDescription: description,
-            bitDepth: bitDepth
+            colorMetadata: colorMetadata
         )
         let frameID = codec == .h264 ? UInt64(264) : UInt64(265)
         _ = try await decoder.decode(CompressedVideoSample(
@@ -233,7 +239,8 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
             pixelBuffer: pixelBuffer,
             presentationTimeStamp: .invalid,
             duration: .invalid,
-            infoFlags: []
+            infoFlags: [],
+            colorMetadata: .rec709VideoRange()
         )
     }
 

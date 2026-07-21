@@ -3,8 +3,8 @@
     {
       "file": "encrypted-vectors.json",
       "origin": "repository-generated with Node.js OpenSSL AES-128-GCM",
-      "purpose": "byte-exact encrypted control framing and nonce origin separation",
-      "redaction": "synthetic key, sequence, packet type, and payload"
+      "purpose": "byte-exact encrypted framing, nonce origin separation, and Sunshine HDR static metadata",
+      "redaction": "synthetic key, sequence, packet type, payload, primaries, and light levels"
     }
   ],
   "schemaVersion": 1,

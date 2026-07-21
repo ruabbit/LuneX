@@ -90,6 +90,7 @@ struct StreamSessionSnapshot: Codable, Equatable, Sendable {
     var stage: StreamNegotiationStage
     var parameters: StreamNegotiationParameters?
     var launchResponse: StreamLaunchResponse?
+    var videoColorMetadata: VideoColorMetadata?
     var negotiatedConfiguration: NegotiatedSessionConfiguration?
     var channelHealth: SessionChannelHealthSnapshot
     var reconnectAttempt: Int?
@@ -348,6 +349,7 @@ actor StreamSessionCoordinator {
             stage: .idle,
             parameters: nil,
             launchResponse: nil,
+            videoColorMetadata: nil,
             negotiatedConfiguration: nil,
             channelHealth: healthAggregator.snapshot,
             reconnectAttempt: nil,
@@ -372,6 +374,7 @@ actor StreamSessionCoordinator {
         snapshot.appID = request.app.id
         snapshot.parameters = nil
         snapshot.launchResponse = nil
+        snapshot.videoColorMetadata = nil
         snapshot.negotiatedConfiguration = nil
         snapshot.failure = nil
         snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
@@ -444,6 +447,32 @@ actor StreamSessionCoordinator {
             snapshot.stage = .readyForTransport
             controlProgress = .launchAccepted
 
+        case let .videoColorMetadata(metadata):
+            guard controlProgress != .idle,
+                  [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) else {
+                throw invalidTransition("Video color metadata arrived outside an active transport generation.")
+            }
+            do {
+                try metadata.validate()
+            } catch {
+                throw invalidTransition("Video color metadata failed runtime contract validation.")
+            }
+            if snapshot.videoColorMetadata == metadata {
+                return snapshot
+            }
+            var updatedConfiguration = snapshot.negotiatedConfiguration
+            if var configuration = snapshot.negotiatedConfiguration {
+                configuration.video.colorMetadata = metadata
+                do {
+                    try configuration.validate()
+                } catch {
+                    throw invalidTransition("Video color metadata is incompatible with the negotiated stream.")
+                }
+                updatedConfiguration = configuration
+            }
+            snapshot.videoColorMetadata = metadata
+            snapshot.negotiatedConfiguration = updatedConfiguration
+
         case .rtspReady:
             if controlProgress.rawValue >= SessionControlProgress.rtspReady.rawValue,
                [.readyForTransport, .streaming, .reconnecting].contains(snapshot.stage) {
@@ -472,6 +501,11 @@ actor StreamSessionCoordinator {
             } catch {
                 throw invalidTransition("Negotiated configuration failed runtime contract validation.")
             }
+            if let videoColorMetadata = snapshot.videoColorMetadata,
+               videoColorMetadata != configuration.video.colorMetadata {
+                throw invalidTransition("Negotiated video color metadata is stale.")
+            }
+            snapshot.videoColorMetadata = configuration.video.colorMetadata
             snapshot.negotiatedConfiguration = configuration
             controlProgress = .negotiated
 
@@ -501,6 +535,7 @@ actor StreamSessionCoordinator {
             }
             lastReconnectAttempt = attempt
             snapshot.reconnectAttempt = attempt
+            snapshot.videoColorMetadata = nil
             snapshot.negotiatedConfiguration = nil
             snapshot.channelHealth = healthAggregator.replaceHealthyChannels([])
             snapshot.stage = .reconnecting

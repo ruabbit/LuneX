@@ -53,12 +53,12 @@ final class VideoDecompressionSessionTests: XCTestCase {
 
         let firstGeneration = try await decoder.replaceSession(
             formatDescription: description,
-            bitDepth: .eight
+            colorMetadata: .rec709VideoRange()
         )
         let first = try XCTUnwrap(factory.sessions.first)
         let secondGeneration = try await decoder.replaceSession(
             formatDescription: description,
-            bitDepth: .eight
+            colorMetadata: .rec709VideoRange()
         )
 
         XCTAssertEqual(firstGeneration, 1)
@@ -80,7 +80,10 @@ final class VideoDecompressionSessionTests: XCTestCase {
         let factory = RecordingVideoSessionFactory(decodeError: kVTVideoDecoderBadDataErr)
         let events = VideoDecoderEventStore()
         let decoder = try VideoDecoder(factory: factory, eventSink: events.append)
-        _ = try await decoder.replaceSession(formatDescription: description, bitDepth: .eight)
+        _ = try await decoder.replaceSession(
+            formatDescription: description,
+            colorMetadata: .rec709VideoRange()
+        )
 
         await XCTAssertThrowsErrorAsync(
             try await decoder.decode(CompressedVideoSample(
@@ -107,7 +110,10 @@ final class VideoDecompressionSessionTests: XCTestCase {
         let factory = RecordingVideoSessionFactory()
         let events = VideoDecoderEventStore()
         let decoder = try VideoDecoder(factory: factory, eventSink: events.append)
-        _ = try await decoder.replaceSession(formatDescription: description, bitDepth: .eight)
+        _ = try await decoder.replaceSession(
+            formatDescription: description,
+            colorMetadata: .rec709VideoRange()
+        )
         let session = try XCTUnwrap(factory.sessions.first)
 
         session.emit(frameID: 1, status: kVTVideoDecoderBadDataErr)
@@ -143,7 +149,10 @@ final class VideoDecompressionSessionTests: XCTestCase {
             factory: factory,
             sampleBufferFactory: VideoSampleBufferFactory(limits: limits)
         )
-        _ = try await decoder.replaceSession(formatDescription: description, bitDepth: .eight)
+        _ = try await decoder.replaceSession(
+            formatDescription: description,
+            colorMetadata: .rec709VideoRange()
+        )
 
         for (frameID, data, expected) in [
             (UInt64(1), Data(), VideoDecoderError.emptyAccessUnit),
@@ -170,7 +179,10 @@ final class VideoDecompressionSessionTests: XCTestCase {
         )
 
         await XCTAssertThrowsErrorAsync(
-            try await decoder.replaceSession(formatDescription: description, bitDepth: .eight)
+            try await decoder.replaceSession(
+                formatDescription: description,
+                colorMetadata: .rec709VideoRange()
+            )
         ) { error in
             XCTAssertEqual(error as? VideoDecoderError, .sessionCreationFailed(-1234))
         }
@@ -194,7 +206,10 @@ final class VideoDecompressionSessionTests: XCTestCase {
         let description = try makeDescription(for: fixture, codec: .h264)
         let factory = RecordingVideoSessionFactory()
         var decoder: VideoDecoder? = try VideoDecoder(factory: factory)
-        _ = try await decoder?.replaceSession(formatDescription: description, bitDepth: .eight)
+        _ = try await decoder?.replaceSession(
+            formatDescription: description,
+            colorMetadata: .rec709VideoRange()
+        )
         let session = try XCTUnwrap(factory.sessions.first)
         weak let weakDecoder = decoder
 
@@ -212,10 +227,12 @@ final class VideoDecompressionSessionTests: XCTestCase {
         let description = try makeDescription(for: fixture, codec: codec)
         let events = VideoDecoderEventStore()
         let decoder = try VideoDecoder(eventSink: events.append)
-        let bitDepth: VideoOutputBitDepth = codec == .hevc ? .ten : .eight
+        let colorMetadata = codec == .hevc
+            ? VideoColorMetadata.hdr10VideoRange()
+            : .rec709VideoRange()
         let generation = try await decoder.replaceSession(
             formatDescription: description,
-            bitDepth: bitDepth
+            colorMetadata: colorMetadata
         )
         let frameID = codec == .h264 ? UInt64(264) : UInt64(265)
 
@@ -228,10 +245,13 @@ final class VideoDecompressionSessionTests: XCTestCase {
         let frame = try await events.waitForFrame(frameID: frameID)
         XCTAssertEqual(frame.generation, generation)
         XCTAssertEqual(CVPixelBufferGetWidth(frame.pixelBuffer), 64)
+        XCTAssertEqual(frame.colorMetadata, colorMetadata)
         XCTAssertEqual(CVPixelBufferGetHeight(frame.pixelBuffer), 64)
         XCTAssertEqual(
             CVPixelBufferGetPixelFormatType(frame.pixelBuffer),
-            bitDepth.pixelFormat
+            colorMetadata.bitDepth == 10
+                ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+                : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         )
         XCTAssertEqual(frame.presentationTimeStamp, CMTime(value: 1, timescale: 60))
         await decoder.stop()

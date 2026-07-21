@@ -267,6 +267,41 @@ final class SessionStateMachineTests: XCTestCase {
         XCTAssertEqual(negotiated, duplicateNegotiated)
     }
 
+    func testVideoColorMetadataUpdatesNegotiatedConfigurationWithoutBeingDropped() async throws {
+        let coordinator = StreamSessionCoordinator(launchClient: StateMachineLaunchClient())
+        let sessionID = UUID()
+        let streaming = try await makeStreaming(
+            coordinator: coordinator,
+            request: makeStateMachineRequest(),
+            sessionID: sessionID
+        )
+        let updatedMetadata = VideoColorMetadata.hdr10VideoRange(
+            contentLight: VideoContentLightMetadata(
+                maximumContentLightLevelNits: 1_200,
+                maximumFrameAverageLightLevelNits: 400
+            ),
+            maximumFullFrameLuminanceNits: 500
+        )
+
+        let updated = try await coordinator.apply(
+            .videoColorMetadata(updatedMetadata),
+            sessionID: sessionID
+        )
+        let duplicate = try await coordinator.apply(
+            .videoColorMetadata(updatedMetadata),
+            sessionID: sessionID
+        )
+
+        XCTAssertNotEqual(updated, streaming)
+        XCTAssertEqual(updated, duplicate)
+        XCTAssertEqual(updated.stage, .streaming)
+        XCTAssertEqual(updated.videoColorMetadata, updatedMetadata)
+        XCTAssertEqual(
+            updated.negotiatedConfiguration?.video.colorMetadata,
+            updatedMetadata
+        )
+    }
+
     private func makeStreaming(
         coordinator: StreamSessionCoordinator,
         request: StreamLaunchRequest,
@@ -316,8 +351,7 @@ func makeStateMachineNegotiatedConfiguration(
             width: 3_840,
             height: 2_160,
             frameRate: 60,
-            bitDepth: 10,
-            isHDR: true,
+            colorMetadata: .hdr10VideoRange(),
             maximumPacketSize: 1_400
         ),
         audio: NegotiatedAudioStreamConfiguration(

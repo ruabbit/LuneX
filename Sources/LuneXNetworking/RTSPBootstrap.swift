@@ -275,6 +275,10 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         sessionID: UUID,
         selection: VideoCodecSelection
     )?
+    private var negotiatedVideoColorMetadata: (
+        sessionID: UUID,
+        metadata: VideoColorMetadata
+    )?
 
     init(
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
@@ -306,6 +310,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
 
         let token = UUID()
         negotiatedVideoSelection = nil
+        negotiatedVideoColorMetadata = nil
         let teardown = SessionControlTeardownCoordinator(
             launchClient: launchClient,
             connection: connection,
@@ -379,6 +384,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         return negotiatedVideoSelection?.selection
     }
 
+    func videoColorMetadata(sessionID: UUID) -> VideoColorMetadata? {
+        guard negotiatedVideoColorMetadata?.sessionID == sessionID else { return nil }
+        return negotiatedVideoColorMetadata?.metadata
+    }
+
     private func bootstrap(
         _ request: StreamLaunchRequest,
         token: UUID,
@@ -407,6 +417,24 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
                     switch event {
                     case .idle, .message:
                         continue
+                    case let .hdrMode(hdrMode):
+                        let metadata = try hdrMode.colorMetadata()
+                        guard let activeSession, activeSession.token == token else {
+                            throw CancellationError()
+                        }
+                        if metadata.isHDR,
+                           negotiatedVideoSelection?.selection.codec == .h264 {
+                            throw ControlChannelError.invalidHDRMetadataPayload
+                        }
+                        negotiatedVideoColorMetadata = (
+                            sessionID: activeSession.sessionID,
+                            metadata: metadata
+                        )
+                        try yield(
+                            .videoColorMetadata(metadata),
+                            token: token,
+                            continuation: continuation
+                        )
                     case let .terminated(reason):
                         try yield(
                             .terminated(reason: reason.description),
@@ -471,6 +499,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     ) async throws {
         try ensureCurrent(token: token)
         negotiatedVideoSelection = nil
+        negotiatedVideoColorMetadata = nil
         guard let sessionURL = response.sessionURL else {
             throw RTSPBootstrapError.invalidSessionURL
         }
@@ -513,6 +542,14 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         negotiatedVideoSelection = (
             sessionID: activeSession.sessionID,
             selection: videoSelection
+        )
+        let colorMetadata = videoSelection.isHDR
+            ? VideoColorMetadata.hdr10VideoRange()
+            : .rec709VideoRange(bitDepth: videoSelection.bitDepth)
+        try colorMetadata.validate()
+        negotiatedVideoColorMetadata = (
+            sessionID: activeSession.sessionID,
+            metadata: colorMetadata
         )
         try yield(.rtspReady, token: token, continuation: continuation)
 

@@ -310,3 +310,16 @@
 - 5.5 最终实现由 locked `CVMetalVideoFrameMapper` 与 actor-isolated `BoundedMetalFrameQueue` 组成。mapped frame 同时保留 source `CVPixelBuffer`、luma/chroma `CVMetalTexture` wrapper 和对应 `MTLTexture`；8-bit `420v` 映射为 `r8Unorm/rg8Unorm`，10-bit `x420` 映射为 `r16Unorm/rg16Unorm`，其他格式 fail closed。
 - queue 默认容量 3、硬上限 8；enqueue 超限淘汰最旧 frame，renderer dequeue 只交付最新 frame 并释放积压。generation replacement/stop 清空 wrapper 并 flush cache，stale generation 在 texture mapping 前拒绝；完整 macOS gate 为 `206 total / 205 passed / 1 explicit Keychain skip / 0 failed`，五平台 build、四 SDK C、fixture/OpenSpec/generator/reference/ENet/simulator gates 全部通过。
 - 该证据证明真实 H.264/HEVC VideoToolbox output 可建立 live zero-CPU-conversion Metal plane，但不证明 YUV shader、colorspace/HDR mapping、drawable presentation、session UI wiring 或 live Sunshine sustained video；这些边界继续属于 5.6-5.8 与 8.x。
+
+### 2026-07-21 阶段 13 Video Color 与 HDR Metadata 设计
+
+- Sunshine generation-7 encrypted control HDR message type 为 `0x010E`。payload 首 byte 是 enable，Sunshine extension 后续按 little-endian 依次携带 RGB display primaries、white point、max/min mastering luminance、MaxCLL、MaxFALL 与 max full-frame luminance；完整 payload 为 27 bytes，legacy enable-only payload 为 1 byte。
+- CoreMedia/CoreVideo 的 MDCV extension/attachment 是固定 24-byte big-endian HEVC SEI layout，primaries 使用 GBR order，max luminance 使用 1/10000 nit；CLL 是固定 4-byte big-endian MaxCLL/MaxFALL。LuneX 将用 repository-owned typed encoder生成这两个 blob，不复制 GPL 实现。
+- 5.6 将定义可验证的 SDR Rec.709 与 HDR10 BT.2020/PQ/video-range metadata contract；negotiated video configuration、decoder generation、decoded frame 与 Metal frame都保留同一 immutable value。control HDR update只产生 typed event，实际 format/session reset 与 IDR 协调留给 5.7。
+- 本任务不设置 `CAMetalLayer` EDR metadata、不实现 YUV-to-RGB shader或 tone mapping，也不把 control metadata arrival视为 HDR presentation；阶段 15 才消费这些保留值完成显示管线。
+- 首轮实现复核发现 `MoonlightControlChannel` 已解析 typed HDR event，但 provider loop 仍将其作为无动作消息丢弃；已补 `SessionControlEvent.videoColorMetadata`、session-scoped provider storage 与 snapshot/config reducer，动态 update 现在跨 actor 边界保留，且 validation failure 不会留下部分 mutation。
+- base negotiated metadata由 codec selection 生成：SDR 为 Rec.709/video-range（8 或 10 bit），HDR 为 HDR10 BT.2020/PQ/10-bit/video-range。H.264 与 10-bit/HDR combination 在 runtime contract 中 fail closed，provider 也拒绝 H.264 generation 的 HDR enable event。
+- 5.6 最终实现保留完整 Sunshine 27-byte HDR payload中的 RGB primaries、white point、mastering max/min luminance、MaxCLL、MaxFALL 与 maximum full-frame luminance；同时支持 legacy 1-byte enable/disable。MDCV 转为 24-byte big-endian GBR order，CLL 转为 4-byte big-endian，均有 byte-exact fixture 回归。
+- production propagation 现在覆盖 codec selection、session-scoped provider state、`SessionControlEvent`、`StreamSessionSnapshot`、negotiated configuration、decoder generation、decoded frame 与 Metal mapped frame；动态 update 先验证临时 configuration 再原子提交，reconnect 清除旧 metadata/configuration。
+- 5.6 focused gate `50/50`；完整 macOS warnings-as-errors tests `211 total / 210 passed / 1 explicit Keychain skip / 0 failed`。macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build、fixture/OpenSpec/generator/reference/ENet/四 SDK C syntax gates 均通过，固定 simulators 构建前后保持 `Shutdown`。
+- 该证据只证明 colorspace、bit depth 与 HDR static metadata 的正确保留，不证明 format-change/reset/IDR、EDR layer metadata、YUV-to-RGB/PQ shader、tone mapping、AppModel presentation 或 live Sunshine sustained video；这些边界继续由 5.7、5.8、8.x 与阶段 15承担。

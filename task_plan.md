@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `29/61`：5.5 zero-copy CVPixelBuffer-to-Metal texture delivery 与 bounded frame queue 已完成独立验收，下一项为 5.6 negotiated colorspace、bit depth、mastering 与 content-light metadata preservation；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `30/61`：5.6 negotiated colorspace、bit depth、mastering 与 content-light metadata preservation 已完成独立验收，下一项为 5.7 format-change、decoder-reset、IDR-request、dropped-frame 与 teardown tests；阶段 13 仍为 `in_progress`。
 
-5.5 已实现 session-owned `CVMetalTextureCache`、8/10-bit bi-planar live Metal texture mapping、wrapper/source lifetime retention、generation isolation 与最大 8 帧的 newest-frame bounded queue；HDR metadata/color conversion/shader、decoder reset policy、AppModel wiring 和 live sustained video仍分别属于 5.6-5.8 与 8.x。
+5.6 已实现 Rec.709/HDR10 typed contract、Sunshine `0x010E` mastering/content-light payload、Apple MDCV/CLL encoding，以及 provider/snapshot/config/decoder/Metal frame 的 immutable metadata propagation；format reset/IDR、EDR/tone mapping、AppModel wiring 和 live sustained video仍分别属于 5.7、阶段 15、8.x 与 5.8。
 
 ## 遇到的错误
 
@@ -111,3 +111,6 @@
 | 5.4 既有 parameter-set fixture 的占位 IDR 被 VideoToolbox 拒绝为 bad data | 1 | 用本机 libx264/libx265 重生成 64x64 黑帧，移除 encoder SEI，仅保留参数集与 IDR，并先用 FFmpeg 独立解码验证后再更新 fixture |
 | 5.5 首次 focused test 把 actor `await` 放入 XCTest autoclosure | 1 | 先把 queue actor 的返回值 await 到局部变量，再传给 `XCTAssertEqual`/`XCTUnwrap`/`XCTAssertNil`，保持 Swift 6 warnings-as-errors |
 | 5.5 完整门禁命令包含 `rm -rf` 预清理而被执行策略拒绝 | 1 | 测试未启动；改用全新的唯一 DerivedData/xcresult 路径，不执行破坏性预清理命令 |
+| 5.6 focused compile 的 CoreMedia extension 测试使用 `as? CFString` 触发 always-succeeds warning | 1 | 在 warnings-as-errors 下改为通过 Foundation `String` bridge 比较 CoreMedia 常量，不屏蔽 Swift 6 诊断 |
+| 5.6 四 SDK C syntax 脚本再次把 vendor 文件列表放入 zsh 标量 | 1 | 改为 zsh 数组并逐文件调用 clang，避免把整串文件名作为一个路径；不修改 pinned vendor source |
+| 5.6 清理脚本使用 zsh 特殊变量名 `path`，覆盖 `PATH` 后找不到 `find` | 1 | 改用普通循环变量 `artifact`，继续只删除限定的 `.derived-data/5-6-*` 产物 |

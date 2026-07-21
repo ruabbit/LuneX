@@ -10,6 +10,7 @@ enum ControlChannelError: Error, Equatable, Sendable, CustomStringConvertible {
     case invalidState
     case disconnected(data: UInt32)
     case invalidTerminationPayload
+    case invalidHDRMetadataPayload
 
     var description: String {
         switch self {
@@ -29,6 +30,8 @@ enum ControlChannelError: Error, Equatable, Sendable, CustomStringConvertible {
             return String(format: "The control connection closed unexpectedly (0x%08X).", data)
         case .invalidTerminationPayload:
             return "The host sent a malformed termination reason."
+        case .invalidHDRMetadataPayload:
+            return "The host sent malformed HDR mode or static metadata."
         }
     }
 }
@@ -236,6 +239,7 @@ enum MoonlightControlProtocol {
     static let requestIDRType: UInt16 = 0x0302
     static let startBType: UInt16 = 0x0307
     static let terminationType: UInt16 = 0x0109
+    static let hdrModeType: UInt16 = 0x010E
     static let requestIDR = MoonlightControlMessage(type: requestIDRType, payload: Data([0, 0]))
     static let startA = requestIDR
     static let startB = MoonlightControlMessage(type: startBType, payload: Data([0]))
@@ -244,7 +248,103 @@ enum MoonlightControlProtocol {
 enum MoonlightControlEvent: Equatable, Sendable {
     case idle
     case message(MoonlightControlMessage)
+    case hdrMode(SunshineHDRModeMetadata)
     case terminated(HostTerminationReason)
+}
+
+enum SunshineHDRModeMetadataParser {
+    private static let legacyPayloadSize = 1
+    private static let sunshinePayloadSize = 27
+
+    static func parse(_ message: MoonlightControlMessage) throws -> SunshineHDRModeMetadata {
+        guard message.type == MoonlightControlProtocol.hdrModeType,
+              [legacyPayloadSize, sunshinePayloadSize].contains(message.payload.count) else {
+            throw ControlChannelError.invalidHDRMetadataPayload
+        }
+        let bytes = [UInt8](message.payload)
+        guard bytes[0] == 0 || bytes[0] == 1 else {
+            throw ControlChannelError.invalidHDRMetadataPayload
+        }
+        let isEnabled = bytes[0] == 1
+        guard message.payload.count == sunshinePayloadSize else {
+            return SunshineHDRModeMetadata(
+                isEnabled: isEnabled,
+                masteringDisplay: nil,
+                contentLight: nil,
+                maximumFullFrameLuminanceNits: nil
+            )
+        }
+
+        var offset = 1
+        var primaries: [VideoChromaticityPoint] = []
+        primaries.reserveCapacity(VideoMasteringDisplayMetadata.primaryCount)
+        for _ in 0..<VideoMasteringDisplayMetadata.primaryCount {
+            primaries.append(VideoChromaticityPoint(
+                x: readLittleEndianUInt16(bytes, offset: &offset),
+                y: readLittleEndianUInt16(bytes, offset: &offset)
+            ))
+        }
+        let whitePoint = VideoChromaticityPoint(
+            x: readLittleEndianUInt16(bytes, offset: &offset),
+            y: readLittleEndianUInt16(bytes, offset: &offset)
+        )
+        let maximumDisplayLuminance = readLittleEndianUInt16(bytes, offset: &offset)
+        let minimumDisplayLuminance = readLittleEndianUInt16(bytes, offset: &offset)
+        let maximumContentLightLevel = readLittleEndianUInt16(bytes, offset: &offset)
+        let maximumFrameAverageLightLevel = readLittleEndianUInt16(bytes, offset: &offset)
+        let maximumFullFrameLuminance = readLittleEndianUInt16(bytes, offset: &offset)
+        guard offset == bytes.count else {
+            throw ControlChannelError.invalidHDRMetadataPayload
+        }
+
+        guard isEnabled else {
+            return SunshineHDRModeMetadata(
+                isEnabled: false,
+                masteringDisplay: nil,
+                contentLight: nil,
+                maximumFullFrameLuminanceNits: nil
+            )
+        }
+        let hasMastering = primaries.contains(where: { $0.x != 0 || $0.y != 0 })
+            || whitePoint.x != 0
+            || whitePoint.y != 0
+            || maximumDisplayLuminance != 0
+            || minimumDisplayLuminance != 0
+        let masteringDisplay = hasMastering ? VideoMasteringDisplayMetadata(
+            displayPrimaries: primaries,
+            whitePoint: whitePoint,
+            maximumDisplayLuminanceNits: maximumDisplayLuminance,
+            minimumDisplayLuminanceTenThousandths: minimumDisplayLuminance
+        ) : nil
+        let hasContentLight = maximumContentLightLevel != 0
+            || maximumFrameAverageLightLevel != 0
+        let contentLight = hasContentLight ? VideoContentLightMetadata(
+            maximumContentLightLevelNits: maximumContentLightLevel,
+            maximumFrameAverageLightLevelNits: maximumFrameAverageLightLevel
+        ) : nil
+        let metadata = SunshineHDRModeMetadata(
+            isEnabled: true,
+            masteringDisplay: masteringDisplay,
+            contentLight: contentLight,
+            maximumFullFrameLuminanceNits: maximumFullFrameLuminance == 0
+                ? nil
+                : maximumFullFrameLuminance
+        )
+        do {
+            _ = try metadata.colorMetadata()
+            return metadata
+        } catch {
+            throw ControlChannelError.invalidHDRMetadataPayload
+        }
+    }
+
+    private static func readLittleEndianUInt16(
+        _ bytes: [UInt8],
+        offset: inout Int
+    ) -> UInt16 {
+        defer { offset += 2 }
+        return UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
+    }
 }
 
 protocol MoonlightControlChannelManaging: Sendable {
@@ -317,6 +417,9 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging {
             )
             if opened.message.type == MoonlightControlProtocol.terminationType {
                 return .terminated(try HostTerminationReason.parse(opened.message))
+            }
+            if opened.message.type == MoonlightControlProtocol.hdrModeType {
+                return .hdrMode(try SunshineHDRModeMetadataParser.parse(opened.message))
             }
             return .message(opened.message)
         case let .disconnected(data):

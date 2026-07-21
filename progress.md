@@ -365,3 +365,19 @@
 - focused decoder+Metal gate `15/15`；完整 macOS warnings-as-errors tests `206 total / 205 passed / 1 skipped / 0 failed`，唯一 skipped 仍为显式 opt-in 真实 Keychain round-trip。macOS、固定 iPhone、固定 iPad、固定 Apple TV 与固定 Apple Vision Pro warnings-as-errors Debug build全部通过，四个 simulator 构建前后均为 `Shutdown`。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、固定 ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。OpenSpec 5.5 更新为完成，权威进度 `29/61`；下一项为 5.6 colorspace/bit-depth/mastering/content-light metadata preservation。
 - 当前证据不等于 shader color conversion、HDR tone mapping、drawable presentation、AppModel production wiring 或 live Sunshine sustained video；这些范围仍保持未完成。
+
+## 2026-07-21 阶段 13 任务 5.6 启动
+
+- 5.5 已以 `7e670d1 Deliver decoded frames to Metal` 独立提交并推送，确认 `HEAD == origin/main`、工作树 clean 后进入 5.6。
+- 5.6 范围限定为 negotiated colorspace/bit depth 与 Sunshine control HDR mastering/content-light metadata 的 typed preservation、Apple CoreMedia blob encoding 以及 decoder/Metal generation传播；format reset/IDR属于 5.7，EDR/tone mapping属于阶段 15。
+- 测试继续显式清除 `LUNEX_RUN_KEYCHAIN_TEST`；跨平台 build 只使用既有四个固定 simulator destination且保持 `Shutdown`。
+- 5.6 expanded focused warnings-as-errors gate 已通过 `50/50`：4 项 color metadata、6 项 control、5 项 runtime contract、10 项 decoder、5 项 Metal、12 项 RTSP bootstrap 与 8 项 session state matrix。覆盖 byte-exact Sunshine `0x010E`、Apple 24-byte MDCV/4-byte CLL、provider/snapshot/config preservation、invalid/stale fail-closed 与真实 VideoToolbox-to-Metal metadata lifetime。
+
+## 2026-07-21 阶段 13 任务 5.6 完成
+
+- 新增 typed SDR Rec.709 与 HDR10 BT.2020/PQ/video-range metadata contract，解析 Sunshine generation-7 `0x010E` legacy/27-byte HDR mode payload，并 byte-exact 生成 Apple 24-byte MDCV 与 4-byte CLL 数据。
+- provider 不再丢弃 HDR control event；metadata 以 session/generation 隔离方式传播到 coordinator snapshot、negotiated video configuration、VideoToolbox decoder generation、decoded frame 与 Metal mapped frame。H.264+10-bit/HDR、HDR+8-bit/Rec.709、SDR stale light metadata 和非法色度/亮度均 fail closed。
+- focused warnings-as-errors gate `50/50`；完整 macOS gate `211 total / 210 passed / 1 skipped / 0 failed`，唯一 skipped 仍为未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，本轮未访问真实 Keychain。
+- macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
+- fixture validator self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定 ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。首次 C gate 的 zsh 标量文件列表错误已记录，并以数组逐文件复验通过。
+- OpenSpec 5.6 更新为完成，权威进度 `30/61`；下一项为 5.7 format-change、decoder-reset、IDR-request、dropped-frame 与 teardown tests。EDR/tone mapping、AppModel presentation 和 live Sunshine sustained video仍保持未完成。

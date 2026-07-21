@@ -49,16 +49,25 @@ struct NegotiatedVideoStreamConfiguration: Codable, Equatable, Sendable {
     var width: Int
     var height: Int
     var frameRate: Int
-    var bitDepth: Int
-    var isHDR: Bool
+    var colorMetadata: VideoColorMetadata
     var maximumPacketSize: Int
+
+    var bitDepth: Int { colorMetadata.bitDepth }
+    var isHDR: Bool { colorMetadata.isHDR }
 
     func validate() throws {
         guard width > 0,
               height > 0,
               frameRate > 0,
-              [8, 10].contains(bitDepth),
               maximumPacketSize > 0 else {
+            throw RuntimeContractError.invalidVideoConfiguration
+        }
+        do {
+            try colorMetadata.validate()
+        } catch {
+            throw RuntimeContractError.invalidVideoConfiguration
+        }
+        if codec == .h264, colorMetadata.bitDepth == 10 || colorMetadata.isHDR {
             throw RuntimeContractError.invalidVideoConfiguration
         }
     }
@@ -163,6 +172,7 @@ protocol PairingRuntimeProvider: Sendable {
 
 enum SessionControlEvent: Equatable, Sendable {
     case launchAccepted(StreamLaunchResponse)
+    case videoColorMetadata(VideoColorMetadata)
     case rtspReady
     case negotiated(NegotiatedSessionConfiguration)
     case channelsReady(SessionChannelReadiness)

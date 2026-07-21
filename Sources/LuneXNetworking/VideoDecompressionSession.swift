@@ -51,6 +51,7 @@ enum VideoDecoderError: Error, Equatable, Sendable, CustomStringConvertible {
     case callbackMissingImageBuffer
     case finishDelayedFramesFailed(OSStatus)
     case waitForAsynchronousFramesFailed(OSStatus)
+    case invalidColorMetadata(VideoColorMetadataError)
 
     var description: String {
         switch self {
@@ -82,6 +83,8 @@ enum VideoDecoderError: Error, Equatable, Sendable, CustomStringConvertible {
             return "VideoToolbox could not finish delayed frames during teardown (\(status))."
         case let .waitForAsynchronousFramesFailed(status):
             return "VideoToolbox could not drain asynchronous frames during teardown (\(status))."
+        case let .invalidColorMetadata(error):
+            return "The decoder color metadata is invalid: \(error)"
         }
     }
 }
@@ -99,10 +102,11 @@ struct DecodedVideoFrame: @unchecked Sendable {
     var presentationTimeStamp: CMTime
     var duration: CMTime
     var infoFlags: VTDecodeInfoFlags
+    var colorMetadata: VideoColorMetadata
 }
 
 enum VideoDecoderEvent: @unchecked Sendable {
-    case sessionStarted(generation: UInt64, pixelFormat: OSType)
+    case sessionStarted(generation: UInt64, colorMetadata: VideoColorMetadata)
     case frame(DecodedVideoFrame)
     case frameDropped(generation: UInt64, frameID: UInt64, infoFlags: VTDecodeInfoFlags)
     case failure(VideoDecoderFailure)
@@ -428,6 +432,7 @@ actor VideoDecoder {
     private var generation: UInt64 = 0
     private var activeGeneration: UInt64?
     private var formatDescription: CMVideoFormatDescription?
+    private var colorMetadata: VideoColorMetadata?
     private var session: (any VideoDecompressionSessionOwning)?
 
     init(
@@ -447,8 +452,18 @@ actor VideoDecoder {
     @discardableResult
     func replaceSession(
         formatDescription: CMVideoFormatDescription,
-        bitDepth: VideoOutputBitDepth
+        colorMetadata: VideoColorMetadata
     ) throws -> UInt64 {
+        do {
+            try colorMetadata.validate()
+        } catch let error as VideoColorMetadataError {
+            throw VideoDecoderError.invalidColorMetadata(error)
+        }
+        guard let bitDepth = VideoOutputBitDepth(rawValue: colorMetadata.bitDepth) else {
+            throw VideoDecoderError.invalidColorMetadata(
+                .invalidBitDepth(colorMetadata.bitDepth)
+            )
+        }
         generation &+= 1
         let nextGeneration = generation
         stopCurrentSession()
@@ -464,11 +479,12 @@ actor VideoDecoder {
                 callbackBridge: bridge
             )
             self.formatDescription = formatDescription
+            self.colorMetadata = colorMetadata
             self.session = session
             activeGeneration = nextGeneration
             eventSink(.sessionStarted(
                 generation: nextGeneration,
-                pixelFormat: bitDepth.pixelFormat
+                colorMetadata: colorMetadata
             ))
             return nextGeneration
         } catch let error as VideoDecoderError {
@@ -486,6 +502,7 @@ actor VideoDecoder {
     func decode(_ sample: CompressedVideoSample) throws -> VideoDecodeSubmission {
         guard let generation = activeGeneration,
               let formatDescription,
+              colorMetadata != nil,
               let session else {
             throw VideoDecoderError.noActiveSession
         }
@@ -552,13 +569,15 @@ actor VideoDecoder {
             )))
             return
         }
+        guard let colorMetadata else { return }
         eventSink(.frame(DecodedVideoFrame(
             generation: output.generation,
             frameID: output.frameID,
             pixelBuffer: pixelBuffer,
             presentationTimeStamp: output.presentationTimeStamp,
             duration: output.duration,
-            infoFlags: output.infoFlags
+            infoFlags: output.infoFlags,
+            colorMetadata: colorMetadata
         )))
     }
 
@@ -566,11 +585,13 @@ actor VideoDecoder {
         guard let generation = activeGeneration, let session else {
             activeGeneration = nil
             formatDescription = nil
+            colorMetadata = nil
             self.session = nil
             return
         }
         activeGeneration = nil
         formatDescription = nil
+        colorMetadata = nil
         self.session = nil
         for error in session.finishAndInvalidate() {
             eventSink(.failure(VideoDecoderFailure(

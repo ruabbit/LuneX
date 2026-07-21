@@ -60,6 +60,17 @@ final class ControlChannelTests: XCTestCase {
 
     func testControlChannelSendsStartsIDRServicesKeepaliveAndTerminates() async throws {
         let key = Data((0..<16).map(UInt8.init))
+        let fixture = try loadFixture()
+        let hdrMode = MoonlightControlMessage(
+            type: MoonlightControlProtocol.hdrModeType,
+            payload: try Data(spacedHex: fixture.hdrMode.payloadHex)
+        )
+        let hdrFrame = try EncryptedControlFrameCodec.seal(
+            hdrMode,
+            sequence: 18,
+            key: key,
+            origin: .host
+        )
         let termination = MoonlightControlMessage(
             type: MoonlightControlProtocol.terminationType,
             payload: Data([0x80, 0x0E, 0x94, 0x03])
@@ -72,6 +83,7 @@ final class ControlChannelTests: XCTestCase {
         )
         let driver = ControlDriverStub(serviceEvents: [
             .idle,
+            .received(channelID: 0, payload: hdrFrame),
             .received(channelID: 0, payload: hostFrame)
         ])
         let channel = MoonlightControlChannel(driver: driver)
@@ -81,6 +93,26 @@ final class ControlChannelTests: XCTestCase {
         try await channel.requestIDR()
         let idleEvent = try await channel.nextEvent()
         XCTAssertEqual(idleEvent, .idle)
+        let hdrEvent = try await channel.nextEvent()
+        let mastering = VideoMasteringDisplayMetadata(
+            displayPrimaries: [
+                VideoChromaticityPoint(x: 34_000, y: 16_000),
+                VideoChromaticityPoint(x: 13_250, y: 34_500),
+                VideoChromaticityPoint(x: 7_500, y: 3_000)
+            ],
+            whitePoint: VideoChromaticityPoint(x: 15_635, y: 16_450),
+            maximumDisplayLuminanceNits: 1_000,
+            minimumDisplayLuminanceTenThousandths: 5
+        )
+        XCTAssertEqual(hdrEvent, .hdrMode(SunshineHDRModeMetadata(
+            isEnabled: true,
+            masteringDisplay: mastering,
+            contentLight: VideoContentLightMetadata(
+                maximumContentLightLevelNits: 1_200,
+                maximumFrameAverageLightLevelNits: 400
+            ),
+            maximumFullFrameLuminanceNits: 500
+        )))
         let terminationEvent = try await channel.nextEvent()
         XCTAssertEqual(
             terminationEvent,
@@ -110,7 +142,7 @@ final class ControlChannelTests: XCTestCase {
         ])
         let serviceTimeouts = await driver.recordedServiceTimeouts()
         let disconnects = await driver.disconnectCount()
-        XCTAssertEqual(serviceTimeouts, [100, 100])
+        XCTAssertEqual(serviceTimeouts, [100, 100, 100])
         XCTAssertEqual(disconnects, 1)
     }
 
@@ -200,8 +232,15 @@ final class ControlChannelTests: XCTestCase {
 }
 
 private struct ControlFixture: Decodable {
+    var hdrMode: ControlHDRFixture
     var schemaVersion: Int
     var vectors: [ControlFixtureVector]
+}
+
+private struct ControlHDRFixture: Decodable {
+    var payloadHex: String
+    var masteringDisplayColorVolumeHex: String
+    var contentLightLevelInfoHex: String
 }
 
 private struct ControlFixtureVector: Decodable {
