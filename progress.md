@@ -1132,3 +1132,16 @@
 - `LM_SKIP_METADATA_EXTRACTION=YES`单点门通过：未使用的AppIntents extractor rule不再运行，macOS Debug构建成功且日志零诊断（`/tmp/LuneX-14-6_2-appintents-probe.fyVIfl`）。
 - 最终macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro的Debug/Release共十个warnings-as-errors build-only全部通过，10个日志零`warning:`/`error:`，证据`/tmp/LuneX-14-6_2-builds-final2.IXQDK5`。
 - simulator规范化快照前后SHA-256同为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`；固定UUID各唯一、可用且全部`Shutdown`，全局`Booted=0`。OpenSpec 6.2标记完成，权威进度`25/29`；下一项6.3为深度质量门。
+
+## 2026-07-21 阶段 14 任务 6.3 启动
+
+- 6.2已以`8e261dc Verify Apple platform release builds`独立提交并推送，确认`HEAD == origin/main`且工作树clean后进入6.3。
+- 复用阶段13任务9.6的严格口径并覆盖当前新增macOS input/lifecycle ownership：五个OpenSpec strict、generator三次、fixture/clean-room/dependency边界、macOS Debug/Release analyzer、完整ASan、完整TSan，以及malloc/resource teardown选择集。所有测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，不访问live host或真实Keychain。
+
+## 2026-07-21 阶段 14 任务 6.3 完成
+
+- repository门通过：OpenSpec strict `5/5`、fixture self-test/全树、generator生成前/三次SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`，clean-room/reference、无Swift package与固定ENet边界通过（`/tmp/LuneX-14-6_3-repo.vQa7C6`）。
+- Debug/Release analyzer成功且结构化结果一致：自有bridge 0项，固定ENet每配置4项已披露finding，无新增（`/tmp/LuneX-14-6_3-static.VoMRXW`）。
+- 完整ASan与TSan各`470 total / 469 passed / 1 Keychain skip / 0 failed`且零sanitizer报告；ASan首轮日志正则误把命令行`-enableAddressSanitizer`当作报告并退出1，收紧到实际`ERROR:`/`SUMMARY:`前缀后同一结果通过，无需重跑。
+- 17类malloc/resource集合在scribble、guard edges、stack logging、heap check和error-abort下通过`250/250`，零malloc报告。最终汇总脚本首次在zsh误用保留的`path`变量覆盖`PATH`而找不到`cmp`，改为直接bash和`evidence_path`后全门汇总通过。
+- OpenSpec 6.3标记完成，权威进度`26/29`；下一项6.4为固定simulator identity/state独立只读门，6.5真实Sunshine/hardware仍不以离线证据替代。

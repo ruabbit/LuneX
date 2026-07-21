@@ -879,5 +879,18 @@
 - 单点验证证明`LM_SKIP_METADATA_EXTRACTION=YES`会从未使用AppIntents的LuneX构建图中移除`ExtractAppIntentsMetadata`，同时保留完整app构建；验证位于`/tmp/LuneX-14-6_2-appintents-probe.fyVIfl`。
 - 最终十构建矩阵全部`BUILD SUCCEEDED`：macOS、固定iPhone、iPad、tvOS与visionOS各自Debug/Release，全部使用隔离DerivedData、Swift/Clang warnings-as-errors、禁用签名并显式移除真实Keychain开关。10个日志零`warning:`/`error:`，证据根目录`/tmp/LuneX-14-6_2-builds-final2.IXQDK5`。
 - 构建前后规范化simulator快照SHA-256均为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`；固定4个UUID唯一、可用、全部`Shutdown`，全局`Booted=0`，未create、boot、run或shutdown设备。
+
+# 2026-07-21 阶段 14 任务 6.3 调查
+
+- 阶段13任务9.6已建立可复用的analyzer/ASan/TSan/malloc门，但当时完整suite为366项；阶段14新增104项macOS lifecycle/input/geometry测试后必须从当前提交重新执行，不能复用旧pass计数。
+- clean-room/dependency门需同时证明：协议fixture self-test和全树脱敏通过；`references/`不被Git或production project引用；无Swift package依赖；固定MIT ENet revision/license/source边界未漂移；generator运行前和三次运行后`project.pbxproj`逐字节一致。
+- resource选择集在原SessionResourceTracker、NetworkChannel、video/audio、media environment、cancellation/recovery、remote input之外，加入MacSessionInputCoordinator、LifecycleRenderPolicy、MacCursorCaptureOwner和MacStreamInputCaptureView，覆盖本阶段新增的event consumer、release barrier、cursor lease、observer和surface teardown所有权。
+
+# 2026-07-21 阶段 14 任务 6.3 验收结论
+
+- repository gates位于`/tmp/LuneX-14-6_3-repo.vQa7C6`：五个OpenSpec strict、fixture validator self-test/全树、generator生成前和三次运行SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、project无漂移、无Swift package、production/reference边界、固定ENet revision/license/source逐字节边界全部通过。
+- macOS Debug/Release analyzer均成功；结构化plist证明自有`LuneXENetBridge`为零finding，固定ENet在两配置各稳定4项：`compress.c:320`、`unix.c:521`、`unix.c:526`三个dead store和`unix.c:867`潜在null dereference，没有新增或漂移（`/tmp/LuneX-14-6_3-static.VoMRXW`）。
+- 完整ASan/LeakSanitizer与TSan分别通过`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`，均无sanitizer报告；结果为`/tmp/LuneX-14-6_3-asan.ONJxta/ASan.xcresult`和`/tmp/LuneX-14-6_3-tsan.5A9CnG/TSan.xcresult`。
+- 开启MallocScribble、GuardEdges、StackLogging、周期heap check和error-abort的17类resource/teardown选择集通过`250/250`且零malloc诊断（`/tmp/LuneX-14-6_3-resource.fHJF25/ResourceOwnership.xcresult`）。这证明离线测试所有权收敛，不证明真实host/hardware长期资源行为。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
