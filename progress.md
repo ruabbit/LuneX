@@ -867,3 +867,17 @@
 - focused warnings-as-errors gate通过`30/30`，无skip，结果`/tmp/LuneX-14-2_4-focused.s1IMBS/LifecycleMatrix.xcresult`。完整macOS通过`397 total / 396 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_4-full.FaICoD/LuneXCoreTests.xcresult`；测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-2_4-builds.ZOABSV`。原始simulator JSON只变化runtime `lastUsage`时间；规范化设备身份/状态前后逐字节一致，四个名称和固定UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
 - 5个OpenSpec change strict validation、generator byte-stability、whitespace和production/reference边界通过；project SHA-256前后均为`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`。OpenSpec 2.4标记完成，权威进度`8/29`；下一项为3.1 application input sink。
+
+## 2026-07-21 阶段 14 任务 3.1 启动
+
+- 2.4已以`f04e56f`独立提交并推送，确认`HEAD == origin/main`且工作树clean。现有`AppModel.sendRemoteInput`不暴露session UUID，但环境发送只校验UUID，没有携带media generation；同UUID replacement的旧application无法在environment边界显式拒绝。
+- 3.1新增main-actor application input sink合同、generation-scoped input application和input unavailable/stale typed error。AppModel从environment snapshot内部推导generation，environment在provider调用前再次验证session、generation和input readiness；本任务不提前实现3.2 bounded platform FIFO。
+- 首轮focused通过3项、失败1项：新增input诊断测试误把既有安全摘要中的普通`session`单词视为隐私泄漏；文案不含UUID/generation值。删除该过严断言，保留稳定分类/code/action及无generation检查，在新隔离目录重跑。
+
+## 2026-07-21 阶段 14 任务 3.1 完成
+
+- 新增main-actor `ApplicationInputSink`，调用方只能提交typed `RemoteInputEvent`。AppModel在media environment启动所有权建立时读取并固定generation，stop/media failure/session failure均清空；高频event不重复获取resource snapshot，也不能误采用同UUID replacement的generation。
+- environment发送入口改为`SessionInputApplication`，在provider调用前校验active session、media generation和input readiness；新增`inputUnavailable`/`staleInputApplication`及稳定input diagnostics。测试证明未ready零发送、ready application内部携带generation、同UUID replacement拒绝旧application。
+- 最终focused warnings-as-errors通过`4/4`，结果`/tmp/LuneX-14-3_1-focused-r3.POmEvA/ApplicationInputSink.xcresult`。完整macOS通过`399 total / 398 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_1-full-r2.lX9rRJ/LuneXCoreTests.xcresult`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_1-builds-r2.hIfFhv`。规范化simulator清单前后逐字节一致，名称/UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
+- 5个OpenSpec strict、generator byte-stability、whitespace及production/reference边界通过；project SHA-256前后均为`a0e3396cfb500e432cc10403c5dc23660a228a821fb0922b8744d34422301e5e`。OpenSpec 3.1标记完成，权威进度`9/29`；下一项为3.2 bounded generation-owned FIFO。

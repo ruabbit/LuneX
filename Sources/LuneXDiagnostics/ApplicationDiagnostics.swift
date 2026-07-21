@@ -226,6 +226,10 @@ enum ApplicationDiagnosticFactory {
                 return transportFailure(code: "media_session_state_invalid")
             case .staleLifecycleApplication:
                 return transportFailure(code: "media_lifecycle_stale")
+            case .inputUnavailable:
+                return inputFailure(code: "application_input_unavailable")
+            case .staleInputApplication:
+                return inputFailure(code: "application_input_stale")
             }
         }
         if error is VideoDecoderError || error is VideoDecodePipelineError ||

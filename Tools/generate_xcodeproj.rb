@@ -46,6 +46,7 @@ sources = [
   "Sources/LuneXApp/LuneXApp.swift",
   "Sources/LuneXApp/RootView.swift",
   "Sources/LuneXCore/AppModel.swift",
+  "Sources/LuneXCore/ApplicationInputSink.swift",
   "Sources/LuneXCore/AppSettings.swift",
   "Sources/LuneXCore/ClientIdentity.swift",
   "Sources/LuneXCore/ClientIdentityGenerator.swift",
@@ -117,6 +118,7 @@ sources = [
 
 test_support_sources = [
   "Sources/LuneXCore/AppModel.swift",
+  "Sources/LuneXCore/ApplicationInputSink.swift",
   "Sources/LuneXCore/AppSettings.swift",
   "Sources/LuneXCore/ClientIdentity.swift",
   "Sources/LuneXCore/ClientIdentityGenerator.swift",

@@ -56,15 +56,17 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             )),
             sessionID: sessionID
         )
-        try await environment.sendInput(.keyboard(
-            KeyboardInputEvent(
+        try await environment.sendInput(SessionInputApplication(
+            sessionID: sessionID,
+            mediaGeneration: active.generation,
+            event: .keyboard(KeyboardInputEvent(
                 rawKeyCode: 4,
                 characters: nil,
                 isDown: true,
                 modifiers: [],
                 isRepeat: false
-            )
-        ), sessionID: sessionID)
+            ))
+        ))
         await waitUntil {
             let snapshot = await environment.snapshot()
             return snapshot.readiness == [.video, .audio, .input]
@@ -109,6 +111,67 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         let stopped = await environment.snapshot()
         XCTAssertNil(stopped.sessionID)
         XCTAssertEqual(stopped.lastTeardownReport, report)
+    }
+
+    func testInputApplicationIsGenerationScopedAcrossSameSessionReplacement() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls)
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        var stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let event = RemoteInputEvent.keyboard(KeyboardInputEvent(
+            rawKeyCode: 4,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        let staleApplication = SessionInputApplication(
+            sessionID: sessionID,
+            mediaGeneration: firstGeneration,
+            event: event
+        )
+        try await environment.sendInput(staleApplication)
+        _ = await environment.stop(sessionID: sessionID)
+
+        stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let replacementGeneration = await environment.snapshot().generation
+
+        await XCTAssertThrowsErrorAsync(
+            try await environment.sendInput(staleApplication)
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleInputApplication
+            )
+        }
+        try await environment.sendInput(SessionInputApplication(
+            sessionID: sessionID,
+            mediaGeneration: replacementGeneration,
+            event: event
+        ))
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        let inputSendCount = await calls.values().filter { $0 == "input.send" }.count
+        XCTAssertEqual(inputSendCount, 2)
+        _ = await environment.stop(sessionID: sessionID)
     }
 
     func testProcessorCreationFailureRollsBackOnlyCreatedResources() async throws {

@@ -713,11 +713,6 @@ final class AppModelWorkflowTests: XCTestCase {
 
         XCTAssertFalse(model.session.isStreaming)
         XCTAssertEqual(model.renderState.policy, .idle)
-        mediaEnvironment.yieldReadiness(
-            [.video, .audio, .input],
-            sessionID: record.sessionID
-        )
-        await waitUntil { model.session.isStreaming }
         let inputEvent = RemoteInputEvent.keyboard(KeyboardInputEvent(
             rawKeyCode: 4,
             characters: nil,
@@ -725,6 +720,21 @@ final class AppModelWorkflowTests: XCTestCase {
             modifiers: [],
             isRepeat: false
         ))
+        do {
+            try await model.sendRemoteInput(inputEvent)
+            XCTFail("Input must fail closed until media input readiness is published.")
+        } catch {
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .inputUnavailable
+            )
+        }
+        XCTAssertEqual(mediaEnvironment.currentSentInputApplications(), [])
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio, .input],
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.session.isStreaming }
         try await model.sendRemoteInput(inputEvent)
         mediaEnvironment.yieldFeedback(
             .led(ControllerLEDFeedback(
@@ -736,7 +746,12 @@ final class AppModelWorkflowTests: XCTestCase {
             sessionID: record.sessionID
         )
         await waitUntil { model.latestRemoteInputFeedback != nil }
-        XCTAssertEqual(mediaEnvironment.currentSentInputEvents(), [inputEvent])
+        let sentApplications = mediaEnvironment.currentSentInputApplications()
+        let mediaSnapshot = await mediaEnvironment.snapshot()
+        XCTAssertEqual(sentApplications.count, 1)
+        XCTAssertEqual(sentApplications.first?.sessionID, record.sessionID)
+        XCTAssertEqual(sentApplications.first?.mediaGeneration, mediaSnapshot.generation)
+        XCTAssertEqual(sentApplications.first?.event, inputEvent)
         XCTAssertEqual(model.latestRemoteInputFeedback, .led(ControllerLEDFeedback(
             controllerID: "controller-1",
             red: 10,
@@ -1640,7 +1655,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var startRecords: [StartRecord] = []
     private var stoppedSessionIDs: [UUID] = []
     private var continuations: [UUID: Continuation] = [:]
-    private var sentInputEvents: [RemoteInputEvent] = []
+    private var sentInputApplications: [SessionInputApplication] = []
 
     init(automaticallyReady: Bool = true) {
         self.automaticallyReady = automaticallyReady
@@ -1678,11 +1693,15 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         _ = application
     }
 
-    func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
-        guard continuation(for: sessionID) != nil else {
+    func sendInput(_ application: SessionInputApplication) async throws {
+        let currentGeneration = withLock { UInt64(startRecords.count) }
+        guard continuation(for: application.sessionID) != nil else {
             throw SessionMediaEnvironmentError.inactiveSession
         }
-        withLock { sentInputEvents.append(event) }
+        guard application.mediaGeneration == currentGeneration else {
+            throw SessionMediaEnvironmentError.staleInputApplication
+        }
+        withLock { sentInputApplications.append(application) }
     }
 
     func stop(sessionID: UUID) async -> SessionTeardownReport? {
@@ -1738,8 +1757,8 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         withLock { stoppedSessionIDs }
     }
 
-    func currentSentInputEvents() -> [RemoteInputEvent] {
-        withLock { sentInputEvents }
+    func currentSentInputApplications() -> [SessionInputApplication] {
+        withLock { sentInputApplications }
     }
 
     private func continuation(for sessionID: UUID) -> Continuation? {
@@ -1788,9 +1807,8 @@ private final class BlockingSessionMediaEnvironment: SessionMediaEnvironment, @u
         _ = application
     }
 
-    func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
-        _ = event
-        _ = sessionID
+    func sendInput(_ application: SessionInputApplication) async throws {
+        _ = application
     }
 
     func stop(sessionID: UUID) async -> SessionTeardownReport? {

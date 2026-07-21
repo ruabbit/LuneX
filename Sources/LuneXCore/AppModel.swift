@@ -119,7 +119,7 @@ enum ProductionRuntimeProviderFactory {
 
 @MainActor
 @Observable
-final class AppModel {
+final class AppModel: ApplicationInputSink {
     private let logger = Logger(subsystem: "dev.lunex.client", category: "app.model")
     var hosts: [MoonlightHost] = []
     var settings = AppSettings.defaults
@@ -149,6 +149,7 @@ final class AppModel {
     private var preparedPairingIdentity: ClientIdentityMaterial?
     private var activeStreamSessionID: UUID?
     private var activeMediaSessionID: UUID?
+    private var activeMediaGeneration: UInt64?
     private var activeControlReadiness: SessionChannelReadiness = []
     private var activeMediaReadiness: SessionChannelReadiness = []
     private var mediaConsumerTask: Task<Void, Never>?
@@ -691,11 +692,19 @@ final class AppModel {
     func sendRemoteInput(_ event: RemoteInputEvent) async throws {
         guard let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
-              activeMediaReadiness.contains(.input) else {
+              let mediaGeneration = activeMediaGeneration else {
             throw SessionMediaEnvironmentError.inactiveSession
         }
+        guard activeMediaReadiness.contains(.input) else {
+            throw SessionMediaEnvironmentError.inputUnavailable
+        }
+        let application = SessionInputApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            event: event
+        )
         do {
-            try await sessionMediaEnvironment.sendInput(event, sessionID: sessionID)
+            try await sessionMediaEnvironment.sendInput(application)
         } catch {
             diagnostics.record(ApplicationDiagnosticFactory.streamFailure(error))
             throw error
@@ -947,8 +956,16 @@ final class AppModel {
             _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
             return false
         }
+        let environmentSnapshot = await sessionMediaEnvironment.snapshot()
+        guard activeStreamSessionID == sessionID,
+              environmentSnapshot.sessionID == sessionID,
+              environmentSnapshot.generation > 0 else {
+            _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
+            return false
+        }
         latestRemoteInputFeedback = nil
         activeMediaSessionID = sessionID
+        activeMediaGeneration = environmentSnapshot.generation
         mediaConsumerTask = Task { [weak self] in
             do {
                 for try await event in events {
@@ -1017,6 +1034,7 @@ final class AppModel {
         guard activeStreamSessionID == sessionID else { return }
         mediaConsumerTask = nil
         activeMediaSessionID = nil
+        activeMediaGeneration = nil
         activeMediaReadiness = []
         activeControlReadiness = []
         latestRemoteInputFeedback = nil
@@ -1030,6 +1048,7 @@ final class AppModel {
         mediaConsumerTask?.cancel()
         mediaConsumerTask = nil
         activeMediaSessionID = nil
+        activeMediaGeneration = nil
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
         _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
@@ -1071,6 +1090,7 @@ final class AppModel {
 
         activeStreamSessionID = nil
         activeMediaSessionID = nil
+        activeMediaGeneration = nil
         activeControlReadiness = []
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil

@@ -14,7 +14,7 @@
 
 ## 3. Ordered macOS session input coordination
 
-- [ ] 3.1 Add an application input sink that derives the active session generation internally and fails closed when input is unavailable
+- [x] 3.1 Add an application input sink that derives the active session generation internally and fails closed when input is unavailable
 - [ ] 3.2 Implement a bounded generation-owned FIFO for synchronous platform samples and ordered remote-provider delivery
 - [ ] 3.3 Implement focus-loss admission closure and one shared held-input `releaseAll` barrier before eligible reactivation
 - [ ] 3.4 Converge send failure, input-channel failure, stop, remote termination, and replacement without stale delivery or cursor ownership

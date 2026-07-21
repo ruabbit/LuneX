@@ -7,6 +7,8 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
     case configurationMismatch
     case streamEnded(SessionChannelReadiness)
     case staleLifecycleApplication
+    case inputUnavailable
+    case staleInputApplication
 
     var description: String {
         switch self {
@@ -22,6 +24,10 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
             return "The \(Self.name(for: channel)) receiver ended before session teardown."
         case .staleLifecycleApplication:
             return "The lifecycle application does not belong to the current media generation or revision."
+        case .inputUnavailable:
+            return "The active media generation is not ready to accept input."
+        case .staleInputApplication:
+            return "The input application does not belong to the current media generation."
         }
     }
 
@@ -56,6 +62,12 @@ struct SessionLifecycleApplication: Equatable, Sendable {
     var mediaGeneration: UInt64
     var lifecycleRevision: UInt64
     var directive: SessionLifecycleDirective
+}
+
+struct SessionInputApplication: Equatable, Sendable {
+    var sessionID: UUID
+    var mediaGeneration: UInt64
+    var event: RemoteInputEvent
 }
 
 protocol SessionVideoProcessing: Sendable {
@@ -100,7 +112,7 @@ protocol SessionMediaEnvironment: Sendable {
 
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws
 
-    func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws
+    func sendInput(_ application: SessionInputApplication) async throws
 
     @discardableResult
     func stop(sessionID: UUID) async -> SessionTeardownReport?
@@ -514,11 +526,20 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         }
     }
 
-    func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
-        guard let active, active.sessionID == sessionID else {
+    func sendInput(_ application: SessionInputApplication) async throws {
+        guard let active, active.sessionID == application.sessionID else {
             throw SessionMediaEnvironmentError.inactiveSession
         }
-        try await active.inputProvider.send(event, sessionID: sessionID)
+        guard active.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleInputApplication
+        }
+        guard active.readiness.contains(.input) else {
+            throw SessionMediaEnvironmentError.inputUnavailable
+        }
+        try await active.inputProvider.send(
+            application.event,
+            sessionID: application.sessionID
+        )
     }
 
     @discardableResult

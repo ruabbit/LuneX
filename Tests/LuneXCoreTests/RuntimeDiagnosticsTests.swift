@@ -155,6 +155,24 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testApplicationInputFailuresUseSafeInputDiagnostics() {
+        let unavailable = ApplicationDiagnosticFactory.streamFailure(
+            SessionMediaEnvironmentError.inputUnavailable
+        )
+        let stale = ApplicationDiagnosticFactory.streamFailure(
+            SessionMediaEnvironmentError.staleInputApplication
+        )
+
+        XCTAssertEqual(unavailable.category, .input)
+        XCTAssertEqual(unavailable.code, "application_input_unavailable")
+        XCTAssertEqual(unavailable.action, .reconnectInput)
+        XCTAssertEqual(stale.category, .input)
+        XCTAssertEqual(stale.code, "application_input_stale")
+        XCTAssertEqual(stale.action, .reconnectInput)
+        XCTAssertFalse(stale.summary.localizedCaseInsensitiveContains("generation"))
+    }
+
+    @MainActor
     func testUnknownFailureNeverCopiesSecretBearingDescription() {
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(
             SecretBearingDiagnosticError()
