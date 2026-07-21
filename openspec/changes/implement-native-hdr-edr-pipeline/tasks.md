@@ -17,7 +17,7 @@
 ## 3. Explicit Metal color and tone-mapping pipeline
 
 - [x] 3.1 Add repository-owned Metal shader resources for video-range sampling, YCbCr conversion, transfer decoding, gamut conversion, luminance mapping, and opaque output
-- [ ] 3.2 Add typed shader uniforms and a bounded pipeline-state cache keyed by input layout, mapping mode, and output pixel format
+- [x] 3.2 Add typed shader uniforms and a bounded pipeline-state cache keyed by input layout, mapping mode, and output pixel format
 - [ ] 3.3 Implement an injectable generation/revision-owned Metal video renderer using zero-copy luma/chroma planes and explicit viewport/video-rectangle presentation
 - [ ] 3.4 Add offscreen shader readback tests against CPU reference vectors for black, reference white, primaries, near-black, peak highlights, SDR fallback, and finite bounds
 - [ ] 3.5 Replace fixed-sRGB Core Image production presentation with the explicit renderer while retaining deterministic clear, fit/fill, throttled, pause, and stale-frame behavior

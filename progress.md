@@ -1338,6 +1338,21 @@
 - repository gates位于`/tmp/LuneX-15-3_1-repo.kUL0UT`：OpenSpec strict `6/6`、fixtures、generator三次稳定且project SHA-256为`084cbaa6ca1aae12218965e8ffde90718f25d90ed2689653eb67c975b4d8f894`、四SDK precise Metal compile/link、reference/dependency/whitespace边界通过。OpenSpec权威进度`11/33`，下一项3.2。
 - 3.1仅证明repository ownership、shader compile/link和entry-point load；pixel-accurate GPU readback归3.4，typed uniforms/cache归3.2，renderer/presenter归3.3/3.5，surface signaling与物理亮度/颜色/跨屏证明仍未完成。
 
+## 2026-07-21 阶段 15 任务 3.2 启动
+
+- 3.1已以`ad42efe Add native HDR Metal shaders`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`11/33`。
+- 3.2限定为固定32-byte Swift/Metal uniform ABI、从validated frame/render configuration生成closed values，以及按input layout/mapping mode/output pixel format键控的bounded thread-safe LRU pipeline cache；不提前接入3.3 renderer或3.5 production presenter。
+- 首轮focused通过`8/8`，但审计发现actor cache无法被同步`MTKViewDelegate.draw(in:)`直接消费，且HDR-to-SDR若接受headroom大于1的CPU mapping会形成CPU/GPU合同分歧；改为锁保护同步cache并要求fallback mapping headroom精确为1后重新验收。
+
+## 2026-07-21 阶段 15 任务 3.2 完成
+
+- 新增固定32-byte/4-byte alignment的`HDRMetalShaderUniforms`，逐字段验证Swift offset与Metal ABI；uniform只能由matching validated frame/render configuration创建，HDR source peak必须从immutable color signature复算一致，SDR拒绝HDR mapping，HDR-to-SDR要求CPU mapping headroom精确为1。
+- 新增closed `HDRMetalPipelineKey`与真实`AppleHDRMetalPipelineStateFactory`，仅接受NV12/SDR/BGRA8、P010/HDR-to-SDR/BGRA8和P010/HDR-EDR/RGBA16三种组合。同步锁保护LRU cache有明确capacity、hit/miss/failure/eviction/flush计数，支持实时draw回调，并保证同key并发只创建一个state、失败不缓存、清理幂等。
+- 最终focused `36/36`且零诊断（`/tmp/LuneX-15-3_2-focused-final.RtsEP5/HDRMetalPipeline.xcresult`）；完整macOS `529 total / 528 passed / 1 explicit Keychain skip / 0 failed`且零诊断（`/tmp/LuneX-15-3_2-full.6wwJEc/LuneXCoreTests.xcresult`）。真实Keychain开关显式移除。
+- macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug零诊断build通过（`/tmp/LuneX-15-3_2-builds.ZSe1im`）；simulator前后规范化SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
+- repository gates位于`/tmp/LuneX-15-3_2-repo.p6v3tE`：OpenSpec strict `6/6`、fixture self-test/全树、generator三次稳定且project SHA-256为`f077b6b13bfc009f726968bc7b01090284ac089297d407d8d589d22ac8cd376c`、production/reference/dependency与whitespace边界通过；shader未改且SHA-256保持`cc2fd6dcfc451bca929292d3f774b22c919165fb41b7f5bd6a05e47e539f0e2b`。
+- OpenSpec 3.2标记完成，权威进度`12/33`。本项不证明renderer command encoding、viewport/video rectangle、GPU readback、production presenter切换或物理HDR；下一项3.3。
+
 ## 2026-07-21 阶段 15 任务 2.4 完成
 
 - 新增真实8/10-bit queue mapping矩阵，分别验证SDR `.r8/.rg8`和HDR `.r16/.rg16` output plane及frozen dynamic range；invalid 10-bit/SDR layout抛错后queue ownership不变，later valid frame正常恢复。

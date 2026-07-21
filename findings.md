@@ -1018,3 +1018,10 @@
 - Xcode不会把普通resource copy自动变成Metal library；repository-owned `.metal`必须以`sourcecode.metal`进入每个target的Sources phase。生成器现对App与测试target执行该合同，并关闭fast math、把Metal warning升级为error。
 - shader与CPU oracle使用同一video-range、YCbCr、Rec.709、PQ、gamut和luminance常量。10-bit路径按P010 left-aligned storage从`.r16Unorm/.rg16Unorm`恢复code value；HDR-to-SDR把current headroom强制为`1.0`，SDR路径不借EDR能力抬升普通白色。
 - focused bundle readback、四SDK独立`.air/.metallib`、五平台Xcode build和完整macOS suite证明shader可编译、链接和按名字加载；它们不证明GPU结果已与CPU vector达到容差，不证明actual presenter已使用该fragment，也不证明显示器进入HDR或达到目标亮度。
+
+# 2026-07-21 阶段 15 任务 3.2 验收结论
+
+- Swift uniform ABI必须使用五个连续`UInt32`与三个`Float`，size/stride为32、alignment为4、offset固定为0...28；仅检查字段值而不锁MemoryLayout会让Metal端在未来重排后静默读错。
+- shader uniform同时消费validated frame layout、immutable color signature、render configuration和signature-derived source peak。HDR-to-SDR不能接收current headroom大于1的CPU mapping后再仅在GPU强制为1，否则3.4 CPU/GPU oracle会使用不同合同；现已typed拒绝该组合。
+- pipeline cache必须可从同步`MTKViewDelegate.draw(in:)`直接调用。actor版本虽能通过独立并发测试，但会迫使renderer异步跳帧或阻塞桥接；最终改为锁保护同步LRU，昂贵创建在同一临界区完成以保证同key并发单建，且合法key空间严格限制为三个layout/mapping/output组合。
+- 真实factory/pipeline与五平台build证明ABI和pipeline construction可消费repository shader，但尚未编码render commands、绑定zero-copy planes/uniforms或验证pixel output；这些分别属于3.3和3.4。

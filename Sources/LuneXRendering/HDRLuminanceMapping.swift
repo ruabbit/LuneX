@@ -88,6 +88,20 @@ enum HDRLuminanceMappingError: Error, Equatable, Hashable, Sendable,
 }
 
 enum HDRSourcePeakResolver {
+    static func resolve(_ signature: HDRRenderColorSignature) throws -> HDRSourcePeak {
+        try resolve(VideoColorMetadata(
+            bitDepth: signature.bitDepth,
+            isHDR: signature.dynamicRange == .hdr10,
+            colorPrimaries: signature.primaries,
+            transferFunction: signature.transferFunction,
+            yCbCrMatrix: signature.matrix,
+            isFullRange: signature.signalRange == .full,
+            masteringDisplay: signature.masteringDisplay,
+            contentLight: signature.contentLight,
+            maximumFullFrameLuminanceNits: signature.maximumFullFrameLuminanceNits
+        ))
+    }
+
     static func resolve(_ metadata: VideoColorMetadata) throws -> HDRSourcePeak {
         do { try metadata.validate() } catch let error as VideoColorMetadataError {
             throw HDRLuminanceMappingError.invalidColorMetadata(error)
