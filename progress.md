@@ -1145,3 +1145,14 @@
 - 完整ASan与TSan各`470 total / 469 passed / 1 Keychain skip / 0 failed`且零sanitizer报告；ASan首轮日志正则误把命令行`-enableAddressSanitizer`当作报告并退出1，收紧到实际`ERROR:`/`SUMMARY:`前缀后同一结果通过，无需重跑。
 - 17类malloc/resource集合在scribble、guard edges、stack logging、heap check和error-abort下通过`250/250`，零malloc报告。最终汇总脚本首次在zsh误用保留的`path`变量覆盖`PATH`而找不到`cmp`，改为直接bash和`evidence_path`后全门汇总通过。
 - OpenSpec 6.3标记完成，权威进度`26/29`；下一项6.4为固定simulator identity/state独立只读门，6.5真实Sunshine/hardware仍不以离线证据替代。
+
+## 2026-07-21 阶段 14 任务 6.4 启动
+
+- 6.3已以`e59bf5f Run macOS lifecycle quality gates`独立提交并推送，确认`HEAD == origin/main`且工作树clean后进入6.4。
+- 本项只读获取当前CoreSimulator JSON，并与6.2最终构建矩阵的before/after规范化快照比较；不执行build/test，也不调用create、clone、boot、bootstatus、shutdown、delete或app run/install。
+
+## 2026-07-21 阶段 14 任务 6.4 完成
+
+- 6.2 before/after与6.4当前三份规范化simulator快照逐字节一致，SHA-256均为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`（`/tmp/LuneX-14-6_4-simulator-audit.zJRuWk`）。
+- 四个固定名称与UUID各唯一、可用且全部`Shutdown`，所有available simulator的`Booted=0`；本项仅只读list/compare，没有build/test或设备状态命令。
+- OpenSpec 6.4标记完成，权威进度`27/29`。6.5仍要求授权Sunshine host、物理鼠标和多显示器，不以模拟器/fixture替代；下一可执行项为6.6最终跟踪、剩余限制与提交推送。

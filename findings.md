@@ -892,5 +892,16 @@
 - macOS Debug/Release analyzer均成功；结构化plist证明自有`LuneXENetBridge`为零finding，固定ENet在两配置各稳定4项：`compress.c:320`、`unix.c:521`、`unix.c:526`三个dead store和`unix.c:867`潜在null dereference，没有新增或漂移（`/tmp/LuneX-14-6_3-static.VoMRXW`）。
 - 完整ASan/LeakSanitizer与TSan分别通过`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`，均无sanitizer报告；结果为`/tmp/LuneX-14-6_3-asan.ONJxta/ASan.xcresult`和`/tmp/LuneX-14-6_3-tsan.5A9CnG/TSan.xcresult`。
 - 开启MallocScribble、GuardEdges、StackLogging、周期heap check和error-abort的17类resource/teardown选择集通过`250/250`且零malloc诊断（`/tmp/LuneX-14-6_3-resource.fHJF25/ResourceOwnership.xcresult`）。这证明离线测试所有权收敛，不证明真实host/hardware长期资源行为。
+
+# 2026-07-21 阶段 14 任务 6.4 调查
+
+- 独立simulator门不复用6.2的“构建命令成功”作为当前状态证明，而是重新读取当前available inventory；比较字段限制为runtime、name、UDID、state和availability，避免CoreSimulator JSON中的无关顺序或附加字段造成假漂移。
+- 除固定UUID计数外还需对每个固定设备名在全部available runtime中计数，防止同名重复实例被“选择固定UUID”过滤掉；所有available设备的`Booted`计数也必须为零。
+
+# 2026-07-21 阶段 14 任务 6.4 验收结论
+
+- 6.2最终构建前、构建后和6.4当前三份规范化CoreSimulator快照逐字节一致，SHA-256均为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`；证据目录`/tmp/LuneX-14-6_4-simulator-audit.zJRuWk`。
+- iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro在全部available inventory中的名称各出现一次，固定UUID也各出现一次；四项均`isAvailable=true`、`Shutdown`，全部available设备`Booted=0`。
+- 本项仅执行`simctl list devices available -j`和结构化读取/比较，没有create、clone、boot、bootstatus、shutdown、delete、install、run、build或test；它证明模拟器inventory稳定性，不证明真机行为。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
