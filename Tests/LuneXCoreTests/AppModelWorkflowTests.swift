@@ -126,7 +126,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.selectedHost?.name, "Test Host")
 
         let host = try XCTUnwrap(model.selectedHost)
-        model.beginPairing(host: host)
+        await model.beginPairing(host: host)
         model.pairingUI.pin = "1234"
         await model.submitPairingPIN()
 
@@ -134,6 +134,266 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.selectedHost?.pinnedIdentity)
         XCTAssertEqual(model.session.phase, .disconnected)
         XCTAssertTrue(model.pairingUI.message?.contains("unavailable") == true)
+    }
+
+    func testPairingUIConsumesProgressAndAuthenticatedCompletion() async throws {
+        let host = makeUnpairedHost()
+        let identity = makePairingIdentity()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: identity)
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+
+        XCTAssertEqual(model.pairingUI.stage, .waitingForPIN)
+        XCTAssertFalse(model.pairingUI.isRunning)
+        XCTAssertNotNil(model.pairingUI.attemptID)
+        XCTAssertEqual(provider.currentRequestCount(), 0)
+
+        model.pairingUI.pin = "1234"
+        let submitTask = Task { await model.submitPairingPIN() }
+        for _ in 0..<100 where provider.currentRequestCount() == 0 {
+            await Task.yield()
+        }
+        let request = try XCTUnwrap(provider.latestRequest())
+        XCTAssertEqual(request.host.id, host.id)
+        XCTAssertEqual(request.pin, "1234")
+        XCTAssertEqual(request.clientIdentity, identity)
+        XCTAssertEqual(model.pairingUI.pin, "")
+        XCTAssertEqual(model.session.phase, .pairing(pin: ""))
+        XCTAssertFalse(model.diagnostics.events.contains { $0.message.contains("1234") })
+
+        provider.yieldProgress(.verifyingServer, for: request)
+        for _ in 0..<100 where model.pairingUI.stage != .verifyingServer {
+            await Task.yield()
+        }
+        XCTAssertEqual(model.pairingUI.stage, .verifyingServer)
+        XCTAssertTrue(model.pairingUI.message?.contains("Verifying") == true)
+
+        provider.completeAuthenticated(request)
+        await submitTask.value
+
+        XCTAssertEqual(model.selectedHost?.pairingState, .paired)
+        XCTAssertEqual(model.selectedHost?.pinnedIdentity?.serverCertificateDER, Data([0x30, 0x01, 0x02]))
+        XCTAssertEqual(model.pairingUI.stage, .paired)
+        XCTAssertFalse(model.pairingUI.isRunning)
+        XCTAssertNil(model.pairingUI.attemptID)
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertFalse(model.diagnostics.events.contains { $0.message.contains("1234") })
+    }
+
+    func testPairingCancellationInvalidatesLateCompletion() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+        model.pairingUI.pin = "4321"
+        let submitTask = Task { await model.submitPairingPIN() }
+        for _ in 0..<100 where provider.currentRequestCount() == 0 {
+            await Task.yield()
+        }
+        let request = try XCTUnwrap(provider.latestRequest())
+
+        await model.cancelPairing()
+        provider.completeAuthenticated(request)
+        await submitTask.value
+
+        XCTAssertEqual(provider.currentCancelledAttemptIDs(), [request.attemptID])
+        XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
+        XCTAssertNil(model.selectedHost?.pinnedIdentity)
+        XCTAssertEqual(model.pairingUI.stage, .cancelled)
+        XCTAssertNil(model.pairingUI.attemptID)
+        XCTAssertEqual(model.session.phase, .disconnected)
+    }
+
+    func testPairingFailsClosedForInvalidOrIncompleteCompletion() async throws {
+        for completion in [ControlledPairingProvider.Completion.invalid, .incomplete] {
+            let host = makeUnpairedHost()
+            let provider = ControlledPairingProvider()
+            let model = makePairingModel(
+                host: host,
+                provider: provider,
+                identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+            )
+
+            await model.loadHosts()
+            await model.beginPairing(host: host)
+            model.pairingUI.pin = "2468"
+            let submitTask = Task { await model.submitPairingPIN() }
+            for _ in 0..<100 where provider.currentRequestCount() == 0 {
+                await Task.yield()
+            }
+            let request = try XCTUnwrap(provider.latestRequest())
+            provider.finish(request, completion: completion)
+            await submitTask.value
+
+            XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
+            XCTAssertNil(model.selectedHost?.pinnedIdentity)
+            XCTAssertEqual(model.pairingUI.stage, .failed)
+            XCTAssertNil(model.pairingUI.attemptID)
+            guard case .failed = model.session.phase else {
+                return XCTFail("Invalid or incomplete pairing completion must fail closed.")
+            }
+        }
+    }
+
+    func testPairingIdentityFailureStopsBeforeRuntimeRequest() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FailingIdentityProvisioner()
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+
+        XCTAssertEqual(provider.currentRequestCount(), 0)
+        XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
+        XCTAssertEqual(model.pairingUI.stage, .failed)
+        XCTAssertNil(model.pairingUI.attemptID)
+        XCTAssertTrue(model.pairingUI.message?.contains("identity") == true)
+    }
+
+    func testPairingRejectsNonASCIIPINBeforeRuntimeRequest() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+        model.pairingUI.pin = "１２３４"
+
+        XCTAssertFalse(model.isPairingPINValid)
+        await model.submitPairingPIN()
+        XCTAssertEqual(provider.currentRequestCount(), 0)
+        XCTAssertEqual(model.pairingUI.stage, .waitingForPIN)
+    }
+
+    func testPairingCancellationWhileIdentityIsPendingIgnoresLateIdentity() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let identityProvisioner = ControlledIdentityProvisioner()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: identityProvisioner
+        )
+
+        await model.loadHosts()
+        let beginTask = Task { await model.beginPairing(host: host) }
+        for _ in 0..<100 {
+            if await identityProvisioner.hasStarted() { break }
+            await Task.yield()
+        }
+        let identityPreparationStarted = await identityProvisioner.hasStarted()
+        XCTAssertTrue(identityPreparationStarted)
+
+        await model.cancelPairing()
+        await identityProvisioner.complete(with: makePairingIdentity())
+        await beginTask.value
+
+        XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
+        XCTAssertEqual(model.pairingUI.stage, .cancelled)
+        XCTAssertNil(model.pairingUI.attemptID)
+        XCTAssertEqual(provider.currentRequestCount(), 0)
+    }
+
+    func testDuplicatePairingSubmissionDoesNotStartAnotherRuntimeRequest() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+        model.pairingUI.pin = "1357"
+        let firstSubmission = Task { await model.submitPairingPIN() }
+        for _ in 0..<100 where provider.currentRequestCount() == 0 {
+            await Task.yield()
+        }
+        let request = try XCTUnwrap(provider.latestRequest())
+
+        model.pairingUI.pin = "2468"
+        await model.submitPairingPIN()
+        XCTAssertEqual(provider.currentRequestCount(), 1)
+
+        provider.completeAuthenticated(request)
+        await firstSubmission.value
+        XCTAssertEqual(model.pairingUI.stage, .paired)
+    }
+
+    func testMismatchedPairingProgressFailsClosedAndCancelsProvider() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+        )
+
+        await model.loadHosts()
+        await model.beginPairing(host: host)
+        model.pairingUI.pin = "8642"
+        let submission = Task { await model.submitPairingPIN() }
+        for _ in 0..<100 where provider.currentRequestCount() == 0 {
+            await Task.yield()
+        }
+        let request = try XCTUnwrap(provider.latestRequest())
+
+        provider.yieldProgress(
+            .verifyingServer,
+            for: request,
+            hostID: UUID(uuidString: "7E42A4CF-4619-435F-B30E-133095E952C8")!
+        )
+        await submission.value
+
+        XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
+        XCTAssertEqual(model.pairingUI.stage, .failed)
+        XCTAssertNil(model.pairingUI.attemptID)
+        XCTAssertEqual(provider.currentCancelledAttemptIDs(), [request.attemptID])
+    }
+
+    func testCancellingWithoutPairingAttemptPreservesActiveSessionState() async {
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(launchClient: StubStreamLaunchClient()),
+            runtimeProviders: .unavailable,
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+        model.session.phase = .streaming
+
+        await model.cancelPairing()
+
+        XCTAssertEqual(model.session.phase, .streaming)
+        XCTAssertEqual(model.pairingUI, PairingUIState())
     }
 
     func testUnavailableTransportDoesNotLaunchOrReportStreaming() async throws {
@@ -312,6 +572,49 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func makePairingModel(
+        host: MoonlightHost,
+        provider: ControlledPairingProvider,
+        identityProvisioner: any ClientIdentityProvisioning
+    ) -> AppModel {
+        AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(hosts: [host]),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(launchClient: StubStreamLaunchClient()),
+            runtimeProviders: RuntimeProviderInventory(pairing: provider),
+            clientIdentityStore: InMemoryClientIdentityStore(),
+            clientIdentityProvisioner: identityProvisioner,
+            clientUniqueID: "test-client"
+        )
+    }
+
+    private func makeUnpairedHost() -> MoonlightHost {
+        MoonlightHost(
+            id: UUID(uuidString: "C8A319F8-E79F-4F57-AC18-7663D52F1EF8")!,
+            name: "Pairing Host",
+            address: "moon.local",
+            pairingState: .unpaired,
+            reachability: .online
+        )
+    }
+
+    private func makePairingIdentity() -> ClientIdentityMaterial {
+        ClientIdentityMaterial(
+            id: UUID(uuidString: "09047262-05A7-43F2-A907-BD301920DA0D")!,
+            certificateDER: Data([0x30, 0x01]),
+            privateKeyDER: Data([0x02, 0x01]),
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+    }
+
     private func completeStreamProviderInventory() -> RuntimeProviderInventory {
         let production = ProductionRuntimeProviderFactory.makeDefault()
         return RuntimeProviderInventory(
@@ -442,5 +745,169 @@ private struct AvailabilityAudioReceiveProvider: AudioReceiveProvider {
     }
 
     func stopAudio(sessionID: UUID) async {
+    }
+}
+
+private struct FixedIdentityProvisioner: ClientIdentityProvisioning {
+    let identity: ClientIdentityMaterial
+
+    func loadOrCreateIdentity(createdAt: Date) async throws -> ClientIdentityMaterial {
+        identity
+    }
+}
+
+private struct FailingIdentityProvisioner: ClientIdentityProvisioning {
+    func loadOrCreateIdentity(createdAt: Date) async throws -> ClientIdentityMaterial {
+        throw PairingTestError.identityFailure
+    }
+}
+
+private actor ControlledIdentityProvisioner: ClientIdentityProvisioning {
+    private var started = false
+    private var continuation: CheckedContinuation<ClientIdentityMaterial, Never>?
+
+    func loadOrCreateIdentity(createdAt: Date) async throws -> ClientIdentityMaterial {
+        started = true
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func hasStarted() -> Bool {
+        started
+    }
+
+    func complete(with identity: ClientIdentityMaterial) {
+        continuation?.resume(returning: identity)
+        continuation = nil
+    }
+}
+
+private enum PairingTestError: Error {
+    case identityFailure
+}
+
+private final class ControlledPairingProvider: PairingRuntimeProvider, @unchecked Sendable {
+    enum Completion {
+        case invalid
+        case incomplete
+    }
+
+    private typealias Continuation = AsyncThrowingStream<PairingRuntimeEvent, Error>.Continuation
+    private let lock = NSLock()
+    private var requests: [PairingRuntimeRequest] = []
+    private var continuations: [UUID: Continuation] = [:]
+    private var cancelledAttemptIDs: [UUID] = []
+
+    func pair(
+        _ request: PairingRuntimeRequest
+    ) async -> AsyncThrowingStream<PairingRuntimeEvent, Error> {
+        AsyncThrowingStream { continuation in
+            lock.lock()
+            requests.append(request)
+            continuations[request.attemptID] = continuation
+            lock.unlock()
+        }
+    }
+
+    func cancelPairing(attemptID: UUID) async {
+        withLock {
+            cancelledAttemptIDs.append(attemptID)
+        }
+    }
+
+    func currentRequestCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests.count
+    }
+
+    func latestRequest() -> PairingRuntimeRequest? {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests.last
+    }
+
+    func currentCancelledAttemptIDs() -> [UUID] {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelledAttemptIDs
+    }
+
+    func yieldProgress(
+        _ stage: PairingStage,
+        for request: PairingRuntimeRequest,
+        attemptID: UUID? = nil,
+        hostID: UUID? = nil
+    ) {
+        let continuation = continuation(for: request.attemptID)
+        continuation?.yield(.progress(PairingSnapshot(
+            attemptID: attemptID ?? request.attemptID,
+            hostID: hostID ?? request.host.id,
+            stage: stage,
+            digestAlgorithm: .sha256,
+            failure: nil,
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )))
+    }
+
+    func completeAuthenticated(_ request: PairingRuntimeRequest) {
+        let continuation = removeContinuation(for: request.attemptID)
+        continuation?.yield(.completed(authenticatedResult(for: request)))
+        continuation?.finish()
+    }
+
+    func finish(_ request: PairingRuntimeRequest, completion: Completion) {
+        let continuation = removeContinuation(for: request.attemptID)
+        switch completion {
+        case .invalid:
+            var result = authenticatedResult(for: request)
+            result.host.pinnedIdentity = nil
+            continuation?.yield(.completed(result))
+        case .incomplete:
+            break
+        }
+        continuation?.finish()
+    }
+
+    private func continuation(for attemptID: UUID) -> Continuation? {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuations[attemptID]
+    }
+
+    private func removeContinuation(for attemptID: UUID) -> Continuation? {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuations.removeValue(forKey: attemptID)
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+
+    private func authenticatedResult(for request: PairingRuntimeRequest) -> PairingResult {
+        let certificate = Data([0x30, 0x01, 0x02])
+        let fingerprint = "verified-certificate"
+        let pairedAt = Date(timeIntervalSince1970: 300)
+        var pairedHost = request.host
+        pairedHost.pairingState = .paired
+        pairedHost.pinnedIdentity = PinnedHostIdentity(
+            certificateSHA256: fingerprint,
+            serverCertificateDER: certificate,
+            pairedAt: pairedAt
+        )
+        return PairingResult(
+            host: pairedHost,
+            serverIdentity: PairingServerIdentity(
+                certificateDER: certificate,
+                certificateSHA256: fingerprint,
+                serverMajorVersion: 7
+            ),
+            digestAlgorithm: .sha256,
+            pairedAt: pairedAt
+        )
     }
 }

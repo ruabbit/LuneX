@@ -416,7 +416,20 @@ private struct PairingPanel: View {
                         Label("Authenticated pairing transport unavailable", systemImage: "exclamationmark.shield")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else {
+                    } else if appModel.pairingUI.isRunning {
+                        HStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Button {
+                                Task {
+                                    await appModel.cancelPairing()
+                                }
+                            } label: {
+                                Label("Cancel", systemImage: "xmark")
+                            }
+                        }
+                    } else if appModel.pairingUI.stage == .waitingForPIN,
+                              appModel.pairingUI.hostID == host.id {
                         HStack {
                             TextField("PIN", text: $appModel.pairingUI.pin)
                                 #if os(iOS)
@@ -428,19 +441,29 @@ private struct PairingPanel: View {
                                 .frame(maxWidth: 120)
 
                             Button {
-                                appModel.beginPairing(host: host)
-                            } label: {
-                                Label("Start", systemImage: "lock.open")
-                            }
-
-                            Button {
                                 Task {
                                     await appModel.submitPairingPIN()
                                 }
                             } label: {
                                 Label("Submit", systemImage: "checkmark")
                             }
-                            .disabled(appModel.pairingUI.pin.count != 4 || appModel.pairingUI.isRunning)
+                            .disabled(!appModel.isPairingPINValid)
+
+                            Button {
+                                Task {
+                                    await appModel.cancelPairing()
+                                }
+                            } label: {
+                                Label("Cancel", systemImage: "xmark")
+                            }
+                        }
+                    } else {
+                        Button {
+                            Task {
+                                await appModel.beginPairing(host: host)
+                            }
+                        } label: {
+                            Label("Start Pairing", systemImage: "lock.open")
                         }
                     }
 
@@ -452,6 +475,12 @@ private struct PairingPanel: View {
                 } else {
                     ContentUnavailableView("Select a Host", systemImage: "key")
                 }
+            }
+        }
+        .onChange(of: appModel.selectedHostID) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            Task {
+                await appModel.cancelPairing()
             }
         }
     }

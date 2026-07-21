@@ -614,3 +614,18 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部通过；没有创建或主动boot模拟器，最终四个固定实例均唯一且为`Shutdown`。
 - fixture validator self-test/全树、全部OpenSpec change strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对和四SDK strict C syntax全部通过。
 - OpenSpec 8.1更新为完成，权威进度`44/61`。当前production pairing显示available但`submitPairingPIN()`尚未消费provider，这是8.2必须立即修复的中间态；stream因缺production video/audio receiver继续truthfully unavailable。
+
+## 2026-07-21 阶段 13 任务 8.2 启动
+
+- 8.1已以`fa3c68b Inject production runtime providers`独立提交并推送，确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`44/61`后进入8.2。
+- 现有`MoonlightPairingProvider + PersistingPairingProvider`已提供attempt-scoped progress/completion/cancel和认证后save/reload；8.2限定为AppModel identity preparation、event consumption、late-attempt isolation、host/UI更新及SwiftUI阶段/取消控制，不修改clean-room wire protocol。
+- PIN只保留在短生命周期UI/request内：构造request后立即清空UI PIN，不写diagnostics、不放入持久session state。正常测试继续显式禁用真实Keychain，使用in-memory/file identity provisioner。
+- 恢复后确认上一轮8.2定向结果`22/22`通过；继续审计并修复无active attempt的cancel误改stream phase、错误attempt/host progress未显式cancel provider两项应用层ownership问题。
+- 新增duplicate submit、mismatched progress fail-closed/provider cancellation、无active pairing取消不影响stream三项回归；最终定向`AppModelWorkflowTests + PairingStateMachineTests + ClientIdentityLifecycleTests` Swift 6 warnings-as-errors gate通过`25/25`，零skip/零失败，结果`/tmp/LuneX-8_2-targeted-audit.O6PEIA/PairingApplication.xcresult`。测试环境显式清除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+
+## 2026-07-21 阶段 13 任务 8.2 完成
+
+- 扩展pairing crypto/transport/persistence/provider/application/identity gate通过`56 total / 55 passed / 1 explicit Keychain skip / 0 failed`；完整macOS Swift 6 warnings-as-errors gate通过`337 total / 336 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_2-full-macos.WqX8tS/LuneXCoreTests.xcresult`。两者均显式清除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro隔离Debug warnings-as-errors build全部通过；最终四个固定simulator各为唯一可用同名实例且全部`Shutdown`，未创建或主动boot设备。
+- fixture validator self-test/全树、全部4个OpenSpec change strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对和四SDK strict C syntax全部通过。
+- OpenSpec 8.2更新为完成，权威进度`45/61`。该验收不代表3.7 live Sunshine pairing/re-pair证据；下一项为8.3 launch/stop UI消费session actor事件并从channel readiness派生phase。

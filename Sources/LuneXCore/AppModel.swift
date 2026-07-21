@@ -11,9 +11,16 @@ enum AppNavigationSelection: Hashable {
 
 struct PairingUIState: Equatable {
     var hostID: MoonlightHost.ID?
+    var attemptID: UUID?
+    var stage: PairingStage = .idle
     var pin: String = ""
     var isRunning = false
     var message: String?
+}
+
+private enum PairingApplicationError: Error {
+    case incompleteRuntimeStream
+    case invalidAuthenticatedCompletion
 }
 
 struct AppCatalogUIState: Equatable {
@@ -127,7 +134,9 @@ final class AppModel {
     private let streamSessionCoordinator: StreamSessionCoordinator
     private let runtimeProviders: RuntimeProviderInventory
     private let clientIdentityStore: any ClientIdentityStore
+    private let clientIdentityProvisioner: any ClientIdentityProvisioning
     private var clientUniqueID: String
+    private var preparedPairingIdentity: ClientIdentityMaterial?
     private let remoteInputKeyOverride: RemoteInputKeyMaterial?
     private let remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
 
@@ -147,6 +156,7 @@ final class AppModel {
         ),
         runtimeProviders: RuntimeProviderInventory = ProductionRuntimeProviderFactory.makeDefault(),
         clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
+        clientIdentityProvisioner: (any ClientIdentityProvisioning)? = nil,
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
         remoteInputKey: RemoteInputKeyMaterial? = nil,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator()
@@ -158,6 +168,8 @@ final class AppModel {
         self.streamSessionCoordinator = streamSessionCoordinator
         self.runtimeProviders = runtimeProviders
         self.clientIdentityStore = clientIdentityStore
+        self.clientIdentityProvisioner = clientIdentityProvisioner
+            ?? ClientIdentityManager(store: clientIdentityStore)
         self.clientUniqueID = clientUniqueID
         self.remoteInputKeyOverride = remoteInputKey
         self.remoteInputKeyGenerator = remoteInputKeyGenerator
@@ -187,6 +199,11 @@ final class AppModel {
 
     var isStreamTransportAvailable: Bool {
         runtimeProviderAvailability.streamTransportAvailable
+    }
+
+    var isPairingPINValid: Bool {
+        let bytes = Array(pairingUI.pin.utf8)
+        return bytes.count == 4 && bytes.allSatisfy { (48...57).contains($0) }
     }
 
     func loadInitialState() async {
@@ -289,12 +306,11 @@ final class AppModel {
         }
     }
 
-    func beginPairing(host: MoonlightHost) {
-        guard isPairingTransportAvailable else {
+    func beginPairing(host: MoonlightHost) async {
+        guard runtimeProviders.pairing != nil else {
             pairingUI = PairingUIState(
                 hostID: host.id,
-                pin: "",
-                isRunning: false,
+                stage: .failed,
                 message: "Pairing is unavailable until authenticated Moonlight transport is installed."
             )
             session.phase = .disconnected
@@ -302,31 +318,126 @@ final class AppModel {
             return
         }
 
+        await cancelPairing(showCancelledState: false)
+        let attemptID = UUID()
         pairingUI = PairingUIState(
             hostID: host.id,
-            pin: "",
-            isRunning: false,
-            message: "Enter the PIN shown on \(host.name)."
+            attemptID: attemptID,
+            stage: .idle,
+            isRunning: true,
+            message: "Preparing client identity..."
         )
         session.phase = .pairing(pin: "")
+        preparedPairingIdentity = nil
+
+        do {
+            let identity = try await clientIdentityProvisioner.loadOrCreateIdentity(
+                createdAt: Date()
+            )
+            guard pairingUI.attemptID == attemptID else { return }
+            preparedPairingIdentity = identity
+            clientUniqueID = identity.id.uuidString
+            pairingUI.stage = .waitingForPIN
+            pairingUI.isRunning = false
+            pairingUI.message = "Enter the PIN shown on \(host.name)."
+            diagnostics.record("Prepared client identity for pairing", subsystem: "pairing")
+        } catch {
+            guard pairingUI.attemptID == attemptID else { return }
+            failPairingAttempt(
+                attemptID: attemptID,
+                message: "Client identity could not be prepared.",
+                diagnostic: "Client identity preparation failed"
+            )
+        }
     }
 
     func submitPairingPIN() async {
         guard let hostID = pairingUI.hostID,
-              let host = hosts.first(where: { $0.id == hostID })
+              let host = hosts.first(where: { $0.id == hostID }),
+              let attemptID = pairingUI.attemptID
         else { return }
 
-        guard isPairingTransportAvailable else {
-            pairingUI.isRunning = false
-            pairingUI.message = "Pairing is unavailable until authenticated Moonlight transport is installed."
-            session.phase = .disconnected
-            diagnostics.record("Rejected pairing PIN for \(host.name); no host state changed", subsystem: "pairing")
+        guard !pairingUI.isRunning,
+              pairingUI.stage == .waitingForPIN else {
             return
         }
 
-        pairingUI.message = "No authenticated pairing provider is configured."
-        session.phase = .failed(SessionError(subsystem: "pairing", message: "Authenticated pairing provider is unavailable"))
-        diagnostics.record("Pairing provider unavailable for \(host.name)", subsystem: "pairing")
+        guard let provider = runtimeProviders.pairing else {
+            failPairingAttempt(
+                attemptID: attemptID,
+                message: "Pairing is unavailable until authenticated Moonlight transport is installed.",
+                diagnostic: "Pairing provider became unavailable"
+            )
+            return
+        }
+        guard let identity = preparedPairingIdentity else {
+            failPairingAttempt(
+                attemptID: attemptID,
+                message: "Client identity is not ready. Start pairing again.",
+                diagnostic: "Pairing request rejected without prepared identity"
+            )
+            return
+        }
+
+        let pin = pairingUI.pin
+        guard isPairingPINValid else {
+            pairingUI.message = "PIN must contain exactly four digits."
+            return
+        }
+
+        let request = PairingRuntimeRequest(
+            attemptID: attemptID,
+            host: host,
+            pin: pin,
+            clientIdentity: identity
+        )
+        pairingUI.pin = ""
+        pairingUI.isRunning = true
+        pairingUI.stage = .exchangingSecrets
+        pairingUI.message = pairingMessage(for: .exchangingSecrets, hostName: host.name)
+        session.phase = .pairing(pin: "")
+
+        var completedResult: PairingResult?
+        do {
+            let events = await provider.pair(request)
+            for try await event in events {
+                guard pairingUI.attemptID == attemptID else { return }
+                switch event {
+                case let .progress(snapshot):
+                    guard snapshot.attemptID == attemptID,
+                          snapshot.hostID == hostID else {
+                        throw PairingApplicationError.invalidAuthenticatedCompletion
+                    }
+                    pairingUI.stage = snapshot.stage
+                    pairingUI.message = snapshot.failure?.message
+                        ?? pairingMessage(for: snapshot.stage, hostName: host.name)
+                case let .completed(result):
+                    try validatePairingCompletion(result, expectedHostID: hostID)
+                    completedResult = result
+                }
+            }
+            guard let result = completedResult else {
+                throw PairingApplicationError.incompleteRuntimeStream
+            }
+            guard pairingUI.attemptID == attemptID else { return }
+            applyPairingCompletion(result)
+        } catch {
+            guard pairingUI.attemptID == attemptID else { return }
+            if let failure = error as? PairingFailure, failure.code == .cancelled {
+                await cancelPairing(showCancelledState: true)
+                return
+            }
+            failPairingAttempt(
+                attemptID: attemptID,
+                message: "Authenticated pairing failed. Try again.",
+                diagnostic: "Authenticated pairing failed for \(host.name)"
+            )
+            await provider.cancelPairing(attemptID: attemptID)
+        }
+    }
+
+    func cancelPairing() async {
+        await cancelPairing(showCancelledState: true)
     }
 
     func refreshAppsForSelectedHost() async {
@@ -445,6 +556,98 @@ final class AppModel {
             renderState.policy = .active
             updateRenderPreferences()
             diagnostics.record("Started demo stream", subsystem: "stream")
+        }
+    }
+
+    private func cancelPairing(showCancelledState: Bool) async {
+        guard let attemptID = pairingUI.attemptID else { return }
+        let hostID = pairingUI.hostID
+        pairingUI.attemptID = nil
+        pairingUI.pin = ""
+        pairingUI.isRunning = false
+        preparedPairingIdentity = nil
+        session.phase = .disconnected
+
+        if showCancelledState {
+            pairingUI.stage = .cancelled
+            pairingUI.message = "Pairing was cancelled."
+            diagnostics.record("Cancelled pairing attempt", subsystem: "pairing")
+        } else if !showCancelledState {
+            pairingUI = PairingUIState(hostID: hostID)
+        }
+
+        if let provider = runtimeProviders.pairing {
+            await provider.cancelPairing(attemptID: attemptID)
+        }
+    }
+
+    private func applyPairingCompletion(_ result: PairingResult) {
+        if let index = hosts.firstIndex(where: { $0.id == result.host.id }) {
+            hosts[index] = result.host
+        } else {
+            hosts.append(result.host)
+        }
+        selectedHostID = result.host.id
+        pairingUI = PairingUIState(
+            hostID: result.host.id,
+            stage: .paired,
+            message: "Paired with \(result.host.name)."
+        )
+        preparedPairingIdentity = nil
+        session.phase = .disconnected
+        diagnostics.record("Authenticated pairing completed", subsystem: "pairing")
+    }
+
+    private func failPairingAttempt(
+        attemptID: UUID,
+        message: String,
+        diagnostic: String
+    ) {
+        guard pairingUI.attemptID == attemptID else { return }
+        pairingUI.attemptID = nil
+        pairingUI.stage = .failed
+        pairingUI.pin = ""
+        pairingUI.isRunning = false
+        pairingUI.message = message
+        preparedPairingIdentity = nil
+        let failure = SessionError(subsystem: "pairing", message: message)
+        session.phase = .failed(failure)
+        diagnostics.record(diagnostic, subsystem: "pairing")
+    }
+
+    private func validatePairingCompletion(
+        _ result: PairingResult,
+        expectedHostID: MoonlightHost.ID
+    ) throws {
+        guard result.host.id == expectedHostID,
+              result.host.pairingState == .paired,
+              let pin = result.host.pinnedIdentity,
+              pin.serverCertificateDER == result.serverIdentity.certificateDER,
+              pin.certificateSHA256.caseInsensitiveCompare(
+                  result.serverIdentity.certificateSHA256
+              ) == .orderedSame else {
+            throw PairingApplicationError.invalidAuthenticatedCompletion
+        }
+    }
+
+    private func pairingMessage(for stage: PairingStage, hostName: String) -> String {
+        switch stage {
+        case .idle:
+            return "Preparing pairing with \(hostName)..."
+        case .waitingForPIN:
+            return "Preparing PIN exchange with \(hostName)..."
+        case .exchangingSecrets:
+            return "Exchanging authenticated pairing secrets..."
+        case .verifyingServer:
+            return "Verifying the host identity..."
+        case .pinningIdentity:
+            return "Saving the verified host identity..."
+        case .paired:
+            return "Authenticated pairing completed."
+        case .failed:
+            return "Authenticated pairing failed."
+        case .cancelled:
+            return "Pairing was cancelled."
         }
     }
 

@@ -167,7 +167,8 @@ actor PairingStateMachine {
     }
 
     private static func isValidPIN(_ pin: String) -> Bool {
-        pin.count == 4 && pin.allSatisfy(\.isNumber)
+        let bytes = Array(pin.utf8)
+        return bytes.count == 4 && bytes.allSatisfy { (48...57).contains($0) }
     }
 
     private func requireStage(_ expected: PairingStage) throws {

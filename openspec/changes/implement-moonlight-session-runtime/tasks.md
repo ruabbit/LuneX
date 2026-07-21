@@ -70,7 +70,7 @@
 ## 8. Application integration
 
 - [x] 8.1 Replace hard-coded unavailable runtime flags with injected production provider availability
-- [ ] 8.2 Connect pairing UI to the authenticated pairing runtime with cancellable stage progress
+- [x] 8.2 Connect pairing UI to the authenticated pairing runtime with cancellable stage progress
 - [ ] 8.3 Connect launch/stop UI to the session actor and derive UI phase from channel readiness
 - [ ] 8.4 Connect decoded video, audio, and input lifetimes to one session-owned SwiftUI environment
 - [ ] 8.5 Surface actionable pairing, transport, decoder, audio, and input diagnostics without secrets

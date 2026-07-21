@@ -15,18 +15,20 @@ final class PairingStateMachineTests: XCTestCase {
     }
 
     func testRejectsInvalidPIN() async throws {
-        let machine = PairingStateMachine(hostID: UUID(uuidString: "6AC54405-5859-4F68-BED8-424F0BFB1782")!)
-        await machine.begin(serverMajorVersion: 7)
+        for pin in ["12AB", "123", "12345", "１２３４", "١٢٣٤"] {
+            let machine = PairingStateMachine(hostID: UUID())
+            await machine.begin(serverMajorVersion: 7)
 
-        do {
-            try await machine.submitPIN("12AB")
-            XCTFail("Expected invalid PIN failure")
-        } catch let failure as PairingFailure {
-            XCTAssertEqual(failure.code, .invalidPIN)
+            do {
+                try await machine.submitPIN(pin)
+                XCTFail("Expected invalid PIN failure for \(pin)")
+            } catch let failure as PairingFailure {
+                XCTAssertEqual(failure.code, .invalidPIN)
+            }
+
+            let snapshot = await machine.snapshot
+            XCTAssertEqual(snapshot.stage, .waitingForPIN)
         }
-
-        let snapshot = await machine.snapshot
-        XCTAssertEqual(snapshot.stage, .waitingForPIN)
     }
 
     func testRejectsInvalidTransition() async {

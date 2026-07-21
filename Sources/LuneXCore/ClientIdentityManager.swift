@@ -176,7 +176,11 @@ enum ClientIdentityManagerError: Error, Equatable {
     case persistenceReloadMismatch
 }
 
-actor ClientIdentityManager {
+protocol ClientIdentityProvisioning: Sendable {
+    func loadOrCreateIdentity(createdAt: Date) async throws -> ClientIdentityMaterial
+}
+
+actor ClientIdentityManager: ClientIdentityProvisioning {
     private let store: any ClientIdentityStore
     private let generator: any ClientIdentityGenerating
     private let validator: any ClientIdentityValidating
