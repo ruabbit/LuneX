@@ -300,3 +300,13 @@
 - 5.4 最终实现为 generation-owned `VideoDecoder` actor、weak/locked callback bridge、required-hardware `VideoToolboxDecompressionSession` 和可注入 session factory。同步 decode error 立即发布，callback error/drop/missing-buffer 各自结构化，stop/replacement/deinit 都确定性收敛且旧 generation callback 不能发布。
 - 合成 fixture 修正后先由 FFmpeg 独立解码，再由 production VideoToolbox gate 验证：H.264 输出 64x64 8-bit bi-planar video-range pixel buffer，HEVC 输出 64x64 10-bit bi-planar video-range pixel buffer。focused decoder+format tests `15/15`，完整 macOS tests `201 total / 200 passed / 1 explicit Keychain skip / 0 failed`。
 - macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build、fixture self-test/全树、OpenSpec strict、generator byte-for-byte、diff/reference boundary、ENet revision/license/source/header 与四 SDK C strict syntax 均通过；四个 fixed simulator 前后保持 `Shutdown`。本任务仍不证明 AV1 format/decode、Metal texture delivery、HDR metadata 或 live Sunshine video。
+
+### 2026-07-21 阶段 13 Metal Frame Delivery 设计
+
+- CoreVideo SDK 明确规定 `CVMetalTextureCacheCreateTextureFromImage` 建立 source image 与 Metal texture 的 live binding，客户端必须保留 `CVMetalTexture` wrapper 直到 GPU 使用结束；这条路径不做 CPU color conversion。5.5 的 mapped frame 因此同时保留源 `CVPixelBuffer`、两个 `CVMetalTexture` wrapper 与 `MTLTexture` view。
+- 8-bit bi-planar video-range 映射为 plane 0 `r8Unorm` full size、plane 1 `rg8Unorm` half size；10-bit bi-planar video-range 映射为 `r16Unorm`/`rg16Unorm`。其他 pixel format 或非双平面 buffer fail closed，不在本任务偷偷转换为 BGRA。
+- renderer-facing queue 使用 generation 隔离和固定小容量：超容量淘汰最旧 arrival；renderer dequeue 时取最新 frame 并清除更旧积压，保持低延迟。replacement/stop 清空 queued wrappers 并 flush texture cache；旧 generation frame 在 map 前拒绝。
+- 当前 `MetalStreamSurface` 只有 `MTKView` lifecycle/pause shell，AppModel production media provider仍按 8.x 保持 fail closed。5.5 提供可注入的 decoded-frame-to-Metal queue boundary和真实 texture mapping测试，不提前声称 shader/color conversion、实际画面呈现或 session UI wiring。
+- 5.5 最终实现由 locked `CVMetalVideoFrameMapper` 与 actor-isolated `BoundedMetalFrameQueue` 组成。mapped frame 同时保留 source `CVPixelBuffer`、luma/chroma `CVMetalTexture` wrapper 和对应 `MTLTexture`；8-bit `420v` 映射为 `r8Unorm/rg8Unorm`，10-bit `x420` 映射为 `r16Unorm/rg16Unorm`，其他格式 fail closed。
+- queue 默认容量 3、硬上限 8；enqueue 超限淘汰最旧 frame，renderer dequeue 只交付最新 frame 并释放积压。generation replacement/stop 清空 wrapper 并 flush cache，stale generation 在 texture mapping 前拒绝；完整 macOS gate 为 `206 total / 205 passed / 1 explicit Keychain skip / 0 failed`，五平台 build、四 SDK C、fixture/OpenSpec/generator/reference/ENet/simulator gates 全部通过。
+- 该证据证明真实 H.264/HEVC VideoToolbox output 可建立 live zero-CPU-conversion Metal plane，但不证明 YUV shader、colorspace/HDR mapping、drawable presentation、session UI wiring 或 live Sunshine sustained video；这些边界继续属于 5.6-5.8 与 8.x。

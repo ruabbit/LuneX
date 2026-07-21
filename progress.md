@@ -349,3 +349,19 @@
 - macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建前后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
 - fixture validator self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、固定 ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。
 - OpenSpec 5.4 更新为完成，权威进度 `28/61`；下一项为 5.5 zero-copy CVPixelBuffer-to-Metal texture delivery 与 bounded frame queue。AV1 format/decode、HDR metadata/reset policy 和 live Sunshine sustained video仍未声称完成。
+
+## 2026-07-21 阶段 13 任务 5.5 启动
+
+- 5.4 已以 `61a3247 Own VideoToolbox decode sessions` 独立提交并推送；确认 `HEAD == origin/main`、工作树 clean 后进入 5.5。
+- 5.5 范围限定为 IOSurface-backed `CVPixelBuffer` 到 `CVMetalTexture` 的零 CPU-copy plane 映射、session-owned texture cache 和有界 newest-frame queue；色彩矩阵、HDR metadata/tone mapping、format reset 与 live sustained video仍分别留给 5.6-5.8。
+- 测试继续显式清除 `LUNEX_RUN_KEYCHAIN_TEST`，并只使用四个固定 simulator destination，不创建或 boot 设备。
+- 5.5 focused warnings-as-errors gate 已通过：`MetalVideoFrameDeliveryTests` 5 项与 `VideoDecompressionSessionTests` 10 项，共 `15/15`；production mapping 从真实 VideoToolbox H.264 `420v` 与 HEVC `x420` 输出建立 `r8Unorm/rg8Unorm` 与 `r16Unorm/rg16Unorm` live Metal plane，且保留同一 source `CVPixelBuffer` 与 `CVMetalTexture` wrapper。完整跨平台封版门禁尚未执行，因此任务仍保持未勾选、未提交。
+- 5.5 完整 macOS warnings-as-errors tests 已通过；xcresult 精确统计 `206 total / 205 passed / 1 skipped / 0 failed`，唯一 skipped 是未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，本轮未访问 Keychain。fixture validator self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace 与 production/reference boundary 同步通过。
+
+## 2026-07-21 阶段 13 任务 5.5 完成
+
+- 新增 locked `CVMetalVideoFrameMapper`：使用 session-owned `CVMetalTextureCacheCreateTextureFromImage` 将 decoder-native `420v`/`x420` 双平面 pixel buffer 映射为 `r8Unorm/rg8Unorm` 或 `r16Unorm/rg16Unorm`，mapped frame 保留 source buffer、CoreVideo wrappers 与 Metal views；其他 pixel format/plane/layout/device mismatch fail closed。
+- 新增 actor-isolated `BoundedMetalFrameQueue`：默认容量 3、硬上限 8，超限淘汰最旧 frame，`dequeueLatest()` 交付最新 frame 并释放积压；generation replacement/stop 清空 queue 并 flush cache，stale frame 在 mapping 前拒绝，decoder start/frame/stop event 可直接驱动该边界。
+- focused decoder+Metal gate `15/15`；完整 macOS warnings-as-errors tests `206 total / 205 passed / 1 skipped / 0 failed`，唯一 skipped 仍为显式 opt-in 真实 Keychain round-trip。macOS、固定 iPhone、固定 iPad、固定 Apple TV 与固定 Apple Vision Pro warnings-as-errors Debug build全部通过，四个 simulator 构建前后均为 `Shutdown`。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、固定 ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。OpenSpec 5.5 更新为完成，权威进度 `29/61`；下一项为 5.6 colorspace/bit-depth/mastering/content-light metadata preservation。
+- 当前证据不等于 shader color conversion、HDR tone mapping、drawable presentation、AppModel production wiring 或 live Sunshine sustained video；这些范围仍保持未完成。

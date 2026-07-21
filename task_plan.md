@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `28/61`：5.4 VideoToolbox decompression-session ownership 与 callback-to-actor bridging 已完成独立验收，下一项为 5.5 zero-copy CVPixelBuffer-to-Metal texture delivery 与 bounded frame queue；阶段 13 仍为 `in_progress`。
+当前 change 权威进度为 `29/61`：5.5 zero-copy CVPixelBuffer-to-Metal texture delivery 与 bounded frame queue 已完成独立验收，下一项为 5.6 negotiated colorspace、bit depth、mastering 与 content-light metadata preservation；阶段 13 仍为 `in_progress`。
 
-5.4 已实现 generation-owned required-hardware VideoToolbox session、owned CoreMedia sample、callback-to-actor bridge、stale callback rejection 和 finish/wait/invalidate teardown；合成 H.264 8-bit 与 HEVC 10-bit production decode 均返回有效 64x64 pixel buffer。Metal texture cache/queue、HDR metadata/reset policy 和 live sustained video仍分别属于 5.5-5.8。
+5.5 已实现 session-owned `CVMetalTextureCache`、8/10-bit bi-planar live Metal texture mapping、wrapper/source lifetime retention、generation isolation 与最大 8 帧的 newest-frame bounded queue；HDR metadata/color conversion/shader、decoder reset policy、AppModel wiring 和 live sustained video仍分别属于 5.6-5.8 与 8.x。
 
 ## 遇到的错误
 
@@ -109,3 +109,5 @@
 | 5.3 四 SDK C syntax 脚本把文件列表放入 zsh 标量 | 1 | 改用 zsh 数组 `sources=(...)` 和 `for file in $sources`，重跑同一 strict syntax gate |
 | 5.4 首次 focused compile 使用了推测的 VideoToolbox Swift enum 名与错误的 static owner | 1 | 按 Xcode 26.4 importer 诊断改用 `._EnableAsynchronousDecompression`、`._1xRealTimePlayback`，并从 factory 类型读取 destination attributes |
 | 5.4 既有 parameter-set fixture 的占位 IDR 被 VideoToolbox 拒绝为 bad data | 1 | 用本机 libx264/libx265 重生成 64x64 黑帧，移除 encoder SEI，仅保留参数集与 IDR，并先用 FFmpeg 独立解码验证后再更新 fixture |
+| 5.5 首次 focused test 把 actor `await` 放入 XCTest autoclosure | 1 | 先把 queue actor 的返回值 await 到局部变量，再传给 `XCTAssertEqual`/`XCTUnwrap`/`XCTAssertNil`，保持 Swift 6 warnings-as-errors |
+| 5.5 完整门禁命令包含 `rm -rf` 预清理而被执行策略拒绝 | 1 | 测试未启动；改用全新的唯一 DerivedData/xcresult 路径，不执行破坏性预清理命令 |
