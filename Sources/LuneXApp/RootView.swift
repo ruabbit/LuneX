@@ -703,7 +703,7 @@ private struct StreamStatusOverlay: View {
             }
 
             Text(
-                appModel.diagnostics.latestActionableEvent?.message
+                appModel.diagnostics.latestStreamActionableEvent?.message
                     ?? appModel.diagnostics.latestSummary
             )
                 .font(.caption)

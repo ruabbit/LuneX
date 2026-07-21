@@ -3,8 +3,16 @@ import Observation
 
 @Observable
 final class DiagnosticsStore {
+    private static let streamCategories: Set<ApplicationDiagnosticCategory> = [
+        .transport,
+        .decoder,
+        .audio,
+        .input
+    ]
+
     private let capacity: Int
     private(set) var events: [DiagnosticEvent] = []
+    private var currentActionableEvents: [ApplicationDiagnosticCategory: DiagnosticEvent] = [:]
 
     init(capacity: Int = 500) {
         self.capacity = max(1, capacity)
@@ -15,7 +23,27 @@ final class DiagnosticsStore {
     }
 
     var latestActionableEvent: DiagnosticEvent? {
-        events.last { $0.action != nil || $0.severity == .error }
+        currentActionableEvents.values.max { $0.date < $1.date }
+    }
+
+    var latestStreamActionableEvent: DiagnosticEvent? {
+        currentActionableEvents.values
+            .filter { Self.streamCategories.contains($0.category) }
+            .max { $0.date < $1.date }
+    }
+
+    func clearActionableEvents(in categories: Set<ApplicationDiagnosticCategory>) {
+        for category in categories {
+            currentActionableEvents[category] = nil
+        }
+    }
+
+    func clearStreamActionableEvents() {
+        clearActionableEvents(in: Self.streamCategories)
+    }
+
+    func clearAllActionableEvents() {
+        currentActionableEvents.removeAll()
     }
 
     func record(
@@ -115,6 +143,9 @@ final class DiagnosticsStore {
             .string(event.message)
         ))
         events.append(sanitizedEvent)
+        if sanitizedEvent.action != nil || sanitizedEvent.severity == .error {
+            currentActionableEvents[sanitizedEvent.category] = sanitizedEvent
+        }
         if events.count > capacity {
             events.removeFirst(events.count - capacity)
         }

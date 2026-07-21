@@ -210,6 +210,67 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testCurrentActionsClearByCategoryWithoutDeletingHistory() {
+        let store = DiagnosticsStore()
+        store.record(ApplicationDiagnosticFactory.pairingUnavailable, date: Date(timeIntervalSince1970: 1))
+        store.record(
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession),
+            date: Date(timeIntervalSince1970: 2)
+        )
+        store.record(
+            ApplicationDiagnosticFactory.streamFailure(RemoteInputRuntimeError.deliveryFailed),
+            date: Date(timeIntervalSince1970: 3)
+        )
+
+        XCTAssertEqual(store.latestActionableEvent?.category, .input)
+        XCTAssertEqual(store.latestStreamActionableEvent?.category, .input)
+
+        store.clearActionableEvents(in: [.input])
+
+        XCTAssertEqual(store.latestActionableEvent?.category, .decoder)
+        XCTAssertEqual(store.latestStreamActionableEvent?.category, .decoder)
+        XCTAssertEqual(store.events.count, 3)
+
+        store.clearStreamActionableEvents()
+
+        XCTAssertEqual(store.latestActionableEvent?.category, .pairing)
+        XCTAssertNil(store.latestStreamActionableEvent)
+        XCTAssertEqual(store.events.count, 3)
+
+        store.clearAllActionableEvents()
+
+        XCTAssertNil(store.latestActionableEvent)
+        XCTAssertEqual(store.events.count, 3)
+    }
+
+    func testMacLifecycleAndInputDiagnosticsUseFixedPrivacyBoundedPayloads() {
+        let diagnostics = MacLifecycleDiagnosticState.allTestStates.map(
+            ApplicationDiagnosticFactory.macLifecycleState
+        ) + MacInputDiagnosticState.allTestStates.map(
+            ApplicationDiagnosticFactory.macInputState
+        )
+        let forbiddenValues = [
+            "45F0C9CB-D795-49B2-A733-F68397632233",
+            "moon.local",
+            "2560",
+            "1440",
+            "keyCode",
+            "characters",
+            "generation"
+        ]
+
+        XCTAssertEqual(Set(diagnostics.map(\.code)).count, diagnostics.count)
+        for diagnostic in diagnostics {
+            XCTAssertEqual(diagnostic.severity, .info)
+            XCTAssertNil(diagnostic.action)
+            for value in forbiddenValues {
+                XCTAssertFalse(diagnostic.code.localizedCaseInsensitiveContains(value))
+                XCTAssertFalse(diagnostic.summary.localizedCaseInsensitiveContains(value))
+            }
+        }
+    }
+
+    @MainActor
     func testControllerFeedbackDiagnosticDoesNotExposeControllerIdentity() {
         let diagnostic = ApplicationDiagnosticFactory.remoteFeedback(
             RemoteInputFeedbackDiagnostic(
@@ -226,6 +287,25 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         XCTAssertFalse(diagnostic.summary.contains("private-controller-id"))
         XCTAssertFalse(diagnostic.code.contains("3"))
     }
+}
+
+private extension MacLifecycleDiagnosticState {
+    static let allTestStates: [Self] = [
+        .inactive,
+        .active,
+        .occluded,
+        .unfocused,
+        .drawableUnavailable
+    ]
+}
+
+private extension MacInputDiagnosticState {
+    static let allTestStates: [Self] = [
+        .unavailable,
+        .closed,
+        .directReady,
+        .relativeReady
+    ]
 }
 
 private struct SecretBearingDiagnosticError: Error, CustomStringConvertible {

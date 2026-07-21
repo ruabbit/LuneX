@@ -45,7 +45,7 @@
 
 当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。
 
-阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`21/29`。5.3已按streaming session、media/input generation、readiness、focus/visibility与有效geometry派生actual surface admission；direct pointer保持绝对输入且不占用cursor，relative pointer经共享lease broker平衡隐藏与pointer association，persisted shortcut policy冻结进每个envelope，Escape只退出relative模式。最终surface focused `33/33`、完整macOS `465 passed + 1 Keychain skip`和五平台Debug构建通过。下一项5.4发布privacy-bounded input/lifecycle diagnostics并在恢复或停止时清理stale action。
+阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`22/29`。5.4已将完整诊断历史与当前action presentation分离，按恢复类别选择性清理；macOS lifecycle/input只发布去重的固定privacy-bounded状态，provider send failure立即关闭surface admission并保留generation供teardown。最终focused `49/49`、完整macOS `468 passed + 1 Keychain skip`和五平台Debug构建通过。下一项5.5为完整application integration gate。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -222,9 +222,15 @@
 | 14.5.3首轮focused两项旧surface测试仍依赖默认开启admission | 1 | 新production默认fail closed正确且新增policy测试通过；旧fixture改为附着window并显式应用direct active policy后重跑，不放宽production默认值 |
 | 14.5.3封版审阅发现旧dismantle的attachment回调可能重取cursor lease | 1 | 未附着路径改为只释放匹配lease且不apply inactive claim；新增真实双coordinator replacement后旧dismantle回归，全部最终门禁重新执行 |
 | 14.5.3竞态修复首个补丁跨错production/test文件上下文 | 1 | `apply_patch`整体拒绝且无修改；拆为Metal surface生产补丁和测试/跟踪补丁后精确应用 |
+| 14.5.4启动跟踪补丁误把`progress.md`末句当作`findings.md`上下文 | 1 | `apply_patch`整体拒绝且无修改；读取两个文件真实尾部后分别按精确末行追加，并继续保持生产代码未触及 |
+| 14.5.4首个生产大补丁的AppModel尾部上下文不匹配 | 1 | `apply_patch`整体拒绝且无源码修改；精确读取`refreshMacInputSurfacePolicy`尾部后拆为诊断模型、store、UI与AppModel小补丁应用 |
+| 14.5.4首轮focused唯一失败在input activation中间态提前断言action已清理 | 1 | production先创建coordinator generation、await返回后才登记App generation并清input action；测试等待完整恢复事务而非仅等待coordinator内部generation非空 |
+| 14.5.4五平台构建前simulator只读校验再次误用`all(generator; condition)`且尾部printf掩盖jq退出码 | 1 | 未修改任何设备；复用`. as $root`后生成固定设备校验数组再`map(...) | all`，并以`&&`确保失败立即向外传播 |
+| 14.5.4仓库门禁调查误假设生成器位于复数`scripts/` | 1 | 命令在只读列目录阶段失败；仓库实际为`Tools/generate_xcodeproj.rb`和单数`script/`，读取现有进度记录后使用真实路径执行 |
+| 14.5.4 provider失败夹具的无上下文替换命中较早同名初始化 | 1 | diff复核在测试前发现；恢复lifecycle缓存测试默认值，并用测试函数名上下文把`failsInputSend`只放到目标诊断测试 |
 
 ## 当前执行点（2026-07-21）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
-- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`21/29`；actual surface geometry、AppModel/media lifecycle、active input coordinator与direct/relative capture/cursor eligibility已连接，下一项5.4为privacy-bounded diagnostics和stale action清理。
+- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`22/29`；privacy-bounded lifecycle/input diagnostics、current-action recovery与provider failure fail-closed已完成，下一项5.5为完整application integration gate。

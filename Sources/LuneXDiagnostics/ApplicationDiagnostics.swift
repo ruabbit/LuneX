@@ -98,6 +98,21 @@ struct ApplicationDiagnostic: Hashable, Sendable {
     }
 }
 
+enum MacLifecycleDiagnosticState: Hashable, Sendable {
+    case inactive
+    case active
+    case occluded
+    case unfocused
+    case drawableUnavailable
+}
+
+enum MacInputDiagnosticState: Hashable, Sendable {
+    case unavailable
+    case closed
+    case directReady
+    case relativeReady
+}
+
 enum ApplicationDiagnosticFactory {
     static let pairingUnavailable = ApplicationDiagnostic(
         category: .pairing,
@@ -122,6 +137,65 @@ enum ApplicationDiagnosticFactory {
         summary: "Streaming is unavailable because a required provider is missing.",
         action: .updateBuild
     )
+
+    static func macLifecycleState(
+        _ state: MacLifecycleDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let code: String
+        let summary: String
+        switch state {
+        case .inactive:
+            code = "mac_lifecycle_inactive"
+            summary = "The macOS stream lifecycle is inactive."
+        case .active:
+            code = "mac_lifecycle_active"
+            summary = "The macOS stream surface is visible and active."
+        case .occluded:
+            code = "mac_lifecycle_occluded"
+            summary = "The macOS stream surface is hidden; video presentation is paused."
+        case .unfocused:
+            code = "mac_lifecycle_unfocused"
+            summary = "The macOS stream surface is unfocused; remote input is suspended."
+        case .drawableUnavailable:
+            code = "mac_lifecycle_drawable_unavailable"
+            summary = "The macOS stream drawable is unavailable; video presentation is paused."
+        }
+        return ApplicationDiagnostic(
+            category: .application,
+            severity: .info,
+            code: code,
+            summary: summary,
+            action: nil
+        )
+    }
+
+    static func macInputState(
+        _ state: MacInputDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let code: String
+        let summary: String
+        switch state {
+        case .unavailable:
+            code = "mac_input_unavailable"
+            summary = "Remote input is not active for the macOS stream."
+        case .closed:
+            code = "mac_input_closed"
+            summary = "Remote input capture is suspended by the macOS lifecycle."
+        case .directReady:
+            code = "mac_input_direct_ready"
+            summary = "Direct pointer input is ready for the macOS stream."
+        case .relativeReady:
+            code = "mac_input_relative_ready"
+            summary = "Relative pointer input is ready for the macOS stream."
+        }
+        return ApplicationDiagnostic(
+            category: .input,
+            severity: .info,
+            code: code,
+            summary: summary,
+            action: nil
+        )
+    }
 
     static func pairingFailure(_ error: Error) -> ApplicationDiagnostic {
         if let failure = error as? PairingFailure {

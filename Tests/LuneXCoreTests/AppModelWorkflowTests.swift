@@ -398,12 +398,14 @@ final class AppModelWorkflowTests: XCTestCase {
         )
 
         await model.loadHosts()
+        model.diagnostics.record(ApplicationDiagnosticFactory.pairingUnavailable)
         await model.beginPairing(host: host)
 
         XCTAssertEqual(model.pairingUI.stage, .waitingForPIN)
         XCTAssertFalse(model.pairingUI.isRunning)
         XCTAssertNotNil(model.pairingUI.attemptID)
         XCTAssertEqual(provider.currentRequestCount(), 0)
+        XCTAssertNotEqual(model.diagnostics.latestActionableEvent?.category, .pairing)
 
         model.pairingUI.pin = "1234"
         let submitTask = Task { await model.submitPairingPIN() }
@@ -425,6 +427,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.pairingUI.stage, .verifyingServer)
         XCTAssertTrue(model.pairingUI.message?.contains("Verifying") == true)
 
+        model.diagnostics.record(ApplicationDiagnosticFactory.pairingUnavailable)
         provider.completeAuthenticated(request)
         await submitTask.value
 
@@ -434,6 +437,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.pairingUI.isRunning)
         XCTAssertNil(model.pairingUI.attemptID)
         XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertNotEqual(model.diagnostics.latestActionableEvent?.category, .pairing)
         XCTAssertFalse(model.diagnostics.events.contains { $0.message.contains("1234") })
     }
 
@@ -1426,6 +1430,117 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
     }
 
+    func testMacDiagnosticsDeduplicateAndClearOnlyRecoveredActions() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(failsInputSend: true)
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 36,
+                    key: Data(repeating: 0x36, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        model.applyPlatformLifecycle(lifecycle)
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.macInputSurfacePolicy.admitsInput }
+        XCTAssertTrue(model.diagnostics.events.contains { $0.code == "mac_lifecycle_active" })
+        XCTAssertTrue(model.diagnostics.events.contains { $0.code == "mac_input_relative_ready" })
+
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession)
+        )
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.pointerMove(MacPointerSample(
+                localPoint: RemotePoint(x: 1_280, y: 720),
+                deltaX: 4,
+                deltaY: -2,
+                buttons: []
+            ))),
+            .accepted
+        )
+        await waitUntil {
+            model.diagnostics.latestStreamActionableEvent?.category == .input
+                && model.macSessionInputSnapshot().terminationReason == .sendFailure
+                && !model.macInputSurfacePolicy.admitsInput
+        }
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.code,
+            "input_delivery_failed"
+        )
+
+        lifecycle.isFocused = false
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        let lifecycleEventCount = model.diagnostics.events.filter {
+            $0.code.hasPrefix("mac_lifecycle_")
+        }.count
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertEqual(
+            model.diagnostics.events.filter { $0.code.hasPrefix("mac_lifecycle_") }.count,
+            lifecycleEventCount
+        )
+        XCTAssertEqual(model.diagnostics.latestStreamActionableEvent?.category, .input)
+        XCTAssertTrue(model.diagnostics.events.contains { $0.code == "mac_lifecycle_unfocused" })
+
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio],
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.macSessionInputSnapshot().generation == nil }
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio, .input],
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.macSessionInputSnapshot().generation != nil
+                && model.diagnostics.latestStreamActionableEvent?.category == .decoder
+        }
+        XCTAssertEqual(model.diagnostics.latestStreamActionableEvent?.category, .decoder)
+
+        lifecycle.isVisible = false
+        lifecycle.isFocused = true
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertEqual(model.diagnostics.latestStreamActionableEvent?.category, .decoder)
+        XCTAssertTrue(model.diagnostics.events.contains { $0.code == "mac_lifecycle_occluded" })
+
+        let historicalActionCount = model.diagnostics.events.filter {
+            $0.action != nil || $0.severity == .error
+        }.count
+        await model.stopStream()
+        await launchTask.value
+
+        XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
+        XCTAssertGreaterThanOrEqual(
+            model.diagnostics.events.filter { $0.action != nil || $0.severity == .error }.count,
+            historicalActionCount
+        )
+        let publicStateEvents = model.diagnostics.events.filter {
+            $0.code.hasPrefix("mac_lifecycle_") || $0.code.hasPrefix("mac_input_")
+        }
+        for event in publicStateEvents {
+            XCTAssertFalse(event.message.contains(record.sessionID.uuidString))
+            XCTAssertFalse(event.message.contains("moon.local"))
+            XCTAssertFalse(event.message.contains("2560"))
+            XCTAssertFalse(event.message.contains("1440"))
+        }
+    }
+
     func testDefaultInputKeyGenerationUsesFreshMaterialForEveryLaunch() async throws {
         let firstKey = RemoteInputKeyMaterial(keyID: 1, key: Data(repeating: 0x11, count: 16))
         let secondKey = RemoteInputKeyMaterial(keyID: 2, key: Data(repeating: 0x22, count: 16))
@@ -2068,6 +2183,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private let lock = NSLock()
     private let automaticallyReady: Bool
     private let failsLifecycleApplication: Bool
+    private let failsInputSend: Bool
     private var startRecords: [StartRecord] = []
     private var stoppedSessionIDs: [UUID] = []
     private var continuations: [UUID: Continuation] = [:]
@@ -2079,10 +2195,12 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     init(
         automaticallyReady: Bool = true,
-        failsLifecycleApplication: Bool = false
+        failsLifecycleApplication: Bool = false,
+        failsInputSend: Bool = false
     ) {
         self.automaticallyReady = automaticallyReady
         self.failsLifecycleApplication = failsLifecycleApplication
+        self.failsInputSend = failsInputSend
     }
 
     func start(
@@ -2148,6 +2266,9 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         }
         guard application.mediaGeneration == currentGeneration else {
             throw SessionMediaEnvironmentError.staleInputApplication
+        }
+        if failsInputSend {
+            throw RemoteInputRuntimeError.deliveryFailed
         }
         withLock { sentInputApplications.append(application) }
     }

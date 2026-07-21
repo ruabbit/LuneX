@@ -828,5 +828,20 @@
 - `captureSystemShortcuts`同时应用到AppKit key-equivalent入口和enqueue-time envelope；Escape始终本地，仅在relative policy下立即释放cursor并把当前设置切换为direct，不会误禁用direct admission。
 - 最终surface focused warnings-as-errors为`33/33`（`/tmp/LuneX-14-5_3-surface-final.PK4kyI/Surface.xcresult`）；完整macOS为`466 total / 465 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_3-full-final2.yUoJpc/LuneXCoreTests.xcresult`）。唯一skip仍为显式禁用的真实Keychain round-trip。
 - macOS、固定iPhone/iPad/Apple TV/Apple Vision Pro Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-14-5_3-builds-final2.6keHqh`）；simulator规范化状态前后逐字节一致，固定实例唯一且全部`Shutdown`、全局`Booted=0`。5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、diff与production/reference边界通过。
+
+# 2026-07-21 阶段 14 任务 5.4 调查
+
+- `DiagnosticsStore.latestActionableEvent`当前从完整历史反查最后一个warning/error/action，因此session恢复或停止后仍可能把已恢复故障重新显示为当前stream overlay；历史审计事件不能为解决展示问题而删除。
+- 5.4采用独立的当前action presentation状态，并按诊断类别/恢复边界清理。input readiness恢复或lifecycle重新开放只允许清理对应的可恢复input/lifecycle action，不能误清仍有效的decoder/audio/transport fatal action。
+- lifecycle/input公开诊断只使用固定code和粗粒度状态，不记录session/generation UUID、主机endpoint/display name、坐标、raw key code、characters或controller identity；相同语义状态去重，resize/revision本身不产生事件。
+- local stop、remote disconnected和新session开始应清理当前stream action presentation但保留`events`历史；streaming/input recovery则只清理已经明确恢复的scope。
+
+# 2026-07-21 阶段 14 任务 5.4 验收结论
+
+- `DiagnosticsStore`现以按类别current-action索引驱动恢复提示，同时继续保留bounded `events`审计历史；stream overlay只读取transport/decoder/audio/input当前action，不再回放旧pairing或已恢复错误，pairing重试/成功也会清理旧pairing action。
+- macOS lifecycle/input状态只发布固定、无参数code与安全摘要，相同语义状态去重。provider send/release失败设置独立generation-failed gate立即关闭actual surface admission，但保留token供readiness loss、stop或replacement完成ordered teardown；新input generation建立后才清input action。
+- input recovery不会清decoder/audio fatal，focus或occlusion变化也不会清未恢复action；新session、streaming transport recovery、local stop和remote disconnect按明确scope清current presentation，历史事件不删除。
+- 最终focused为`49/49`（`/tmp/LuneX-14-5_4-focused-final2.M5GVv9/Diagnostics.xcresult`）；完整macOS为`469 total / 468 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_4-full-final2.4322ka/LuneXCoreTests.xcresult`），测试显式移除真实Keychain开关。
+- 五平台Debug warnings-as-errors build-only通过（`/tmp/LuneX-14-5_4-builds-final2.Uw3Ahq`）；simulator前后规范化状态逐字节一致，固定实例唯一且全部`Shutdown`、全局`Booted=0`。OpenSpec strict `5/5`、generator三次及生成前SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过，最终仓库门禁`/tmp/LuneX-14-5_4-repo-gates-final2.18qgSJ`。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

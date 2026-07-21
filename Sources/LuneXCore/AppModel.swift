@@ -178,6 +178,11 @@ final class AppModel: ApplicationInputSink {
     @ObservationIgnored private lazy var macSessionInputCoordinator =
         MacSessionInputCoordinator(sink: self)
     @ObservationIgnored private var activeMacInputGeneration: MacSessionInputGeneration?
+    @ObservationIgnored private var isMacInputGenerationFailed = false
+#if os(macOS)
+    @ObservationIgnored private var lastMacLifecycleDiagnosticState: MacLifecycleDiagnosticState?
+    @ObservationIgnored private var lastMacInputDiagnosticState: MacInputDiagnosticState?
+#endif
 
     init(
         hostLibraryManager: HostLibraryManager = HostLibraryManager(
@@ -304,6 +309,9 @@ final class AppModel: ApplicationInputSink {
         renderState.policy = directive.renderPolicy
         renderState.transform.drawableSize = lifecycle.drawableSize
         renderState.headroom = lifecycle.headroom
+#if os(macOS)
+        publishMacLifecycleDiagnostic(for: directive)
+#endif
         applyInputLifecycle(directive.input)
         clearPresentationIfRequired(directive.presentation)
         refreshMacInputSurfacePolicy()
@@ -469,6 +477,7 @@ final class AppModel: ApplicationInputSink {
         }
 
         await cancelPairing(showCancelledState: false)
+        diagnostics.clearActionableEvents(in: [.pairing])
         let attemptID = UUID()
         pairingUI = PairingUIState(
             hostID: host.id,
@@ -696,9 +705,8 @@ final class AppModel: ApplicationInputSink {
             didPrepareSession = true
             activeControlReadiness = []
             activeMediaReadiness = []
+            clearStreamActionPresentation()
             streamLaunchUI.isLaunching = true
-            streamLaunchUI.errorMessage = nil
-            streamLaunchUI.actionMessage = nil
             session.activeHostID = host.id
             session.lastError = nil
             navigationSelection = .stream
@@ -748,6 +756,7 @@ final class AppModel: ApplicationInputSink {
     }
 
     func stopStream() async {
+        clearStreamActionPresentation()
         guard let sessionID = activeStreamSessionID,
               let sessionControlProvider = runtimeProviders.sessionControl else {
             return
@@ -761,8 +770,6 @@ final class AppModel: ApplicationInputSink {
         await sessionControlProvider.stop(sessionID: sessionID)
         _ = try? await streamSessionCoordinator.completeLocalStop(sessionID: sessionID)
         diagnostics.record("Stopped stream session", subsystem: "stream")
-        streamLaunchUI.errorMessage = nil
-        streamLaunchUI.actionMessage = nil
         session.activeHostID = nil
         session.lastError = nil
         session.phase = .disconnected
@@ -786,7 +793,13 @@ final class AppModel: ApplicationInputSink {
         do {
             try await sessionMediaEnvironment.sendInput(application)
         } catch {
-            diagnostics.record(ApplicationDiagnosticFactory.streamFailure(error))
+            if activeStreamSessionID == sessionID,
+               activeMediaSessionID == sessionID,
+               activeMediaGeneration == mediaGeneration {
+                isMacInputGenerationFailed = true
+                refreshMacInputSurfacePolicy()
+                diagnostics.record(ApplicationDiagnosticFactory.streamFailure(error))
+            }
             throw error
         }
     }
@@ -807,6 +820,8 @@ final class AppModel: ApplicationInputSink {
             if activeStreamSessionID == sessionID,
                activeMediaSessionID == sessionID,
                activeMediaGeneration == mediaGeneration {
+                isMacInputGenerationFailed = true
+                refreshMacInputSurfacePolicy()
                 diagnostics.record(ApplicationDiagnosticFactory.streamFailure(error))
             }
             throw error
@@ -862,6 +877,7 @@ final class AppModel: ApplicationInputSink {
         )
         preparedPairingIdentity = nil
         session.phase = .disconnected
+        diagnostics.clearActionableEvents(in: [.pairing])
         diagnostics.record("Authenticated pairing completed", subsystem: "pairing")
     }
 
@@ -926,8 +942,7 @@ final class AppModel: ApplicationInputSink {
             activeControlReadiness = []
             activeMediaReadiness = []
             streamLaunchUI.isLaunching = false
-            streamLaunchUI.errorMessage = nil
-            streamLaunchUI.actionMessage = nil
+            clearStreamActionPresentation()
             session.activeHostID = nil
             session.lastError = nil
             session.phase = .disconnected
@@ -952,6 +967,9 @@ final class AppModel: ApplicationInputSink {
             renderState.policy = .idle
 
         case .streaming:
+            diagnostics.clearActionableEvents(in: [.transport])
+            streamLaunchUI.errorMessage = nil
+            streamLaunchUI.actionMessage = nil
             streamLaunchUI.isLaunching = false
             session.phase = .streaming
             renderState.policy = hasPlatformLifecycle
@@ -1317,6 +1335,8 @@ final class AppModel: ApplicationInputSink {
             return
         }
         activeMacInputGeneration = generation
+        isMacInputGenerationFailed = false
+        diagnostics.clearActionableEvents(in: [.input])
         applyInputLifecycle(latestLifecycleDirective.input)
         refreshMacInputSurfacePolicy()
     }
@@ -1326,6 +1346,7 @@ final class AppModel: ApplicationInputSink {
     ) async {
         guard let generation = activeMacInputGeneration else { return }
         activeMacInputGeneration = nil
+        isMacInputGenerationFailed = false
         refreshMacInputSurfacePolicy()
         _ = await macSessionInputCoordinator.terminate(
             generation: generation,
@@ -1429,6 +1450,7 @@ final class AppModel: ApplicationInputSink {
             && activeMediaGeneration != nil
             && activeMediaReadiness.contains(.input)
             && activeMacInputGeneration != nil
+            && !isMacInputGenerationFailed
             && renderState.coordinateSnapshot != nil
         macInputSurfacePolicy = MacInputSurfacePolicy(
             admitsInput: admitsInput,
@@ -1440,7 +1462,65 @@ final class AppModel: ApplicationInputSink {
             ),
             forwardsSystemShortcuts: settings.input.captureSystemShortcuts
         )
+#if os(macOS)
+        publishMacInputDiagnosticState()
+#endif
     }
+
+    private func clearStreamActionPresentation() {
+        diagnostics.clearStreamActionableEvents()
+        streamLaunchUI.errorMessage = nil
+        streamLaunchUI.actionMessage = nil
+    }
+
+#if os(macOS)
+    private func publishMacLifecycleDiagnostic(
+        for directive: SessionLifecycleDirective
+    ) {
+        let state: MacLifecycleDiagnosticState
+        switch directive.presentation {
+        case .active:
+            state = .active
+        case .throttled:
+            state = .unfocused
+        case let .clear(reason):
+            switch reason {
+            case .streamInactive:
+                state = .inactive
+            case .notVisible:
+                state = .occluded
+            case .drawableUnavailable:
+                state = .drawableUnavailable
+            case .notFocused:
+                state = .unfocused
+            }
+        }
+        guard lastMacLifecycleDiagnosticState != state else { return }
+        lastMacLifecycleDiagnosticState = state
+        diagnostics.record(ApplicationDiagnosticFactory.macLifecycleState(state))
+    }
+
+    private func publishMacInputDiagnosticState() {
+        let state: MacInputDiagnosticState
+        if activeStreamSessionID == nil
+            || activeMediaSessionID != activeStreamSessionID
+            || activeMediaGeneration == nil
+            || !activeMediaReadiness.contains(.input)
+            || activeMacInputGeneration == nil
+            || isMacInputGenerationFailed {
+            state = .unavailable
+        } else if !macInputSurfacePolicy.admitsInput {
+            state = .closed
+        } else if macInputSurfacePolicy.cursorPolicy.capturesRelativePointer {
+            state = .relativeReady
+        } else {
+            state = .directReady
+        }
+        guard lastMacInputDiagnosticState != state else { return }
+        lastMacInputDiagnosticState = state
+        diagnostics.record(ApplicationDiagnosticFactory.macInputState(state))
+    }
+#endif
 
     private func updateRenderPreferences() {
         renderState.transform.sourceSize = activeDecodedSourceSize ?? PixelSize(
