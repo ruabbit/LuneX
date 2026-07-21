@@ -70,6 +70,11 @@ struct SessionInputApplication: Equatable, Sendable {
     var event: RemoteInputEvent
 }
 
+struct SessionInputReleaseApplication: Equatable, Sendable {
+    var sessionID: UUID
+    var mediaGeneration: UInt64
+}
+
 protocol SessionVideoProcessing: Sendable {
     func consume(_ event: VideoReceiveEvent) async throws -> Bool
     func updateColorMetadata(_ metadata: VideoColorMetadata) async throws
@@ -113,6 +118,8 @@ protocol SessionMediaEnvironment: Sendable {
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws
 
     func sendInput(_ application: SessionInputApplication) async throws
+
+    func releaseInput(_ application: SessionInputReleaseApplication) async throws
 
     @discardableResult
     func stop(sessionID: UUID) async -> SessionTeardownReport?
@@ -540,6 +547,23 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             application.event,
             sessionID: application.sessionID
         )
+    }
+
+    func releaseInput(_ application: SessionInputReleaseApplication) async throws {
+        guard let active, active.sessionID == application.sessionID else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard active.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleInputApplication
+        }
+        await active.inputProvider.releaseAll(sessionID: application.sessionID)
+        guard let current = self.active,
+              current.sessionID == application.sessionID else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard current.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleInputApplication
+        }
     }
 
     @discardableResult

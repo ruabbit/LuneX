@@ -711,6 +711,28 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
+    func releaseRemoteInput() async throws {
+        guard let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        let application = SessionInputReleaseApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        do {
+            try await sessionMediaEnvironment.releaseInput(application)
+        } catch {
+            if activeStreamSessionID == sessionID,
+               activeMediaSessionID == sessionID,
+               activeMediaGeneration == mediaGeneration {
+                diagnostics.record(ApplicationDiagnosticFactory.streamFailure(error))
+            }
+            throw error
+        }
+    }
+
     func toggleDemoSession() {
         if session.isStreaming {
             session.phase = .disconnected

@@ -144,6 +144,11 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             event: event
         )
         try await environment.sendInput(staleApplication)
+        let staleReleaseApplication = SessionInputReleaseApplication(
+            sessionID: sessionID,
+            mediaGeneration: firstGeneration
+        )
+        try await environment.releaseInput(staleReleaseApplication)
         _ = await environment.stop(sessionID: sessionID)
 
         stream = try await environment.start(
@@ -163,14 +168,28 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 .staleInputApplication
             )
         }
+        await XCTAssertThrowsErrorAsync(
+            try await environment.releaseInput(staleReleaseApplication)
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleInputApplication
+            )
+        }
         try await environment.sendInput(SessionInputApplication(
             sessionID: sessionID,
             mediaGeneration: replacementGeneration,
             event: event
         ))
+        try await environment.releaseInput(SessionInputReleaseApplication(
+            sessionID: sessionID,
+            mediaGeneration: replacementGeneration
+        ))
         XCTAssertGreaterThan(replacementGeneration, firstGeneration)
         let inputSendCount = await calls.values().filter { $0 == "input.send" }.count
+        let inputReleaseCount = await calls.values().filter { $0 == "input.release" }.count
         XCTAssertEqual(inputSendCount, 2)
+        XCTAssertEqual(inputReleaseCount, 3)
         _ = await environment.stop(sessionID: sessionID)
     }
 

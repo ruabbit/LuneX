@@ -141,6 +141,150 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.snapshot().deliveredEventCount, 0)
     }
 
+    func testFocusLossClosesAdmissionAndReleasesAfterAcceptedFIFO() async throws {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 4)
+        )
+        let generation = coordinator.activate()
+        let keyDown = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 6,
+                characters: "c",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        let buttonDown = envelope(
+            .button(button: .left, isDown: true, localPoint: nil),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+
+        XCTAssertEqual(coordinator.enqueue(keyDown, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+        XCTAssertEqual(coordinator.enqueue(buttonDown, generation: generation), .accepted)
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: generation),
+            .applied
+        )
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: generation),
+            .applied
+        )
+        XCTAssertEqual(
+            coordinator.enqueue(keyDown, generation: generation),
+            .rejected(.admissionClosed)
+        )
+        sink.resumeFirstSend()
+        await waitUntil {
+            coordinator.snapshot().completedReleaseBarrierCount == 1
+        }
+
+        XCTAssertEqual(sink.operations, [
+            .event(.keyboard(KeyboardInputEvent(
+                rawKeyCode: 6,
+                characters: "c",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            ))),
+            .event(.pointer(.button(
+                button: .left,
+                isDown: true,
+                point: nil
+            ))),
+            .release
+        ])
+        XCTAssertFalse(coordinator.snapshot().acceptsInput)
+        XCTAssertEqual(sink.releaseCallCount, 1)
+    }
+
+    func testFocusRegainWaitsForInFlightReleaseBarrier() async throws {
+        let sink = ControlledApplicationInputSink(blockRelease: true)
+        let coordinator = MacSessionInputCoordinator(sink: sink)
+        let generation = coordinator.activate()
+        let sample = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 7,
+                characters: "x",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: generation),
+            .applied
+        )
+        await waitUntil { coordinator.snapshot().hasInFlightReleaseBarrier }
+        XCTAssertEqual(
+            coordinator.setFocusEligible(true, generation: generation),
+            .applied
+        )
+        XCTAssertFalse(coordinator.snapshot().acceptsInput)
+        XCTAssertEqual(
+            coordinator.enqueue(sample, generation: generation),
+            .rejected(.admissionClosed)
+        )
+
+        sink.resumeRelease()
+        await waitUntil { coordinator.snapshot().acceptsInput }
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().deliveredEventCount == 1 }
+        XCTAssertEqual(sink.releaseCallCount, 1)
+    }
+
+    func testReplacementGenerationIsUnaffectedByOldFocusRelease() async throws {
+        let sink = ControlledApplicationInputSink(blockRelease: true)
+        let coordinator = MacSessionInputCoordinator(sink: sink)
+        let firstGeneration = coordinator.activate()
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: firstGeneration),
+            .applied
+        )
+        await waitUntil { coordinator.snapshot().hasInFlightReleaseBarrier }
+
+        let replacementGeneration = coordinator.activate()
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: firstGeneration),
+            .staleGeneration
+        )
+        XCTAssertTrue(coordinator.snapshot().acceptsInput)
+        sink.resumeRelease()
+        for _ in 0..<20 { await Task.yield() }
+
+        let state = coordinator.snapshot()
+        XCTAssertEqual(state.generation, replacementGeneration)
+        XCTAssertTrue(state.acceptsInput)
+        XCTAssertEqual(state.completedReleaseBarrierCount, 0)
+        XCTAssertEqual(state.releaseBarrierFailureCount, 0)
+        XCTAssertEqual(sink.releaseCallCount, 1)
+    }
+
+    func testReleaseFailureKeepsAdmissionClosed() async throws {
+        let sink = ControlledApplicationInputSink(failsRelease: true)
+        let coordinator = MacSessionInputCoordinator(sink: sink)
+        let generation = coordinator.activate()
+        XCTAssertEqual(
+            coordinator.setFocusEligible(false, generation: generation),
+            .applied
+        )
+        XCTAssertEqual(
+            coordinator.setFocusEligible(true, generation: generation),
+            .applied
+        )
+        await waitUntil { coordinator.snapshot().releaseBarrierFailureCount == 1 }
+
+        XCTAssertFalse(coordinator.snapshot().acceptsInput)
+        XCTAssertEqual(coordinator.snapshot().completedReleaseBarrierCount, 0)
+        XCTAssertEqual(sink.releaseCallCount, 1)
+    }
+
     func testQueuePolicyRejectsUnsafeCapacities() {
         XCTAssertThrowsError(try MacSessionInputQueuePolicy(maximumPendingSamples: 0))
         XCTAssertThrowsError(try MacSessionInputQueuePolicy(maximumPendingSamples: 4_097))
@@ -196,16 +340,33 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
 
 @MainActor
 private final class ControlledApplicationInputSink: ApplicationInputSink {
-    private(set) var events: [RemoteInputEvent] = []
-    private var shouldBlockFirstSend: Bool
-    private var firstSendContinuation: CheckedContinuation<Void, Never>?
+    enum Operation: Equatable {
+        case event(RemoteInputEvent)
+        case release
+    }
 
-    init(blockFirstSend: Bool = false) {
+    private(set) var events: [RemoteInputEvent] = []
+    private(set) var operations: [Operation] = []
+    private(set) var releaseCallCount = 0
+    private var shouldBlockFirstSend: Bool
+    private var shouldBlockRelease: Bool
+    private let failsRelease: Bool
+    private var firstSendContinuation: CheckedContinuation<Void, Never>?
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+
+    init(
+        blockFirstSend: Bool = false,
+        blockRelease: Bool = false,
+        failsRelease: Bool = false
+    ) {
         shouldBlockFirstSend = blockFirstSend
+        shouldBlockRelease = blockRelease
+        self.failsRelease = failsRelease
     }
 
     func sendRemoteInput(_ event: RemoteInputEvent) async throws {
         events.append(event)
+        operations.append(.event(event))
         guard shouldBlockFirstSend else { return }
         shouldBlockFirstSend = false
         await withCheckedContinuation { continuation in
@@ -213,8 +374,27 @@ private final class ControlledApplicationInputSink: ApplicationInputSink {
         }
     }
 
+    func releaseRemoteInput() async throws {
+        releaseCallCount += 1
+        operations.append(.release)
+        if shouldBlockRelease {
+            shouldBlockRelease = false
+            await withCheckedContinuation { continuation in
+                releaseContinuation = continuation
+            }
+        }
+        if failsRelease {
+            throw SessionMediaEnvironmentError.inputUnavailable
+        }
+    }
+
     func resumeFirstSend() {
         firstSendContinuation?.resume()
         firstSendContinuation = nil
+    }
+
+    func resumeRelease() {
+        releaseContinuation?.resume()
+        releaseContinuation = nil
     }
 }

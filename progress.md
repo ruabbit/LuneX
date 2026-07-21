@@ -894,3 +894,16 @@
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部退出成功，证据根目录`/tmp/LuneX-14-3_2-builds.q9O7ei`。规范化simulator清单前后逐字节一致，名称/UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
 - 5个OpenSpec change strict、generator byte-stability、whitespace与production/reference边界通过；project SHA-256两次生成前后均为`abdb7ba6c28d50f959111b1cfa3784e1d0c929552095c8f4eb3c5cdd40cdbc80`。OpenSpec 3.2标记完成，权威进度`10/29`；下一项为3.3 focus-loss admission closure与共享held-input `releaseAll` barrier。
 - 3.2不宣称旧不可取消sink send已完成等待式teardown：replacement后旧delivery可继续悬挂，但generation fence阻止其修改新状态。该收敛属于3.4；focus release属于3.3。
+
+## 2026-07-21 阶段 14 任务 3.3 启动
+
+- 3.2已以`682ecfb`独立提交并推送，确认`HEAD == origin/main`且工作树clean。3.3在同一个generation consumer中加入focus-loss barrier：先同步关闭新sample admission，继续drain此前已接受的sample，再执行一个共享`releaseAll`，屏障完成前即使focus恢复也不重新开放。
+- release通过AppModel内部固定的session/media generation构造application，并由environment在provider调用前后校验；旧focus operation不得读取或释放same-UUID replacement generation。
+
+## 2026-07-21 阶段 14 任务 3.3 完成
+
+- coordinator在失焦时同步关闭admission但继续drain accepted FIFO，随后执行一个不占普通容量的共享release barrier；重复失焦不重复release，屏障pending/in-flight期间回焦仍保持关闭，成功后仅同一eligible generation重开，失败保持fail closed。
+- `SessionInputReleaseApplication`将AppModel固定的session/media generation传入environment；provider suspension前后均校验ownership，旧release错误只有调用时generation仍current才记录诊断。coordinator和真实AppModel race测试均证明replacement不受旧回调影响。
+- 最终focused warnings-as-errors通过`11/11`，结果`/tmp/LuneX-14-3_3-focused-r3.OZCdOo/FocusRelease.xcresult`。完整macOS通过`408 total / 407 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_3-full.HGv3HA/LuneXCoreTests.xcresult`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_3-builds.OTxzEU`。规范化simulator清单前后逐字节一致，名称/UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
+- 5个OpenSpec change strict、generator byte-stability、whitespace与production/reference边界通过；project SHA-256两次生成前后均为`abdb7ba6c28d50f959111b1cfa3784e1d0c929552095c8f4eb3c5cdd40cdbc80`。OpenSpec 3.3标记完成，权威进度`11/29`；下一项为3.4 failure/teardown convergence。

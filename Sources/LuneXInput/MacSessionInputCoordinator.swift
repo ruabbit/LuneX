@@ -62,8 +62,8 @@ struct MacSessionInputGeneration: Equatable, Hashable, Sendable {
 enum MacSessionInputRejection: Equatable, Sendable {
     case inactiveGeneration
     case staleGeneration
+    case admissionClosed
     case capacityExceeded(limit: Int)
-    case deliveryFailed
 }
 
 enum MacSessionInputEnqueueResult: Equatable, Sendable {
@@ -71,8 +71,15 @@ enum MacSessionInputEnqueueResult: Equatable, Sendable {
     case rejected(MacSessionInputRejection)
 }
 
+enum MacSessionInputFocusUpdateResult: Equatable, Sendable {
+    case applied
+    case inactiveGeneration
+    case staleGeneration
+}
+
 struct MacSessionInputCoordinatorSnapshot: Equatable, Sendable {
     var generation: MacSessionInputGeneration?
+    var isFocusEligible: Bool
     var acceptsInput: Bool
     var queuedSampleCount: Int
     var hasInFlightSample: Bool
@@ -82,6 +89,10 @@ struct MacSessionInputCoordinatorSnapshot: Equatable, Sendable {
     var droppedSampleCount: UInt64
     var rejectedSampleCount: UInt64
     var deliveryFailureCount: UInt64
+    var hasPendingReleaseBarrier: Bool
+    var hasInFlightReleaseBarrier: Bool
+    var completedReleaseBarrierCount: UInt64
+    var releaseBarrierFailureCount: UInt64
 }
 
 private struct MacInputSampleFIFO {
@@ -125,9 +136,12 @@ final class MacSessionInputCoordinator {
     private let policy: MacSessionInputQueuePolicy
 
     private var generation: MacSessionInputGeneration?
+    private var isFocusEligible = false
     private var acceptsInput = false
     private var queue: MacInputSampleFIFO
     private var hasInFlightSample = false
+    private var hasPendingReleaseBarrier = false
+    private var hasInFlightReleaseBarrier = false
     private var signalContinuation: AsyncStream<Void>.Continuation?
     private var consumerTask: Task<Void, Never>?
     private var acceptedSampleCount: UInt64 = 0
@@ -136,6 +150,8 @@ final class MacSessionInputCoordinator {
     private var droppedSampleCount: UInt64 = 0
     private var rejectedSampleCount: UInt64 = 0
     private var deliveryFailureCount: UInt64 = 0
+    private var completedReleaseBarrierCount: UInt64 = 0
+    private var releaseBarrierFailureCount: UInt64 = 0
 
     init(
         sink: any ApplicationInputSink,
@@ -157,6 +173,7 @@ final class MacSessionInputCoordinator {
         let generation = MacSessionInputGeneration(id: UUID())
         let signals = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.generation = generation
+        isFocusEligible = true
         acceptsInput = true
         signalContinuation = signals.continuation
         consumerTask = Task { [weak self] in
@@ -189,7 +206,7 @@ final class MacSessionInputCoordinator {
         }
         guard acceptsInput else {
             rejectedSampleCount &+= 1
-            return .rejected(.deliveryFailed)
+            return .rejected(.admissionClosed)
         }
         let outstanding = queue.count + (hasInFlightSample ? 1 : 0)
         guard outstanding < policy.maximumPendingSamples else {
@@ -209,9 +226,38 @@ final class MacSessionInputCoordinator {
         return .accepted
     }
 
+    @discardableResult
+    func setFocusEligible(
+        _ eligible: Bool,
+        generation: MacSessionInputGeneration
+    ) -> MacSessionInputFocusUpdateResult {
+        guard let currentGeneration = self.generation else {
+            return .inactiveGeneration
+        }
+        guard currentGeneration == generation else {
+            return .staleGeneration
+        }
+        guard isFocusEligible != eligible else { return .applied }
+
+        isFocusEligible = eligible
+        if eligible {
+            if !hasPendingReleaseBarrier && !hasInFlightReleaseBarrier {
+                acceptsInput = true
+            }
+        } else {
+            acceptsInput = false
+            if !hasPendingReleaseBarrier && !hasInFlightReleaseBarrier {
+                hasPendingReleaseBarrier = true
+                signalContinuation?.yield(())
+            }
+        }
+        return .applied
+    }
+
     func snapshot() -> MacSessionInputCoordinatorSnapshot {
         MacSessionInputCoordinatorSnapshot(
             generation: generation,
+            isFocusEligible: isFocusEligible,
             acceptsInput: acceptsInput,
             queuedSampleCount: queue.count,
             hasInFlightSample: hasInFlightSample,
@@ -220,51 +266,77 @@ final class MacSessionInputCoordinator {
             reservedSampleCount: reservedSampleCount,
             droppedSampleCount: droppedSampleCount,
             rejectedSampleCount: rejectedSampleCount,
-            deliveryFailureCount: deliveryFailureCount
+            deliveryFailureCount: deliveryFailureCount,
+            hasPendingReleaseBarrier: hasPendingReleaseBarrier,
+            hasInFlightReleaseBarrier: hasInFlightReleaseBarrier,
+            completedReleaseBarrierCount: completedReleaseBarrierCount,
+            releaseBarrierFailureCount: releaseBarrierFailureCount
         )
     }
 
     private func drain(generation: MacSessionInputGeneration) async {
-        while self.generation == generation, acceptsInput, !Task.isCancelled {
-            guard let envelope = queue.popFirst() else { return }
-            hasInFlightSample = true
-            let output = envelope.resolve()
+        while self.generation == generation, !Task.isCancelled {
+            if let envelope = queue.popFirst() {
+                hasInFlightSample = true
+                let output = envelope.resolve()
 
-            switch output.policy {
-            case .deliver:
-                guard let event = output.event else {
-                    droppedSampleCount &+= 1
-                    hasInFlightSample = false
-                    continue
-                }
-                do {
-                    try await sink.sendRemoteInput(event)
-                } catch {
+                switch output.policy {
+                case .deliver:
+                    guard let event = output.event else {
+                        droppedSampleCount &+= 1
+                        hasInFlightSample = false
+                        continue
+                    }
+                    do {
+                        try await sink.sendRemoteInput(event)
+                    } catch {
+                        guard self.generation == generation else { return }
+                        deliveryFailureCount &+= 1
+                        droppedSampleCount &+= UInt64(queue.count)
+                        queue.removeAll()
+                        acceptsInput = false
+                        hasInFlightSample = false
+                        return
+                    }
                     guard self.generation == generation else { return }
-                    deliveryFailureCount &+= 1
-                    droppedSampleCount &+= UInt64(queue.count)
-                    queue.removeAll()
-                    acceptsInput = false
-                    hasInFlightSample = false
-                    return
+                    deliveredEventCount &+= 1
+                case .reserveLocally:
+                    reservedSampleCount &+= 1
+                case .drop:
+                    droppedSampleCount &+= 1
                 }
-                guard self.generation == generation else { return }
-                deliveredEventCount &+= 1
-            case .reserveLocally:
-                reservedSampleCount &+= 1
-            case .drop:
-                droppedSampleCount &+= 1
+                hasInFlightSample = false
+                continue
             }
-            hasInFlightSample = false
+
+            guard hasPendingReleaseBarrier else { return }
+            hasPendingReleaseBarrier = false
+            hasInFlightReleaseBarrier = true
+            do {
+                try await sink.releaseRemoteInput()
+            } catch {
+                guard self.generation == generation else { return }
+                releaseBarrierFailureCount &+= 1
+                hasInFlightReleaseBarrier = false
+                acceptsInput = false
+                return
+            }
+            guard self.generation == generation else { return }
+            hasInFlightReleaseBarrier = false
+            completedReleaseBarrierCount &+= 1
+            acceptsInput = isFocusEligible
         }
     }
 
     private func invalidateCurrentGeneration() {
         acceptsInput = false
+        isFocusEligible = false
         generation = nil
         droppedSampleCount &+= UInt64(queue.count)
         queue.removeAll()
         hasInFlightSample = false
+        hasPendingReleaseBarrier = false
+        hasInFlightReleaseBarrier = false
         signalContinuation?.finish()
         signalContinuation = nil
         consumerTask?.cancel()
@@ -278,5 +350,7 @@ final class MacSessionInputCoordinator {
         droppedSampleCount = 0
         rejectedSampleCount = 0
         deliveryFailureCount = 0
+        completedReleaseBarrierCount = 0
+        releaseBarrierFailureCount = 0
     }
 }

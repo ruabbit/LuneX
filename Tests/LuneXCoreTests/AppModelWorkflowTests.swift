@@ -609,6 +609,64 @@ final class AppModelWorkflowTests: XCTestCase {
         })
     }
 
+    func testOldInputReleaseCannotPublishIntoReplacementGeneration() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 1,
+                    key: Data(repeating: 0x11, count: 16)
+                )),
+                .success(RemoteInputKeyMaterial(
+                    keyID: 2,
+                    key: Data(repeating: 0x22, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let firstLaunch = Task { await model.launchSelectedApp() }
+        let firstRecord = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: firstRecord)
+        await waitUntil { model.session.isStreaming }
+
+        mediaEnvironment.blockNextRelease()
+        let staleRelease = Task { try await model.releaseRemoteInput() }
+        await waitUntil { mediaEnvironment.hasBlockedRelease() }
+        await model.stopStream()
+        await firstLaunch.value
+
+        let replacementLaunch = Task { await model.launchSelectedApp() }
+        await waitUntil { provider.currentStartRecords().count == 2 }
+        let replacementRecord = try XCTUnwrap(provider.currentStartRecords().last)
+        driveSessionToStreaming(provider, record: replacementRecord)
+        await waitUntil { model.session.isStreaming }
+        let diagnosticCount = model.diagnostics.events.count
+
+        mediaEnvironment.resumeBlockedRelease()
+        do {
+            try await staleRelease.value
+            XCTFail("A release owned by the stopped generation must fail closed.")
+        } catch {
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .inactiveSession
+            )
+        }
+        XCTAssertEqual(model.diagnostics.events.count, diagnosticCount)
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().last?.mediaGeneration,
+            1
+        )
+
+        await model.stopStream()
+        await replacementLaunch.value
+    }
+
     func testReconnectLeavesStreamingUntilFreshNegotiationAndFullReadiness() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment(automaticallyReady: false)
@@ -736,6 +794,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil { model.session.isStreaming }
         try await model.sendRemoteInput(inputEvent)
+        try await model.releaseRemoteInput()
         mediaEnvironment.yieldFeedback(
             .led(ControllerLEDFeedback(
                 controllerID: "controller-1",
@@ -752,6 +811,13 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(sentApplications.first?.sessionID, record.sessionID)
         XCTAssertEqual(sentApplications.first?.mediaGeneration, mediaSnapshot.generation)
         XCTAssertEqual(sentApplications.first?.event, inputEvent)
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications(),
+            [SessionInputReleaseApplication(
+                sessionID: record.sessionID,
+                mediaGeneration: mediaSnapshot.generation
+            )]
+        )
         XCTAssertEqual(model.latestRemoteInputFeedback, .led(ControllerLEDFeedback(
             controllerID: "controller-1",
             red: 10,
@@ -1656,6 +1722,9 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var stoppedSessionIDs: [UUID] = []
     private var continuations: [UUID: Continuation] = [:]
     private var sentInputApplications: [SessionInputApplication] = []
+    private var releasedInputApplications: [SessionInputReleaseApplication] = []
+    private var shouldBlockNextRelease = false
+    private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
 
     init(automaticallyReady: Bool = true) {
         self.automaticallyReady = automaticallyReady
@@ -1702,6 +1771,22 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
             throw SessionMediaEnvironmentError.staleInputApplication
         }
         withLock { sentInputApplications.append(application) }
+    }
+
+    func releaseInput(_ application: SessionInputReleaseApplication) async throws {
+        try validateRelease(application)
+        let shouldBlock = withLock {
+            let value = shouldBlockNextRelease
+            shouldBlockNextRelease = false
+            releasedInputApplications.append(application)
+            return value
+        }
+        if shouldBlock {
+            await withCheckedContinuation { continuation in
+                withLock { blockedReleaseContinuation = continuation }
+            }
+        }
+        try validateRelease(application)
     }
 
     func stop(sessionID: UUID) async -> SessionTeardownReport? {
@@ -1761,6 +1846,41 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         withLock { sentInputApplications }
     }
 
+    func currentReleasedInputApplications() -> [SessionInputReleaseApplication] {
+        withLock { releasedInputApplications }
+    }
+
+    func blockNextRelease() {
+        withLock { shouldBlockNextRelease = true }
+    }
+
+    func hasBlockedRelease() -> Bool {
+        withLock { blockedReleaseContinuation != nil }
+    }
+
+    func resumeBlockedRelease() {
+        let continuation = withLock {
+            let value = blockedReleaseContinuation
+            blockedReleaseContinuation = nil
+            return value
+        }
+        continuation?.resume()
+    }
+
+    private func validateRelease(
+        _ application: SessionInputReleaseApplication
+    ) throws {
+        let state = withLock {
+            (continuations[application.sessionID] != nil, UInt64(startRecords.count))
+        }
+        guard state.0 else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard application.mediaGeneration == state.1 else {
+            throw SessionMediaEnvironmentError.staleInputApplication
+        }
+    }
+
     private func continuation(for sessionID: UUID) -> Continuation? {
         withLock { continuations[sessionID] }
     }
@@ -1808,6 +1928,10 @@ private final class BlockingSessionMediaEnvironment: SessionMediaEnvironment, @u
     }
 
     func sendInput(_ application: SessionInputApplication) async throws {
+        _ = application
+    }
+
+    func releaseInput(_ application: SessionInputReleaseApplication) async throws {
         _ = application
     }
 
