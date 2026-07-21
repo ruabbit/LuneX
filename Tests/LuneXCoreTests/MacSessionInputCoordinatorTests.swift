@@ -8,7 +8,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
             sink: sink,
             policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 8)
         )
-        let generation = coordinator.activate()
+        let generation = await coordinator.activate()
         let first = envelope(
             .keyboard(MacKeyboardSample(
                 rawKeyCode: 4,
@@ -73,7 +73,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
             sink: sink,
             policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 2)
         )
-        let firstGeneration = coordinator.activate()
+        let firstGeneration = await coordinator.activate()
         let sample = envelope(
             .keyboard(MacKeyboardSample(
                 rawKeyCode: 5,
@@ -95,7 +95,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         sink.resumeFirstSend()
         await waitUntil { coordinator.snapshot().deliveredEventCount == 2 }
 
-        let replacementGeneration = coordinator.activate()
+        let replacementGeneration = await coordinator.activate()
         XCTAssertEqual(
             coordinator.enqueue(sample, generation: firstGeneration),
             .rejected(.staleGeneration)
@@ -110,7 +110,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
     func testReservedAndOutOfVideoSamplesNeverReachApplicationSink() async throws {
         let sink = ControlledApplicationInputSink()
         let coordinator = MacSessionInputCoordinator(sink: sink)
-        let generation = coordinator.activate()
+        let generation = await coordinator.activate()
         let commandQ = envelope(
             .keyboard(MacKeyboardSample(
                 rawKeyCode: 12,
@@ -147,7 +147,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
             sink: sink,
             policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 4)
         )
-        let generation = coordinator.activate()
+        let generation = await coordinator.activate()
         let keyDown = envelope(
             .keyboard(MacKeyboardSample(
                 rawKeyCode: 6,
@@ -205,7 +205,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
     func testFocusRegainWaitsForInFlightReleaseBarrier() async throws {
         let sink = ControlledApplicationInputSink(blockRelease: true)
         let coordinator = MacSessionInputCoordinator(sink: sink)
-        let generation = coordinator.activate()
+        let generation = await coordinator.activate()
         let sample = envelope(
             .keyboard(MacKeyboardSample(
                 rawKeyCode: 7,
@@ -242,20 +242,23 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
     func testReplacementGenerationIsUnaffectedByOldFocusRelease() async throws {
         let sink = ControlledApplicationInputSink(blockRelease: true)
         let coordinator = MacSessionInputCoordinator(sink: sink)
-        let firstGeneration = coordinator.activate()
+        let firstGeneration = await coordinator.activate()
         XCTAssertEqual(
             coordinator.setFocusEligible(false, generation: firstGeneration),
             .applied
         )
         await waitUntil { coordinator.snapshot().hasInFlightReleaseBarrier }
 
-        let replacementGeneration = coordinator.activate()
+        let replacement = Task { await coordinator.activate() }
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(coordinator.snapshot().hasInFlightReleaseBarrier)
+        sink.resumeRelease()
+        let replacementGeneration = await replacement.value
         XCTAssertEqual(
             coordinator.setFocusEligible(false, generation: firstGeneration),
             .staleGeneration
         )
         XCTAssertTrue(coordinator.snapshot().acceptsInput)
-        sink.resumeRelease()
         for _ in 0..<20 { await Task.yield() }
 
         let state = coordinator.snapshot()
@@ -269,7 +272,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
     func testReleaseFailureKeepsAdmissionClosed() async throws {
         let sink = ControlledApplicationInputSink(failsRelease: true)
         let coordinator = MacSessionInputCoordinator(sink: sink)
-        let generation = coordinator.activate()
+        let generation = await coordinator.activate()
         XCTAssertEqual(
             coordinator.setFocusEligible(false, generation: generation),
             .applied
@@ -282,6 +285,120 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(coordinator.snapshot().acceptsInput)
         XCTAssertEqual(coordinator.snapshot().completedReleaseBarrierCount, 0)
+        XCTAssertEqual(sink.releaseCallCount, 1)
+    }
+
+    func testTerminalTriggersShareCleanupAndWaitForInFlightDelivery() async throws {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let cleanup = CaptureCleanupRecorder()
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            releaseCapture: { cleanup.releaseCapture() }
+        )
+        let generation = await coordinator.activate()
+        let sample = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 8,
+                characters: "v",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+
+        let stop = Task {
+            await coordinator.terminate(generation: generation, reason: .stop)
+        }
+        await waitUntil { coordinator.snapshot().terminationReason == .stop }
+        let remote = Task {
+            await coordinator.terminate(
+                generation: generation,
+                reason: .remoteTermination
+            )
+        }
+        await waitUntil {
+            let state = coordinator.snapshot()
+            return state.terminationReason == .stop
+                && state.queuedSampleCount == 0
+        }
+        XCTAssertFalse(coordinator.snapshot().acceptsInput)
+        XCTAssertEqual(coordinator.snapshot().captureCleanupCount, 1)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+        XCTAssertEqual(
+            coordinator.setFocusEligible(true, generation: generation),
+            .terminationInProgress
+        )
+        XCTAssertEqual(
+            coordinator.enqueue(sample, generation: generation),
+            .rejected(.admissionClosed)
+        )
+
+        sink.resumeFirstSend()
+        let stopResult = await stop.value
+        let remoteResult = await remote.value
+        XCTAssertEqual(stopResult, .completed)
+        XCTAssertEqual(remoteResult, .completed)
+        XCTAssertNil(coordinator.snapshot().generation)
+        XCTAssertEqual(sink.events.count, 1)
+        XCTAssertEqual(sink.releaseCallCount, 1)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+    }
+
+    func testSendFailureClosesGenerationBeforeReplacement() async throws {
+        let sink = ControlledApplicationInputSink(failsSend: true)
+        let cleanup = CaptureCleanupRecorder()
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            releaseCapture: { cleanup.releaseCapture() }
+        )
+        let firstGeneration = await coordinator.activate()
+        let sample = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 9,
+                characters: "f",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        XCTAssertEqual(coordinator.enqueue(sample, generation: firstGeneration), .accepted)
+        await waitUntil { coordinator.snapshot().terminationReason == .sendFailure }
+
+        XCTAssertFalse(coordinator.snapshot().acceptsInput)
+        XCTAssertEqual(coordinator.snapshot().deliveryFailureCount, 1)
+        XCTAssertEqual(coordinator.snapshot().captureCleanupCount, 1)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+        XCTAssertEqual(sink.releaseCallCount, 0)
+
+        let replacementGeneration = await coordinator.activate()
+        XCTAssertNotEqual(replacementGeneration, firstGeneration)
+        XCTAssertTrue(coordinator.snapshot().acceptsInput)
+        XCTAssertNil(coordinator.snapshot().terminationReason)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+    }
+
+    func testConcurrentReplacementActivationSharesOneGeneration() async throws {
+        let sink = ControlledApplicationInputSink(blockRelease: true)
+        let coordinator = MacSessionInputCoordinator(sink: sink)
+        let firstGeneration = await coordinator.activate()
+
+        let firstReplacement = Task { await coordinator.activate() }
+        await waitUntil { coordinator.snapshot().hasInFlightReleaseBarrier }
+        let secondReplacement = Task { await coordinator.activate() }
+        for _ in 0..<20 { await Task.yield() }
+        sink.resumeRelease()
+
+        let firstResult = await firstReplacement.value
+        let secondResult = await secondReplacement.value
+        XCTAssertNotEqual(firstResult, firstGeneration)
+        XCTAssertEqual(firstResult, secondResult)
+        XCTAssertEqual(coordinator.snapshot().generation, firstResult)
+        XCTAssertTrue(coordinator.snapshot().acceptsInput)
         XCTAssertEqual(sink.releaseCallCount, 1)
     }
 
@@ -350,6 +467,7 @@ private final class ControlledApplicationInputSink: ApplicationInputSink {
     private(set) var releaseCallCount = 0
     private var shouldBlockFirstSend: Bool
     private var shouldBlockRelease: Bool
+    private let failsSend: Bool
     private let failsRelease: Bool
     private var firstSendContinuation: CheckedContinuation<Void, Never>?
     private var releaseContinuation: CheckedContinuation<Void, Never>?
@@ -357,20 +475,26 @@ private final class ControlledApplicationInputSink: ApplicationInputSink {
     init(
         blockFirstSend: Bool = false,
         blockRelease: Bool = false,
+        failsSend: Bool = false,
         failsRelease: Bool = false
     ) {
         shouldBlockFirstSend = blockFirstSend
         shouldBlockRelease = blockRelease
+        self.failsSend = failsSend
         self.failsRelease = failsRelease
     }
 
     func sendRemoteInput(_ event: RemoteInputEvent) async throws {
         events.append(event)
         operations.append(.event(event))
-        guard shouldBlockFirstSend else { return }
-        shouldBlockFirstSend = false
-        await withCheckedContinuation { continuation in
-            firstSendContinuation = continuation
+        if shouldBlockFirstSend {
+            shouldBlockFirstSend = false
+            await withCheckedContinuation { continuation in
+                firstSendContinuation = continuation
+            }
+        }
+        if failsSend {
+            throw SessionMediaEnvironmentError.inputUnavailable
         }
     }
 
@@ -396,5 +520,14 @@ private final class ControlledApplicationInputSink: ApplicationInputSink {
     func resumeRelease() {
         releaseContinuation?.resume()
         releaseContinuation = nil
+    }
+}
+
+@MainActor
+private final class CaptureCleanupRecorder {
+    private(set) var releaseCount = 0
+
+    func releaseCapture() {
+        releaseCount += 1
     }
 }

@@ -907,3 +907,16 @@
 - 最终focused warnings-as-errors通过`11/11`，结果`/tmp/LuneX-14-3_3-focused-r3.OZCdOo/FocusRelease.xcresult`。完整macOS通过`408 total / 407 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_3-full.HGv3HA/LuneXCoreTests.xcresult`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_3-builds.OTxzEU`。规范化simulator清单前后逐字节一致，名称/UUID各唯一、全部`Shutdown`、全局`Booted=0`，未create、boot、run或shutdown设备。
 - 5个OpenSpec change strict、generator byte-stability、whitespace与production/reference边界通过；project SHA-256两次生成前后均为`abdb7ba6c28d50f959111b1cfa3784e1d0c929552095c8f4eb3c5cdd40cdbc80`。OpenSpec 3.3标记完成，权威进度`11/29`；下一项为3.4 failure/teardown convergence。
+
+## 2026-07-21 阶段 14 任务 3.4 启动
+
+- 3.3已以`2f5635e`独立提交并推送，确认`HEAD == origin/main`且工作树clean。3.4把send failure、input-channel failure、stop、remote termination、detach与replacement收敛到同一个generation terminal path。
+- replacement激活改为async：必须等待旧consumer当前in-flight send/release真正返回；terminal path同步关闭admission、丢弃未开始sample、执行一次注入式capture cleanup并共享consumer completion，避免cancel不响应时旧delivery跨代存活。
+
+## 2026-07-21 阶段 14 任务 3.4 完成
+
+- coordinator新增generation-scoped terminal reason/result与一次性capture cleanup；send failure不重复release，其他terminal trigger等待当前send和共享release barrier，终止期间focus不能重开admission，queued sample被同步丢弃。
+- replacement activation改为async并等待旧consumer真实完成；审阅发现并修复两个并发activation可能连续创建两代的MainActor reentrancy，现共享一个activation task并返回同一replacement generation。
+- 最终focused warnings-as-errors通过`11/11`，结果`/tmp/LuneX-14-3_4-focused-r2.kp6TJJ/Termination.xcresult`。修改后完整macOS通过`411 total / 410 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_4-full-r2.shEz9u/LuneXCoreTests.xcresult`；未访问真实Keychain。
+- 修改后macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_4-builds-r2.2QPSxQ`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+- 5个OpenSpec strict、generator byte-stability、whitespace与production/reference边界通过。OpenSpec 3.4标记完成，权威进度`12/29`；下一项为3.5完整input coordination竞态矩阵。

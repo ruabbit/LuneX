@@ -35,7 +35,7 @@ flowchart LR
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
-| 14 | `in_progress`，OpenSpec `11/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle/application input sink、bounded generation FIFO、focus-loss共享release barrier、receiver-drain/decode-pause/presentation-clear/fresh-IDR恢复及完整lifecycle竞态矩阵 | 尚未收敛input failure/teardown，也未把真实`NSEvent`/cursor capture接入active remote input |
+| 14 | `in_progress`，OpenSpec `12/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle/application input sink、bounded generation FIFO、focus-release与terminal convergence、receiver-drain/decode-pause/presentation-clear/fresh-IDR恢复及完整lifecycle竞态矩阵 | 尚需补全input coordinator竞态矩阵，也未把真实`NSEvent`/cursor capture接入active remote input |
 | 15 | `pending` | 已保留bit depth/colorspace/MDCV/CLL并读取display headroom | 尚无10-bit EDR输出、PQ映射、tone mapping或跨屏硬件验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
@@ -71,6 +71,7 @@ flowchart LR
 - `ApplicationInputSink`只接受typed event；AppModel在media owner启动时内部固定generation，environment在provider调用前再次验证session、generation与input readiness，调用方不能伪造或沿用replacement generation。
 - `MacSessionInputCoordinator`以同步main-actor admission接收冻结的platform sample与coordinate/cursor/shortcut策略；固定容量环形FIFO将in-flight计入backpressure，每个generation仅一个consumer按序调用application sink，旧token不能进入replacement。
 - focus loss同步关闭新sample admission但不停止accepted FIFO drain；同代只执行一个generation-scoped `releaseAll` barrier，回焦必须等屏障成功，旧release在provider suspension前后均不能越过replacement ownership fence。
+- send/input-channel failure、stop、remote termination、detach与replacement共享terminal path；它关闭admission、丢弃未开始sample、一次cleanup并等待当前delivery/release，async activation及其并发调用不能跨代遗留consumer。
 
 ## 阶段 15：HDR 和 EDR
 
