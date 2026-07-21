@@ -802,3 +802,15 @@
 - 首次五平台build误用不存在的`LuneX` scheme，在编译与simulator运行前一致终止；枚举工程后改用四个实际App scheme。macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV与固定Apple Vision Pro Debug warnings-as-errors构建全部通过，隔离根目录前缀`/tmp/LuneX-14-1_3-platforms-r2.*`。
 - 构建前后固定simulator均唯一、available且`Shutdown`，全局Booted为0；未create、boot或run simulator。全部5个OpenSpec change strict通过，generator前后project SHA-256同为`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`，whitespace、旧mapper transform扫描与production/reference边界通过。
 - OpenSpec 1.3标记完成，权威进度`3/29`。本任务不证明AppKit backing conversion、完整resize/stale revision矩阵或live Sunshine输入；下一项为1.4确定性坐标测试矩阵。
+
+## 2026-07-21 阶段 14 任务 1.4 启动
+
+- 1.3已以`8bc349a`独立提交并推送，确认`HEAD == origin/main`且工作树clean。1.4在既有测试文件内扩展确定性矩阵，不提前实现属于4.3的AppKit capture或`convertToBacking`。
+- 矩阵覆盖fit上下/左右letterbox拒绝、fill drawable边界与source crop边界一致、1x/2x backing点和drawable同步缩放、source/drawable全部非正维度、resize前后immutable snapshot隔离、scale-mode revision与旧snapshot保留。
+
+## 2026-07-21 阶段 14 任务 1.4 完成
+
+- focused Swift 6 warnings-as-errors坐标矩阵通过`13/13`，结果`/tmp/LuneX-14-1_4-focused.4m6B2p/CoordinateMatrix.xcresult`；Xcode中途对已断开物理设备的notification service警告未影响指定macOS destination或结构化结果。
+- 完整macOS suite通过`381 total / 380 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-1_4-full.7Fq2Qs/LuneXCoreTests.xcresult`；测试树精确确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- 全部5个OpenSpec change strict通过；generator前后project SHA-256保持`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`，whitespace通过。任务只改测试，1.3刚通过的五平台production build仍适用，不重复运行相同App build作为新证据。
+- 固定iPhone/iPad/Apple TV/Apple Vision Pro均保持唯一且`Shutdown`，全局Booted为0，未create、boot或run simulator。OpenSpec 1.4标记完成，权威进度`4/29`；下一项为2.1生命周期directive。
