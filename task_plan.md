@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`4/33`；video-range/matrix/transfer/PQ/gamut reference math完成，下一项1.5 source peak与headroom shoulder |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`5/33`；source peak与current-headroom shoulder完成，下一项1.6 deterministic contract tests |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`4/33`。1.1至1.3完成边界、immutable合同与decoded validation；1.4新增pure Swift 8/10-bit video-range、Rec.709/BT.2020矩阵、BT.709 inverse transfer、ST 2084 PQ EOTF及D65 sRGB/P3/BT.2020 gamut reference math，并拒绝非有限/越界输入。focused `7/7`、完整macOS `497 total / 496 passed / 1 Keychain skip / 0 failed`和五平台Debug通过，但尚无source-peak/headroom mapping或shader接线。下一项1.5实现source peak与reference-white preserving shoulder。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`5/33`。1.1至1.4完成边界、immutable/decoded合同和color math；1.5从mastering/MaxCLL解析100...10000-nit source peak，缺失时使用1000-nit typed fallback，并实现保留100-nit reference white、连续单调、严格受current headroom限制的direct/shoulder/SDR mapping。focused `7/7`、完整macOS `504 total / 503 passed / 1 Keychain skip / 0 failed`和五平台Debug通过，但尚未接入shader/renderer。下一项1.6扩展deterministic contract tests。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -245,10 +245,11 @@
 | 15.1.3首次五平台包装器在bash中使用zsh式1-based数组索引 | 1 | 只完成iPhone/iPad build且未启动设备后主动中止；改用`${!names[@]}`与0-based索引，在新证据目录从macOS开始完整重跑 |
 | 15.1.3仓库门的`references/`扫描误命中`Preferences/`子串 | 1 | 实际命中仅为Moonlight plist路径；规则收紧为单词边界`\breferences/`后在新证据目录重跑全部门 |
 | 15.1.4首轮Rec.709 breakpoint测试把`0.081`误按线性分支期望`0.018` | 1 | 规范条件为`E' < 0.081`，边界应走幂函数并得到`0.0179450234`；修正known vector后用新DerivedData重跑 |
+| 15.1.5首轮focused编译被相等source-peak分支的未使用`content`绑定阻止 | 1 | warnings-as-errors在测试前失败；等值分支改为两值平均以明确双metadata来源，并用新DerivedData重跑 |
 
 ## 当前执行点（2026-07-21）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`4/33`；1.1至1.4完成边界、immutable合同、decoded validator和color reference math，下一项1.5为source peak与headroom shoulder。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`5/33`；1.1至1.5完成foundation与luminance mapping，下一项1.6为deterministic invalid/known-vector/continuity tests。

@@ -861,6 +861,12 @@
 - 当前测试树唯一显式opt-in环境开关是`LUNEX_RUN_KEYCHAIN_TEST`；normal suite将显式移除该变量，预期唯一skip为一次性真实Keychain round-trip。
 - 测试树尚无live-host XCTest环境开关或test case，因为阶段13的OpenSpec 9.2仍未实现；6.1只证明normal suite没有host/Keychain副作用，不能把缺失的live-host测试描述为disabled pass。
 
+# 2026-07-21 阶段 15 任务 1.5 验收结论
+
+- source peak优先使用mastering maximum与非零MaxCLL中的安全约束，并以basis区分mastering/content/equal/fallback；协议允许但超出显示参考范围的值被限制到100...10000 nits并标记clamped。
+- mapping保持0...100 nits线性reference区；source peak能落入current headroom时不压缩，否则highlights通过连续单调shoulder落入当前而非potential headroom。SDR fallback在headroom 1下必然把reference-white以上压至1，这是同时满足reference white不变与输出不超过1的边界。
+- focused、完整suite和五平台build证明CPU合同；不证明shader像素、EDR signaling或物理亮度。
+
 # 2026-07-21 阶段 15 任务 1.4 验收结论
 
 - reference math明确按8-bit `16/235/128/224`与10-bit四倍code值做video-range normalization；Rec.709和BT.2020使用各自non-constant-luminance矩阵，不依赖CoreImage隐式转换。

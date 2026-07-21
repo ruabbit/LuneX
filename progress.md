@@ -1230,3 +1230,18 @@
 - macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors通过（`/tmp/LuneX-15-1_4-builds.6aJ4jz`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，全部固定设备`Shutdown`且全局`Booted=0`。
 - repository gates位于`/tmp/LuneX-15-1_4-repo.lZwC8m`：OpenSpec strict `6/6`、generator三次稳定且project SHA-256为`fd2e7fba3373edcdb1abc50415dd44440fd37d20f26b87c4210756c37642b367`、reference/dependency/whitespace边界通过。
 - OpenSpec 1.4标记完成，权威进度`4/33`。本证据不证明1.5 source peak/headroom shoulder、Metal shader、production output或物理HDR；下一项1.5。
+
+## 2026-07-21 阶段 15 任务 1.5 启动
+
+- 1.4已以`98ad24b Implement HDR color reference math`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`4/33`。
+- source peak从validated mastering maximum与非零MaxCLL取安全约束，缺失时使用1000-nit fallback，并限制为100...10000 nits且暴露basis/clamp状态。
+- 100 nits及以下保持`nits/100`；显示可直接容纳时保持线性EDR，否则仅对highlights使用连续单调shoulder并严格受current headroom限制。potential headroom不参与本合同。
+
+## 2026-07-21 阶段 15 任务 1.5 完成
+
+- 新增`HDRSourcePeakResolver`和`HDRLuminanceMapping`：mastering/MaxCLL取安全约束并暴露basis，缺失使用1000-nit fallback，结果限制100...10000 nits；current headroom限定1...64且potential headroom不进入输入。
+- mapping在100 nits及以下保持`nits/100`，source peak可直接容纳时线性映射，否则以连续单调log shoulder压入current headroom；headroom=1提供明确SDR fallback并保持reference white。
+- focused `7/7`（`/tmp/LuneX-15-1_5-focused-final.G92DHJ/HDRLuminanceMapping.xcresult`）；完整macOS `504 total / 503 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-1_5-full.nZTm5t/LuneXCoreTests.xcresult`），唯一skip和日志边界通过。
+- 五平台Debug warnings-as-errors通过（`/tmp/LuneX-15-1_5-builds.louq0p`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定设备均`Shutdown`且全局`Booted=0`。
+- repository gates位于`/tmp/LuneX-15-1_5-repo.z327fj`：OpenSpec strict `6/6`、generator三次稳定且project SHA-256为`6342e672d7af9aff2908bda8551eb10b22b20ba85cee844fe0e422f90920100d`、reference/dependency/whitespace门通过。
+- OpenSpec 1.5标记完成，权威进度`5/33`。未接入shader/renderer/surface且不证明物理HDR；下一项1.6。
