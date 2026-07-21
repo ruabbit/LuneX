@@ -597,3 +597,9 @@
 - macOS, fixed iPhone 17 Pro, fixed iPad Pro 13-inch (M5), fixed Apple TV, and fixed Apple Vision Pro each passed both Debug and Release Swift/Clang warnings-as-errors builds with a distinct DerivedData directory, for ten successful application builds.
 - Fixed simulator identity and state were read before and after the build matrix. Each requested device name resolved to exactly one available instance with the expected UUID, and every instance remained `Shutdown`; no simulator was created or explicitly booted.
 - This verifies source compatibility and optimized configuration compilation across the five application targets. It does not prove launch behavior, real-device signing, live media, hardware capabilities, performance, power, or release distribution readiness.
+
+### OpenSpec 9.5 simulator inventory acceptance (2026-07-21)
+
+- Normalized CoreSimulator records from immediately before the 9.4 build matrix, immediately after it, and the independent 9.5 readback are byte-identical for the four fixed targets.
+- Each requested name has one available instance, each expected UUID occurs once, all four states are `Shutdown`, and the current available-device inventory contains zero `Booted` simulators.
+- The audit performed no create, boot, shutdown, delete, clone, or build action. It verifies inventory stability for the configured available runtimes, not physical-device behavior or unavailable historical runtimes.

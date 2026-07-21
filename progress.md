@@ -732,3 +732,13 @@
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro均通过Debug与Release Swift/Clang warnings-as-errors构建，共10次成功；每次使用独立DerivedData，证据根目录`/tmp/LuneX-9_4-builds.nQRQAw`。
 - 构建前后只读`simctl list`均确认四个固定simulator名称各只有一个available实例、UUID精确匹配且为`Shutdown`；未创建或主动boot设备。
 - OpenSpec 9.4更新为完成，权威进度`51/61`。该证据是多平台源码/优化配置编译证明，不替代真机签名、运行、live Sunshine媒体、硬件能力、性能功耗或发布就绪证明；下一项为9.5独立模拟器单实例验收。
+
+## 2026-07-21 阶段 13 任务 9.5 启动
+
+- 9.5不执行build、create、boot或shutdown；只读比较9.4构建前/后和当前三份`simctl list devices available --json`，严格验证四个固定名称各一项、UUID不变、状态始终`Shutdown`且当前所有available simulator的Booted计数为零。
+
+## 2026-07-21 阶段 13 任务 9.5 完成
+
+- 9.4构建前、构建后与9.5当前三份CoreSimulator JSON经固定字段规范化后逐字节一致；iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV、Apple Vision Pro各有一个available同名实例，预期UUID各出现一次且全部`Shutdown`。
+- 当前全部available simulator的Booted计数为`0`；审计没有执行create、clone、boot、shutdown、delete或build，证据目录`/tmp/LuneX-9_5-simulator-audit.ZqTbQP`。
+- OpenSpec 9.5更新为完成，权威进度`52/61`。该证据限定于已配置available runtime的模拟器inventory稳定性，不证明真机行为；下一项为9.6 strict/static/resource-leak验证。

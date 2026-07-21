@@ -43,7 +43,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `51/61`：9.4已用10个隔离DerivedData完成macOS、固定iPhone、iPad、Apple TV与Vision Pro的Debug和Release warnings-as-errors构建，固定simulator前后均唯一且`Shutdown`。production仍缺具体video/audio network receiver，且仓库尚无9.2 live-host XCTest，因此3.7、5.8、6.7、7.7、9.2与9.3保持未完成；下一可执行项为9.5模拟器单实例独立验收，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `52/61`：9.5已对9.4构建前、构建后与当前三份CoreSimulator清单做规范化比对，四个固定设备的名称、UUID、唯一计数和`Shutdown`状态完全一致，当前available Booted计数为零。production仍缺具体video/audio network receiver，且仓库尚无9.2 live-host XCTest，因此3.7、5.8、6.7、7.7、9.2与9.3保持未完成；下一可执行项为9.6严格验证、静态分析与资源泄漏诊断，阶段13仍为 `in_progress`。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -195,5 +195,5 @@
 
 ## 当前执行点（2026-07-21）
 
-- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`51/61`；9.4已完成独立Debug/Release五平台验收，下一项为9.5模拟器唯一性与未启动状态验收。
+- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`52/61`；9.5已完成独立模拟器唯一性与未启动状态验收，下一项为9.6严格验证、静态分析与资源泄漏诊断。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
