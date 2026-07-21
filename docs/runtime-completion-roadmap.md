@@ -36,7 +36,7 @@ flowchart LR
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
 | 14 | `in_progress`，OpenSpec `27/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
-| 15 | `pending` | 已保留bit depth/colorspace/MDCV/CLL并读取display headroom | 尚无10-bit EDR输出、PQ映射、tone mapping或跨屏硬件验证 |
+| 15 | `in_progress`，OpenSpec `0/33` | 已保留bit depth/colorspace/MDCV/CLL、请求8/10-bit VideoToolbox格式、映射8/10-bit Metal plane并读取display headroom | actual presenter仍固定Core Image/sRGB；尚无显式PQ/EDR mapping、float surface、跨屏revision或物理显示器验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
@@ -92,6 +92,7 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
+- OpenSpec `implement-native-hdr-edr-pipeline`已创建并通过strict validation，含`hdr-video-output-contract`、`edr-tone-mapping`和`hdr-display-adaptation`三项capability及33个任务；当前从1.1无行为变更inventory开始。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

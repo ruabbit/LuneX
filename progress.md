@@ -1168,3 +1168,9 @@
 - 在已推送`3ef99ee`、clean tree和全新DerivedData上，完整macOS suite通过`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`且日志零诊断（`/tmp/LuneX-14-stage-acceptance.ce4byY/Stage14Acceptance.xcresult`）。
 - OpenSpec strict `5/5`、project hash稳定、HEAD/远端一致；只读复核固定simulator全部可用且`Shutdown`，全局`Booted=0`。
 - 阶段14 offline acceptance通过，但状态仍为`28/29 in_progress`，唯一6.5真实Sunshine/硬件门保持pending；下一步进入阶段15 OpenSpec提案和确定性实现。
+
+## 2026-07-21 阶段 15 OpenSpec 创建
+
+- 创建`implement-native-hdr-edr-pipeline`的proposal、design、三份capability spec和33项依赖有序tasks；OpenSpec strict validation通过且change为apply-ready，权威进度`0/33`。
+- HDR change明确连接现有metadata/P010/Metal plane/headroom foundation，替换actual fixed-sRGB presentation为显式Metal color/tone-map/surface contract；不引入第三方或GPL依赖。
+- 物理HDR/SDR显示器、亮度/颜色、HDR signaling、headroom和跨屏验证保留6.5，不由shader readback、模拟器或layer property替代。提案独立提交推送后进入1.1 inventory。

@@ -915,5 +915,11 @@
 - 从已推送`3ef99ee`与全新DerivedData重跑完整macOS suite，结构化通过`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`，日志零warning/error；结果`/tmp/LuneX-14-stage-acceptance.ce4byY/Stage14Acceptance.xcresult`。
 - 同一门重新确认OpenSpec strict `5/5`、project SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、`HEAD == origin/main`以及固定simulator可用且`Shutdown`、全局`Booted=0`。
 - 阶段级离线自验通过不等于阶段complete；6.5仍无授权Sunshine receipt、物理输入与多显示器证据，OpenSpec保持`28/29 in_progress`。
+
+# 2026-07-21 阶段 15 OpenSpec 提案
+
+- 创建`implement-native-hdr-edr-pipeline`，proposal、design、`hdr-video-output-contract`、`edr-tone-mapping`、`hdr-display-adaptation`三份spec和33项tasks均生成并通过strict validation，状态apply-ready。
+- 当前foundation已经请求VideoToolbox 8-bit NV12/10-bit P010并将plane映射为`.r8/.rg8`或`.r16/.rg16` Metal texture，`VideoColorMetadata`也跨decoder/frame保留；实际`StreamMetalPresenter`仍直接从`CVPixelBuffer`构造Core Image并固定输出sRGB，没有消费plane/headroom形成显式HDR pipeline。
+- 设计采用immutable generation+display-revision render configuration、显式video-range/矩阵/transfer/gamut/PQ/reference-white/headroom mapping、float EDR surface和typed fallback；无新第三方/GPL依赖。deterministic shader/simulator门不替代物理HDR/SDR亮度、信号、颜色或跨屏证明。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
