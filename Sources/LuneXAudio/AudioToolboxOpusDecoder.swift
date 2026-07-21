@@ -224,7 +224,7 @@ actor AudioToolboxOpusDecoder {
             producedBytes = buffers.mBuffers.mDataByteSize
             return status
         }
-        guard decodeStatus == noErr else {
+        guard decodeStatus == noErr || decodeStatus == opusInputTemporarilyUnavailableStatus else {
             throw OpusDecoderError.decodeFailed(decodeStatus)
         }
 
@@ -234,7 +234,8 @@ actor AudioToolboxOpusDecoder {
             throw OpusDecoderError.inconsistentPCMOutput
         }
         let actualFrameCount = Int(producedBytes) / bytesPerFrame
-        guard actualFrameCount <= configuration.samplesPerFrame,
+        guard actualFrameCount > 0,
+              actualFrameCount <= configuration.samplesPerFrame,
               Int(producedFrames) == actualFrameCount else {
             throw OpusDecoderError.inconsistentPCMOutput
         }
@@ -305,6 +306,10 @@ private final class OwnedOpusPacketInput {
     }
 }
 
+// A private callback status keeps the pull converter live when the current network packet is
+// exhausted. Returning zero packets with noErr would instead declare a permanent end of stream.
+private let opusInputTemporarilyUnavailableStatus = OSStatus(bitPattern: 0x6E646174) // 'ndat'
+
 private let opusPacketInputProc: AudioConverterComplexInputDataProc = {
     _, ioNumberDataPackets, ioData, outPacketDescription, userData in
     guard let userData else {
@@ -316,7 +321,7 @@ private let opusPacketInputProc: AudioConverterComplexInputDataProc = {
         .takeUnretainedValue()
     guard !input.wasProvided else {
         ioNumberDataPackets.pointee = 0
-        return noErr
+        return opusInputTemporarilyUnavailableStatus
     }
     ioNumberDataPackets.pointee = 1
     ioData.pointee.mNumberBuffers = 1

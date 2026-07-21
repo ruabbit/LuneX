@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `36/61`：6.5 route/interruption/underrun/packet-loss/teardown handling已完成独立验收。5.8与6.7仍分别需要授权live Sunshine sustained-video与audible hardware证据并保持未完成；下一项为6.6 deterministic audio decode/jitter/synchronization/resource-release tests，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `37/61`：6.6 deterministic audio decode/jitter/synchronization/resource-release tests已完成独立验收。5.8与6.7仍分别需要授权live Sunshine sustained-video与audible hardware证据并保持未完成；下一项可离线任务为7.1 negotiated input key setup与byte-exact authenticated event serialization，阶段13仍为 `in_progress`。
 
-6.5已实现session-owned `SessionAudioRuntime`：route change/underrun重建graph并reset clock，interruption显式pause/resume，短loss最多补4包/960 frames静音，超限或partial failure统一重建，stop幂等且stopped后fail closed。typed event handler不等于平台notification已经接线，真实可听同步证据仍属于6.7。
+6.6以连续synthetic Opus fixture跨层覆盖jitter reorder/loss、production AudioToolbox decode、session scheduling、actual-frame clock与逆序resource teardown；同时修复input callback以typed temporary-unavailable status结束单次pull，避免`0 packets + noErr`把连续converter永久标记为EOF。该确定性证据不等于平台notification已经接线或真实硬件可听，后者仍属于6.7。
 
 ## 遇到的错误
 
@@ -129,3 +129,9 @@
 | 6.4 staged audit发现hard threshold边界与后置算术错误可部分提交state | 1 | hard resync改为包含正负边界；audio/video候选写入后的snapshot/decision错误会恢复旧stream、observation time和last action |
 | 6.5首轮failure-call断言多预期route，并暴露engine start失败未释放partial graph | 1 | pipeline start catch统一stop/清queue/config/route；recovery failGraph依赖该底层保证不重复stop，并让重复interruption begin推进monotonic event time |
 | 6.5 audit发现interruption期间route-change被当作invalid state | 1 | 新增typed `routeChangeDeferred`，中断期间不抢先激活graph，明确resume时统一configure/start最新系统route |
+| 6.5推送后OpenSpec进度打印的Python one-liner引号错误 | 1 | Git push、HEAD/origin与clean状态已先成功；改用`str.format`避免shell中的嵌套f-string转义并复核`36/61` |
+| 6.6首次focused清理glob在无旧产物时触发zsh `NOMATCH` | 1 | 使用glob限定符`(N)`让空匹配得到空数组，不再把“没有旧产物”当失败 |
+| 6.6集成测试把`await`直接写入XCTest同步autoclosure | 1 | 先await actor snapshot/count到局部纯值，再交给`XCTAssertEqual`，保持Swift 6 isolation边界明确 |
+| 6.6初始跨层fixture把同一Opus packet重复为连续媒体，AudioToolbox只产出`[120,0,0]` frames | 1 | 扩展development-only OpusSpike按同一encoder state生成指定packet index，新增4包连续synthetic fixture；不放宽production PCM guard |
+| 6.6尝试设置`kConverterPrimeMethod_None`被Opus converter以`'prop'`拒绝 | 1 | 按SDK callback契约在当前packet耗尽时返回private temporary-unavailable status与0 packets，保留converter live state；不做逐包reset |
+| 6.6连续解码focused测试把decoded buffer在schedule循环中重复append | 1 | 删除测试自污染；clock继续只按实际三次decode输出累计，并以完整gate复验 |

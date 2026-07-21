@@ -33,8 +33,12 @@ static const profile_t *find_profile(const char *name) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s <stereo|surround51|surround51-hq|surround71|surround71-hq>\n", argv[0]);
+  if (argc != 2 && argc != 3) {
+    fprintf(
+      stderr,
+      "usage: %s <stereo|surround51|surround51-hq|surround71|surround71-hq> [packet-index]\n",
+      argv[0]
+    );
     return EXIT_FAILURE;
   }
 
@@ -42,6 +46,16 @@ int main(int argc, char **argv) {
   if (profile == NULL) {
     fprintf(stderr, "unknown profile: %s\n", argv[1]);
     return EXIT_FAILURE;
+  }
+
+  long packet_index = 0;
+  if (argc == 3) {
+    char *end = NULL;
+    packet_index = strtol(argv[2], &end, 10);
+    if (end == argv[2] || *end != '\0' || packet_index < 0 || packet_index > 31) {
+      fprintf(stderr, "packet index must be between 0 and 31\n");
+      return EXIT_FAILURE;
+    }
   }
 
   uint8_t mapping[8];
@@ -69,30 +83,36 @@ int main(int argc, char **argv) {
 
   enum { frames = 240, max_channels = 8, max_packet_size = 1400 };
   float pcm[frames * max_channels] = {0};
-  for (int frame = 0; frame < frames; ++frame) {
-    for (int channel = 0; channel < profile->channels; ++channel) {
-      const double frequency = 997.0 + (channel * 37.0);
-      pcm[(frame * profile->channels) + channel] =
-        (float) (0.08 * sin(2.0 * M_PI * frequency * frame / 48000.0));
+  unsigned char packet[max_packet_size];
+  for (long encoded_index = 0; encoded_index <= packet_index; ++encoded_index) {
+    for (int frame = 0; frame < frames; ++frame) {
+      for (int channel = 0; channel < profile->channels; ++channel) {
+        const double frequency = 997.0 + (channel * 37.0);
+        const long absolute_frame = (encoded_index * frames) + frame;
+        pcm[(frame * profile->channels) + channel] =
+          (float) (0.08 * sin(2.0 * M_PI * frequency * absolute_frame / 48000.0));
+      }
+    }
+
+    const int bytes = opus_multistream_encode_float(
+      encoder,
+      pcm,
+      frames,
+      packet,
+      sizeof(packet)
+    );
+    if (bytes < 0) {
+      fprintf(stderr, "encoding failed: %s\n", opus_strerror(bytes));
+      opus_multistream_encoder_destroy(encoder);
+      return EXIT_FAILURE;
+    }
+    if (encoded_index == packet_index
+        && fwrite(packet, 1, (size_t) bytes, stdout) != (size_t) bytes) {
+      fprintf(stderr, "writing packet failed\n");
+      opus_multistream_encoder_destroy(encoder);
+      return EXIT_FAILURE;
     }
   }
-
-  unsigned char packet[max_packet_size];
-  const int bytes = opus_multistream_encode_float(
-    encoder,
-    pcm,
-    frames,
-    packet,
-    sizeof(packet)
-  );
   opus_multistream_encoder_destroy(encoder);
-  if (bytes < 0) {
-    fprintf(stderr, "encoding failed: %s\n", opus_strerror(bytes));
-    return EXIT_FAILURE;
-  }
-  if (fwrite(packet, 1, (size_t) bytes, stdout) != (size_t) bytes) {
-    fprintf(stderr, "writing packet failed\n");
-    return EXIT_FAILURE;
-  }
   return EXIT_SUCCESS;
 }

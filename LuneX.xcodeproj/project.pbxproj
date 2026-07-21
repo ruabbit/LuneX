@@ -156,6 +156,7 @@
 		20BE6E6A77E0B9ED3426DC00 /* AppKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */; };
 		2220525EC17385E564247B74 /* HostLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/HostLibrary.swift"; sourceTree = "<group>"; };
 		2241853F5DDD3179444F126D /* PairingCryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60235BA18CDDA4EF6C53362 /* PairingCryptoTests.swift */; };
+		22930FAEAC9FF280CADB1E8A /* AudioRuntimeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/AudioRuntimeIntegrationTests.swift"; sourceTree = "<group>"; };
 		23C944B7F6935AE80E901F50 /* TouchInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */; };
 		23EDB4BFB4ABA1B790E136DC /* MetalVideoFrameDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXRendering/MetalVideoFrameDelivery.swift"; sourceTree = "<group>"; };
 		2404D2BFB1803FA4A5439BAD /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
@@ -237,6 +238,7 @@
 				A3545F00E0D81B84268202EB /* unix.c in Sources */
 			); runOnlyForDeploymentPostprocessing = 0; };
 		2726DAE1144FCA0279421B11 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		27D2AA384E01A0EE36C8FF73 /* AudioRuntimeIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22930FAEAC9FF280CADB1E8A /* AudioRuntimeIntegrationTests.swift */; };
 		280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/AudioSessionPipeline.swift"; sourceTree = "<group>"; };
 		28622E70A21C8499F9D180E6 /* AppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */; };
 		28F34CCC61A59B6EEE80D9B2 /* ControlChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB2DBC865FA6773F94F74AC /* ControlChannel.swift */; };
@@ -571,6 +573,7 @@
 				E7CA5C07D4789409605B8EE0 /* AppCatalogTests.swift in Sources */,
 				964916DFE9B0D91D8BE72F72 /* AppModelWorkflowTests.swift in Sources */,
 				B5AD4050462EA1A4C3821D27 /* AudioPipelineTests.swift in Sources */,
+				27D2AA384E01A0EE36C8FF73 /* AudioRuntimeIntegrationTests.swift in Sources */,
 				3A561C66837F3E7DB6575CF1 /* AudioRuntimeRecoveryTests.swift in Sources */,
 				F172451920061FA8B868459C /* AudioPacketJitterBufferTests.swift in Sources */,
 				D0BC380E1BD3EC5E17FA857C /* AudioToolboxOpusDecoderTests.swift in Sources */,
@@ -880,6 +883,7 @@
 				2ACF9C6C82903CEB2A8E982F /* AppCatalogTests.swift */,
 				A1090CFF3D6FEB9B6928362E /* AppModelWorkflowTests.swift */,
 				29601CEF411F6EC4ABEB07B8 /* AudioPipelineTests.swift */,
+				22930FAEAC9FF280CADB1E8A /* AudioRuntimeIntegrationTests.swift */,
 				0BDEA8393F4A6638D93FC0E7 /* AudioRuntimeRecoveryTests.swift */,
 				D921D7FF58CFA0F11C098563 /* AudioPacketJitterBufferTests.swift */,
 				9F821FB80CF8F9AE0A3442DD /* AudioToolboxOpusDecoderTests.swift */,

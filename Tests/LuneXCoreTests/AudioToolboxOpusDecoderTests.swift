@@ -80,6 +80,29 @@ final class AudioToolboxOpusDecoderTests: XCTestCase {
         await decoder.close()
     }
 
+    func testConsecutivePacketsDoNotEndTheLiveConverterStream() async throws {
+        let fixture = try loadSequenceFixture()
+        let decoder = try AudioToolboxOpusDecoder(configuration: stereoConfiguration())
+        var decodedFrameCounts: [Int] = []
+
+        for (index, fixturePacket) in fixture.packets.enumerated() {
+            let payload = try XCTUnwrap(Data(base64Encoded: fixturePacket.base64Payload))
+            let decoded = try await decoder.decode(ReceivedAudioPacket(
+                sequenceNumber: UInt16(index),
+                timestamp: UInt32(index * fixture.samplesPerFrame),
+                receiveTimeNanoseconds: UInt64(index),
+                payload: payload
+            ))
+            decodedFrameCounts.append(decoded.frameCount)
+            XCTAssertGreaterThan(decoded.frameCount, 0)
+            XCTAssertLessThanOrEqual(decoded.frameCount, fixture.samplesPerFrame)
+            XCTAssertEqual(decoded.interleavedSamples.count, decoded.frameCount * 2)
+        }
+
+        XCTAssertEqual(decodedFrameCounts.count, fixture.packets.count)
+        await decoder.close()
+    }
+
     func testEveryApprovedSunshineProfileCreatesAndClosesConverter() async throws {
         let profiles = [
             (2, 1, 1),
@@ -203,6 +226,17 @@ final class AudioToolboxOpusDecoderTests: XCTestCase {
             from: Data(contentsOf: url)
         )
     }
+
+    private func loadSequenceFixture() throws -> OpusSequenceFixture {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/Moonlight/audio/stereo-sequence-5ms-opus.json")
+        return try JSONDecoder().decode(
+            OpusSequenceFixture.self,
+            from: Data(contentsOf: url)
+        )
+    }
 }
 
 private struct OpusDecoderFixture: Decodable {
@@ -220,6 +254,15 @@ private struct MultistreamOpusDecoderFixture: Decodable {
     }
 
     var profiles: [Profile]
+    var samplesPerFrame: Int
+}
+
+private struct OpusSequenceFixture: Decodable {
+    struct Packet: Decodable {
+        var base64Payload: String
+    }
+
+    var packets: [Packet]
     var samplesPerFrame: Int
 }
 

@@ -1,0 +1,31 @@
+{
+  "bitrate": 96000,
+  "channelCount": 2,
+  "coupledStreamCount": 1,
+  "encoderApplication": "restricted-lowdelay",
+  "frameDurationMilliseconds": 5,
+  "generation": "repository OpusSpike continuous per-channel sine; development-only libopus 1.6.1 CBR",
+  "origin": "synthetic",
+  "packets": [
+    {
+      "base64Payload": "7J/ldKOmFPkpjXzMAz6FG83DLsSTfWFqZC4HxCDvprS58nc+9cKkswAavZJ5aeL66Fe6e7zA/mPTTV9w",
+      "sha256": "6ad406c9f3080428896850b896893be8156187df78fa1ba501fccc1d89462459"
+    },
+    {
+      "base64Payload": "7J6DI7zMxwJPx+/gxkGRxGkiY8afref6AVCIVkFZvoeN8+VSynHb6NeuVkA1gjSA8IWADYk28OEclUzw",
+      "sha256": "f680d6f8507489f6f242b8d7123617b949525a35877f61760a8c56f943ab720b"
+    },
+    {
+      "base64Payload": "7J6W0nY8887Cx3nwZZ3iaHZsykuA4Dxut2C/wbVGIf/Ykj2o49yj5LBpoklhalvSS5d2vItWkV4fGp/w",
+      "sha256": "ce8a4fffca5e4497887f2dec13de83ce5ba0b627cb4629eeaa46be1e6612e059"
+    },
+    {
+      "base64Payload": "7J6W4wZY65K+UuD0Llzu3QPsd4nL6NK7vG9ZGge4TRyzRqD5Ub6gefWba58YrteoPIBZKb8UdLTyYc/w",
+      "sha256": "0823a215d38d33665778025eddc3f8d1942b014e9e96804fabcdb1418fb18a78"
+    }
+  ],
+  "sampleRate": 48000,
+  "samplesPerFrame": 240,
+  "streamCount": 1,
+  "version": 1
+}

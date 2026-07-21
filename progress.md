@@ -475,3 +475,18 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator构建前后均为`Shutdown`，没有创建或boot新实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header逐文件比对和四SDK strict C syntax gates全部通过。
 - OpenSpec 6.5更新为完成，权威进度`36/61`。下一项为6.6 deterministic audio decode/jitter/synchronization/resource-release tests；6.5不证明平台notification接线或audible synchronized hardware output。
+
+## 2026-07-21 阶段 13 任务 6.6 启动
+
+- 6.5已以`463a6fd Handle audio runtime recovery`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`36/61`后进入6.6。
+- 现有decode、jitter、clock、recovery与resource tests均以单层为主；6.6新增跨层production Opus fixture integration，覆盖乱序/wrap、短loss静音、actual decoded-frame clock、pending buffer teardown、迟到completion与decoder close。
+- 6.6仍不启动真实Keychain、simulator或Sunshine session，也不把`.dataConsumed`解释为audible playback；6.7保持授权硬件live gate。
+
+## 2026-07-21 阶段 13 任务 6.6 完成
+
+- 新增两条跨层确定性audio integration tests：正常路径覆盖UInt16 sequence/UInt32 RTP双wrap乱序、连续production Opus decode、actual-frame clock、逆序resource teardown和迟到completion；loss路径覆盖typed missing range、exact 240-frame silence、future packet恢复、schedule顺序与零ownership。
+- 新增4包连续synthetic stereo Opus fixture及development-only generator packet-index能力，逐包base64和SHA-256回读一致。集成测试暴露`AudioConverter` input proc的`0 packets + noErr`会永久结束连续流；Opus converter不支持prime-method property，最终改为SDK规定的temporary-unavailable callback error并保持codec state，0-frame PCM继续fail closed。
+- focused decoder/integration gate`11/11`，expanded audio/RTSP/runtime/resource gate`69/69`；完整macOS warnings-as-errors gate`273 total / 272 passed / 1 skipped / 0 failed`，唯一skip为未启用真实Keychain round-trip，本轮继续使用file/in-memory fallback。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator构建前后均为`Shutdown`，没有创建或boot新实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、development fixture generator及四SDK strict C syntax gates全部通过。
+- OpenSpec 6.6更新为完成，权威进度`37/61`。6.7需要授权硬件audible synchronized audio证据，当前不以fixture或`.dataConsumed`替代；下一项可离线任务为7.1 negotiated input key setup与byte-exact authenticated event serialization。

@@ -378,3 +378,17 @@
 - 最终实现对interruption期间route change返回typed `routeChangeDeferred`，不抢先激活系统audio session；重复interruption begin保持幂等并推进monotonic event time。`AudioSessionPipeline.start()`失败也会停止partial engine、清queue并清除configuration/route，recovery owner不会重复释放底层资源。
 - focused recovery gate最终`33/33`，expanded audio/runtime/resource gate`66/66`；完整macOS warnings-as-errors gate实际为`270 total / 269 passed / 1 explicit Keychain skip / 0 failed`。五平台warnings-as-errors Debug build与全部静态门禁通过，四个固定simulator前后保持`Shutdown`。
 - 该证据证明typed recovery state machine、bounded concealment与确定性graph/clock teardown，不证明平台route/interruption notification已接线、声音已从硬件输出或A/V同步在真实Sunshine session中可听；这些证明仍分别属于阶段16/17和6.7。
+
+### 2026-07-21 阶段 13 Audio Deterministic Integration Test 设计
+
+- 6.1-6.5已有各层单元回归，但尚无同一测试把synthetic Opus fixture经过jitter reorder/loss、production AudioToolbox decode、session runtime scheduling、actual-frame clock与resource tracker teardown串联起来；6.6补齐该确定性边界，不新增或伪装network/audio hardware证据。
+- 正常路径使用UInt16 sequence与UInt32 RTP双wrap的乱序包，要求jitter按wire顺序释放、decoder保留sequence/timestamp、clock累计每次真实decoded frame count，并在tracker逆序关闭audio graph与decoder后拒绝迟到`.dataConsumed` callback污染。
+- loss路径要求jitter先发布typed missing range，再由recovery runtime补入exact sequence/RTP的240-frame静音，随后继续decode future packet；最终engine schedule顺序、silence samples、concealed count、clock total与stop后的零ownership必须一致。
+
+### 2026-07-21 阶段 13 Audio Deterministic Integration Test 验收
+
+- 连续的4个synthetic stereo Opus packets由development-only libopus 1.6.1在同一encoder state下生成，fixture逐包SHA-256与generator output均已回读一致；production target仍不包含libopus或新package/product。
+- 跨层测试暴露真实decoder缺陷：单包input proc用`0 packets + noErr`表示当前无更多输入时，AudioConverter将其视为永久EOF，后续合法连续包得到0 frames。`kConverterPrimeMethod_None`在该Opus converter上返回`'prop'`而不可用；最终按SDK contract返回private temporary-unavailable callback status，让每次pull返回当前已产生PCM并保持converter state，decoder对0-frame输出继续fail closed。
+- 最终正常路径覆盖UInt16 sequence和UInt32 RTP双wrap、乱序释放、连续production decode、实际frame clock、逆序audio/decoder teardown、迟到`.dataConsumed` callback与closed decoder；loss路径覆盖typed missing range、exact 240-frame silence、未来包恢复、schedule顺序和零ownership。
+- focused decoder/integration gate `11/11`，expanded audio/RTSP/runtime/resource gate `69/69`；完整macOS warnings-as-errors gate `273 total / 272 passed / 1 explicit Keychain skip / 0 failed`。五平台warnings-as-errors Debug build、fixture/OpenSpec/generator/boundary/ENet/四SDK C gates全部通过，四个固定simulator前后均为`Shutdown`。
+- 6.6证明确定性decode/jitter/sync/teardown行为，不证明`.dataConsumed`已经从硬件播放、A/V在真实Sunshine session中可听同步、route/interruption平台notification已接线或6.7 live gate完成。

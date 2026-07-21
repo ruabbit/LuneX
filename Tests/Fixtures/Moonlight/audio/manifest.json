@@ -7,6 +7,12 @@
       "redaction": "not applicable; fully synthetic media"
     },
     {
+      "expectedResult": "four distinct continuous 5 ms stereo packets decode in order; first packet may be shortened by decoder priming",
+      "origin": "repository-generated continuous per-channel tones with development-only libopus 1.6.1",
+      "path": "stereo-sequence-5ms-opus.json",
+      "redaction": "not applicable; fully synthetic media"
+    },
+    {
       "expectedResult": "non-silent interleaved 5.1 and 7.1 PCM for normal and high-quality Sunshine identity mappings",
       "origin": "repository-generated per-channel tones with development-only libopus 1.6.1",
       "path": "sunshine-multistream-5ms-opus.json",

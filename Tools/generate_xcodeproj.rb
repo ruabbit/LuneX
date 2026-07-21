@@ -171,6 +171,7 @@ test_sources = [
   "Tests/LuneXCoreTests/AppCatalogTests.swift",
   "Tests/LuneXCoreTests/AppModelWorkflowTests.swift",
   "Tests/LuneXCoreTests/AudioPipelineTests.swift",
+  "Tests/LuneXCoreTests/AudioRuntimeIntegrationTests.swift",
   "Tests/LuneXCoreTests/AudioRuntimeRecoveryTests.swift",
   "Tests/LuneXCoreTests/AudioPacketJitterBufferTests.swift",
   "Tests/LuneXCoreTests/AudioToolboxOpusDecoderTests.swift",
