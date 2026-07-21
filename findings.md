@@ -531,3 +531,29 @@
 - Invalid event order, provider throw, incomplete stream, input-key failure, and parameter preparation failure fail closed. Pre-start failure is visible but does not start/stop the provider; post-start failure stops the provider exactly once.
 - Final evidence: targeted `31/31`, expanded `76/76`, complete macOS `344 total / 343 passed / 1 explicit Keychain skip / 0 failed`, and all five Debug warnings-as-errors builds passed. Fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates passed, and fixed simulators remained unique and Shutdown.
 - This does not connect the concrete video/audio/input providers to the same session lifetime and does not prove live Sunshine media or input. Those boundaries remain 8.4, 5.8, 6.7, 7.7, and 9.2-9.3.
+
+### OpenSpec 8.4 unified media environment design (2026-07-21)
+
+- The lower native components are present, but no owner currently binds negotiated video/audio/input configuration to receiver streams, decode/audio processors, SwiftUI presentation, input activation, feedback, and deterministic teardown.
+- Session control readiness is not authoritative for media readiness. The application must accept only the `.control` bit from `SessionControlProvider` and independently aggregate `.video`, `.audio`, and `.input` from a media environment after their actual startup succeeds.
+- A generation-scoped media environment should own receiver-consumer tasks and resources through `SessionResourceTracker`. Stop invalidates ownership before awaits, cancels consumers, releases held input while control is still available, stops processors/receivers, clears presentation, and returns one idempotent teardown report.
+- Reconnect must stop the old media environment and clear media readiness before fresh RTSP negotiation starts replacement media resources for the same session ID. Late events from the old media generation must not restore readiness or frames.
+- Decoded frames need a bounded, thread-safe presentation source reachable from SwiftUI. Initial rendering can use Core Image backed by Metal for native SDR presentation; HDR/EDR transfer-function and headroom mapping remain explicitly owned by the later HDR change.
+
+### OpenSpec 8.4 unified media environment lifecycle audit (2026-07-21)
+
+- The first gate with the continuous Opus fixture passed `43/43`, proving four ordered packets traverse `NativeSessionAudioProcessor`, AudioToolbox, `SessionAudioRuntime`, and the session-owned audio graph.
+- Starting ownership originally retained only identifiers, so `stop()` could only spin while `startInput()` was suspended. The starting generation now retains its tracker and stop starts the same reverse teardown operation immediately, allowing `stopInput()` to unblock startup.
+- An externally cancelled media-event consumer originally left the environment alive, and an input-feedback stream that ended early left `.input` ready. Event-stream cancellation now tears down the matching generation, while an unexpected feedback end fails with `.streamEnded(.input)`.
+- A processor factory can complete after teardown changes the tracker to stopping. Registration failure now explicitly stops the newly created processor, and the native video/audio factories clean up partial decoder, presentation-source, and audio-graph state.
+- Media readiness now starts with input only. Video is added after a frame is successfully submitted to VideoToolbox, and audio is added after decoded PCM is successfully scheduled to the session graph; receiver-stream creation alone no longer permits `Streaming`.
+- The Metal presenter now takes a locked render-state/runtime snapshot and submits a clear-only drawable whenever presentation is idle, paused, or has no current frame. This prevents a stopped or replacement session from leaving the previous frame visible.
+
+### OpenSpec 8.4 unified media environment acceptance (2026-07-21)
+
+- `NativeSessionMediaEnvironment` owns five resources and three consumers under one generation: video/audio receivers, video/audio processors, and remote input/feedback. Clean teardown releases input, audio processor, video processor, audio receiver, then video receiver; duplicate stop callers reuse the same report.
+- Pending startup stop now tears down the starting tracker and unblocks input startup. Receiver or feedback end, processor failure, event-consumer cancellation, local/remote stop, reconnect, and late replacement events all preserve generation isolation and converge without surviving tasks.
+- Session truth requires independent readiness: control contributes only `.control`, input contributes after activation, video after successful VideoToolbox submission, and audio after PCM schedule. A control provider reporting `.all` or receiver creation alone cannot enter `Streaming`.
+- The decoded frame path is a bounded session/decoder-generation source rendered by Core Image on Metal with fit/fill and clear-only idle/no-frame presentation. It is deliberately SDR/system color at this stage; HDR/EDR transfer mapping remains stage 15.
+- Final evidence is `45/45` targeted, `169/169` expanded, and `358 total / 357 passed / 1 explicit Keychain skip / 0 failed` complete macOS. macOS plus fixed iPhone/iPad/Apple TV/Vision Pro Debug warnings-as-errors builds passed; fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates passed and all fixed simulators remained unique and `Shutdown`.
+- Production provider inventory still has no concrete video/audio network receiver, so default stream availability remains false. This task proves integration ownership and native processing paths, not sustained live Sunshine video, audible hardware audio, delivered live input, HDR tone mapping, or spatial audio.

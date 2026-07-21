@@ -512,8 +512,10 @@ final class AppModelWorkflowTests: XCTestCase {
 
     func testReconnectLeavesStreamingUntilFreshNegotiationAndFullReadiness() async throws {
         let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(automaticallyReady: false)
         let model = makeLaunchReadyModel(
             sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
             launchClient: StubStreamLaunchClient(),
             remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
                 .success(RemoteInputKeyMaterial(
@@ -528,6 +530,11 @@ final class AppModelWorkflowTests: XCTestCase {
         let launchTask = Task { await model.launchSelectedApp() }
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 1 }
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio, .input],
+            sessionID: record.sessionID
+        )
         await waitUntil { model.session.isStreaming }
 
         provider.yield(
@@ -547,6 +554,11 @@ final class AppModelWorkflowTests: XCTestCase {
             )),
             sessionID: record.sessionID
         )
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 2 }
+        mediaEnvironment.yieldReadiness(
+            [.video, .input],
+            sessionID: record.sessionID
+        )
         provider.yield(.channelsReady(.control), sessionID: record.sessionID)
         for _ in 0..<100 {
             await Task.yield()
@@ -555,7 +567,10 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.session.isStreaming)
         XCTAssertEqual(model.renderState.policy, .idle)
 
-        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio, .input],
+            sessionID: record.sessionID
+        )
         await waitUntil { model.session.isStreaming }
         XCTAssertEqual(model.renderState.policy, .active)
 
@@ -563,6 +578,165 @@ final class AppModelWorkflowTests: XCTestCase {
         provider.finish(sessionID: record.sessionID)
         await launchTask.value
         XCTAssertEqual(model.session.phase, .disconnected)
+    }
+
+    func testControlReadinessCannotBypassMediaEnvironmentReadiness() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(automaticallyReady: false)
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 14,
+                    key: Data(repeating: 0xF2, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        provider.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 1 }
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        for _ in 0..<100 { await Task.yield() }
+
+        XCTAssertFalse(model.session.isStreaming)
+        XCTAssertEqual(model.renderState.policy, .idle)
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio, .input],
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.session.isStreaming }
+        let inputEvent = RemoteInputEvent.keyboard(KeyboardInputEvent(
+            rawKeyCode: 4,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        try await model.sendRemoteInput(inputEvent)
+        mediaEnvironment.yieldFeedback(
+            .led(ControllerLEDFeedback(
+                controllerID: "controller-1",
+                red: 10,
+                green: 20,
+                blue: 30
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.latestRemoteInputFeedback != nil }
+        XCTAssertEqual(mediaEnvironment.currentSentInputEvents(), [inputEvent])
+        XCTAssertEqual(model.latestRemoteInputFeedback, .led(ControllerLEDFeedback(
+            controllerID: "controller-1",
+            red: 10,
+            green: 20,
+            blue: 30
+        )))
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertNil(model.latestRemoteInputFeedback)
+        do {
+            try await model.sendRemoteInput(inputEvent)
+            XCTFail("Stopped media generation must reject remote input.")
+        } catch {
+            XCTAssertEqual(error as? SessionMediaEnvironmentError, .inactiveSession)
+        }
+    }
+
+    func testMediaEnvironmentFailureFailsSessionAndStopsControlProviderOnce() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 16,
+                    key: Data(repeating: 0xF4, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        mediaEnvironment.finish(
+            sessionID: record.sessionID,
+            throwing: MediaEnvironmentApplicationTestError.failed
+        )
+        await launchTask.value
+
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertNil(model.session.activeHostID)
+        guard case .failed = model.session.phase else {
+            return XCTFail("Media environment failure must fail the application session.")
+        }
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testLocalStopWhileMediaStartupIsPendingCannotRestoreStreaming() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = BlockingSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 15,
+                    key: Data(repeating: 0xF3, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        provider.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.hasStarted() }
+
+        await model.stopStream()
+        mediaEnvironment.completeStart()
+        await launchTask.value
+
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [
+            record.sessionID,
+            record.sessionID
+        ])
     }
 
     func testInvalidSessionEventOrderFailsClosedAndStopsProviderOnce() async throws {
@@ -767,6 +941,8 @@ final class AppModelWorkflowTests: XCTestCase {
 
     private func makeLaunchReadyModel(
         sessionControlProvider: any SessionControlProvider,
+        sessionMediaEnvironment: any SessionMediaEnvironment =
+            ControlledSessionMediaEnvironment(),
         launchClient: StubStreamLaunchClient,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
     ) -> AppModel {
@@ -797,6 +973,7 @@ final class AppModelWorkflowTests: XCTestCase {
             runtimeProviders: completeStreamProviderInventory(
                 sessionControlProvider: sessionControlProvider
             ),
+            sessionMediaEnvironment: sessionMediaEnvironment,
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKeyGenerator: remoteInputKeyGenerator
@@ -1044,6 +1221,10 @@ private enum InputKeyGeneratorTestError: Error {
     case exhausted
 }
 
+private enum MediaEnvironmentApplicationTestError: Error {
+    case failed
+}
+
 private struct AvailabilityVideoReceiveProvider: VideoReceiveProvider {
     func receiveVideo(
         sessionID: UUID,
@@ -1271,6 +1452,222 @@ private final class ControlledSessionControlProvider: SessionControlProvider, @u
             ),
             requiredChannels: .all
         )
+    }
+}
+
+private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, @unchecked Sendable {
+    struct StartRecord {
+        var sessionID: UUID
+        var configuration: NegotiatedSessionConfiguration
+    }
+
+    private typealias Continuation = AsyncThrowingStream<
+        SessionMediaEnvironmentEvent,
+        Error
+    >.Continuation
+
+    private let lock = NSLock()
+    private let automaticallyReady: Bool
+    private var startRecords: [StartRecord] = []
+    private var stoppedSessionIDs: [UUID] = []
+    private var continuations: [UUID: Continuation] = [:]
+    private var sentInputEvents: [RemoteInputEvent] = []
+
+    init(automaticallyReady: Bool = true) {
+        self.automaticallyReady = automaticallyReady
+    }
+
+    func start(
+        sessionID: UUID,
+        configuration: NegotiatedSessionConfiguration,
+        controlProvider: any SessionControlProvider
+    ) async throws -> AsyncThrowingStream<SessionMediaEnvironmentEvent, Error> {
+        _ = controlProvider
+        let pair = AsyncThrowingStream<SessionMediaEnvironmentEvent, Error>.makeStream()
+        withLock {
+            startRecords.append(StartRecord(
+                sessionID: sessionID,
+                configuration: configuration
+            ))
+            continuations[sessionID] = pair.continuation
+        }
+        if automaticallyReady {
+            pair.continuation.yield(.readiness([.video, .audio, .input]))
+        }
+        return pair.stream
+    }
+
+    func updateVideoColorMetadata(
+        _ metadata: VideoColorMetadata,
+        sessionID: UUID
+    ) async throws {
+        _ = metadata
+        _ = sessionID
+    }
+
+    func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
+        guard continuation(for: sessionID) != nil else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        withLock { sentInputEvents.append(event) }
+    }
+
+    func stop(sessionID: UUID) async -> SessionTeardownReport? {
+        let continuation = withLock {
+            stoppedSessionIDs.append(sessionID)
+            return continuations.removeValue(forKey: sessionID)
+        }
+        continuation?.finish()
+        return SessionTeardownReport(
+            cancelledTaskCount: 0,
+            stoppedResourceCount: 3,
+            unfinishedTasks: [],
+            taskOutcomes: [:]
+        )
+    }
+
+    func snapshot() async -> SessionMediaEnvironmentSnapshot {
+        let state = withLock {
+            (startRecords.last?.sessionID, startRecords.count, continuations.isEmpty)
+        }
+        return SessionMediaEnvironmentSnapshot(
+            sessionID: state.2 ? nil : state.0,
+            generation: UInt64(state.1),
+            readiness: state.2 ? [] : [.video, .audio, .input],
+            resourcePhase: state.2 ? nil : .active,
+            activeTaskCount: 0,
+            activeResourceCount: state.2 ? 0 : 3,
+            lastTeardownReport: nil
+        )
+    }
+
+    func yieldReadiness(
+        _ readiness: SessionChannelReadiness,
+        sessionID: UUID
+    ) {
+        continuation(for: sessionID)?.yield(.readiness(readiness))
+    }
+
+    func yieldFeedback(_ feedback: RemoteInputFeedback, sessionID: UUID) {
+        continuation(for: sessionID)?.yield(.feedback(feedback))
+    }
+
+    func finish(sessionID: UUID, throwing error: Error) {
+        let continuation = withLock { continuations.removeValue(forKey: sessionID) }
+        continuation?.finish(throwing: error)
+    }
+
+    func currentStartRecords() -> [StartRecord] {
+        withLock { startRecords }
+    }
+
+    func currentStoppedSessionIDs() -> [UUID] {
+        withLock { stoppedSessionIDs }
+    }
+
+    func currentSentInputEvents() -> [RemoteInputEvent] {
+        withLock { sentInputEvents }
+    }
+
+    private func continuation(for sessionID: UUID) -> Continuation? {
+        withLock { continuations[sessionID] }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class BlockingSessionMediaEnvironment: SessionMediaEnvironment, @unchecked Sendable {
+    private let lock = NSLock()
+    private var started = false
+    private var startContinuation: CheckedContinuation<
+        AsyncThrowingStream<SessionMediaEnvironmentEvent, Error>,
+        Never
+    >?
+    private var stoppedSessionIDs: [UUID] = []
+
+    func start(
+        sessionID: UUID,
+        configuration: NegotiatedSessionConfiguration,
+        controlProvider: any SessionControlProvider
+    ) async throws -> AsyncThrowingStream<SessionMediaEnvironmentEvent, Error> {
+        _ = sessionID
+        _ = configuration
+        _ = controlProvider
+        setStarted()
+        return await withCheckedContinuation { continuation in
+            withLock { startContinuation = continuation }
+        }
+    }
+
+    func updateVideoColorMetadata(
+        _ metadata: VideoColorMetadata,
+        sessionID: UUID
+    ) async throws {
+        _ = metadata
+        _ = sessionID
+    }
+
+    func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
+        _ = event
+        _ = sessionID
+    }
+
+    func stop(sessionID: UUID) async -> SessionTeardownReport? {
+        withLock { stoppedSessionIDs.append(sessionID) }
+        return SessionTeardownReport(
+            cancelledTaskCount: 0,
+            stoppedResourceCount: 0,
+            unfinishedTasks: [],
+            taskOutcomes: [:]
+        )
+    }
+
+    func snapshot() async -> SessionMediaEnvironmentSnapshot {
+        SessionMediaEnvironmentSnapshot(
+            sessionID: nil,
+            generation: 0,
+            readiness: [],
+            resourcePhase: nil,
+            activeTaskCount: 0,
+            activeResourceCount: 0,
+            lastTeardownReport: nil
+        )
+    }
+
+    func hasStarted() -> Bool {
+        withLock { started }
+    }
+
+    func completeStart() {
+        let continuation = withLock { () -> CheckedContinuation<
+            AsyncThrowingStream<SessionMediaEnvironmentEvent, Error>,
+            Never
+        >? in
+            defer { startContinuation = nil }
+            return startContinuation
+        }
+        let stream = AsyncThrowingStream<SessionMediaEnvironmentEvent, Error> { continuation in
+            continuation.yield(.readiness([.video, .audio, .input]))
+        }
+        continuation?.resume(returning: stream)
+    }
+
+    func currentStoppedSessionIDs() -> [UUID] {
+        withLock { stoppedSessionIDs }
+    }
+
+    private func setStarted() {
+        withLock { started = true }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
     }
 }
 

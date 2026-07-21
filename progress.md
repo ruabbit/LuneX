@@ -651,3 +651,29 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors build全部通过，根目录`/tmp/LuneX-8_3-platform-builds.41TB2V`；四个固定simulator前后均唯一且为`Shutdown`，未创建或主动boot额外设备。
 - fixture self-test/全树、全部4个OpenSpec对象strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对和四SDK strict C syntax全部通过。
 - OpenSpec 8.3更新为完成，权威进度`46/61`。该验收不代表8.4统一video/audio/input lifetime或任何live Sunshine端到端证据；下一项为8.4。
+
+## 2026-07-21 阶段 13 任务 8.4 启动
+
+- 8.3已以`2e3fe2f Connect session control UI`独立提交并推送，确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`46/61`后进入8.4。
+- 代码盘点确认VideoToolbox/Metal frame delivery、AudioToolbox/AVAudioEngine runtime和remote-input actor均已存在，但AppModel只消费control provider，production inventory仍缺具体video/audio receiver，因此stream availability保持truthfully false。
+- 8.4限定为统一session-owned media environment：聚合control/media readiness，启动/消费receiver与native processor，激活input/feedback，连接decoded frame presentation，并在local stop、remote termination、reconnect或failure时一次性清理。不得用control provider的`.all`绕过真实media readiness。
+- 第一版实现已加入`NativeSessionMediaEnvironment`、normalized video assembly/VideoToolbox processor、jitter/Opus/AVAudioEngine processor和thread-safe decoded-frame presentation source；AppModel开始独立聚合control与media readiness，并在四类terminal/reconnect路径统一停止media environment。
+- `MetalStreamSurface`已接入presentation source，以Core Image on Metal做初始native SDR frame呈现与fit/fill定位；HDR transfer/headroom mapping仍明确留在阶段15。
+
+## 2026-07-21 OpenSpec 8.4 生命周期审计
+
+- 最新连续Opus fixture加入后，定向Swift 6 warnings-as-errors门通过`43/43`，结果`/tmp/LuneX-8_4-targeted-audio.EvVZVP/MediaEnvironment.xcresult`；使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- 新增并修复pending input startup主动teardown、feedback stream提前结束fail closed、media event consumer取消自动teardown三类生命周期边界。
+- 补充processor创建后注册竞态和native video/audio factory半初始化失败回滚；下一步重新运行定向门并继续expanded/full验收。
+- 生命周期修复后的定向门通过`45/45`，结果`/tmp/LuneX-8_4-targeted-lifecycle.IuPDOR/MediaEnvironment.xcresult`。进一步将media readiness从receiver创建收紧为input启动、VideoToolbox frame submission和PCM graph schedule三项独立里程碑；首轮readiness门为`44 passed / 1 failed`，唯一失败是测试未把jitter buffer在`.closed`时的成功flush计入ready，已修正测试观测而未放宽production策略。
+- readiness修正后定向门重新通过`45/45`，结果`/tmp/LuneX-8_4-targeted-final.5qauT6/MediaEnvironment.xcresult`。Metal presenter补充锁定状态快照和idle/no-frame clear-only提交，避免停止后旧drawable残留；下一步执行扩展media/application gate。
+- 扩展media/application gate通过`169/169`，结果`/tmp/LuneX-8_4-expanded.E5zYnp/ExpandedMedia.xcresult`；完整macOS通过`358 total / 357 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_4-full-macos.i7xdkX/LuneXCoreTests.xcresult`。
+- 首轮app-target平台构建在macOS/iPhone发现`makeCoordinator()`返回private presenter的访问级别错误；已中止后续重复失败并将presenter改为fileprivate，下一轮使用首错即停的串行脚本。
+
+## 2026-07-21 阶段 13 任务 8.4 完成
+
+- 最终定向Swift 6 warnings-as-errors gate通过`45/45`，结果`/tmp/LuneX-8_4-targeted-final.5qauT6/MediaEnvironment.xcresult`；扩展video/audio/input/application gate通过`169/169`，结果`/tmp/LuneX-8_4-expanded.E5zYnp/ExpandedMedia.xcresult`。
+- 完整macOS gate通过`358 total / 357 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_4-full-macos.i7xdkX/LuneXCoreTests.xcresult`；所有测试均使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，根目录`/tmp/LuneX-8_4-platform-builds-r4.90Lsdh`。四个固定simulator构建前后均唯一且为`Shutdown`，未创建或主动boot设备。
+- fixture validator self-test/全树、4个OpenSpec change strict validation、generator SHA-256 byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对与四SDK strict C syntax全部通过。
+- OpenSpec 8.4更新为完成，权威进度`47/61`。production仍缺具体video/audio network receiver，因此stream availability继续fail closed；5.8/6.7/7.7和9.2-9.3 live证据、阶段15 HDR与阶段16空间音频均未被此验收替代。下一项为8.5 actionable diagnostics。

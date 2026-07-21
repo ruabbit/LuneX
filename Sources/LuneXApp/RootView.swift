@@ -630,7 +630,10 @@ private struct StreamWorkspaceView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            MetalStreamSurface(renderState: appModel.renderState)
+            MetalStreamSurface(
+                renderState: appModel.renderState,
+                presentationSource: appModel.videoPresentationSource
+            )
                 .ignoresSafeArea()
 
             StreamStatusOverlay()

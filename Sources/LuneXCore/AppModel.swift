@@ -130,6 +130,9 @@ final class AppModel {
     var pairingUI = PairingUIState()
     var appCatalogUI = AppCatalogUIState()
     var streamLaunchUI = StreamLaunchUIState()
+    var latestRemoteInputFeedback: RemoteInputFeedback?
+
+    let videoPresentationSource: StreamVideoPresentationSource
 
     private let hostLibraryManager: HostLibraryManager
     private let settingsRepository: AppSettingsRepository
@@ -137,11 +140,16 @@ final class AppModel {
     private let appCatalogRepository: AppCatalogSnapshotRepository
     private let streamSessionCoordinator: StreamSessionCoordinator
     private let runtimeProviders: RuntimeProviderInventory
+    private let sessionMediaEnvironment: any SessionMediaEnvironment
     private let clientIdentityStore: any ClientIdentityStore
     private let clientIdentityProvisioner: any ClientIdentityProvisioning
     private var clientUniqueID: String
     private var preparedPairingIdentity: ClientIdentityMaterial?
     private var activeStreamSessionID: UUID?
+    private var activeMediaSessionID: UUID?
+    private var activeControlReadiness: SessionChannelReadiness = []
+    private var activeMediaReadiness: SessionChannelReadiness = []
+    private var mediaConsumerTask: Task<Void, Never>?
     private let remoteInputKeyOverride: RemoteInputKeyMaterial?
     private let remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
 
@@ -160,6 +168,8 @@ final class AppModel {
             launchClient: HTTPStreamLaunchClient()
         ),
         runtimeProviders: RuntimeProviderInventory = ProductionRuntimeProviderFactory.makeDefault(),
+        sessionMediaEnvironment: (any SessionMediaEnvironment)? = nil,
+        videoPresentationSource: StreamVideoPresentationSource? = nil,
         clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
         clientIdentityProvisioner: (any ClientIdentityProvisioning)? = nil,
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
@@ -172,6 +182,18 @@ final class AppModel {
         self.appCatalogRepository = appCatalogRepository
         self.streamSessionCoordinator = streamSessionCoordinator
         self.runtimeProviders = runtimeProviders
+        let presentationSource = videoPresentationSource ?? StreamVideoPresentationSource()
+        self.videoPresentationSource = presentationSource
+        self.sessionMediaEnvironment = sessionMediaEnvironment
+            ?? NativeSessionMediaEnvironment(
+                videoReceiveProvider: runtimeProviders.videoReceive,
+                audioReceiveProvider: runtimeProviders.audioReceive,
+                remoteInputProvider: runtimeProviders.remoteInput,
+                videoProcessorFactory: NativeSessionVideoProcessorFactory(
+                    presentationSource: presentationSource
+                ),
+                audioProcessorFactory: NativeSessionAudioProcessorFactory()
+            )
         self.clientIdentityStore = clientIdentityStore
         self.clientIdentityProvisioner = clientIdentityProvisioner
             ?? ClientIdentityManager(store: clientIdentityStore)
@@ -526,12 +548,16 @@ final class AppModel {
         }
 
         let sessionID = UUID()
+        var didPrepareSession = false
         do {
             let snapshot = try await streamSessionCoordinator.prepare(
                 request,
                 sessionID: sessionID
             )
             activeStreamSessionID = sessionID
+            didPrepareSession = true
+            activeControlReadiness = []
+            activeMediaReadiness = []
             streamLaunchUI.isLaunching = true
             streamLaunchUI.errorMessage = nil
             session.activeHostID = host.id
@@ -546,11 +572,11 @@ final class AppModel {
             )
             for try await event in events {
                 guard activeStreamSessionID == sessionID else { return }
-                let snapshot = try await streamSessionCoordinator.apply(
+                try await consumeSessionControlEvent(
                     event,
-                    sessionID: sessionID
+                    sessionID: sessionID,
+                    sessionControlProvider: sessionControlProvider
                 )
-                applySessionSnapshot(snapshot)
                 if case .terminated = event {
                     receivedTerminalEvent = true
                 }
@@ -567,9 +593,12 @@ final class AppModel {
                 return
             }
             guard activeStreamSessionID == sessionID else {
-                failStreamSession(error, sessionID: nil)
+                if !didPrepareSession {
+                    failStreamSession(error, sessionID: nil)
+                }
                 return
             }
+            await stopMediaEnvironment(sessionID: sessionID)
             _ = try? await streamSessionCoordinator.fail(
                 error,
                 sessionID: sessionID
@@ -588,6 +617,7 @@ final class AppModel {
         streamLaunchUI.isLaunching = false
         session.phase = .stopping
         _ = try? await streamSessionCoordinator.beginLocalStop(sessionID: sessionID)
+        await stopMediaEnvironment(sessionID: sessionID)
         await sessionControlProvider.stop(sessionID: sessionID)
         _ = try? await streamSessionCoordinator.completeLocalStop(sessionID: sessionID)
         diagnostics.record("Stopped stream session", subsystem: "stream")
@@ -595,6 +625,15 @@ final class AppModel {
         session.lastError = nil
         session.phase = .disconnected
         renderState.policy = .idle
+    }
+
+    func sendRemoteInput(_ event: RemoteInputEvent) async throws {
+        guard let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaReadiness.contains(.input) else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        try await sessionMediaEnvironment.sendInput(event, sessionID: sessionID)
     }
 
     func toggleDemoSession() {
@@ -706,6 +745,8 @@ final class AppModel {
         switch snapshot.stage {
         case .idle, .disconnected:
             activeStreamSessionID = nil
+            activeControlReadiness = []
+            activeMediaReadiness = []
             streamLaunchUI.isLaunching = false
             session.activeHostID = nil
             session.lastError = nil
@@ -747,6 +788,171 @@ final class AppModel {
                 sessionID: snapshot.sessionID
             )
         }
+    }
+
+    private func consumeSessionControlEvent(
+        _ event: SessionControlEvent,
+        sessionID: UUID,
+        sessionControlProvider: any SessionControlProvider
+    ) async throws {
+        switch event {
+        case let .channelsReady(reportedReadiness):
+            activeControlReadiness = reportedReadiness.intersection(.control)
+            try await applyAggregatedReadiness(sessionID: sessionID)
+
+        case let .negotiated(configuration):
+            let snapshot = try await streamSessionCoordinator.apply(
+                event,
+                sessionID: sessionID
+            )
+            applySessionSnapshot(snapshot)
+            _ = try await startMediaEnvironment(
+                sessionID: sessionID,
+                configuration: configuration,
+                sessionControlProvider: sessionControlProvider
+            )
+
+        case .reconnecting:
+            await stopMediaEnvironment(sessionID: sessionID)
+            guard activeStreamSessionID == sessionID else { return }
+            activeControlReadiness = []
+            activeMediaReadiness = []
+            let snapshot = try await streamSessionCoordinator.apply(
+                event,
+                sessionID: sessionID
+            )
+            applySessionSnapshot(snapshot)
+
+        case let .videoColorMetadata(metadata):
+            let snapshot = try await streamSessionCoordinator.apply(
+                event,
+                sessionID: sessionID
+            )
+            applySessionSnapshot(snapshot)
+            if activeMediaSessionID == sessionID {
+                try await sessionMediaEnvironment.updateVideoColorMetadata(
+                    metadata,
+                    sessionID: sessionID
+                )
+            }
+
+        case .terminated:
+            let snapshot = try await streamSessionCoordinator.apply(
+                event,
+                sessionID: sessionID
+            )
+            applySessionSnapshot(snapshot)
+            await stopMediaEnvironment(sessionID: sessionID)
+
+        case .launchAccepted, .rtspReady:
+            let snapshot = try await streamSessionCoordinator.apply(
+                event,
+                sessionID: sessionID
+            )
+            applySessionSnapshot(snapshot)
+        }
+    }
+
+    private func startMediaEnvironment(
+        sessionID: UUID,
+        configuration: NegotiatedSessionConfiguration,
+        sessionControlProvider: any SessionControlProvider
+    ) async throws -> Bool {
+        guard activeMediaSessionID == nil else {
+            throw SessionMediaEnvironmentError.sessionAlreadyActive
+        }
+        let events = try await sessionMediaEnvironment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: sessionControlProvider
+        )
+        guard activeStreamSessionID == sessionID else {
+            _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
+            return false
+        }
+        latestRemoteInputFeedback = nil
+        activeMediaSessionID = sessionID
+        mediaConsumerTask = Task { [weak self] in
+            do {
+                for try await event in events {
+                    try Task.checkCancellation()
+                    guard let self else { return }
+                    await self.consumeMediaEnvironmentEvent(
+                        event,
+                        sessionID: sessionID,
+                        sessionControlProvider: sessionControlProvider
+                    )
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self else { return }
+                await self.failFromMediaEnvironment(
+                    error,
+                    sessionID: sessionID,
+                    sessionControlProvider: sessionControlProvider
+                )
+            }
+        }
+        return true
+    }
+
+    private func consumeMediaEnvironmentEvent(
+        _ event: SessionMediaEnvironmentEvent,
+        sessionID: UUID,
+        sessionControlProvider: any SessionControlProvider
+    ) async {
+        guard activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID else { return }
+        switch event {
+        case let .readiness(readiness):
+            activeMediaReadiness = readiness.intersection([.video, .audio, .input])
+            do {
+                try await applyAggregatedReadiness(sessionID: sessionID)
+            } catch {
+                await failFromMediaEnvironment(
+                    error,
+                    sessionID: sessionID,
+                    sessionControlProvider: sessionControlProvider
+                )
+            }
+        case let .feedback(feedback):
+            latestRemoteInputFeedback = feedback
+        }
+    }
+
+    private func applyAggregatedReadiness(sessionID: UUID) async throws {
+        let snapshot = try await streamSessionCoordinator.apply(
+            .channelsReady(activeControlReadiness.union(activeMediaReadiness)),
+            sessionID: sessionID
+        )
+        applySessionSnapshot(snapshot)
+    }
+
+    private func failFromMediaEnvironment(
+        _ error: Error,
+        sessionID: UUID,
+        sessionControlProvider: any SessionControlProvider
+    ) async {
+        guard activeStreamSessionID == sessionID else { return }
+        mediaConsumerTask = nil
+        activeMediaSessionID = nil
+        activeMediaReadiness = []
+        activeControlReadiness = []
+        latestRemoteInputFeedback = nil
+        _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
+        _ = try? await streamSessionCoordinator.fail(error, sessionID: sessionID)
+        failStreamSession(error, sessionID: sessionID)
+        await sessionControlProvider.stop(sessionID: sessionID)
+    }
+
+    private func stopMediaEnvironment(sessionID: UUID) async {
+        mediaConsumerTask?.cancel()
+        mediaConsumerTask = nil
+        activeMediaSessionID = nil
+        activeMediaReadiness = []
+        latestRemoteInputFeedback = nil
+        _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
     }
 
     private func pendingTransportMessage(for snapshot: StreamSessionSnapshot) -> String {
@@ -798,6 +1004,10 @@ final class AppModel {
         }
 
         activeStreamSessionID = nil
+        activeMediaSessionID = nil
+        activeControlReadiness = []
+        activeMediaReadiness = []
+        latestRemoteInputFeedback = nil
         streamLaunchUI.isLaunching = false
         streamLaunchUI.errorMessage = sessionError.message
         session.activeHostID = nil

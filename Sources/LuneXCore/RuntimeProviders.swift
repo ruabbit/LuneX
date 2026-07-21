@@ -194,6 +194,7 @@ protocol SessionControlProvider: Sendable {
 struct ReceivedVideoPacket: Equatable, Sendable {
     var sequenceNumber: UInt32
     var frameIndex: UInt32
+    var rtpTimestamp: UInt32 = 0
     var receiveTimeNanoseconds: UInt64
     var isFirstPacket: Bool
     var isLastPacket: Bool
