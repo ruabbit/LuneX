@@ -945,3 +945,17 @@
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-4_1-builds.6sCLS5`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
 - 5个OpenSpec strict、generator byte-stability（SHA-256 `f28937759af3c90b9f9ca70a429536266e795405b13e5ccf029cc80cc82613c9`）、whitespace与production/reference边界通过。OpenSpec 4.1标记完成，权威进度`14/29`；下一项4.2实现first-responder keyboard/modifier/shortcut capture view。
 - 4.1只证明cursor owner及真实AppKit/CoreGraphics adapter可编译、所有权转换确定且可恢复；尚未接入stream surface、window lifecycle或coordinator cleanup，不能当作实际remote cursor capture或Sunshine receipt证据。
+
+## 2026-07-21 阶段 14 任务 4.2 启动
+
+- 4.1已以`6d9c30c`独立提交并推送，确认`HEAD == origin/main`且工作树clean。4.2实现macOS-only flipped first-responder capture view、key/modifier/repeat/reserved-shortcut值样本和显式macOS virtual-key到Win32 VK翻译，不提前接入实际stream surface。
+- 首轮focused在测试编译阶段发现当前SDK的`NSEvent.keyEvent`要求非optional characters；production无编译错误。测试factory对`flagsChanged`改用空字符串，并使用新隔离目录重跑。
+
+## 2026-07-21 阶段 14 任务 4.2 完成
+
+- 新增macOS-only `MacStreamInputCaptureView`：flipped、可成为first responder，override keyDown/keyUp/flagsChanged/performKeyEquivalent；左右modifier keyCode独立平衡，repeat原样保留，Command-Q/Tab/H分类跨key-up持续，Escape始终本地且非repeat仅触发一次capture-exit callback。
+- `MacInputAdapter`不再把macOS `NSEvent.keyCode`直接送wire；显式翻译已确认的ANSI/ISO、modifier、keypad、F1-F20、navigation和context-menu键到Win32 VK，未知Fn、媒体音量和语义未确认的keypad equals fail closed。审阅修正`kVK_Help`为`VK_HELP (0x2F)`。
+- 最终focused Swift/Clang warnings-as-errors通过`33/33`，结果`/tmp/LuneX-14-4_2-focused-final.RqwnSz/KeyboardCapture.xcresult`。完整macOS suite结构化通过`428 total / 427 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_2-full-final.kwwfBb/LuneXCoreTests.xcresult`；唯一skip为显式禁用的真实Keychain round-trip。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors最终重跑全部通过，证据根目录`/tmp/LuneX-14-4_2-builds-final.WDEInh`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+- 5个OpenSpec strict、generator byte-stability（SHA-256 `e1eac0d6538ff7f5ecff19a0d40ffa967a8d0c0d0cddb0fab281788c8f1fa9d2`）、whitespace与production/reference边界通过。OpenSpec 4.2标记完成，权威进度`15/29`；下一项4.3实现pointer/button/scroll/backing conversion。
+- 4.2证明真实AppKit键盘事件采集类型和翻译可工作，但capture view尚未嵌入`MetalStreamSurface`、绑定session generation或调用coordinator enqueue；不声称live Sunshine收到任何键盘事件。

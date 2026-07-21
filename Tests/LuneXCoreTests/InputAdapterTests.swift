@@ -94,6 +94,129 @@ final class InputAdapterTests: XCTestCase {
         XCTAssertNil(output.event)
     }
 
+    func testMacKeyboardTranslatesVirtualKeyAndDropsUnknownKey() {
+        let adapter = MacInputAdapter(
+            mapper: makeMapper(),
+            cursorPolicy: CursorCapturePolicy(
+                hidesSystemCursor: false,
+                capturesRelativePointer: false,
+                usesRemotePointer: false,
+                reason: nil
+            )
+        )
+
+        XCTAssertEqual(
+            adapter.keyboard(MacKeyboardSample(
+                rawKeyCode: 0,
+                characters: "a",
+                isDown: true,
+                modifiers: [.shift],
+                isRepeat: true
+            )),
+            InputAdapterOutput(
+                event: .keyboard(KeyboardInputEvent(
+                    rawKeyCode: 0x41,
+                    characters: "a",
+                    isDown: true,
+                    modifiers: [.shift],
+                    isRepeat: true
+                )),
+                policy: .deliver
+            )
+        )
+
+        let unknown = adapter.keyboard(MacKeyboardSample(
+            rawKeyCode: 63,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        XCTAssertNil(unknown.event)
+        XCTAssertEqual(
+            unknown.policy,
+            .drop(reason: "The macOS virtual key has no supported remote mapping")
+        )
+    }
+
+    func testReservedShortcutClassificationKeepsKeyUpLocal() {
+        let adapter = MacInputAdapter(
+            mapper: makeMapper(),
+            cursorPolicy: CursorCapturePolicy(
+                hidesSystemCursor: false,
+                capturesRelativePointer: false,
+                usesRemotePointer: false,
+                reason: nil
+            )
+        )
+        let keyUp = MacKeyboardSample(
+            rawKeyCode: 12,
+            characters: "q",
+            isDown: false,
+            modifiers: [],
+            isRepeat: false,
+            reservedShortcut: .commandQ
+        )
+
+        XCTAssertEqual(
+            adapter.keyboard(keyUp),
+            InputAdapterOutput(
+                event: nil,
+                policy: .reserveLocally(reason: MacReservedShortcut.commandQ.reason)
+            )
+        )
+
+        var forwardingAdapter = adapter
+        forwardingAdapter.forwardsSystemShortcuts = true
+        XCTAssertEqual(
+            forwardingAdapter.keyboard(keyUp).event,
+            .keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x51,
+                characters: "q",
+                isDown: false,
+                modifiers: [],
+                isRepeat: false
+            ))
+        )
+
+        XCTAssertEqual(
+            forwardingAdapter.keyboard(MacKeyboardSample(
+                rawKeyCode: 53,
+                characters: "\u{1B}",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false,
+                reservedShortcut: .escapeCapture
+            )).policy,
+            .reserveLocally(reason: MacReservedShortcut.escapeCapture.reason)
+        )
+    }
+
+    func testMacVirtualKeyTranslatorCoversLayoutFunctionAndNavigationKeys() {
+        let expectedMappings: [UInt16: UInt16] = [
+            0: 0x41,
+            10: 0xE2,
+            64: 0x80,
+            71: 0x90,
+            90: 0x83,
+            110: 0x5D,
+            114: 0x2F,
+            123: 0x25,
+            126: 0x26
+        ]
+
+        for (macKeyCode, remoteKeyCode) in expectedMappings {
+            XCTAssertEqual(
+                MacVirtualKeyTranslator.remoteKeyCode(for: macKeyCode),
+                remoteKeyCode,
+                "Unexpected mapping for macOS virtual key \(macKeyCode)"
+            )
+        }
+        XCTAssertNil(MacVirtualKeyTranslator.remoteKeyCode(for: 63))
+        XCTAssertNil(MacVirtualKeyTranslator.remoteKeyCode(for: 72))
+        XCTAssertNil(MacVirtualKeyTranslator.remoteKeyCode(for: 81))
+    }
+
     func testTouchInputMapsThroughRenderTransform() {
         let adapter = TouchInputAdapter(mapper: makeMapper())
 

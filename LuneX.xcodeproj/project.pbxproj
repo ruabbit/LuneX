@@ -85,6 +85,7 @@
 				34D24A0912E7D927AEB04D7E /* InputMapper.swift */,
 				ABED38FF12DCB714ED141DB6 /* MacCursorCaptureOwner.swift */,
 				D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */,
+				502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */,
 				213FADD9BB6C09AEE90F9AA1 /* MacSessionInputCoordinator.swift */,
 				FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */,
 				4D0440A153CC09DAFCFA271E /* RemoteInputWireCodec.swift */,
@@ -145,6 +146,7 @@
 		15E2868CAA5C0D8D2AAE920C /* AudioPacketJitterBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C6B6FFA15778F50114093FC /* AudioPacketJitterBuffer.swift */; };
 		166FE8F98C01F0283B2688DF /* LuneX-macOS */ = {isa = PBXNativeTarget; buildConfigurationList = CAB3AF3CEA282C5D459AE7DA /* Build configuration list for LuneX-macOS */; buildPhases = (26AD0EF2EAD126EA75ED112C /* Sources */, CF80BD5D3C0A0E94467A5E1A /* Frameworks */, B89160B88498A95454FBDFEE /* Resources */); buildRules = (); dependencies = (); name = "LuneX-macOS"; productName = "LuneX-macOS"; productReference = 4E563EAF4AF6BCC20BC60369 /* LuneX-macOS.app */; productType = "com.apple.product-type.application"; };
 		1670130D50FF3FB4415ADCA6 /* PairingTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/PairingTransportTests.swift"; sourceTree = "<group>"; };
+		16736CE3819A5857F577C372 /* MacStreamInputCaptureViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MacStreamInputCaptureViewTests.swift"; sourceTree = "<group>"; };
 		16B2325EC9DA156268314F99 /* BoundedFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB71532D3E0C8C031A920E10 /* BoundedFrameDecoder.swift */; };
 		17F36281F017DADE8B8B5B62 /* ServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E349041994EA416B05890A /* ServerInfo.swift */; };
 		1842E33381787F2350CEB4F4 /* Build configuration list for LuneX-tvOS */ = {isa = XCConfigurationList; buildConfigurations = (3716B850200E36E53E450170 /* Debug */, EE113BB7483723D6DD61000C /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
@@ -210,6 +212,7 @@
 				657EA7386E369D3A9D5F8C0C /* InputMapper.swift in Sources */,
 				E646CD0D17BBE4B88BDC4983 /* MacCursorCaptureOwner.swift in Sources */,
 				AB2F7B0256B25B107E605AE5 /* MacInputAdapter.swift in Sources */,
+				86D55376E5BB7B700FFEE7C1 /* MacStreamInputCaptureView.swift in Sources */,
 				3474320A32AEDF8105AD5199 /* MacSessionInputCoordinator.swift in Sources */,
 				CC9E439469C759B67C72B433 /* RemoteInputRuntime.swift in Sources */,
 				7AE20D097A3B7F40D3421860 /* RemoteInputWireCodec.swift in Sources */,
@@ -397,6 +400,7 @@
 		4FA393E16ACA3B15586B2711 /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
 		4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/GameControllerInputAdapter.swift"; sourceTree = "<group>"; };
 		4FF5B5DAD873E001E9585812 /* RTSPMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/RTSPMessageTests.swift"; sourceTree = "<group>"; };
+		502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXInput/MacStreamInputCaptureView.swift"; sourceTree = "<group>"; };
 		505783E49A0A9D900331A4A9 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "AccentColor";
 				CODE_SIGN_STYLE = "Automatic";
@@ -473,6 +477,7 @@
 				63F09D2BD173ACA0F4A2AFF8 /* InputMapper.swift in Sources */,
 				51098B0D3D37F5E7A32A61D7 /* MacCursorCaptureOwner.swift in Sources */,
 				684C18432A5442649DB9462A /* MacInputAdapter.swift in Sources */,
+				5E7BDD6A64EFDE58581CFE1B /* MacStreamInputCaptureView.swift in Sources */,
 				EE8AF1825C3FA507B23E91EA /* MacSessionInputCoordinator.swift in Sources */,
 				4E0C760E5D80E64FBCA4D55A /* RemoteInputRuntime.swift in Sources */,
 				2A3C4F4985D5599BC04D2D11 /* RemoteInputWireCodec.swift in Sources */,
@@ -538,6 +543,7 @@
 		55382DA4B93CC740EF5B1FAB /* host.c in Sources */ = {isa = PBXBuildFile; fileRef = 9D5A2F039AF5AC454CE4E1E0 /* host.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		558D80929E02769E4962D8AE /* MediaClockSynchronizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB90277F995A5405549A7E56 /* MediaClockSynchronizer.swift */; };
 		58565479ADC766DF04FB6F7B /* RTSPBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13450D22D4C73E2DC264A069 /* RTSPBootstrap.swift */; };
+		59D99AD5ABDAA10830A76923 /* MacStreamInputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */; };
 		5A52A473DF63B8343293FC7A /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/AppModel.swift"; sourceTree = "<group>"; };
 		5AA1ACBAD82910D22EA20338 /* MacCursorCaptureOwnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32801D303C6ACADF61AD5EE /* MacCursorCaptureOwnerTests.swift */; };
 		5B3DC20E4DC3AE9778A01376 /* compress.c in Sources */ = {isa = PBXBuildFile; fileRef = 02C460FF46B93521C789DB2E /* compress.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
@@ -550,6 +556,7 @@
 		5DD08FEA662C7C1FC6788DA1 /* callbacks.c in Sources */ = {isa = PBXBuildFile; fileRef = B315A2E144291C0C6E464F3E /* callbacks.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		5E02CA64A195A74783CE5F5E /* peer.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AB990EDF8496554BC8B7484 /* peer.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		5E3E9CBD480704E77CC42280 /* RuntimeProviderContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376BD9E570B5F6A6DBBAC3DD /* RuntimeProviderContractTests.swift */; };
+		5E7BDD6A64EFDE58581CFE1B /* MacStreamInputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */; };
 		5F1E61576A2ABADA8D414265 /* VideoDecodePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/VideoDecodePipeline.swift"; sourceTree = "<group>"; };
 		5F30E763D9AE5D2A7C3216A5 /* ClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B249D70217EBBA15751AAF /* ClientIdentity.swift */; };
 		5FB3B5F46FA829F94852FCCA /* LuneXENetBridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "Sources/LuneXNetworking/CInterop/LuneXENetBridge.c"; sourceTree = "<group>"; };
@@ -586,6 +593,7 @@
 				D89071682C0FF797FEDA8255 /* InputMapper.swift in Sources */,
 				EB56E63ED340512643206CBB /* MacCursorCaptureOwner.swift in Sources */,
 				A11319EF185BB2B85CAC1E57 /* MacInputAdapter.swift in Sources */,
+				9C343CDCED9E04E04E032315 /* MacStreamInputCaptureView.swift in Sources */,
 				DA48EDDCC9F06DFE0FE498DA /* MacSessionInputCoordinator.swift in Sources */,
 				301E811A2A51CAADA8533336 /* RemoteInputRuntime.swift in Sources */,
 				334A976ACB2845489B227C37 /* RemoteInputWireCodec.swift in Sources */,
@@ -653,6 +661,7 @@
 				9A22319E9908017D57D5E5E1 /* DiscoveryTests.swift in Sources */,
 				B54E157C6D5AE9E834114317 /* LifecycleRenderPolicyTests.swift in Sources */,
 				5AA1ACBAD82910D22EA20338 /* MacCursorCaptureOwnerTests.swift in Sources */,
+				E2EB6FC033282DC22D2BF957 /* MacStreamInputCaptureViewTests.swift in Sources */,
 				C36B7EDACE203F2FA7D24DBF /* MacSessionInputCoordinatorTests.swift in Sources */,
 				7CCAB43B2EACD71201FE1AA8 /* MetalVideoFrameDeliveryTests.swift in Sources */,
 				90F976152B2E278F303C0FCB /* MediaClockSynchronizerTests.swift in Sources */,
@@ -793,6 +802,7 @@
 		86812B849941DBEA8E1C5720 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7F3BA9FD46B52A82C6F343 /* AppSettings.swift */; };
 		86A8D18A71F7A38EA11F69A4 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E264A3CED5E104C8FC807B /* Pairing.swift */; };
 		86AE033AC4A073DBF507A156 /* StreamCoordinateSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533C6BF0CE0FC77B5AF48465 /* StreamCoordinateSnapshot.swift */; };
+		86D55376E5BB7B700FFEE7C1 /* MacStreamInputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */; };
 		8726147B2CC1DF70D22CFB20 /* ClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B249D70217EBBA15751AAF /* ClientIdentity.swift */; };
 		874BD39BD776049ED821F046 /* unix.c in Sources */ = {isa = PBXBuildFile; fileRef = 63DF5880D21F53811AE8A4D8 /* unix.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		874D26083549C3755E04CDE7 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
@@ -826,6 +836,7 @@
 				655FDF52FC82292CD6CF0A01 /* InputMapper.swift in Sources */,
 				DDA6508FA14D6C3B5E5119B3 /* MacCursorCaptureOwner.swift in Sources */,
 				4B3298D4C3E56D5F52ED776B /* MacInputAdapter.swift in Sources */,
+				59D99AD5ABDAA10830A76923 /* MacStreamInputCaptureView.swift in Sources */,
 				91DBDCE7183BA3D558E443EF /* MacSessionInputCoordinator.swift in Sources */,
 				E41E3EA7115FC3E30F53E297 /* RemoteInputRuntime.swift in Sources */,
 				CB17E899BACD0813C5E2A4E7 /* RemoteInputWireCodec.swift in Sources */,
@@ -977,6 +988,7 @@
 		9B128DB5299D871DF9EECE7A /* peer.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AB990EDF8496554BC8B7484 /* peer.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		9BA659907F3732614E174257 /* VideoFormatDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCEB47FA125148AC58BAE31 /* VideoFormatDescription.swift */; };
 		9C1A7ED20A6C63D1DBDE4BA2 /* AudioRuntimeRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/AudioRuntimeRecovery.swift"; sourceTree = "<group>"; };
+		9C343CDCED9E04E04E032315 /* MacStreamInputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */; };
 		9C765FF4C8CB61B389F4018E /* VideoDecodePipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/VideoDecodePipelineTests.swift"; sourceTree = "<group>"; };
 		9C861B66313C4DF21D4B16B1 /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
 		9C9925A5B9A1A59DBD66B848 /* VideoPacketAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034D057B26B7D00AA2AD265F /* VideoPacketAssembly.swift */; };
@@ -1005,6 +1017,7 @@
 				938BDD632F8585548B3C76DB /* DiscoveryTests.swift */,
 				13F37678462B1A2328169961 /* LifecycleRenderPolicyTests.swift */,
 				F32801D303C6ACADF61AD5EE /* MacCursorCaptureOwnerTests.swift */,
+				16736CE3819A5857F577C372 /* MacStreamInputCaptureViewTests.swift */,
 				C050244F381FB8AECBFBE492 /* MacSessionInputCoordinatorTests.swift */,
 				71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */,
 				756C2F7D0E424A7D7F302393 /* MediaClockSynchronizerTests.swift */,
@@ -1241,6 +1254,7 @@
 		D76541BC2CB99720732B8F10 /* LuneXCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "LuneXCoreTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D7E37AC044EED0F2CA68A0E0 /* StreamNegotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */; };
 		D89071682C0FF797FEDA8255 /* InputMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34D24A0912E7D927AEB04D7E /* InputMapper.swift */; };
+		D90FA0F15CC0610C64AF65A4 /* MacStreamInputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 502F7F89392E916B3374754E /* MacStreamInputCaptureView.swift */; };
 		D921D7FF58CFA0F11C098563 /* AudioPacketJitterBufferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/AudioPacketJitterBufferTests.swift"; sourceTree = "<group>"; };
 		DA48EDDCC9F06DFE0FE498DA /* MacSessionInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213FADD9BB6C09AEE90F9AA1 /* MacSessionInputCoordinator.swift */; };
 		DA5F0215FF24D4402D11058F /* AppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */; };
@@ -1267,6 +1281,7 @@
 		E1862A01B9DF3E5C21EB7CD5 /* AudioSessionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */; };
 		E29320AAC5AB607075FA1DDA /* BoundedFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB71532D3E0C8C031A920E10 /* BoundedFrameDecoder.swift */; };
 		E2AD4561832E48E548C2E084 /* RTSPMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA161CDCBA58595C0DFFB1DD /* RTSPMessage.swift */; };
+		E2EB6FC033282DC22D2BF957 /* MacStreamInputCaptureViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16736CE3819A5857F577C372 /* MacStreamInputCaptureViewTests.swift */; };
 		E39EE678B8A2A21D8B358CB4 /* SessionMediaEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/SessionMediaEnvironmentTests.swift"; sourceTree = "<group>"; };
 		E409C8A4980387DCE2ECDE08 /* SessionMediaEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */; };
 		E41E3EA7115FC3E30F53E297 /* RemoteInputRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */; };
@@ -1365,6 +1380,7 @@
 				D747B6E1D4385A59D6CA07BB /* InputMapper.swift in Sources */,
 				9A94BAD23BA210809BB75F6A /* MacCursorCaptureOwner.swift in Sources */,
 				CF6C4861E915DE66E95360AD /* MacInputAdapter.swift in Sources */,
+				D90FA0F15CC0610C64AF65A4 /* MacStreamInputCaptureView.swift in Sources */,
 				6FAF7AE168EEA45605C6B703 /* MacSessionInputCoordinator.swift in Sources */,
 				A09317A2A71A45E2B151B4CE /* RemoteInputRuntime.swift in Sources */,
 				47C21D5E1C6FC619A4A34BE5 /* RemoteInputWireCodec.swift in Sources */,

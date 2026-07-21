@@ -11,7 +11,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         let generation = await coordinator.activate()
         let first = envelope(
             .keyboard(MacKeyboardSample(
-                rawKeyCode: 4,
+                rawKeyCode: 0,
                 characters: "a",
                 isDown: true,
                 modifiers: [],
@@ -47,7 +47,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(sink.events, [
             .keyboard(KeyboardInputEvent(
-                rawKeyCode: 4,
+                rawKeyCode: 0x41,
                 characters: "a",
                 isDown: true,
                 modifiers: [],
@@ -76,7 +76,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         let firstGeneration = await coordinator.activate()
         let sample = envelope(
             .keyboard(MacKeyboardSample(
-                rawKeyCode: 5,
+                rawKeyCode: 11,
                 characters: "b",
                 isDown: true,
                 modifiers: [],
@@ -150,7 +150,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         let generation = await coordinator.activate()
         let keyDown = envelope(
             .keyboard(MacKeyboardSample(
-                rawKeyCode: 6,
+                rawKeyCode: 8,
                 characters: "c",
                 isDown: true,
                 modifiers: [],
@@ -185,7 +185,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(sink.operations, [
             .event(.keyboard(KeyboardInputEvent(
-                rawKeyCode: 6,
+                rawKeyCode: 0x43,
                 characters: "c",
                 isDown: true,
                 modifiers: [],
@@ -298,7 +298,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         let generation = await coordinator.activate()
         let sample = envelope(
             .keyboard(MacKeyboardSample(
-                rawKeyCode: 8,
+                rawKeyCode: 9,
                 characters: "v",
                 isDown: true,
                 modifiers: [],
@@ -358,7 +358,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         let firstGeneration = await coordinator.activate()
         let sample = envelope(
             .keyboard(MacKeyboardSample(
-                rawKeyCode: 9,
+                rawKeyCode: 3,
                 characters: "f",
                 isDown: true,
                 modifiers: [],
@@ -442,7 +442,7 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         let generation = await coordinator.activate()
         let sample = envelope(
             .keyboard(MacKeyboardSample(
-                rawKeyCode: 10,
+                rawKeyCode: 11,
                 characters: "b",
                 isDown: true,
                 modifiers: [],

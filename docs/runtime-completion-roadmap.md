@@ -35,7 +35,7 @@ flowchart LR
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
-| 14 | `in_progress`，OpenSpec `14/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle/application input sink、bounded coordinator和balanced AppKit cursor owner | 尚未实现`NSEvent` capture，也未把cursor owner/input/lifecycle接入active stream surface |
+| 14 | `in_progress`，OpenSpec `15/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle/application input sink、bounded coordinator、balanced cursor owner和keyboard/modifier capture | 尚未实现pointer/button/scroll capture，也未把capture/cursor/lifecycle接入active stream surface |
 | 15 | `pending` | 已保留bit depth/colorspace/MDCV/CLL并读取display headroom | 尚无10-bit EDR输出、PQ映射、tone mapping或跨屏硬件验证 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
@@ -73,6 +73,7 @@ flowchart LR
 - focus loss同步关闭新sample admission但不停止accepted FIFO drain；同代只执行一个generation-scoped `releaseAll` barrier，回焦必须等屏障成功，旧release在provider suspension前后均不能越过replacement ownership fence。
 - send/input-channel failure、stop、remote termination、detach与replacement共享terminal path；它关闭admission、丢弃未开始sample、一次cleanup并等待当前delivery/release，async activation及其并发调用不能跨代遗留consumer。
 - `MacCursorCaptureOwner`只逆转自身成功取得的状态：relative capture先成功解除pointer association再隐藏cursor，重复apply/release幂等；association恢复失败时仍立即unhide，并保留association ownership供后续cleanup重试。真实AppKit适配器调用`NSCursor.hide/unhide`与`CGAssociateMouseAndMouseCursorPosition`，但尚未接入stream view。
+- `MacStreamInputCaptureView`是macOS-only flipped first responder，直接override key/flags/key-equivalent事件并同步产出值样本；左右modifier独立跟踪，repeat不伪造key-up，reserved shortcut分类跨key-up保留，Escape始终本地并触发一次capture-exit callback。`MacVirtualKeyTranslator`只输出明确的Win32 VK映射，未知或语义不确定的macOS key fail closed。
 
 ## 阶段 15：HDR 和 EDR
 
