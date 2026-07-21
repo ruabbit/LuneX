@@ -1259,3 +1259,23 @@
 - 完整macOS `512 total / 511 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-1_6-full.qqQNp2/LuneXCoreTests.xcresult`）；五平台Debug warnings-as-errors通过（`/tmp/LuneX-15-1_6-builds.Hdh9rO`），simulator前后哈希均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`。
 - repository gates位于`/tmp/LuneX-15-1_6-repo.luZbmL`：OpenSpec strict `6/6`、generator三次稳定且project SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace门通过。
 - OpenSpec 1.6标记完成，权威进度`6/33`。CPU合同不证明shader/physical HDR；下一项2.1。
+
+## 2026-07-21 阶段 15 任务 2.1 启动
+
+- 从`71660be`、`HEAD == origin/main`和clean tree恢复；OpenSpec `implement-native-hdr-edr-pipeline`为`6/33 ready`，下一项确认为2.1。
+- 本项仅在decoded frame创建时冻结decoder generation与metadata-derived color signature，Metal frame透传同一binding，并对active render configuration执行typed generation/signature compatibility；不提前实现2.2 plane/device validation、2.3 queue revision/flush或presenter wiring。
+- 所有现有`DecodedVideoFrame`字段均无构造后赋值，能收紧为不可变`let`；raw `VideoColorMetadata`只由decoded frame持有，Metal frame不复制第二份raw metadata。
+- frame binding与render contract的首轮focused warnings-as-errors门通过`19/19`、零skip/失败（`/tmp/LuneX-15-2_1-focused.Y17NwU/FrameBinding.xcresult`）；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`且不访问网络或simulator。
+- 本轮恢复后的focused包装先后发现三项验收错误：误用无test action的`LuneX-macOS` scheme；zsh只读变量`status`覆盖返回码；HDR/SDR配置helper加入局部变量后缺显式`return`。前两项未改变源码行为，第三项已修为`return try HDRRenderConfigurationIdentity(...)`；最终证据不复用这些失败运行。
+- 完整macOS suite通过`514 total / 513 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-2_1-full.G6y7ZL/LuneXCoreTests.xcresult`），唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，构建日志零warning/error。
+- macOS、固定iPhone、iPad、tvOS与visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-2_1-builds.bEQNit`）；simulator前后规范化SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，四个固定实例均唯一、可用且`Shutdown`，全局`Booted=0`。
+- repository首轮包装器已通过OpenSpec strict `6/6`和generator三次稳定，但裸`references/`扫描把`Library/Preferences/`的字符子串误报并以1退出；该误报不是production reference泄漏，后续改用路径token边界且不重复已通过门。
+
+## 2026-07-21 阶段 15 任务 2.1 完成
+
+- 最终focused warnings-as-errors gate通过`19/19`、零skip/失败（`/tmp/LuneX-15-2_1-focused-final2.d3RLRD/FrameBinding.xcresult`）；覆盖immutable metadata snapshot、SDR/HDR matching configuration、stale generation/signature和真实8/10-bit VideoToolbox-to-Metal frame binding。
+- 完整macOS结构化通过`514 total / 513 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-2_1-full.wcwquA/LuneXCoreTests.xcresult`）；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-2_1-builds.JbfIV0`）。simulator构建前后规范化SHA-256均为`faab504ded9ac0f2b4e78151ee2dc98182575d55f37231dca28a5a8a9409d944`，四个固定实例各唯一、可用且`Shutdown`，全局`Booted=0`。
+- repository gates通过（`/tmp/LuneX-15-2_1-repo.4udJFX`）：OpenSpec strict `6/6`、fixture self-test/全树、generator三次稳定且project SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、production/reference/dependency与whitespace边界全部通过。
+- OpenSpec 2.1标记完成，权威进度`7/33`。本项不证明2.2 mapper完整验证、2.3 queue revision/flush、Metal shader、production HDR输出或物理显示器行为；下一项2.2。
+- 未完成门重跑时，按最新mtime选中了同范围并发验收流的不同证据目录布局，边界/diff/status已执行但最终hash文件名不存在而退出；源码未变化，后续固定核对`D3aZxd`与`4udJFX`，不再按mtime猜测。

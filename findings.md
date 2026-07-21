@@ -961,3 +961,11 @@
 - 合同明确CAEDRMetadata HDR10 buffer value`1.0`在`opticalOutputScale=100`时对应100 nits、current而非potential headroom是安全输出bound，并列出deterministic与physical HDR/SDR/cross-display证据矩阵。1.1不改变production runtime。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
+
+# 2026-07-21 阶段 15 任务 2.1 frame binding 调查
+
+- `DecodedVideoFrame`此前保存mutable generation/raw metadata但没有creation-time render binding；`MetalVideoFrame`仅嵌套decoded frame，无法显式对`HDRRenderConfigurationIdentity`执行兼容性检查。
+- 2.1采用`HDRFrameRenderBinding(decoderGeneration,colorSignature)`：decoded frame初始化时计算一次并以`let`冻结，mapped frame只读透传。兼容性先比较generation并复用`staleDecoderGeneration`，再以不携带raw metadata的`staleColorSignature` fail closed。
+- display revision、mapping mode和surface contract属于active configuration而不是decoded frame binding；将其塞入frame会把异步显示状态错误绑定到解码时刻，相关queue revision和flush由2.3实现。
+- `DecodedVideoFrame`在初始化时创建唯一`HDRFrameRenderBinding`快照；外部metadata后续变化不会改变frame signature。`MetalVideoFrame`不再复制raw metadata，只通过其不可变decoded frame暴露同一binding。
+- matching SDR/NV12与HDR10/P010真实decoder-to-Metal帧均通过configuration compatibility；generation变化返回typed `staleDecoderGeneration`，signature变化返回不泄露metadata的`staleColorSignature`。

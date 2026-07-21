@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`6/33`；color/luminance foundation与deterministic gates完成，下一项2.1 generation-owned frame binding |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`7/33`；immutable decoded/Metal frame binding完成，下一项2.2 mapper layout/format/device/signature验证 |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`6/33`。1.1至1.5 foundation完成；1.6以确定性网格覆盖code domain、BT.709/PQ monotonicity、gamut cube、source/headroom continuity和codec组合，并发现、修复rounded BT.709 cut的下降跳变。联合focused `14/14`、完整macOS `512 total / 511 passed / 1 Keychain skip / 0 failed`和五平台Debug通过。下一项2.1将validated contract绑定generation-owned decoded/Metal frame。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`7/33`。1.1至1.6 color/luminance foundation和deterministic gates完成；2.1在decoded frame创建时冻结generation与metadata-derived signature，mapped Metal frame透传同一binding并对active render configuration做typed compatibility。2.1 focused `19/19`、完整macOS `514 total / 513 passed / 1 Keychain skip / 0 failed`和五平台Debug通过。下一项2.2强化mapper的CoreVideo plane、Metal format/dimension/device与signature验证。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -75,6 +75,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 2.1 repository gate用裸`references/`正则把`Library/Preferences/`中的字符子串误报为reference路径 | 1 | 保留已通过的OpenSpec/generator证据，将production扫描收紧为路径token边界后仅重跑未完成门 |
+| 2.1边界门恢复时按最新mtime选择到并发验收流的不同证据布局，找不到`project-before.sha256` | 1 | 停止推断最新目录，按`D3aZxd`与`4udJFX`固定路径分别核对并合并证据 |
 | Swift typecheck 使用 Obj-C 属性名 `listenerHeadTrackingEnabled` 失败 | 1 | 改用 Swift 属性名 `isListenerHeadTrackingEnabled`；visionOS 标记不可用，改为平台能力 gated |
 | 首次 macOS build 找不到 `Sources/Sources/...` 输入文件 | 1 | 修正 Xcode project 生成器的 group path，避免重复拼接 `Sources/` 和 `Resources/` |
 | 首次 iOS build 因 `UIScreen.main` 默认参数触发 Swift 6 actor isolation 错误 | 1 | 改为 `@MainActor` 且显式传入 `UIScreen`，符合 iOS 26 scene/window 上下文要求 |
@@ -256,4 +258,4 @@
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`6/33`；第1组color/luminance foundation完成，下一项2.1为generation-owned decoded/Metal frame contract。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`7/33`；第1组color/luminance foundation和2.1 immutable frame binding完成，下一项2.2为mapper完整验证。

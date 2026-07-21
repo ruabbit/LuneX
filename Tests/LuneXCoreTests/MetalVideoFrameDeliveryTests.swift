@@ -21,6 +21,13 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
                 mapped.decodedFrame.colorMetadata,
                 codec == .h264 ? .rec709VideoRange() : .hdr10VideoRange()
             )
+            XCTAssertEqual(mapped.renderBinding, frame.renderBinding)
+            XCTAssertNoThrow(try mapped.validateRenderCompatibility(
+                with: makeConfiguration(
+                    generation: frame.generation,
+                    metadata: frame.colorMetadata
+                )
+            ))
             XCTAssertEqual(mapped.luma.role, .luma)
             XCTAssertEqual(mapped.luma.texture.pixelFormat, expectedFormats.0)
             XCTAssertEqual(mapped.luma.texture.width, 64)
@@ -37,6 +44,67 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
             )
         }
         mapper.flush()
+    }
+
+    func testDecodedAndMappedFramesRetainImmutableRenderBinding() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let mapper = try CVMetalVideoFrameMapper(device: device)
+        let pixelBuffer = try makeMetalPixelBuffer()
+        var metadata = VideoColorMetadata.rec709VideoRange()
+        let frame = DecodedVideoFrame(
+            generation: 7,
+            frameID: 70,
+            pixelBuffer: pixelBuffer,
+            presentationTimeStamp: .invalid,
+            duration: .invalid,
+            infoFlags: [],
+            colorMetadata: metadata
+        )
+        metadata.colorPrimaries = .ituR2020
+        let expectedBinding = HDRFrameRenderBinding(
+            decoderGeneration: 7,
+            colorSignature: HDRRenderColorSignature(metadata: .rec709VideoRange())
+        )
+        let configuration = try makeConfiguration(
+            generation: 7,
+            metadata: .rec709VideoRange()
+        )
+
+        XCTAssertEqual(frame.renderBinding, expectedBinding)
+        XCTAssertNoThrow(try frame.validateRenderCompatibility(with: configuration))
+
+        let mapped = try mapper.map(frame)
+        XCTAssertEqual(mapped.renderBinding, expectedBinding)
+        XCTAssertNoThrow(try mapped.validateRenderCompatibility(with: configuration))
+    }
+
+    func testFrameBindingRejectsStaleGenerationAndColorSignature() throws {
+        let mapper = try CVMetalVideoFrameMapper(
+            device: XCTUnwrap(MTLCreateSystemDefaultDevice())
+        )
+        let frame = decodedFrame(
+            generation: 3,
+            frameID: 30,
+            pixelBuffer: try makeMetalPixelBuffer()
+        )
+        let mapped = try mapper.map(frame)
+
+        XCTAssertThrowsError(try frame.validateRenderCompatibility(
+            with: makeConfiguration(generation: 4, metadata: .rec709VideoRange())
+        )) { error in
+            XCTAssertEqual(
+                error as? HDRRenderResolutionError,
+                .staleDecoderGeneration(expected: 4, actual: 3)
+            )
+        }
+
+        var changedMetadata = VideoColorMetadata.rec709VideoRange()
+        changedMetadata.maximumFullFrameLuminanceNits = 100
+        XCTAssertThrowsError(try mapped.validateRenderCompatibility(
+            with: makeConfiguration(generation: 3, metadata: changedMetadata)
+        )) { error in
+            XCTAssertEqual(error as? HDRRenderResolutionError, .staleColorSignature)
+        }
     }
 
     func testBoundedQueueDropsOldestAndDequeuesNewestWithoutBacklog() async throws {
@@ -258,6 +326,26 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
         )
         XCTAssertEqual(status, kCVReturnSuccess)
         return try XCTUnwrap(pixelBuffer)
+    }
+
+    private func makeConfiguration(
+        generation: UInt64,
+        metadata: VideoColorMetadata
+    ) throws -> HDRRenderConfigurationIdentity {
+        let isHDR = metadata.isHDR
+        return try HDRRenderConfigurationIdentity(
+            decoderGeneration: generation,
+            colorSignature: HDRRenderColorSignature(metadata: metadata),
+            displayRevision: HDRDisplayRevision(rawValue: 1),
+            mappingMode: isHDR ? .hdrEDR : .sdr,
+            surfaceContract: HDRSurfaceContract(
+                drawablePixelFormat: isHDR ? .rgba16Float : .bgra8UnormSRGB,
+                outputColorSpace: isHDR ? .extendedLinearDisplayP3 : .sRGB,
+                outputGamut: isHDR ? .displayP3 : .sRGB,
+                extendedRangeIntent: isHDR ? .enabled : .disabled,
+                metadataMode: isHDR ? .hdr10 : .none
+            )
+        )
     }
 
     private func loadFixture() throws -> MetalVideoFixture {

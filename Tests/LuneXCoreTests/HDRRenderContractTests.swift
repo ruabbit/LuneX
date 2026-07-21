@@ -259,6 +259,7 @@ final class HDRRenderContractTests: XCTestCase {
             .unsupportedSurfaceContract,
             .incompatibleMappingAndSurface,
             .staleDecoderGeneration(expected: 4, actual: 3),
+            .staleColorSignature,
             .staleDisplayRevision(expected: expectedRevision, actual: actualRevision),
             .invalidDisplayRevision,
             .displayRevisionExhausted
@@ -268,8 +269,8 @@ final class HDRRenderContractTests: XCTestCase {
         XCTAssertTrue(errors.allSatisfy { !$0.description.isEmpty })
         XCTAssertEqual(errors.map(\.testCategory), [
             "session", "source", "source", "layout", "layout", "platform", "headroom",
-            "headroom", "preference", "surface", "surface", "generation", "display",
-            "display", "display"
+            "headroom", "preference", "surface", "surface", "generation", "source",
+            "display", "display", "display"
         ])
     }
 }
@@ -329,7 +330,7 @@ private extension HDRRenderResolutionError {
     var testCategory: String {
         switch self {
         case .inactiveSession: "session"
-        case .invalidSourceContract, .incompatibleSourceAndMapping: "source"
+        case .invalidSourceContract, .incompatibleSourceAndMapping, .staleColorSignature: "source"
         case .unsupportedDecodedLayout, .incompatibleDecodedLayout: "layout"
         case .unsupportedPlatformOutput: "platform"
         case .missingCurrentDisplayHeadroom, .invalidCurrentDisplayHeadroom: "headroom"

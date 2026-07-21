@@ -96,13 +96,42 @@ struct VideoDecoderFailure: Equatable, Sendable {
 }
 
 struct DecodedVideoFrame: @unchecked Sendable {
-    var generation: UInt64
-    var frameID: UInt64
-    var pixelBuffer: CVPixelBuffer
-    var presentationTimeStamp: CMTime
-    var duration: CMTime
-    var infoFlags: VTDecodeInfoFlags
-    var colorMetadata: VideoColorMetadata
+    let generation: UInt64
+    let frameID: UInt64
+    let pixelBuffer: CVPixelBuffer
+    let presentationTimeStamp: CMTime
+    let duration: CMTime
+    let infoFlags: VTDecodeInfoFlags
+    let colorMetadata: VideoColorMetadata
+    let renderBinding: HDRFrameRenderBinding
+
+    init(
+        generation: UInt64,
+        frameID: UInt64,
+        pixelBuffer: CVPixelBuffer,
+        presentationTimeStamp: CMTime,
+        duration: CMTime,
+        infoFlags: VTDecodeInfoFlags,
+        colorMetadata: VideoColorMetadata
+    ) {
+        self.generation = generation
+        self.frameID = frameID
+        self.pixelBuffer = pixelBuffer
+        self.presentationTimeStamp = presentationTimeStamp
+        self.duration = duration
+        self.infoFlags = infoFlags
+        self.colorMetadata = colorMetadata
+        renderBinding = HDRFrameRenderBinding(
+            decoderGeneration: generation,
+            colorSignature: HDRRenderColorSignature(metadata: colorMetadata)
+        )
+    }
+
+    func validateRenderCompatibility(
+        with configuration: HDRRenderConfigurationIdentity
+    ) throws {
+        try renderBinding.validateCompatibility(with: configuration)
+    }
 }
 
 enum VideoDecoderEvent: @unchecked Sendable {

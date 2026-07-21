@@ -34,6 +34,25 @@ struct HDRRenderColorSignature: Codable, Hashable, Sendable {
     }
 }
 
+struct HDRFrameRenderBinding: Hashable, Sendable {
+    let decoderGeneration: UInt64
+    let colorSignature: HDRRenderColorSignature
+
+    func validateCompatibility(
+        with configuration: HDRRenderConfigurationIdentity
+    ) throws {
+        guard decoderGeneration == configuration.decoderGeneration else {
+            throw HDRRenderResolutionError.staleDecoderGeneration(
+                expected: configuration.decoderGeneration,
+                actual: decoderGeneration
+            )
+        }
+        guard colorSignature == configuration.colorSignature else {
+            throw HDRRenderResolutionError.staleColorSignature
+        }
+    }
+}
+
 struct HDRDisplayRevision: RawRepresentable, Comparable, Codable, Hashable, Sendable {
     let rawValue: UInt64
 
@@ -198,6 +217,7 @@ enum HDRRenderResolutionError: Error, Equatable, Hashable, Sendable,
     case unsupportedSurfaceContract
     case incompatibleMappingAndSurface
     case staleDecoderGeneration(expected: UInt64, actual: UInt64)
+    case staleColorSignature
     case staleDisplayRevision(expected: HDRDisplayRevision, actual: HDRDisplayRevision)
     case invalidDisplayRevision
     case displayRevisionExhausted
@@ -228,6 +248,8 @@ enum HDRRenderResolutionError: Error, Equatable, Hashable, Sendable,
             return "The HDR mapping mode and surface contract are incompatible."
         case let .staleDecoderGeneration(expected, actual):
             return "Decoder generation \(actual) is stale; expected \(expected)."
+        case .staleColorSignature:
+            return "The frame color signature is stale for the active render configuration."
         case let .staleDisplayRevision(expected, actual):
             return "Display revision \(actual.rawValue) is stale; expected \(expected.rawValue)."
         case .invalidDisplayRevision:

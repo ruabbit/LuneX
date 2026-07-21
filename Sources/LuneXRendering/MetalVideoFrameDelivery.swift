@@ -40,18 +40,25 @@ enum MetalFrameDeliveryError: Error, Equatable, Sendable, CustomStringConvertibl
 }
 
 struct MetalVideoTexturePlane: @unchecked Sendable {
-    var role: MetalVideoPlaneRole
-    var coreVideoTexture: CVMetalTexture
-    var texture: any MTLTexture
+    let role: MetalVideoPlaneRole
+    let coreVideoTexture: CVMetalTexture
+    let texture: any MTLTexture
 }
 
 struct MetalVideoFrame: @unchecked Sendable {
-    var decodedFrame: DecodedVideoFrame
-    var luma: MetalVideoTexturePlane
-    var chroma: MetalVideoTexturePlane
+    let decodedFrame: DecodedVideoFrame
+    let luma: MetalVideoTexturePlane
+    let chroma: MetalVideoTexturePlane
 
     var generation: UInt64 { decodedFrame.generation }
     var frameID: UInt64 { decodedFrame.frameID }
+    var renderBinding: HDRFrameRenderBinding { decodedFrame.renderBinding }
+
+    func validateRenderCompatibility(
+        with configuration: HDRRenderConfigurationIdentity
+    ) throws {
+        try renderBinding.validateCompatibility(with: configuration)
+    }
 }
 
 protocol MetalVideoFrameMapping: Sendable {
