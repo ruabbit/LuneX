@@ -1119,3 +1119,16 @@
 - 从`db11c35`干净提交基线和全新DerivedData运行normal macOS suite，显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结果`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-6_1-normal.8p8JY5/Normal.xcresult`）。
 - 串行结构化读回确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试树没有live-host XCTest/opt-in开关，因此阶段13 9.2继续标记为缺失，不能把不存在的测试算作disabled pass。
 - OpenSpec strict `5/5`、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、project/whitespace/reference边界通过（`/tmp/LuneX-14-6_1-repo-gates.EkT8SN`）。OpenSpec 6.1标记完成，权威进度`24/29`；下一项6.2为macOS Debug/Release与固定iPhone/iPad/tvOS/visionOS warnings-as-errors构建门。
+
+## 2026-07-21 阶段 14 任务 6.2 启动
+
+- 6.1主记录与迟到的repository-gate证据已分别以`005c6dd`、`c82649b`提交并推送；确认`HEAD == origin/main`后进入6.2。提交后另一路遗留写入曾把两条已提交证据覆盖为旧尾部，并导致首次`apply_patch`上下文校验失败；已基于Git证据合并恢复，不使用回退命令。
+- 本项从只读simulator快照开始，对macOS与固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV、Apple Vision Pro分别执行Debug/Release warnings-as-errors build-only；每个构建使用隔离DerivedData，不create、boot、run或shutdown任何simulator。
+- 首次构建矩阵包装器因`/bin/bash -lc`脚本文本又被外层zsh解释，`jq`引号在进入bash前破坏并以127退出；失败发生在创建证据目录和任何`xcodebuild`/simulator操作之前。后续改由执行工具直接选择`/bin/bash`，不重复嵌套shell方案。
+- 第一轮十构建均`BUILD SUCCEEDED`且simulator不变，但每个日志都有Xcode `appintentsmetadataprocessor`对项目未链接AppIntents的skip warning。第二轮从Xcode `AppIntentsMetadata.xcspec`采用`LM_FILTER_WARNINGS=YES`，命令已带`--quiet-warnings`但Xcode 26.4仍输出相同warning；最终零诊断检查因此退出1，不能作为最终门。下一步用SwiftBuild平台插件公开的`LM_SKIP_METADATA_EXTRACTION=YES`先做单点验证。
+
+## 2026-07-21 阶段 14 任务 6.2 完成
+
+- `LM_SKIP_METADATA_EXTRACTION=YES`单点门通过：未使用的AppIntents extractor rule不再运行，macOS Debug构建成功且日志零诊断（`/tmp/LuneX-14-6_2-appintents-probe.fyVIfl`）。
+- 最终macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro的Debug/Release共十个warnings-as-errors build-only全部通过，10个日志零`warning:`/`error:`，证据`/tmp/LuneX-14-6_2-builds-final2.IXQDK5`。
+- simulator规范化快照前后SHA-256同为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`；固定UUID各唯一、可用且全部`Shutdown`，全局`Booted=0`。OpenSpec 6.2标记完成，权威进度`25/29`；下一项6.3为深度质量门。

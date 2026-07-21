@@ -39,7 +39,7 @@
 ## 6. Verification and tracking
 
 - [x] 6.1 Run normal tests with live-host and real-Keychain paths disabled and verify the only allowed skip
-- [ ] 6.2 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with warnings as errors and isolated DerivedData
+- [x] 6.2 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with warnings as errors and isolated DerivedData
 - [ ] 6.3 Run OpenSpec strict, generator, clean-room/dependency, static analyzer, ASan, TSan, malloc ownership, and resource-release gates
 - [ ] 6.4 Verify fixed simulator identities remain unique and `Shutdown` without creating or explicitly booting devices
 - [ ] 6.5 Prove real macOS key, relative/direct pointer, scroll, focus release, occlusion resume, resize, and multi-display mapping against an authorized Sunshine host and hardware

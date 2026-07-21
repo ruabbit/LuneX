@@ -867,5 +867,17 @@
 - 唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试树唯一opt-in环境读取也是该Keychain开关，没有live-host XCTest或相应环境开关。
 - 因此6.1证明normal suite未访问真实Keychain且没有隐藏的live-host side effect；它不证明授权Sunshine互操作，阶段13 9.2仍是尚未实现而非skipped pass。
 - OpenSpec strict `5/5`、进度`24/29`、generator三次稳定、project/whitespace/reference边界通过，最终repository gates位于`/tmp/LuneX-14-6_1-repo-gates.EkT8SN`。
+
+# 2026-07-21 阶段 14 任务 6.2 调查
+
+- 固定构建矩阵为macOS `platform=macOS,arch=arm64`，iPhone `23A27088-C19F-4F77-A455-4E50E393167E`，iPad `409A5908-8C39-4797-A41C-04503A05FA3D`，Apple TV `11D0B224-D778-4A13-A156-272A45AFF119`，Apple Vision Pro `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`；移动/TV/vision构建只引用既有固定UUID，不显式启动设备。
+- 每个平台分别执行Debug和Release，设置Swift/Clang warnings-as-errors且使用独立DerivedData。构建前后规范化simulator identity/state必须逐字节一致，固定UUID必须各自唯一、可用、`Shutdown`且全局`Booted=0`。
+- Xcode 26.4的App Intents metadata extractor即使收到官方`LM_FILTER_WARNINGS=YES`产生的`--quiet-warnings`，仍会对未链接AppIntents的正常项目输出skip warning；这不是Swift/Clang warning，但最终自验不把它忽略。SwiftBuild平台插件还公开`LM_SKIP_METADATA_EXTRACTION`，适合本项目明确不使用AppIntents的构建门，需先验证其确实移除该rule且不影响产物构建。
+
+# 2026-07-21 阶段 14 任务 6.2 验收结论
+
+- 单点验证证明`LM_SKIP_METADATA_EXTRACTION=YES`会从未使用AppIntents的LuneX构建图中移除`ExtractAppIntentsMetadata`，同时保留完整app构建；验证位于`/tmp/LuneX-14-6_2-appintents-probe.fyVIfl`。
+- 最终十构建矩阵全部`BUILD SUCCEEDED`：macOS、固定iPhone、iPad、tvOS与visionOS各自Debug/Release，全部使用隔离DerivedData、Swift/Clang warnings-as-errors、禁用签名并显式移除真实Keychain开关。10个日志零`warning:`/`error:`，证据根目录`/tmp/LuneX-14-6_2-builds-final2.IXQDK5`。
+- 构建前后规范化simulator快照SHA-256均为`b6b4a5f0e17cb704abfa9cfe669beeebe176286fa52e096b33563bc1ba356db8`；固定4个UUID唯一、可用、全部`Shutdown`，全局`Booted=0`，未create、boot、run或shutdown设备。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
