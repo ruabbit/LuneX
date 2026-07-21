@@ -1108,3 +1108,14 @@
 - 完整macOS `470 total / 469 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_5-full.G8yfCE/LuneXCoreTests.xcresult`），测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，唯一skip精确为真实Keychain round-trip。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-14-5_5-builds.aZ3I4a`）；前后simulator规范化JSON逐字节一致，四个固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
 - OpenSpec strict `5 passed / 0 failed`，generator生成前与三次生成SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`，project无漂移、whitespace、reference和ThirdParty边界通过（`/tmp/LuneX-14-5_5-repo-gates.lB9GkQ`）。OpenSpec 5.5标记完成，权威进度`23/29`；下一项6.1为normal tests/唯一Keychain skip门，阶段13仍为`54/61 in_progress`。
+
+## 2026-07-21 阶段 14 任务 6.1 启动
+
+- 5.5已以`db11c35 Gate macOS application integration`独立提交并推送，确认`HEAD == origin/main`且工作树clean后进入6.1。
+- 测试树仅有`LUNEX_RUN_KEYCHAIN_TEST`一个opt-in变量；本项将从全新DerivedData执行normal macOS suite并显式移除该变量，结构化核对唯一skip。阶段13 9.2缺失的live-host XCTest不视为本项通过证据。
+
+## 2026-07-21 阶段 14 任务 6.1 完成
+
+- 从`db11c35`干净提交基线和全新DerivedData运行normal macOS suite，显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结果`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-6_1-normal.8p8JY5/Normal.xcresult`）。
+- 串行结构化读回确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试树没有live-host XCTest/opt-in开关，因此阶段13 9.2继续标记为缺失，不能把不存在的测试算作disabled pass。
+- OpenSpec 6.1标记完成，权威进度`24/29`；下一项6.2为macOS Debug/Release与固定iPhone/iPad/tvOS/visionOS warnings-as-errors构建门。

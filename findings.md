@@ -855,5 +855,16 @@
 - fake media environment按设计不启动`NativeSessionVideoProcessor`，因此测试显式注入同一个presentation source并播入受控decoder generation，只验证AppModel在occlusion时失效旧generation、resume后接受新generation、stop时清理source；这不声称fake environment或Sunshine生成了真实视频帧。
 - 最终单项复跑`1/1`（`/tmp/LuneX-14-5_5-single-r2.moqTup/Integration-final-1784637488.xcresult`），最终扩大focused为`92/92`（`/tmp/LuneX-14-5_5-focused-final.4mEnnV/Focused.xcresult`），完整macOS为`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_5-full.G8yfCE/LuneXCoreTests.xcresult`）。
 - 五平台Debug warnings-as-errors build-only通过（`/tmp/LuneX-14-5_5-builds.aZ3I4a`）；simulator前后规范化identity/state逐字节一致，固定实例唯一、可用且全部`Shutdown`，全局`Booted=0`。OpenSpec strict `5/5`、generator生成前和三次生成SHA-256一致、diff/reference/ThirdParty边界通过，最终repository gates记录于`/tmp/LuneX-14-5_5-repo-gates.lB9GkQ`。
+
+# 2026-07-21 阶段 14 任务 6.1 调查
+
+- 当前测试树唯一显式opt-in环境开关是`LUNEX_RUN_KEYCHAIN_TEST`；normal suite将显式移除该变量，预期唯一skip为一次性真实Keychain round-trip。
+- 测试树尚无live-host XCTest环境开关或test case，因为阶段13的OpenSpec 9.2仍未实现；6.1只证明normal suite没有host/Keychain副作用，不能把缺失的live-host测试描述为disabled pass。
+
+# 2026-07-21 阶段 14 任务 6.1 验收结论
+
+- 从5.5已提交基线和全新DerivedData执行normal macOS suite，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结构化结果为`470 total / 469 passed / 1 skipped / 0 failed`（`/tmp/LuneX-14-6_1-normal.8p8JY5/Normal.xcresult`）。
+- 唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试树唯一opt-in环境读取也是该Keychain开关，没有live-host XCTest或相应环境开关。
+- 因此6.1证明normal suite未访问真实Keychain且没有隐藏的live-host side effect；它不证明授权Sunshine互操作，阶段13 9.2仍是尚未实现而非skipped pass。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
