@@ -591,3 +591,9 @@
 - The current XCTest source has one opt-in integration environment variable: `LUNEX_RUN_KEYCHAIN_TEST=1`. No live-host integration XCTest exists yet, so the normal suite contains no environment-triggered discovery, pairing, launch, or streaming operation.
 - A fresh isolated macOS warnings-as-errors run with `LUNEX_RUN_KEYCHAIN_TEST` explicitly removed passed `366 total / 365 passed / 1 skipped / 0 failed`. The xcresult test tree identifies the sole skip as `testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()` and its expected one-time authorization message.
 - This is complete evidence for the deterministic offline suite only. It does not satisfy the missing opt-in live-host test implementation, authorized host-state capture, sustained media, hardware audio, delivered input, reconnect, or end-to-end tasks.
+
+### OpenSpec 9.4 multi-platform build acceptance (2026-07-21)
+
+- macOS, fixed iPhone 17 Pro, fixed iPad Pro 13-inch (M5), fixed Apple TV, and fixed Apple Vision Pro each passed both Debug and Release Swift/Clang warnings-as-errors builds with a distinct DerivedData directory, for ten successful application builds.
+- Fixed simulator identity and state were read before and after the build matrix. Each requested device name resolved to exactly one available instance with the expected UUID, and every instance remained `Shutdown`; no simulator was created or explicitly booted.
+- This verifies source compatibility and optimized configuration compilation across the five application targets. It does not prove launch behavior, real-device signing, live media, hardware capabilities, performance, power, or release distribution readiness.

@@ -721,3 +721,14 @@
 - 独立完整macOS Swift 6/Clang warnings-as-errors离线套件通过`366 total / 365 passed / 1 skipped / 0 failed`，结果`/tmp/LuneX-9_1-offline.vWMJzq/OfflineTests.xcresult`；命令显式使用`env -u LUNEX_RUN_KEYCHAIN_TEST`。
 - 通过xcresult tests树精确确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，提示为一次性授权Keychain验证；没有其他skip、expected failure或失败。
 - OpenSpec 9.1更新为完成，权威进度`50/61`。当前没有9.2 live-host XCTest，且production仍缺具体video/audio receiver，因此9.1不替代3.7/5.8/6.7/7.7/9.2/9.3；下一可执行项为9.4 Debug/Release五平台构建。
+
+## 2026-07-21 阶段 13 任务 9.4 启动
+
+- 9.2/9.3因缺少opt-in live-host XCTest、具体授权host状态和production video/audio receiver保持未完成；不阻塞独立可执行的9.4 build验证。
+- 9.4采用严格口径：macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro均分别执行Debug与Release warnings-as-errors构建，共10次；每次使用独立DerivedData，构建前后只读验证固定simulator唯一且`Shutdown`，不创建或主动boot设备。
+
+## 2026-07-21 阶段 13 任务 9.4 完成
+
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro均通过Debug与Release Swift/Clang warnings-as-errors构建，共10次成功；每次使用独立DerivedData，证据根目录`/tmp/LuneX-9_4-builds.nQRQAw`。
+- 构建前后只读`simctl list`均确认四个固定simulator名称各只有一个available实例、UUID精确匹配且为`Shutdown`；未创建或主动boot设备。
+- OpenSpec 9.4更新为完成，权威进度`51/61`。该证据是多平台源码/优化配置编译证明，不替代真机签名、运行、live Sunshine媒体、硬件能力、性能功耗或发布就绪证明；下一项为9.5独立模拟器单实例验收。
