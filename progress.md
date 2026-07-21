@@ -756,3 +756,14 @@
 - 修正后完整TSan通过`366 total / 365 passed / 1 explicit Keychain skip / 0 failed`且无ThreadSanitizer报告，结果`/tmp/LuneX-9_6-tsan-r2.YItvB8/TSan.xcresult`。MallocScribble/GuardEdges/StackLogging/heap-check/error-abort下resource ownership/teardown选择集通过`174/174`且无malloc诊断，结果`/tmp/LuneX-9_6-resource.lwHznn/ResourceOwnership.xcresult`。
 - 最终未启用sanitizer的完整macOS warnings-as-errors套件通过`366 total / 365 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-9_6-final-normal.8ZuCiE/FinalNormal.xcresult`；OpenSpec strict复核仍为`4/4`。
 - OpenSpec 9.6更新为完成，权威进度`53/61`。下一可执行项为9.7更新跟踪、记录剩余平台体验工作并封版提交；live-host/hardware任务仍保持未完成。
+
+## 2026-07-21 阶段 13 任务 9.7 启动
+
+- 审计现有OpenSpec inventory：bootstrap、critical audit remediation、identity/trust/macOS lifecycle均all done；session runtime为`53/61`，阶段14–20路线图中的change名称尚未创建为OpenSpec对象。
+- 9.7将把阶段13已证明/未证明边界、7项live/hardware blocker、阶段14–20离线可推进与硬件完成门、以及阶段18–20具体交付补入`docs/runtime-completion-roadmap.md`，再同步三份跟踪文件与OpenSpec task状态。
+
+## 2026-07-21 阶段 13 任务 9.7 完成
+
+- `docs/runtime-completion-roadmap.md`新增阶段13–20当前证据/缺口表、离线推进与硬件完成门边界，并补齐阶段18 tvOS/visionOS、阶段19原生产品工作流/无障碍、阶段20 Release性能质量的可执行交付和验收项。
+- 阶段13阶段级自验收结论：离线/runtime foundation通过；live/hardware未通过。1.1、3.7、5.8、6.7、7.7、9.2、9.3继续保持pending，production因缺video/audio network receiver继续fail closed，不以9.1/9.4/9.5/9.6证据替代。
+- OpenSpec 9.7更新为完成，权威进度`54/61`；全部4个现有OpenSpec change strict validation通过。等待授权host/hardware期间，下一可执行工作为创建阶段14 `integrate-macos-native-input-lifecycle` change并推进确定性实现。

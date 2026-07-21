@@ -610,3 +610,9 @@
 - The ENet findings are three dead stores (`compress.c:320`, `unix.c:521`, `unix.c:526`) and one potential null dereference at `unix.c:867`. The latter exists for a public API call with non-null peer and null local address; LuneX reaches receive only through `enet_host_service`, whose `protocol.c` call supplies both addresses. It remains a disclosed dependency risk rather than being hidden or patched outside the pinned-revision process.
 - The complete ASan and TSan offline suites each pass `366 total / 365 passed / 1 explicit Keychain skip / 0 failed`, with no AddressSanitizer, LeakSanitizer, or ThreadSanitizer report. A 174-test ownership/teardown set also passes with malloc scribble, guard edges, stack logging, heap checks, and error-abort enabled.
 - TSan exposed a test synchronization defect, not a reported data race: the decoder-drop test observed the actor after its drop counter changed but while `beginRecovery` was suspended in decoder stop. The test now waits for the complete recovery transaction and requester count; targeted TSan and the complete TSan/normal suites pass.
+
+### OpenSpec 9.7 tracking and remaining-work acceptance (2026-07-21)
+
+- The roadmap now records current proof and missing proof for every stage from 13 through 20, distinguishes deterministic work that can proceed offline from completion gates requiring an authorized host or physical hardware, and adds executable stage 18–20 scope.
+- Stage 13 offline/runtime-foundation acceptance passes based on normal, five-platform Debug/Release, simulator-inventory, strict/static, ASan/TSan, and resource evidence. The stage and change remain incomplete because seven tasks still require host/hardware evidence: 1.1, 3.7, 5.8, 6.7, 7.7, 9.2, and 9.3.
+- The named stage 14–20 changes do not yet exist as OpenSpec objects. The next unblocked action is to propose and implement stage 14 macOS native input/lifecycle work while preserving all stage 13 live gates as pending.

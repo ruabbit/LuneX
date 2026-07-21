@@ -84,4 +84,4 @@
 - [x] 9.4 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with isolated DerivedData
 - [x] 9.5 Verify no duplicate simulator instances are created or booted
 - [x] 9.6 Run OpenSpec strict validation, sanitizer/static checks, and resource-leak diagnostics
-- [ ] 9.7 Update planning files, document remaining platform-experience changes, commit, and push
+- [x] 9.7 Update planning files, document remaining platform-experience changes, commit, and push
