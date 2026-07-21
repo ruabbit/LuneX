@@ -742,3 +742,17 @@
 - 9.4构建前、构建后与9.5当前三份CoreSimulator JSON经固定字段规范化后逐字节一致；iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV、Apple Vision Pro各有一个available同名实例，预期UUID各出现一次且全部`Shutdown`。
 - 当前全部available simulator的Booted计数为`0`；审计没有执行create、clone、boot、shutdown、delete或build，证据目录`/tmp/LuneX-9_5-simulator-audit.ZqTbQP`。
 - OpenSpec 9.5更新为完成，权威进度`52/61`。该证据限定于已配置available runtime的模拟器inventory稳定性，不证明真机行为；下一项为9.6 strict/static/resource-leak验证。
+
+## 2026-07-21 阶段 13 任务 9.6 启动
+
+- 9.6独立矩阵包括：全部OpenSpec strict validation、macOS Debug/Release `xcodebuild analyze`、完整离线ASan套件、并发/ownership相关TSan选择集，以及开启MallocScribble/MallocGuardEdges/MallocStackLogging的resource teardown选择集。
+- sanitizer和resource测试继续显式`env -u LUNEX_RUN_KEYCHAIN_TEST`，不接触真实Keychain或live host；每项使用独立DerivedData/xcresult。资源选择集覆盖SessionResourceTracker、NetworkChannel、VideoDecompression/DecodePipeline、AudioPipeline/Recovery、SessionMediaEnvironment、SessionCancellation/Recovery与RemoteInputDelivery。
+
+## 2026-07-21 阶段 13 任务 9.6 完成
+
+- 全部4个OpenSpec change strict validation通过；macOS Debug/Release `xcodebuild analyze`均成功。结构化plist显示自有`LuneXENetBridge`为零finding，固定且与上游逐字节一致的ENet在两配置均稳定产生4项：3个dead store和`unix.c:867`潜在null dereference；后者对LuneX唯一`enet_host_service`调用路径不可达但保留为披露的依赖风险。静态证据目录`/tmp/LuneX-9_6-static.FSakvB`。
+- 完整ASan+LeakSanitizer离线套件通过`366 total / 365 passed / 1 explicit Keychain skip / 0 failed`，无sanitizer诊断，结果`/tmp/LuneX-9_6-asan.BsZfIn/ASan.xcresult`。
+- 完整TSan首轮没有race报告，但decoder-drop测试只等待drop计数并在合法actor reentrancy中间态断言IDR状态，产生`364 passed / 1 failed / 1 skipped`。测试改为等待decoder释放、awaiting/outstanding IDR、pipeline/requester计数完整收敛；目标TSan通过`1/1`，结果`/tmp/LuneX-9_6-tsan-targeted.ezI7C9/TSanTargeted.xcresult`。
+- 修正后完整TSan通过`366 total / 365 passed / 1 explicit Keychain skip / 0 failed`且无ThreadSanitizer报告，结果`/tmp/LuneX-9_6-tsan-r2.YItvB8/TSan.xcresult`。MallocScribble/GuardEdges/StackLogging/heap-check/error-abort下resource ownership/teardown选择集通过`174/174`且无malloc诊断，结果`/tmp/LuneX-9_6-resource.lwHznn/ResourceOwnership.xcresult`。
+- 最终未启用sanitizer的完整macOS warnings-as-errors套件通过`366 total / 365 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-9_6-final-normal.8ZuCiE/FinalNormal.xcresult`；OpenSpec strict复核仍为`4/4`。
+- OpenSpec 9.6更新为完成，权威进度`53/61`。下一可执行项为9.7更新跟踪、记录剩余平台体验工作并封版提交；live-host/hardware任务仍保持未完成。

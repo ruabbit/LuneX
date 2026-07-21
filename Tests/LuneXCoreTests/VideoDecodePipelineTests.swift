@@ -203,7 +203,13 @@ final class VideoDecodePipelineTests: XCTestCase {
 
         try await waitUntil {
             let snapshot = await pipeline.snapshot()
+            let requestCount = await requester.count
             return snapshot.decoderDroppedFrameCount == 1
+                && snapshot.activeDecoderGeneration == nil
+                && snapshot.isAwaitingIDR
+                && snapshot.hasOutstandingIDRRequest
+                && snapshot.idrRequestCount == 1
+                && requestCount == 1
         }
         let snapshot = await pipeline.snapshot()
         XCTAssertNil(snapshot.activeDecoderGeneration)

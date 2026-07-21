@@ -83,5 +83,5 @@
 - [ ] 9.3 Verify authenticated pairing, sustained video, synchronized audio, delivered input, reconnect, and clean stop end to end
 - [x] 9.4 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with isolated DerivedData
 - [x] 9.5 Verify no duplicate simulator instances are created or booted
-- [ ] 9.6 Run OpenSpec strict validation, sanitizer/static checks, and resource-leak diagnostics
+- [x] 9.6 Run OpenSpec strict validation, sanitizer/static checks, and resource-leak diagnostics
 - [ ] 9.7 Update planning files, document remaining platform-experience changes, commit, and push

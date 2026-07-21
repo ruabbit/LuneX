@@ -43,7 +43,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `52/61`：9.5已对9.4构建前、构建后与当前三份CoreSimulator清单做规范化比对，四个固定设备的名称、UUID、唯一计数和`Shutdown`状态完全一致，当前available Booted计数为零。production仍缺具体video/audio network receiver，且仓库尚无9.2 live-host XCTest，因此3.7、5.8、6.7、7.7、9.2与9.3保持未完成；下一可执行项为9.6严格验证、静态分析与资源泄漏诊断，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `53/61`：9.6已完成OpenSpec strict、Debug/Release analyzer、完整ASan、完整TSan、malloc资源所有权选择集与最终普通套件。自有C bridge静态finding为零；固定ENet保留4项可审计finding，其中公开API参数组合的潜在null dereference对LuneX唯一`enet_host_service`路径不可达但仍作为依赖残余风险记录。production仍缺具体video/audio network receiver与9.2 live-host XCTest，因此3.7、5.8、6.7、7.7、9.2与9.3保持未完成；下一可执行项为9.7跟踪/剩余工作文档与封版提交，阶段13仍为 `in_progress`。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -192,8 +192,10 @@
 | 8.5最终simulator jq复核在`and`后丢失根对象上下文 | 1 | 产品/OpenSpec/generator/boundary/ENet/C门已通过；将输入保存为`$root`后重新从头执行仓库与simulator门禁 |
 | 8.6 simulator复核的`jq all(generator; condition)`在本机解析失败 | 1 | 未修改任何设备状态；改为`map`生成四项计数并严格要求每个固定UUID唯一且`Shutdown` |
 | 8.6仓库门禁把OpenSpec JSON顶层误当作对象数组 | 1 | CLI实际返回`items`与`summary`对象；读取真实JSON后改验`.summary.totals`和`.items | all(.valid)`，在新隔离目录从头重跑通过 |
+| 9.6静态门禁把任何analyzer plist/html产物误判为issue | 1 | Xcode零问题文件也会生成plist；改为结构化读取每个plist的`diagnostics`，自有bridge为零，固定ENet四项在Debug/Release精确一致并显式披露 |
+| 9.6完整TSan首轮暴露decoder-drop测试观察合法actor中间态 | 1 | 等待条件从单一drop计数改为完整recovery事务与requester计数；TSan目标测试`1/1`和完整套件随后通过，无TSan race诊断 |
 
 ## 当前执行点（2026-07-21）
 
-- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`52/61`；9.5已完成独立模拟器唯一性与未启动状态验收，下一项为9.6严格验证、静态分析与资源泄漏诊断。
+- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`53/61`；9.6已完成strict/static/sanitizer/resource验收，下一可执行项为9.7跟踪、剩余平台体验文档与封版提交。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。

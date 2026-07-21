@@ -603,3 +603,10 @@
 - Normalized CoreSimulator records from immediately before the 9.4 build matrix, immediately after it, and the independent 9.5 readback are byte-identical for the four fixed targets.
 - Each requested name has one available instance, each expected UUID occurs once, all four states are `Shutdown`, and the current available-device inventory contains zero `Booted` simulators.
 - The audit performed no create, boot, shutdown, delete, clone, or build action. It verifies inventory stability for the configured available runtimes, not physical-device behavior or unavailable historical runtimes.
+
+### OpenSpec 9.6 strict, sanitizer, static, and resource acceptance (2026-07-21)
+
+- All four OpenSpec changes pass strict validation. macOS Debug and Release `xcodebuild analyze` both succeed and produce the same structured finding set: zero diagnostics in the repository-owned `LuneXENetBridge`, plus four findings in byte-identical pinned ENet source.
+- The ENet findings are three dead stores (`compress.c:320`, `unix.c:521`, `unix.c:526`) and one potential null dereference at `unix.c:867`. The latter exists for a public API call with non-null peer and null local address; LuneX reaches receive only through `enet_host_service`, whose `protocol.c` call supplies both addresses. It remains a disclosed dependency risk rather than being hidden or patched outside the pinned-revision process.
+- The complete ASan and TSan offline suites each pass `366 total / 365 passed / 1 explicit Keychain skip / 0 failed`, with no AddressSanitizer, LeakSanitizer, or ThreadSanitizer report. A 174-test ownership/teardown set also passes with malloc scribble, guard edges, stack logging, heap checks, and error-abort enabled.
+- TSan exposed a test synchronization defect, not a reported data race: the decoder-drop test observed the actor after its drop counter changed but while `beginRecovery` was suspended in decoder stop. The test now waits for the complete recovery transaction and requester count; targeted TSan and the complete TSan/normal suites pass.
