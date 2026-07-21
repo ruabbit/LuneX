@@ -1057,3 +1057,17 @@
 - 新增7项真实Metal readback测试：NV12 SDR black/reference-white/Rec.709 primaries，P010 PQ near-black/reference-white/source peak，Rec.2020 red到Display-P3，HDR-to-SDR，non-finite sanitize，non-full fill crop及resolved fit letterbox；CPU oracle复用production constants/math并按目标格式声明`0.008`或`0.012`容差。
 - P010输入明确将10-bit code左移6位写入`.r16Unorm/.rg16Unorm`；sRGB target回读后执行匹配inverse transfer再与CPU线性结果比较，RGBA16 target按half-float读取。private render target统一通过blit复制到shared buffer，输入纹理按unified/discrete GPU选择shared/managed storage。
 - GPU readback验证了shader输出数值、最终finite bound和opaque alpha，也验证了viewport clear与source crop实际影响像素；它仍不证明production presenter已切换、`CAMetalLayer` colorspace/EDR intent已配置、显示器进入HDR模式或达到物理亮度/颜色准确性。
+
+## 2026-07-22 阶段 15 任务 3.5 实现边界
+
+- production `StreamMetalPresenter`当前仍构造`CIImage(cvPixelBuffer:)`、使用固定sRGB `CIContext`并自己编码clear/present command buffer；这绕过3.2至3.4的typed uniforms、zero-copy plane mapper、revision-owned renderer和CPU/GPU已验数值路径。
+- `StreamRenderState`目前只有policy、coordinate snapshot和headroom，没有第4组才会建立的resolved surface contract与monotonic display revision。因此3.5不能仅因display支持EDR就选择float drawable，也不能提前声称原子screen/headroom适配完成。
+- 3.5过渡production合同应固定匹配的`.bgra8Unorm_srgb` surface：SDR frame走`.sdr`显式Metal路径，HDR frame走`.hdrToSDR`且headroom精确为1；第4组再把resolved EDR contract注入同一presenter/renderer而不重新引入Core Image。
+- presenter必须在configure/replacement/dismantle释放mapper cache与renderer pipeline ownership；idle/no-frame/paused/invalid frame保持一次opaque-black clear，active/throttled继续按MTKView 60/15 FPS策略，fit/fill继续使用同一`StreamCoordinateSnapshot`。
+
+## 2026-07-22 阶段 15 任务 3.5 验收结论
+
+- production `StreamMetalPresenter`已彻底移除`CoreImage`、`CIContext`和`CIImage`，实际macOS/iOS/iPadOS/tvOS/visionOS SwiftUI surface改为`CVMetalVideoFrameMapper + HDRMetalVideoRenderer`；真实offscreen production-runtime测试证明decoded NV12 plane进入repository shader并得到opaque white输出。
+- 第4组display/surface resolver尚未存在，因此当前contract有意固定`.bgra8Unorm_srgb`与EDR intent disabled：SDR使用`.sdr`，P010 HDR使用source-peak-derived、headroom精确为1的`.hdrToSDR`。display支持EDR不能直接打开layer intent，避免surface格式和shader mapping分裂。
+- presenter用frame generation、frame ID、color signature和`CVPixelBuffer`身份缓存单帧mapping；configuration变化、暂停/idle、失败、configure replacement和dismantle都会停止renderer并flush mapper。terminal invalidation不可被迟到draw复活，macOS与mobile拆卸都清delegate并暂停view。
+- focused `14/14`、完整macOS `550 total / 549 passed / 1 explicit Keychain skip / 0 failed`及五平台Debug warnings-as-errors通过；这些证据证明production explicit renderer和SDR fallback，不证明4.x EDR surface、真实display revision/headroom、HDR signaling或物理亮度/颜色。

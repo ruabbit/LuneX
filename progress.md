@@ -1403,3 +1403,23 @@
 - repository gates位于`/tmp/LuneX-15-3_4-repo.tbmx0q`：OpenSpec strict `6/6`、fixture self-test/全树、generator生成前和三次运行SHA-256均为`3a559222444abb28bd41a4411b0951105d687aa5f6e3cf145488ed3339ede097`，reference/dependency/whitespace边界通过。
 - OpenSpec 3.4标记完成，权威进度`14/33`。本项证明offscreen GPU数值，不证明3.5 production presenter切换、4.x surface signaling或物理HDR；下一项3.5。
 - 提交前自审将texture payload、readback coordinate和blit completion从“断言后继续”改为guard+typed throw，防止坏测试输入进入Metal API；全新DerivedData focused再次`7/7 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_4-focused-guarded.dJ4EPW/HDRMetalShaderReadback.xcresult`）。
+
+## 2026-07-22 阶段 15 任务 3.5 启动
+
+- 3.4已以`1ed7d2b Verify HDR Metal shader readback`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`14/33`。
+- 审计production调用链确认`StreamMetalPresenter`仍使用Core Image固定sRGB路径，实际SwiftUI macOS/iOS/tvOS/visionOS surface均通过该presenter；3.5将接入`CVMetalVideoFrameMapper + HDRMetalVideoRenderer`并保留clear/fit/fill/throttle/pause/stale行为。
+- 第4组surface/display resolver尚未存在，故3.5固定匹配sRGB surface：SDR显式Metal，HDR显式HDR-to-SDR fallback；不以`DisplayHeadroom.supportsEDR`直接启用EDR intent，动态float drawable/colorspace和current-headroom mapping留给4.1至4.4。
+
+## 2026-07-22 阶段 15 任务 3.5 暂停检查点
+
+- production presenter未提交工作树已移除Core Image路径，接入`CVMetalVideoFrameMapper + HDRMetalVideoRenderer`，固定`.bgra8Unorm_srgb` surface，SDR使用`.sdr`、HDR使用headroom `1`的`.hdrToSDR`；macOS和mobile dismantle显式停止并失效runtime，layer intent暂时强制SDR。
+- 新增`StreamMetalPresenterTests`并纳入generator-owned project；全新DerivedData focused warnings-as-errors通过`5/5`，含真实`DecodedVideoFrame -> mapper -> renderer -> offscreen sRGB target` GPU回读及invalidate后fail-closed，结果`/tmp/LuneX-15-3_5-focused.PrglEY/StreamMetalPresenter.xcresult`。测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- 用户要求暂停以更新macOS时，完整macOS suite和五平台Debug build-only正在并行执行；已立即向首组六个`xcodebuild`发送中断并以`130`退出。随后检测到中断前异步执行流延迟启动的另一组五平台build，也已按其`/tmp/LuneX-15-3_5-builds-*`路径定向发送INT/TERM并确认进程表无残留。因此所有中断运行均不计验收，OpenSpec `3.5`保持未完成、未勾选、未提交、未推送。
+- 暂停时工作树包含`MetalStreamSurface.swift`、`StreamMetalPresenterTests.swift`、generator/project及`findings.md`/`progress.md`修改；`git diff --check`通过。恢复后先核对Xcode/SDK/runtime与simulator清单，再从完整macOS suite、五平台build-only和repository gates重新验收，不重复运行已通过的focused测试除非环境或源码变化。
+
+## 2026-07-22 阶段 15 任务 3.5 完成
+
+- 恢复后审计共享工作树并补强terminal invalidation、opaque-black clear、macOS/mobile dismantle、SDR-only layer intent与四项plan resolver测试；共享执行流追加真实production runtime offscreen GPU测试后保留并审计，未增加public或测试专用后门。
+- 全新DerivedData focused通过`14/14 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_5-focused-final.jc3pIV/StreamMetalPresenter.xcresult`）；完整macOS通过`550 total / 549 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-3_5-full.Dis35D/LuneXCoreTests.xcresult`），唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`且命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-3_5-builds-1784650856524`）；simulator前后清单逐字一致，SHA-256均为`a4f4478ed56e83535f5a8e7fda2ebd80e047fb169c1271648a41a1fbd61b07af`，四实例唯一、available、`Shutdown`且全局`Booted=0`。
+- 3.5标记完成，OpenSpec权威进度`15/33`。本项不证明3.6完整failure/resource矩阵、4.x EDR surface/display adaptation或6.5物理显示器结果；下一项3.6。

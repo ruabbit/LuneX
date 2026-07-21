@@ -27,16 +27,18 @@ still required before LuneX may claim working HDR output.
 | CoreMedia metadata | `VideoColorMetadata.coreMediaExtensions()` can encode primaries, transfer, matrix, range, bit depth, MDCV, and CLL | Unit tests validate the dictionary/data encoding | Production `VideoFormatDescriptionFactory` does not currently apply this dictionary to the created H.264/HEVC format description |
 | VideoToolbox output | `VideoOutputBitDepth` requests NV12 video range for 8-bit and P010 video range for 10-bit, with IOSurface and Metal compatibility | Factory/decoder tests validate requested attributes and generation ownership | Decoder callback does not revalidate the actual returned pixel format against `VideoColorMetadata` before publishing a frame |
 | Decoded frame | `DecodedVideoFrame` retains decoder generation and immutable `VideoColorMetadata` | Decoder and pipeline generation tests | No derived immutable render color signature or display revision is attached |
-| Metal plane mapping | `CVMetalVideoFrameMapper` maps NV12 to `.r8Unorm/.rg8Unorm` and P010 to `.r16Unorm/.rg16Unorm`; it checks plane count, dimensions, format, and Metal device | Focused mapper/queue tests | `CVMetalVideoFrameMapper` and `BoundedMetalFrameQueue` have no production consumer |
+| Metal plane mapping | `CVMetalVideoFrameMapper` maps NV12 to `.r8Unorm/.rg8Unorm` and P010 to `.r16Unorm/.rg16Unorm`; the production presenter runtime consumes those zero-copy planes after validating format, dimensions, device, generation, and color signature | Focused mapper/queue/presenter tests and real offscreen Metal execution | The standalone bounded queue is not yet the application presentation owner; display/surface revision ownership is added by tasks 4.1 through 5.1 |
 | Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations and clears frames across pause, stop, failure, and replacement | Session/lifecycle integration tests | It stores raw `DecodedVideoFrame` only and has no render/display revision fence |
-| Actual presenter | `StreamMetalPresenter` creates `CIImage(cvPixelBuffer:)`, scales it to the shared video rectangle, and renders it through a fixed sRGB `CIContext` into the default drawable | SDR presentation geometry and lifecycle behavior | It bypasses mapped luma/chroma textures, explicit range/matrix/transfer/gamut math, PQ luminance mapping, HDR metadata, and a float EDR drawable |
+| Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. SDR uses the sRGB pipeline; HDR uses the bounded HDR-to-SDR pipeline until a resolved EDR surface exists | Focused production-runtime GPU execution, shader readback, lifecycle tests, full macOS tests, and five-platform builds | It intentionally fixes the drawable to sRGB and does not yet apply a float EDR drawable, extended-linear colorspace, display-owned headroom, or HDR metadata |
 | Display lifecycle | macOS rereads the actual `NSScreen`, headroom, display name, backing pixels, and drawable on window/screen/backing/resize notifications | AppKit notification and stale-attachment tests | Headroom has no monotonic display revision separate from general lifecycle revision |
-| Surface intent | `DisplayHeadroomReader.configure` sets `wantsExtendedDynamicRangeContent` on macOS/iOS when requested | The property call compiles on those platforms | Call sites currently pass `renderState.headroom.supportsEDR`, which is display capability, not `streamIsHDR`; no colorspace, pixel format, or `CAEDRMetadata` is applied atomically |
+| Surface intent | Presenter call sites force `wantsExtendedDynamicRangeContent = false` while the active surface contract is sRGB, so display capability alone cannot accidentally enable EDR | The property call and SDR fallback compile on all targets; focused tests lock the matching sRGB contract | Tasks 4.1 through 4.6 must atomically own pixel format, colorspace, extended-range intent, metadata, and actual display-headroom revision |
 | AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
 
-The production truth at the start of stage 15 is therefore: LuneX can preserve
-HDR metadata and request/map a 10-bit decoded layout, but it does not yet render
-that layout through an explicit HDR/EDR color pipeline.
+The production truth after task 3.5 is therefore: LuneX presents both SDR and
+HDR decoded layouts through the explicit shader and revision-owned Metal
+renderer. The current production surface remains sRGB, so HDR is deliberately
+tone-mapped to SDR headroom `1.0`; no EDR signaling or physical HDR result is
+claimed until the display/surface adaptation tasks and hardware gate pass.
 
 ## Apple SDK 26.4 API matrix
 

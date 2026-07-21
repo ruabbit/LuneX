@@ -1,17 +1,189 @@
-@preconcurrency import CoreImage
 import Foundation
 import MetalKit
 import SwiftUI
+
+enum StreamMetalPresenterError: Error, Equatable, Sendable {
+    case commandQueueUnavailable
+    case clearCommandUnavailable
+    case clearEncoderUnavailable
+    case invalidatedRuntime
+}
+
+struct StreamMetalPresentationPlan: Sendable {
+    let configuration: HDRRenderConfigurationIdentity
+    let uniforms: HDRMetalShaderUniforms
+}
+
+enum StreamMetalPresentationPlanResolver {
+    static func resolve(
+        frame: DecodedVideoFrame,
+        coordinateSnapshot: StreamCoordinateSnapshot
+    ) throws -> StreamMetalPresentationPlan {
+        let frameContract = try HDRDecodedVideoContractValidator.validateForMetalMapping(
+            pixelBuffer: frame.pixelBuffer,
+            colorMetadata: frame.colorMetadata
+        )
+        guard frameContract.colorSignature == frame.renderBinding.colorSignature else {
+            throw MetalFrameDeliveryError.incompatibleColorSignature
+        }
+
+        let mappingMode: HDRMappingMode = frame.colorMetadata.isHDR ? .hdrToSDR : .sdr
+        let surface = try HDRSurfaceContract(
+            drawablePixelFormat: .bgra8UnormSRGB,
+            outputColorSpace: .sRGB,
+            outputGamut: .sRGB,
+            extendedRangeIntent: .disabled,
+            metadataMode: .none
+        )
+        let configuration = try HDRRenderConfigurationIdentity(
+            decoderGeneration: frame.generation,
+            colorSignature: frame.renderBinding.colorSignature,
+            displayRevision: HDRDisplayRevision(rawValue: coordinateSnapshot.revision),
+            mappingMode: mappingMode,
+            surfaceContract: surface
+        )
+        let luminanceMapping: HDRLuminanceMapping? = frame.colorMetadata.isHDR
+            ? try HDRLuminanceMapping(
+                sourcePeak: HDRSourcePeakResolver.resolve(frame.colorMetadata),
+                currentHeadroom: 1
+            )
+            : nil
+        return StreamMetalPresentationPlan(
+            configuration: configuration,
+            uniforms: try HDRMetalShaderUniforms(
+                frameContract: frameContract,
+                configuration: configuration,
+                luminanceMapping: luminanceMapping
+            )
+        )
+    }
+}
+
+private struct StreamMetalMappedFrameIdentity: Equatable {
+    let generation: UInt64
+    let frameID: UInt64
+    let colorSignature: HDRRenderColorSignature
+    let pixelBuffer: ObjectIdentifier
+
+    init(_ frame: DecodedVideoFrame) {
+        generation = frame.generation
+        frameID = frame.frameID
+        colorSignature = frame.renderBinding.colorSignature
+        pixelBuffer = ObjectIdentifier(frame.pixelBuffer)
+    }
+}
+
+final class StreamMetalPresenterRuntime: @unchecked Sendable {
+    private let mapper: any MetalVideoFrameMapping
+    private let renderer: HDRMetalVideoRenderer
+    private let commandQueue: any MTLCommandQueue
+    private let lock = NSLock()
+    private var activeConfiguration: HDRRenderConfigurationIdentity?
+    private var mappedFrame: MetalVideoFrame?
+    private var mappedFrameIdentity: StreamMetalMappedFrameIdentity?
+    private var isInvalidated = false
+
+    init(device: any MTLDevice, bundle: Bundle) throws {
+        guard let commandQueue = device.makeCommandQueue() else {
+            throw StreamMetalPresenterError.commandQueueUnavailable
+        }
+        mapper = try CVMetalVideoFrameMapper(device: device)
+        renderer = try HDRMetalVideoRenderer(device: device, bundle: bundle)
+        self.commandQueue = commandQueue
+    }
+
+    @discardableResult
+    func present(
+        frame: DecodedVideoFrame,
+        plan: StreamMetalPresentationPlan,
+        coordinateSnapshot: StreamCoordinateSnapshot,
+        target: HDRMetalRenderTarget,
+        completion: HDRMetalCommandCompletion = .asynchronous
+    ) throws -> HDRMetalVideoRendererResult {
+        try lock.withLock {
+            guard !isInvalidated else {
+                throw StreamMetalPresenterError.invalidatedRuntime
+            }
+            if activeConfiguration != plan.configuration {
+                try renderer.replaceConfiguration(plan.configuration)
+                mapper.flush()
+                mappedFrame = nil
+                mappedFrameIdentity = nil
+                activeConfiguration = plan.configuration
+            }
+            let identity = StreamMetalMappedFrameIdentity(frame)
+            let metalFrame: MetalVideoFrame
+            if mappedFrameIdentity == identity, let mappedFrame {
+                metalFrame = mappedFrame
+            } else {
+                metalFrame = try mapper.map(frame)
+                mappedFrame = metalFrame
+                mappedFrameIdentity = identity
+            }
+            return try renderer.render(
+                frame: metalFrame,
+                configuration: plan.configuration,
+                uniforms: plan.uniforms,
+                coordinateSnapshot: coordinateSnapshot,
+                target: target,
+                completion: completion
+            )
+        }
+    }
+
+    func clear(drawable: any CAMetalDrawable, color: MTLClearColor) throws {
+        try lock.withLock {
+            guard !isInvalidated else {
+                throw StreamMetalPresenterError.invalidatedRuntime
+            }
+            guard let commandBuffer = commandQueue.makeCommandBuffer() else {
+                throw StreamMetalPresenterError.clearCommandUnavailable
+            }
+            let descriptor = MTLRenderPassDescriptor()
+            descriptor.colorAttachments[0].texture = drawable.texture
+            descriptor.colorAttachments[0].loadAction = .clear
+            descriptor.colorAttachments[0].storeAction = .store
+            descriptor.colorAttachments[0].clearColor = color
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(
+                descriptor: descriptor
+            ) else {
+                throw StreamMetalPresenterError.clearEncoderUnavailable
+            }
+            encoder.endEncoding()
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+        }
+    }
+
+    func stop() {
+        lock.withLock {
+            renderer.stop()
+            mapper.flush()
+            activeConfiguration = nil
+            mappedFrame = nil
+            mappedFrameIdentity = nil
+        }
+    }
+
+    func invalidate() {
+        lock.withLock {
+            guard !isInvalidated else { return }
+            isInvalidated = true
+            renderer.stop()
+            mapper.flush()
+            activeConfiguration = nil
+            mappedFrame = nil
+            mappedFrameIdentity = nil
+        }
+    }
+}
 
 final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     private let presentationSource: StreamVideoPresentationSource
     private let lock = NSLock()
     private var renderPolicy: RenderPolicy
     private var coordinateSnapshot: StreamCoordinateSnapshot?
-    private var commandQueue: (any MTLCommandQueue)?
-    private var context: CIContext?
-    private let outputColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
-        ?? CGColorSpaceCreateDeviceRGB()
+    private var runtime: StreamMetalPresenterRuntime?
 
     init(
         presentationSource: StreamVideoPresentationSource,
@@ -25,11 +197,16 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     @MainActor
     func configure(_ view: MTKView) {
         guard let device = view.device else { return }
+        let runtime = try? StreamMetalPresenterRuntime(
+            device: device,
+            bundle: Bundle(for: StreamMetalPresenter.self)
+        )
         withLock {
-            commandQueue = device.makeCommandQueue()
-            context = CIContext(mtlDevice: device)
+            self.runtime?.invalidate()
+            self.runtime = runtime
         }
-        view.framebufferOnly = false
+        view.colorPixelFormat = .bgra8Unorm_srgb
+        view.framebufferOnly = true
         view.delegate = self
     }
 
@@ -46,76 +223,52 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         let snapshot = withLock {
-            (renderPolicy, coordinateSnapshot, commandQueue, context)
+            (renderPolicy, coordinateSnapshot, runtime)
         }
-        guard let commandQueue = snapshot.2,
-              let commandBuffer = commandQueue.makeCommandBuffer(),
-              let drawable = view.currentDrawable,
-              let descriptor = view.currentRenderPassDescriptor else { return }
-
-        descriptor.colorAttachments[0].loadAction = .clear
-        descriptor.colorAttachments[0].storeAction = .store
-        descriptor.colorAttachments[0].clearColor = view.clearColor
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
+        guard let runtime = snapshot.2,
+              let drawable = view.currentDrawable else { return }
+        guard snapshot.0 == .active || snapshot.0.isThrottled else {
+            runtime.stop()
+            try? runtime.clear(drawable: drawable, color: view.clearColor)
             return
         }
-        encoder.endEncoding()
-
-        guard snapshot.0 == .active || snapshot.0.isThrottled,
-              let coordinateSnapshot = snapshot.1,
+        guard let coordinateSnapshot = snapshot.1,
               coordinateSnapshot.drawableSize.width == drawable.texture.width,
               coordinateSnapshot.drawableSize.height == drawable.texture.height,
               let frame = presentationSource.currentFrame() else {
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
+            try? runtime.clear(drawable: drawable, color: view.clearColor)
             return
         }
-        let bounds = CGRect(
-            x: 0,
-            y: 0,
-            width: drawable.texture.width,
-            height: drawable.texture.height
-        )
-        let image = positioned(
-            CIImage(cvPixelBuffer: frame.pixelBuffer),
-            using: coordinateSnapshot.resolvedVideo
-        )
-        snapshot.3?.render(
-            image,
-            to: drawable.texture,
-            commandBuffer: commandBuffer,
-            bounds: bounds,
-            colorSpace: outputColorSpace
-        )
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+        do {
+            try runtime.present(
+                frame: frame,
+                plan: StreamMetalPresentationPlanResolver.resolve(
+                    frame: frame,
+                    coordinateSnapshot: coordinateSnapshot
+                ),
+                coordinateSnapshot: coordinateSnapshot,
+                target: HDRMetalRenderTarget(
+                    texture: drawable.texture,
+                    drawable: drawable
+                )
+            )
+        } catch {
+            runtime.stop()
+            try? runtime.clear(drawable: drawable, color: view.clearColor)
+        }
+    }
+
+    func stop() {
+        withLock {
+            runtime?.invalidate()
+            runtime = nil
+        }
     }
 
     private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
         lock.lock()
         defer { lock.unlock() }
         return try operation()
-    }
-
-    private func positioned(
-        _ image: CIImage,
-        using resolvedVideo: ResolvedVideoRectangle
-    ) -> CIImage {
-        guard image.extent.width > 0,
-              image.extent.height > 0 else { return image }
-        let videoRect = resolvedVideo.videoRect
-        let horizontalScale = videoRect.width / image.extent.width
-        let verticalScale = videoRect.height / image.extent.height
-        let translationX = videoRect.minX - image.extent.minX * horizontalScale
-        let translationY = videoRect.minY - image.extent.minY * verticalScale
-        return image.transformed(by: CGAffineTransform(
-            a: horizontalScale,
-            b: 0,
-            c: 0,
-            d: verticalScale,
-            tx: translationX,
-            ty: translationY
-        ))
     }
 }
 
@@ -338,6 +491,7 @@ final class MacStreamSurfaceCoordinator {
     }
 
     func detach(_ view: MacStreamInputCaptureView) {
+        presenter.stop()
         captureController.detach(from: view)
         attachmentOwner.detach(from: view)
         view.delegate = nil
@@ -372,11 +526,11 @@ struct MetalStreamSurface: NSViewRepresentable {
             captureExitHandler: { context.coordinator.exitCapture() },
             sampleHandler: { context.coordinator.handle($0) }
         )
-        view.clearColor = MTLClearColor(red: 0.02, green: 0.025, blue: 0.03, alpha: 1)
+        view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
         if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: renderState.headroom.supportsEDR)
+            DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
         context.coordinator.presenter.configure(view)
         context.coordinator.captureController.update(inputPolicy, for: view)
@@ -417,7 +571,7 @@ struct MetalStreamSurface: NSViewRepresentable {
             view.isPaused = true
         }
         if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: state.headroom.supportsEDR)
+            DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
     }
 }
@@ -435,11 +589,11 @@ struct MetalStreamSurface: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MTKView {
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
-        view.clearColor = MTLClearColor(red: 0.02, green: 0.025, blue: 0.03, alpha: 1)
+        view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
         if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: renderState.headroom.supportsEDR)
+            DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
         context.coordinator.configure(view)
         return view
@@ -464,9 +618,15 @@ struct MetalStreamSurface: UIViewRepresentable {
             )
         }
         if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: renderState.headroom.supportsEDR)
+            DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
         if view.isPaused { view.draw() }
+    }
+
+    static func dismantleUIView(_ view: MTKView, coordinator: StreamMetalPresenter) {
+        coordinator.stop()
+        view.delegate = nil
+        view.isPaused = true
     }
 }
 #endif

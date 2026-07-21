@@ -257,6 +257,7 @@ test_sources = [
   "Tests/LuneXCoreTests/SessionStateMachineTests.swift",
   "Tests/LuneXCoreTests/StreamNegotiationTests.swift",
   "Tests/LuneXCoreTests/StreamCoordinateSnapshotTests.swift",
+  "Tests/LuneXCoreTests/StreamMetalPresenterTests.swift",
   "Tests/LuneXCoreTests/VideoCodecSelectionTests.swift",
   "Tests/LuneXCoreTests/VideoColorMetadataTests.swift",
   "Tests/LuneXCoreTests/VideoDecodePipelineTests.swift",
