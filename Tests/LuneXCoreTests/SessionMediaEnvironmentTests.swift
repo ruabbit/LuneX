@@ -259,6 +259,126 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         _ = await environment.stop(sessionID: sessionID)
     }
 
+    func testLifecycleApplicationIsRevisionedAndGenerationScoped() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls)
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let first = SessionLifecycleApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            lifecycleRevision: 4,
+            directive: SessionLifecycleDirectiveResolver.resolve(
+                isStreamActive: true,
+                isVisible: false,
+                isFocused: false,
+                drawableSize: PixelSize(width: 1920, height: 1080)
+            )
+        )
+
+        try await environment.applyLifecycle(first)
+        try await environment.applyLifecycle(first)
+        let firstSnapshot = await environment.snapshot()
+        XCTAssertEqual(firstSnapshot.lifecycleApplication, first)
+
+        var older = first
+        older.lifecycleRevision = 3
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyLifecycle(older)
+        ) { error in
+            XCTAssertEqual(error as? SessionMediaEnvironmentError, .staleLifecycleApplication)
+        }
+
+        var conflicting = first
+        conflicting.directive = SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 1920, height: 1080)
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyLifecycle(conflicting)
+        ) { error in
+            XCTAssertEqual(error as? SessionMediaEnvironmentError, .staleLifecycleApplication)
+        }
+
+        var current = conflicting
+        current.lifecycleRevision = 5
+        try await environment.applyLifecycle(current)
+        let currentSnapshot = await environment.snapshot()
+        XCTAssertEqual(currentSnapshot.lifecycleApplication, current)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testReplacementGenerationRejectsPriorLifecycleApplication() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls)
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        let firstStream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var firstIterator = firstStream.makeAsyncIterator()
+        _ = try await firstIterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let stale = SessionLifecycleApplication(
+            sessionID: sessionID,
+            mediaGeneration: firstGeneration,
+            lifecycleRevision: 1,
+            directive: SessionLifecycleDirectiveResolver.resolve(
+                isStreamActive: true,
+                isVisible: false,
+                isFocused: false,
+                drawableSize: PixelSize(width: 1920, height: 1080)
+            )
+        )
+        try await environment.applyLifecycle(stale)
+        _ = await environment.stop(sessionID: sessionID)
+
+        let replacementStream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var replacementIterator = replacementStream.makeAsyncIterator()
+        _ = try await replacementIterator.next()
+        let replacementGeneration = await environment.snapshot().generation
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyLifecycle(stale)
+        ) { error in
+            XCTAssertEqual(error as? SessionMediaEnvironmentError, .staleLifecycleApplication)
+        }
+        let unappliedReplacementSnapshot = await environment.snapshot()
+        XCTAssertNil(unappliedReplacementSnapshot.lifecycleApplication)
+
+        var replacement = stale
+        replacement.mediaGeneration = replacementGeneration
+        try await environment.applyLifecycle(replacement)
+        let appliedReplacementSnapshot = await environment.snapshot()
+        XCTAssertEqual(appliedReplacementSnapshot.lifecycleApplication, replacement)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
     func testStopUnblocksInputStartupAndRollsBackCleanly() async throws {
         let calls = MediaEnvironmentCallRecorder()
         let video = ControlledVideoReceiveProvider(calls: calls)

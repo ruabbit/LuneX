@@ -1674,6 +1674,10 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         _ = sessionID
     }
 
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
+    }
+
     func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
         guard continuation(for: sessionID) != nil else {
             throw SessionMediaEnvironmentError.inactiveSession
@@ -1778,6 +1782,10 @@ private final class BlockingSessionMediaEnvironment: SessionMediaEnvironment, @u
     ) async throws {
         _ = metadata
         _ = sessionID
+    }
+
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
     }
 
     func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {

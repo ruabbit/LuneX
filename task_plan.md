@@ -31,7 +31,7 @@
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
-| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`5/29`；闭合render/video/presentation/input directive已定义，下一步按session generation接入media environment |
+| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`6/29`；lifecycle application已按media generation/revision归属，下一步执行drain/pause/clear/IDR恢复副作用 |
 | 15. 原生 HDR/EDR 管线 | pending | 10-bit、BT.2020/PQ、MDCV/CLL、EDR metadata、tone mapping 与跨屏验证 |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
@@ -45,7 +45,7 @@
 
 当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。
 
-阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`5/29`。2.1新增闭合`SessionLifecycleDirective`：inactive、hidden、drawable unavailable、visible unfocused与active focused按固定优先级原子决定render、decoded-video submission/drain、presentation clear/throttle与input release admission；focused `11/11`、完整macOS `386 passed + 1 Keychain skip`和五平台Debug构建通过。下一项为2.2按session generation把directive接入media environment且拒绝stale application。每项继续独立实现、验收、提交和推送。
+阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`6/29`。2.2新增同时携带session ID、media generation、lifecycle revision和directive的application；environment只接受当前generation的revision前进，完全相同重复幂等，旧generation、revision回退和同revision冲突内容fail closed，snapshot只公开无秘密元数据。focused `24/24`、完整macOS `389 passed + 1 Keychain skip`和五平台Debug构建通过。下一项为2.3执行transport drain、decoded-video pause、presentation clear和visible resume fresh IDR。每项继续独立实现、验收、提交和推送。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -200,9 +200,10 @@
 | 14.1.2 simulator只读审计在对象literal内使用`as`绑定 | 1 | `jq`编译失败且未修改设备；改为先将输入绑定为`$root`、UUID数组绑定为`$ids`再构造结果 |
 | 14.1.3首轮focused gate有fill浮点exact断言且AppModel测试缺source geometry | 1 | production按合同保持不变；fill改为accuracy断言，AppModel测试先建立有效source再验证lifecycle drawable发布snapshot |
 | 14.1.3首次五平台build误用不存在的`LuneX` scheme | 1 | 编译启动前即失败且未启动simulator；用`xcodebuild -list`确认后分别改用`LuneX-macOS`、`LuneX-iOS`、`LuneX-tvOS`与`LuneX-visionOS`，新隔离目录重跑 |
+| 14.2.2首轮focused compile发现新增media error未同步diagnostic穷尽分类 | 1 | 不添加default掩盖；将stale lifecycle收敛为稳定`media_lifecycle_stale` transport诊断并补无秘密分类回归，新隔离目录重跑 |
 
 ## 当前执行点（2026-07-21）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
-- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`5/29`；闭合生命周期directive完成，下一项为2.2 generation-scoped media environment application。
+- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`6/29`；generation/revision-scoped lifecycle application完成，下一项为2.3 video pause/clear/fresh-IDR副作用。

@@ -826,3 +826,15 @@
 - focused Swift 6 warnings-as-errors gate通过`11/11`，结果`/tmp/LuneX-14-2_1-focused.P7k3Jd/LifecycleDirective.xcresult`。完整macOS suite通过`387 total / 386 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_1-full.K9t2Vn/LuneXCoreTests.xcresult`；测试树确认唯一skip仍为一次性真实Keychain测试。
 - macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，隔离目录前缀`/tmp/LuneX-14-2_1-builds.*`。只执行build，未boot或run simulator。
 - 全部5个OpenSpec change strict通过，generator前后project SHA-256保持`0751025a3a049f7312b2552eac3d944c043a0f1e39d75ee388a714d524609633`，whitespace通过；固定simulator名称/UUID各唯一、全部`Shutdown`且全局Booted为0。OpenSpec 2.1标记完成，权威进度`5/29`，下一项为2.2 generation-scoped application。
+
+## 2026-07-21 阶段 14 任务 2.2 启动
+
+- 2.1已以`9350326`独立提交并推送，确认`HEAD == origin/main`且工作树clean。审计确认仅以session UUID校验不足以拒绝同一UUID停止后重用时的迟到lifecycle callback。
+- 新增`SessionLifecycleApplication`同时携带session ID、media generation、lifecycle revision和闭合directive；environment只允许当前generation的revision前进，完全相同application幂等，旧generation、revision回退与同revision冲突内容fail closed。snapshot只公开无秘密application元数据，SwiftUI不接触provider。
+
+## 2026-07-21 阶段 14 任务 2.2 完成
+
+- environment新增generation/revision-scoped `applyLifecycle`入口与snapshot metadata；同session UUID replacement generation会拒绝旧application，完全相同重复幂等，revision回退或同revision冲突内容返回typed stale error。
+- 首轮focused在测试启动前因新增media error未同步`ApplicationDiagnostics`穷尽switch而失败，结果`/tmp/LuneX-14-2_2-focused.T8m4Rx/LifecycleApplication.xcresult`；补稳定`media_lifecycle_stale`安全诊断和回归后，focused通过`24/24`，结果`/tmp/LuneX-14-2_2-focused-r2.W5n9Lc/LifecycleApplication.xcresult`。
+- 完整macOS suite通过`390 total / 389 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-2_2-full.R3q7Hs/LuneXCoreTests.xcresult`；唯一skip经test tree确认仍为一次性真实Keychain测试，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS和固定iPhone/iPad/Apple TV/Apple Vision Pro Debug warnings-as-errors构建全部通过，目录前缀`/tmp/LuneX-14-2_2-builds.*`。全部5个OpenSpec strict、generator byte-stability、whitespace与固定simulator唯一/Shutdown/全局Booted=0通过。OpenSpec 2.2标记完成，权威进度`6/29`；下一项为2.3实际video pause/clear/IDR恢复。

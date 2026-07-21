@@ -224,6 +224,8 @@ enum ApplicationDiagnosticFactory {
                 return transportFailure(code: "media_stream_ended")
             case .sessionAlreadyActive, .inactiveSession, .configurationMismatch:
                 return transportFailure(code: "media_session_state_invalid")
+            case .staleLifecycleApplication:
+                return transportFailure(code: "media_lifecycle_stale")
             }
         }
         if error is VideoDecoderError || error is VideoDecodePipelineError ||

@@ -6,6 +6,7 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
     case inactiveSession
     case configurationMismatch
     case streamEnded(SessionChannelReadiness)
+    case staleLifecycleApplication
 
     var description: String {
         switch self {
@@ -19,6 +20,8 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
             return "The negotiated media configuration does not match the session generation."
         case let .streamEnded(channel):
             return "The \(Self.name(for: channel)) receiver ended before session teardown."
+        case .staleLifecycleApplication:
+            return "The lifecycle application does not belong to the current media generation or revision."
         }
     }
 
@@ -45,6 +48,14 @@ struct SessionMediaEnvironmentSnapshot: Equatable, Sendable {
     var activeTaskCount: Int
     var activeResourceCount: Int
     var lastTeardownReport: SessionTeardownReport?
+    var lifecycleApplication: SessionLifecycleApplication? = nil
+}
+
+struct SessionLifecycleApplication: Equatable, Sendable {
+    var sessionID: UUID
+    var mediaGeneration: UInt64
+    var lifecycleRevision: UInt64
+    var directive: SessionLifecycleDirective
 }
 
 protocol SessionVideoProcessing: Sendable {
@@ -85,6 +96,8 @@ protocol SessionMediaEnvironment: Sendable {
         sessionID: UUID
     ) async throws
 
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws
+
     func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws
 
     @discardableResult
@@ -108,6 +121,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var audioProcessor: any SessionAudioProcessing
         var inputProvider: any RemoteInputProvider
         var readiness: SessionChannelReadiness
+        var lifecycleApplication: SessionLifecycleApplication?
     }
 
     private struct TeardownOperation {
@@ -283,7 +297,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 videoProcessor: videoProcessor,
                 audioProcessor: audioProcessor,
                 inputProvider: remoteInputProvider,
-                readiness: [.input]
+                readiness: [.input],
+                lifecycleApplication: nil
             )
             startingSession = nil
             cancelledStartingGenerations.remove(mediaGeneration)
@@ -413,6 +428,23 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         try await active.videoProcessor.updateColorMetadata(metadata)
     }
 
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        guard var active, active.sessionID == application.sessionID else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard active.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleLifecycleApplication
+        }
+        if let current = active.lifecycleApplication {
+            if application == current { return }
+            guard application.lifecycleRevision > current.lifecycleRevision else {
+                throw SessionMediaEnvironmentError.staleLifecycleApplication
+            }
+        }
+        active.lifecycleApplication = application
+        self.active = active
+    }
+
     func sendInput(_ event: RemoteInputEvent, sessionID: UUID) async throws {
         guard let active, active.sessionID == sessionID else {
             throw SessionMediaEnvironmentError.inactiveSession
@@ -480,7 +512,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 resourcePhase: nil,
                 activeTaskCount: 0,
                 activeResourceCount: 0,
-                lastTeardownReport: lastTeardownReport
+                lastTeardownReport: lastTeardownReport,
+                lifecycleApplication: nil
             )
         }
         let resources = await active.tracker.snapshot()
@@ -491,7 +524,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             resourcePhase: resources.phase,
             activeTaskCount: resources.activeTasks.count,
             activeResourceCount: resources.activeResources.count,
-            lastTeardownReport: lastTeardownReport
+            lastTeardownReport: lastTeardownReport,
+            lifecycleApplication: active.lifecycleApplication
         )
     }
 

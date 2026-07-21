@@ -142,6 +142,19 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testStaleLifecycleApplicationUsesSafeStableDiagnostic() {
+        let diagnostic = ApplicationDiagnosticFactory.streamFailure(
+            SessionMediaEnvironmentError.staleLifecycleApplication
+        )
+
+        XCTAssertEqual(diagnostic.category, .transport)
+        XCTAssertEqual(diagnostic.code, "media_lifecycle_stale")
+        XCTAssertEqual(diagnostic.action, .retryStream)
+        XCTAssertFalse(diagnostic.summary.localizedCaseInsensitiveContains("generation"))
+        XCTAssertFalse(diagnostic.summary.localizedCaseInsensitiveContains("session"))
+    }
+
+    @MainActor
     func testUnknownFailureNeverCopiesSecretBearingDescription() {
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(
             SecretBearingDiagnosticError()
