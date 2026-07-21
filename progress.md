@@ -1386,3 +1386,20 @@
 - repository gates位于`/tmp/LuneX-15-3_3-repo.CeDCBo`：OpenSpec strict `6/6`、fixture self/full、generator三次稳定、project SHA-256为`b340e4ea43bc866bb05d5f2842346cc87968ab282698148d7b406e3db73d0a1d`，production/reference/dependency/whitespace边界通过。
 - OpenSpec 3.3标记完成，权威进度`13/33`。本项不证明GPU pixel accuracy、production presenter切换、EDR surface signaling或物理HDR；下一项3.4执行offscreen shader readback并与CPU reference vectors比较。
 - 恢复后提交前独立复验再次通过：generator输出SHA-256仍为`b340e4ea43bc866bb05d5f2842346cc87968ab282698148d7b406e3db73d0a1d`，`git diff --check`通过；全新DerivedData下`HDRMetalVideoRendererTests`为`9/9 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_3-reverify.FiOY7J/HDRMetalVideoRenderer.xcresult`），命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+
+## 2026-07-21 阶段 15 任务 3.4 启动
+
+- 3.3已以`1840026 Add revision-owned HDR Metal renderer`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`13/33`。
+- 已重新读取change的proposal/design/三份spec/tasks及现有shader、CPU reference math、luminance mapping、pipeline、renderer与测试合同。3.4限定为真实offscreen shader readback和CPU/GPU oracle，不提前替换3.5 production presenter或实现4.x surface signaling。
+- 计划用private `.bgra8Unorm_srgb`/`.rgba16Float` target加blit readback，显式处理sRGB存储编码、RGBA half-float、P010 left-aligned code、格式量化容差、opaque alpha、fit letterbox和fill crop；测试期间继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`且不改变simulator状态。
+- 共享执行流首轮focused的6项中2项通过、4项在进入数值断言前因早期1x1输入把chroma尺寸算为0而崩溃；当前文件已修为half尺寸至少1，但失败xcresult不计验收。进一步把output target改为private storage并通过shared buffer blit回读，输入纹理在unified/discrete GPU分别使用shared/managed storage，并增加由真实geometry resolver生成的fit opaque-black letterbox readback。
+- 最终版focused从全新DerivedData通过`7/7 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_4-focused-final.76O3LO/HDRMetalShaderReadback.xcresult`），覆盖SDR black/reference-white/Rec.709 primaries、PQ near-black/reference-white/peak、Rec.2020到P3 primary、HDR-to-SDR、finite/opaque、NaN sanitize、fill crop和fit letterbox；命令显式移除真实Keychain开关。
+
+## 2026-07-22 阶段 15 任务 3.4 完成
+
+- 新增`HDRMetalShaderReadbackTests.swift`并纳入generator-owned macOS test target；真实Metal pipeline把NV12/P010 code纹理渲染到private sRGB/half-float target，再经blit回读并与CPU reference math比较。P010保持left-aligned 10-bit，fit clear为opaque black，fill实际采样non-full crop。
+- focused通过`7/7`（`/tmp/LuneX-15-3_4-focused-final.MtIc50/HDRMetalShaderReadback.xcresult`）；完整macOS通过`545 total / 544 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-3_4-final-1784649981999/LuneXCoreTests.xcresult`），唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，xcresult build diagnostics为`0 warning / 0 error / 0 analyzer warning`。
+- macOS及固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only在最终树上全部成功且分别执行`CompileMetalFile`与`MetalLink`（`/tmp/LuneX-15-3_4-final-1784649981999`）。simulator清单前后逐字一致，SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定四实例唯一、available、`Shutdown`且全局`Booted=0`。
+- repository gates位于`/tmp/LuneX-15-3_4-repo.tbmx0q`：OpenSpec strict `6/6`、fixture self-test/全树、generator生成前和三次运行SHA-256均为`3a559222444abb28bd41a4411b0951105d687aa5f6e3cf145488ed3339ede097`，reference/dependency/whitespace边界通过。
+- OpenSpec 3.4标记完成，权威进度`14/33`。本项证明offscreen GPU数值，不证明3.5 production presenter切换、4.x surface signaling或物理HDR；下一项3.5。
+- 提交前自审将texture payload、readback coordinate和blit completion从“断言后继续”改为guard+typed throw，防止坏测试输入进入Metal API；全新DerivedData focused再次`7/7 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_4-focused-guarded.dJ4EPW/HDRMetalShaderReadback.xcresult`）。

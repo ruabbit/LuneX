@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`13/33`；injectable generation/revision-owned Metal renderer完成，下一项3.4 offscreen shader readback |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`14/33`；offscreen CPU/GPU shader readback完成，下一项3.5替换production presenter |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`13/33`。3.3已新增16-byte geometry ABI、fit/fill viewport与source-crop、zero-copy plane binding、drawable/device/surface fail-closed验证、ownership revision completion隔离，以及replacement/stop/failure pipeline释放。focused `9/9`、完整macOS `538 total / 537 passed / 1 Keychain skip / 0 failed`和五平台零诊断build通过。下一项3.4执行offscreen shader readback对照CPU vectors；当前证据不代表pixel accuracy、production presenter或物理HDR完成。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`14/33`。3.4以真实repository metallib、NV12/P010 left-aligned code、private offscreen target和blit readback对照CPU oracle，覆盖SDR/PQ关键向量、gamut、HDR-to-SDR、finite/opaque、fit/fill。focused `7/7`、完整macOS `545 total / 544 passed / 1 Keychain skip / 0 failed`和五平台build通过。下一项3.5替换production Core Image presenter；当前证据证明离屏GPU数值，不代表surface signaling或物理HDR完成。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -265,10 +265,12 @@
 | 15.3.3测试直接调用不存在的raw shader-uniform initializer | 1 | 不开放测试后门；改用合法HDR contract/configuration/mapping构造与active SDR不匹配的uniforms验证fail-closed |
 | 15.3.3测试helper加入局部`isHDR`后缺少显式`return` | 1 | 补上显式返回并用全新DerivedData重跑，失败证据不计入验收 |
 | 15.3.3共享completion合同落盘后recording stub仍实现旧submit签名 | 1 | 保留ownership revision补强，更新stub和延迟completion回归，并修正同步wait回调避免锁互等 |
+| 15.3.4首轮focused构建期间读到早期1x1 chroma零尺寸版本并导致4个测试进程崩溃 | 1 | 不复用失败证据；保留共享流已落盘的`max(half, 1)`修正，增加private-target blit readback和fit letterbox覆盖后从全新DerivedData重跑 |
+| 15.3.4只读simulator快照命令含`rm -rf`而被执行策略拒绝 | 1 | 不请求放宽权限；改用`mktemp -d`创建全新证据目录并成功完成相同只读清单比较 |
 
-## 当前执行点（2026-07-21）
+## 当前执行点（2026-07-22）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`13/33`；3.3 injectable generation/revision-owned Metal renderer完成，下一项3.4 offscreen shader readback CPU/GPU vectors。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`14/33`；3.4 offscreen CPU/GPU shader readback完成，下一项3.5替换production Core Image presenter。

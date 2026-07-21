@@ -1043,3 +1043,17 @@
 - command completion由单调ownership revision隔离；replacement和stop后的迟到完成只累计stale counter，不能恢复旧configuration或last-completed frame。同步GPU wait在调用线程回调，避免renderer持锁等待completion线程形成互等。
 - replacement、stop、同步提交失败和异步GPU失败都释放renderer-owned pipeline cache；Apple submitter验证command queue、pipeline、planes和target属于同一device，present只接受与target texture同一对象的`CAMetalDrawable`。
 - focused真实offscreen command completion、完整suite和五平台build只证明编码/所有权合同。像素与CPU reference vector容差属于3.4，production Core Image presenter替换属于3.5，surface colorspace/EDR intent属于4.x，物理亮度/颜色/信号仍需6.5。
+
+## 2026-07-21 阶段 15 任务 3.4 实现边界
+
+- 3.4必须执行repository metallib中的真实vertex/fragment函数并回读实际render target；仅复测CPU math、pipeline创建或command completion不能证明shader数值输出。
+- `.bgra8Unorm_srgb` attachment接收线性shader输出并在存储时执行sRGB编码，因此8-bit oracle应将CPU线性结果编码、量化后按BGRA字节比较；`.rgba16Float`直接按RGBA half-float读取并与CPU线性/EDR component比较。
+- offscreen target使用private storage，完成render后通过blit复制到shared `MTLBuffer`，避免依赖特定设备是否允许对render target直接`getBytes`。P010测试数据按left-aligned 10-bit code写入`UInt16(code << 6)`。
+- fit测试应同时检查clear得到的opaque black letterbox与可见视频；fill测试用黑色两侧/白色中心的宽画面裁到方形，确保GPU实际采样`sourceCropRect`而非仅验证geometry结构体。
+- 本项仍不切换production `StreamMetalPresenter`，不配置`CAMetalLayer` colorspace/EDR intent，也不把离屏数值正确称为显示器HDR signaling或物理亮度/颜色证明。
+
+## 2026-07-22 阶段 15 任务 3.4 验收结论
+
+- 新增7项真实Metal readback测试：NV12 SDR black/reference-white/Rec.709 primaries，P010 PQ near-black/reference-white/source peak，Rec.2020 red到Display-P3，HDR-to-SDR，non-finite sanitize，non-full fill crop及resolved fit letterbox；CPU oracle复用production constants/math并按目标格式声明`0.008`或`0.012`容差。
+- P010输入明确将10-bit code左移6位写入`.r16Unorm/.rg16Unorm`；sRGB target回读后执行匹配inverse transfer再与CPU线性结果比较，RGBA16 target按half-float读取。private render target统一通过blit复制到shared buffer，输入纹理按unified/discrete GPU选择shared/managed storage。
+- GPU readback验证了shader输出数值、最终finite bound和opaque alpha，也验证了viewport clear与source crop实际影响像素；它仍不证明production presenter已切换、`CAMetalLayer` colorspace/EDR intent已配置、显示器进入HDR模式或达到物理亮度/颜色准确性。

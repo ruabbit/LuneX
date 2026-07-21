@@ -235,6 +235,7 @@ test_sources = [
   "Tests/LuneXCoreTests/HDRDecodedVideoContractTests.swift",
   "Tests/LuneXCoreTests/HDRLuminanceMappingTests.swift",
   "Tests/LuneXCoreTests/HDRMetalPipelineTests.swift",
+  "Tests/LuneXCoreTests/HDRMetalShaderReadbackTests.swift",
   "Tests/LuneXCoreTests/HDRMetalVideoRendererTests.swift",
   "Tests/LuneXCoreTests/HDRRenderContractTests.swift",
   "Tests/LuneXCoreTests/InputAdapterTests.swift",

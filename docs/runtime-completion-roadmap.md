@@ -92,7 +92,7 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`当前`13/33`；第1、2组、3.1 shader resources、3.2 typed uniforms/bounded pipeline cache和3.3 revision-owned Metal renderer完成，下一项3.4 offscreen shader readback CPU/GPU vectors。
+- OpenSpec `implement-native-hdr-edr-pipeline`当前`14/33`；第1、2组、3.1 shader resources、3.2 typed uniforms/bounded pipeline cache、3.3 revision-owned Metal renderer和3.4 offscreen CPU/GPU shader readback完成，下一项3.5替换production Core Image presenter。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。
