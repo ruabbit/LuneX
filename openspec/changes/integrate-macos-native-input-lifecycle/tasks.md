@@ -26,7 +26,7 @@
 - [x] 4.2 Implement a flipped first-responder stream capture view for key, modifier, repeat, and reserved-shortcut samples
 - [x] 4.3 Capture relative/absolute pointer movement, buttons, and scrolling with explicit view-to-backing conversion
 - [x] 4.4 Attach input capture and lifecycle observation to the actual macOS stream surface and detach them idempotently on SwiftUI replacement
-- [ ] 4.5 Add AppKit-focused cursor transition, responder, event translation, attachment, and dismantle tests
+- [x] 4.5 Add AppKit-focused cursor transition, responder, event translation, attachment, and dismantle tests
 
 ## 5. Application and media integration
 

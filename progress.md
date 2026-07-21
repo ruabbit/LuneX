@@ -1010,3 +1010,19 @@
 - 最终focused为`30/30`（`/tmp/LuneX-14-4_4-focused-final.wTD7bt/SurfaceAttachment.xcresult`）；完整macOS为`446 total / 445 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-4_4-full-final.EoPoDt/LuneXCoreTests.xcresult`），测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - 五平台Debug warnings-as-errors通过（`/tmp/LuneX-14-4_4-builds-final.fqr0Yj`），simulator状态前后逐字节一致。5个OpenSpec strict、generator三次SHA-256均为`8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。
 - OpenSpec 4.4标记完成，权威进度`17/29`；下一项为4.5 AppKit cursor transition、responder、event translation、attachment与dismantle测试矩阵。阶段13仍为`54/61 in_progress`，不以本次离线证据替代production video/audio receiver或授权live-host/hardware证据。
+
+## 2026-07-21 阶段 14 任务 4.5 启动
+
+- 4.4已以`14eff16`独立提交并推送，确认`HEAD == origin/main`且工作树clean。4.5扩展AppKit-focused cursor、responder、event translation、attachment与dismantle回归，不重复4.2/4.3已有基础事件矩阵。
+- 审阅发现capture surface仅声明`acceptsFirstResponder`，但启用admission后没有实际请求first responder；点击路径又直接处理button而不调用`super`，因此仅有能力声明不足以证明键盘事件可达。4.5将补启用/附着/点击时的幂等responder acquisition及禁用释放，同时保持默认admission关闭。
+- 4.5 focused macOS Swift/Clang warnings-as-errors gate一次通过`28/28`、无skip，结果`/tmp/LuneX-14-4_5-focused.ZiDrwr/AppKitFocused.xcresult`；覆盖cursor relative-to-hide-only transition、responder启用/点击/禁用、stale window callback、latest coordinator handler与重复dismantle。
+- 完整macOS suite通过`451 total / 450 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_5-full.ns7pyI/LuneXCoreTests.xcresult`；test tree确认唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，未访问真实Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug Swift/Clang warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-4_5-builds.WacHba`；构建前后固定simulator identity/state逐字节一致，全部唯一且`Shutdown`，全局`Booted=0`。
+
+## 2026-07-21 阶段 14 任务 4.5 完成
+
+- enabled actual capture surface在window attachment和mouse-down时幂等请求first responder；禁用时只释放自身ownership并清transient tracking。默认surface仍disabled，不会抢本地键盘焦点。
+- repeated SwiftUI dismantle现在首先关闭input admission，再清window callback、attachment、Metal delegate并暂停surface；旧view后续直接事件调用不产生sample。stale window callback与旧handler均不能影响replacement。
+- cursor relative-to-hide-only transition、responder transfer、actual event latest-closure routing、attachment replacement与dismantle cleanup均有AppKit-focused回归；本项不提前接入5.2/5.3 active session/cursor policy。
+- focused `28/28`（`/tmp/LuneX-14-4_5-focused.ZiDrwr/AppKitFocused.xcresult`）；完整macOS `451 total / 450 passed / 1 Keychain skip / 0 failed`（`/tmp/LuneX-14-4_5-full.ns7pyI/LuneXCoreTests.xcresult`）；五平台Debug通过（`/tmp/LuneX-14-4_5-builds.WacHba`）。
+- 5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 4.5标记完成，权威进度`18/29`；第4节Native AppKit capture/cursor ownership已完成，下一项5.1 actual stream-view geometry。阶段13仍为`54/61 in_progress`。

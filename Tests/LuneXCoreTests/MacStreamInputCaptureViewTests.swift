@@ -460,6 +460,139 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(lifecycle.drawableSize, .zero)
     }
 
+    func testInputAdmissionOwnsResponderOnlyWhileEnabledAndAttached() throws {
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
+        let sibling = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
+        let view = MacStreamInputCaptureView(
+            frame: root.bounds,
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        let window = makeWindow(contentView: root)
+        root.addSubview(sibling)
+        root.addSubview(view)
+        XCTAssertTrue(window.makeFirstResponder(sibling))
+        XCTAssertTrue(window.firstResponder === sibling)
+
+        view.isInputCaptureEnabled = true
+        XCTAssertTrue(window.firstResponder === view)
+        XCTAssertTrue(view.requestFirstResponderIfNeeded())
+
+        XCTAssertTrue(window.makeFirstResponder(sibling))
+        view.mouseDown(with: try mouseEvent(
+            type: .leftMouseDown,
+            windowNumber: window.windowNumber
+        ))
+        XCTAssertTrue(window.firstResponder === view)
+
+        view.isInputCaptureEnabled = false
+        XCTAssertFalse(window.firstResponder === view)
+        XCTAssertFalse(view.requestFirstResponderIfNeeded())
+    }
+
+    func testStaleWindowCallbackCannotReattachReplacementOwner() {
+        let monitor = RecordingAppKitLifecycleMonitor()
+        let owner = MacStreamSurfaceAttachmentOwner(lifecycleMonitor: monitor)
+        let oldView = makeView()
+        let replacementView = makeView()
+        let oldWindow = makeWindow(contentView: oldView)
+        let replacementWindow = makeWindow(contentView: replacementView)
+        owner.attach(to: oldView)
+        let staleCallback = oldView.onWindowChange
+
+        owner.attach(to: replacementView)
+        staleCallback?(oldWindow)
+
+        XCTAssertEqual(monitor.attachedWindowIDs, [
+            ObjectIdentifier(oldWindow),
+            ObjectIdentifier(replacementWindow)
+        ])
+        XCTAssertEqual(monitor.detachCount, 1)
+    }
+
+    func testCoordinatorUpdateRoutesActualEventsToLatestHandlers() throws {
+        let firstRecorder = MacInputSampleRecorder()
+        let replacementRecorder = MacInputSampleRecorder()
+        var firstExitCount = 0
+        var replacementExitCount = 0
+        let coordinator = makeSurfaceCoordinator(
+            inputSampleHandler: { firstRecorder.samples.append($0) },
+            captureExitHandler: { firstExitCount += 1 }
+        )
+        let view = MacStreamInputCaptureView(
+            sampleHandler: { coordinator.handle($0) }
+        )
+
+        view.keyDown(with: try keyEvent(
+            type: .keyDown,
+            keyCode: 0,
+            characters: "a",
+            modifiers: []
+        ))
+        coordinator.exitCapture()
+        coordinator.update(
+            renderState: StreamRenderState(),
+            inputSampleHandler: { replacementRecorder.samples.append($0) },
+            captureExitHandler: { replacementExitCount += 1 }
+        )
+        view.keyUp(with: try keyEvent(
+            type: .keyUp,
+            keyCode: 0,
+            characters: "a",
+            modifiers: []
+        ))
+        coordinator.exitCapture()
+
+        XCTAssertEqual(firstRecorder.keyboardSamples.map(\.isDown), [true])
+        XCTAssertEqual(replacementRecorder.keyboardSamples.map(\.isDown), [false])
+        XCTAssertEqual(firstExitCount, 1)
+        XCTAssertEqual(replacementExitCount, 1)
+    }
+
+    func testRepeatedDismantleClosesAdmissionAndClearsSurfaceOwnership() throws {
+        let lifecycle = PlatformLifecycleState()
+        let recorder = MacInputSampleRecorder()
+        let coordinator = makeSurfaceCoordinator(
+            lifecycle: lifecycle,
+            inputSampleHandler: { recorder.samples.append($0) }
+        )
+        let view = MacStreamInputCaptureView(
+            sampleHandler: { coordinator.handle($0) }
+        )
+        let window = makeWindow(contentView: view)
+        coordinator.presenter.configure(view)
+        coordinator.attachmentOwner.attach(to: view)
+        lifecycle.isVisible = true
+        lifecycle.isFocused = true
+        lifecycle.drawableSize = PixelSize(width: 320, height: 240)
+        lifecycle.updateRenderPolicy()
+        view.isPaused = false
+        XCTAssertTrue(window.firstResponder === view)
+
+        view.mouseDown(with: try mouseEvent(
+            type: .leftMouseDown,
+            windowNumber: window.windowNumber
+        ))
+        MetalStreamSurface.dismantleNSView(view, coordinator: coordinator)
+        MetalStreamSurface.dismantleNSView(view, coordinator: coordinator)
+        view.mouseDragged(with: try cgMouseEvent(
+            type: .leftMouseDragged,
+            buttonNumber: 0,
+            deltaX: 1,
+            deltaY: 1
+        ))
+
+        XCTAssertFalse(view.isInputCaptureEnabled)
+        XCTAssertNil(view.onWindowChange)
+        XCTAssertNil(view.delegate)
+        XCTAssertTrue(view.isPaused)
+        XCTAssertFalse(window.firstResponder === view)
+        XCTAssertFalse(lifecycle.isVisible)
+        XCTAssertFalse(lifecycle.isFocused)
+        XCTAssertEqual(lifecycle.drawableSize, .zero)
+        XCTAssertEqual(recorder.samples.count, 1)
+    }
+
     private func makeView(
         recorder: MacInputSampleRecorder = MacInputSampleRecorder()
     ) -> MacStreamInputCaptureView {
@@ -517,6 +650,20 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         )
         window.contentView = contentView
         return window
+    }
+
+    private func makeSurfaceCoordinator(
+        lifecycle: PlatformLifecycleState = PlatformLifecycleState(),
+        inputSampleHandler: @escaping MacStreamInputCaptureView.SampleHandler = { _ in },
+        captureExitHandler: @escaping @MainActor () -> Void = {}
+    ) -> MacStreamSurfaceCoordinator {
+        MacStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            lifecycle: lifecycle,
+            inputSampleHandler: inputSampleHandler,
+            captureExitHandler: captureExitHandler
+        )
     }
 
     private func cgMouseEvent(

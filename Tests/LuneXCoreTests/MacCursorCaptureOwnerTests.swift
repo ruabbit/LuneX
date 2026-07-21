@@ -71,6 +71,33 @@ final class MacCursorCaptureOwnerTests: XCTestCase {
         XCTAssertEqual(operations.calls, [.hide, .unhide])
     }
 
+    func testRelativeToHideOnlyTransitionRestoresAssociationWithoutShowingCursor() {
+        let operations = CursorSystemOperationsStub()
+        let owner = MacCursorCaptureOwner(operations: operations)
+        let hideOnly = CursorCapturePolicy(
+            hidesSystemCursor: true,
+            capturesRelativePointer: false,
+            usesRemotePointer: true,
+            reason: nil
+        )
+
+        XCTAssertTrue(owner.apply(capturePolicy))
+        XCTAssertTrue(owner.apply(hideOnly))
+        XCTAssertEqual(operations.calls, [
+            .association(false),
+            .hide,
+            .association(true)
+        ])
+        XCTAssertEqual(owner.snapshot(), MacCursorCaptureSnapshot(
+            ownsHiddenCursor: true,
+            ownsPointerDisassociation: false,
+            transitionFailureCount: 0
+        ))
+
+        XCTAssertTrue(owner.releaseCapture())
+        XCTAssertEqual(operations.calls.last, .unhide)
+    }
+
     private var capturePolicy: CursorCapturePolicy {
         CursorCapturePolicy(
             hidesSystemCursor: true,

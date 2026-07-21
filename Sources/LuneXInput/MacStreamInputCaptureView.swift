@@ -38,7 +38,19 @@ enum MacScrollDeltaNormalizer {
 final class MacStreamInputCaptureView: MTKView {
     typealias SampleHandler = @MainActor (MacPlatformInputSample) -> Void
 
-    var isInputCaptureEnabled: Bool
+    var isInputCaptureEnabled: Bool {
+        didSet {
+            guard isInputCaptureEnabled != oldValue else { return }
+            if isInputCaptureEnabled {
+                requestFirstResponderIfNeeded()
+            } else {
+                resetTransientInputState()
+                if window?.firstResponder === self {
+                    window?.makeFirstResponder(nil)
+                }
+            }
+        }
+    }
     var forwardsSystemShortcuts: Bool
     var onWindowChange: (@MainActor (NSWindow?) -> Void)?
 
@@ -74,6 +86,7 @@ final class MacStreamInputCaptureView: MTKView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         onWindowChange?(window)
+        requestFirstResponderIfNeeded()
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -190,6 +203,7 @@ final class MacStreamInputCaptureView: MTKView {
             super.mouseDown(with: event)
             return
         }
+        requestFirstResponderIfNeeded()
         emitButton(.left, isDown: true, event: event)
     }
 
@@ -206,6 +220,7 @@ final class MacStreamInputCaptureView: MTKView {
             super.rightMouseDown(with: event)
             return
         }
+        requestFirstResponderIfNeeded()
         emitButton(.right, isDown: true, event: event)
     }
 
@@ -223,6 +238,7 @@ final class MacStreamInputCaptureView: MTKView {
             super.otherMouseDown(with: event)
             return
         }
+        requestFirstResponderIfNeeded()
         emitButton(button, isDown: true, event: event)
     }
 
@@ -260,6 +276,13 @@ final class MacStreamInputCaptureView: MTKView {
         pressedModifierKeyCodes.removeAll(keepingCapacity: true)
         pressedPointerButtons = []
         reservedShortcutsByKeyCode.removeAll(keepingCapacity: true)
+    }
+
+    @discardableResult
+    func requestFirstResponderIfNeeded() -> Bool {
+        guard isInputCaptureEnabled, let window else { return false }
+        guard window.firstResponder !== self else { return true }
+        return window.makeFirstResponder(self)
     }
 
     private func emitPointerMovement(_ event: NSEvent) {

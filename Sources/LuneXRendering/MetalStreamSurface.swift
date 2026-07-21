@@ -221,6 +221,7 @@ final class MacStreamSurfaceCoordinator {
     }
 
     func detach(_ view: MacStreamInputCaptureView) {
+        view.isInputCaptureEnabled = false
         attachmentOwner.detach(from: view)
         view.delegate = nil
         view.isPaused = true

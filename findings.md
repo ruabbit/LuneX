@@ -768,3 +768,17 @@
 - actual surface的input admission保持默认关闭，因为5.2尚未把sample handler接入active `AppModel`/session input coordinator；因此4.4不吞本地键鼠，也不声称Sunshine已收到输入。
 - `AppKitLifecycleMonitor.refreshDrawableSize()`仍读取`window.contentView.bounds`。actual stream-view backing pixels、screen/backing/live-resize原子几何属于5.1，不由4.4完成。
 - 最终验收为focused `30/30`、完整macOS `446 total / 445 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors通过；simulator状态前后逐字节一致，未创建、启动或关闭设备。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。
+
+# 2026-07-21 阶段 14 任务 4.5 调查
+
+- `acceptsFirstResponder == true`只表示window可以接受该view，并不会让SwiftUI创建的Metal surface自动成为first responder。当前enabled `mouseDown`也不调用`super`，所以真实点击不能依赖AppKit隐式转移。
+- responder ownership应受`isInputCaptureEnabled`约束：默认disabled surface不抢焦点；启用且附着时请求一次，点击时可恢复被overlay转走的responder；禁用时若仍由surface拥有则释放并清transient tracking。
+- 4.5仍不应用cursor eligibility或active session wiring；它只验证4.1 cursor owner的transition矩阵，以及4.2-4.4 AppKit view/coordinator的event、responder、replacement与dismantle边界。真正的cursor/session组合属于5.2/5.3。
+
+# 2026-07-21 阶段 14 任务 4.5 验收结论
+
+- `MacStreamInputCaptureView`在enabled且已附着时幂等请求first responder，点击可从overlay/sibling恢复键盘ownership；disabled surface不请求，禁用只在自身持有时释放并清transient modifier/button/shortcut状态。
+- `MacStreamSurfaceCoordinator.detach`现在先关闭view input admission，再拆attachment、清delegate并暂停surface；重复dismantle后旧view直接触发事件也不会进入handler。
+- captured old `onWindowChange` closure在replacement后即使迟到调用，也因view identity fence被拒绝；coordinator update后的actual key event与capture-exit只进入最新closures。
+- cursor owner新增relative-to-hide-only transition证明：先恢复pointer association但保持cursor hidden，最终release才执行一次unhide；不在4.5接入session eligibility。
+- 验收通过focused `28/28`、完整macOS `451 total / 450 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`与边界门均通过。
