@@ -288,3 +288,15 @@
 - bootstrap CRLF 回归暴露既有 SDP parser 缺陷：Swift 把 CRLF 视为一个 `Character`，旧的 CR/LF equality splitter 无法拆行，导致真实 CRLF body 只保留默认 H.264。parser 已改用 `Character.isNewline`，CRLF 的 HEVC/AV1 capability 识别和 fail-closed gate 均有端到端 stub coverage。
 - 5.3 focused selection/RTSP/SDP tests `24/24`，完整 macOS warnings-as-errors tests `191 total / 190 passed / 1 explicit Keychain skip / 0 failed`；五平台 warnings-as-errors Debug build、fixture/OpenSpec/generator/reference/ENet/四 SDK C syntax gates 全部通过，固定 simulators 前后均为 `Shutdown`。
 - 本任务不证明 AV1 sequence-header/format construction、VideoToolbox session/callback ownership、decoded frame、Metal delivery 或 live Sunshine video；这些边界继续分别属于 5.4-5.8。
+
+### 2026-07-21 阶段 13 VideoToolbox Session Ownership 设计
+
+- `VTDecompressionSessionDecodeFrame` 的 SDK 契约明确：返回非零错误时不会产生 callback；返回成功才保证 callback。因此同步 decode error 必须立即形成 structured decoder event，不能等待永远不会到达的回调。
+- 输出 callback 可能异步且不保证 display order；5.4 的每个 decompression session 必须绑定独立 generation bridge，callback 在进入 actor 前携带 generation/frame token。replacement 先使旧 generation 失效，再 finish delayed frames、wait asynchronous frames、invalidate、detach bridge，迟到旧 callback 只能被丢弃。
+- `VTIsHardwareDecodeSupported` 仍不是实际资源证据。production create 必须传 `kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder = true`，并把 `VTDecompressionSessionCreate` 的 OSStatus 作为实际 hardware session 成败证据。
+- H.264/HEVC format description 在 5.2 固定使用 4-byte NAL length header；因此送入 `CMSampleBuffer` 前必须把 bounded Annex-B access unit byte-exact 转为每 NAL 的 4-byte big-endian length framing。`CMBlockBuffer` 由 CoreMedia allocator 拥有并复制输入 bytes，异步 decoder 不引用临时 `Data` pointer。
+- destination pixel buffer attributes 明确要求 `kCVPixelBufferIOSurfacePropertiesKey` 空字典、`kCVPixelBufferMetalCompatibilityKey = true`；8-bit 使用 `kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange`，10-bit 使用 `kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange`。5.4 只建立后续零拷贝条件，不声称 5.5 texture cache/frame queue 已完成。
+- callback 返回的 image buffer 在未设置 modifiable flag 时仍可能被 decoder 引用；LuneX 将其作为只读 retained `CVPixelBuffer` 跨 actor 传递，不修改其内容。HDR mastering/content-light metadata preservation、reset/IDR policy 和 live sustained decode 分别保留给 5.6、5.7、5.8。
+- 5.4 最终实现为 generation-owned `VideoDecoder` actor、weak/locked callback bridge、required-hardware `VideoToolboxDecompressionSession` 和可注入 session factory。同步 decode error 立即发布，callback error/drop/missing-buffer 各自结构化，stop/replacement/deinit 都确定性收敛且旧 generation callback 不能发布。
+- 合成 fixture 修正后先由 FFmpeg 独立解码，再由 production VideoToolbox gate 验证：H.264 输出 64x64 8-bit bi-planar video-range pixel buffer，HEVC 输出 64x64 10-bit bi-planar video-range pixel buffer。focused decoder+format tests `15/15`，完整 macOS tests `201 total / 200 passed / 1 explicit Keychain skip / 0 failed`。
+- macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build、fixture self-test/全树、OpenSpec strict、generator byte-for-byte、diff/reference boundary、ENet revision/license/source/header 与四 SDK C strict syntax 均通过；四个 fixed simulator 前后保持 `Shutdown`。本任务仍不证明 AV1 format/decode、Metal texture delivery、HDR metadata 或 live Sunshine video。

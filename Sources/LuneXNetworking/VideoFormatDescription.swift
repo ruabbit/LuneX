@@ -111,7 +111,7 @@ struct VideoParameterSetParser: Sendable {
         guard codec != .av1 else {
             throw VideoFormatDescriptionError.unsupportedCodec
         }
-        let nalUnits = try split(accessUnit)
+        let nalUnits = try splitNALUnits(accessUnit)
         var video: Data?
         var sequence: Data?
         var picture: Data?
@@ -149,7 +149,7 @@ struct VideoParameterSetParser: Sendable {
         )
     }
 
-    private func split(_ accessUnit: Data) throws -> [Data] {
+    func splitNALUnits(_ accessUnit: Data) throws -> [Data] {
         guard !accessUnit.isEmpty else {
             throw VideoFormatDescriptionError.emptyAccessUnit
         }

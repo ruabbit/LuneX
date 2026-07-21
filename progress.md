@@ -331,3 +331,21 @@
 - macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建前后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。
 - OpenSpec 5.3 更新为完成，权威进度 `27/61`；下一项为 5.4 VideoToolbox decompression-session ownership 与 callback-to-actor bridging。AV1 format construction、真实 decoder/frame 和 live video 仍未由 5.3 证明。
+
+## 2026-07-21 阶段 13 任务 5.4 启动
+
+- 5.3 已以 `5357a2e Gate AV1 hardware codec negotiation` 独立提交并推送；恢复时确认 `HEAD == origin/main`、工作树 clean、OpenSpec 权威进度 `27/61`。
+- 当前执行 5.4 `Implement VideoToolbox decompression-session ownership and callback-to-actor bridging`；范围限定为 generation-owned session、硬件 decoder create、异步 callback 到 actor 的桥接和确定性 teardown，不提前声称 5.5 Metal delivery、5.6 HDR metadata、5.7 reset policy 或 5.8 live video。
+- 后续测试继续显式清除 `LUNEX_RUN_KEYCHAIN_TEST`，不再次访问真实 Keychain；跨平台构建只使用既有固定 simulator destination，不创建或 boot 新设备。
+- 5.4 focused gate 已通过：10 项 decoder/session tests 与 5 项既有 format tests 共 `15/15`。production 路径实际创建 required-hardware VideoToolbox session，并从合成 64x64 H.264 8-bit 与 HEVC 10-bit IDR 收到有效 `CVPixelBuffer` callback。
+- 原 `parameter-sets.json` 的占位 IDR 被 VideoToolbox 和 FFmpeg 同时判定为 bad data；已用本机 libx264/libx265 重生成无主机数据黑帧，移除 encoder SEI，仅保留参数集/IDR，先经 FFmpeg 独立解码后再进入 fixture。此证据仍不等于 live Sunshine sustained video。
+
+## 2026-07-21 阶段 13 任务 5.4 完成
+
+- 新增 generation-owned `VideoDecoder` actor、weak/locked `VideoDecompressionCallbackBridge`、required-hardware `VideoToolboxDecompressionSession`、owned CoreMedia sample construction 和可注入 session factory；replacement/stop/deinit 均执行 idempotent finish/wait/invalidate teardown，stale callback 被拒绝。
+- H.264/HEVC bounded Annex-B access unit 在进入 `CMSampleBuffer` 前转为 4-byte big-endian NAL length framing；CoreMedia 自行分配 block memory并复制 bytes。输出 attrs 明确为 IOSurface-backed、Metal-compatible，8-bit/10-bit 分别选择 video-range bi-planar pixel format。
+- focused decoder+format tests 最终 `15/15`；真实 production factory 成功创建 required-hardware session，并从合成 H.264 8-bit 与 HEVC 10-bit IDR 分别收到有效 64x64 pixel buffer。同步/异步 error、drop、missing image、replacement、late callback、重复 stop、deinit、malformed/oversized 和 create failure 均有回归。
+- 完整 macOS warnings-as-errors tests 最终 `201 total / 200 passed / 1 skipped / 0 failed`；唯一 skipped 是未设置 `LUNEX_RUN_KEYCHAIN_TEST` 的真实 Keychain round-trip，本任务未再次访问真实 Keychain。
+- macOS、固定 iPhone 17 Pro、固定 iPad Pro 13-inch、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build 全部通过；构建前后四个 simulator 均为 `Shutdown`，未创建或 boot 新实例。
+- fixture validator self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference boundary、固定 ENet revision/license/source/header 和四 SDK strict C syntax gates 全部通过。
+- OpenSpec 5.4 更新为完成，权威进度 `28/61`；下一项为 5.5 zero-copy CVPixelBuffer-to-Metal texture delivery 与 bounded frame queue。AV1 format/decode、HDR metadata/reset policy 和 live Sunshine sustained video仍未声称完成。
