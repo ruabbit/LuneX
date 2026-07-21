@@ -16,12 +16,13 @@ def q(value)
 end
 
 def source_file?(path)
-  path.end_with?(".swift", ".c")
+  path.end_with?(".swift", ".c", ".metal")
 end
 
 def file_type(path)
   return "sourcecode.swift" if path.end_with?(".swift")
   return "sourcecode.c.c" if path.end_with?(".c")
+  return "sourcecode.metal" if path.end_with?(".metal")
 
   "folder.assetcatalog"
 end
@@ -68,6 +69,7 @@ sources = [
   "Sources/LuneXRendering/HDRDecodedVideoContract.swift",
   "Sources/LuneXRendering/HDRLuminanceMapping.swift",
   "Sources/LuneXRendering/HDRRenderContract.swift",
+  "Sources/LuneXRendering/HDRVideoShaders.metal",
   "Sources/LuneXRendering/MetalVideoFrameDelivery.swift",
   "Sources/LuneXRendering/MetalStreamSurface.swift",
   "Sources/LuneXRendering/StreamVideoPresentationSource.swift",
@@ -146,6 +148,7 @@ test_support_sources = [
   "Sources/LuneXRendering/HDRDecodedVideoContract.swift",
   "Sources/LuneXRendering/HDRLuminanceMapping.swift",
   "Sources/LuneXRendering/HDRRenderContract.swift",
+  "Sources/LuneXRendering/HDRVideoShaders.metal",
   "Sources/LuneXRendering/MetalVideoFrameDelivery.swift",
   "Sources/LuneXRendering/MetalStreamSurface.swift",
   "Sources/LuneXRendering/StreamVideoPresentationSource.swift",
@@ -431,6 +434,8 @@ targets.each do |target|
       "INFOPLIST_KEY_CFBundleDisplayName" => "LuneX",
       "INFOPLIST_KEY_NSHumanReadableCopyright" => "Copyright © 2026 LuneX.",
       "MARKETING_VERSION" => "0.1.0",
+      "MTL_FAST_MATH" => "NO",
+      "MTL_TREAT_WARNINGS_AS_ERRORS" => "YES",
       "PRODUCT_BUNDLE_IDENTIFIER" => target[:bundle],
       "PRODUCT_NAME" => "$(TARGET_NAME)",
       "SDKROOT" => target[:sdk],
@@ -476,6 +481,8 @@ objects << "#{test_frameworks_phase} /* Frameworks */ = {isa = PBXFrameworksBuil
     "GCC_TREAT_WARNINGS_AS_ERRORS" => "YES",
     "HEADER_SEARCH_PATHS" => "$(PROJECT_DIR)/ThirdParty/ENet/include",
     "MARKETING_VERSION" => "0.1.0",
+    "MTL_FAST_MATH" => "NO",
+    "MTL_TREAT_WARNINGS_AS_ERRORS" => "YES",
     "PRODUCT_BUNDLE_IDENTIFIER" => test_target[:bundle],
     "PRODUCT_NAME" => "$(TARGET_NAME)",
     "SDKROOT" => test_target[:sdk],

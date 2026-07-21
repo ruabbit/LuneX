@@ -1323,6 +1323,21 @@
 - 完整macOS suite通过`520 total / 519 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-2_4-full.GBqvtu/LuneXCoreTests.xcresult`），唯一skip精确为允许的真实Keychain round-trip，日志零warning/error。
 - macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-2_4-builds.0Lccsq`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
 
+## 2026-07-21 阶段 15 任务 3.1 启动
+
+- 2.4已以`23962fa Gate Metal frame contract transitions`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`10/33`。
+- 3.1范围限定为repository-owned Metal shader资源与可编译pure shader functions，覆盖video-range、YCbCr matrix、transfer decode、gamut conversion、luminance mapping和opaque output；typed Swift uniforms/pipeline cache、renderer与readback分别留给3.2至3.4。
+- 四个平台`xcrun --sdk ... metal --version`均报告缺少Xcode Metal Toolchain；先通过官方`xcodebuild -downloadComponent MetalToolchain`安装，不以Swift编译或文本扫描替代shader编译证明。
+
+## 2026-07-21 阶段 15 任务 3.1 完成
+
+- 安装官方Metal Toolchain后，新增`HDRVideoShaders.metal`，覆盖8-bit NV12与left-aligned P010 video-range normalization、Rec.709/BT.2020 YCbCr、continuous Rec.709 inverse transfer、ST 2084 PQ absolute nits、sRGB/Display-P3/BT.2020 gamut conversion、reference-white shoulder、finite final bound和opaque alpha；HDR-to-SDR明确使用headroom `1.0`。
+- generator将`.metal`作为`sourcecode.metal`纳入四个App与macOS test target的Sources phase，并以`MTL_FAST_MATH=NO`和`MTL_TREAT_WARNINGS_AS_ERRORS=YES`编译；focused测试从测试bundle的`default.metallib`读回vertex/fragment entry points并通过`8/8`（`/tmp/LuneX-15-3_1-focused-r2.iM4OlJ`）。
+- 完整macOS suite通过`521 total / 520 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-3_1-full.ENQuct`），唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug build-only均实际执行`CompileMetalFile`与`MetalLink`并通过（`/tmp/LuneX-15-3_1-builds.n6rALQ`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
+- repository gates位于`/tmp/LuneX-15-3_1-repo.kUL0UT`：OpenSpec strict `6/6`、fixtures、generator三次稳定且project SHA-256为`084cbaa6ca1aae12218965e8ffde90718f25d90ed2689653eb67c975b4d8f894`、四SDK precise Metal compile/link、reference/dependency/whitespace边界通过。OpenSpec权威进度`11/33`，下一项3.2。
+- 3.1仅证明repository ownership、shader compile/link和entry-point load；pixel-accurate GPU readback归3.4，typed uniforms/cache归3.2，renderer/presenter归3.3/3.5，surface signaling与物理亮度/颜色/跨屏证明仍未完成。
+
 ## 2026-07-21 阶段 15 任务 2.4 完成
 
 - 新增真实8/10-bit queue mapping矩阵，分别验证SDR `.r8/.rg8`和HDR `.r16/.rg16` output plane及frozen dynamic range；invalid 10-bit/SDR layout抛错后queue ownership不变，later valid frame正常恢复。

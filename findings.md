@@ -1012,3 +1012,9 @@
 - 2.3采用调用方显式传入`HDRRenderConfigurationIdentity`的边界：queue保存单一active configuration，frame仍只保存decode-time generation/color binding；enqueue先比较调用方configuration与active identity，再比较frame binding，mapper只在全部匹配后运行。
 - configuration identity变化必须在actor内原子丢弃queued frames、分类累计generation或render-contract reset并flush mapper cache；完全相同configuration重复应用保持幂等，不无谓清帧或flush。stop只接受精确active identity，旧session/display callback不能清除replacement ownership。
 - display revision不绑定进decoded frame；旧display work通过enqueue/dequeue携带的configuration identity与active identity比较后拒绝。这样不会把窗口移动或headroom状态错误冻结在解码时刻。
+
+# 2026-07-21 阶段 15 任务 3.1 验收结论
+
+- Xcode不会把普通resource copy自动变成Metal library；repository-owned `.metal`必须以`sourcecode.metal`进入每个target的Sources phase。生成器现对App与测试target执行该合同，并关闭fast math、把Metal warning升级为error。
+- shader与CPU oracle使用同一video-range、YCbCr、Rec.709、PQ、gamut和luminance常量。10-bit路径按P010 left-aligned storage从`.r16Unorm/.rg16Unorm`恢复code value；HDR-to-SDR把current headroom强制为`1.0`，SDR路径不借EDR能力抬升普通白色。
+- focused bundle readback、四SDK独立`.air/.metallib`、五平台Xcode build和完整macOS suite证明shader可编译、链接和按名字加载；它们不证明GPU结果已与CPU vector达到容差，不证明actual presenter已使用该fragment，也不证明显示器进入HDR或达到目标亮度。

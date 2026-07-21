@@ -1,6 +1,16 @@
+import Metal
 import XCTest
 
 final class HDRColorPipelineDeterminismTests: XCTestCase {
+    func testRepositoryMetalLibraryContainsExplicitHDRPipelineFunctions() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let library = try device.makeDefaultLibrary(bundle: Bundle(for: Self.self))
+        XCTAssertTrue(library.functionNames.contains("lunex_hdr_video_vertex"))
+        XCTAssertTrue(library.functionNames.contains("lunex_hdr_video_fragment"))
+        XCTAssertNotNil(library.makeFunction(name: "lunex_hdr_video_vertex"))
+        XCTAssertNotNil(library.makeFunction(name: "lunex_hdr_video_fragment"))
+    }
+
     func testVideoRangeDomainsRemainFiniteWithinDeclaredExcursions() throws {
         for bitDepth in [8, 10] {
             let maximum = (1 << bitDepth) - 1
