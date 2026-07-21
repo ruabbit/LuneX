@@ -444,3 +444,18 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro最终warnings-as-errors Debug build全部通过；四个simulator前后均为`Shutdown`，没有创建或boot新实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header和四SDK strict C syntax gates全部通过。
 - OpenSpec 6.3更新为完成，权威进度`34/61`。下一项为6.4 A/V clock与bounded resynchronization；6.3不证明同步、route/interruption/loss handling或audible live output。
+
+## 2026-07-21 阶段 13 任务 6.4 启动
+
+- 6.3已以`2e1cf01 Schedule PCM through AVAudioEngine`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`34/61`后进入6.4。
+- 6.4以audio为fresh时的master、video为audio stale时的fallback；drift定义为各stream相对首个local presentation anchor的offset变化，避免直接比较独立随机RTP起点。audio媒体位置只累计实际decoded frame count，video使用90 kHz wrap-aware timestamp。
+
+## 2026-07-21 阶段 13 任务 6.4 完成
+
+- 新增session-owned `MediaClockSynchronizer`：fresh audio为master、audio超过100 ms无observation时回退video；两条stream分别以首个local presentation observation为零点，比较`local elapsed - media elapsed`变化，不直接相减独立随机RTP起点。
+- audio position只累计`AudioScheduleReceipt.frameCount`实际decoded frames，首包120-frame priming回归证明不会按固定240误算；video以90 kHz UInt32 RTP wrap-aware forward delta推进。audio/video wrap、backward timestamp、backward local time和invalid policy均有确定性回归。
+- abs drift不超过15 ms不动作；video ahead hold最多10 ms，video behind每次只drop当前frame；abs drift达到250 ms正负边界时只reanchor video并保持audio连续。stale audio下禁止依据旧audio state校正。
+- staged audit加入后置snapshot/decision error rollback，任何checked arithmetic failure不留下candidate stream、observation time或action部分mutation。首轮两个失败向量是未实际形成drift及已触发audio stale fallback，修正测试时序/专用fresh policy后通过。
+- clock-specific最终`12/12`；expanded audio/video assembly/decode/Metal gate`63/63`；最终完整macOS warnings-as-errors gate`259 total / 258 passed / 1 skipped / 0 failed`，唯一skip仍为未启用真实Keychain round-trip。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator前后均为`Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四SDK C gates全部通过。
+- OpenSpec 6.4更新为完成，权威进度`35/61`。下一项为6.5 route/interruption/underrun/packet-loss/teardown handling；6.4不证明实际renderer校正应用或audible synchronized output。

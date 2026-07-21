@@ -360,3 +360,12 @@
 - 最终production client在configure时attach player并连接main mixer，start后启动engine/player，stop时停止player/engine、reset并清除configuration；pipeline失败reconfigure会停止partial graph、清空old queue/config/route，不能从failed/stopped状态直接restart。
 - byte-exact PCM factory回读、bounded scheduling、completion释放、late completion、backend failure transactional rollback、failed replacement和production graph construction均有回归。focused decoder+graph gate`18/18`，完整macOS gate`247 total / 246 passed / 1 explicit Keychain skip / 0 failed`。
 - macOS、固定iPhone/iPad/tvOS/visionOS最终warnings-as-errors Debug build与全部静态门禁通过；四个simulator保持`Shutdown`。该证据不证明A/V sync、route/interruption、loss concealment或audible hardware output。
+
+### 2026-07-21 阶段 13 A/V Clock 设计
+
+- audio/video RTP timestamp可能使用独立随机起点，不能把原始UInt32除以timescale后直接相减。6.4分别在首个local presentation observation建立零点，测量各自`local elapsed - media elapsed`的变化，再比较两条stream的offset drift。
+- audio clock不使用固定240 frames假设：每个scheduled receipt在其buffer-start presentation time记录此前累计的实际decoded frames，再把本包实际frame count加入下一位置；首包120-frame priming和后续实际输出因此不会制造伪漂移。
+- 默认audio fresh窗口100 ms，audio失活后回退video。abs drift不超过15 ms不动作；video ahead每次hold最多10 ms，video behind每次只drop当前一帧；abs drift超过250 ms只重锚video，保持audio master连续。
+- `MediaClockSynchronizer`最终对audio/video UInt32 RTP分别执行forward/wrap-aware展开，全局local presentation observation必须monotonic；invalid policy、frame count、backward timestamp/time和所有checked arithmetic均结构化fail closed，后置decision失败会rollback候选state。
+- hard threshold正负边界均直接reanchor video；audio stale时不再按旧audio state校正。clock-specific最终`12/12`，expanded音视频pipeline gate`63/63`，完整macOS gate`259 total / 258 passed / 1 explicit Keychain skip / 0 failed`。
+- 五平台warnings-as-errors Debug build及全部静态门禁通过，四个固定simulator保持`Shutdown`。该证据证明deterministic clock decision，不证明route/interruption/loss concealment、实际renderer应用decision或audible synchronized hardware output。
