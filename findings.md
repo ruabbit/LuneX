@@ -866,5 +866,6 @@
 - 从5.5已提交基线和全新DerivedData执行normal macOS suite，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结构化结果为`470 total / 469 passed / 1 skipped / 0 failed`（`/tmp/LuneX-14-6_1-normal.8p8JY5/Normal.xcresult`）。
 - 唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试树唯一opt-in环境读取也是该Keychain开关，没有live-host XCTest或相应环境开关。
 - 因此6.1证明normal suite未访问真实Keychain且没有隐藏的live-host side effect；它不证明授权Sunshine互操作，阶段13 9.2仍是尚未实现而非skipped pass。
+- OpenSpec strict `5/5`、进度`24/29`、generator三次稳定、project/whitespace/reference边界通过，最终repository gates位于`/tmp/LuneX-14-6_1-repo-gates.EkT8SN`。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。
