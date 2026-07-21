@@ -333,4 +333,13 @@
 - 5.7 最终实现新增 session-owned `VideoDecodePipeline` 和精确 session-ID 的 control IDR adapter。首个合法 IDR 创建 generation；相同 parameter sets/metadata 的 IDR 复用；parameter set、bit depth 或 HDR metadata 变化先 drain/stop，下一 IDR 才建立新 generation。loss/drop 请求失败后可重试，重复事件只保留一个 outstanding IDR。
 - 96x64 H.264 format-change fixture 由本机 libx264 合成、移除 encoder SEI，并由 FFmpeg 与 CoreMedia 独立确认；它不含 host、用户、Keychain 或网络数据。staged audit另发现 decoder session创建挂起期间 `stop()` 可被迟到 IDR continuation覆盖，现已在 replace/decode异步边界后校验 lifecycle token，并加入确定性停止竞态回归。
 - 最终 pipeline-specific gate `10/10`，完整 macOS gate `221 total / 220 passed / 1 explicit Keychain skip / 0 failed`。修改后的五平台 warnings-as-errors build、fixture/OpenSpec/generator/reference/dependency/ENet/四 SDK C syntax门禁均通过，固定simulators前后保持 `Shutdown`。
+
+### 2026-07-21 阶段 13 Audio Ordering 与 Jitter Policy 设计
+
+- `AudioReceiveProvider` 的共享contract已经把网络边界归一为UInt16 sequence、UInt32 RTP timestamp、monotonic receive time和raw Opus payload；6.1在这个post-RTP边界工作，不解析socket datagram，也不把排序组件与6.2 decoder绑定。
+- 低延迟缓冲不能只按packet count猜测时间：Sunshine默认5 ms/240 samples，但AudioConverter首个packet可能因priming只输出120 frames。6.1只使用negotiated packet cadence计算receive-side target/deadline；真正audio clock必须在6.4使用实际decoded PCM frame count。
+- policy需要同时限制packet数量、payload bytes、最大单包、可接受forward gap与reorder distance。deadline、reorder-window、capacity和end-of-stream造成的missing range必须成为typed event，以便6.5做concealment/diagnostics；duplicate、conflicting duplicate和late packet也不能静默消失。
+- 6.1最终实现 `AudioPacketJitterBuffer`：默认由48 kHz/240 samples cadence派生10 ms target delay和40 ms maximum jitter，reorder window 8、forward gap 1024、32 packets并同时限制payload bytes；所有cadence arithmetic使用overflow-reporting运算。
+- discard到达仍推进monotonic clock并触发deadline drain；invalid payload、backward clock和过大forward gap在mutation前fail closed。UInt16 wrap、pre-playout向后扩展、out-of-order、deadline/window/capacity/end-of-stream loss、duplicate/conflict/late及极端配置均有回归。
+- focused jitter gate `11/11`，expanded audio/RTSP/runtime contract gate `23/23`，完整macOS gate `232 total / 231 passed / 1 explicit Keychain skip / 0 failed`；五平台warnings-as-errors build和全部静态门禁通过，固定simulators前后保持 `Shutdown`。该证据不证明Opus decode、PCM或audible output。
 - macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build全部通过，构建后四个 simulator保持 `Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四 SDK C syntax门禁全部通过。该证据仍不等于 video socket provider、AppModel presentation、EDR mapping 或 live Sunshine sustained video。

@@ -398,3 +398,18 @@
 - macOS、固定 iPhone、固定 iPad、固定 Apple TV、固定 Apple Vision Pro warnings-as-errors Debug build全部通过；原构建会话真实退出 `0`，四个 simulator构建后均为 `Shutdown`，未创建或boot新实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定 ENet revision/license/source/header逐文件比对和macOS/iOS Simulator/tvOS Simulator/visionOS Simulator strict C syntax gates全部通过。
 - OpenSpec 5.7更新为完成，权威进度 `31/61`。5.8需要授权 live Sunshine持续解码与clean stop证据，当前保持未完成；下一项可离线执行任务为6.1 bounded audio packet ordering与jitter-buffer policy。video socket/AppModel wiring、EDR mapping和live sustained video仍未声称完成。
+
+## 2026-07-21 阶段 13 任务 6.1 启动
+
+- 5.7已以 `d3e49c9 Coordinate video decoder recovery` 独立提交并推送；确认 `HEAD == origin/main`、工作树clean、OpenSpec权威进度 `31/61` 后进入6.1。5.8继续等待授权live Sunshine证据，不以fixture替代。
+- 6.1范围限定为post-RTP `ReceivedAudioPacket` 的UInt16 wrap-aware排序、目标playout delay、最大jitter deadline、重排窗口、packet/byte双容量和loss/discard事件；Opus decode、PCM scheduling、A/V clock和route/underrun处理仍分别属于6.2-6.5。
+- 后续测试继续显式清除 `LUNEX_RUN_KEYCHAIN_TEST`，跨平台build只使用既有固定simulator destination且不boot设备。
+
+## 2026-07-21 阶段 13 任务 6.1 完成
+
+- 新增 `AudioPacketJitterBuffer`：UInt16 wrap-aware sequence ordering、pre-playout backward adjustment、10 ms target/40 ms deadline、8-packet reorder window、1024 forward-gap bound、32 packet/byte双容量和idempotent finish；ready/loss/discard均为typed event。
+- 首轮audit修复discarded arrival不驱动deadline的问题，duplicate/conflict/late现在推进monotonic clock并drain；invalid payload/过大gap不部分修改状态。第二轮audit将cadence计算改为checked arithmetic，`samplesPerFrame = Int.max`结构化fail closed。
+- focused jitter gate `11/11`，expanded audio/RTSP/runtime contract gate `23/23`；完整macOS warnings-as-errors gate `232 total / 231 passed / 1 skipped / 0 failed`，唯一skip为未启用真实Keychain round-trip，本轮继续使用file fallback。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator验收前后均为 `Shutdown`，未创建或boot额外实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header和四SDK strict C syntax gates全部通过。
+- OpenSpec 6.1更新为完成，权威进度 `32/61`。下一项为6.2 approved AudioToolbox Opus decode与PCM format conversion；6.1不证明decoder、audio engine、A/V clock或audible live output。
