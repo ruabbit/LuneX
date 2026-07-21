@@ -290,6 +290,10 @@ actor AudioSessionPipeline {
             snapshot.updatedAt = now
             return snapshot
         } catch {
+            invalidateScheduledBuffers()
+            engineClient.stop(drain: false)
+            snapshot.configuration = nil
+            snapshot.route = nil
             return fail(error, now: now)
         }
     }

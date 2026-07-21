@@ -167,6 +167,23 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertFalse(client.snapshotCalls().contains("configure"))
     }
 
+    func testEngineStartFailureStopsPartialGraphAndClearsConfiguration() async throws {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(engineClient: client)
+        _ = try await pipeline.configure(.stereoLowLatency)
+        client.failNextStart()
+
+        let failed = try await pipeline.start()
+
+        XCTAssertEqual(failed.stage, .failed)
+        XCTAssertNil(failed.configuration)
+        XCTAssertNil(failed.route)
+        XCTAssertEqual(
+            client.snapshotCalls(),
+            ["configure", "route", "start", "stop:false"]
+        )
+    }
+
     @MainActor
     func testDiagnosticsStoreRecordsAudioSnapshot() {
         let diagnostics = DiagnosticsStore()
@@ -217,6 +234,7 @@ private final class StubAudioEngineClient: AudioEngineClient, @unchecked Sendabl
     private var calls: [String] = []
     private var completions: [@Sendable () -> Void] = []
     private var shouldFailNextConfigure = false
+    private var shouldFailNextStart = false
     private var shouldFailNextSchedule = false
 
     init(route: AudioRouteSnapshot = AudioRouteSnapshot(
@@ -238,6 +256,10 @@ private final class StubAudioEngineClient: AudioEngineClient, @unchecked Sendabl
 
     func start() throws {
         calls.append("start")
+        if shouldFailNextStart {
+            shouldFailNextStart = false
+            throw AudioPipelineError.invalidConfiguration
+        }
     }
 
     func schedule(
@@ -275,6 +297,10 @@ private final class StubAudioEngineClient: AudioEngineClient, @unchecked Sendabl
 
     func failNextSchedule() {
         shouldFailNextSchedule = true
+    }
+
+    func failNextStart() {
+        shouldFailNextStart = true
     }
 }
 

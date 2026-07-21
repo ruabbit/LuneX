@@ -53,7 +53,7 @@
 - [x] 6.2 Implement the approved Opus decode path and PCM format conversion
 - [x] 6.3 Connect decoded PCM to a session-owned AVAudioEngine graph
 - [x] 6.4 Implement audio/video clock selection, drift measurement, and bounded resynchronization
-- [ ] 6.5 Implement route-change, interruption, underrun, packet-loss, and teardown handling
+- [x] 6.5 Implement route-change, interruption, underrun, packet-loss, and teardown handling
 - [ ] 6.6 Add deterministic audio decode, jitter, synchronization, and resource-release tests
 - [ ] 6.7 Prove audible synchronized audio across start, route change, and stop on authorized hardware
 

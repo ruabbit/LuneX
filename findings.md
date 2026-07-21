@@ -369,3 +369,12 @@
 - `MediaClockSynchronizer`最终对audio/video UInt32 RTP分别执行forward/wrap-aware展开，全局local presentation observation必须monotonic；invalid policy、frame count、backward timestamp/time和所有checked arithmetic均结构化fail closed，后置decision失败会rollback候选state。
 - hard threshold正负边界均直接reanchor video；audio stale时不再按旧audio state校正。clock-specific最终`12/12`，expanded音视频pipeline gate`63/63`，完整macOS gate`259 total / 258 passed / 1 explicit Keychain skip / 0 failed`。
 - 五平台warnings-as-errors Debug build及全部静态门禁通过，四个固定simulator保持`Shutdown`。该证据证明deterministic clock decision，不证明route/interruption/loss concealment、实际renderer应用decision或audible synchronized hardware output。
+
+### 2026-07-21 阶段 13 Audio Recovery 设计
+
+- `SessionAudioRuntime`作为session级owner组合6.3 pipeline与6.4 clock。route change和underrun都清空旧scheduled buffers、重建graph并reset clock；interruption begin停止graph，只有明确`shouldResume`才重新configure/start。
+- 短packet loss采用bounded silence：最多4包、总计最多960 frames，sequence/RTP timestamp均wrap-aware推进，clock按补入的实际silence frames推进。超过边界直接rebuild；若多包补偿中途失败，也rebuild清除partial schedule和clock state。
+- stop幂等并释放graph/clock；stopped后的schedule/event fail closed。typed handler不声称已经监听平台notification，macOS/iOS/tvOS/visionOS route/interruption source接线分别保留阶段16/17。
+- 最终实现对interruption期间route change返回typed `routeChangeDeferred`，不抢先激活系统audio session；重复interruption begin保持幂等并推进monotonic event time。`AudioSessionPipeline.start()`失败也会停止partial engine、清queue并清除configuration/route，recovery owner不会重复释放底层资源。
+- focused recovery gate最终`33/33`，expanded audio/runtime/resource gate`66/66`；完整macOS warnings-as-errors gate实际为`270 total / 269 passed / 1 explicit Keychain skip / 0 failed`。五平台warnings-as-errors Debug build与全部静态门禁通过，四个固定simulator前后保持`Shutdown`。
+- 该证据证明typed recovery state machine、bounded concealment与确定性graph/clock teardown，不证明平台route/interruption notification已接线、声音已从硬件输出或A/V同步在真实Sunshine session中可听；这些证明仍分别属于阶段16/17和6.7。

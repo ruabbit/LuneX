@@ -459,3 +459,19 @@
 - clock-specific最终`12/12`；expanded audio/video assembly/decode/Metal gate`63/63`；最终完整macOS warnings-as-errors gate`259 total / 258 passed / 1 skipped / 0 failed`，唯一skip仍为未启用真实Keychain round-trip。
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator前后均为`Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四SDK C gates全部通过。
 - OpenSpec 6.4更新为完成，权威进度`35/61`。下一项为6.5 route/interruption/underrun/packet-loss/teardown handling；6.4不证明实际renderer校正应用或audible synchronized output。
+
+## 2026-07-21 阶段 13 任务 6.5 启动
+
+- 6.4已以`68a4ff8 Bound audio video clock drift`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`35/61`后进入6.5。
+- 6.5新增session级recovery owner统一处理route rebuild、interruption pause/resume、underrun、短loss静音补偿与stop；平台notification到typed event的接线保留阶段16/17，audible真机证据保留6.7。
+
+## 2026-07-21 阶段 13 任务 6.5 完成
+
+- 新增session-owned `SessionAudioRuntime`，统一拥有6.3 `AudioSessionPipeline`与6.4 `MediaClockSynchronizer`：route change与underrun停止旧graph、清queue、重建并reset clock；interruption只在明确`shouldResume`时恢复。
+- 短packet loss最多补4包、总计960 frames静音，sequence/RTP timestamp wrap-aware推进且clock只累计实际补入frames；超限直接rebuild，多包补偿中途失败也清除partial schedule与partial clock。
+- interruption期间route change返回typed deferred action；stop幂等，stopped后schedule/event fail closed；non-monotonic time、invalid policy/state、graph failure与overflow均结构化。pipeline engine-start failure同时停止partial graph并清除queue/configuration/route。
+- focused recovery/pipeline/clock gate最终`33/33`；expanded audio decode/jitter/sync/runtime/resource gate`66/66`。
+- 完整macOS warnings-as-errors gate实际为`270 total / 269 passed / 1 skipped / 0 failed`，唯一skip为显式opt-in真实Keychain round-trip；本任务始终使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，继续走file/in-memory fallback。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator构建前后均为`Shutdown`，没有创建或boot新实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header逐文件比对和四SDK strict C syntax gates全部通过。
+- OpenSpec 6.5更新为完成，权威进度`36/61`。下一项为6.6 deterministic audio decode/jitter/synchronization/resource-release tests；6.5不证明平台notification接线或audible synchronized hardware output。

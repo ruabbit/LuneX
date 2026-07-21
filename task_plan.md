@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `35/61`：6.4 audio/video clock selection、drift measurement与bounded resynchronization已完成独立验收。5.8仍需要授权live Sunshine sustained-video证据并保持未完成；下一项为6.5 route/interruption/underrun/packet-loss/teardown handling，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `36/61`：6.5 route/interruption/underrun/packet-loss/teardown handling已完成独立验收。5.8与6.7仍分别需要授权live Sunshine sustained-video与audible hardware证据并保持未完成；下一项为6.6 deterministic audio decode/jitter/synchronization/resource-release tests，阶段13仍为 `in_progress`。
 
-6.4已实现session-owned `MediaClockSynchronizer`：fresh audio优先、video fallback，audio以实际decoded frames推进，video以90 kHz wrap-aware RTP推进；hold/drop/reanchor校正全部有界。route/interruption/underrun/loss handling仍属于6.5。
+6.5已实现session-owned `SessionAudioRuntime`：route change/underrun重建graph并reset clock，interruption显式pause/resume，短loss最多补4包/960 frames静音，超限或partial failure统一重建，stop幂等且stopped后fail closed。typed event handler不等于平台notification已经接线，真实可听同步证据仍属于6.7。
 
 ## 遇到的错误
 
@@ -127,3 +127,5 @@
 | 6.3 final audit发现stream config和production client stop边界过宽 | 1 | pipeline/client双层只接受48 kHz、1...8 channels；client stop清空configuration，禁止停止后绕过actor直接schedule |
 | 6.4首轮clock向量未形成预期drift且hard样例触发audio stale fallback | 1 | video-ahead向量让RTP媒体时间比local推进多10 ms；hard-drift专用policy延长fresh窗口，保持测试确实处于audio-master校正分支 |
 | 6.4 staged audit发现hard threshold边界与后置算术错误可部分提交state | 1 | hard resync改为包含正负边界；audio/video候选写入后的snapshot/decision错误会恢复旧stream、observation time和last action |
+| 6.5首轮failure-call断言多预期route，并暴露engine start失败未释放partial graph | 1 | pipeline start catch统一stop/清queue/config/route；recovery failGraph依赖该底层保证不重复stop，并让重复interruption begin推进monotonic event time |
+| 6.5 audit发现interruption期间route-change被当作invalid state | 1 | 新增typed `routeChangeDeferred`，中断期间不抢先激活graph，明确resume时统一configure/start最新系统route |
