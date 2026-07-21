@@ -861,6 +861,14 @@
 - 当前测试树唯一显式opt-in环境开关是`LUNEX_RUN_KEYCHAIN_TEST`；normal suite将显式移除该变量，预期唯一skip为一次性真实Keychain round-trip。
 - 测试树尚无live-host XCTest环境开关或test case，因为阶段13的OpenSpec 9.2仍未实现；6.1只证明normal suite没有host/Keychain副作用，不能把缺失的live-host测试描述为disabled pass。
 
+# 2026-07-21 阶段 15 任务 1.2 验收结论
+
+- `HDRRenderColorSignature`复制validated source metadata形成immutable/hashable identity，覆盖bit depth、dynamic range、primaries、transfer、matrix、range、MDCV、CLL和maximum full-frame luminance；它不在1.2重复拥有或重新解释raw metadata。
+- `HDRPlatformOutputCapabilities`把platform、headroom source、surface EDR/metadata support、supported EDR gamut与SDR tone-map fallback保持为独立字段，因此tvOS的headroom-without-layer-EDR和visionOS的layer-EDR-without-headroom不会因共用UIKit/QuartzCore分支而混淆。
+- `HDRSurfaceContract`只允许三种完整组合：BGRA8+sRGB SDR、RGBA16Float+extended-linear Display P3 HDR10 EDR、RGBA16Float+extended-linear BT.2020 HDR10 EDR；混合drawable/colorspace/gamut/intent/metadata mode会以closed error拒绝。
+- `HDRRenderConfigurationIdentity`由decoder generation、color signature、display revision、mapping mode和surface contract共同决定；generation/revision 0、source/mapping错配和mapping/surface错配均fail closed。`hdrToSDR`使用合法SDR surface而不把HDR source改称SDR。
+- focused `12/12`、完整macOS `482 total / 481 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors、OpenSpec strict、generator稳定性、reference/dependency边界和只读simulator状态门均通过。证据不延伸到actual decoded plane/layout验证、runtime presenter/shader/surface接线或物理HDR显示证明。
+
 # 2026-07-21 阶段 14 任务 6.1 验收结论
 
 - 从5.5已提交基线和全新DerivedData执行normal macOS suite，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结构化结果为`470 total / 469 passed / 1 skipped / 0 failed`（`/tmp/LuneX-14-6_1-normal.8p8JY5/Normal.xcresult`）。

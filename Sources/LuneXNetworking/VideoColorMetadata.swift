@@ -24,7 +24,7 @@ enum VideoColorMetadataError: Error, Equatable, Sendable, CustomStringConvertibl
     }
 }
 
-enum VideoColorPrimaries: String, Codable, Equatable, Sendable {
+enum VideoColorPrimaries: String, Codable, Equatable, Hashable, Sendable {
     case ituR709
     case ituR2020
 
@@ -38,7 +38,7 @@ enum VideoColorPrimaries: String, Codable, Equatable, Sendable {
     }
 }
 
-enum VideoTransferFunction: String, Codable, Equatable, Sendable {
+enum VideoTransferFunction: String, Codable, Equatable, Hashable, Sendable {
     case ituR709
     case smpteST2084PQ
 
@@ -52,7 +52,7 @@ enum VideoTransferFunction: String, Codable, Equatable, Sendable {
     }
 }
 
-enum VideoYCbCrMatrix: String, Codable, Equatable, Sendable {
+enum VideoYCbCrMatrix: String, Codable, Equatable, Hashable, Sendable {
     case ituR709
     case ituR2020
 
@@ -66,7 +66,7 @@ enum VideoYCbCrMatrix: String, Codable, Equatable, Sendable {
     }
 }
 
-struct VideoChromaticityPoint: Codable, Equatable, Sendable {
+struct VideoChromaticityPoint: Codable, Equatable, Hashable, Sendable {
     var x: UInt16
     var y: UInt16
 
@@ -75,7 +75,7 @@ struct VideoChromaticityPoint: Codable, Equatable, Sendable {
     }
 }
 
-struct VideoMasteringDisplayMetadata: Codable, Equatable, Sendable {
+struct VideoMasteringDisplayMetadata: Codable, Equatable, Hashable, Sendable {
     static let primaryCount = 3
 
     /// RGB order, normalized to 50,000 as sent by Sunshine.
@@ -114,7 +114,7 @@ struct VideoMasteringDisplayMetadata: Codable, Equatable, Sendable {
     }
 }
 
-struct VideoContentLightMetadata: Codable, Equatable, Sendable {
+struct VideoContentLightMetadata: Codable, Equatable, Hashable, Sendable {
     var maximumContentLightLevelNits: UInt16
     var maximumFrameAverageLightLevelNits: UInt16
 
@@ -135,7 +135,7 @@ struct VideoContentLightMetadata: Codable, Equatable, Sendable {
     }
 }
 
-struct VideoColorMetadata: Codable, Equatable, Sendable {
+struct VideoColorMetadata: Codable, Equatable, Hashable, Sendable {
     var bitDepth: Int
     var isHDR: Bool
     var colorPrimaries: VideoColorPrimaries

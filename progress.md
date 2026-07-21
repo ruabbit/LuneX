@@ -1175,14 +1175,29 @@
 - HDR change明确连接现有metadata/P010/Metal plane/headroom foundation，替换actual fixed-sRGB presentation为显式Metal color/tone-map/surface contract；不引入第三方或GPL依赖。
 - 物理HDR/SDR显示器、亮度/颜色、HDR signaling、headroom和跨屏验证保留6.5，不由shader readback、模拟器或layer property替代。提案独立提交推送后进入1.1 inventory。
 
+## 2026-07-21 阶段 15 任务 1.1 启动
+
+- OpenSpec提案已以`65c28eb Plan native HDR EDR pipeline`独立提交并推送，确认`HEAD == origin/main`且工作树clean；change权威进度`0/33`。
+- 1.1仅盘点decoded格式、metadata ownership、actual renderer、Apple EDR API、平台差异和物理硬件证明边界，不修改runtime行为；后续immutable合同与production实现分别从1.2开始。
+- Apple API结论以本机Xcode 26.4 SDK headers/module availability与严格typecheck为准；上游仓库只读，不复制代码。测试继续不访问真实Keychain，也不创建、启动或运行simulator。
+
 ## 2026-07-21 阶段 15 任务 1.1 完成
 
 - `docs/runtime/hdr-edr-contract.md`固化当前production数据流、未接线Metal mapper/queue、fixed-sRGB actual presenter、display-vs-stream HDR误接、Apple SDK 26.4 API矩阵和硬件证明边界；没有修改runtime源码。
 - warnings-as-errors SDK probe确认macOS/iOS完整headroom+layer EDR能力、tvOS仅UIScreen headroom/颜色空间且layer EDR unavailable、visionOS layer EDR可编译但UIScreen unavailable；首个统一probe在tvOS按真实availability失败后拆分验证，未放宽平台假设。
 - OpenSpec 1.1标记完成，权威进度`1/33`。下一项1.2定义immutable color/display/surface value contract和closed resolver errors。
 
-## 2026-07-21 阶段 15 任务 1.1 启动
+## 2026-07-21 阶段 15 任务 1.2 启动
 
-- OpenSpec提案已以`65c28eb Plan native HDR EDR pipeline`独立提交并推送，确认`HEAD == origin/main`且工作树clean；change权威进度`0/33`。
-- 1.1仅盘点decoded格式、metadata ownership、actual renderer、Apple EDR API、平台差异和物理硬件证明边界，不修改runtime行为；后续immutable合同与production实现分别从1.2开始。
-- Apple API结论以本机Xcode 26.4 SDK headers/module availability与严格typecheck为准；上游仓库只读，不复制代码。测试继续不访问真实Keychain，也不创建、启动或运行simulator。
+- 1.1已以`9dd3ba6 Inventory native HDR EDR boundaries`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`1/33`。
+- 1.2仅定义platform-neutral immutable color signature、display revision、platform capability、mapping mode、surface/metadata/render configuration合同和fail-closed invariant errors；不连接actual presenter、shader、AppModel或lifecycle。
+- 新合同必须能区分tvOS的headroom-without-layer-EDR与visionOS的layer-EDR-without-headroom，并保证SDR、HDR-to-SDR与HDR-EDR surface组合不可被静默混用。
+
+## 2026-07-21 阶段 15 任务 1.2 完成
+
+- 新增`HDRRenderColorSignature`、`HDRDisplayRevision`、`HDRPlatformOutputCapabilities`、`HDRMappingMode`、`HDRSurfaceContract`、`HDRRenderConfigurationIdentity`和closed `HDRRenderResolutionError`；`VideoColorMetadata`值类型增加`Hashable`，但metadata ownership仍保持单一且没有runtime wiring。
+- surface合同只接受BGRA8+sRGB SDR或RGBA16Float+extended-linear P3/BT.2020 HDR10 EDR组合；configuration拒绝generation/revision 0、SDR/HDR source与mapping错配以及mapping/surface错配。tvOS与visionOS capability不对称得到独立测试覆盖。
+- focused结果`12/12`（`/tmp/LuneX-15-1_2-focused-final.qzvPB6/HDRRenderContract.xcresult`）；完整macOS suite为`482 total / 481 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-1_2-full.JvPq5Q/LuneXCoreTests.xcresult`）。唯一skip仍是`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，所有命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、固定iPhone、iPad、tvOS与visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-1_2-builds.MjyUqg`）；simulator前后规范化状态逐字节一致，四个固定设备均唯一、可用、`Shutdown`且全局`Booted=0`，未执行设备create/clone/boot/launch/shutdown/delete。
+- repository gates位于`/tmp/LuneX-15-1_2-repo-gates-final.6fIeqD`：OpenSpec strict `6/6`、generator三次稳定且SHA-256为`be87633006a8ab40568fa6b9bb0be5de3018c40a93f80fbf1d9438775aaac0d9`、production/reference边界、无Swift Package、精确Keychain skip与`git diff --check`通过。
+- OpenSpec 1.2标记完成，权威进度`2/33`。本证据不证明actual `CVPixelBuffer`布局、production presenter、shader readback、layer runtime property或物理HDR/SDR亮度与颜色；下一项1.3实现actual decoded layout/metadata compatibility validator。
