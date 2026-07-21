@@ -783,3 +783,14 @@
 - 新增`docs/runtime/macos-input-lifecycle-contract.md`，固化实际stream-surface scoped capture、view-to-backing坐标、共享revisioned video rect、bounded FIFO、focus-loss `releaseAll` barrier、balanced cursor owner及旧window/session generation拒绝合同。
 - 明确`NSEvent.keyCode`是macOS device-independent key number而非远端Win32/GameStream键码；当前adapter/wire raw passthrough在真实接线前必须由显式translation替代，未知键fail closed。
 - OpenSpec 1.1标记完成，权威进度`1/29`；本任务仅改文档和跟踪，没有触碰production source、generator或project。下一项为1.2 revisioned coordinate snapshot和共享fit/fill video rectangle resolver。
+
+## 2026-07-21 阶段 14 任务 1.2 启动
+
+- 设计平台无关的immutable coordinate point/rect、resolved drawable video rect/source crop、revisioned snapshot与变更驱动publisher；保持现有`RenderTransform`和renderer/mapper行为到1.3再迁移。
+
+## 2026-07-21 阶段 14 任务 1.2 完成
+
+- 新增`Sources/LuneXPlatform/StreamCoordinateSnapshot.swift`：fit/fill resolver统一计算drawable bounds、destination video rect、source crop和scale；publisher仅在source/drawable/mode变更时推进revision，无效geometry和`UInt64`溢出均fail closed。
+- 新增`StreamCoordinateSnapshotTests`并同步generator/project；focused Swift 6/Clang warnings-as-errors测试通过`6/6`，无skip，结果`/tmp/LuneX-14-1_2-focused.v2yyeb/StreamCoordinateSnapshot.xcresult`。所有测试显式`env -u LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV和固定Apple Vision Pro Debug warnings-as-errors隔离构建全部通过，证据根目录`/tmp/LuneX-14-1_2-platforms.behknb`；只执行build，没有创建、boot或运行simulator。构建前后四个固定UUID均唯一且为`Shutdown`，全局Booted计数为0。
+- OpenSpec 1.2标记完成，权威进度`2/29`。resolver尚未接入renderer或`InputMapper`，生产letterbox拒绝和共享rectangle仍待1.3；下一项为1.3消费接线。
