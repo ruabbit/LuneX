@@ -773,3 +773,13 @@
 - 创建`integrate-macos-native-input-lifecycle`，完成proposal、design、`macos-native-input-capture`、`macos-session-lifecycle-control`、`stream-coordinate-transform`三项spec与29项tasks；artifact状态apply-ready，单change strict validation通过。
 - 现状审计确认AppKit notification只驱动render state；真实NSEvent、balanced cursor ownership、active-session input sink、focus-loss release barrier、actual stream-surface transform与decoder pause/resume均未接线。阶段14保持production fail closed并保留stage13 live证据缺口。
 - 后续按OpenSpec任务逐项独立验收/提交/推送；当前第一项为1.1 macOS event/modifier/shortcut/cursor/coordinate/multi-window ownership合同清单。
+
+## 2026-07-21 阶段 14 任务 1.1 启动
+
+- 对照Xcode 26.4 AppKit/CoreGraphics SDK头文件与repository-owned实现，清点window/application notification作用域、`NSEvent`键码/修饰键/坐标/滚轮语义、cursor关联恢复和多窗口observer/generation所有权；不修改运行行为。
+
+## 2026-07-21 阶段 14 任务 1.1 完成
+
+- 新增`docs/runtime/macos-input-lifecycle-contract.md`，固化实际stream-surface scoped capture、view-to-backing坐标、共享revisioned video rect、bounded FIFO、focus-loss `releaseAll` barrier、balanced cursor owner及旧window/session generation拒绝合同。
+- 明确`NSEvent.keyCode`是macOS device-independent key number而非远端Win32/GameStream键码；当前adapter/wire raw passthrough在真实接线前必须由显式translation替代，未知键fail closed。
+- OpenSpec 1.1标记完成，权威进度`1/29`；本任务仅改文档和跟踪，没有触碰production source、generator或project。下一项为1.2 revisioned coordinate snapshot和共享fit/fill video rectangle resolver。
