@@ -647,7 +647,10 @@ private struct StreamWorkspaceView: View {
             MetalStreamSurface(
                 renderState: appModel.renderState,
                 presentationSource: appModel.videoPresentationSource,
-                lifecycle: platformLifecycle
+                lifecycle: platformLifecycle,
+                inputSampleHandler: { sample in
+                    _ = appModel.submitMacPlatformInput(sample)
+                }
             )
                 .ignoresSafeArea()
             #else

@@ -198,13 +198,17 @@ final class MacSessionInputCoordinator {
         activationOperation?.task.cancel()
     }
 
-    func activate() async -> MacSessionInputGeneration {
+    func activate(
+        isFocusEligible initialFocusEligibility: Bool = true
+    ) async -> MacSessionInputGeneration {
         if let activationOperation {
             return await activationOperation.task.value
         }
         let id = UUID()
         let task = Task { [self] in
-            await performActivation()
+            await performActivation(
+                initialFocusEligibility: initialFocusEligibility
+            )
         }
         activationOperation = ActivationOperation(id: id, task: task)
         let generation = await task.value
@@ -214,7 +218,9 @@ final class MacSessionInputCoordinator {
         return generation
     }
 
-    private func performActivation() async -> MacSessionInputGeneration {
+    private func performActivation(
+        initialFocusEligibility: Bool
+    ) async -> MacSessionInputGeneration {
         if let generation {
             _ = await terminate(generation: generation, reason: .replacement)
         }
@@ -222,8 +228,8 @@ final class MacSessionInputCoordinator {
         let generation = MacSessionInputGeneration(id: UUID())
         let signals = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.generation = generation
-        isFocusEligible = true
-        acceptsInput = true
+        isFocusEligible = initialFocusEligibility
+        acceptsInput = initialFocusEligibility
         signalContinuation = signals.continuation
         consumerTask = Task { [weak self] in
             for await _ in signals.stream {

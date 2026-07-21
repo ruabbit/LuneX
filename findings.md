@@ -796,5 +796,23 @@
 - drawable严格来自`surface.convertToBacking(surface.bounds)`并做finite/positive/Int-range校验；结果同步写入`PlatformLifecycleState`与actual `MTKView.drawableSize`。window content size不再参与。
 - `MacStreamInputCaptureView`在frame/bounds size变化时通知当前attachment owner；window resize/end-live-resize/screen/backing及application screen-parameter通知也重新查询当前view、screen name与三个EDR headroom值。
 - `MetalStreamSurface.apply`不再把可能滞后的render coordinate snapshot写回drawable。5.1证明几何检测和surface配置，不证明5.2已把lifecycle geometry发布给AppModel coordinate snapshot或active media/input session。
+
+# 2026-07-21 阶段 14 任务 5.2 调查
+
+- `AppModel.applyPlatformLifecycle`当前只同步`renderState.policy/drawableSize/headroom`，尚未构造generation-scoped `SessionLifecycleApplication`；`NativeSessionMediaEnvironment`和`NativeSessionVideoProcessor`已经具备revision reservation、stale-generation拒绝、decoded submission暂停、presentation清理与IDR恢复语义，5.2必须消费这些接口而不是在SwiftUI或AppModel重写媒体并发状态机。
+- `MacSessionInputCoordinator`已经提供bounded FIFO、enqueue-time coordinate snapshot、focus-loss release barrier和terminal generation隔离；AppModel现有`ApplicationInputSink`实现会内部派生活跃session/media generation，因此actual surface只能提交值样本，不得持有provider、session ID或generation。
+- lifecycle通知可能先于media generation到达，也可能在actor await期间继续变化。AppModel需要一个单一、revision-aware pump缓存最新directive并串行补应用；stop/reconnect/replacement必须使旧pump失效，旧application即使迟到也不能失败或覆盖新generation。
+- input coordinator应在media input readiness首次建立时激活，readiness丢失、stop、remote termination、reconnect/replacement或media failure时终止。初始focus eligibility必须从已缓存directive建立，避免`activate()`默认打开后再关闭产生短暂admission和无意义release barrier。
+- 5.2只把actual surface sample handler接入AppModel；surface的`isInputCaptureEnabled`仍保持false，cursor policy与持久化输入设置的最终eligibility属于5.3，不能在本项提前开启真实AppKit事件吞入。
+- 提交前复核发现`updateRenderPreferences()`会在session streaming或保存设置时用请求HDR的合成headroom覆盖actual display lifecycle值，且source geometry仍停留在用户请求分辨率。5.2改为active media generation持有negotiated decoded source size；platform lifecycle一旦接管，display headroom不再被设置加载/保存覆盖。
+- lifecycle pump只能在environment明确返回`.staleLifecycleApplication`且缓存中确有更高revision时重试；当前generation的decoder/IDR或其他effect失败必须进入`failFromMediaEnvironment`，终止input generation、停止media/control并发布安全session failure，不能被较新window notification掩盖。
+
+# 2026-07-21 阶段 14 任务 5.2 验收结论
+
+- AppModel现拥有单一lifecycle pump：window state先同步更新renderer、coordinate snapshot、headroom与input focus，最新directive再按AppModel单调revision应用到内部派生的active media session/generation；media start会等待缓存application收敛，stop/replacement使旧pump失效。
+- negotiated video size成为active decoded source geometry；actual surface drawable和display lifecycle headroom不会再被请求设置覆盖。presentation clear立即丢弃当前generation帧，native video processor继续负责pause/drain/IDR recovery的generation fence。
+- media input readiness激活`MacSessionInputCoordinator`并直接继承当前focus eligibility；actual surface handler同步提交冻结的sample/snapshot/cursor/shortcut envelope。focus loss关闭admission并完成ordered release，input readiness loss、stop、remote termination、reconnect和media failure终止generation。
+- 最终focused warnings-as-errors为`79/79`（`/tmp/LuneX-14-5_2-focused-final2.otpayx/IntegrationFocused.xcresult`）；完整macOS为`459 total / 458 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-14-5_2-full-final2.wc1urd/LuneXCoreTests.xcresult`）。唯一skip精确为一次性真实Keychain测试，命令显式移除环境变量。
+- 最终五平台Debug warnings-as-errors build-only通过（`/tmp/LuneX-14-5_2-builds-final2.pe158p`）；simulator前后规范化identity/state逐字节一致，固定设备各唯一且`Shutdown`、全局`Booted=0`。本项仍不启用actual capture/cursor，5.3和6.5/live Sunshine边界保持未完成。
 - 旧`AppKitLifecycleAttachment`与`WindowObservationView`已删除，因为production ownership已在actual Metal surface，保留两套attachment会重新引入整窗与surface竞态。
 - 最终验收通过focused `38/38`、完整macOS `455 total / 454 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors；simulator前后逐字节一致。5个OpenSpec strict、generator SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`和边界门通过。

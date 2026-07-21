@@ -150,11 +150,34 @@ final class AppModel: ApplicationInputSink {
     private var activeStreamSessionID: UUID?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
+    @ObservationIgnored private var activeDecodedSourceSize: PixelSize?
     private var activeControlReadiness: SessionChannelReadiness = []
     private var activeMediaReadiness: SessionChannelReadiness = []
     private var mediaConsumerTask: Task<Void, Never>?
     private let remoteInputKeyOverride: RemoteInputKeyMaterial?
     private let remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
+    @ObservationIgnored private var hasPlatformLifecycle = false
+    @ObservationIgnored private var latestLifecycleRevision: UInt64 = 0
+    @ObservationIgnored private var latestLifecycleDirective =
+        SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: false,
+            isVisible: false,
+            isFocused: false,
+            drawableSize: .zero
+        )
+    @ObservationIgnored private var latestMacCursorPolicy =
+        CursorCapturePolicyResolver.resolve(
+            isStreamActive: false,
+            isVisible: false,
+            isFocused: false,
+            prefersRemotePointer: false
+        )
+    @ObservationIgnored private var appliedLifecycleApplication: SessionLifecycleApplication?
+    @ObservationIgnored private var lifecycleApplicationTask: Task<Void, Never>?
+    @ObservationIgnored private var lifecycleApplicationOperationID: UUID?
+    @ObservationIgnored private lazy var macSessionInputCoordinator =
+        MacSessionInputCoordinator(sink: self)
+    @ObservationIgnored private var activeMacInputGeneration: MacSessionInputGeneration?
 
     init(
         hostLibraryManager: HostLibraryManager = HostLibraryManager(
@@ -269,9 +292,61 @@ final class AppModel: ApplicationInputSink {
     }
 
     func applyPlatformLifecycle(_ lifecycle: PlatformLifecycleState) {
-        renderState.policy = lifecycle.renderPolicy
+        let directive = SessionLifecycleDirectiveResolver.resolve(
+            isStreamActive: lifecycle.isStreamActive,
+            isVisible: lifecycle.isVisible,
+            isFocused: lifecycle.isFocused,
+            drawableSize: lifecycle.drawableSize
+        )
+        hasPlatformLifecycle = true
+        latestLifecycleRevision &+= 1
+        latestLifecycleDirective = directive
+        latestMacCursorPolicy = CursorCapturePolicyResolver.resolve(
+            isStreamActive: lifecycle.isStreamActive,
+            isVisible: lifecycle.isVisible,
+            isFocused: lifecycle.isFocused,
+            prefersRemotePointer: false
+        )
+        renderState.policy = directive.renderPolicy
         renderState.transform.drawableSize = lifecycle.drawableSize
         renderState.headroom = lifecycle.headroom
+        applyInputLifecycle(directive.input)
+        clearPresentationIfRequired(directive.presentation)
+        scheduleLifecycleApplication()
+    }
+
+    @discardableResult
+    func submitMacPlatformInput(
+        _ sample: MacPlatformInputSample
+    ) -> MacSessionInputEnqueueResult {
+        guard let generation = activeMacInputGeneration else {
+            return .rejected(.inactiveGeneration)
+        }
+        guard let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration != nil,
+              activeMediaReadiness.contains(.input),
+              let coordinateSnapshot = renderState.coordinateSnapshot else {
+            return .rejected(.admissionClosed)
+        }
+        let result = macSessionInputCoordinator.enqueue(
+            MacInputSampleEnvelope(
+                sample: sample,
+                coordinateSnapshot: coordinateSnapshot,
+                cursorPolicy: latestMacCursorPolicy,
+                forwardsSystemShortcuts: false
+            ),
+            generation: generation
+        )
+        if result == .rejected(.inactiveGeneration)
+            || result == .rejected(.staleGeneration) {
+            activeMacInputGeneration = nil
+        }
+        return result
+    }
+
+    func macSessionInputSnapshot() -> MacSessionInputCoordinatorSnapshot {
+        macSessionInputCoordinator.snapshot()
     }
 
     func loadHosts() async {
@@ -673,11 +748,12 @@ final class AppModel: ApplicationInputSink {
               let sessionControlProvider = runtimeProviders.sessionControl else {
             return
         }
+        await terminateMacInputGeneration(reason: .stop)
         activeStreamSessionID = nil
         streamLaunchUI.isLaunching = false
         session.phase = .stopping
         _ = try? await streamSessionCoordinator.beginLocalStop(sessionID: sessionID)
-        await stopMediaEnvironment(sessionID: sessionID)
+        await stopMediaEnvironment(sessionID: sessionID, inputReason: .stop)
         await sessionControlProvider.stop(sessionID: sessionID)
         _ = try? await streamSessionCoordinator.completeLocalStop(sessionID: sessionID)
         diagnostics.record("Stopped stream session", subsystem: "stream")
@@ -873,7 +949,9 @@ final class AppModel: ApplicationInputSink {
         case .streaming:
             streamLaunchUI.isLaunching = false
             session.phase = .streaming
-            renderState.policy = .active
+            renderState.policy = hasPlatformLifecycle
+                ? latestLifecycleDirective.renderPolicy
+                : .active
             updateRenderPreferences()
 
         case .reconnecting:
@@ -921,7 +999,10 @@ final class AppModel: ApplicationInputSink {
             )
 
         case .reconnecting:
-            await stopMediaEnvironment(sessionID: sessionID)
+            await stopMediaEnvironment(
+                sessionID: sessionID,
+                inputReason: .replacement
+            )
             guard activeStreamSessionID == sessionID else { return }
             activeControlReadiness = []
             activeMediaReadiness = []
@@ -945,12 +1026,16 @@ final class AppModel: ApplicationInputSink {
             }
 
         case .terminated:
+            await terminateMacInputGeneration(reason: .remoteTermination)
             let snapshot = try await streamSessionCoordinator.apply(
                 event,
                 sessionID: sessionID
             )
             applySessionSnapshot(snapshot)
-            await stopMediaEnvironment(sessionID: sessionID)
+            await stopMediaEnvironment(
+                sessionID: sessionID,
+                inputReason: .remoteTermination
+            )
 
         case .launchAccepted, .rtspReady:
             let snapshot = try await streamSessionCoordinator.apply(
@@ -988,6 +1073,19 @@ final class AppModel: ApplicationInputSink {
         latestRemoteInputFeedback = nil
         activeMediaSessionID = sessionID
         activeMediaGeneration = environmentSnapshot.generation
+        activeDecodedSourceSize = PixelSize(
+            width: configuration.video.width,
+            height: configuration.video.height
+        )
+        renderState.transform.sourceSize = activeDecodedSourceSize ?? .zero
+        appliedLifecycleApplication = nil
+        let lifecycleTask = scheduleLifecycleApplication()
+        await lifecycleTask?.value
+        guard activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration == environmentSnapshot.generation else {
+            return false
+        }
         mediaConsumerTask = Task { [weak self] in
             do {
                 for try await event in events {
@@ -1022,7 +1120,14 @@ final class AppModel: ApplicationInputSink {
               activeMediaSessionID == sessionID else { return }
         switch event {
         case let .readiness(readiness):
+            let previousReadiness = activeMediaReadiness
             activeMediaReadiness = readiness.intersection([.video, .audio, .input])
+            if previousReadiness.contains(.input),
+               !activeMediaReadiness.contains(.input) {
+                await terminateMacInputGeneration(reason: .inputChannelFailure)
+            } else if activeMediaReadiness.contains(.input) {
+                await activateMacInputGenerationIfNeeded()
+            }
             do {
                 try await applyAggregatedReadiness(sessionID: sessionID)
             } catch {
@@ -1054,9 +1159,12 @@ final class AppModel: ApplicationInputSink {
         sessionControlProvider: any SessionControlProvider
     ) async {
         guard activeStreamSessionID == sessionID else { return }
+        await terminateMacInputGeneration(reason: .inputChannelFailure)
+        invalidateLifecycleApplicationPump()
         mediaConsumerTask = nil
         activeMediaSessionID = nil
         activeMediaGeneration = nil
+        activeDecodedSourceSize = nil
         activeMediaReadiness = []
         activeControlReadiness = []
         latestRemoteInputFeedback = nil
@@ -1066,14 +1174,183 @@ final class AppModel: ApplicationInputSink {
         await sessionControlProvider.stop(sessionID: sessionID)
     }
 
-    private func stopMediaEnvironment(sessionID: UUID) async {
+    private func stopMediaEnvironment(
+        sessionID: UUID,
+        inputReason: MacSessionInputTerminationReason = .stop
+    ) async {
+        await terminateMacInputGeneration(reason: inputReason)
+        invalidateLifecycleApplicationPump()
         mediaConsumerTask?.cancel()
         mediaConsumerTask = nil
+        if let mediaGeneration = activeMediaGeneration {
+            videoPresentationSource.clear(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration
+            )
+        }
         activeMediaSessionID = nil
         activeMediaGeneration = nil
+        activeDecodedSourceSize = nil
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
         _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
+    }
+
+    @discardableResult
+    private func scheduleLifecycleApplication() -> Task<Void, Never>? {
+        guard activeStreamSessionID != nil,
+              activeMediaSessionID != nil,
+              activeMediaGeneration != nil else {
+            return nil
+        }
+        if let lifecycleApplicationTask { return lifecycleApplicationTask }
+
+        let operationID = UUID()
+        lifecycleApplicationOperationID = operationID
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.drainLifecycleApplications(operationID: operationID)
+        }
+        lifecycleApplicationTask = task
+        return task
+    }
+
+    private func drainLifecycleApplications(operationID: UUID) async {
+        while !Task.isCancelled,
+              lifecycleApplicationOperationID == operationID,
+              let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration {
+            let application = SessionLifecycleApplication(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration,
+                lifecycleRevision: latestLifecycleRevision,
+                directive: latestLifecycleDirective
+            )
+            if let appliedLifecycleApplication,
+               appliedLifecycleApplication.sessionID == sessionID,
+               appliedLifecycleApplication.mediaGeneration == mediaGeneration,
+               appliedLifecycleApplication.lifecycleRevision >= application.lifecycleRevision {
+                break
+            }
+
+            do {
+                try await sessionMediaEnvironment.applyLifecycle(application)
+            } catch {
+                guard !Task.isCancelled,
+                      lifecycleApplicationOperationID == operationID,
+                      activeStreamSessionID == sessionID,
+                      activeMediaSessionID == sessionID,
+                      activeMediaGeneration == mediaGeneration else {
+                    break
+                }
+                if error as? SessionMediaEnvironmentError == .staleLifecycleApplication,
+                   latestLifecycleRevision > application.lifecycleRevision {
+                    continue
+                }
+                if let sessionControlProvider = runtimeProviders.sessionControl {
+                    await failFromMediaEnvironment(
+                        error,
+                        sessionID: sessionID,
+                        sessionControlProvider: sessionControlProvider
+                    )
+                }
+                break
+            }
+
+            guard !Task.isCancelled,
+                  lifecycleApplicationOperationID == operationID,
+                  activeStreamSessionID == sessionID,
+                  activeMediaSessionID == sessionID,
+                  activeMediaGeneration == mediaGeneration else {
+                break
+            }
+            appliedLifecycleApplication = application
+            if latestLifecycleRevision == application.lifecycleRevision { break }
+        }
+
+        guard lifecycleApplicationOperationID == operationID else { return }
+        lifecycleApplicationTask = nil
+        lifecycleApplicationOperationID = nil
+        if let appliedLifecycleApplication,
+           appliedLifecycleApplication.lifecycleRevision < latestLifecycleRevision {
+            scheduleLifecycleApplication()
+        }
+    }
+
+    private func invalidateLifecycleApplicationPump() {
+        lifecycleApplicationTask?.cancel()
+        lifecycleApplicationTask = nil
+        lifecycleApplicationOperationID = nil
+        appliedLifecycleApplication = nil
+    }
+
+    private func activateMacInputGenerationIfNeeded() async {
+        guard activeMacInputGeneration == nil,
+              let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration != nil,
+              activeMediaReadiness.contains(.input) else { return }
+        let initialEligibility: Bool
+        if case .open = latestLifecycleDirective.input {
+            initialEligibility = true
+        } else {
+            initialEligibility = false
+        }
+        let generation = await macSessionInputCoordinator.activate(
+            isFocusEligible: initialEligibility
+        )
+        guard activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration != nil,
+              activeMediaReadiness.contains(.input) else {
+            _ = await macSessionInputCoordinator.terminate(
+                generation: generation,
+                reason: .replacement
+            )
+            return
+        }
+        activeMacInputGeneration = generation
+        applyInputLifecycle(latestLifecycleDirective.input)
+    }
+
+    private func terminateMacInputGeneration(
+        reason: MacSessionInputTerminationReason
+    ) async {
+        guard let generation = activeMacInputGeneration else { return }
+        activeMacInputGeneration = nil
+        _ = await macSessionInputCoordinator.terminate(
+            generation: generation,
+            reason: reason
+        )
+    }
+
+    private func applyInputLifecycle(_ directive: InputLifecycleDirective) {
+        guard let generation = activeMacInputGeneration else { return }
+        switch directive {
+        case .open:
+            _ = macSessionInputCoordinator.setFocusEligible(
+                true,
+                generation: generation
+            )
+        case .closed:
+            _ = macSessionInputCoordinator.setFocusEligible(
+                false,
+                generation: generation
+            )
+        }
+    }
+
+    private func clearPresentationIfRequired(
+        _ directive: PresentationLifecycleDirective
+    ) {
+        guard case .clear = directive,
+              let sessionID = activeMediaSessionID,
+              let mediaGeneration = activeMediaGeneration else { return }
+        videoPresentationSource.discardFrames(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
     }
 
     private func pendingTransportMessage(for snapshot: StreamSessionSnapshot) -> String {
@@ -1104,6 +1381,7 @@ final class AppModel: ApplicationInputSink {
             return
         }
 
+        invalidateLifecycleApplicationPump()
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
         let sessionError = SessionError(
             subsystem: diagnostic.subsystem,
@@ -1113,6 +1391,7 @@ final class AppModel: ApplicationInputSink {
         activeStreamSessionID = nil
         activeMediaSessionID = nil
         activeMediaGeneration = nil
+        activeDecodedSourceSize = nil
         activeControlReadiness = []
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
@@ -1127,12 +1406,17 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func updateRenderPreferences() {
-        renderState.transform.sourceSize = PixelSize(width: settings.stream.width, height: settings.stream.height)
-        renderState.transform.mode = settings.stream.scaleMode
-        renderState.headroom = DisplayHeadroom(
-            potential: settings.stream.hdrEnabled ? 1.5 : 1.0,
-            current: settings.stream.hdrEnabled ? 1.25 : 1.0,
-            reference: 1.0
+        renderState.transform.sourceSize = activeDecodedSourceSize ?? PixelSize(
+            width: settings.stream.width,
+            height: settings.stream.height
         )
+        renderState.transform.mode = settings.stream.scaleMode
+        if !hasPlatformLifecycle {
+            renderState.headroom = DisplayHeadroom(
+                potential: settings.stream.hdrEnabled ? 1.5 : 1.0,
+                current: settings.stream.hdrEnabled ? 1.25 : 1.0,
+                reference: 1.0
+            )
+        }
     }
 }

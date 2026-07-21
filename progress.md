@@ -1043,3 +1043,21 @@
 - 删除已无production调用的零尺寸`AppKitLifecycleAttachment`，并移除render snapshot对actual drawable的反向写入。5.2的AppModel/media/input application仍保持未完成。
 - focused `38/38`（`/tmp/LuneX-14-5_1-focused-r2.qCiegh/SurfaceGeometry.xcresult`）；完整macOS `455 total / 454 passed / 1 Keychain skip / 0 failed`（`/tmp/LuneX-14-5_1-full.7R2U3Q/LuneXCoreTests.xcresult`）；五平台Debug通过（`/tmp/LuneX-14-5_1-builds.BgYKnF`）。
 - 5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 5.1标记完成，权威进度`19/29`；下一项5.2 application/media integration。阶段13仍为`54/61 in_progress`。
+
+## 2026-07-21 阶段 14 任务 5.2 启动
+
+- 从session catch-up、文件化计划、active goal和OpenSpec全部context恢复；确认`HEAD == origin/main == 762e7c8`、工作树clean，OpenSpec权威进度`19/29`，四个固定simulator实例唯一且全部`Shutdown`。
+- 5.2范围限定为`PlatformLifecycleState -> AppModel -> renderer/media lifecycle`和`actual surface -> AppModel -> active MacSessionInputCoordinator -> ApplicationInputSink`连接；不提前开启5.3 persisted capture/cursor eligibility，不把deterministic provider delivery声称为Sunshine live receipt。
+- 实现将使用AppModel-owned单一lifecycle pump和media-readiness-owned input generation；已有media environment revision/generation语义、video presentation recovery和input FIFO/release barrier保持不重写。完成前需新增AppModel集成测试并执行focused/full/five-platform、simulator、OpenSpec、generator和repository边界门禁。
+- 首轮快速编译中`LuneXCoreTests`误用`build` action导致无匹配destination，后续改用该scheme的`test` action；macOS App真实编译定位到lifecycle pump弱引用闭包把Task推导为`Task<Void?, Never>`，已改为显式unwrap self后返回`Void`，不重复无效命令。
+- 新增3项AppModel focused测试单独运行`3/3`通过；扩大到AppModel/lifecycle/media/input coordinator共78项时出现2个测试观察竞态：一个在session尚未进入streaming前断言render active，另一个在fake release已记录但coordinator完成计数尚未回写时断言。测试改为等待最终session/coordinator状态，production逻辑未因中间状态断言改写。
+- 修正等待后相关focused门`78/78`通过，完整macOS suite为`458 total / 457 passed / 1 explicit Keychain skip / 0 failed`。五平台Debug warnings-as-errors build-only通过，证据`/tmp/LuneX-14-5_2-builds.doirzl`；simulator前后规范化JSON逐字节一致，固定实例各唯一且全部`Shutdown`、全局`Booted=0`。
+- 提交前复核补上negotiated decoded source geometry ownership，并阻止设置刷新覆盖actual lifecycle display headroom；因为production已变化，相关focused/full/five-platform证据必须重新验证，前述结果只保留为中间证据。
+- 第二次diff复核收紧lifecycle pump错误分类：仅明确stale application可在更高revision下重试，真实effect failure必须失败并清理session；新增AppModel failure convergence测试。production再次变化，最终门禁从focused开始重新执行。
+
+## 2026-07-21 阶段 14 任务 5.2 完成
+
+- 最终相关focused Swift/Clang warnings-as-errors通过`79/79`，结果`/tmp/LuneX-14-5_2-focused-final2.otpayx/IntegrationFocused.xcresult`；覆盖lifecycle缓存/顺序、negotiated geometry/headroom、fake-provider input、focus release、零drawable和effect failure convergence。
+- 完整macOS suite结构化通过`459 total / 458 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-5_2-full-final2.wc1urd/LuneXCoreTests.xcresult`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV与Apple Vision Pro Debug warnings-as-errors build-only全部通过，证据`/tmp/LuneX-14-5_2-builds-final2.pe158p`。构建前后simulator规范化JSON逐字节一致，固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+- 5个OpenSpec strict、generator三次SHA-256 `8ba9f47017c9aca22655a7efdd638f7a01b05be995cd139cf36c50475e6211fd`、whitespace与production/reference边界通过。OpenSpec 5.2标记完成，权威进度`20/29`；下一项5.3 persisted capture/cursor eligibility，阶段13仍为`54/61 in_progress`。

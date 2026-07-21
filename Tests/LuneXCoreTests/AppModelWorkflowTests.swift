@@ -97,6 +97,248 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
     }
 
+    func testLatestLifecycleIsCachedUntilMediaGenerationStartsAndThenAppliedInOrder() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 31,
+                    key: Data(repeating: 0x31, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: false,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2560, height: 1440)
+        )
+        model.applyPlatformLifecycle(lifecycle)
+        lifecycle.isStreamActive = true
+        lifecycle.isVisible = false
+        lifecycle.headroom = DisplayHeadroom(
+            potential: 2.4,
+            current: 1.8,
+            reference: 1.0
+        )
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertEqual(mediaEnvironment.currentLifecycleApplications(), [])
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { mediaEnvironment.currentLifecycleApplications().count == 1 }
+
+        let cachedApplication = try XCTUnwrap(
+            mediaEnvironment.currentLifecycleApplications().first
+        )
+        XCTAssertEqual(cachedApplication.sessionID, record.sessionID)
+        XCTAssertEqual(cachedApplication.mediaGeneration, 1)
+        XCTAssertEqual(cachedApplication.lifecycleRevision, 2)
+        XCTAssertEqual(
+            cachedApplication.directive,
+            SessionLifecycleDirectiveResolver.resolve(
+                isStreamActive: true,
+                isVisible: false,
+                isFocused: true,
+                drawableSize: PixelSize(width: 2560, height: 1440)
+            )
+        )
+
+        lifecycle.isVisible = true
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        await waitUntil { mediaEnvironment.currentLifecycleApplications().count == 2 }
+        await waitUntil { model.session.isStreaming }
+        let applications = mediaEnvironment.currentLifecycleApplications()
+        XCTAssertEqual(applications.map(\.lifecycleRevision), [2, 3])
+        XCTAssertEqual(applications.last?.directive.input, .open)
+        XCTAssertEqual(model.renderState.policy, .active)
+        XCTAssertEqual(
+            model.renderState.transform.sourceSize,
+            PixelSize(width: 3840, height: 2160)
+        )
+        XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
+    func testMacPlatformSampleFlowsThroughAppModelAndFocusLossReleasesInput() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 32,
+                    key: Data(repeating: 0x32, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2560, height: 1440)
+        )
+        model.applyPlatformLifecycle(lifecycle)
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        await waitUntil { model.macSessionInputSnapshot().acceptsInput }
+
+        let sample = MacPlatformInputSample.keyboard(MacKeyboardSample(
+            rawKeyCode: 0,
+            characters: "a",
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        XCTAssertEqual(model.submitMacPlatformInput(sample), .accepted)
+        await waitUntil { mediaEnvironment.currentSentInputApplications().count == 1 }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().first?.event,
+            .keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x41,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            ))
+        )
+
+        lifecycle.isFocused = false
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        XCTAssertFalse(model.macSessionInputSnapshot().acceptsInput)
+        XCTAssertEqual(
+            model.submitMacPlatformInput(sample),
+            .rejected(.admissionClosed)
+        )
+        await waitUntil {
+            model.macSessionInputSnapshot().completedReleaseBarrierCount == 1
+        }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            1
+        )
+        XCTAssertEqual(
+            model.macSessionInputSnapshot().completedReleaseBarrierCount,
+            1
+        )
+        XCTAssertEqual(model.renderState.policy, .throttled(
+            reason: "Window or scene not focused"
+        ))
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertNil(model.macSessionInputSnapshot().generation)
+    }
+
+    func testMacPlatformInputFailsClosedWithoutCurrentDrawableGeometry() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 33,
+                    key: Data(repeating: 0x33, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: .zero
+        )
+        model.applyPlatformLifecycle(lifecycle)
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        await waitUntil { model.macSessionInputSnapshot().generation != nil }
+        XCTAssertFalse(model.macSessionInputSnapshot().acceptsInput)
+        XCTAssertNil(model.renderState.coordinateSnapshot)
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.pointerMove(MacPointerSample(
+                localPoint: RemotePoint(x: 10, y: 10),
+                deltaX: 0,
+                deltaY: 0,
+                buttons: []
+            ))),
+            .rejected(.admissionClosed)
+        )
+        XCTAssertEqual(mediaEnvironment.currentSentInputApplications(), [])
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
+    func testLifecycleEffectFailureFailsSessionAndCleansInputGeneration() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            failsLifecycleApplication: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 34,
+                    key: Data(repeating: 0x34, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        model.applyPlatformLifecycle(makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2560, height: 1440)
+        ))
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await launchTask.value
+
+        XCTAssertFalse(model.hasActiveStreamSession)
+        guard case .failed = model.session.phase else {
+            return XCTFail("A current lifecycle effect failure must fail the session.")
+        }
+        XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertNil(model.macSessionInputSnapshot().generation)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(
+            mediaEnvironment.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+    }
+
     func testUnavailablePairingPreservesHostState() async throws {
         let hostRepository = InMemoryHostRepository()
         let hostManager = HostLibraryManager(
@@ -1223,6 +1465,21 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func makePlatformLifecycle(
+        isStreamActive: Bool,
+        isVisible: Bool,
+        isFocused: Bool,
+        drawableSize: PixelSize
+    ) -> PlatformLifecycleState {
+        let lifecycle = PlatformLifecycleState()
+        lifecycle.isStreamActive = isStreamActive
+        lifecycle.isVisible = isVisible
+        lifecycle.isFocused = isFocused
+        lifecycle.drawableSize = drawableSize
+        lifecycle.updateRenderPolicy()
+        return lifecycle
+    }
+
     private func makePairingModel(
         host: MoonlightHost,
         provider: ControlledPairingProvider,
@@ -1718,16 +1975,22 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     private let lock = NSLock()
     private let automaticallyReady: Bool
+    private let failsLifecycleApplication: Bool
     private var startRecords: [StartRecord] = []
     private var stoppedSessionIDs: [UUID] = []
     private var continuations: [UUID: Continuation] = [:]
     private var sentInputApplications: [SessionInputApplication] = []
     private var releasedInputApplications: [SessionInputReleaseApplication] = []
+    private var lifecycleApplications: [SessionLifecycleApplication] = []
     private var shouldBlockNextRelease = false
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
 
-    init(automaticallyReady: Bool = true) {
+    init(
+        automaticallyReady: Bool = true,
+        failsLifecycleApplication: Bool = false
+    ) {
         self.automaticallyReady = automaticallyReady
+        self.failsLifecycleApplication = failsLifecycleApplication
     }
 
     func start(
@@ -1759,7 +2022,31 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     }
 
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
-        _ = application
+        let state = withLock {
+            (
+                continuations[application.sessionID] != nil,
+                UInt64(startRecords.count),
+                lifecycleApplications.last
+            )
+        }
+        guard state.0 else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard application.mediaGeneration == state.1 else {
+            throw SessionMediaEnvironmentError.staleLifecycleApplication
+        }
+        if failsLifecycleApplication {
+            throw MediaEnvironmentApplicationTestError.failed
+        }
+        if let previous = state.2,
+           previous.sessionID == application.sessionID,
+           previous.mediaGeneration == application.mediaGeneration {
+            if previous == application { return }
+            guard application.lifecycleRevision > previous.lifecycleRevision else {
+                throw SessionMediaEnvironmentError.staleLifecycleApplication
+            }
+        }
+        withLock { lifecycleApplications.append(application) }
     }
 
     func sendInput(_ application: SessionInputApplication) async throws {
@@ -1805,7 +2092,12 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func snapshot() async -> SessionMediaEnvironmentSnapshot {
         let state = withLock {
-            (startRecords.last?.sessionID, startRecords.count, continuations.isEmpty)
+            (
+                startRecords.last?.sessionID,
+                startRecords.count,
+                continuations.isEmpty,
+                lifecycleApplications.last
+            )
         }
         return SessionMediaEnvironmentSnapshot(
             sessionID: state.2 ? nil : state.0,
@@ -1814,7 +2106,8 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
             resourcePhase: state.2 ? nil : .active,
             activeTaskCount: 0,
             activeResourceCount: state.2 ? 0 : 3,
-            lastTeardownReport: nil
+            lastTeardownReport: nil,
+            lifecycleApplication: state.3
         )
     }
 
@@ -1848,6 +2141,10 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func currentReleasedInputApplications() -> [SessionInputReleaseApplication] {
         withLock { releasedInputApplications }
+    }
+
+    func currentLifecycleApplications() -> [SessionLifecycleApplication] {
+        withLock { lifecycleApplications }
     }
 
     func blockNextRelease() {
