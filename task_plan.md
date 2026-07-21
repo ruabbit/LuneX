@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `32/61`：6.1 bounded audio packet ordering 与 jitter-buffer policy已完成独立验收。5.8仍需要授权live Sunshine sustained-video证据并保持未完成；下一项为6.2 approved AudioToolbox Opus decode与PCM format conversion，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `33/61`：6.2 approved AudioToolbox Opus decode与PCM format conversion已完成独立验收。5.8仍需要授权live Sunshine sustained-video证据并保持未完成；下一项为6.3 session-owned AVAudioEngine graph，阶段13仍为 `in_progress`。
 
-6.1已实现UInt16 wrap-aware `AudioPacketJitterBuffer`：negotiated 5 ms cadence派生10 ms target/40 ms deadline，reorder、packet/byte capacity、forward-gap均有硬上限，loss/discard原因显式发布且end-of-stream可确定性flush。Opus decode、PCM scheduling、A/V clock与route/underrun仍分别属于6.2-6.5。
+6.2已实现actor-owned `AudioToolboxOpusDecoder`：从negotiated mono/stereo/multistream configuration生成bounded `OpusHead`，输出48 kHz interleaved signed Int16 PCM并保留实际frame count、sequence与RTP timestamp。AVAudioEngine scheduling、A/V clock与route/interruption/underrun仍分别属于6.3-6.5。
 
 ## 遇到的错误
 
@@ -121,3 +121,4 @@
 | 6.1首轮审计发现discarded audio arrival未驱动jitter deadline | 1 | duplicate/conflict/late合法到达统一推进monotonic clock并触发drain；invalid payload/巨大gap保持transactional，并补deadline回归 |
 | 6.1 checked-arithmetic补丁错误混入跨文件测试上下文 | 1 | `apply_patch` 整体拒绝且未产生修改；拆成production/test/plan精确file section后重新应用 |
 | 6.1 policy由未上限的 `samplesPerFrame` 直接计算纳秒可能整数溢出 | 1 | 使用 `multipliedReportingOverflow` 计算packet cadence/target/deadline，极端negotiated配置结构化fail closed |
+| 6.2 actor `deinit` 读取non-Sendable `AudioConverterRef`被Swift 6拒绝 | 1 | 用窄 `@unchecked Sendable` RAII owner封装opaque pointer并在owner deinit dispose；actor只持有/清空owner |

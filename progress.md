@@ -413,3 +413,19 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator验收前后均为 `Shutdown`，未创建或boot额外实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header和四SDK strict C syntax gates全部通过。
 - OpenSpec 6.1更新为完成，权威进度 `32/61`。下一项为6.2 approved AudioToolbox Opus decode与PCM format conversion；6.1不证明decoder、audio engine、A/V clock或audible live output。
+
+## 2026-07-21 阶段 13 任务 6.2 启动
+
+- 6.1已以 `e2814ad Bound audio packet jitter` 独立提交并推送；确认 `HEAD == origin/main`、工作树clean、OpenSpec权威进度 `32/61` 后进入6.2。
+- 6.2采用已批准的Apple AudioToolbox `AudioConverter`，从negotiated channel/stream/coupled/mapping构造bounded `OpusHead`，把单个post-RTP raw Opus packet转换为canonical interleaved signed-16 PCM并返回实际frame count；production target不加入libopus。
+- AVAudioEngine graph、A/V clock、route/interruption/underrun和audible live evidence仍分别属于6.3-6.7；测试继续显式清除真实Keychain opt-in。
+
+## 2026-07-21 阶段 13 任务 6.2 完成
+
+- 新增actor-owned `AudioToolboxOpusDecoder`：Apple `AudioConverter`解码negotiated Opus，family 0覆盖canonical mono/stereo，family 1保留multistream stream/coupled/mapping；输出48 kHz interleaved signed Int16 PCM和实际frame count、sequence、RTP timestamp。
+- converter由窄`@unchecked Sendable` RAII owner唯一dispose；packet input拥有稳定storage，payload、samples/frame、output frames/bytes均有硬上限和一致性检查；reset、幂等close与closed-state fail closed均有回归。
+- repository-generated stereo、5.1 normal/HQ、7.1 normal/HQ fixtures由development-only libopus 1.6.1生成并经统一脱敏、SHA-256 readback和production decode验证；production Xcode graph未加入libopus或任何新package/product。
+- focused decoder gate `8/8`，expanded audio/RTSP/runtime contract gate `31/31`；完整macOS warnings-as-errors gate为`240 total / 239 passed / 1 skipped / 0 failed`，唯一skip仍为未设置`LUNEX_RUN_KEYCHAIN_TEST`的真实Keychain round-trip，本轮继续使用file fallback。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator构建前后均为`Shutdown`，没有创建或boot新实例。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header和四SDK strict C syntax gates全部通过。
+- OpenSpec 6.2更新为完成，权威进度`33/61`。下一项为6.3 session-owned AVAudioEngine graph；6.2不证明PCM scheduling、A/V sync、route/interruption/underrun处理或audible live output。

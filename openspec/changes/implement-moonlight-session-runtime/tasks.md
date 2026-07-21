@@ -50,7 +50,7 @@
 ## 6. Native audio runtime
 
 - [x] 6.1 Implement bounded audio packet ordering and jitter-buffer policy
-- [ ] 6.2 Implement the approved Opus decode path and PCM format conversion
+- [x] 6.2 Implement the approved Opus decode path and PCM format conversion
 - [ ] 6.3 Connect decoded PCM to a session-owned AVAudioEngine graph
 - [ ] 6.4 Implement audio/video clock selection, drift measurement, and bounded resynchronization
 - [ ] 6.5 Implement route-change, interruption, underrun, packet-loss, and teardown handling

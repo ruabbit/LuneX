@@ -342,4 +342,12 @@
 - 6.1最终实现 `AudioPacketJitterBuffer`：默认由48 kHz/240 samples cadence派生10 ms target delay和40 ms maximum jitter，reorder window 8、forward gap 1024、32 packets并同时限制payload bytes；所有cadence arithmetic使用overflow-reporting运算。
 - discard到达仍推进monotonic clock并触发deadline drain；invalid payload、backward clock和过大forward gap在mutation前fail closed。UInt16 wrap、pre-playout向后扩展、out-of-order、deadline/window/capacity/end-of-stream loss、duplicate/conflict/late及极端配置均有回归。
 - focused jitter gate `11/11`，expanded audio/RTSP/runtime contract gate `23/23`，完整macOS gate `232 total / 231 passed / 1 explicit Keychain skip / 0 failed`；五平台warnings-as-errors build和全部静态门禁通过，固定simulators前后保持 `Shutdown`。该证据不证明Opus decode、PCM或audible output。
-- macOS、固定 iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build全部通过，构建后四个 simulator保持 `Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四 SDK C syntax门禁全部通过。该证据仍不等于 video socket provider、AppModel presentation、EDR mapping 或 live Sunshine sustained video。
+
+### 2026-07-21 阶段 13 AudioToolbox Opus Decoder 设计
+
+- production decoder复用已独立验证的AudioToolbox surface，但不能直接把命令行spike当运行时：converter必须由actor单独拥有、explicit reset/close、每次input packet使用稳定owned storage，输出byte/frame count必须互相一致且受negotiated `samplesPerFrame` 上限约束。
+- `OpusHead` mapping family 0只适用于1/2 channel、单stream且identity mapping的canonical mono/stereo；其他合法multistream configuration必须使用family 1并写入stream count、coupled count和完整negotiated mapping，不能把5.1/7.1默认成Vorbis channel order。
+- canonical runtime PCM选择48 kHz、interleaved、signed packed Int16。实际decoded frame count可以小于encoded 240 frames（首包priming已实测120），因此output value必须携带frame count/sequence/timestamp，6.4只按实际PCM frames推进clock。
+- 最终production decoder使用actor隔离的`AudioConverter`和窄`@unchecked Sendable` RAII owner；reset/close确定性，close幂等，closed/invalid payload/configuration均fail closed，OSStatus只以数值进入结构化错误。
+- synthetic stereo与Sunshine 5.1/7.1 normal/HQ四种multistream packet均通过production AudioToolbox实际解码并产生非静音PCM；focused `8/8`、expanded audio/RTSP/runtime `31/31`、完整macOS `240 total / 239 passed / 1 explicit Keychain skip / 0 failed`。
+- macOS、固定iPhone/iPad/tvOS/visionOS warnings-as-errors Debug build全部通过，构建后四个simulator保持`Shutdown`。fixture/OpenSpec/generator/reference/dependency/ENet/四SDK C syntax门禁全部通过。该证据证明Opus-to-PCM边界，不证明AVAudioEngine scheduling、A/V sync、route handling或audible live output。

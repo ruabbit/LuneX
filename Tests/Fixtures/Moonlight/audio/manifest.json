@@ -5,6 +5,12 @@
       "origin": "generated 997 Hz sine wave; never captured from a host",
       "path": "stereo-5ms-opus.json",
       "redaction": "not applicable; fully synthetic media"
+    },
+    {
+      "expectedResult": "non-silent interleaved 5.1 and 7.1 PCM for normal and high-quality Sunshine identity mappings",
+      "origin": "repository-generated per-channel tones with development-only libopus 1.6.1",
+      "path": "sunshine-multistream-5ms-opus.json",
+      "redaction": "not applicable; fully synthetic media"
     }
   ],
   "schemaVersion": 1,

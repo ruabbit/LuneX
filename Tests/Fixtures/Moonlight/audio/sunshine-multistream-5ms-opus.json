@@ -1,0 +1,43 @@
+{
+  "encoderApplication": "restricted-lowdelay",
+  "frameDurationMilliseconds": 5,
+  "generation": "Tools/OpusSpike/generate_fixture.c with libopus 1.6.1 CBR and per-channel synthetic tones",
+  "origin": "repository-generated synthetic media; no host data",
+  "profiles": [
+    {
+      "base64Payload": "7DGf5XSjphT5KY18zAM+hRvNws1B4J8jGVxI+K56jk49A3SAtja4p/JCPgD7GjA/VNNw7DF+0ASAO4ebrNEM2jPYPnLvEMpI/LFY2+lzNf+rAwZskB1nfTmeC6OhSPPRQQD6ZkAD6B1+0tDV8B6iK3f0NGP4VK/C88/MQQypO2SQAg491+h+0s/rjVrI7eLO8Mp5l5VIKjiflOVSAJ5EVw==",
+      "channelCount": 6,
+      "coupledStreamCount": 2,
+      "name": "surround51",
+      "sha256": "e0da36ad54988c8a809a5a55f9cf8de2722f23dd92fdb9560714fe70d987ce1c",
+      "streamCount": 4
+    },
+    {
+      "base64Payload": "6J+fmOYDbZDP1kUIR2B0ZZc0ZPM6SlnzttdLji4M7PCptpETArnSlwgMEPLXnsKPN/85mXKWqXih5bLm0wv5kX5KLDC7EftOLwLfzQegAAAAAAAAAAAAAAAAAAAGfqKcKTKG0EtKqiLey9UD4Zdg9P6d1kjhWd3C7+NfDtp8XzNWxAPTp4BiyWfwOvK4ggn/S6D5wnwhwueeORlZt2GV3JHon5/ltUpXrHFUeAYI/gjOzL3sbdQOw4ulqoDMG0LVvkpJdX4RaXfdDEJaQxKqxbdojwdW/CdjDWpZBgrs8iS+seaKDB4k9F+LgwcEZwLawAAAAAAAAAAAAAAAAAAABLGinCkyhtBLSqoi3svY7GNKuMdVfPFui2o/oC+m2/3H2tuSJh2c9CwZhrcMq+7KJb1lHyHq77Om3vlrBvDuZBm8j+ifn+Xqh/s08kdxfzRk12Lj1IHf9Y9DdodXwERS4/3TdlgeV0hfCdtPvs7tZVLbU/NXl+J5hIUFhtnBs3D1yZ3Fv3GQgtYMM37qmsW75jHgAAAAAAAAAAAAAAAAAAG9zEFOFJlDaCWlVRFvZetRQNUWkKr54t0WYuN8hLroUbclmG5YgvbVOGNwWgs5Q1XT4WfWBHM4tWl3FavXaOWQ7X1u6J+f5ekzZOMF7wHxl9Kz+QaPVXmtpN8dd92LZzP40xklghVxGJt/mYslW72L1ezZ84077ALiTFtTh8H70FMg8B4LCrOleW8LSIdjaZTEgBAAAAAAAAAAAAAAAAAAAAlN+KcKTKG0Esx3aLey8kaqTwCt1lQNCN1XGC+wFV0P6Q21g3+GZaBpABjGZSUb62tgK0CSx1LwKvwuDGG0bE9dPIzon5/l6OYzcnQ1w0OOybBye7PwqT7UUYy5l/I4Z57zLLmn0zTj47SFiqwaWgah99niFKAlFhlOfBFT/ZMMAETzMDkhGIbN+hNomcOGVBtgAAAAAAAAAAAAAAAAAAABaEopwpMobQS0qqIt7L3xYZxEwFZUDQfhs4GHEBkHx+kUxrAn811o+YAs5GXTaDXE3BdEdHzkCjp4AUo9eAsVjGz7i+h+0s/rjVrKoHxM9wQc8ZvM0mJSlk0yWDO2LtffLY2iD16LigGNReZw09yE1H6OQvEQrwEz7gK/Oer7XBptAQj64AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH1nQKcKTKG0EWlVRFvZeVXzxbosxAfDCTzjhgURcFWZ9tGBviCkMWvs9iFqyDVyCxbEb",
+      "channelCount": 6,
+      "coupledStreamCount": 0,
+      "name": "surround51-hq",
+      "sha256": "cffc6fd500dd4c9758f852715b988a93375bdce708c416c3b87b884159dcaaf8",
+      "streamCount": 6
+    },
+    {
+      "base64Payload": "7EKf5XSjphT5KY18zAM+hRvNw2S3bNZbCmvJPw9rY3Xb8b6VjUkCHUF3dPhU6j9lRnqho6B3xXnE04X3DA/Jj00yX3DsQn7QBIA7h5us0QzaM9g+cu8Q28bzeDonmScA/ZRFGDvK2vvLG0LeZuxaWAIKnXx8YxOWG93x4fTEnEFUD/6JxzIAX+xCn+V1yhumBL5HLF/ocXE7KkMtqsgRzp/83vRWE6v8qsGxVGC+eD5roVteKv8cOs71fNLMhve6Hh9MU10kC/VKWtNq6Cef5egQ69zi+cCp4Xu+h6MpNmFhR62r5GsTx8fGSeWN4PPnR4JGs4jon+XoJEiM47snGFjLZujIeDxQr7vHP2f3XHjnTp8B6rGQMoc=",
+      "channelCount": 8,
+      "coupledStreamCount": 3,
+      "name": "surround71",
+      "sha256": "aa7fb7d566505377283f9035b8c40bd330839f9d130c4d60dea6f9e6e958ed6c",
+      "streamCount": 5
+    },
+    {
+      "base64Payload": "6J+fmOYDbZDP1kUIR2B0ZZc0ZPM6SlnzttdLji4M7PCptpETArnSlwgMEPLXnsKPN/85mXKWqXih5bLm0wv5kX5KLDC7EftOLwLfzQegAAAAAAAAAAAAAAAAAAAGfqKcKTKG0EtKqiLey9UD4Zdg9P6d1kjhWd3C7+NfDtp8XzNWxAPTp4BiyWfwOvK4ggn/S6D5wnwhwueeORlZt2GV3JHon5/ltUpXrHFUeAYI/gjOzL3sbdQOw4ulqoDMG0LVvkpJdX4RaXfdDEJaQxKqxbdojwdW/CdjDWpZBgrs8iS+seaKDB4k9F+LgwcEZwLawAAAAAAAAAAAAAAAAAAABLGinCkyhtBLSqoi3svY7GNKuMdVfPFui2o/oC+m2/3H2tuSJh2c9CwZhrcMq+7KJb1lHyHq77Om3vlrBvDuZBm8j+ifn+Xqh/s08kdxfzRk12Lj1IHf9Y9DdodXwERS4/3TdlgeV0hfCdtPvs7tZVLbU/NXl+J5hIUFhtnBs3D1yZ3Fv3GQgtYMM37qmsW75jHgAAAAAAAAAAAAAAAAAAG9zEFOFJlDaCWlVRFvZetRQNUWkKr54t0WYuN8hLroUbclmG5YgvbVOGNwWgs5Q1XT4WfWBHM4tWl3FavXaOWQ7X1u6J+f5ekzZOMF7wHxl9Kz+QaPVXmtpN8dd92LZzP40xklghVxGJt/mYslW72L1ezZ84077ALiTFtTh8H70FMg8B4LCrOleW8LSIdjaZTEgBAAAAAAAAAAAAAAAAAAAAlN+KcKTKG0Esx3aLey8kaqTwCt1lQNCN1XGC+wFV0P6Q21g3+GZaBpABjGZSUb62tgK0CSx1LwKvwuDGG0bE9dPIzon5/l6OYzcnQ1w0OOybBye7PwqT7UUYy5l/I4Z57zLLmn0zTj47SFiqwaWgah99niFKAlFhlOfBFT/ZMMAETzMDkhGIbN+hNomcOGVBtgAAAAAAAAAAAAAAAAAAABaEopwpMobQS0qqIt7L3xYZxEwFZUDQfhs4GHEBkHx+kUxrAn811o+YAs5GXTaDXE3BdEdHzkCjp4AUo9eAsVjGz7i+ifftLP641ayqB8TPcEJgyQCwAJm80VLPbUNXb4dcoILcovcR5Rb7zkL9Dyi7GttiG+f2XmnEUZgdgWYx3sqq9vXAsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABuHoKcKTKG0EWlVRFvZeVXzxbosxAfDCTzjhgURcGgydfaMBvjsAVoYtfZ7ELVkGrkCxbEb6J+f5egQ69zi+cCs+U3WqV5ew95yYafB3tkBhGnIYat0CzsiwC6N7PwVbRfkIsgTT/oxfC2NgURHh4WYgEab+G2amf9NwqEKCcc+G6f9OoAAAAAAAAAAAAAAAAAAAAPiIFOFJlDaCWlVRFvZeK8o7zPadV88W6LMT8b7nXQo25hU3r4c7xSjRuMMmHkqltTSiLN0+X4BwYp7Ag+AH8R8eYjon+XoJEiM47snG2EP8/EbtljeSdBiwqpT1KHGT9T+R/CZutIXuRJGeJLEf3JwFIM5u5TXdBplofvHu6rXJt4hwKc8Ac5AAAAAAAAAAAAAAAAAAAAAAAAAAAAADPLdFOFJlDaCLSsVi3svWVA0I3VcAfjka6HhJsXdzw5cY2C8EQMKQRCDgzMwomZQWo9hYpGHIxCo1vBwN4c=",
+      "channelCount": 8,
+      "coupledStreamCount": 0,
+      "name": "surround71-hq",
+      "sha256": "b0ad3a729eff36310900adbda77321bf224cef72030372f7f5567e39a9b587a9",
+      "streamCount": 8
+    }
+  ],
+  "sampleRate": 48000,
+  "samplesPerFrame": 240,
+  "schemaVersion": 1
+}
