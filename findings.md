@@ -994,6 +994,18 @@
 - same-generation color、display和surface transition均会丢弃旧queued entry并flush texture cache；旧configuration请求只计入对应stale counter，不改变active identity或清除新entry。
 - 该确定性actor证据证明有序revision isolation，不证明实际display/headroom callback已产生configuration、renderer已消费queue或真实HDR surface已切换。
 
+# 2026-07-21 阶段 15 任务 2.4 matrix 设计
+
+- SDR/HDR mapping matrix必须经过`BoundedMetalFrameQueue`而不是只直接调用mapper，证明active configuration、frozen signature、mapped plane formats和delivery处于同一所有权路径。
+- layout/metadata mismatch抛错后queue不增加enqueued count或留下entry；同一active configuration的later valid frame仍必须map、enqueue和dequeue成功，避免单帧CoreVideo异常毒化session。
+- replacement matrix同时覆盖queued discard、cache flush、stale generation/display dequeue不清current entry、current delivery、stop discard/flush、late frame mapping side effect为零和duplicate stop no-op。
+
+# 2026-07-21 阶段 15 任务 2.4 验收结论
+
+- 第2组的实际闭环是：decoded frame冻结generation/color，mapper验证actual CoreVideo/Metal contract，queue绑定完整render configuration并隔离revision，测试矩阵证明单帧失败、replacement与teardown后仍收敛。
+- cache flush通过外部counting mapper观测，且每次configuration apply/stop有明确边界；这证明调用发生，不等于GPU已释放所有未来renderer resource，后者仍由3.6和6.3覆盖。
+- 第2组完成不等于HDR output：当前actual presenter仍是fixed-sRGB Core Image，shader、pipeline、surface和AppModel接线均尚未实现。
+
 # 2026-07-21 阶段 15 任务 2.3 调查
 
 - 旧`BoundedMetalFrameQueue`只拥有`activeGeneration`，decoder event的`colorMetadata`未形成render configuration ownership；enqueue只拒绝generation mismatch，display revision、mapping mode与surface contract在异步边界完全不可见。

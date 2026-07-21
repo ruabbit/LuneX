@@ -539,6 +539,187 @@ final class MetalVideoFrameDeliveryTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(mapper.flushCount, 4)
     }
 
+    func testQueueMapsSDRAndHDRFramesThroughTheirExplicitConfigurations() async throws {
+        let mapper = try CVMetalVideoFrameMapper(
+            device: XCTUnwrap(MTLCreateSystemDefaultDevice())
+        )
+        let queue = try BoundedMetalFrameQueue(mapper: mapper)
+        let sdr = try makeConfiguration(
+            generation: 20,
+            metadata: .rec709VideoRange()
+        )
+        let hdr = try makeConfiguration(
+            generation: 21,
+            metadata: .hdr10VideoRange(),
+            displayRevision: 2
+        )
+
+        _ = await queue.applyRenderConfiguration(sdr)
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 20,
+            frameID: 200,
+            pixelBuffer: try makeMetalPixelBuffer()
+        ), configuration: sdr)
+        let mappedSDRCandidate = await queue.dequeueLatest(configuration: sdr)
+        let mappedSDR = try XCTUnwrap(mappedSDRCandidate)
+        XCTAssertEqual(mappedSDR.luma.texture.pixelFormat, .r8Unorm)
+        XCTAssertEqual(mappedSDR.chroma.texture.pixelFormat, .rg8Unorm)
+        XCTAssertEqual(mappedSDR.renderBinding.colorSignature.dynamicRange, .sdr)
+
+        _ = await queue.applyRenderConfiguration(hdr)
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 21,
+            frameID: 210,
+            pixelBuffer: try makeMetalPixelBuffer(
+                format: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+            ),
+            colorMetadata: .hdr10VideoRange()
+        ), configuration: hdr)
+        let mappedHDRCandidate = await queue.dequeueLatest(configuration: hdr)
+        let mappedHDR = try XCTUnwrap(mappedHDRCandidate)
+        XCTAssertEqual(mappedHDR.luma.texture.pixelFormat, .r16Unorm)
+        XCTAssertEqual(mappedHDR.chroma.texture.pixelFormat, .rg16Unorm)
+        XCTAssertEqual(mappedHDR.renderBinding.colorSignature.dynamicRange, .hdr10)
+
+        let snapshot = await queue.snapshot()
+        XCTAssertEqual(snapshot.enqueuedFrameCount, 2)
+        XCTAssertEqual(snapshot.deliveredFrameCount, 2)
+        XCTAssertEqual(snapshot.queuedFrameCount, 0)
+    }
+
+    func testLayoutFailureDoesNotPoisonCurrentQueueOrLaterFrame() async throws {
+        let mapper = CountingMetalFrameMapper(
+            delegate: try CVMetalVideoFrameMapper(device: XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        )
+        let queue = try BoundedMetalFrameQueue(mapper: mapper)
+        let renderConfiguration = try makeConfiguration(
+            generation: 30,
+            metadata: .rec709VideoRange()
+        )
+        _ = await queue.applyRenderConfiguration(renderConfiguration)
+
+        do {
+            _ = try await queue.enqueue(decodedFrame(
+                generation: 30,
+                frameID: 300,
+                pixelBuffer: try makeMetalPixelBuffer(
+                    format: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+                )
+            ), configuration: renderConfiguration)
+            XCTFail("The mismatched 10-bit layout must fail before queue ownership changes.")
+        } catch {
+            XCTAssertEqual(
+                error as? MetalFrameDeliveryError,
+                .invalidDecodedContract(.incompatibleBitDepth(expected: 8, actual: 10))
+            )
+        }
+        var snapshot = await queue.snapshot()
+        XCTAssertEqual(snapshot.queuedFrameCount, 0)
+        XCTAssertEqual(snapshot.enqueuedFrameCount, 0)
+        XCTAssertEqual(mapper.mapCount, 1)
+
+        let recovery = try await queue.enqueue(decodedFrame(
+            generation: 30,
+            frameID: 301,
+            pixelBuffer: try makeMetalPixelBuffer()
+        ), configuration: renderConfiguration)
+        XCTAssertEqual(recovery, .enqueued(
+            generation: 30,
+            displayRevision: HDRDisplayRevision(rawValue: 1),
+            frameID: 301,
+            evictedFrames: 0
+        ))
+        let recoveredFrame = await queue.dequeueLatest(configuration: renderConfiguration)
+        XCTAssertEqual(recoveredFrame?.frameID, 301)
+        snapshot = await queue.snapshot()
+        XCTAssertEqual(snapshot.deliveredFrameCount, 1)
+        XCTAssertEqual(mapper.mapCount, 2)
+    }
+
+    func testReplacementCacheFlushAndTeardownRemainBounded() async throws {
+        let mapper = CountingMetalFrameMapper(
+            delegate: try CVMetalVideoFrameMapper(device: XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        )
+        let queue = try BoundedMetalFrameQueue(mapper: mapper)
+        let pixelBuffer = try makeMetalPixelBuffer()
+        let first = try makeConfiguration(
+            generation: 40,
+            metadata: .rec709VideoRange()
+        )
+        let replacement = try makeConfiguration(
+            generation: 41,
+            metadata: .rec709VideoRange(),
+            displayRevision: 2
+        )
+        let staleDisplay = try makeConfiguration(
+            generation: 41,
+            metadata: .rec709VideoRange(),
+            displayRevision: 1
+        )
+
+        _ = await queue.applyRenderConfiguration(first)
+        for frameID in UInt64(400)...401 {
+            _ = try await queue.enqueue(decodedFrame(
+                generation: 40,
+                frameID: frameID,
+                pixelBuffer: pixelBuffer
+            ), configuration: first)
+        }
+        let replacementResult = await queue.applyRenderConfiguration(replacement)
+        XCTAssertEqual(replacementResult, .configurationStarted(
+            generation: 41,
+            displayRevision: HDRDisplayRevision(rawValue: 2),
+            discardedFrames: 2
+        ))
+        var snapshot = await queue.snapshot()
+        XCTAssertEqual(snapshot.queuedFrameCount, 0)
+        XCTAssertEqual(snapshot.generationResetDropCount, 2)
+        XCTAssertEqual(mapper.flushCount, 2)
+
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 41,
+            frameID: 410,
+            pixelBuffer: pixelBuffer
+        ), configuration: replacement)
+        let staleGenerationFrame = await queue.dequeueLatest(configuration: first)
+        XCTAssertNil(staleGenerationFrame)
+        let staleDisplayFrame = await queue.dequeueLatest(configuration: staleDisplay)
+        XCTAssertNil(staleDisplayFrame)
+        let replacementFrame = await queue.dequeueLatest(configuration: replacement)
+        XCTAssertEqual(replacementFrame?.frameID, 410)
+
+        _ = try await queue.enqueue(decodedFrame(
+            generation: 41,
+            frameID: 411,
+            pixelBuffer: pixelBuffer
+        ), configuration: replacement)
+        let stop = await queue.stopRenderConfiguration(replacement)
+        XCTAssertEqual(stop, .configurationStopped(
+            generation: 41,
+            displayRevision: HDRDisplayRevision(rawValue: 2),
+            discardedFrames: 1
+        ))
+        let flushCountAfterStop = mapper.flushCount
+        let mapCountAfterStop = mapper.mapCount
+        let late = try await queue.enqueue(decodedFrame(
+            generation: 41,
+            frameID: 412,
+            pixelBuffer: pixelBuffer
+        ), configuration: replacement)
+        XCTAssertEqual(late, .rejectedInactive(frameID: 412))
+        XCTAssertEqual(mapper.mapCount, mapCountAfterStop)
+        XCTAssertEqual(mapper.flushCount, flushCountAfterStop)
+        let duplicateStop = await queue.stopRenderConfiguration(replacement)
+        XCTAssertEqual(duplicateStop, .ignored)
+
+        snapshot = await queue.snapshot()
+        XCTAssertNil(snapshot.activeGeneration)
+        XCTAssertEqual(snapshot.queuedFrameCount, 0)
+        XCTAssertEqual(snapshot.staleGenerationDropCount, 1)
+        XCTAssertEqual(snapshot.staleDisplayRevisionDropCount, 1)
+        XCTAssertGreaterThanOrEqual(mapper.flushCount, 3)
+    }
+
     func testUnsupportedFormatAndInvalidCapacityFailClosed() async throws {
         XCTAssertThrowsError(try BoundedMetalFrameQueue(
             configuration: MetalFrameQueueConfiguration(capacity: 0),

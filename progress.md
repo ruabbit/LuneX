@@ -1315,6 +1315,21 @@
 - focused `10/10`、完整macOS `517 total / 516 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors和simulator不变门通过。repository gates位于`/tmp/LuneX-15-2_3-repo.9QB8QY`：OpenSpec strict `6/6`、fixtures、generator三次稳定且SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace边界通过。
 - OpenSpec 2.3标记完成，权威进度`9/33`。本项不证明2.4扩大matrix、shader/renderer/presenter、surface signaling或物理HDR行为；下一项2.4。
 
+## 2026-07-21 阶段 15 任务 2.4 启动
+
+- 2.3已以`f54f5a7 Revision Metal frame queue contracts`独立提交并推送，`HEAD == origin/main`且工作树clean；OpenSpec权威进度`9/33`。
+- 2.4仅扩大测试矩阵，不新增production抽象：真实8/10-bit buffer经production mapper+queue覆盖SDR/HDR；layout failure后later current frame恢复；generation/display stale dequeue保留replacement；replacement/cache flush与stop/late frame teardown按exact counter验证。
+- focused warnings-as-errors通过`13/13`、零skip/失败（`/tmp/LuneX-15-2_4-focused.zj5jWj/FrameContractMatrix.xcresult`）。
+- 完整macOS suite通过`520 total / 519 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-2_4-full.GBqvtu/LuneXCoreTests.xcresult`），唯一skip精确为允许的真实Keychain round-trip，日志零warning/error。
+- macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-2_4-builds.0Lccsq`）；simulator前后SHA-256均为`045d55961d523ff13abb1b67d8f084a479050cfdab82af71e1e3e451a96ce7c8`，固定实例唯一、可用且`Shutdown`，全局`Booted=0`。
+
+## 2026-07-21 阶段 15 任务 2.4 完成
+
+- 新增真实8/10-bit queue mapping矩阵，分别验证SDR `.r8/.rg8`和HDR `.r16/.rg16` output plane及frozen dynamic range；invalid 10-bit/SDR layout抛错后queue ownership不变，later valid frame正常恢复。
+- replacement矩阵锁定queued discard、generation reset count、cache flush、stale generation/display dequeue不清current entry、replacement delivery、stop discard/flush、late inactive frame不调用mapper和duplicate stop no-op。
+- focused `13/13`、完整macOS `520 total / 519 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors和simulator不变门通过。repository gates位于`/tmp/LuneX-15-2_4-repo.J7MgyQ`：OpenSpec strict `6/6`、fixtures、generator三次稳定且SHA-256为`1c8a50a136572246843d406311257caef1f45e443e9bd97d9ea11219786d2682`、reference/dependency/whitespace边界通过。
+- OpenSpec 2.4标记完成，权威进度`10/33`。第2组确定性自验完成，但不证明Metal shader、renderer/presenter、surface signaling或物理HDR；下一项3.1。
+
 ## 2026-07-21 阶段 15 任务 2.3 启动
 
 - 从`48b2359`恢复，确认`HEAD == origin/main`、初始工作树clean且无运行中的build/git进程；OpenSpec权威进度`8/33`。
