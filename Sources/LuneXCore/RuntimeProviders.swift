@@ -106,9 +106,10 @@ struct NegotiatedInputConfiguration: Codable, Equatable, Sendable {
     var maximumMessageSize: Int
 
     func validate() throws {
-        guard keyMaterial.keyID >= 0,
-              !keyMaterial.key.isEmpty,
-              maximumMessageSize > 0 else {
+        guard keyMaterial.isValidAES128Material,
+              encrypted,
+              (RemoteInputWireCodec.minimumPacketSize...RemoteInputWireCodec.maximumPacketSize)
+                  .contains(maximumMessageSize) else {
             throw RuntimeContractError.invalidInputConfiguration
         }
     }

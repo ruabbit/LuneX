@@ -51,7 +51,10 @@ final class AppModelWorkflowTests: XCTestCase {
             streamSessionCoordinator: streamCoordinator,
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
-            remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data([0xAA, 0xBB]))
+            remoteInputKey: RemoteInputKeyMaterial(
+                keyID: 7,
+                key: Data(repeating: 0xAA, count: 16)
+            )
         )
 
         await model.addManualHost(name: nil, address: "moon.local")
@@ -99,7 +102,10 @@ final class AppModelWorkflowTests: XCTestCase {
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
-            remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data([0xAA, 0xBB]))
+            remoteInputKey: RemoteInputKeyMaterial(
+                keyID: 7,
+                key: Data(repeating: 0xAA, count: 16)
+            )
         )
 
         await model.loadInitialState()
@@ -165,6 +171,87 @@ final class AppModelWorkflowTests: XCTestCase {
         let launchCount = await launchClient.currentLaunchCount()
         XCTAssertEqual(launchCount, 1)
     }
+
+    func testDefaultInputKeyGenerationUsesFreshMaterialForEveryLaunch() async throws {
+        let firstKey = RemoteInputKeyMaterial(keyID: 1, key: Data(repeating: 0x11, count: 16))
+        let secondKey = RemoteInputKeyMaterial(keyID: 2, key: Data(repeating: 0x22, count: 16))
+        let keyGenerator = ScriptedInputKeyGenerator(results: [.success(firstKey), .success(secondKey)])
+        let launchClient = StubStreamLaunchClient()
+        let model = makeLaunchReadyModel(
+            launchClient: launchClient,
+            remoteInputKeyGenerator: keyGenerator
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        await model.launchSelectedApp()
+        await model.stopStream()
+        await model.launchSelectedApp()
+
+        let launchedKeys = await launchClient.currentLaunchedKeys()
+        XCTAssertEqual(launchedKeys, [firstKey, secondKey])
+        XCTAssertEqual(keyGenerator.currentGenerationCount(), 2)
+    }
+
+    func testInputKeyGenerationFailureStopsBeforeNetworkLaunch() async throws {
+        let keyGenerator = ScriptedInputKeyGenerator(results: [.failure(InputKeyGeneratorTestError.failed)])
+        let launchClient = StubStreamLaunchClient()
+        let model = makeLaunchReadyModel(
+            launchClient: launchClient,
+            remoteInputKeyGenerator: keyGenerator
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        await model.launchSelectedApp()
+
+        let launchCount = await launchClient.currentLaunchCount()
+        XCTAssertEqual(launchCount, 0)
+        XCTAssertEqual(keyGenerator.currentGenerationCount(), 1)
+        guard case .failed = model.session.phase else {
+            return XCTFail("Input-key generation failure must fail the session before launch.")
+        }
+        XCTAssertTrue(model.streamLaunchUI.errorMessage?.contains("failed") == true)
+        XCTAssertEqual(model.renderState.policy, .idle)
+    }
+
+    private func makeLaunchReadyModel(
+        launchClient: StubStreamLaunchClient,
+        remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
+    ) -> AppModel {
+        let host = MoonlightHost(
+            id: UUID(uuidString: "45F0C9CB-D795-49B2-A733-F68397632233")!,
+            name: "Test Host",
+            address: "moon.local",
+            pairingState: .paired,
+            reachability: .online,
+            pinnedIdentity: PinnedHostIdentity(
+                certificateSHA256: "existing-cert",
+                serverCertificateDER: Data([1, 2, 3]),
+                pairedAt: Date(timeIntervalSince1970: 10)
+            )
+        )
+        return AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(hosts: [host]),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
+            runtimeCapabilities: RuntimeCapabilityAvailability(
+                pairingTransportAvailable: false,
+                streamTransportAvailable: true
+            ),
+            clientIdentityStore: InMemoryClientIdentityStore(),
+            clientUniqueID: "test-client",
+            remoteInputKeyGenerator: remoteInputKeyGenerator
+        )
+    }
 }
 
 private struct StubServerInfoClient: ServerInfoClient {
@@ -195,9 +282,11 @@ private struct StubAppListClient: AppListClient {
 
 private actor StubStreamLaunchClient: StreamLaunchClient {
     private var launchCount = 0
+    private var launchedKeys: [RemoteInputKeyMaterial] = []
 
     func launch(_ request: StreamLaunchRequest, parameters: StreamNegotiationParameters) async throws -> StreamLaunchResponse {
         launchCount += 1
+        launchedKeys.append(request.remoteInputKey)
         return StreamLaunchResponse(
             sessionURL: "rtsp://test/session",
             gameSessionID: "session-1",
@@ -219,4 +308,39 @@ private actor StubStreamLaunchClient: StreamLaunchClient {
     func currentLaunchCount() -> Int {
         launchCount
     }
+
+    func currentLaunchedKeys() -> [RemoteInputKeyMaterial] {
+        launchedKeys
+    }
+}
+
+private final class ScriptedInputKeyGenerator: RemoteInputKeyMaterialGenerating, @unchecked Sendable {
+    private let lock = NSLock()
+    private var results: [Result<RemoteInputKeyMaterial, Error>]
+    private var generationCount = 0
+
+    init(results: [Result<RemoteInputKeyMaterial, Error>]) {
+        self.results = results
+    }
+
+    func generate() throws -> RemoteInputKeyMaterial {
+        lock.lock()
+        defer { lock.unlock() }
+        generationCount += 1
+        guard !results.isEmpty else {
+            throw InputKeyGeneratorTestError.exhausted
+        }
+        return try results.removeFirst().get()
+    }
+
+    func currentGenerationCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return generationCount
+    }
+}
+
+private enum InputKeyGeneratorTestError: Error {
+    case failed
+    case exhausted
 }

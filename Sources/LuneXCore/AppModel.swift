@@ -62,7 +62,8 @@ final class AppModel {
     private let runtimeCapabilities: RuntimeCapabilityAvailability
     private let clientIdentityStore: any ClientIdentityStore
     private var clientUniqueID: String
-    private let remoteInputKey: RemoteInputKeyMaterial
+    private let remoteInputKeyOverride: RemoteInputKeyMaterial?
+    private let remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
 
     init(
         hostLibraryManager: HostLibraryManager = HostLibraryManager(
@@ -81,10 +82,8 @@ final class AppModel {
         runtimeCapabilities: RuntimeCapabilityAvailability = .current,
         clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
-        remoteInputKey: RemoteInputKeyMaterial = RemoteInputKeyMaterial(
-            keyID: 1,
-            key: Data((0..<16).map { UInt8($0 + 1) })
-        )
+        remoteInputKey: RemoteInputKeyMaterial? = nil,
+        remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator()
     ) {
         self.hostLibraryManager = hostLibraryManager
         self.settingsRepository = settingsRepository
@@ -94,7 +93,8 @@ final class AppModel {
         self.runtimeCapabilities = runtimeCapabilities
         self.clientIdentityStore = clientIdentityStore
         self.clientUniqueID = clientUniqueID
-        self.remoteInputKey = remoteInputKey
+        self.remoteInputKeyOverride = remoteInputKey
+        self.remoteInputKeyGenerator = remoteInputKeyGenerator
     }
 
     var selectedHost: MoonlightHost? {
@@ -319,18 +319,18 @@ final class AppModel {
         updateRenderPreferences()
         defer { streamLaunchUI.isLaunching = false }
 
-        let request = StreamLaunchRequest(
-            host: host,
-            app: app,
-            preferences: settings.stream,
-            clientUniqueID: clientUniqueID,
-            remoteInputKey: remoteInputKey,
-            audioPlaybackMode: .clientOnly,
-            controllerBitmap: 0,
-            optimizeGameSettings: true
-        )
-
         do {
+            let remoteInputKey = try remoteInputKeyOverride ?? remoteInputKeyGenerator.generate()
+            let request = StreamLaunchRequest(
+                host: host,
+                app: app,
+                preferences: settings.stream,
+                clientUniqueID: clientUniqueID,
+                remoteInputKey: remoteInputKey,
+                audioPlaybackMode: .clientOnly,
+                controllerBitmap: 0,
+                optimizeGameSettings: true
+            )
             _ = try await streamSessionCoordinator.launch(request)
             throw StreamNegotiationFailure(
                 code: .transportUnavailable,

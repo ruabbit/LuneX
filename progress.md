@@ -490,3 +490,20 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个simulator构建前后均为`Shutdown`，没有创建或boot新实例。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、development fixture generator及四SDK strict C syntax gates全部通过。
 - OpenSpec 6.6更新为完成，权威进度`37/61`。6.7需要授权硬件audible synchronized audio证据，当前不以fixture或`.dataConsumed`替代；下一项可离线任务为7.1 negotiated input key setup与byte-exact authenticated event serialization。
+
+## 2026-07-21 阶段 13 任务 7.1 启动
+
+- 6.6已以`33d1811 Add deterministic audio integration tests`独立提交并推送；确认`HEAD == origin/main`、工作树clean、OpenSpec权威进度`37/61`后进入7.1，6.7继续等待授权硬件可听证据。
+- 当前Sunshine full encrypted control path把input plaintext作为control type `0x0206`的payload，并与start/IDR/control消息共享同一16-byte `rikey`和control-wide UInt32 sequence；7.1禁止另建input sequence，以免同key复用AES-GCM nonce。
+- 7.1范围限定为negotiated key/config严格验证、bounded input plaintext packet和显式control sequence的byte-exact authenticated envelope；ordered delivery、coalescing、controller/feedback与focus-loss release分别保留7.2-7.6。
+- 初轮focused gate已完成`42/42`。封版审计确认AppModel旧生产默认固定输入key会造成跨session key/nonce安全风险，现已改为每次launch调用安全随机generator，并补充连续launch与generator失败前置阻断测试；plaintext packet同时拒绝零event magic。
+
+## 2026-07-21 阶段 13 任务 7.1 完成
+
+- 新增bounded remote-input plaintext和keyboard mixed-endian serializer；协商配置只接受AES-128、UInt32 key ID、authenticated mode与8...128-byte plaintext。authenticated envelope固定control type `0x0206`并要求调用方显式传入共享control sequence，禁止input另起counter复用AES-GCM nonce。
+- 新增独立synthetic keyboard/AES-GCM fixture，Node crypto通过OpenSSL 3.6.3重新生成的plaintext、`CC` nonce、tag/ciphertext和完整control frame均byte-exact一致；mutation、wrong origin/type、invalid key/config/length/magic全部fail closed。
+- AppModel移除生产固定`01...10`输入key，默认每个独立launch调用`SecureRemoteInputKeyMaterialGenerator`；连续launch使用不同key，generator failure在network launch前停止。显式override只用于确定性测试。
+- targeted修正后`11/11`，expanded input/control/session gate`70/70`；完整macOS warnings-as-errors gate`280 total / 279 passed / 1 skipped / 0 failed`，唯一skip为未启用的一次性真实Keychain round-trip，本任务继续使用file/in-memory fallback。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过。Xcode构建后iPhone曾短暂显示Booted但在shutdown命令到达前已自动关闭；最终四个固定simulator均为`Shutdown`，未创建或启动第二个同类设备。
+- fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、Node/OpenSSL independent vector与四SDK strict C syntax gates全部通过。
+- OpenSpec 7.1更新为完成，权威进度`38/61`。该结果不证明transport delivery、ordering/backpressure、platform mapping、coalescing、focus-loss release或live Sunshine input；下一项为7.2 ordered keyboard/pointer-button/scroll/touch/clipboard delivery。

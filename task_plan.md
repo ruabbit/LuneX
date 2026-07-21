@@ -43,9 +43,9 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `37/61`：6.6 deterministic audio decode/jitter/synchronization/resource-release tests已完成独立验收。5.8与6.7仍分别需要授权live Sunshine sustained-video与audible hardware证据并保持未完成；下一项可离线任务为7.1 negotiated input key setup与byte-exact authenticated event serialization，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `38/61`：7.1 negotiated input key setup与byte-exact authenticated event serialization已完成独立验收。3.7、5.8与6.7仍分别需要授权live pairing、sustained-video与audible hardware证据并保持未完成；下一项可离线任务为7.2 ordered keyboard/pointer-button/scroll/touch/clipboard delivery，阶段13仍为 `in_progress`。
 
-6.6以连续synthetic Opus fixture跨层覆盖jitter reorder/loss、production AudioToolbox decode、session scheduling、actual-frame clock与逆序resource teardown；同时修复input callback以typed temporary-unavailable status结束单次pull，避免`0 packets + noErr`把连续converter永久标记为EOF。该确定性证据不等于平台notification已经接线或真实硬件可听，后者仍属于6.7。
+7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
 ## 遇到的错误
 
@@ -135,3 +135,6 @@
 | 6.6初始跨层fixture把同一Opus packet重复为连续媒体，AudioToolbox只产出`[120,0,0]` frames | 1 | 扩展development-only OpusSpike按同一encoder state生成指定packet index，新增4包连续synthetic fixture；不放宽production PCM guard |
 | 6.6尝试设置`kConverterPrimeMethod_None`被Opus converter以`'prop'`拒绝 | 1 | 按SDK callback契约在当前packet耗尽时返回private temporary-unavailable status与0 packets，保留converter live state；不做逐包reset |
 | 6.6连续解码focused测试把decoded buffer在schedule循环中重复append | 1 | 删除测试自污染；clock继续只按实际三次decode输出累计，并以完整gate复验 |
+| 7.1 staged audit发现AppModel生产默认使用固定`01...10`输入密钥 | 1 | 默认改为每次launch调用`SecureRemoteInputKeyMaterialGenerator`，仅保留显式测试override；增加连续launch新key与生成失败不触网回归 |
+| 7.1新key回归首次连续launch未先结束coordinator内部已接受session | 1 | 两次独立session之间调用真实`stopStream()`路径；不放宽coordinator的duplicate-session拒绝策略 |
+| 7.1构建后iPhone状态检查与shutdown命令竞态 | 1 | Xcode自动结束后device已先回到`Shutdown`，`simctl`返回405；再次按固定UUID读回，四个simulator均为`Shutdown`且未创建重复设备 |

@@ -4,6 +4,10 @@ struct RemoteInputKeyMaterial: Codable, Equatable, Hashable, Sendable {
     var keyID: Int
     var key: Data
 
+    var isValidAES128Material: Bool {
+        key.count == 16 && UInt32(exactly: keyID) != nil
+    }
+
     var hexKey: String {
         key.map { String(format: "%02X", $0) }.joined()
     }
@@ -58,6 +62,7 @@ enum StreamNegotiationFailureCode: String, Codable, Equatable, Sendable {
     case missingHostAddress
     case invalidResolution
     case invalidBitrate
+    case invalidInputKey
     case launchRejected
     case resumeRejected
     case cancelRejected
@@ -298,6 +303,13 @@ struct StreamNegotiator: Sendable {
         }
         guard request.preferences.bitrateKbps > 0 else {
             throw StreamNegotiationFailure(code: .invalidBitrate, subsystem: "settings", message: "Stream bitrate must be positive.")
+        }
+        guard request.remoteInputKey.isValidAES128Material else {
+            throw StreamNegotiationFailure(
+                code: .invalidInputKey,
+                subsystem: "input",
+                message: "Remote input requires a 16-byte AES key and an unsigned 32-bit key ID."
+            )
         }
 
         return StreamNegotiationParameters(

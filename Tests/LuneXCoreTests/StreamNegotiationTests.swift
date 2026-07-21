@@ -13,7 +13,7 @@ final class StreamNegotiationTests: XCTestCase {
         XCTAssertEqual(parameters.appID, "109")
         XCTAssertEqual(parameters.mode, "3840x2160x120")
         XCTAssertTrue(parameters.hdrRequested)
-        XCTAssertEqual(parameters.remoteInputKeyHex, "0A0B0C")
+        XCTAssertEqual(parameters.remoteInputKeyHex, String(repeating: "0A", count: 16))
         XCTAssertEqual(parameters.controllerBitmap, 3)
     }
 
@@ -144,7 +144,10 @@ final class StreamNegotiationTests: XCTestCase {
             app: app,
             preferences: preferences,
             clientUniqueID: "client",
-            remoteInputKey: RemoteInputKeyMaterial(keyID: 7, key: Data([10, 11, 12])),
+            remoteInputKey: RemoteInputKeyMaterial(
+                keyID: 7,
+                key: Data(repeating: 0x0A, count: 16)
+            ),
             audioPlaybackMode: .clientOnly,
             controllerBitmap: 3,
             optimizeGameSettings: false

@@ -392,3 +392,17 @@
 - 最终正常路径覆盖UInt16 sequence和UInt32 RTP双wrap、乱序释放、连续production decode、实际frame clock、逆序audio/decoder teardown、迟到`.dataConsumed` callback与closed decoder；loss路径覆盖typed missing range、exact 240-frame silence、未来包恢复、schedule顺序和零ownership。
 - focused decoder/integration gate `11/11`，expanded audio/RTSP/runtime/resource gate `69/69`；完整macOS warnings-as-errors gate `273 total / 272 passed / 1 explicit Keychain skip / 0 failed`。五平台warnings-as-errors Debug build、fixture/OpenSpec/generator/boundary/ENet/四SDK C gates全部通过，四个固定simulator前后均为`Shutdown`。
 - 6.6证明确定性decode/jitter/sync/teardown行为，不证明`.dataConsumed`已经从硬件播放、A/V在真实Sunshine session中可听同步、route/interruption平台notification已接线或6.7 live gate完成。
+
+### 2026-07-21 阶段 13 Authenticated Remote Input 设计
+
+- 现代Sunshine encrypted-control协议中，input data是control message type `0x0206`的payload；外层AES-128-GCM frame与start/IDR/其他control messages共享同一`rikey`和sequence space，client nonce固定字段为`CC`。input runtime若从0另起sequence会与已发送control frame复用nonce，必须禁止。
+- 7.1采用显式control-wide sequence的stateless authenticated encoder，不自行维护第二计数器；negotiated input config只接受16-byte key、UInt32范围key ID、启用authenticated mode和有界plaintext size。
+- input plaintext自身使用4-byte big-endian payload length、4-byte little-endian event magic以及事件字段规定的端序。7.1先固定协议级packet/envelope与独立synthetic exact-wire vectors；队列、transport reliability、platform event mapping、coalescing和release ownership属于后续7.2-7.6。
+
+### 2026-07-21 阶段 13 Authenticated Remote Input 验收
+
+- `RemoteInputPlaintextPacket`严格验证8...128-byte协议边界、big-endian payload length和非零little-endian event magic；keyboard down/up serializer保留协议mixed-endian字段，14-byte keyboard fixture与Node/OpenSSL 3.6.3独立AES-128-GCM frame逐byte一致。
+- `AuthenticatedRemoteInputContext`只持有协商key与plaintext上限，调用方必须显式提供control-wide UInt32 sequence；它复用现有control frame codec的client `CC` nonce，不创建input私有counter，mutation、wrong origin和wrong control type全部fail closed。
+- negotiated input只接受16-byte AES key、UInt32范围key ID、`encrypted=true`和8...128-byte plaintext limit。AppModel默认每个独立launch用`SecRandomCopyBytes`生成新key/key ID，固定key仅作为显式测试override；随机源失败和invalid material都在网络launch前拒绝。
+- expanded input/control/session gate `70/70`；完整macOS warnings-as-errors gate `280 total / 279 passed / 1 explicit Keychain skip / 0 failed`。五平台Debug build、fixture/OpenSpec/generator/boundary/ENet/四SDK C gates通过，固定simulator最终均为`Shutdown`。
+- 7.1不证明event已进入ENet transport、不证明ordered delivery/backpressure/coalescing、平台键鼠触控映射、focus-loss release或live Sunshine输入；这些边界仍属于7.2-7.7与阶段14。

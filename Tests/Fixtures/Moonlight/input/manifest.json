@@ -1,1 +1,12 @@
-{"fixtures":[],"schemaVersion":1,"subsystem":"input"}
+{
+  "fixtures": [
+    {
+      "expectedResult": "keyboard plaintext and authenticated control frame match independent AES-128-GCM bytes",
+      "origin": "repository-generated with Node.js OpenSSL AES-128-GCM",
+      "path": "authenticated-keyboard-vectors.json",
+      "redaction": "not applicable; synthetic key, sequence, and input event"
+    }
+  ],
+  "schemaVersion": 1,
+  "subsystem": "input"
+}
