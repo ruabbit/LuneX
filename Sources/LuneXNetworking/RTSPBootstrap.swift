@@ -415,7 +415,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
                     let event = try await controlChannel.nextEvent()
                     try ensureCurrent(token: token)
                     switch event {
-                    case .idle, .message:
+                    case .idle, .message, .controllerFeedback:
                         continue
                     case let .hdrMode(hdrMode):
                         let metadata = try hdrMode.colorMetadata()

@@ -542,3 +542,25 @@
 - macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过；四个固定simulator最终均为`Shutdown`，没有创建或boot重复设备。
 - fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、四SDK strict C syntax与Node independent movement vector全部通过。
 - OpenSpec 7.3更新为完成，权威进度`40/61`。该结果不证明阶段14 `NSEvent`/cursor capture接线、7.4 controller feedback、7.5 held-state release或7.7 live Sunshine已消费movement；下一项为7.4 controller/motion/battery/LED/rumble/trigger-rumble handling。
+## 2026-07-21 - Resume stage 13 at OpenSpec 7.4
+
+- Recovered the active goal and file-backed plan after context handoff.
+- Confirmed `main` and `origin/main` are both at `8ed1ff4` with a clean worktree.
+- Confirmed OpenSpec `implement-moonlight-session-runtime` is ready at `40/61`; 7.4 is the next offline implementation task.
+- Re-read every OpenSpec context artifact and the `openspec-apply-change` / `planning-with-files` instructions.
+- Started 7.4 with no real-Keychain execution and no simulator boot or creation.
+
+## 2026-07-21 阶段 13 任务 7.4 恢复验收
+
+- 活动 goal 仍为 active；重新读取 planning-with-files、OpenSpec apply 指令及 proposal/design/specs/tasks，change 为 `spec-driven`、权威进度 `40/61`。
+- 修复新增 activation/teardown 并发测试的 Swift 6 sending-closure 诊断：在 `Task` 外预先构造 Sendable endpoint/configuration，避免闭包捕获 non-Sendable `XCTestCase self`；生产实现未改动。
+- 后续验收继续显式清除 `LUNEX_RUN_KEYCHAIN_TEST`，不再次访问真实 Keychain；只复用既有固定 simulator destination，不创建或主动 boot 新设备。
+
+## 2026-07-21 阶段 13 任务 7.4 完成
+
+- 新增16-slot session controller registry、Apple player-index稳定映射、完整state accumulator、arrival/disconnect fallback以及controller state/motion/battery byte-exact codec；axis delta不会清除held buttons，state和motion只在安全条件下合并。
+- control channel严格解析rumble、trigger rumble、motion-rate和RGB LED，按protocol index映射回controller ID并通过容量64的typed stream广播；capability gate阻止不支持的feedback、motion和battery，motion按sensor type等待host rate请求且rate 0重新禁用。
+- staged audit补齐feedback-source termination、activation/teardown重入与capability回归；最终targeted warnings-as-errors `44/44`，完整macOS `314 total / 313 passed / 1 explicit Keychain skip / 0 failed`。本轮始终显式清除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- macOS、固定iPhone、固定iPad、固定Apple TV、固定Apple Vision Pro warnings-as-errors Debug build全部通过。fixture self-test/全树、OpenSpec strict、generator byte-for-byte、LuneX whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header、四SDK strict C syntax与independent Node controller reconstruction全部通过。
+- 四个固定simulator最终均为`Shutdown`，且每个指定名称只有一个可用实例；未创建或重复启动设备。OpenSpec 7.4更新为完成，权威进度`41/61`，下一项为7.5 focus loss/disconnect/input failure时释放held remote keys/buttons。
+- 7.4只证明serialization、state accumulation、bounded feedback mapping与teardown，不证明Sunshine消费、物理`GCController` rumble/LED/sensor接线、7.5 held-state release或7.7 live互操作。

@@ -1,0 +1,7 @@
+{
+  "arrivalPacketHex": "00 00 00 0c 04 00 00 55 01 02 f7 00 01 50 10 00",
+  "batteryPacketHex": "00 00 00 08 07 00 00 55 01 03 57 00",
+  "motionPacketHex": "00 00 00 14 06 00 00 55 01 02 00 00 00 00 c0 3f 00 00 10 c0 00 00 00 3e",
+  "schemaVersion": 1,
+  "statePacketHex": "00 00 00 1e 0c 00 00 00 1a 00 01 00 03 00 14 00 01 50 40 80 34 12 cc ed 00 80 ff 7f 9c 00 10 00 55 00"
+}

@@ -262,7 +262,7 @@ enum RemoteInputFeedback: Equatable, Sendable {
     case rumble(ControllerRumbleFeedback)
     case triggerRumble(ControllerTriggerFeedback)
     case led(ControllerLEDFeedback)
-    case motionRate(controllerID: String, reportRateHz: Int)
+    case motionRate(controllerID: String, motionType: ControllerMotionType, reportRateHz: Int)
 }
 
 protocol RemoteInputProvider: Sendable {

@@ -787,7 +787,7 @@ final class RemoteInputDeliveryTests: XCTestCase {
         XCTAssertEqual(deactivateCount, 1)
     }
 
-    func testProviderRejectsSendBeforeStartAndUnsupportedEventWithoutDeactivating() async throws {
+    func testProviderRejectsSendBeforeStartAndStillUnsupportedEventWithoutDeactivating() async throws {
         let sender = InputSenderStub()
         let provider = MoonlightRemoteInputProvider(sender: sender)
         let sessionID = UUID()
@@ -800,20 +800,359 @@ final class RemoteInputDeliveryTests: XCTestCase {
             configuration: inputConfiguration(key: Data(repeating: 3, count: 16))
         )
         do {
-            try await provider.send(.gameController(GameControllerInputEvent(
-                controllerID: "fixture",
-                playerIndex: 0,
-                element: .a,
-                value: 1,
-                isPressed: true
+            try await provider.send(.tvRemote(TVRemoteInputEvent(
+                button: .playPause,
+                isDown: true
             )), sessionID: sessionID)
-            XCTFail("Expected unsupported controller input to fail.")
+            XCTFail("Expected unsupported TV remote input to fail.")
         } catch let error as RemoteInputCodecError {
             XCTAssertEqual(error, .unsupportedEvent)
         }
         try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
         let sendCount = await sender.recordedSends().count
         XCTAssertEqual(sendCount, 1)
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderRegistersControllerAccumulatesFullStateAndDisconnectsWithMask() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x31, count: 16))
+        )
+
+        try await provider.send(.gameController(GameControllerInputEvent(
+            controllerID: "controller-two",
+            playerIndex: 2,
+            element: .a,
+            value: 1,
+            isPressed: true
+        )), sessionID: sessionID)
+        try await provider.send(.gameController(GameControllerInputEvent(
+            controllerID: "controller-two",
+            playerIndex: 2,
+            element: .leftThumbstickX,
+            value: 0.5,
+            isPressed: true
+        )), sessionID: sessionID)
+
+        var sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 4)
+        XCTAssertEqual(sends.map(\.channelID), [0x11, 0x11, 0x11, 0x11])
+        XCTAssertTrue(sends.allSatisfy(\.reliable))
+        XCTAssertEqual([UInt8](sends[0].packet.bytes)[8], 1)
+        let pressed = try controllerState(from: sends[2].packet)
+        XCTAssertEqual(pressed.controllerIndex, 1)
+        XCTAssertEqual(pressed.activeMask, 0x0002)
+        XCTAssertEqual(pressed.buttons & RemoteControllerButtonFlags.a.rawValue, RemoteControllerButtonFlags.a.rawValue)
+        XCTAssertEqual(pressed.leftStickX, 0)
+        let moved = try controllerState(from: sends[3].packet)
+        XCTAssertEqual(moved.buttons & RemoteControllerButtonFlags.a.rawValue, RemoteControllerButtonFlags.a.rawValue)
+        XCTAssertEqual(moved.leftStickX, 16_384)
+
+        try await provider.send(.controllerDisconnected(controllerID: "controller-two"), sessionID: sessionID)
+        sends = await sender.recordedSends()
+        let disconnected = try controllerState(from: try XCTUnwrap(sends.last).packet)
+        XCTAssertEqual(disconnected.controllerIndex, 1)
+        XCTAssertEqual(disconnected.activeMask, 0)
+        XCTAssertEqual(disconnected.buttons, 0)
+        XCTAssertEqual(disconnected.leftStickX, 0)
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderBoundsControllerRegistryAtSixteenStableSlots() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x32, count: 16))
+        )
+        for index in 0..<RemoteInputWireCodec.maximumControllerCount {
+            try await provider.send(.controllerConnected(ControllerConnectionInputEvent(
+                controllerID: "controller-\(index)",
+                playerIndex: index < 4 ? index + 1 : nil,
+                type: .unknown,
+                capabilities: [],
+                supportedButtons: .standard
+            )), sessionID: sessionID)
+        }
+        await assertProviderError(.controllerLimitReached) {
+            try await provider.send(.controllerConnected(ControllerConnectionInputEvent(
+                controllerID: "controller-overflow",
+                playerIndex: nil,
+                type: .unknown,
+                capabilities: [],
+                supportedButtons: .standard
+            )), sessionID: sessionID)
+        }
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 32)
+        XCTAssertEqual(
+            Set(sends.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element.channelID)),
+            Set((0x10...0x1F).map(UInt8.init))
+        )
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderMapsFeedbackAndGatesMotionUntilHostRequest() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x33, count: 16))
+        )
+        try await provider.send(.controllerConnected(ControllerConnectionInputEvent(
+            controllerID: "physical-one",
+            playerIndex: 1,
+            type: .playStation,
+            capabilities: [.rumble, .triggerRumble, .accelerometer, .gyroscope, .battery, .rgbLED],
+            supportedButtons: .standard
+        )), sessionID: sessionID)
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var iterator = feedback.makeAsyncIterator()
+
+        await assertProviderError(.motionNotEnabled) {
+            try await provider.send(.controllerMotion(ControllerMotionInputEvent(
+                controllerID: "physical-one",
+                type: .accelerometer,
+                x: 1,
+                y: 2,
+                z: 3
+            )), sessionID: sessionID)
+        }
+
+        await source.yield(.motionRate(
+            controllerIndex: 0,
+            motionType: .accelerometer,
+            reportRateHz: 120
+        ))
+        let motionRate = await iterator.next()
+        XCTAssertEqual(motionRate, .motionRate(
+            controllerID: "physical-one",
+            motionType: .accelerometer,
+            reportRateHz: 120
+        ))
+        try await provider.send(.controllerMotion(ControllerMotionInputEvent(
+            controllerID: "physical-one",
+            type: .accelerometer,
+            x: 1,
+            y: 2,
+            z: 3
+        )), sessionID: sessionID)
+        var sends = await sender.recordedSends()
+        XCTAssertEqual(try XCTUnwrap(sends.last).channelID, 0x20)
+        XCTAssertFalse(try XCTUnwrap(sends.last).reliable)
+
+        await source.yield(.rumble(controllerIndex: 0, lowFrequency: 0, highFrequency: .max))
+        let rumble = await iterator.next()
+        XCTAssertEqual(rumble, .rumble(ControllerRumbleFeedback(
+            controllerID: "physical-one",
+            lowFrequency: 0,
+            highFrequency: 1
+        )))
+        await source.yield(.triggerRumble(controllerIndex: 0, leftMotor: 0x8000, rightMotor: .max))
+        guard case let .triggerRumble(trigger)? = await iterator.next() else {
+            return XCTFail("Expected mapped trigger-rumble feedback.")
+        }
+        XCTAssertEqual(trigger.controllerID, "physical-one")
+        XCTAssertEqual(trigger.leftMotor, Float(0x8000) / Float(UInt16.max), accuracy: 0.000_001)
+        XCTAssertEqual(trigger.rightMotor, 1)
+        await source.yield(.led(controllerIndex: 0, red: 1, green: 2, blue: 3))
+        let led = await iterator.next()
+        XCTAssertEqual(led, .led(ControllerLEDFeedback(
+            controllerID: "physical-one",
+            red: 1,
+            green: 2,
+            blue: 3
+        )))
+
+        try await provider.send(.controllerBattery(ControllerBatteryInputEvent(
+            controllerID: "physical-one",
+            state: .discharging,
+            percentage: 75
+        )), sessionID: sessionID)
+        sends = await sender.recordedSends()
+        XCTAssertEqual(try XCTUnwrap(sends.last).channelID, 0x10)
+        XCTAssertTrue(try XCTUnwrap(sends.last).reliable)
+
+        await source.yield(.motionRate(
+            controllerIndex: 0,
+            motionType: .accelerometer,
+            reportRateHz: 0
+        ))
+        _ = await iterator.next()
+        await assertProviderError(.motionNotEnabled) {
+            try await provider.send(.controllerMotion(ControllerMotionInputEvent(
+                controllerID: "physical-one",
+                type: .accelerometer,
+                x: 1,
+                y: 2,
+                z: 3
+            )), sessionID: sessionID)
+        }
+
+        await provider.stopInput(sessionID: sessionID)
+        let finished = await iterator.next()
+        XCTAssertNil(finished)
+    }
+
+    func testControllerAndMotionCoalescingPreservesButtonTransitionsAndSensorType() {
+        var first = RemoteControllerState.empty(controllerIndex: 0, activeGamepadMask: 1)
+        first.buttons = .a
+        var axis = first
+        axis.leftStickX = 1_000
+        XCTAssertEqual(
+            RemoteInputMovementCoalescer.coalesce(
+                older: .controllerState(first),
+                newer: .controllerState(axis)
+            ),
+            .controllerState(axis)
+        )
+        var released = axis
+        released.buttons = []
+        XCTAssertNil(RemoteInputMovementCoalescer.coalesce(
+            older: .controllerState(axis),
+            newer: .controllerState(released)
+        ))
+
+        let accelerometer = RemoteControllerMotion(
+            controllerIndex: 0,
+            type: .accelerometer,
+            x: 1,
+            y: 2,
+            z: 3
+        )
+        var latest = accelerometer
+        latest.x = 4
+        XCTAssertEqual(RemoteInputMovementCoalescer.coalesce(
+            older: .controllerMotionState(accelerometer),
+            newer: .controllerMotionState(latest)
+        ), .controllerMotionState(latest))
+        var gyroscope = latest
+        gyroscope.type = .gyroscope
+        XCTAssertNil(RemoteInputMovementCoalescer.coalesce(
+            older: .controllerMotionState(latest),
+            newer: .controllerMotionState(gyroscope)
+        ))
+    }
+
+    func testFeedbackSourceEndFailsSessionAndFinishesSubscribers() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x34, count: 16))
+        )
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var iterator = feedback.makeAsyncIterator()
+
+        await source.finish()
+        let finished = await iterator.next()
+        XCTAssertNil(finished)
+        await assertProviderError(.inactiveSession) {
+            try await provider.send(.clipboard(ClipboardInputEvent(text: "late")), sessionID: sessionID)
+        }
+        let deactivationCount = await sender.deactivateCount()
+        XCTAssertEqual(deactivationCount, 1)
+    }
+
+    func testProviderRejectsConcurrentActivationAndRestartDuringTeardown() async throws {
+        let sender = InputSenderStub(
+            activationDelayNanoseconds: 30_000_000,
+            deactivationDelayNanoseconds: 30_000_000
+        )
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let firstSession = UUID()
+        let firstEndpoint = inputEndpoint()
+        let firstConfiguration = inputConfiguration(key: Data(repeating: 0x35, count: 16))
+        let firstStart = Task {
+            try await provider.startInput(
+                sessionID: firstSession,
+                endpoint: firstEndpoint,
+                configuration: firstConfiguration
+            )
+        }
+        try await Task.sleep(nanoseconds: 2_000_000)
+        await assertProviderError(.inactiveSession) {
+            try await provider.startInput(
+                sessionID: UUID(),
+                endpoint: inputEndpoint(),
+                configuration: inputConfiguration(key: Data(repeating: 0x36, count: 16))
+            )
+        }
+        try await firstStart.value
+
+        let stop = Task { await provider.stopInput(sessionID: firstSession) }
+        try await Task.sleep(nanoseconds: 2_000_000)
+        await assertProviderError(.inactiveSession) {
+            try await provider.startInput(
+                sessionID: UUID(),
+                endpoint: inputEndpoint(),
+                configuration: inputConfiguration(key: Data(repeating: 0x37, count: 16))
+            )
+        }
+        await stop.value
+
+        let replacementSession = UUID()
+        try await provider.startInput(
+            sessionID: replacementSession,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x38, count: 16))
+        )
+        await provider.stopInput(sessionID: replacementSession)
+    }
+
+    func testControllerCapabilitiesGateMotionAndBatteryData() async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender, feedbackSource: source)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x39, count: 16))
+        )
+        try await provider.send(.controllerConnected(ControllerConnectionInputEvent(
+            controllerID: "limited",
+            playerIndex: 1,
+            type: .unknown,
+            capabilities: [],
+            supportedButtons: .standard
+        )), sessionID: sessionID)
+        await source.yield(.motionRate(
+            controllerIndex: 0,
+            motionType: .accelerometer,
+            reportRateHz: 120
+        ))
+        try await Task.sleep(nanoseconds: 2_000_000)
+
+        await assertProviderError(.invalidControllerEvent) {
+            try await provider.send(.controllerMotion(ControllerMotionInputEvent(
+                controllerID: "limited",
+                type: .accelerometer,
+                x: 1,
+                y: 2,
+                z: 3
+            )), sessionID: sessionID)
+        }
+        await assertProviderError(.invalidControllerEvent) {
+            try await provider.send(.controllerBattery(ControllerBatteryInputEvent(
+                controllerID: "limited",
+                state: .full,
+                percentage: 100
+            )), sessionID: sessionID)
+        }
         await provider.stopInput(sessionID: sessionID)
     }
 
@@ -854,6 +1193,27 @@ final class RemoteInputDeliveryTests: XCTestCase {
             x: Int16(bitPattern: UInt16(bytes[8]) << 8 | UInt16(bytes[9])),
             y: Int16(bitPattern: UInt16(bytes[10]) << 8 | UInt16(bytes[11]))
         )
+    }
+
+    private func controllerState(
+        from packet: RemoteInputPlaintextPacket
+    ) throws -> ParsedControllerState {
+        let bytes = [UInt8](packet.bytes)
+        guard bytes.count == 34,
+              Array(bytes[0...7]) == [0x00, 0x00, 0x00, 0x1E, 0x0C, 0x00, 0x00, 0x00] else {
+            throw RemoteInputCodecError.invalidPacket
+        }
+        return ParsedControllerState(
+            controllerIndex: UInt8(readLittleEndianUInt16(bytes, offset: 10)),
+            activeMask: readLittleEndianUInt16(bytes, offset: 12),
+            buttons: UInt32(readLittleEndianUInt16(bytes, offset: 16))
+                | UInt32(readLittleEndianUInt16(bytes, offset: 30)) << 16,
+            leftStickX: Int16(bitPattern: readLittleEndianUInt16(bytes, offset: 20))
+        )
+    }
+
+    private func readLittleEndianUInt16(_ bytes: [UInt8], offset: Int) -> UInt16 {
+        UInt16(bytes[offset]) | UInt16(bytes[offset + 1]) << 8
     }
 
     private func inputConfiguration(key: Data) -> NegotiatedInputConfiguration {
@@ -943,6 +1303,13 @@ private struct RelativeMovementDelta: Equatable, Sendable {
     var y: Int16
 }
 
+private struct ParsedControllerState: Equatable, Sendable {
+    var controllerIndex: UInt8
+    var activeMask: UInt16
+    var buttons: UInt32
+    var leftStickX: Int16
+}
+
 private actor InputCompletionRecorder {
     private var recordedValues: [Int] = []
 
@@ -962,20 +1329,29 @@ private struct InputSendRecord: Equatable, Sendable {
 }
 
 private actor InputSenderStub: AuthenticatedInputFrameSending {
+    private let activationDelayNanoseconds: UInt64
+    private let deactivationDelayNanoseconds: UInt64
     private let delayNanosecondsByCall: [Int: UInt64]
     private let failingCalls: Set<Int>
     private var sends: [InputSendRecord] = []
     private var deactivations = 0
 
     init(
+        activationDelayNanoseconds: UInt64 = 0,
+        deactivationDelayNanoseconds: UInt64 = 0,
         delayNanosecondsByCall: [Int: UInt64] = [:],
         failingCalls: Set<Int> = []
     ) {
+        self.activationDelayNanoseconds = activationDelayNanoseconds
+        self.deactivationDelayNanoseconds = deactivationDelayNanoseconds
         self.delayNanosecondsByCall = delayNanosecondsByCall
         self.failingCalls = failingCalls
     }
 
     func activateInput(configuration: NegotiatedInputConfiguration) async throws {
+        if activationDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: activationDelayNanoseconds)
+        }
         try configuration.validate()
     }
 
@@ -995,6 +1371,9 @@ private actor InputSenderStub: AuthenticatedInputFrameSending {
     }
 
     func deactivateInput() async {
+        if deactivationDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: deactivationDelayNanoseconds)
+        }
         deactivations += 1
     }
 
@@ -1004,6 +1383,28 @@ private actor InputSenderStub: AuthenticatedInputFrameSending {
 
     func deactivateCount() -> Int {
         deactivations
+    }
+}
+
+private actor InputFeedbackSourceStub: RemoteControllerFeedbackStreaming {
+    private var continuation: AsyncStream<RemoteControllerFeedbackMessage>.Continuation?
+
+    func controllerFeedbackMessages() async -> AsyncStream<RemoteControllerFeedbackMessage> {
+        var createdContinuation: AsyncStream<RemoteControllerFeedbackMessage>.Continuation!
+        let stream = AsyncStream(
+            bufferingPolicy: .bufferingNewest(64)
+        ) { createdContinuation = $0 }
+        continuation = createdContinuation
+        return stream
+    }
+
+    func yield(_ message: RemoteControllerFeedbackMessage) {
+        continuation?.yield(message)
+    }
+
+    func finish() {
+        continuation?.finish()
+        continuation = nil
     }
 }
 

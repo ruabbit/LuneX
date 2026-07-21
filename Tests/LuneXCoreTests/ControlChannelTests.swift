@@ -222,6 +222,81 @@ final class ControlChannelTests: XCTestCase {
         )))
     }
 
+    func testControllerFeedbackParsesBroadcastsAndFinishesWithControlChannel() async throws {
+        let key = Data(repeating: 0x6A, count: 16)
+        let messages: [MoonlightControlMessage] = [
+            MoonlightControlMessage(
+                type: MoonlightControlProtocol.rumbleType,
+                payload: Data([0xEE, 0xFF, 0xC0, 0x00, 0x01, 0x00, 0x00, 0x00, 0xFF, 0xFF])
+            ),
+            MoonlightControlMessage(
+                type: MoonlightControlProtocol.triggerRumbleType,
+                payload: Data([0x01, 0x00, 0x00, 0x80, 0xFF, 0xFF])
+            ),
+            MoonlightControlMessage(
+                type: MoonlightControlProtocol.motionRateType,
+                payload: Data([0x01, 0x00, 0x78, 0x00, ControllerMotionType.accelerometer.rawValue])
+            ),
+            MoonlightControlMessage(
+                type: MoonlightControlProtocol.controllerLEDType,
+                payload: Data([0x01, 0x00, 0x12, 0x34, 0x56])
+            )
+        ]
+        let expected: [RemoteControllerFeedbackMessage] = [
+            .rumble(controllerIndex: 1, lowFrequency: 0, highFrequency: .max),
+            .triggerRumble(controllerIndex: 1, leftMotor: 0x8000, rightMotor: .max),
+            .motionRate(controllerIndex: 1, motionType: .accelerometer, reportRateHz: 120),
+            .led(controllerIndex: 1, red: 0x12, green: 0x34, blue: 0x56)
+        ]
+        let frames = try messages.enumerated().map { index, message in
+            try EncryptedControlFrameCodec.seal(
+                message,
+                sequence: UInt32(index),
+                key: key,
+                origin: .host
+            )
+        }
+        let driver = ControlDriverStub(serviceEvents: frames.map {
+            .received(channelID: 0, payload: $0)
+        })
+        let channel = MoonlightControlChannel(driver: driver)
+        try await channel.connect(
+            endpoint: RuntimeNetworkEndpoint(host: "example.invalid", port: 47_999, transport: .udp),
+            connectData: 0,
+            encryptionKey: key
+        )
+        let stream = await channel.controllerFeedbackMessages()
+        var iterator = stream.makeAsyncIterator()
+
+        for feedback in expected {
+            let event = try await channel.nextEvent()
+            XCTAssertEqual(event, .controllerFeedback(feedback))
+            let broadcast = await iterator.next()
+            XCTAssertEqual(broadcast, feedback)
+        }
+
+        await channel.stop()
+        let finished = await iterator.next()
+        XCTAssertNil(finished)
+    }
+
+    func testKnownMalformedControllerFeedbackFailsClosed() throws {
+        let malformed: [MoonlightControlMessage] = [
+            MoonlightControlMessage(type: MoonlightControlProtocol.rumbleType, payload: Data(repeating: 0, count: 9)),
+            MoonlightControlMessage(type: MoonlightControlProtocol.triggerRumbleType, payload: Data(repeating: 0, count: 5)),
+            MoonlightControlMessage(type: MoonlightControlProtocol.motionRateType, payload: Data([0, 0, 1, 0, 3])),
+            MoonlightControlMessage(type: MoonlightControlProtocol.controllerLEDType, payload: Data([16, 0, 1, 2, 3]))
+        ]
+        for message in malformed {
+            XCTAssertThrowsError(try RemoteControllerFeedbackParser.parseIfKnown(message)) { error in
+                XCTAssertEqual(error as? ControlChannelError, .invalidControllerFeedbackPayload)
+            }
+        }
+        XCTAssertNil(try RemoteControllerFeedbackParser.parseIfKnown(
+            MoonlightControlMessage(type: 0x7777, payload: Data())
+        ))
+    }
+
     private func loadFixture() throws -> ControlFixture {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

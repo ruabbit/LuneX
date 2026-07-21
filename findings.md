@@ -436,3 +436,21 @@
 - provider只在pending FIFO队尾合并同button snapshot relative movement，或同button/reference size absolute movement；keyboard、button、scroll、touch、clipboard、不同movement类型和不同状态均为barrier。absolute event在adapter生成时捕获source reference size，窗口后续resize不会改写已排队坐标语义。
 - 每个coalesced caller只在最终物理packet成功后完成；transport failure、stop、caller上限和packet上限都有确定性回归。最终targeted `29/29`、expanded input/control/session `97/97`；完整macOS warnings-as-errors `303 total / 302 passed / 1 explicit Keychain skip / 0 failed`。
 - macOS、固定iPhone/iPad/Apple TV/Vision Pro warnings-as-errors Debug build、fixture/OpenSpec/generator/reference/dependency/ENet/四SDK C与independent Node gates全部通过，固定simulator最终均为`Shutdown`。7.3不证明平台`NSEvent`/cursor capture、focus-loss release、controller feedback或live Sunshine movement消费。
+### OpenSpec 7.4 controller and feedback protocol boundary (2026-07-21)
+
+- The pinned `moonlight-common-c` reference uses a 34-byte generation-5 multi-controller packet: big-endian payload size `30`, little-endian magic `0x0000000C`, controller index, active mask, split low/high button flags, triggers, four signed stick axes, and fixed tail fields.
+- Controller state, arrival, disconnect fallback, and battery packets use reliable ENet channel `0x10 + zero-based controller index`; motion uses unreliable channel `0x20 + index`.
+- Sunshine supports exactly 16 controller indices. Apple player indices `1...4` therefore normalize to protocol indices `0...3` when available; other controllers take the lowest free slot.
+- A single `GameControllerInputEvent` is a delta, not a wire snapshot. The session must own a controller registry and full-state accumulator so an axis update cannot clear held buttons or other axes.
+- Arrival is a typed `0x55000004` packet followed by an empty multi-controller fallback packet. Disconnect is an empty state packet with that controller removed from the active mask.
+- Accelerometer (`0x01`, m/s^2) and gyroscope (`0x02`, deg/s) samples must remain disabled until the host sends a matching motion-rate feedback request; rate zero disables that sensor again.
+- Known feedback control types are rumble `0x010B`, trigger rumble `0x5500`, motion request `0x5501`, and RGB LED `0x5502`. Exact payload lengths and controller indices must be validated before broadcasting; malformed known types fail closed.
+- Parsing and broadcasting feedback proves the runtime boundary only. Applying rumble, trigger motors, LED, or sensor enablement to actual `GCController` hardware remains a later platform integration proof.
+
+### OpenSpec 7.4 controller and feedback protocol acceptance (2026-07-21)
+
+- Session-owned registry accepts at most 16 controllers, maps Apple player index `1...4` to protocol index `0...3` when available, otherwise chooses the lowest free index, and accumulates delta events into a complete snapshot without clearing held buttons or axes.
+- Connection sends arrival plus empty multi-controller fallback; disconnect sends an empty state with the active mask cleared. State/arrival/battery use reliable channel `0x10 + index`; motion uses unreliable channel `0x20 + index` and remains disabled until matching host motion-rate feedback enables the sensor.
+- Control parsing strictly accepts rumble `0x010B`, trigger rumble `0x5500`, motion rate `0x5501`, and RGB LED `0x5502` only at exact payload sizes with controller index `0...15`; typed feedback is bounded at 64 newest values, maps protocol index back to controller ID, and finishes on control/input teardown.
+- Final targeted warnings-as-errors gate passed `44/44`; complete macOS gate passed `314 total / 313 passed / 1 explicit Keychain skip / 0 failed`. macOS, fixed iPhone/iPad/Apple TV/Vision Pro Debug builds and fixture/OpenSpec/generator/boundary/ENet/four-SDK-C/independent-Node gates passed; all four fixed simulators ended `Shutdown` with one available instance per specified name.
+- This proves deterministic serialization, bounded state/feedback handling, teardown, and capability policy. It does not prove Sunshine consumed controller input or physical `GCController` rumble, LED, trigger motors, motion sensing, and battery reporting; those remain 7.7 and later platform integration work.

@@ -13,6 +13,7 @@ enum ControlChannelError: Error, Equatable, Sendable, CustomStringConvertible {
     case invalidHDRMetadataPayload
     case inputKeyMismatch
     case inputNotActive
+    case invalidControllerFeedbackPayload
 
     var description: String {
         switch self {
@@ -38,6 +39,8 @@ enum ControlChannelError: Error, Equatable, Sendable, CustomStringConvertible {
             return "The negotiated remote-input key does not match the active control session."
         case .inputNotActive:
             return "Authenticated remote input is not active on the control session."
+        case .invalidControllerFeedbackPayload:
+            return "The host sent malformed controller feedback."
         }
     }
 }
@@ -246,6 +249,10 @@ enum MoonlightControlProtocol {
     static let startBType: UInt16 = 0x0307
     static let terminationType: UInt16 = 0x0109
     static let hdrModeType: UInt16 = 0x010E
+    static let rumbleType: UInt16 = 0x010B
+    static let triggerRumbleType: UInt16 = 0x5500
+    static let motionRateType: UInt16 = 0x5501
+    static let controllerLEDType: UInt16 = 0x5502
     static let requestIDR = MoonlightControlMessage(type: requestIDRType, payload: Data([0, 0]))
     static let startA = requestIDR
     static let startB = MoonlightControlMessage(type: startBType, payload: Data([0]))
@@ -255,7 +262,75 @@ enum MoonlightControlEvent: Equatable, Sendable {
     case idle
     case message(MoonlightControlMessage)
     case hdrMode(SunshineHDRModeMetadata)
+    case controllerFeedback(RemoteControllerFeedbackMessage)
     case terminated(HostTerminationReason)
+}
+
+enum RemoteControllerFeedbackMessage: Equatable, Sendable {
+    case rumble(controllerIndex: UInt8, lowFrequency: UInt16, highFrequency: UInt16)
+    case triggerRumble(controllerIndex: UInt8, leftMotor: UInt16, rightMotor: UInt16)
+    case motionRate(controllerIndex: UInt8, motionType: ControllerMotionType, reportRateHz: UInt16)
+    case led(controllerIndex: UInt8, red: UInt8, green: UInt8, blue: UInt8)
+}
+
+enum RemoteControllerFeedbackParser {
+    static func parseIfKnown(
+        _ message: MoonlightControlMessage
+    ) throws -> RemoteControllerFeedbackMessage? {
+        let bytes = [UInt8](message.payload)
+        switch message.type {
+        case MoonlightControlProtocol.rumbleType:
+            guard bytes.count == 10 else { throw ControlChannelError.invalidControllerFeedbackPayload }
+            return .rumble(
+                controllerIndex: try controllerIndex(bytes, offset: 4),
+                lowFrequency: readLittleEndianUInt16(bytes, offset: 6),
+                highFrequency: readLittleEndianUInt16(bytes, offset: 8)
+            )
+        case MoonlightControlProtocol.triggerRumbleType:
+            guard bytes.count == 6 else { throw ControlChannelError.invalidControllerFeedbackPayload }
+            return .triggerRumble(
+                controllerIndex: try controllerIndex(bytes, offset: 0),
+                leftMotor: readLittleEndianUInt16(bytes, offset: 2),
+                rightMotor: readLittleEndianUInt16(bytes, offset: 4)
+            )
+        case MoonlightControlProtocol.motionRateType:
+            guard bytes.count == 5,
+                  let motionType = ControllerMotionType(rawValue: bytes[4]) else {
+                throw ControlChannelError.invalidControllerFeedbackPayload
+            }
+            return .motionRate(
+                controllerIndex: try controllerIndex(bytes, offset: 0),
+                motionType: motionType,
+                reportRateHz: readLittleEndianUInt16(bytes, offset: 2)
+            )
+        case MoonlightControlProtocol.controllerLEDType:
+            guard bytes.count == 5 else { throw ControlChannelError.invalidControllerFeedbackPayload }
+            return .led(
+                controllerIndex: try controllerIndex(bytes, offset: 0),
+                red: bytes[2],
+                green: bytes[3],
+                blue: bytes[4]
+            )
+        default:
+            return nil
+        }
+    }
+
+    private static func controllerIndex(_ bytes: [UInt8], offset: Int) throws -> UInt8 {
+        let value = readLittleEndianUInt16(bytes, offset: offset)
+        guard value < UInt16(RemoteInputWireCodec.maximumControllerCount) else {
+            throw ControlChannelError.invalidControllerFeedbackPayload
+        }
+        return UInt8(value)
+    }
+
+    private static func readLittleEndianUInt16(_ bytes: [UInt8], offset: Int) -> UInt16 {
+        UInt16(bytes[offset]) | UInt16(bytes[offset + 1]) << 8
+    }
+}
+
+protocol RemoteControllerFeedbackStreaming: Sendable {
+    func controllerFeedbackMessages() async -> AsyncStream<RemoteControllerFeedbackMessage>
 }
 
 enum SunshineHDRModeMetadataParser {
@@ -364,12 +439,14 @@ protocol MoonlightControlChannelManaging: Sendable {
     func stop() async
 }
 
-actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInputFrameSending {
+actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInputFrameSending,
+    RemoteControllerFeedbackStreaming {
     private let driver: any ENetConnectionDriving
     private var encryptionKey = Data()
     private var nextSequence: UInt32 = 0
     private var connected = false
     private var inputContext: AuthenticatedRemoteInputContext?
+    private var feedbackContinuations: [UUID: AsyncStream<RemoteControllerFeedbackMessage>.Continuation] = [:]
 
     init(driver: any ENetConnectionDriving = ENetConnectionDriver()) {
         self.driver = driver
@@ -428,6 +505,10 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
             if opened.message.type == MoonlightControlProtocol.hdrModeType {
                 return .hdrMode(try SunshineHDRModeMetadataParser.parse(opened.message))
             }
+            if let feedback = try RemoteControllerFeedbackParser.parseIfKnown(opened.message) {
+                broadcast(feedback)
+                return .controllerFeedback(feedback)
+            }
             return .message(opened.message)
         case let .disconnected(data):
             await stop()
@@ -472,11 +553,28 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
         inputContext = nil
     }
 
+    func controllerFeedbackMessages() async -> AsyncStream<RemoteControllerFeedbackMessage> {
+        guard connected else {
+            return AsyncStream { $0.finish() }
+        }
+        let id = UUID()
+        var continuation: AsyncStream<RemoteControllerFeedbackMessage>.Continuation!
+        let stream = AsyncStream(
+            bufferingPolicy: .bufferingNewest(64)
+        ) { continuation = $0 }
+        continuation.onTermination = { @Sendable _ in
+            Task { await self.removeFeedbackContinuation(id) }
+        }
+        feedbackContinuations[id] = continuation
+        return stream
+    }
+
     func stop() async {
         connected = false
         nextSequence = 0
         inputContext = nil
         encryptionKey.removeAll(keepingCapacity: false)
+        finishFeedbackStreams()
         await driver.disconnect()
     }
 
@@ -493,5 +591,23 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
         nextSequence += 1
         try await driver.send(frame, channelID: channelID, reliable: true)
         guard connected else { throw ControlChannelError.invalidState }
+    }
+
+    private func broadcast(_ message: RemoteControllerFeedbackMessage) {
+        for continuation in feedbackContinuations.values {
+            continuation.yield(message)
+        }
+    }
+
+    private func removeFeedbackContinuation(_ id: UUID) {
+        feedbackContinuations[id] = nil
+    }
+
+    private func finishFeedbackStreams() {
+        let continuations = feedbackContinuations.values
+        feedbackContinuations.removeAll(keepingCapacity: false)
+        for continuation in continuations {
+            continuation.finish()
+        }
     }
 }

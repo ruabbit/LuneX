@@ -128,6 +128,76 @@ final class RemoteInputWireCodecTests: XCTestCase {
         }
     }
 
+    func testControllerPacketsMatchReviewedVectorsAndChannelSemantics() throws {
+        let fixture = try loadControllerFixture()
+        let state = RemoteControllerState(
+            controllerIndex: 1,
+            activeGamepadMask: 0x0003,
+            buttons: RemoteControllerButtonFlags(rawValue: 0x0010_5001),
+            leftTrigger: 0x40,
+            rightTrigger: 0x80,
+            leftStickX: 0x1234,
+            leftStickY: -0x1234,
+            rightStickX: .min,
+            rightStickY: .max
+        )
+        let arrival = RemoteControllerArrival(
+            controllerIndex: 1,
+            type: .playStation,
+            capabilities: RemoteControllerCapabilities(rawValue: 0x00F7),
+            supportedButtons: RemoteControllerButtonFlags(rawValue: 0x0010_5001)
+        )
+        let motion = RemoteControllerMotion(
+            controllerIndex: 1,
+            type: .gyroscope,
+            x: 1.5,
+            y: -2.25,
+            z: 0.125
+        )
+        let battery = RemoteControllerBattery(
+            controllerIndex: 1,
+            state: .charging,
+            percentage: 87
+        )
+
+        let statePacket = try XCTUnwrap(RemoteInputWireCodec.outboundPackets(for: .controllerState(state)).first)
+        XCTAssertEqual(statePacket.plaintext.bytes, try decodeHex(fixture.statePacketHex))
+        XCTAssertEqual(statePacket.channelID, 0x11)
+        XCTAssertTrue(statePacket.reliable)
+
+        let arrivalPacket = try XCTUnwrap(RemoteInputWireCodec.outboundPackets(for: .controllerArrival(arrival)).first)
+        XCTAssertEqual(arrivalPacket.plaintext.bytes, try decodeHex(fixture.arrivalPacketHex))
+        XCTAssertEqual(arrivalPacket.channelID, 0x11)
+        XCTAssertTrue(arrivalPacket.reliable)
+
+        let motionPacket = try XCTUnwrap(RemoteInputWireCodec.outboundPackets(for: .controllerMotionState(motion)).first)
+        XCTAssertEqual(motionPacket.plaintext.bytes, try decodeHex(fixture.motionPacketHex))
+        XCTAssertEqual(motionPacket.channelID, 0x21)
+        XCTAssertFalse(motionPacket.reliable)
+
+        let batteryPacket = try XCTUnwrap(RemoteInputWireCodec.outboundPackets(for: .controllerBatteryState(battery)).first)
+        XCTAssertEqual(batteryPacket.plaintext.bytes, try decodeHex(fixture.batteryPacketHex))
+        XCTAssertEqual(batteryPacket.channelID, 0x11)
+        XCTAssertTrue(batteryPacket.reliable)
+    }
+
+    func testControllerCodecRejectsInvalidIndexBatteryAndDetachedNonEmptyState() throws {
+        XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .controllerArrival(
+            RemoteControllerArrival(
+                controllerIndex: 16,
+                type: .unknown,
+                capabilities: [],
+                supportedButtons: []
+            )
+        )))
+        XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .controllerBatteryState(
+            RemoteControllerBattery(controllerIndex: 0, state: .charging, percentage: 101)
+        )))
+        var detached = RemoteControllerState.empty(controllerIndex: 0, activeGamepadMask: 0)
+        detached.buttons = .a
+        XCTAssertThrowsError(try RemoteInputWireCodec.outboundPackets(for: .controllerState(detached)))
+    }
+
     private func configuration(keyID: Int, key: Data) -> NegotiatedInputConfiguration {
         NegotiatedInputConfiguration(
             keyMaterial: RemoteInputKeyMaterial(keyID: keyID, key: key),
@@ -156,6 +226,14 @@ final class RemoteInputWireCodecTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Fixtures/Moonlight/input/authenticated-keyboard-vectors.json")
         return try JSONDecoder().decode(RemoteInputFixture.self, from: Data(contentsOf: url))
+    }
+
+    private func loadControllerFixture() throws -> ControllerWireFixture {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/Moonlight/input/controller-vectors.json")
+        return try JSONDecoder().decode(ControllerWireFixture.self, from: Data(contentsOf: url))
     }
 
     private func decodeHex(_ value: String) throws -> Data {
@@ -217,6 +295,14 @@ private struct RemoteInputFixture: Decodable {
     var plaintextPacketHex: String
     var sealedFrameHex: String
     var sequence: UInt32
+}
+
+private struct ControllerWireFixture: Decodable {
+    var arrivalPacketHex: String
+    var batteryPacketHex: String
+    var motionPacketHex: String
+    var schemaVersion: Int
+    var statePacketHex: String
 }
 
 private enum RemoteInputFixtureError: Error {

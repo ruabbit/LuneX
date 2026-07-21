@@ -11,6 +11,12 @@
       "origin": "repository-generated from documented field widths and mixed-endian protocol layout",
       "path": "ordered-event-vectors.json",
       "redaction": "not applicable; synthetic input events only"
+    },
+    {
+      "expectedResult": "controller state, arrival, motion, and battery packets match independently reviewed mixed-endian protocol bytes",
+      "origin": "repository-generated from the pinned protocol field widths and channel contract",
+      "path": "controller-vectors.json",
+      "redaction": "not applicable; synthetic controller state only"
     }
   ],
   "schemaVersion": 1,
