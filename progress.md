@@ -767,3 +767,9 @@
 - `docs/runtime-completion-roadmap.md`新增阶段13–20当前证据/缺口表、离线推进与硬件完成门边界，并补齐阶段18 tvOS/visionOS、阶段19原生产品工作流/无障碍、阶段20 Release性能质量的可执行交付和验收项。
 - 阶段13阶段级自验收结论：离线/runtime foundation通过；live/hardware未通过。1.1、3.7、5.8、6.7、7.7、9.2、9.3继续保持pending，production因缺video/audio network receiver继续fail closed，不以9.1/9.4/9.5/9.6证据替代。
 - OpenSpec 9.7更新为完成，权威进度`54/61`；全部4个现有OpenSpec change strict validation通过。等待授权host/hardware期间，下一可执行工作为创建阶段14 `integrate-macos-native-input-lifecycle` change并推进确定性实现。
+
+## 2026-07-21 阶段 14 OpenSpec 启动
+
+- 创建`integrate-macos-native-input-lifecycle`，完成proposal、design、`macos-native-input-capture`、`macos-session-lifecycle-control`、`stream-coordinate-transform`三项spec与29项tasks；artifact状态apply-ready，单change strict validation通过。
+- 现状审计确认AppKit notification只驱动render state；真实NSEvent、balanced cursor ownership、active-session input sink、focus-loss release barrier、actual stream-surface transform与decoder pause/resume均未接线。阶段14保持production fail closed并保留stage13 live证据缺口。
+- 后续按OpenSpec任务逐项独立验收/提交/推送；当前第一项为1.1 macOS event/modifier/shortcut/cursor/coordinate/multi-window ownership合同清单。

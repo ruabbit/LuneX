@@ -616,3 +616,10 @@
 - The roadmap now records current proof and missing proof for every stage from 13 through 20, distinguishes deterministic work that can proceed offline from completion gates requiring an authorized host or physical hardware, and adds executable stage 18–20 scope.
 - Stage 13 offline/runtime-foundation acceptance passes based on normal, five-platform Debug/Release, simulator-inventory, strict/static, ASan/TSan, and resource evidence. The stage and change remain incomplete because seven tasks still require host/hardware evidence: 1.1, 3.7, 5.8, 6.7, 7.7, 9.2, and 9.3.
 - The named stage 14–20 changes do not yet exist as OpenSpec objects. The next unblocked action is to propose and implement stage 14 macOS native input/lifecycle work while preserving all stage 13 live gates as pending.
+
+### Stage 14 OpenSpec and runtime-boundary audit (2026-07-21)
+
+- `AppKitLifecycleMonitor` already observes the requested occlusion, key/resign-key, application activation, screen-parameter, backing, minimization, and resize notifications, but currently updates only render policy/drawable/headroom. It does not call active input release, apply decoder policy, or bind geometry to the actual stream surface.
+- `MacInputAdapter`, `InputMapper`, cursor policy, and authenticated remote provider exist as disconnected/tested types. No AppKit view captures `NSEvent`; no cursor owner calls balanced AppKit/CoreGraphics APIs; `AppModel` does not expose a bounded active-session input sink.
+- The current mapper independently recomputes a video rectangle from whole-window drawable size and clamps fit letterbox points to a remote edge. Stage 14 defines one revisioned actual-surface coordinate snapshot shared by renderer and input, with letterbox rejection and resize generation safety.
+- `integrate-macos-native-input-lifecycle` is apply-ready with three new capabilities and 29 tasks. Its design keeps AppKit sampling synchronous, serializes delivery in a generation-owned actor, drains transport while decoded submission is paused, and requests a fresh IDR on visible resume. It adds no dependency and does not widen production provider availability.
