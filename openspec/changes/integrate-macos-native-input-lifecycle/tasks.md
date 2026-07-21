@@ -22,7 +22,7 @@
 
 ## 4. Native AppKit capture and cursor ownership
 
-- [ ] 4.1 Implement an injectable main-actor cursor owner with balanced hide/show and relative association restore
+- [x] 4.1 Implement an injectable main-actor cursor owner with balanced hide/show and relative association restore
 - [ ] 4.2 Implement a flipped first-responder stream capture view for key, modifier, repeat, and reserved-shortcut samples
 - [ ] 4.3 Capture relative/absolute pointer movement, buttons, and scrolling with explicit view-to-backing conversion
 - [ ] 4.4 Attach input capture and lifecycle observation to the actual macOS stream surface and detach them idempotently on SwiftUI replacement

@@ -931,3 +931,17 @@
 - focused warnings-as-errors通过`15/15`，结果`/tmp/LuneX-14-3_5-focused.ejam0P/Matrix.xcresult`。完整macOS通过`415 total / 414 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-3_5-full.uXXjYE/LuneXCoreTests.xcresult`；未访问真实Keychain。
 - macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-3_5-builds.XvlSHg`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
 - OpenSpec 3.5标记完成，权威进度`13/29`；ordered macOS session input coordination小节完成，下一项4.1实现balanced AppKit cursor owner。
+
+## 2026-07-21 阶段 14 任务 4.1 启动
+
+- 3.5已以`7a34105`独立提交并推送，确认`HEAD == origin/main`且工作树clean。4.1实现main-actor cursor owner与可注入system operations，真实`NSCursor`/CoreGraphics实现仅在macOS编译。
+- owner只记录并逆转自身成功执行的hide与pointer disassociation；relative acquisition先解除关联、成功后才隐藏，获取失败不改变cursor可见性。重复policy/cleanup幂等，association恢复失败仍立即unhide并保留association ownership供后续重试。
+- 新增`MacCursorCaptureOwner`、macOS `AppKitCursorSystemOperations`与注入式测试；初版focused `4/4`后复核发现获取顺序会在association失败时留下隐藏cursor，已修正production和测试，旧结果不作为最终证据。
+
+## 2026-07-21 阶段 14 任务 4.1 完成
+
+- 最终focused Swift/Clang warnings-as-errors通过`4/4`，结果`/tmp/LuneX-14-4_1-focused-r2.OCEdIM/CursorOwner.xcresult`；覆盖balanced/idempotent capture、acquisition failure零ownership、restore failure可重试和hide-only policy。
+- 完整macOS suite结构化通过`419 total / 418 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-14-4_1-full.9Gr5Jt/LuneXCoreTests.xcresult`；唯一skip为显式禁用的真实Keychain round-trip，未再次访问Keychain。
+- macOS、固定iPhone 17 Pro、iPad Pro 13-inch (M5)、Apple TV和Apple Vision Pro Debug warnings-as-errors构建全部通过，证据根目录`/tmp/LuneX-14-4_1-builds.6sCLS5`。规范化simulator清单前后逐字节一致，四个固定实例唯一且全部`Shutdown`，全局`Booted=0`。
+- 5个OpenSpec strict、generator byte-stability（SHA-256 `f28937759af3c90b9f9ca70a429536266e795405b13e5ccf029cc80cc82613c9`）、whitespace与production/reference边界通过。OpenSpec 4.1标记完成，权威进度`14/29`；下一项4.2实现first-responder keyboard/modifier/shortcut capture view。
+- 4.1只证明cursor owner及真实AppKit/CoreGraphics adapter可编译、所有权转换确定且可恢复；尚未接入stream surface、window lifecycle或coordinator cleanup，不能当作实际remote cursor capture或Sunshine receipt证据。

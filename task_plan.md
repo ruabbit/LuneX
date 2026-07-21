@@ -22,7 +22,7 @@
 | 2. 本机环境检查 | complete | Xcode/Swift/OpenSpec/模拟器/SDK 能力清单 |
 | 3. OpenSpec 需求整理 | complete | 全平台客户端 spec、第一阶段 change、任务清单 |
 | 4. 项目脚手架 | complete | SwiftUI 多平台 App 工程、共享核心模块、平台适配层、单测 target |
-| 5. macOS 核心体验 | partial | window lifecycle 与 Metal pause/throttle 已接线；真实 cursor capture、输入发送、HDR 和音频待完成 |
+| 5. macOS 核心体验 | partial | window lifecycle 与 Metal pause/throttle 已接线；balanced cursor owner已实现，真实capture接线、输入发送、HDR和音频待完成 |
 | 6. iOS/iPadOS 核心体验 | partial | policy/model 与原生 UI 已有；scene/resize、PiP、后台 session、移动 EDR 未接线 |
 | 7. 流媒体协议与会话核心 | partial | host/app HTTPS 与状态骨架已有；真实 pairing、RTSP/control、解码和输入 transport 未实现 |
 | 8. tvOS/visionOS 适配 | partial | target、UI 和 adapter 骨架可构建；真实媒体、输入、HDR/空间音频未验证 |
@@ -31,7 +31,7 @@
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
-| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`13/29`；input coordination矩阵完成，下一步实现AppKit cursor owner |
+| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`14/29`；balanced AppKit cursor owner完成，下一步实现first-responder capture view |
 | 15. 原生 HDR/EDR 管线 | pending | 10-bit、BT.2020/PQ、MDCV/CLL、EDR metadata、tone mapping 与跨屏验证 |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
@@ -45,7 +45,7 @@
 
 当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。
 
-阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`13/29`。3.5矩阵覆盖FIFO/backpressure、满容量focus barrier、重复失焦、release/send failure、全部external terminal reason、重复teardown、stale/inactive operation、replacement与并发activation。focused `15/15`、完整macOS `414 passed + 1 Keychain skip`和五平台Debug构建通过。下一项4.1实现injectable main-actor cursor owner及balanced hide/show/association restore。每项继续独立实现、验收、提交和推送。
+阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`14/29`。4.1新增injectable main-actor cursor owner，先成功取得pointer disassociation ownership再隐藏cursor；release恢复关联失败时立即unhide并保留关联ownership供后续重试。focused `4/4`、完整macOS `418 passed + 1 Keychain skip`和五平台Debug构建通过。下一项4.2实现flipped first-responder capture view及keyboard/modifier/reserved-shortcut sample翻译；实际stream-surface接线仍属于4.4/5.2。每项继续独立实现、验收、提交和推送。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -215,4 +215,4 @@
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
-- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`13/29`；ordered input coordination小节完成，下一项为4.1 AppKit cursor owner。
+- 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`14/29`；balanced AppKit cursor owner完成，下一项为4.2 first-responder keyboard/modifier/shortcut capture view。
