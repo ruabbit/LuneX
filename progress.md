@@ -696,3 +696,17 @@
 - 修改后的macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，根目录`/tmp/LuneX-8_5-platform-builds-r2.0YDpJn`；构建前后四个simulator各唯一且为`Shutdown`，未创建或主动boot设备。
 - fixture validator self-test/全树、全部OpenSpec strict validation、generator SHA-256 byte-for-byte、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对、四SDK strict C syntax与固定simulator唯一/Shutdown复核全部通过，最终门禁目录`/tmp/LuneX-8_5-repo-gates-r4.uUbuvL`。
 - OpenSpec 8.5更新为完成，权威进度`48/61`。production仍缺具体video/audio network receiver，因此stream availability保持fail closed；3.7/5.8/6.7/7.7与9.2-9.3 live证据、阶段15 HDR、阶段16空间音频和阶段17移动连续性均未被本次验收替代。下一项为8.6。
+
+## 2026-07-21 阶段 13 任务 8.6 启动
+
+- 生产inventory审计确认stream availability必须同时包含session control、video receive、audio receive与remote input；默认factory只有pairing/control/input，因video/audio缺失继续truthfully unavailable。
+- `launchSelectedApp()`的availability guard位于remote input key生成、coordinator prepare、control start和media environment start之前；`beginPairing()`的pairing-provider guard位于identity provision之前。8.6将补充四种单provider缺失矩阵与pairing缺失的无副作用证明，不以availability位图断言单独替代执行路径测试。
+
+## 2026-07-21 阶段 13 任务 8.6 完成
+
+- pairing缺provider回归确认identity provision未启动、host仍未配对且无pinned identity；四种required stream provider逐一缺失矩阵确认input-key generation、control start、media environment start与legacy launch计数全部为零，状态保持library/disconnected/idle并输出稳定诊断。
+- 定向Swift 6 warnings-as-errors gate通过`28/28`，结果`/tmp/LuneX-8_6-targeted.n7wWDn/FailClosedProviders.xcresult`；扩展provider/session/cancellation/recovery/media/diagnostics gate通过`84/84`，结果`/tmp/LuneX-8_6-expanded.geI1yx/FailClosedExpanded.xcresult`。
+- 完整macOS gate通过`366 total / 365 passed / 1 explicit Keychain skip / 0 failed`，结果`/tmp/LuneX-8_6-full.lDob5D/LuneXCoreTests.xcresult`；所有测试显式使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、固定Apple TV、固定Apple Vision Pro Debug warnings-as-errors构建全部通过，根目录`/tmp/LuneX-8_6-platform-builds.E5pqLP`；构建前后四个simulator各唯一且为`Shutdown`，未创建或主动boot设备。
+- fixture validator self-test/全树、4个OpenSpec change strict validation、generator逐字节一致、whitespace、production/reference/dependency boundary、固定ENet revision/license/source/header 18文件逐字节比对与四SDK strict C syntax全部通过，最终门禁目录`/tmp/LuneX-8_6-repo-gates-r2.bTa33D`。首次simulator `jq all`表达式和首次OpenSpec JSON断言错误均在执行状态修改前停止，已记录并用新表达式/新隔离目录完整复验。
+- OpenSpec 8.6更新为完成，权威进度`49/61`。production仍因缺具体video/audio network receiver保持fail closed；3.7/5.8/6.7/7.7与9.2-9.3 live证据仍未完成。下一项为9.1禁用live-host和真实Keychain路径的正常离线测试。

@@ -106,6 +106,7 @@ final class AppModelWorkflowTests: XCTestCase {
             artworkCache: InMemoryArtworkCache()
         )
         let streamCoordinator = StreamSessionCoordinator(launchClient: StubStreamLaunchClient())
+        let identityProvisioner = ControlledIdentityProvisioner()
         let model = AppModel(
             hostLibraryManager: hostManager,
             settingsRepository: InMemoryAppSettingsRepository(),
@@ -114,6 +115,7 @@ final class AppModelWorkflowTests: XCTestCase {
             streamSessionCoordinator: streamCoordinator,
             runtimeProviders: .unavailable,
             clientIdentityStore: InMemoryClientIdentityStore(),
+            clientIdentityProvisioner: identityProvisioner,
             clientUniqueID: "test-client",
             remoteInputKey: RemoteInputKeyMaterial(
                 keyID: 7,
@@ -137,6 +139,8 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.pairingUI.actionMessage, ApplicationDiagnosticAction.updateBuild.label)
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .pairing)
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "pairing_provider_unavailable")
+        let identityProvisioningStarted = await identityProvisioner.hasStarted()
+        XCTAssertFalse(identityProvisioningStarted)
     }
 
     func testPairingUIConsumesProgressAndAuthenticatedCompletion() async throws {
@@ -488,6 +492,56 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "stream_provider_unavailable")
         let launchCount = await launchClient.currentLaunchCount()
         XCTAssertEqual(launchCount, 0)
+    }
+
+    func testEveryMissingRequiredStreamProviderStopsBeforeAnySessionSideEffect() async throws {
+        for missingProvider in MissingStreamProvider.allCases {
+            let controlProvider = ControlledSessionControlProvider()
+            let mediaEnvironment = ControlledSessionMediaEnvironment()
+            let launchClient = StubStreamLaunchClient()
+            let keyGenerator = ScriptedInputKeyGenerator(results: [])
+            let production = ProductionRuntimeProviderFactory.makeDefault()
+            let inventory = RuntimeProviderInventory(
+                pairing: production.pairing,
+                sessionControl: missingProvider == .sessionControl ? nil : controlProvider,
+                videoReceive: missingProvider == .videoReceive
+                    ? nil
+                    : AvailabilityVideoReceiveProvider(),
+                audioReceive: missingProvider == .audioReceive
+                    ? nil
+                    : AvailabilityAudioReceiveProvider(),
+                remoteInput: missingProvider == .remoteInput ? nil : production.remoteInput
+            )
+            let model = makeLaunchReadyModel(
+                sessionControlProvider: controlProvider,
+                sessionMediaEnvironment: mediaEnvironment,
+                launchClient: launchClient,
+                remoteInputKeyGenerator: keyGenerator,
+                runtimeProviders: inventory
+            )
+
+            await model.loadInitialState()
+            await model.refreshAppsForSelectedHost()
+            await model.launchSelectedApp()
+
+            XCTAssertFalse(
+                model.isStreamTransportAvailable,
+                "\(missingProvider) must keep stream availability fail closed."
+            )
+            XCTAssertFalse(model.hasActiveStreamSession)
+            XCTAssertFalse(model.session.isStreaming)
+            XCTAssertEqual(model.session.phase, .disconnected)
+            XCTAssertEqual(model.navigationSelection, .library)
+            XCTAssertEqual(model.renderState.policy, .idle)
+            XCTAssertEqual(model.streamLaunchUI.errorMessage, ApplicationDiagnosticFactory.streamUnavailable.summary)
+            XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.updateBuild.label)
+            XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "stream_provider_unavailable")
+            XCTAssertEqual(keyGenerator.currentGenerationCount(), 0)
+            XCTAssertEqual(controlProvider.currentStartRecords().count, 0)
+            XCTAssertEqual(mediaEnvironment.currentStartRecords().count, 0)
+            let launchCount = await launchClient.currentLaunchCount()
+            XCTAssertEqual(launchCount, 0)
+        }
     }
 
     func testSessionUIRequiresNegotiationAndEveryRequiredChannel() async throws {
@@ -1049,7 +1103,8 @@ final class AppModelWorkflowTests: XCTestCase {
         sessionMediaEnvironment: any SessionMediaEnvironment =
             ControlledSessionMediaEnvironment(),
         launchClient: StubStreamLaunchClient,
-        remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating
+        remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating,
+        runtimeProviders: RuntimeProviderInventory? = nil
     ) -> AppModel {
         let host = MoonlightHost(
             id: UUID(uuidString: "45F0C9CB-D795-49B2-A733-F68397632233")!,
@@ -1075,7 +1130,7 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
             streamSessionCoordinator: StreamSessionCoordinator(launchClient: launchClient),
-            runtimeProviders: completeStreamProviderInventory(
+            runtimeProviders: runtimeProviders ?? completeStreamProviderInventory(
                 sessionControlProvider: sessionControlProvider
             ),
             sessionMediaEnvironment: sessionMediaEnvironment,
@@ -1233,6 +1288,13 @@ final class AppModelWorkflowTests: XCTestCase {
             remoteInput: production.remoteInput
         )
     }
+}
+
+private enum MissingStreamProvider: String, CaseIterable {
+    case sessionControl
+    case videoReceive
+    case audioReceive
+    case remoteInput
 }
 
 private struct StubServerInfoClient: ServerInfoClient {

@@ -43,7 +43,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `48/61`：8.5已将pairing/transport/decoder/audio/input失败收敛为有界、类型化、可执行且经过secret redaction的应用诊断，SwiftUI只显示安全摘要、code、severity与恢复动作；正常stop/远端断开会清除陈旧错误动作。production仍缺具体video/audio network receiver，因此默认stream availability继续fail closed。3.7、5.8、6.7与7.7仍分别需要授权live pairing、sustained-video、audible hardware与input/feedback证据并保持未完成；下一项为8.6缺失required production provider时的fail-closed证明，阶段13仍为 `in_progress`。
+当前 change 权威进度为 `49/61`：8.6已用执行级矩阵证明pairing provider缺失时不启动identity provision，control/video/audio/input任一stream provider缺失时不生成input key、不创建session、不启动control/media/legacy launch，也不离开library或报告Streaming。production仍缺具体video/audio network receiver，因此默认stream availability继续fail closed。3.7、5.8、6.7与7.7仍分别需要授权live pairing、sustained-video、audible hardware与input/feedback证据并保持未完成；下一项为9.1禁用live-host与真实Keychain路径的正常离线测试，阶段13仍为 `in_progress`。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -64,6 +64,8 @@
 8.3让`MoonlightSessionControlProvider`成为launch/resume/RTSP/control与transport teardown的单一owner；AppModel只调用`StreamSessionCoordinator.prepare/apply/fail`归约状态，不再通过legacy launch client发送第二次`/launch`或`/cancel`。Streaming要求validated negotiated configuration与control/video/audio/input全部ready；remote termination、reconnect、invalid order、incomplete/throwing stream、local stop、duplicate launch、late event与pre-start failure均有应用层回归。该证据不等于8.4已启动真实video/audio/input provider，也不等于5.8/6.7/7.7或9.2-9.3 live端到端已完成。
 
 8.4新增generation-scoped `NativeSessionMediaEnvironment`，统一拥有video/audio receiver、VideoToolbox/AudioToolbox processor、remote input/feedback和3个consumer task，并以5个tracked resource逆序释放。AppModel只聚合control的`.control`与media环境的`.video/.audio/.input`；input启动后先ready，video/audio必须分别成功提交VideoToolbox和排入PCM graph后才ready。decoded frame通过有界presentation source进入Metal/CI，停止或无帧时主动清黑。该证据不等于production已有真实video/audio receiver，不等于最终HDR tone mapping或空间音频，也不等于5.8/6.7/7.7 live证据。
+
+8.6保持既有production fail-closed逻辑不变，并补充pairing缺失与四种required stream provider逐一缺失的执行级无副作用回归；所有case均验证稳定诊断、disconnected/idle/library状态与identity/key/control/media/legacy launch计数为零。该证据只证明缺失provider不会越过应用guard，不提供缺失的video/audio receiver，也不替代3.7/5.8/6.7/7.7和9.2-9.3 live互操作证据。
 
 ## 遇到的错误
 
@@ -188,8 +190,10 @@
 | 8.5第二轮唯一失败仍断言错误文案包含`failed` | 1 | launch request上下文将未知key-generator错误收敛为typed `invalidInputKey`，测试改验input类别/code/action和安全摘要，不依赖任意英文子串 |
 | 8.5首轮仓库门禁把fixture根目录误写为`Fixtures` | 1 | 实际根目录为`Tests/Fixtures/Moonlight`；self-test通过，后续门禁尚未执行，改正参数后用新隔离目录完整重跑 |
 | 8.5最终simulator jq复核在`and`后丢失根对象上下文 | 1 | 产品/OpenSpec/generator/boundary/ENet/C门已通过；将输入保存为`$root`后重新从头执行仓库与simulator门禁 |
+| 8.6 simulator复核的`jq all(generator; condition)`在本机解析失败 | 1 | 未修改任何设备状态；改为`map`生成四项计数并严格要求每个固定UUID唯一且`Shutdown` |
+| 8.6仓库门禁把OpenSpec JSON顶层误当作对象数组 | 1 | CLI实际返回`items`与`summary`对象；读取真实JSON后改验`.summary.totals`和`.items | all(.valid)`，在新隔离目录从头重跑通过 |
 
 ## 当前执行点（2026-07-21）
 
-- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`48/61`；8.5已完成全部验收，下一项为8.6 required production provider缺失时保持fail closed。
-- 8.6验收要求：pairing缺provider时不接触identity/network，stream缺control/video/audio/input任一项时不创建session、不报告Streaming且给出稳定诊断；production inventory继续因缺video/audio receiver而truthfully unavailable。
+- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`49/61`；8.6已完成全部验收，下一项为9.1禁用live-host与真实Keychain路径的正常离线测试。
+- production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。

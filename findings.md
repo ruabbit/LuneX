@@ -572,3 +572,16 @@
 - Pairing and stream panels show only the current safe recovery action; normal stop and remote disconnect clear stale failure/action state. The Diagnostics view presents category, severity, code, safe summary, suggested action, and timestamp.
 - Final evidence is `48/48` targeted and `365 total / 364 passed / 1 explicit Keychain skip / 0 failed` complete macOS. App/persistence/catalog diagnostics and audio-route snapshots also avoid arbitrary error text, host identity/address, and output-device names. All five Debug warnings-as-errors builds and fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates passed; fixed simulators remained unique and `Shutdown`.
 - This proves actionable and privacy-bounded application diagnostics. It does not add missing production video/audio receivers, enable live streaming, prove Sunshine interoperability, or complete later HDR, spatial-audio, PiP/background, and native-input experience stages.
+
+### OpenSpec 8.6 fail-closed provider audit (2026-07-21)
+
+- `RuntimeProviderAvailability.requiredStream` is the exact four-provider set: session control, video receive, audio receive, and remote input. Pairing remains independent.
+- Application guards execute before pairing identity provisioning and before stream input-key generation, session preparation, control start, or media-environment start. The remaining work is an execution-level missing-provider matrix proving every one of those side effects stays at zero.
+- The production factory deliberately provides pairing/control/input but no concrete video/audio network receivers. Task 8.6 must preserve this truthful unavailable state; it must not add placeholder receivers or weaken readiness to complete the checklist.
+
+### OpenSpec 8.6 fail-closed provider acceptance (2026-07-21)
+
+- Pairing-provider absence now has an execution-level regression proving identity provisioning never starts and the host remains unpaired without a pinned identity. The application emits the stable `pairing_provider_unavailable` diagnostic.
+- A four-case matrix removes session control, video receive, audio receive, or remote input one at a time. Every case remains disconnected, idle, and in the library while input-key generation, control start, media-environment start, and legacy launch counts all stay zero; the application emits `stream_provider_unavailable`.
+- Final evidence is `28/28` targeted, `84/84` expanded, and `366 total / 365 passed / 1 explicit Keychain skip / 0 failed` complete macOS. All five Debug warnings-as-errors builds, fixture/OpenSpec/generator/boundary/ENet/four-SDK-C gates, and fixed-simulator uniqueness/Shutdown checks passed.
+- No production availability was widened. The factory still lacks concrete video/audio network receivers, so the default app cannot claim a stream session; authorized live pairing, sustained video, audible hardware audio, delivered input/feedback, and end-to-end interoperability remain unproven.
