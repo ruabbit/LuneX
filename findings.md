@@ -1560,3 +1560,20 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_4-builds.1785357260030/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - 最终repository gate `/tmp/LuneX-16-4_4-repo-final.s9yPFw`通过OpenSpec strict `7/7`、fixture、source/test membership、privacy/reference/package/Core Image/secret/diff边界和generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip是显式真实Keychain测试，全局`Booted=0`且未操作simulator。
 - 该证据证明AppModel current-generation状态与偏好接线，不证明设置已经持久化/UI已经接线，也不证明signed entitlement、AirPods head tracking、真实route transition、可听多声道定位或live Sunshine播放；这些仍分别属于5.x和6.6。
+
+## 2026-07-30 阶段 16 任务 4.5 调查
+
+- `AudioRuntimeRecoveryTests`已单独覆盖route-during-interruption、underrun rebuild、短loss concealment、partial concealment failure和late scheduled-buffer completion；4.5应增加跨事件组合断言，确保这些累计/失效语义在spatial policy与interruption恢复中不互相回退。
+- `NativeSessionAudioProcessorTests`已覆盖route/preference共享revision域与interruption latest-wins，但尚无一条明确的capability downgrade到typed nonspatial fallback、随后recovery到spatial graph的单调event/graph generation回归。
+- `SessionMediaEnvironmentTests`已拒绝旧processor runtime event，却未让preference update实际悬挂跨越same-session replacement；仅在调用前检查generation不足以证明actor重入后的post-await stale收敛。
+- stop/restart需要同时证明旧audio runtime snapshot被清除、新generation从空状态开始、旧generation event/偏好完成不能污染replacement，不能只断言resource stop count。
+
+## 2026-07-30 阶段 16 任务 4.5 验收结论
+
+- processor新增明确的capability `supported -> unsupported -> supported`回归，实际runtime依次为`headTracked -> nonspatial(routeUnsupported) -> headTracked`，event sequence、policy revision和graph generation均严格单调。
+- runtime组合测试在短loss concealment后进入interruption，同时接收新spatial policy和route change；resume只建立latest policy graph，累计concealed frame保持240，旧scheduled-buffer completion不能恢复失效容量。
+- environment新增真实悬挂的preference update跨越stop/restart与same-session replacement；旧调用恢复后返回`.staleAudioApplication`，停止后的snapshot无audio runtime，新generation从空snapshot开始并只接受replacement processor事件。
+- 修正后focused `/tmp/LuneX-16-4_5-focused-r2.BdIcbk/Focused.xcresult`为`56/56`，expanded `/tmp/LuneX-16-4_5-expanded.SuNKjD/Expanded.xcresult`为`115/115`，完整macOS `/tmp/LuneX-16-4_5-full.xB6T2k/LuneXCoreTests.xcresult`为`709 total / 708 passed / 1 explicit Keychain skip / 0 failed`；三份xcresult结构化diagnostics均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_5-builds.1785357974699/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-4_5-repo.A1M8ns`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/diff边界和generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain测试，全局`Booted=0`且未操作simulator。
+- 本项证明确定性恢复/replacement矩阵，不等于4.6已完成真实7.1 application链路，也不证明signed entitlement、真实route硬件切换、AirPods head tracking、可听声道定位或live Sunshine播放。

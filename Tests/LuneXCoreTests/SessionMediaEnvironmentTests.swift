@@ -402,6 +402,115 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         _ = await environment.stop(sessionID: sessionID)
     }
 
+    func testStoppedAudioGenerationCannotCompletePreferenceIntoRestart()
+        async throws
+    {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(
+            calls: calls,
+            finishStreamOnStop: false
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        var stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let firstProcessor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let firstRuntime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 0,
+            graphGeneration: 1
+        )
+        await firstProcessor.emit(firstRuntime)
+        _ = try await iterator.next()
+        let firstSnapshot = await environment.snapshot()
+        XCTAssertEqual(
+            firstSnapshot.audioRuntime?.runtime,
+            firstRuntime
+        )
+
+        await firstProcessor.blockNextPreferenceUpdate()
+        let staleApplication = SessionSpatialAudioPreferenceApplication(
+            sessionID: sessionID,
+            mediaGeneration: firstGeneration,
+            preferences: SessionSpatialAudioPreferences(
+                spatialAudioEnabled: false,
+                headTrackingEnabled: false
+            )
+        )
+        let staleUpdate = Task {
+            try await environment.updateSpatialAudioPreferences(staleApplication)
+        }
+        await waitUntil {
+            await firstProcessor.hasBlockedPreferenceUpdate()
+        }
+
+        _ = await environment.stop(sessionID: sessionID)
+        let stoppedSnapshot = await environment.snapshot()
+        XCTAssertNil(stoppedSnapshot.sessionID)
+        XCTAssertNil(stoppedSnapshot.audioRuntime)
+
+        stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let replacementSnapshot = await environment.snapshot()
+        let replacementGeneration = replacementSnapshot.generation
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        XCTAssertNil(replacementSnapshot.audioRuntime)
+
+        await firstProcessor.resumeBlockedPreferenceUpdate()
+        await XCTAssertThrowsErrorAsync(try await staleUpdate.value) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleAudioApplication
+            )
+        }
+
+        let replacementProcessor = try XCTUnwrap(
+            audioProcessorFactory.processor(at: 1)
+        )
+        let staleRuntime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 99,
+            graphGeneration: 99,
+            cause: .recovery
+        )
+        let replacementRuntime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 0,
+            graphGeneration: 1
+        )
+        await firstProcessor.emit(staleRuntime)
+        await replacementProcessor.emit(replacementRuntime)
+        let expected = SessionMediaAudioRuntimeState(
+            sessionID: sessionID,
+            mediaGeneration: replacementGeneration,
+            runtime: replacementRuntime
+        )
+        let forwarded = try await iterator.next()
+        let currentSnapshot = await environment.snapshot()
+        XCTAssertEqual(forwarded, .audioRuntime(expected))
+        XCTAssertEqual(currentSnapshot.audioRuntime, expected)
+
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
     func testInputApplicationIsGenerationScopedAcrossSameSessionReplacement() async throws {
         let calls = MediaEnvironmentCallRecorder()
         let environment = makeEnvironment(
@@ -2289,6 +2398,9 @@ private actor ControlledAudioProcessor: SessionAudioProcessing {
     private let eventStream: AsyncStream<SessionAudioRuntimeEvent>
     private let eventContinuation: AsyncStream<SessionAudioRuntimeEvent>.Continuation
     private var appliedPreferences: [SessionSpatialAudioPreferences] = []
+    private var shouldBlockNextPreferenceUpdate = false
+    private var blockedPreferenceContinuation:
+        CheckedContinuation<Void, Never>?
 
     init(
         calls: MediaEnvironmentCallRecorder,
@@ -2314,11 +2426,30 @@ private actor ControlledAudioProcessor: SessionAudioProcessing {
     func updateSpatialAudioPreferences(
         _ preferences: SessionSpatialAudioPreferences
     ) async throws {
+        if shouldBlockNextPreferenceUpdate {
+            shouldBlockNextPreferenceUpdate = false
+            await withCheckedContinuation { continuation in
+                blockedPreferenceContinuation = continuation
+            }
+        }
         appliedPreferences.append(preferences)
     }
 
     func preferenceUpdates() -> [SessionSpatialAudioPreferences] {
         appliedPreferences
+    }
+
+    func blockNextPreferenceUpdate() {
+        shouldBlockNextPreferenceUpdate = true
+    }
+
+    func hasBlockedPreferenceUpdate() -> Bool {
+        blockedPreferenceContinuation != nil
+    }
+
+    func resumeBlockedPreferenceUpdate() {
+        blockedPreferenceContinuation?.resume()
+        blockedPreferenceContinuation = nil
     }
 
     func emit(_ event: SessionAudioRuntimeEvent) {

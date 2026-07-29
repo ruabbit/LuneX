@@ -92,6 +92,66 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
         XCTAssertEqual(resumed.lastAction, .interruptionResumed)
     }
 
+    func testInterruptedRouteAndPolicyRecoveryPreservesConcealmentAndRejectsLateCompletion()
+        async throws
+    {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        let concealed = try await harness.runtime.handle(
+            .packetLoss(
+                firstSequenceNumber: 1,
+                firstRTPTimeStamp: 1,
+                packetCount: 1,
+                samplesPerPacket: 240
+            ),
+            at: 1
+        )
+        XCTAssertEqual(concealed.concealedFrameCount, 240)
+        let scheduledBeforeInterruption = await harness.pipeline.scheduledBufferCount()
+        XCTAssertEqual(scheduledBeforeInterruption, 1)
+
+        _ = try await harness.runtime.handle(.interruptionBegan, at: 2)
+        let revisedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: true
+        )
+        let deferredPolicy = try await harness.runtime.applySpatialPolicy(
+            revisedIntent,
+            at: 3
+        )
+        let deferredRoute = try await harness.runtime.handle(
+            .routeChanged,
+            at: 4
+        )
+        let resumed = try await harness.runtime.handle(
+            .interruptionEnded(shouldResume: true),
+            at: 5
+        )
+
+        harness.client.completeAllSchedules()
+        await Task.yield()
+        await Task.yield()
+        let settled = try await harness.runtime.snapshot(at: 6)
+
+        XCTAssertEqual(
+            deferredPolicy.lastAction,
+            .spatialPolicyDeferred(revisedIntent.revision)
+        )
+        XCTAssertEqual(deferredRoute.lastAction, .routeChangeDeferred)
+        XCTAssertEqual(resumed.lastAction, .interruptionResumed)
+        XCTAssertEqual(resumed.pipeline.spatialRuntime?.revision, revisedIntent.revision)
+        XCTAssertEqual(resumed.concealedFrameCount, 240)
+        XCTAssertEqual(settled.concealedFrameCount, 240)
+        let scheduledAfterLateCompletion = await harness.pipeline.scheduledBufferCount()
+        XCTAssertEqual(scheduledAfterLateCompletion, 0)
+        XCTAssertEqual(
+            harness.client.snapshotGraphIntents(),
+            [harness.graphIntent, revisedIntent]
+        )
+    }
+
     func testUnderrunRebuildsGraphAndResetsClock() async throws {
         let harness = try makeHarness()
         _ = try await harness.runtime.start(at: 0)

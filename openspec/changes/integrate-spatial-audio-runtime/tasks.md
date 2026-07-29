@@ -30,7 +30,7 @@
 - [x] 4.2 Extend `NativeSessionAudioProcessor` and its factory to own the route monitor, current spatial preferences, graph generation, and semantic audio-state event stream
 - [x] 4.3 Forward current-generation audio runtime state through `NativeSessionMediaEnvironment` alongside readiness and discard stale processor/rebuild events
 - [x] 4.4 Bind `AppModel` audio/spatial state and preference changes to the active session/media generation, clearing current state on stop, failure, reconnect, and replacement
-- [ ] 4.5 Add route-during-interruption, capability downgrade/recovery, preference change, underrun/concealment, stale completion, stop/restart, and generation-replacement tests
+- [x] 4.5 Add route-during-interruption, capability downgrade/recovery, preference change, underrun/concealment, stale completion, stop/restart, and generation-replacement tests
 - [ ] 4.6 Add one application integration gate spanning negotiated 7.1 PCM, environment graph state, media readiness, route downgrade, entitlement fallback, reconnect replacement, diagnostics, and clean stop
 
 ## 5. Settings, diagnostics, and native product state

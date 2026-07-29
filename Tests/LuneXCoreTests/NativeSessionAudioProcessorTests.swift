@@ -97,6 +97,48 @@ final class NativeSessionAudioProcessorTests: XCTestCase {
         await harness.collection.value
     }
 
+    func testCapabilityDowngradeAndRecoveryPublishTypedMonotonicRuntime()
+        async throws
+    {
+        let harness = try await makeHarness(
+            capability: routeCapability(support: .supported),
+            entitlement: .granted
+        )
+        defer { harness.collection.cancel() }
+        try await waitForEventCount(1, recorder: harness.events)
+
+        harness.engine.setCapability(routeCapability(support: .unsupported))
+        harness.source.emit(.spatialPlaybackCapabilityChanged)
+        try await waitForEventCount(2, recorder: harness.events)
+
+        harness.engine.setCapability(routeCapability(support: .supported))
+        harness.source.emit(.spatialPlaybackCapabilityChanged)
+        try await waitForEventCount(3, recorder: harness.events)
+
+        let events = await harness.events.snapshot()
+        XCTAssertEqual(events.map(\.sequence), [0, 1, 2])
+        XCTAssertEqual(events.map(\.graphGeneration), [1, 2, 3])
+        XCTAssertEqual(
+            events.map(\.cause),
+            [.initial, .spatialCapabilityChanged, .spatialCapabilityChanged]
+        )
+        XCTAssertEqual(
+            events.map(\.spatialRuntime?.presentationMode),
+            [.headTracked, .nonspatial, .headTracked]
+        )
+        XCTAssertEqual(
+            events.map(\.spatialRuntime?.fallbackReason),
+            [nil, .routeUnsupported, nil]
+        )
+        XCTAssertEqual(
+            harness.engine.graphIntents().map(\.route.systemSpatialSupport),
+            [.supported, .unsupported, .supported]
+        )
+
+        await harness.processor.stop()
+        await harness.collection.value
+    }
+
     func testInterruptedChangesAreDeferredAndResumeOnlyTheLatestIntent()
         async throws
     {

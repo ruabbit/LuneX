@@ -1971,3 +1971,18 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_4-builds.1785357260030/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - 最终repository gate `/tmp/LuneX-16-4_4-repo-final.s9yPFw`通过OpenSpec strict `7/7`、fixtures、membership、reference/package/Core Image/secret/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain用例，前后全局`Booted=0`且未操作simulator。
 - OpenSpec 4.4已勾选，权威进度更新为`21/35`；下一项4.5补齐route/interruption、capability downgrade/recovery、preference、underrun/concealment、stale completion、stop/restart和generation replacement回归矩阵。本项不证明5.x settings/UI或6.6签名/物理可听验收。
+
+## 2026-07-30 阶段 16 任务 4.5 启动
+
+- 4.4已以`9e9bece Bind spatial audio application state`独立提交并推送；fetch确认`HEAD == origin/main`且工作树clean，OpenSpec权威进度`21/35`，进入4.5。
+- 现有底层测试分别覆盖route-during-interruption、underrun/concealment、preference policy、late schedule completion和environment generation replacement，但缺少capability downgrade/recovery、interruption期间route+preference latest-wins、audio snapshot stop/restart及in-flight preference completion跨same-session replacement的组合回归。
+- 本项只补runtime/processor/environment/AppModel恢复与replacement测试矩阵；不提前实现4.6完整7.1 application gate、5.x settings/diagnostics/UI或6.6硬件验收。测试继续显式移除真实Keychain opt-in且不操作simulator。
+- 首轮focused在测试执行前被warnings-as-errors拒绝：新environment测试对本文件非throwing `waitUntil`写了多余`try`。删除该单点后使用全新DerivedData/result bundle重跑；失败bundle不计验收且没有production行为失败。
+
+## 2026-07-30 阶段 16 任务 4.5 完成
+
+- 新增processor capability downgrade/recovery typed状态与单调sequence/graph generation回归；新增runtime concealment+interruption+latest policy+route+late completion组合回归；新增environment悬挂preference跨stop/restart/replacement的post-await stale与snapshot隔离回归。
+- focused `/tmp/LuneX-16-4_5-focused-r2.BdIcbk/Focused.xcresult`为`56/56`，expanded `/tmp/LuneX-16-4_5-expanded.SuNKjD/Expanded.xcresult`为`115/115`，完整macOS `/tmp/LuneX-16-4_5-full.xB6T2k/LuneXCoreTests.xcresult`为`709 total / 708 passed / 1 explicit Keychain skip / 0 failed`；全部结构化diagnostics为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_5-builds.1785357974699/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-4_5-repo.A1M8ns`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式Keychain测试，前后全局`Booted=0`且未操作simulator。
+- OpenSpec 4.5已勾选，权威进度更新为`22/35`；下一项4.6新增跨negotiated 7.1 PCM、environment graph、readiness、route downgrade、entitlement fallback、reconnect replacement、diagnostics与clean stop的application integration gate。本项不替代4.6或6.6硬件证据。
