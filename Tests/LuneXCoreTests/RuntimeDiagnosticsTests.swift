@@ -270,6 +270,118 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         }
     }
 
+    func testHDRDiagnosticsUseStablePrivacyBoundedSemanticPayloads() throws {
+        let states: [HDRPresentationDiagnosticState] = [
+            .activeSDR,
+            .activeEDR,
+            .sdrFallback(.userPreferenceDisabled),
+            .sdrFallback(.platformOutputUnsupported(.macOS)),
+            .sdrFallback(.currentHeadroomUnavailable),
+            .sdrFallback(.currentHeadroomInvalid),
+            .sdrFallback(.currentHeadroomInsufficient),
+            .invalidInput,
+            .unsupportedOutput,
+            .staleRevision,
+            .pipelineFailure
+        ]
+        let diagnostics = try states.map {
+            try XCTUnwrap(ApplicationDiagnosticFactory.hdrPresentationState($0))
+        }
+        let forbiddenValues = [
+            "private-host",
+            "game-name",
+            "display-serial",
+            "decoderGeneration",
+            "displayRevision",
+            "frame",
+            "metadata",
+            "pixel"
+        ]
+
+        XCTAssertNil(ApplicationDiagnosticFactory.hdrPresentationState(.inactive))
+        XCTAssertEqual(Set(diagnostics.map(\.code)).count, diagnostics.count)
+        XCTAssertTrue(diagnostics.allSatisfy { $0.category == .hdr })
+        XCTAssertTrue(diagnostics.allSatisfy { $0.subsystem == "stream.hdr" })
+        for diagnostic in diagnostics {
+            for value in forbiddenValues {
+                XCTAssertFalse(
+                    diagnostic.code.localizedCaseInsensitiveContains(value)
+                )
+                XCTAssertFalse(
+                    diagnostic.summary.localizedCaseInsensitiveContains(value)
+                )
+            }
+        }
+    }
+
+    func testHDRResolutionErrorsMapToClosedSemanticDiagnosticClasses() {
+        let invalidInput: [HDRRenderResolutionError] = [
+            .invalidSourceContract,
+            .incompatibleSourceAndMapping,
+            .unsupportedDecodedLayout,
+            .incompatibleDecodedLayout
+        ]
+        let unsupportedOutput: [HDRRenderResolutionError] = [
+            .unsupportedPlatformOutput(.macOS),
+            .missingCurrentDisplayHeadroom,
+            .invalidCurrentDisplayHeadroom,
+            .insufficientCurrentDisplayHeadroom,
+            .userDisabledHDRWithoutSDRFallback,
+            .unsupportedSurfaceContract,
+            .incompatibleMappingAndSurface
+        ]
+        let staleRevision: [HDRRenderResolutionError] = [
+            .staleDecoderGeneration(expected: 2, actual: 1),
+            .staleColorSignature,
+            .staleDisplayRevision(
+                expected: HDRDisplayRevision(rawValue: 2),
+                actual: HDRDisplayRevision(rawValue: 1)
+            ),
+            .invalidDisplayRevision,
+            .displayRevisionExhausted
+        ]
+
+        XCTAssertTrue(invalidInput.allSatisfy {
+            HDRPresentationDiagnosticState.closed($0) == .invalidInput
+        })
+        XCTAssertTrue(unsupportedOutput.allSatisfy {
+            HDRPresentationDiagnosticState.closed($0) == .unsupportedOutput
+        })
+        XCTAssertTrue(staleRevision.allSatisfy {
+            HDRPresentationDiagnosticState.closed($0) == .staleRevision
+        })
+        XCTAssertEqual(
+            HDRPresentationDiagnosticState.closed(.inactiveSession),
+            .inactive
+        )
+        XCTAssertEqual(
+            HDRPresentationDiagnosticState.closed(.drawableUnavailable),
+            .inactive
+        )
+    }
+
+    @MainActor
+    func testHDRActionRecoveryDoesNotClearOtherStreamActionsOrHistory() {
+        let store = DiagnosticsStore(capacity: 4)
+        store.record(
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession),
+            date: Date(timeIntervalSince1970: 1)
+        )
+        store.record(
+            ApplicationDiagnosticFactory.hdrPresentationState(.pipelineFailure)!,
+            date: Date(timeIntervalSince1970: 2)
+        )
+
+        XCTAssertEqual(store.latestStreamActionableEvent?.category, .hdr)
+        store.clearActionableEvents(in: [.hdr])
+
+        XCTAssertEqual(store.latestStreamActionableEvent?.category, .decoder)
+        XCTAssertEqual(
+            store.events.map(\.code),
+            ["video_pipeline_failed", "hdr_pipeline_failure"]
+        )
+    }
+
     @MainActor
     func testControllerFeedbackDiagnosticDoesNotExposeControllerIdentity() {
         let diagnostic = ApplicationDiagnosticFactory.remoteFeedback(

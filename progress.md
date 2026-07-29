@@ -1612,3 +1612,24 @@
 - 5.2实现删除settings-derived synthetic headroom，并把HDR/EDR eligibility收紧到权威streaming snapshot、current media/video readiness、active decoder generation、matching negotiated/decoded metadata，再结合user preference、platform/display capability和真实current headroom解析。
 - reconnect顺序改为先应用reconnecting snapshot并关闭render/input/HDR eligibility，再等待media teardown；focused `2/2`、扩大矩阵`134/134`、完整macOS `606 total / 605 passed / 1 Keychain skip / 0 failed`及五平台Debug Metal build均已通过任务级验收。正常测试未启用真实Keychain。
 - OpenSpec 5.2标记完成，权威进度更新为`24/33`；阶段15保持`in_progress`。下一项5.3为deduplicated privacy-bounded active-SDR/active-EDR/fallback/error diagnostics。5.4 application gate、5.5 status/settings UI、live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
+
+## 2026-07-29 阶段 15 任务 5.3 恢复
+
+- macOS更新后恢复确认活动goal仍为阶段13至20，`HEAD == origin/main == 7184e18`，OpenSpec权威进度`24/33`，工作树仅含暂停前5.3九个文件；本轮不触发真实Keychain或任何simulator生命周期操作。
+- 已有实现覆盖稳定HDR类别/代码、privacy-bounded文案、语义去重、仅清`.hdr`的recovery，以及resolver/presenter到AppModel的production回调。提交前审计确认旧SwiftUI presenter在replacement已激活后迟到`stop()`可无条件发布`.inactive`并清除新状态。
+- 修复增加presenter-owned UUID lease：configure claim，状态携带owner，stop发布inactive后release；AppModel只接受当前owner的surface事件，resolver的权威closed状态仍可直接发布。新增AppModel与两个真实presenter replacement回归，覆盖旧owner迟到failure/stop不能覆盖replacement。
+- 首轮ownership focused在测试编译阶段因新回归误用不存在的`sdrVideoRange()`停止；production源码无诊断。结果`/tmp/LuneX-15-5_3-ownership-focused-r1.zr70yd/Ownership.xcresult`不计验收，fixture改用既有`rec709VideoRange()`后从全新路径重跑。
+- 修正后的ownership focused通过`3/3`，扩大`RuntimeDiagnosticsTests + AppModelWorkflowTests + StreamMetalPresenterTests`矩阵通过`84/84`，完整macOS suite通过`612 total / 611 passed / 1 explicit Keychain skip / 0 failed`；所有xcresult结构化diagnostics为0。
+- macOS与固定iPhone/iPad/tvOS/visionOS Debug App build全部warnings-as-errors成功并生成Metal artifacts；simulator规范化清单前后SHA-256同为`b4647483e9c488adce9837dfa317dc8bae4a5262249059840f1f80f4fb1dc4e5`，固定四实例唯一、available、`Shutdown`且全局`Booted=0`。
+- 首轮repository包装器已完成fixture/strict/apply/generator/reference/package/Core Image/diff/whitespace实质门，但最终仅用于打印摘要的`jq`嵌套引号编译失败并使总退出码为3；该轮不计最终验收，改用无嵌套插值的TSV读回并从全新目录完整重跑。
+
+## 2026-07-29 阶段 15 任务 5.3 完成
+
+- production最后补强后的expanded gate位于`/tmp/LuneX-15-5_3-expanded-final2.hN5slx`并通过`84/84`；完整macOS gate位于`/tmp/LuneX-15-5_3-full-final2.1ezRUN`并通过`612 total / 611 passed / 1 explicit Keychain skip / 0 failed`。两者结构化warning/error/analyzer warning均为0，正常测试未启用真实Keychain。
+- 五平台最终build-only位于`/tmp/LuneX-15-5_3-builds-final2.h2BFAz`：macOS、固定iPhone/iPad/tvOS/visionOS均`succeeded`、结构化diagnostics为0，并各生成Metal AIR/metallib。simulator规范化before/after清单逐字一致，SHA-256同为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`。
+- 最终构建证据首次读回在zsh只读变量`status`处退出；此前simulator比较已完成，但该包装器不计完整验收。改用`build_status`后只重跑未完成的五平台结果/Metal产物读回并通过，未重复生成或操作simulator。
+- production最后补强后的repository gates从全新目录`/tmp/LuneX-15-5_3-repo-final3.fZC1hP`完整通过：fixture self-test/全树、OpenSpec strict `6/6`、apply `25/33`且task 25=true/task 26=false、generator初始与连续三次SHA-256均为`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、reference/package/Core Image/diff/owned-whitespace边界全部成立。此前`repo-final-r2`仅保留为最后一行production补强前的中间证据。
+- production现发布deduplicated privacy-bounded active SDR/EDR、typed SDR fallback、invalid-input、unsupported-output、stale-revision与pipeline-failure diagnostics；recovery只清`.hdr` current action并保留其他类别与bounded history。
+- presenter UUID lease修复replacement ownership：新surface claim后，旧surface迟到failure/draw/stop/release均不能覆盖当前AppModel HDR诊断。ownership `3/3`、扩大矩阵`84/84`、完整macOS `612 total / 611 passed / 1 Keychain skip / 0 failed`及五平台Debug Metal build通过。
+- OpenSpec 5.3标记完成，权威进度更新为`25/33`；阶段15保持`in_progress`。下一项5.4为SDR、HDR EDR、headroom downgrade/recovery、metadata、cross-display revision、stale-frame及clean-stop的application integration gate；5.5 UI和live/physical证据继续未完成。
+- 提交前完整diff自审发现普通clear failure仅发布诊断而未像first-clear/present failure一样停止runtime；已补`runtime.stop()`，并从全新路径完成expanded/full/five-platform/repository最终门禁。

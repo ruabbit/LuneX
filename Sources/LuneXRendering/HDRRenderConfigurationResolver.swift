@@ -19,6 +19,51 @@ enum HDRResolvedOutputMode: Hashable, Sendable {
     case sdrFallback(HDRSDRFallbackReason)
 }
 
+enum HDRPresentationDiagnosticState: Hashable, Sendable {
+    case inactive
+    case activeSDR
+    case activeEDR
+    case sdrFallback(HDRSDRFallbackReason)
+    case invalidInput
+    case unsupportedOutput
+    case staleRevision
+    case pipelineFailure
+
+    static func resolved(
+        _ configuration: HDRResolvedRenderConfiguration
+    ) -> HDRPresentationDiagnosticState {
+        switch configuration.outputMode {
+        case .sdr:
+            return .activeSDR
+        case .edr:
+            return .activeEDR
+        case let .sdrFallback(reason):
+            return .sdrFallback(reason)
+        }
+    }
+
+    static func closed(
+        _ error: HDRRenderResolutionError
+    ) -> HDRPresentationDiagnosticState {
+        switch error {
+        case .inactiveSession, .drawableUnavailable:
+            return .inactive
+        case .invalidSourceContract, .incompatibleSourceAndMapping,
+             .unsupportedDecodedLayout, .incompatibleDecodedLayout:
+            return .invalidInput
+        case .unsupportedPlatformOutput, .missingCurrentDisplayHeadroom,
+             .invalidCurrentDisplayHeadroom, .insufficientCurrentDisplayHeadroom,
+             .userDisabledHDRWithoutSDRFallback, .unsupportedSurfaceContract,
+             .incompatibleMappingAndSurface:
+            return .unsupportedOutput
+        case .staleDecoderGeneration, .staleColorSignature,
+             .staleDisplayRevision, .invalidDisplayRevision,
+             .displayRevisionExhausted:
+            return .staleRevision
+        }
+    }
+}
+
 enum HDRResolvedSurfaceState: Hashable, Sendable {
     case ready
     case requiresApplication(previous: HDRSurfaceContract?)

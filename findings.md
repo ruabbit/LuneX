@@ -1231,3 +1231,14 @@
 - focused transition `2/2`、扩大矩阵`134/134`、完整macOS `606 total / 605 passed / 1 explicit Keychain skip / 0 failed`以及五平台Debug warnings-as-errors Metal build均通过；正常测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
 - repository最终门禁位于`/tmp/LuneX-15-5_2-repo-final-r2.L9LM2w`：fixture validator self-test/全树、OpenSpec strict `6/6`、勾选前apply `23/33`且task 24=false、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference/package/Core Image/diff及自有whitespace边界全部通过。
 - 此任务证明离线production eligibility与fail-closed时序，不证明compositor EDR signaling、live Sunshine HDR、物理峰值亮度、颜色准确性或跨显示器视觉一致性。5.3 diagnostics、5.4 application integration gate、5.5 HDR status/settings UI和6.5物理显示器验收继续保持未完成。
+
+## 2026-07-29 阶段 15 任务 5.3 验收结论
+
+- `HDRPresentationDiagnosticState`把全部resolver closed error收敛为inactive、invalid-input、unsupported-output或stale-revision，把resolved output收敛为active SDR、active EDR或五种typed SDR fallback；factory使用稳定代码和固定摘要，不携带host/endpoint/app/display identity、revision值、raw metadata、frame或pixel值。
+- `AppModel`按完整语义状态去重；active SDR/EDR与inactive recovery只清当前`.hdr` actionable entry，decoder/transport/audio/input/pairing action与bounded redacted history保持不变。
+- actual macOS/UIKit surface使用presenter-owned UUID lease。replacement presenter claim后，旧presenter迟到failure、draw、stop或release不能覆盖当前诊断；当前presenter teardown仍发布inactive并释放lease。
+- 提交前完整diff自审补齐普通clear失败的runtime stop，使其与first-clear/present failure一致地收敛当前pipeline；此前完整验收降为中间证据，最终门禁从源码测试开始全部重跑。
+- ownership focused `3/3`、扩大diagnostics/AppModel/presenter矩阵`84/84`、完整macOS `612 total / 611 passed / 1 explicit Keychain skip / 0 failed`以及五平台Debug warnings-as-errors Metal build通过；正常测试显式移除真实Keychain开关。
+- 最终五平台构建证据位于`/tmp/LuneX-15-5_3-builds-final2.h2BFAz`；simulator规范化清单前后SHA-256同为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定四实例唯一、available、`Shutdown`且全局`Booted=0`，未执行任何生命周期命令。
+- production最后补强后的repository最终门禁位于`/tmp/LuneX-15-5_3-repo-final3.fZC1hP`：fixture self-test/全树、OpenSpec strict `6/6`、apply `25/33`且task 25=true/task 26=false、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference/package/Core Image/diff及自有whitespace边界全部通过。
+- 该证据覆盖同步resolver/surface/renderer诊断与replacement ownership，不声称穷尽异步GPU completion fault，也不证明compositor EDR signaling、live Sunshine HDR、物理峰值亮度/颜色准确性或跨显示器视觉一致性。5.4 application gate、5.5 status/settings UI和6.5物理显示器验收继续未完成。

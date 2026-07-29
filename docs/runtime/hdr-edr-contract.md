@@ -32,9 +32,10 @@ still required before LuneX may claim working HDR output.
 | Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. The SwiftUI/AppModel graph now supplies the resolved/closed value, and the presenter clears old presentation, applies SDR or EDR surface state, replaces runtime ownership, and rejects stale views | Focused production-runtime GPU execution, shader readback, lifecycle/transition/application graph tests, full macOS tests, and five-platform builds | Deterministic transition does not prove compositor signaling or physical display output |
 | Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; AppModel propagates the revision-owned public snapshot and exhaustion state into render resolution | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, application graph, and full-suite tests | iOS/iPadOS live scene/window ownership remains stage 17 work |
 | Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and atomically transitions to the AppModel-resolved SDR/EDR contract while replacing runtime ownership; one platform capability resolution drives both resolver and surface behavior | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported/fallback, rollback, application graph, macOS transitions, real layer fields, and exact cross-platform capability boundaries; all five platform targets compile | Stage 17/18 and task 6.5 retain mobile, tvOS/visionOS, compositor, and physical-display acceptance |
-| AppModel eligibility | AppModel resolves HDR only for a streaming session with the current media generation, video readiness, matching active decoder generation, matching negotiated/decoded metadata, a real lifecycle display snapshot/current headroom, supported platform output, and enabled user preference; settings no longer synthesize display headroom | Application workflow tests cover inactive/video-not-ready closure, source/generation mismatch, preference, display/headroom, replacement, reconnect-before-teardown fail-closed ordering, stale events, stop, and failure | Task 5.3 diagnostics, task 5.4 application integration, task 5.5 status/settings UI, and live/physical acceptance remain pending |
+| AppModel eligibility | AppModel resolves HDR only for a streaming session with the current media generation, video readiness, matching active decoder generation, matching negotiated/decoded metadata, a real lifecycle display snapshot/current headroom, supported platform output, and enabled user preference; settings no longer synthesize display headroom | Application workflow tests cover inactive/video-not-ready closure, source/generation mismatch, preference, display/headroom, replacement, reconnect-before-teardown fail-closed ordering, stale events, stop, and failure | Task 5.4 application integration, task 5.5 status/settings UI, and live/physical acceptance remain pending |
+| HDR diagnostics | Resolver and actual presenter states publish stable active-SDR, active-EDR, typed SDR-fallback, invalid-input, unsupported-output, stale-revision, and pipeline-failure codes. Equivalent semantic states deduplicate, recovery clears only the current HDR action, and presenter UUID leases reject replacement-view callbacks | Factory/error-matrix, bounded-history, AppModel scoped-recovery, real presenter replacement, complete macOS, and five-platform build tests | Task 5.5 still owns accessibility-safe current status/settings UI; synchronous submission evidence does not cover every asynchronous GPU completion fault |
 
-The production truth after task 5.2 is therefore: LuneX carries negotiated and
+The production truth after task 5.3 is therefore: LuneX carries negotiated and
 decoded color metadata plus actual pixel-buffer layout through a
 session/media/decoder-generation-owned, monotonic presentation event stream.
 AppModel first requires current streaming/media/video/decoder/source ownership,
@@ -43,8 +44,11 @@ snapshot/current headroom, user preference, and platform capability before
 passing one resolved or closed value to the actual Metal surface and renderer.
 Settings no longer synthesize display headroom, and reconnect closes render
 eligibility before waiting for media teardown. This is deterministic production
-eligibility, not proof that a compositor entered HDR/EDR or that a physical
-display reached a luminance/color target. Task 5.3 diagnostics, task 5.4
+eligibility with privacy-bounded semantic diagnostics. Surface events are owned
+by one presenter UUID, so an old SwiftUI view cannot clear or replace the
+replacement presenter's state. Recovery clears only the current HDR action and
+retains bounded redacted history. This is not proof that a compositor entered
+HDR/EDR or that a physical display reached a luminance/color target. Task 5.4
 application integration, task 5.5 status/settings UI, live Sunshine HDR,
 compositor EDR signaling, and task 6.5 physical display evidence remain pending.
 
@@ -461,7 +465,49 @@ and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
 This proves the production ownership and invocation graph under deterministic
 inputs. It does not prove compositor EDR signaling, live Sunshine HDR,
 physical peak luminance/color accuracy, cross-display visual consistency, or
-device performance. Tasks 5.3 through 5.5 and 6.5 retain those gates.
+device performance. Tasks 5.4, 5.5, and 6.5 retain those gates.
+
+## Task 5.3 diagnostic evidence
+
+`HDRPresentationDiagnosticState` maps every resolver closure into one of
+inactive, invalid-input, unsupported-output, or stale-revision, and maps every
+resolved configuration into active SDR, active EDR, or one typed SDR fallback.
+The application factory publishes fixed codes and fixed summaries only. It does
+not record host or endpoint identity, application names, display identifiers,
+decoder/display revision values, raw metadata, frame contents, or pixel values.
+
+`AppModel` deduplicates equivalent semantic states. Active SDR, active EDR, and
+inactive recovery clear only the current `.hdr` actionable entry; decoder,
+transport, audio, input, and pairing actions remain intact, while the existing
+bounded diagnostics history is preserved. The macOS and UIKit representables
+now use a presenter-owned UUID lease. A replacement presenter claims the lease,
+and delayed failure, draw, stop, or release callbacks from the old presenter
+cannot mutate the current diagnostic state.
+
+The ownership focused gate passed `3/3`; the expanded diagnostics, AppModel, and
+presenter matrix passed `84/84`. The complete macOS warnings-as-errors suite
+passed `612 total / 611 passed / 1 explicit Keychain skip / 0 failed`; the sole
+skip remained
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`
+with `LUNEX_RUN_KEYCHAIN_TEST` removed. macOS and the fixed iPhone, iPad, tvOS,
+and visionOS destinations all passed Debug warnings-as-errors builds with zero
+structured diagnostics and Metal artifacts.
+
+The normalized simulator inventory was byte-identical before and after with
+SHA-256
+`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`;
+the fixed instances remained unique, available, and `Shutdown`, with
+global `Booted=0`. OpenSpec strict `6/6`, fixture self-test/tree, four stable
+project hashes at
+`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`,
+and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
+The final post-fix build and repository evidence is retained at
+`/tmp/LuneX-15-5_3-builds-final2.h2BFAz` and
+`/tmp/LuneX-15-5_3-repo-final3.fZC1hP`.
+This evidence covers synchronous resolver/surface/renderer diagnostics and
+replacement ownership; it does not claim exhaustive asynchronous GPU-fault
+telemetry, compositor EDR signaling, live Sunshine HDR, or physical display
+quality.
 
 ## Verification matrix
 

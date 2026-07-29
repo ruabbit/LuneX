@@ -6,6 +6,7 @@ final class DiagnosticsStore {
     private static let streamCategories: Set<ApplicationDiagnosticCategory> = [
         .transport,
         .decoder,
+        .hdr,
         .audio,
         .input
     ]

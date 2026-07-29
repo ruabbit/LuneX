@@ -131,6 +131,128 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.renderState.displaySnapshot)
     }
 
+    func testHDRDiagnosticsDeduplicateAndClearOnlyHDRActionOnRecovery() {
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(
+                launchClient: StubStreamLaunchClient()
+            ),
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession)
+        )
+
+        model.publishHDRPresentationDiagnostic(.pipelineFailure)
+        model.publishHDRPresentationDiagnostic(.pipelineFailure)
+        XCTAssertEqual(
+            model.diagnostics.events.filter {
+                $0.code == "hdr_pipeline_failure"
+            }.count,
+            1
+        )
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.category,
+            .hdr
+        )
+
+        model.publishHDRPresentationDiagnostic(.activeEDR)
+        model.publishHDRPresentationDiagnostic(.activeEDR)
+        XCTAssertEqual(
+            model.diagnostics.events.filter { $0.code == "hdr_active_edr" }.count,
+            1
+        )
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.category,
+            .decoder
+        )
+        XCTAssertTrue(model.diagnostics.events.contains {
+            $0.code == "hdr_pipeline_failure"
+        })
+
+        model.publishHDRPresentationDiagnostic(
+            .sdrFallback(.platformOutputUnsupported(.macOS))
+        )
+        model.publishHDRPresentationDiagnostic(
+            .sdrFallback(.platformOutputUnsupported(.macOS))
+        )
+        XCTAssertEqual(
+            model.diagnostics.events.filter {
+                $0.code == "hdr_sdr_fallback_unsupported_output"
+            }.count,
+            1
+        )
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.category,
+            .hdr
+        )
+
+        model.publishHDRPresentationDiagnostic(.inactive)
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.category,
+            .decoder
+        )
+        XCTAssertEqual(model.diagnostics.events.count, 4)
+    }
+
+    func testHDRDiagnosticOwnershipRejectsStalePresenterAfterReplacement() {
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(
+                launchClient: StubStreamLaunchClient()
+            ),
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+        let oldOwner = UUID()
+        let replacementOwner = UUID()
+
+        model.claimHDRPresentationDiagnosticOwnership(oldOwner)
+        model.publishHDRPresentationDiagnostic(.activeEDR, ownerID: oldOwner)
+        model.claimHDRPresentationDiagnosticOwnership(replacementOwner)
+        model.publishHDRPresentationDiagnostic(.activeSDR, ownerID: replacementOwner)
+
+        model.publishHDRPresentationDiagnostic(.pipelineFailure, ownerID: oldOwner)
+        model.publishHDRPresentationDiagnostic(.inactive, ownerID: oldOwner)
+        model.releaseHDRPresentationDiagnosticOwnership(oldOwner)
+        model.publishHDRPresentationDiagnostic(.pipelineFailure, ownerID: oldOwner)
+
+        XCTAssertEqual(
+            model.diagnostics.events.map(\.code),
+            ["hdr_active_edr", "hdr_active_sdr"]
+        )
+        XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
+
+        model.publishHDRPresentationDiagnostic(
+            .pipelineFailure,
+            ownerID: replacementOwner
+        )
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.code,
+            "hdr_pipeline_failure"
+        )
+        model.publishHDRPresentationDiagnostic(.inactive, ownerID: replacementOwner)
+        model.releaseHDRPresentationDiagnosticOwnership(replacementOwner)
+        XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
+    }
+
     func testLatestLifecycleIsCachedUntilMediaGenerationStartsAndThenAppliedInOrder() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()

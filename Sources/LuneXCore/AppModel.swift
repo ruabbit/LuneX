@@ -165,6 +165,9 @@ final class AppModel: ApplicationInputSink {
     @ObservationIgnored private var activeVideoPresentationRevision: UInt64 = 0
     @ObservationIgnored private var activeVideoDecoderGeneration: UInt64?
     @ObservationIgnored private var highestVideoDecoderGeneration: UInt64 = 0
+    @ObservationIgnored private var lastHDRPresentationDiagnosticState:
+        HDRPresentationDiagnosticState = .inactive
+    @ObservationIgnored private var activeHDRPresentationDiagnosticOwnerID: UUID?
     private var activeControlReadiness: SessionChannelReadiness = []
     private var activeMediaReadiness: SessionChannelReadiness = []
     private var mediaConsumerTask: Task<Void, Never>?
@@ -326,6 +329,44 @@ final class AppModel: ApplicationInputSink {
         clearPresentationIfRequired(directive.presentation)
         refreshMacInputSurfacePolicy()
         scheduleLifecycleApplication()
+    }
+
+    func publishHDRPresentationDiagnostic(
+        _ state: HDRPresentationDiagnosticState
+    ) {
+        guard state != lastHDRPresentationDiagnosticState else { return }
+        lastHDRPresentationDiagnosticState = state
+        switch state {
+        case .inactive:
+            diagnostics.clearActionableEvents(in: [.hdr])
+        case .activeSDR, .activeEDR:
+            diagnostics.clearActionableEvents(in: [.hdr])
+            if let diagnostic = ApplicationDiagnosticFactory.hdrPresentationState(state) {
+                diagnostics.record(diagnostic)
+            }
+        case .sdrFallback, .invalidInput, .unsupportedOutput,
+             .staleRevision, .pipelineFailure:
+            if let diagnostic = ApplicationDiagnosticFactory.hdrPresentationState(state) {
+                diagnostics.record(diagnostic)
+            }
+        }
+    }
+
+    func claimHDRPresentationDiagnosticOwnership(_ ownerID: UUID) {
+        activeHDRPresentationDiagnosticOwnerID = ownerID
+    }
+
+    func publishHDRPresentationDiagnostic(
+        _ state: HDRPresentationDiagnosticState,
+        ownerID: UUID
+    ) {
+        guard activeHDRPresentationDiagnosticOwnerID == ownerID else { return }
+        publishHDRPresentationDiagnostic(state)
+    }
+
+    func releaseHDRPresentationDiagnosticOwnership(_ ownerID: UUID) {
+        guard activeHDRPresentationDiagnosticOwnerID == ownerID else { return }
+        activeHDRPresentationDiagnosticOwnerID = nil
     }
 
     @discardableResult
@@ -1645,6 +1686,7 @@ final class AppModel: ApplicationInputSink {
         renderState.negotiatedVideoColorMetadata = nil
         renderState.decodedVideoPresentationContract = nil
         renderState.hdrRenderResolution = .closed(.inactiveSession)
+        publishHDRPresentationDiagnostic(.inactive)
     }
 
     private func refreshHDRRenderResolution() {
@@ -1654,33 +1696,33 @@ final class AppModel: ApplicationInputSink {
               activeMediaGeneration != nil,
               activeMediaReadiness.contains(.video),
               let decoded = renderState.decodedVideoPresentationContract else {
-            renderState.hdrRenderResolution = .closed(.inactiveSession)
+            applyHDRRenderResolution(.closed(.inactiveSession))
             return
         }
         guard let activeVideoDecoderGeneration else {
-            renderState.hdrRenderResolution = .closed(.inactiveSession)
+            applyHDRRenderResolution(.closed(.inactiveSession))
             return
         }
         guard decoded.decoderGeneration == activeVideoDecoderGeneration else {
-            renderState.hdrRenderResolution = .closed(.staleDecoderGeneration(
+            applyHDRRenderResolution(.closed(.staleDecoderGeneration(
                 expected: activeVideoDecoderGeneration,
                 actual: decoded.decoderGeneration
-            ))
+            )))
             return
         }
         guard let negotiated = renderState.negotiatedVideoColorMetadata else {
-            renderState.hdrRenderResolution = .closed(.invalidSourceContract)
+            applyHDRRenderResolution(.closed(.invalidSourceContract))
             return
         }
         guard negotiated == decoded.colorMetadata else {
-            renderState.hdrRenderResolution = .closed(.staleColorSignature)
+            applyHDRRenderResolution(.closed(.staleColorSignature))
             return
         }
         let drawableSize = renderState.coordinateSnapshot?.drawableSize
         let drawableAvailable = drawableSize.map {
             $0.width > 0 && $0.height > 0
         } ?? false
-        renderState.hdrRenderResolution = HDRRenderConfigurationResolver.resolve(
+        applyHDRRenderResolution(HDRRenderConfigurationResolver.resolve(
             HDRRenderConfigurationResolverInput(
                 decodedLayout: decoded.decodedLayout,
                 colorMetadata: decoded.colorMetadata,
@@ -1696,6 +1738,14 @@ final class AppModel: ApplicationInputSink {
                     appliedSurfaceContract: nil
                 )
             )
-        )
+        ))
+    }
+
+    private func applyHDRRenderResolution(
+        _ resolution: HDRRenderConfigurationResolution
+    ) {
+        renderState.hdrRenderResolution = resolution
+        guard case let .closed(error) = resolution else { return }
+        publishHDRPresentationDiagnostic(.closed(error))
     }
 }

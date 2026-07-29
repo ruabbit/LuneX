@@ -390,16 +390,39 @@ final class StreamMetalPresenterRuntime: StreamMetalPresenterRuntiming,
     }
 }
 
+struct HDRPresentationDiagnosticLease {
+    typealias ClaimHandler = @MainActor (UUID) -> Void
+    typealias PublishHandler = @MainActor (
+        UUID,
+        HDRPresentationDiagnosticState
+    ) -> Void
+    typealias ReleaseHandler = @MainActor (UUID) -> Void
+
+    let claim: ClaimHandler
+    let publish: PublishHandler
+    let release: ReleaseHandler
+
+    static let unmanaged = HDRPresentationDiagnosticLease(
+        claim: { _ in },
+        publish: { _, _ in },
+        release: { _ in }
+    )
+}
+
 final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     typealias RuntimeFactory = (any MTLDevice, Bundle) throws
         -> any StreamMetalPresenterRuntiming
     typealias SurfaceAdapterFactory = @MainActor (MTKView) -> any HDRSurfaceApplying
     typealias DrawableProvider = @MainActor (MTKView) -> (any CAMetalDrawable)?
+    typealias DiagnosticHandler = @MainActor (HDRPresentationDiagnosticState) -> Void
 
     private let presentationSource: StreamVideoPresentationSource
     private let runtimeFactory: RuntimeFactory
     private let surfaceAdapterFactory: SurfaceAdapterFactory
     private let drawableProvider: DrawableProvider
+    private let diagnosticHandler: DiagnosticHandler
+    private let diagnosticLease: HDRPresentationDiagnosticLease
+    private let diagnosticOwnerID = UUID()
     private let lock = NSLock()
     private var renderPolicy: RenderPolicy
     private var coordinateSnapshot: StreamCoordinateSnapshot?
@@ -413,6 +436,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     private var presentationRevision: UInt64 = 0
     private var configurationTransitionCount: UInt64 = 0
     private var closedTransitionCount: UInt64 = 0
+    private var ownsDiagnosticLease = false
 
     init(
         presentationSource: StreamVideoPresentationSource,
@@ -425,21 +449,29 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         },
         drawableProvider: @escaping DrawableProvider = { view in
             view.currentDrawable
-        }
+        },
+        diagnosticHandler: @escaping DiagnosticHandler = { _ in },
+        diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
     ) {
         self.presentationSource = presentationSource
         self.runtimeFactory = runtimeFactory
         self.surfaceAdapterFactory = surfaceAdapterFactory
         self.drawableProvider = drawableProvider
+        self.diagnosticHandler = diagnosticHandler
+        self.diagnosticLease = diagnosticLease
         renderPolicy = renderState.policy
         coordinateSnapshot = renderState.coordinateSnapshot
     }
 
     @MainActor
     func configure(_ view: MTKView) {
-        guard let device = view.device else { return }
         if let previousView = surfaceView, previousView !== view {
             stop()
+        }
+        claimDiagnosticLease()
+        guard let device = view.device else {
+            publishDiagnostic(.pipelineFailure)
+            return
         }
         let adapter: any HDRSurfaceApplying
         if surfaceView === view, let surfaceAdapter {
@@ -459,15 +491,23 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             let outcome = try adapter.apply(surface)
             guard outcome.activeContract == surface else {
                 failSurfaceConfiguration(view)
+                publishDiagnostic(.pipelineFailure)
                 return
             }
         } catch {
             failSurfaceConfiguration(view)
+            publishDiagnostic(.pipelineFailure)
             return
         }
         surfaceAdapter = adapter
         surfaceView = view
-        let runtime = try? runtimeFactory(device, Bundle(for: StreamMetalPresenter.self))
+        let runtime: (any StreamMetalPresenterRuntiming)?
+        do {
+            runtime = try runtimeFactory(device, Bundle(for: StreamMetalPresenter.self))
+        } catch {
+            runtime = nil
+            publishDiagnostic(.pipelineFailure)
+        }
         let previousRuntime = withLock {
             let previous = self.runtime
             self.runtime = runtime
@@ -548,6 +588,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                 withLock {
                     activeResolvedConfiguration = configuration
                 }
+                publishDiagnostic(.resolved(configuration))
                 return .unchanged(configuration.identity)
             }
 
@@ -604,6 +645,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             }
             view.isPaused = schedule.isPaused
             view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
+            publishDiagnostic(.resolved(configuration))
             view.draw()
             return .applied(
                 previous: previousIdentity,
@@ -639,6 +681,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                 }
             } catch {
                 runtime.stop()
+                publishDiagnostic(.pipelineFailure)
             }
             return
         }
@@ -660,7 +703,12 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         case let .clear(reason):
             if reason == .inactivePolicy { runtime.stop() }
             if let drawable {
-                try? runtime.clear(drawable: drawable, color: view.clearColor)
+                do {
+                    try runtime.clear(drawable: drawable, color: view.clearColor)
+                } catch {
+                    runtime.stop()
+                    publishDiagnostic(.pipelineFailure)
+                }
             }
             return
         case .present:
@@ -692,9 +740,13 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                 ),
                 completion: .asynchronous
             )
+            if let resolvedConfiguration = snapshot.3 {
+                publishDiagnostic(.resolved(resolvedConfiguration))
+            }
         } catch {
             runtime.stop()
             try? runtime.clear(drawable: drawable, color: view.clearColor)
+            publishDiagnostic(Self.diagnosticState(for: error))
         }
     }
 
@@ -722,6 +774,8 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             restoredSurface = nil
         }
         withLock { appliedSurfaceContract = restoredSurface }
+        publishDiagnostic(.inactive)
+        releaseDiagnosticLease()
     }
 
     func snapshot() -> StreamMetalPresenterSnapshot {
@@ -825,11 +879,81 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         }
     }
 
+    @MainActor
     private func closeTransition(
         _ error: StreamMetalConfigurationTransitionError
     ) -> StreamMetalConfigurationTransitionOutcome {
         withLock { closedTransitionCount &+= 1 }
+        publishDiagnostic(Self.diagnosticState(for: error))
         return .closed(error)
+    }
+
+    @MainActor
+    private func claimDiagnosticLease() {
+        guard !ownsDiagnosticLease else { return }
+        ownsDiagnosticLease = true
+        diagnosticLease.claim(diagnosticOwnerID)
+    }
+
+    @MainActor
+    private func publishDiagnostic(_ state: HDRPresentationDiagnosticState) {
+        guard ownsDiagnosticLease else { return }
+        diagnosticHandler(state)
+        diagnosticLease.publish(diagnosticOwnerID, state)
+    }
+
+    @MainActor
+    private func releaseDiagnosticLease() {
+        guard ownsDiagnosticLease else { return }
+        ownsDiagnosticLease = false
+        diagnosticLease.release(diagnosticOwnerID)
+    }
+
+    private static func diagnosticState(
+        for error: StreamMetalConfigurationTransitionError
+    ) -> HDRPresentationDiagnosticState {
+        switch error {
+        case let .resolutionClosed(error):
+            return .closed(error)
+        case .staleSurface:
+            return .staleRevision
+        case .surfaceUnsupported:
+            return .unsupportedOutput
+        case .surfaceApplicationFailed, .runtimeCreationFailed:
+            return .pipelineFailure
+        }
+    }
+
+    private static func diagnosticState(
+        for error: Error
+    ) -> HDRPresentationDiagnosticState {
+        if let error = error as? HDRRenderResolutionError {
+            return .closed(error)
+        }
+        if let error = error as? MetalFrameDeliveryError {
+            switch error {
+            case .incompatibleColorSignature:
+                return .staleRevision
+            case .invalidDecodedContract, .unsupportedPixelFormat,
+                 .invalidPixelBufferDimensions, .invalidPlaneCount,
+                 .invalidPlaneDimensions, .unexpectedMetalTextureDimensions,
+                 .unexpectedMetalTexturePixelFormat,
+                 .unexpectedMetalTextureDevice:
+                return .invalidInput
+            case .invalidQueueCapacity, .textureCacheCreationFailed,
+                 .textureCreationFailed, .missingMetalTexture:
+                return .pipelineFailure
+            }
+        }
+        if let error = error as? HDRMetalPipelineError {
+            switch error {
+            case .staleColorSignature, .staleLuminanceMapping:
+                return .staleRevision
+            default:
+                return .pipelineFailure
+            }
+        }
+        return .pipelineFailure
     }
 
     private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
@@ -1014,11 +1138,15 @@ final class MacStreamSurfaceCoordinator {
         lifecycle: PlatformLifecycleState,
         inputSampleHandler: @escaping MacStreamInputCaptureView.SampleHandler,
         captureExitHandler: @escaping @MainActor () -> Void,
+        diagnosticHandler: @escaping StreamMetalPresenter.DiagnosticHandler = { _ in },
+        diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged,
         cursorBroker: MacCursorCaptureBroker = .shared
     ) {
         presenter = StreamMetalPresenter(
             presentationSource: presentationSource,
-            renderState: renderState
+            renderState: renderState,
+            diagnosticHandler: diagnosticHandler,
+            diagnosticLease: diagnosticLease
         )
         let captureController = MacStreamSurfaceCaptureController(broker: cursorBroker)
         self.captureController = captureController
@@ -1073,6 +1201,8 @@ struct MetalStreamSurface: NSViewRepresentable {
     var inputPolicy = MacInputSurfacePolicy.inactive
     var inputSampleHandler: MacStreamInputCaptureView.SampleHandler = { _ in }
     var captureExitHandler: @MainActor () -> Void = {}
+    var diagnosticHandler: StreamMetalPresenter.DiagnosticHandler = { _ in }
+    var diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
 
     func makeCoordinator() -> MacStreamSurfaceCoordinator {
         MacStreamSurfaceCoordinator(
@@ -1080,7 +1210,9 @@ struct MetalStreamSurface: NSViewRepresentable {
             renderState: renderState,
             lifecycle: lifecycle,
             inputSampleHandler: inputSampleHandler,
-            captureExitHandler: captureExitHandler
+            captureExitHandler: captureExitHandler,
+            diagnosticHandler: diagnosticHandler,
+            diagnosticLease: diagnosticLease
         )
     }
 
@@ -1137,11 +1269,15 @@ struct MetalStreamSurface: NSViewRepresentable {
 struct MetalStreamSurface: UIViewRepresentable {
     let renderState: StreamRenderState
     let presentationSource: StreamVideoPresentationSource
+    var diagnosticHandler: StreamMetalPresenter.DiagnosticHandler = { _ in }
+    var diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
 
     func makeCoordinator() -> StreamMetalPresenter {
         StreamMetalPresenter(
             presentationSource: presentationSource,
-            renderState: renderState
+            renderState: renderState,
+            diagnosticHandler: diagnosticHandler,
+            diagnosticLease: diagnosticLease
         )
     }
 

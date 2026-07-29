@@ -654,13 +654,15 @@ private struct StreamWorkspaceView: View {
                 },
                 captureExitHandler: {
                     appModel.exitMacRelativePointerCapture()
-                }
+                },
+                diagnosticLease: hdrPresentationDiagnosticLease
             )
                 .ignoresSafeArea()
             #else
             MetalStreamSurface(
                 renderState: appModel.renderState,
-                presentationSource: appModel.videoPresentationSource
+                presentationSource: appModel.videoPresentationSource,
+                diagnosticLease: hdrPresentationDiagnosticLease
             )
                 .ignoresSafeArea()
             #endif
@@ -675,6 +677,23 @@ private struct StreamWorkspaceView: View {
             }
         }
         .background(Color.black)
+    }
+
+    private var hdrPresentationDiagnosticLease: HDRPresentationDiagnosticLease {
+        HDRPresentationDiagnosticLease(
+            claim: { ownerID in
+                appModel.claimHDRPresentationDiagnosticOwnership(ownerID)
+            },
+            publish: { ownerID, state in
+                appModel.publishHDRPresentationDiagnostic(
+                    state,
+                    ownerID: ownerID
+                )
+            },
+            release: { ownerID in
+                appModel.releaseHDRPresentationDiagnosticOwnership(ownerID)
+            }
+        )
     }
 }
 

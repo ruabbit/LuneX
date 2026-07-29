@@ -4,6 +4,7 @@ enum ApplicationDiagnosticCategory: String, CaseIterable, Hashable, Sendable {
     case pairing
     case transport
     case decoder
+    case hdr
     case audio
     case input
     case application
@@ -13,6 +14,7 @@ enum ApplicationDiagnosticCategory: String, CaseIterable, Hashable, Sendable {
         case .pairing: "Pairing"
         case .transport: "Transport"
         case .decoder: "Video"
+        case .hdr: "HDR"
         case .audio: "Audio"
         case .input: "Input"
         case .application: "Application"
@@ -24,6 +26,7 @@ enum ApplicationDiagnosticCategory: String, CaseIterable, Hashable, Sendable {
         case .pairing: "link.badge.plus"
         case .transport: "network"
         case .decoder: "film.stack"
+        case .hdr: "sun.max.fill"
         case .audio: "speaker.wave.2"
         case .input: "cursorarrow.motionlines"
         case .application: "app.badge.checkmark"
@@ -33,6 +36,7 @@ enum ApplicationDiagnosticCategory: String, CaseIterable, Hashable, Sendable {
     static func infer(from subsystem: String) -> ApplicationDiagnosticCategory {
         let normalized = subsystem.lowercased()
         if normalized.contains("pair") || normalized.contains("identity") { return .pairing }
+        if normalized.contains("hdr") || normalized.contains("edr") { return .hdr }
         if normalized.contains("video") || normalized.contains("decoder") { return .decoder }
         if normalized.contains("audio") { return .audio }
         if normalized.contains("input") || normalized.contains("controller") { return .input }
@@ -50,6 +54,7 @@ enum ApplicationDiagnosticAction: String, Hashable, Sendable {
     case checkHost
     case retryStream
     case reviewStreamSettings
+    case reviewHDRSettings
     case checkAudioOutput
     case reconnectInput
     case useSupportedController
@@ -67,6 +72,8 @@ enum ApplicationDiagnosticAction: String, Hashable, Sendable {
             "Reconnect the stream. If it fails again, review Diagnostics."
         case .reviewStreamSettings:
             "Lower the codec, resolution, frame rate, or bitrate, then retry."
+        case .reviewHDRSettings:
+            "Review HDR settings and the current display, then retry."
         case .checkAudioOutput:
             "Check the selected audio output, then reconnect the stream."
         case .reconnectInput:
@@ -91,6 +98,7 @@ struct ApplicationDiagnostic: Hashable, Sendable {
         case .pairing: "pairing"
         case .transport: "stream.transport"
         case .decoder: "stream.video"
+        case .hdr: "stream.hdr"
         case .audio: "stream.audio"
         case .input: "stream.input"
         case .application: "app"
@@ -194,6 +202,78 @@ enum ApplicationDiagnosticFactory {
             code: code,
             summary: summary,
             action: nil
+        )
+    }
+
+    static func hdrPresentationState(
+        _ state: HDRPresentationDiagnosticState
+    ) -> ApplicationDiagnostic? {
+        let severity: RuntimeDiagnosticSeverity
+        let code: String
+        let summary: String
+        let action: ApplicationDiagnosticAction?
+
+        switch state {
+        case .inactive:
+            return nil
+        case .activeSDR:
+            severity = .info
+            code = "hdr_active_sdr"
+            summary = "The stream is using the standard dynamic range presentation path."
+            action = nil
+        case .activeEDR:
+            severity = .info
+            code = "hdr_active_edr"
+            summary = "The stream is using the extended dynamic range presentation path."
+            action = nil
+        case let .sdrFallback(reason):
+            severity = .warning
+            action = .reviewHDRSettings
+            switch reason {
+            case .userPreferenceDisabled:
+                code = "hdr_sdr_fallback_user_disabled"
+                summary = "HDR content is using SDR tone mapping because HDR is disabled."
+            case .platformOutputUnsupported:
+                code = "hdr_sdr_fallback_unsupported_output"
+                summary = "HDR content is using SDR tone mapping because EDR output is unsupported."
+            case .currentHeadroomUnavailable:
+                code = "hdr_sdr_fallback_headroom_unavailable"
+                summary = "HDR content is using SDR tone mapping because display headroom is unavailable."
+            case .currentHeadroomInvalid:
+                code = "hdr_sdr_fallback_headroom_invalid"
+                summary = "HDR content is using SDR tone mapping because display headroom is invalid."
+            case .currentHeadroomInsufficient:
+                code = "hdr_sdr_fallback_headroom_insufficient"
+                summary = "HDR content is using SDR tone mapping because current headroom is insufficient."
+            }
+        case .invalidInput:
+            severity = .error
+            code = "hdr_invalid_input"
+            summary = "The decoded video does not match the negotiated HDR color contract."
+            action = .reviewStreamSettings
+        case .unsupportedOutput:
+            severity = .error
+            code = "hdr_unsupported_output"
+            summary = "The requested HDR output cannot be applied on the current presentation path."
+            action = .reviewHDRSettings
+        case .staleRevision:
+            severity = .warning
+            code = "hdr_stale_revision"
+            summary = "A stale HDR render revision was rejected."
+            action = .retryStream
+        case .pipelineFailure:
+            severity = .error
+            code = "hdr_pipeline_failure"
+            summary = "The HDR presentation pipeline failed and stopped the current output."
+            action = .retryStream
+        }
+
+        return ApplicationDiagnostic(
+            category: .hdr,
+            severity: severity,
+            code: code,
+            summary: summary,
+            action: action
         )
     }
 

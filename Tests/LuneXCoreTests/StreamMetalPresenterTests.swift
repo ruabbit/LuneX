@@ -570,11 +570,13 @@ final class StreamMetalPresenterTests: XCTestCase {
         let replacementRuntime = RecordingStreamMetalPresenterRuntime()
         var runtimes = [initialRuntime, replacementRuntime]
         let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        var diagnosticStates: [HDRPresentationDiagnosticState] = []
         let presenter = StreamMetalPresenter(
             presentationSource: StreamVideoPresentationSource(),
             renderState: StreamRenderState(),
             runtimeFactory: { _, _ in runtimes.removeFirst() },
-            surfaceAdapterFactory: { _ in surfaceAdapter }
+            surfaceAdapterFactory: { _ in surfaceAdapter },
+            diagnosticHandler: { diagnosticStates.append($0) }
         )
         presenter.configure(view)
         let frame = try makeFrame(
@@ -608,6 +610,87 @@ final class StreamMetalPresenterTests: XCTestCase {
             configurationTransitionCount: 1,
             closedTransitionCount: 0
         ))
+        XCTAssertEqual(diagnosticStates, [.activeEDR])
+    }
+
+    @MainActor
+    func testReplacementDiagnosticLeaseRejectsOldPresenterStopAndLateFailure() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let oldView = MTKView(frame: .zero, device: device)
+        let replacementView = MTKView(frame: .zero, device: device)
+        var activeOwner: UUID?
+        var acceptedStates: [HDRPresentationDiagnosticState] = []
+        let lease = HDRPresentationDiagnosticLease(
+            claim: { activeOwner = $0 },
+            publish: { ownerID, state in
+                guard activeOwner == ownerID else { return }
+                acceptedStates.append(state)
+            },
+            release: { ownerID in
+                guard activeOwner == ownerID else { return }
+                activeOwner = nil
+            }
+        )
+        var oldRuntimes: [any StreamMetalPresenterRuntiming] = [
+            RecordingStreamMetalPresenterRuntime(),
+            RecordingStreamMetalPresenterRuntime()
+        ]
+        let oldPresenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in oldRuntimes.removeFirst() },
+            surfaceAdapterFactory: { _ in RecordingPresenterSurfaceAdapter() },
+            diagnosticLease: lease
+        )
+        oldPresenter.configure(oldView)
+        let oldFrame = try makeFrame(
+            generation: 70,
+            frameID: 1,
+            metadata: .hdr10VideoRange()
+        )
+        let oldConfiguration = try makeResolvedConfiguration(
+            for: oldFrame,
+            displayRevision: 60,
+            currentHeadroom: 2
+        )
+        _ = oldPresenter.transition(.resolved(oldConfiguration), on: oldView)
+        XCTAssertEqual(acceptedStates, [.activeEDR])
+
+        var replacementRuntimes: [any StreamMetalPresenterRuntiming] = [
+            RecordingStreamMetalPresenterRuntime(),
+            RecordingStreamMetalPresenterRuntime()
+        ]
+        let replacementPresenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in replacementRuntimes.removeFirst() },
+            surfaceAdapterFactory: { _ in RecordingPresenterSurfaceAdapter() },
+            diagnosticLease: lease
+        )
+        replacementPresenter.configure(replacementView)
+        let replacementFrame = try makeFrame(
+            generation: 71,
+            frameID: 2,
+            metadata: .rec709VideoRange()
+        )
+        let replacementConfiguration = try makeResolvedConfiguration(
+            for: replacementFrame,
+            displayRevision: 61,
+            currentHeadroom: 2
+        )
+        _ = replacementPresenter.transition(
+            .resolved(replacementConfiguration),
+            on: replacementView
+        )
+        XCTAssertEqual(acceptedStates, [.activeEDR, .activeSDR])
+
+        _ = oldPresenter.transition(.closed(.invalidSourceContract), on: oldView)
+        oldPresenter.stop()
+        XCTAssertEqual(acceptedStates, [.activeEDR, .activeSDR])
+
+        replacementPresenter.stop()
+        XCTAssertEqual(acceptedStates, [.activeEDR, .activeSDR, .inactive])
+        XCTAssertNil(activeOwner)
     }
 
     @MainActor
@@ -787,6 +870,7 @@ final class StreamMetalPresenterTests: XCTestCase {
         let initialRuntime = RecordingStreamMetalPresenterRuntime()
         var shouldFail = false
         let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        var diagnosticStates: [HDRPresentationDiagnosticState] = []
         let presenter = StreamMetalPresenter(
             presentationSource: StreamVideoPresentationSource(),
             renderState: StreamRenderState(),
@@ -794,7 +878,8 @@ final class StreamMetalPresenterTests: XCTestCase {
                 if shouldFail { throw TestError.runtimeCreationFailed }
                 return initialRuntime
             },
-            surfaceAdapterFactory: { _ in surfaceAdapter }
+            surfaceAdapterFactory: { _ in surfaceAdapter },
+            diagnosticHandler: { diagnosticStates.append($0) }
         )
         presenter.configure(view)
         let frame = try makeFrame(
@@ -821,6 +906,7 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertNil(view.delegate)
         XCTAssertTrue(view.isPaused)
         XCTAssertNil(presenter.snapshot().activeConfiguration)
+        XCTAssertEqual(diagnosticStates, [.pipelineFailure])
     }
 
     @MainActor
@@ -832,13 +918,15 @@ final class StreamMetalPresenterTests: XCTestCase {
         let recoveredRuntime = RecordingStreamMetalPresenterRuntime()
         var runtimes = [initialRuntime, edrRuntime, recoveredRuntime]
         let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        var diagnosticStates: [HDRPresentationDiagnosticState] = []
         let renderState = StreamRenderState()
         renderState.policy = .active
         let presenter = StreamMetalPresenter(
             presentationSource: StreamVideoPresentationSource(),
             renderState: renderState,
             runtimeFactory: { _, _ in runtimes.removeFirst() },
-            surfaceAdapterFactory: { _ in surfaceAdapter }
+            surfaceAdapterFactory: { _ in surfaceAdapter },
+            diagnosticHandler: { diagnosticStates.append($0) }
         )
         presenter.configure(view)
         let frame = try makeFrame(
@@ -887,6 +975,10 @@ final class StreamMetalPresenterTests: XCTestCase {
             configurationTransitionCount: 2,
             closedTransitionCount: 1
         ))
+        XCTAssertEqual(
+            diagnosticStates,
+            [.activeEDR, .unsupportedOutput, .activeEDR]
+        )
     }
 
     @MainActor
