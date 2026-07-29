@@ -21,7 +21,7 @@
 - [x] 3.2 Add generator-owned macOS, iOS, and tvOS head-pose entitlement files/build settings while preserving visionOS platform separation and unsigned buildability
 - [x] 3.3 Implement the iOS/iPadOS/tvOS/visionOS `AVAudioSession` playback, multichannel declaration, preferred-channel, spatial-port, deactivation, and capability-notification adapter
 - [x] 3.4 Implement macOS route/output capability resolution from the actual engine output format and graph result without product-name inference
-- [ ] 3.5 Implement an injectable bounded route/interruption/media-services/spatial-capability monitor that emits deduplicated semantic revisions
+- [x] 3.5 Implement an injectable bounded route/interruption/media-services/spatial-capability monitor that emits deduplicated semantic revisions
 - [ ] 3.6 Add entitlement, platform matrix, multichannel limit, capability notification, equivalent-notification, missing-route, output-name noninference, deactivate, and observer-cleanup tests
 
 ## 4. Recovery, session generation, and application ownership

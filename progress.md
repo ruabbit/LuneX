@@ -1871,3 +1871,10 @@
 - 四平台generic-device Debug unsigned warnings-as-errors build全部succeeded且结构化diagnostics为0，未操作simulator。
 - OpenSpec strict、five-target membership、output-name absence、`git diff --check`及generator稳定SHA-256 `a306bccd3be7666c185bd9fcb2dd54418634ffba01603045638e6a71f0236a7d`通过。
 - OpenSpec 3.4已勾选，预期权威进度`15/35`；下一项3.5为有界route/interruption/media-services/spatial-capability monitor与deduplicated semantic revision。当前capability readback不替代通知接线、runtime rebuild或物理硬件验收。
+
+## 2026-07-30 阶段 16 任务 3.5 完成
+
+- 新增generator-owned `SpatialAudioRouteMonitor.swift`与9项测试：移动家族真实NotificationCenter名称适配、纯值capability reader、有界`bufferingNewest` stream、初始snapshot、语义去重、interruption/media-services转换、reset-without-lost、stop/deinit、late-callback suppression及revision exhaustion均已覆盖。
+- 最终focused `9/9`、expanded `69/69 passed / 0 skipped / 0 failed`；macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build全部succeeded，所有xcresult的warning/error/analyzer warning均为0。
+- OpenSpec strict、source/test membership、`git diff --check`与generator稳定SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有访问真实Keychain，也没有创建、启动或操作simulator。
+- OpenSpec 3.5已勾选，权威进度更新为`16/35`；下一项3.6补齐entitlement、platform matrix、multichannel limit、capability/equivalent notification、missing route、output-name noninference、deactivate与真实observer cleanup测试。3.5不证明runtime graph rebuild、签名权限或物理空间音频。

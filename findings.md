@@ -1479,3 +1479,13 @@
 - focused证据`/tmp/LuneX-16-3_4-focused.Si6fg2/MacAudioOutputCapability.xcresult`为`6/6`；expanded mac/mobile adapter、audio graph及resolver证据`/tmp/LuneX-16-3_4-expanded.glUt5U/MacAudioOutputExpanded.xcresult`为`56/56 passed / 0 skipped / 0 failed`，结构化diagnostics为0。
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-3_4-build-macos.vEBBC0`、`/tmp/LuneX-16-3_4-build-ios.6P1Ccm`、`/tmp/LuneX-16-3_4-build-tvos.eRiPFk`和`/tmp/LuneX-16-3_4-build-visionos.lyAOKD`；全部unsigned warnings-as-errors succeeded且结构化diagnostics为0，未操作simulator。
 - OpenSpec strict、five-target membership、output-name absence、`git diff --check`与generator连续SHA-256 `a306bccd3be7666c185bd9fcb2dd54418634ffba01603045638e6a71f0236a7d`通过。本项不证明真实route切换或硬件空间播放；semantic revision monitor与runtime rebuild仍属3.5/4.1。
+
+## 2026-07-30 阶段 16 任务 3.5 验收
+
+- 新增`SpatialAudioRouteCapabilityState`和可注入reader，route语义只含output availability、typed spatial support和current/maximum channel count，不保存revision、route UID/name或原始notification payload。移动家族reader从既有`MobileAudioSessionApplying.currentSnapshot()`读取能力。
+- `SpatialAudioPlatformNotificationSource`在iOS/iPadOS、tvOS与visionOS观察route、interruption、media-services lost/reset及spatial-capability通知；macOS显式使用空平台名称集合，不伪造`AVAudioSession`支持。锁保护observer token和generation，stop/deinit移除token并拒绝旧callback。
+- `SpatialAudioRouteMonitor`用`AsyncStream.bufferingNewest`与严格`1...64`容量发布初始snapshot和单调`SpatialAudioSemanticRevision`；等价语义通知不增加revision。interruption end保留`shouldResume` trigger；media-services reset使用独立`.reset`状态，确保系统未先发lost时仍产生一次恢复转换且重复reset去重。
+- 最终focused证据`/tmp/LuneX-16-3_5-focused-final.xcresult`为`9/9 passed / 0 skipped / 0 failed`；扩大证据`/tmp/LuneX-16-3_5-expanded-final.xcresult`为`69/69 passed / 0 skipped / 0 failed`。两份结果和四平台build均结构化warning/error/analyzer warning为0，所有测试显式移除真实Keychain opt-in。
+- macOS、iOS/iPadOS、tvOS、visionOS final generic-device Debug unsigned warnings-as-errors build结果分别位于`/tmp/LuneX-16-3_5-build-final-{macos,ios,tvos,visionos}.1785351815883/Build.xcresult`；全部`succeeded`且未选择或操作simulator。
+- OpenSpec strict、source/test membership、`git diff --check`及generator连续SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。首次Swift Optional推断失败和首次macOS错误scheme均未计验收并已在最终树完整重跑。
+- 3.5只证明平台通知适配、纯值归约、边界与生命周期；不证明4.1 runtime graph rebuild、signed provisioning、AirPods head tracking、visionOS可听空间定位、物理多声道分离或route transition可听同步。
