@@ -80,6 +80,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 finalReadiness = readiness
             case let .feedback(feedback):
                 observedFeedback = feedback
+            case .videoPresentation:
+                break
             }
         }
         XCTAssertEqual(finalReadiness, [.video, .audio, .input])
@@ -962,6 +964,185 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(snapshot.staleFrameDropCount, 1)
     }
 
+    func testPresentationSourcePublishesOnlySemanticDecoderAndFrameRevisions() throws {
+        let source = StreamVideoPresentationSource()
+        let sessionID = UUID()
+        let mediaGeneration: UInt64 = 12
+        let metadata = VideoColorMetadata.rec709VideoRange()
+        let pixelBuffer = try makePixelBuffer()
+
+        let began = source.beginSession(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        XCTAssertEqual(
+            began,
+            .cleared(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: sessionID,
+                    mediaGeneration: mediaGeneration,
+                    revision: 1
+                ),
+                decoderGeneration: nil
+            )
+        )
+        let started = source.consume(
+            .sessionStarted(generation: 4, colorMetadata: metadata),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        XCTAssertEqual(
+            started,
+            .decoderStarted(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: sessionID,
+                    mediaGeneration: mediaGeneration,
+                    revision: 2
+                ),
+                contract: StreamVideoDecoderPresentationContract(
+                    decoderGeneration: 4,
+                    colorMetadata: metadata
+                )
+            )
+        )
+
+        let firstFrame = DecodedVideoFrame(
+            generation: 4,
+            frameID: 70,
+            pixelBuffer: pixelBuffer,
+            presentationTimeStamp: .zero,
+            duration: CMTime(value: 1, timescale: 60),
+            infoFlags: [],
+            colorMetadata: metadata
+        )
+        let decoded = source.consume(
+            .frame(firstFrame),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+        let expectedContract = StreamVideoDecodedPresentationContract(
+            decoderGeneration: 4,
+            colorMetadata: metadata,
+            decodedLayout: HDRDecodedPixelBufferLayout(
+                pixelBuffer: pixelBuffer
+            )
+        )
+        XCTAssertEqual(
+            decoded,
+            .decodedFrame(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: sessionID,
+                    mediaGeneration: mediaGeneration,
+                    revision: 3
+                ),
+                contract: expectedContract
+            )
+        )
+        XCTAssertNil(source.consume(
+            .frame(DecodedVideoFrame(
+                generation: 4,
+                frameID: 71,
+                pixelBuffer: pixelBuffer,
+                presentationTimeStamp: .zero,
+                duration: CMTime(value: 1, timescale: 60),
+                infoFlags: [],
+                colorMetadata: metadata
+            )),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        ))
+        XCTAssertEqual(source.snapshot().presentationRevision, 3)
+        XCTAssertEqual(source.snapshot().latestFrameID, 71)
+
+        XCTAssertEqual(
+            source.discardFrames(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration
+            ),
+            .cleared(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: sessionID,
+                    mediaGeneration: mediaGeneration,
+                    revision: 4
+                ),
+                decoderGeneration: 4
+            )
+        )
+    }
+
+    func testPresentationSourceRevisionExhaustionFailsClosed() throws {
+        let source = StreamVideoPresentationSource(
+            initialPresentationRevision: .max
+        )
+        let sessionID = UUID()
+
+        XCTAssertNil(source.beginSession(
+            sessionID: sessionID,
+            mediaGeneration: 1
+        ))
+        XCTAssertNil(source.consume(
+            .sessionStarted(
+                generation: 1,
+                colorMetadata: .rec709VideoRange()
+            ),
+            sessionID: sessionID,
+            mediaGeneration: 1
+        ))
+
+        let snapshot = source.snapshot()
+        XCTAssertEqual(snapshot.presentationRevision, .max)
+        XCTAssertTrue(snapshot.isPresentationRevisionExhausted)
+        XCTAssertNil(snapshot.decoderGeneration)
+        XCTAssertNil(snapshot.latestFrameID)
+    }
+
+    func testMediaEnvironmentForwardsGenerationOwnedVideoPresentationEvents()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let video = ControlledVideoReceiveProvider(calls: calls)
+        let audio = ControlledAudioReceiveProvider(calls: calls)
+        let input = ControlledRemoteInputProvider(calls: calls)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: video,
+            audio: audio,
+            input: input,
+            videoProcessorFactory: PublishingVideoProcessorFactory(calls: calls)
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: RecordingLifecycleControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        var observed: StreamVideoPresentationEvent?
+        for _ in 0..<4 {
+            guard let event = try await iterator.next() else { break }
+            if case let .videoPresentation(presentation) = event {
+                observed = presentation
+                break
+            }
+        }
+
+        XCTAssertEqual(
+            observed,
+            .decoderStarted(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: sessionID,
+                    mediaGeneration: 1,
+                    revision: 1
+                ),
+                contract: StreamVideoDecoderPresentationContract(
+                    decoderGeneration: 9,
+                    colorMetadata: configuration.video.colorMetadata
+                )
+            )
+        )
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
     func testNativeVideoProcessorDrainsAndClearsUntilFreshIDRResume() async throws {
         let source = StreamVideoPresentationSource()
         let control = RecordingLifecycleControlProvider()
@@ -1351,12 +1532,16 @@ private struct ControlledLifecycleVideoProcessorFactory: SessionVideoProcessorCr
         sessionID: UUID,
         mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
-        controlProvider: any SessionControlProvider
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
     ) async throws -> any SessionVideoProcessing {
         _ = sessionID
         _ = mediaGeneration
         _ = configuration
         _ = controlProvider
+        _ = presentationEventSink
         return processor
     }
 }
@@ -1606,13 +1791,45 @@ private struct RecordingVideoProcessorFactory: SessionVideoProcessorCreating {
         sessionID: UUID,
         mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
-        controlProvider: any SessionControlProvider
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
     ) async throws -> any SessionVideoProcessing {
         _ = sessionID
         _ = mediaGeneration
         _ = configuration
         _ = controlProvider
+        _ = presentationEventSink
         await calls.append("video.processor.start")
+        return RecordingVideoProcessor(calls: calls)
+    }
+}
+
+private struct PublishingVideoProcessorFactory: SessionVideoProcessorCreating {
+    let calls: MediaEnvironmentCallRecorder
+
+    func makeVideoProcessor(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        configuration: NegotiatedVideoStreamConfiguration,
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
+    ) async throws -> any SessionVideoProcessing {
+        _ = controlProvider
+        presentationEventSink(.decoderStarted(
+            ownership: StreamVideoPresentationOwnership(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration,
+                revision: 1
+            ),
+            contract: StreamVideoDecoderPresentationContract(
+                decoderGeneration: 9,
+                colorMetadata: configuration.colorMetadata
+            )
+        ))
         return RecordingVideoProcessor(calls: calls)
     }
 }

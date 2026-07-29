@@ -25,25 +25,26 @@ still required before LuneX may claim working HDR output.
 |---|---|---|---|
 | Negotiation/control | `VideoColorMetadata` distinguishes 8-bit Rec.709 SDR and 10-bit BT.2020/PQ HDR10 video range; it validates MDCV, CLL, and maximum full-frame luminance bounds | Typed protocol and deterministic fixture tests | Live Sunshine HDR negotiation remains a stage 13 hardware/live gate |
 | CoreMedia metadata | `VideoColorMetadata.coreMediaExtensions()` can encode primaries, transfer, matrix, range, bit depth, MDCV, and CLL | Unit tests validate the dictionary/data encoding | Production `VideoFormatDescriptionFactory` does not currently apply this dictionary to the created H.264/HEVC format description |
-| VideoToolbox output | `VideoOutputBitDepth` requests NV12 video range for 8-bit and P010 video range for 10-bit, with IOSurface and Metal compatibility | Factory/decoder tests validate requested attributes and generation ownership | Decoder callback does not revalidate the actual returned pixel format against `VideoColorMetadata` before publishing a frame |
-| Decoded frame | `DecodedVideoFrame` retains decoder generation and immutable `VideoColorMetadata` | Decoder and pipeline generation tests | No derived immutable render color signature or display revision is attached |
-| Metal plane mapping | `CVMetalVideoFrameMapper` maps NV12 to `.r8Unorm/.rg8Unorm` and P010 to `.r16Unorm/.rg16Unorm`; the production presenter runtime consumes those zero-copy planes after validating format, dimensions, device, generation, and color signature | Focused mapper/queue/presenter tests and real offscreen Metal execution | The standalone bounded queue is not yet the application presentation owner; display/surface revision ownership is added by tasks 4.1 through 5.1 |
-| Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations and clears frames across pause, stop, failure, and replacement | Session/lifecycle integration tests | It stores raw `DecodedVideoFrame` only and has no render/display revision fence |
-| Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. It now owns an injectable resolved-configuration transition that clears old presentation, applies SDR or EDR surface state, replaces runtime ownership, and rejects stale views | Focused production-runtime GPU execution, shader readback, lifecycle/transition tests, full macOS tests, and five-platform builds | The SwiftUI/AppModel update graph does not call the resolver or transition yet, so its production caller path still starts in the fixed SDR fallback |
-| Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; a separate publisher advances only for attached/detached availability, display identity, or semantic headroom changes | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, and full-suite tests | Task 5.1 must propagate this snapshot through AppModel/render state; task 4.3 defines how it participates in active configuration resolution |
-| Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and can atomically transition to a resolved SDR/EDR contract while replacing runtime ownership; one platform capability resolution drives both resolver and surface behavior | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported/fallback, rollback, macOS transitions, real layer fields, and exact cross-platform capability boundaries; all five platform targets compile | Task 5.1 must provide the production caller; stage 17/18 and task 6.5 retain mobile, tvOS/visionOS, and physical-display acceptance |
-| AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
+| VideoToolbox output | `VideoOutputBitDepth` requests NV12 video range for 8-bit and P010 video range for 10-bit, with IOSurface and Metal compatibility; the presentation source derives the actual callback layout and the resolver revalidates it with the decoded metadata before selecting a render path | Factory/decoder, presentation-source, resolver, and generation-ownership tests | Live Sunshine delivery and physical output remain separate gates |
+| Decoded frame | `DecodedVideoFrame` retains decoder generation and immutable `VideoColorMetadata`; the presentation source derives a typed decoded layout and publishes it under session/media generation plus a monotonic presentation revision | Decoder, pipeline, source ownership, ordering, overflow, and application graph tests | Display revision remains a lifecycle-owned input to the resolved configuration rather than a mutable frame field |
+| Metal plane mapping | `CVMetalVideoFrameMapper` maps NV12 to `.r8Unorm/.rg8Unorm` and P010 to `.r16Unorm/.rg16Unorm`; the production presenter runtime consumes those zero-copy planes after validating format, dimensions, device, generation, and color signature | Focused mapper/queue/presenter tests and real offscreen Metal execution | Physical performance and display behavior remain stage 20/task 6.5 gates |
+| Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations, clears frames across pause, stop, failure, and replacement, and publishes semantic decoder/frame/clear events with session, media generation, monotonic revision, metadata, and actual decoded layout | Session/lifecycle integration, frame-before-start ordering, stale-generation, deduplication, and revision-exhaustion tests | It deliberately publishes no per-frame pixel values or display identity |
+| Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. The SwiftUI/AppModel graph now supplies the resolved/closed value, and the presenter clears old presentation, applies SDR or EDR surface state, replaces runtime ownership, and rejects stale views | Focused production-runtime GPU execution, shader readback, lifecycle/transition/application graph tests, full macOS tests, and five-platform builds | Deterministic transition does not prove compositor signaling or physical display output |
+| Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; AppModel propagates the revision-owned public snapshot and exhaustion state into render resolution | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, application graph, and full-suite tests | iOS/iPadOS live scene/window ownership remains stage 17 work |
+| Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and atomically transitions to the AppModel-resolved SDR/EDR contract while replacing runtime ownership; one platform capability resolution drives both resolver and surface behavior | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported/fallback, rollback, application graph, macOS transitions, real layer fields, and exact cross-platform capability boundaries; all five platform targets compile | Stage 17/18 and task 6.5 retain mobile, tvOS/visionOS, compositor, and physical-display acceptance |
+| AppModel fallback | AppModel resolves HDR only when an active session/media generation has a valid decoded contract and a real lifecycle display snapshot; the legacy settings-derived `renderState.headroom` remains present but is not passed to the HDR resolver | Application workflow tests cover active ownership, preference, display/headroom, metadata, replacement, stale events, stop, and failure | Task 5.2 must remove the remaining synthetic settings eligibility fallback and derive the complete policy from active runtime facts |
 
-The production truth after task 4.6 is therefore: LuneX presents both SDR and
-HDR decoded layouts through the explicit shader and revision-owned Metal
-renderer. Surface fields have one atomic, platform-capability-gated owner, and
-the deterministic resolver can select SDR, EDR, or a diagnosed SDR fallback.
-The presenter can consume that resolved value through a tested transition API,
-but the SwiftUI/AppModel production graph does not call it yet. That caller path
-still requests only sRGB SDR, so HDR remains deliberately tone-mapped to
-headroom `1.0`. No end-to-end production EDR selection, HDR signaling, or
-physical HDR result is claimed until tasks 5.1 through 5.4 and the hardware
-gate pass.
+The production truth after task 5.1 is therefore: LuneX carries negotiated and
+decoded color metadata plus actual pixel-buffer layout through a
+session/media/decoder-generation-owned, monotonic presentation event stream.
+AppModel combines that contract with the real revision-owned lifecycle display
+snapshot/current headroom, user preference, and platform capability, then
+passes one resolved or closed value to the actual Metal surface and renderer.
+This is production graph connectivity, not proof that a compositor entered
+HDR/EDR or that a physical display reached a luminance/color target. Task 5.2
+still owns complete eligibility without synthetic settings fallback, task 5.3
+owns diagnostics, task 5.4 owns the broader application gate, and task 6.5 owns
+physical display evidence.
 
 ## Apple SDK 26.4 API matrix
 
@@ -406,6 +407,59 @@ iOS/iPadOS scene or window ownership, tvOS/visionOS physical HDR output,
 compositor EDR signaling, live Sunshine HDR, luminance/color accuracy, or
 cross-display visual consistency. Tasks 5.x, stages 17/18, and task 6.5 retain
 those gates.
+
+## Production graph integration evidence
+
+OpenSpec task 5.1 connects the existing contracts without collapsing their
+ownership:
+
+- `StreamVideoPresentationSource` publishes semantic decoder-start,
+  decoded-frame, and clear events under session ID, media generation, decoder
+  generation, and a checked monotonic presentation revision. Consecutive
+  frames with the same generation, metadata, and actual decoded layout do not
+  churn the semantic revision;
+- the media environment forwards those events on its existing
+  generation-owned stream. Frame-before-start delivery is accepted only when
+  the self-contained decoded contract establishes a strictly newer decoder
+  generation; old revisions, decoder generations, media generations, and late
+  clears cannot mutate replacement ownership;
+- presentation revision overflow permanently fails that source closed and
+  clears all revision-owned decoder/frame state rather than wrapping;
+- AppModel retains negotiated metadata separately, accepts decoded metadata and
+  layout only from the current event owner, propagates the real lifecycle
+  display snapshot/exhaustion state, and resolves with
+  `HDRPlatformOutputCapabilityAdapter.current.capabilities`;
+- missing active session/media ownership, decoded contract, drawable, or real
+  display snapshot stays `.closed(.inactiveSession)`. The legacy
+  settings-derived headroom value is not substituted into the resolver; and
+- the macOS and UIKit representables feed the resolved/closed value into the
+  actual `StreamMetalPresenter`. Equivalent values do not rebuild the
+  surface/runtime, while metadata, preference, headroom/display, decoder,
+  lifecycle discard, replacement, stop, and failure transitions clear or
+  recompute revision-owned presentation.
+
+The final expanded application/media/presenter/lifecycle/resolver matrix passed
+`132/132`. The complete macOS warnings-as-errors suite passed `604 total / 603
+passed / 1 explicit Keychain skip / 0 failed`; the sole skip was
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`,
+with `LUNEX_RUN_KEYCHAIN_TEST` explicitly removed. macOS and the fixed iPhone,
+iPad, tvOS, and visionOS destinations passed Debug warnings-as-errors builds
+with zero structured diagnostics and each produced `HDRVideoShaders.air` plus
+`default.metallib`.
+
+The normalized simulator inventory was byte-identical before and after with
+SHA-256
+`60efff618098f956b1cc1cb74e83f4b122b6e52e186130ece4eb02ebcab2f49d`;
+the four fixed instances remained unique, available, and `Shutdown`, and
+global `Booted=0`. OpenSpec strict `6/6`, fixture self-test/tree, four stable
+project hashes at
+`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`,
+and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
+
+This proves the production ownership and invocation graph under deterministic
+inputs. It does not prove compositor EDR signaling, live Sunshine HDR,
+physical peak luminance/color accuracy, cross-display visual consistency, or
+device performance. Tasks 5.2 through 5.4 and 6.5 retain those gates.
 
 ## Verification matrix
 

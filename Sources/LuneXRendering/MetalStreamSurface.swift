@@ -408,6 +408,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     private weak var surfaceView: MTKView?
     private var activeResolvedConfiguration: HDRResolvedRenderConfiguration?
     private var appliedSurfaceContract: HDRSurfaceContract?
+    private var lastRequestedResolution: HDRRenderConfigurationResolution?
     private var requiresClearBeforePresentation = false
     private var presentationRevision: UInt64 = 0
     private var configurationTransitionCount: UInt64 = 0
@@ -472,6 +473,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             self.runtime = runtime
             activeResolvedConfiguration = nil
             appliedSurfaceContract = surface
+            lastRequestedResolution = nil
             requiresClearBeforePresentation = false
             presentationRevision &+= 1
             return previous
@@ -483,19 +485,33 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
 
     @MainActor
     func update(renderState: StreamRenderState) {
-        let transition = withLock {
+        let update = withLock {
             let previousRevision = coordinateSnapshot?.revision
             renderPolicy = renderState.policy
             coordinateSnapshot = renderState.coordinateSnapshot
-            guard previousRevision != coordinateSnapshot?.revision else {
-                return (false, nil as (any StreamMetalPresenterRuntiming)?)
+            let coordinateChanged = previousRevision != coordinateSnapshot?.revision
+            let resolutionChanged =
+                lastRequestedResolution != renderState.hdrRenderResolution
+            if resolutionChanged {
+                lastRequestedResolution = renderState.hdrRenderResolution
             }
-            requiresClearBeforePresentation = true
-            presentationRevision &+= 1
-            return (true, runtime)
+            if coordinateChanged {
+                requiresClearBeforePresentation = true
+                presentationRevision &+= 1
+            }
+            return (
+                coordinateChanged,
+                resolutionChanged,
+                runtime,
+                renderState.hdrRenderResolution
+            )
         }
-        guard transition.0 else { return }
-        transition.1?.stop()
+        if update.0 {
+            update.2?.stop()
+        }
+        if update.1, let view = surfaceView {
+            _ = transition(update.3, on: view)
+        }
         if StreamMetalViewScheduleResolver.resolve(renderState.policy).requestsImmediateDraw {
             surfaceView?.draw()
         }
@@ -690,6 +706,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             let previous = runtime
             runtime = nil
             activeResolvedConfiguration = nil
+            lastRequestedResolution = nil
             requiresClearBeforePresentation = false
             presentationRevision &+= 1
             return previous
@@ -725,6 +742,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             let previous = runtime
             runtime = nil
             activeResolvedConfiguration = nil
+            lastRequestedResolution = nil
             appliedSurfaceContract = nil
             requiresClearBeforePresentation = false
             presentationRevision &+= 1

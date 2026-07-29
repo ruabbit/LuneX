@@ -127,6 +127,10 @@ final class AppModel: ApplicationInputSink {
             if settings.input != oldValue.input {
                 refreshMacInputSurfacePolicy()
             }
+            if settings.stream != oldValue.stream {
+                updateRenderPreferences()
+                refreshHDRRenderResolution()
+            }
         }
     }
     var session = StreamingSessionState()
@@ -158,6 +162,9 @@ final class AppModel: ApplicationInputSink {
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
     @ObservationIgnored private var activeDecodedSourceSize: PixelSize?
+    @ObservationIgnored private var activeVideoPresentationRevision: UInt64 = 0
+    @ObservationIgnored private var activeVideoDecoderGeneration: UInt64?
+    @ObservationIgnored private var highestVideoDecoderGeneration: UInt64 = 0
     private var activeControlReadiness: SessionChannelReadiness = []
     private var activeMediaReadiness: SessionChannelReadiness = []
     private var mediaConsumerTask: Task<Void, Never>?
@@ -309,6 +316,9 @@ final class AppModel: ApplicationInputSink {
         renderState.policy = directive.renderPolicy
         renderState.transform.drawableSize = lifecycle.drawableSize
         renderState.headroom = lifecycle.headroom
+        renderState.displaySnapshot = lifecycle.displaySnapshot
+        renderState.isDisplayRevisionExhausted = lifecycle.isDisplayRevisionExhausted
+        refreshHDRRenderResolution()
 #if os(macOS)
         publishMacLifecycleDiagnostic(for: directive)
 #endif
@@ -938,6 +948,7 @@ final class AppModel: ApplicationInputSink {
         defer { refreshMacInputSurfacePolicy() }
         switch snapshot.stage {
         case .idle, .disconnected:
+            clearActiveVideoPresentation()
             activeStreamSessionID = nil
             activeControlReadiness = []
             activeMediaReadiness = []
@@ -1042,6 +1053,7 @@ final class AppModel: ApplicationInputSink {
             )
             applySessionSnapshot(snapshot)
             if activeMediaSessionID == sessionID {
+                updateNegotiatedVideoColorMetadata(metadata)
                 try await sessionMediaEnvironment.updateVideoColorMetadata(
                     metadata,
                     sessionID: sessionID
@@ -1096,6 +1108,9 @@ final class AppModel: ApplicationInputSink {
         latestRemoteInputFeedback = nil
         activeMediaSessionID = sessionID
         activeMediaGeneration = environmentSnapshot.generation
+        beginVideoPresentation(
+            negotiatedColorMetadata: configuration.video.colorMetadata
+        )
         activeDecodedSourceSize = PixelSize(
             width: configuration.video.width,
             height: configuration.video.height
@@ -1166,6 +1181,11 @@ final class AppModel: ApplicationInputSink {
             if case let .diagnostic(inputDiagnostic) = feedback {
                 diagnostics.record(ApplicationDiagnosticFactory.remoteFeedback(inputDiagnostic))
             }
+        case let .videoPresentation(presentationEvent):
+            applyVideoPresentationEvent(
+                presentationEvent,
+                sessionID: sessionID
+            )
         }
     }
 
@@ -1189,6 +1209,7 @@ final class AppModel: ApplicationInputSink {
         activeMediaSessionID = nil
         activeMediaGeneration = nil
         activeDecodedSourceSize = nil
+        clearActiveVideoPresentation()
         activeMediaReadiness = []
         activeControlReadiness = []
         latestRemoteInputFeedback = nil
@@ -1215,6 +1236,7 @@ final class AppModel: ApplicationInputSink {
         activeMediaSessionID = nil
         activeMediaGeneration = nil
         activeDecodedSourceSize = nil
+        clearActiveVideoPresentation()
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
         _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
@@ -1376,10 +1398,16 @@ final class AppModel: ApplicationInputSink {
         guard case .clear = directive,
               let sessionID = activeMediaSessionID,
               let mediaGeneration = activeMediaGeneration else { return }
-        videoPresentationSource.discardFrames(
+        if let event = videoPresentationSource.discardFrames(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration
-        )
+        ) {
+            applyVideoPresentationEvent(event, sessionID: sessionID)
+        } else {
+            activeVideoDecoderGeneration = nil
+            renderState.decodedVideoPresentationContract = nil
+            refreshHDRRenderResolution()
+        }
     }
 
     private func pendingTransportMessage(for snapshot: StreamSessionSnapshot) -> String {
@@ -1421,6 +1449,7 @@ final class AppModel: ApplicationInputSink {
         activeMediaSessionID = nil
         activeMediaGeneration = nil
         activeDecodedSourceSize = nil
+        clearActiveVideoPresentation()
         activeControlReadiness = []
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
@@ -1535,5 +1564,120 @@ final class AppModel: ApplicationInputSink {
                 reference: 1.0
             )
         }
+    }
+
+    private func beginVideoPresentation(
+        negotiatedColorMetadata: VideoColorMetadata
+    ) {
+        activeVideoPresentationRevision = 0
+        activeVideoDecoderGeneration = nil
+        highestVideoDecoderGeneration = 0
+        renderState.negotiatedVideoColorMetadata = negotiatedColorMetadata
+        renderState.decodedVideoPresentationContract = nil
+        refreshHDRRenderResolution()
+    }
+
+    private func updateNegotiatedVideoColorMetadata(
+        _ metadata: VideoColorMetadata
+    ) {
+        renderState.negotiatedVideoColorMetadata = metadata
+        activeVideoDecoderGeneration = nil
+        renderState.decodedVideoPresentationContract = nil
+        refreshHDRRenderResolution()
+    }
+
+    private func applyVideoPresentationEvent(
+        _ event: StreamVideoPresentationEvent,
+        sessionID: UUID
+    ) {
+        let ownership = event.ownership
+        guard activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              ownership.sessionID == sessionID,
+              ownership.mediaGeneration == activeMediaGeneration,
+              ownership.revision > activeVideoPresentationRevision else {
+            return
+        }
+
+        switch event {
+        case let .decoderStarted(_, contract):
+            guard contract.decoderGeneration > highestVideoDecoderGeneration else {
+                return
+            }
+            activeVideoPresentationRevision = ownership.revision
+            activeVideoDecoderGeneration = contract.decoderGeneration
+            highestVideoDecoderGeneration = contract.decoderGeneration
+            renderState.decodedVideoPresentationContract = nil
+
+        case let .decodedFrame(_, contract):
+            guard contract.decoderGeneration >= highestVideoDecoderGeneration else {
+                return
+            }
+            if contract.decoderGeneration > highestVideoDecoderGeneration {
+                activeVideoDecoderGeneration = contract.decoderGeneration
+                highestVideoDecoderGeneration = contract.decoderGeneration
+            }
+            guard contract.decoderGeneration == activeVideoDecoderGeneration else {
+                return
+            }
+            activeVideoPresentationRevision = ownership.revision
+            renderState.decodedVideoPresentationContract = contract
+            activeDecodedSourceSize = PixelSize(
+                width: contract.decodedLayout.width,
+                height: contract.decodedLayout.height
+            )
+            renderState.transform.sourceSize = activeDecodedSourceSize ?? .zero
+
+        case let .cleared(_, decoderGeneration):
+            if let decoderGeneration {
+                guard decoderGeneration == activeVideoDecoderGeneration else {
+                    return
+                }
+            }
+            activeVideoPresentationRevision = ownership.revision
+            activeVideoDecoderGeneration = nil
+            renderState.decodedVideoPresentationContract = nil
+        }
+        refreshHDRRenderResolution()
+    }
+
+    private func clearActiveVideoPresentation() {
+        activeVideoPresentationRevision = 0
+        activeVideoDecoderGeneration = nil
+        highestVideoDecoderGeneration = 0
+        renderState.negotiatedVideoColorMetadata = nil
+        renderState.decodedVideoPresentationContract = nil
+        renderState.hdrRenderResolution = .closed(.inactiveSession)
+    }
+
+    private func refreshHDRRenderResolution() {
+        guard activeStreamSessionID != nil,
+              activeMediaSessionID == activeStreamSessionID,
+              activeMediaGeneration != nil,
+              let decoded = renderState.decodedVideoPresentationContract else {
+            renderState.hdrRenderResolution = .closed(.inactiveSession)
+            return
+        }
+        let drawableSize = renderState.coordinateSnapshot?.drawableSize
+        let drawableAvailable = drawableSize.map {
+            $0.width > 0 && $0.height > 0
+        } ?? false
+        renderState.hdrRenderResolution = HDRRenderConfigurationResolver.resolve(
+            HDRRenderConfigurationResolverInput(
+                decodedLayout: decoded.decodedLayout,
+                colorMetadata: decoded.colorMetadata,
+                decoderGeneration: decoded.decoderGeneration,
+                userAllowsHDR: settings.stream.hdrEnabled,
+                platformCapabilities:
+                    HDRPlatformOutputCapabilityAdapter.current.capabilities,
+                displaySnapshot: renderState.displaySnapshot,
+                isDisplayRevisionExhausted:
+                    renderState.isDisplayRevisionExhausted,
+                drawableState: HDRDrawableState(
+                    isAvailable: drawableAvailable,
+                    appliedSurfaceContract: nil
+                )
+            )
+        )
     }
 }

@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`22/33`；4.6跨平台capability adapter完成，下一项5.1 production graph接线 |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`23/33`；5.1 production graph接线完成，下一项5.2移除synthetic settings eligibility fallback |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`22/33`。4.6新增单一平台capability resolution：macOS/iOS为候选supported；tvOS因`CAMetalLayer` EDR surface不可用返回typed SDR fallback，但可compile-safe读取`UIScreen` current/potential headroom；visionOS因没有current headroom来源返回typed SDR fallback。surface adapter从同一结果派生，避免与resolver能力漂移。最终focused `33/33`、完整macOS `599 total / 598 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。下一项5.1连接`AppModel`、media environment、presentation source、actual stream surface与active renderer revision；production HDR signaling、live Sunshine及物理亮度/颜色证据仍未完成。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`23/33`。5.1已把negotiated/decoded color metadata、decoder/media generation、真实lifecycle display snapshot/current headroom与user preference接入`AppModel`，并通过revision-owned presentation event连接media environment、actual stream surface和active renderer transition。最终扩大矩阵`132/132`、完整macOS `604 total / 603 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。下一项5.2从active session、preference、valid source、platform/display/current headroom完整派生eligibility并移除legacy synthetic settings fallback；5.3 diagnostics、live Sunshine、compositor signaling及物理亮度/颜色证据仍未完成。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -291,11 +291,13 @@
 | 15.4.4第三轮closed恢复测试错误假设默认策略active | 1 | `StreamRenderState()`默认`.idle`，实现正确保持view paused；测试显式设`.active`以验证按当前策略恢复，并从全新证据路径重跑 |
 | 15.4.4首轮五平台包装器误在zsh使用Bash数组索引 | 1 | 首个build前以`bad substitution`退出且未触碰设备；改用显式Bash、新证据目录和新前置清单完整重跑 |
 | 15.4.4首轮repository whitespace口径误纳入vendor | 1 | 172处命中全部来自固定上游`ThirdParty/ENet`，自有文件/current diff clean；排除vendor后从全新目录完整重跑既有门禁 |
+| 15.5.1 presentation revision exhaustion首轮保留了调用方刚写入的decoder generation | 1 | 将首次overflow与后续exhausted发布统一经过`clearRevisionOwnedPresentation()`，四项ownership/exhaustion focused门从全新证据路径通过 |
+| 15.5.1路线图搜索包含不存在的`README.md`并以`rg`退出码2结束 | 1 | 命令只读且已返回所需匹配；后续只读取仓库中实际存在的HDR合同、roadmap和三份跟踪文件 |
 
 ## 当前执行点（2026-07-29）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`22/33`；4.6跨平台capability adapters已完成并通过最终门禁，下一项5.1为production `AppModel`/media/presentation/render graph接线。
-- presenter transition API已经能消费resolved configuration并管理surface/runtime/clear/stop/replacement ownership，但production SwiftUI/AppModel尚未调用resolver/transition；5.1仍负责AppModel、lifecycle display snapshot、preference与实际surface接线。当前离线证据不证明production EDR、HDR signaling、live Sunshine HDR或物理亮度/颜色。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`23/33`；5.1 production `AppModel`/media/presentation/render graph接线已完成并通过任务级验收，下一项5.2为完整eligibility派生和synthetic settings fallback移除。
+- production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；5.2、5.3、5.4和6.5保持未完成。

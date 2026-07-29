@@ -1190,3 +1190,21 @@
 - tvOS可读取`UIScreen.currentEDRHeadroom/potentialEDRHeadroom`，但SDK明确没有`CAMetalLayer` EDR intent/metadata，因此返回`.extendedRangeSurfaceUnavailable`并让HDR resolver选择`.platformOutputUnsupported(.tvOS)`的SDR tone-map fallback。
 - visionOS可编译layer EDR intent/metadata与P3 surface，但没有可用的current display headroom来源，因此返回`.currentHeadroomUnavailable`并让HDR resolver选择同名SDR fallback；不会用potential、固定值或设置合成值冒充current headroom。
 - 四平台矩阵、surface派生和resolver fallback均有确定性测试，五个平台从同一source graph实际完成build-only。此证据只证明API/capability边界与compile safety，不证明移动scene/window ownership、tvOS/visionOS物理HDR、compositor signaling或设备显示结果。
+
+## 2026-07-29 阶段 15 任务 5.1 恢复与时序审计
+
+- 系统更新后恢复确认OpenSpec仍为`22/33`且5.1未勾选；工作树包含production graph与测试的10个未提交文件，`git diff --check`通过。
+- 修正旧coordinate-revision测试后，AppModel、media environment、presenter、实际AppKit surface与resolver扩大矩阵通过，结果为`/tmp/LuneX-15-5_1-focused.hAjX8r/DerivedData/Logs/Test/Test-LuneXCoreTests-2026.07.29_21-28-42-+0800.xcresult`。
+- 审计发现presentation revision在source锁内产生、但事件可从并发回调在锁外进入`AsyncStream`，因此更高revision的decoded frame可能先于较低revision的decoder-start到达。decoded frame本身已由source验证并包含完整decoder generation、metadata与layout，AppModel现在允许其在generation严格升高时建立high-water ownership，同时继续拒绝旧generation、旧revision和错误media generation。
+- 扩展现有HDR application graph回归，使decoder generation 11的frame以revision 4先于revision 3的decoder-start交付，并追加旧media generation的`.max` revision clear；全新DerivedData focused测试通过，结果为`/tmp/LuneX-15-5_1-ordering-r1/Logs/Test/Test-LuneXCoreTests-2026.07.29_21-31-47-+0800.xcresult`。
+
+## 2026-07-29 阶段 15 任务 5.1 验收结论
+
+- `StreamVideoPresentationSource`以session/media generation和checked monotonic revision发布decoder-start、decoded-frame与clear语义事件；相同generation/metadata/actual decoded layout的连续帧不增加语义revision。revision耗尽会永久fail closed并清除decoder/frame ownership，不回绕。
+- media environment沿既有generation-owned event stream转发presentation事件。AppModel分别保存negotiated metadata与实际decoded contract，只接受当前session/media owner、更高revision和非旧decoder generation；frame-before-start可用完整decoded contract建立严格更新的generation ownership，迟到start/clear、旧media generation和replacement事件保持拒绝。
+- AppModel把真实lifecycle `HDRDisplaySnapshot`、display revision exhaustion、user preference和当前platform capability送入resolver；没有active session/media、decoded contract、drawable或真实display snapshot时保持`.closed(.inactiveSession)`，不使用legacy settings-derived `renderState.headroom`冒充显示器证据。
+- actual macOS/UIKit representable把resolved/closed值送入`StreamMetalPresenter`；相同resolution去重，metadata/preference/display/headroom/decoder/lifecycle discard/replacement/stop/failure会清除或重算revision-owned surface/runtime。
+- 最终扩大矩阵`132/132`通过（`/tmp/LuneX-15-5_1-expanded-final.eDt1IE/Expanded.xcresult`）；完整macOS suite为`604 total / 603 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-5_1-full-final.ZFwls4/LuneXCoreTests.xcresult`），唯一skip精确为真实Keychain opt-in，所有测试均显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 五平台Debug warnings-as-errors build位于`/tmp/LuneX-15-5_1-builds-final.D40JCi`，五个xcresult均`succeeded`且warning/error/analyzer warning为0，每个平台均生成`HDRVideoShaders.air`和`default.metallib`。simulator前后规范化清单逐字一致，SHA-256均为`60efff618098f956b1cc1cb74e83f4b122b6e52e186130ece4eb02ebcab2f49d`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`。
+- repository gates位于`/tmp/LuneX-15-5_1-repo-final.6NWoUy`：OpenSpec strict `6/6`、勾选前apply `22/33`、fixture self-test/全树、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference、Swift Package、Core Image、diff及排除vendor的自有whitespace边界全部通过。
+- 此证据证明production ownership与调用图，不证明compositor实际进入EDR、live Sunshine HDR、物理峰值亮度/颜色准确性、跨显示器视觉一致性或设备性能。5.2 synthetic settings eligibility移除、5.3 diagnostics、5.4 application gate和6.5物理显示器证明仍未完成。

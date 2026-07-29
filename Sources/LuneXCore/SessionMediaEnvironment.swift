@@ -44,6 +44,7 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
 enum SessionMediaEnvironmentEvent: Equatable, Sendable {
     case readiness(SessionChannelReadiness)
     case feedback(RemoteInputFeedback)
+    case videoPresentation(StreamVideoPresentationEvent)
 }
 
 struct SessionMediaEnvironmentSnapshot: Equatable, Sendable {
@@ -87,7 +88,10 @@ protocol SessionVideoProcessorCreating: Sendable {
         sessionID: UUID,
         mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
-        controlProvider: any SessionControlProvider
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
     ) async throws -> any SessionVideoProcessing
 }
 
@@ -239,6 +243,16 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         )
         lastTeardownReport = nil
         lastStoppedSessionID = nil
+        let pair = AsyncThrowingStream<SessionMediaEnvironmentEvent, Error>.makeStream()
+        pair.continuation.onTermination = { [weak self] termination in
+            guard case .cancelled = termination else { return }
+            Task {
+                await self?.consumerCancelled(
+                    sessionID: sessionID,
+                    generation: mediaGeneration
+                )
+            }
+        }
 
         do {
             _ = try await tracker.registerResource(
@@ -258,7 +272,10 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 sessionID: sessionID,
                 mediaGeneration: mediaGeneration,
                 configuration: configuration.video,
-                controlProvider: controlProvider
+                controlProvider: controlProvider,
+                presentationEventSink: { event in
+                    pair.continuation.yield(.videoPresentation(event))
+                }
             )
             do {
                 _ = try await tracker.registerResource(kind: .decoder, name: "video-processor") {
@@ -307,16 +324,6 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                   startingSession?.generation == mediaGeneration,
                   !cancelledStartingGenerations.contains(mediaGeneration) else {
                 throw CancellationError()
-            }
-            let pair = AsyncThrowingStream<SessionMediaEnvironmentEvent, Error>.makeStream()
-            pair.continuation.onTermination = { [weak self] termination in
-                guard case .cancelled = termination else { return }
-                Task {
-                    await self?.consumerCancelled(
-                        sessionID: sessionID,
-                        generation: mediaGeneration
-                    )
-                }
             }
             active = ActiveSession(
                 sessionID: sessionID,
@@ -421,6 +428,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             active.continuation.yield(.readiness(active.readiness))
             return pair.stream
         } catch {
+            pair.continuation.finish(throwing: error)
             if let active,
                active.sessionID == sessionID,
                active.generation == mediaGeneration {

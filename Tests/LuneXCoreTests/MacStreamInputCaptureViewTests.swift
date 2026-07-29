@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+@preconcurrency import CoreVideo
 import XCTest
 
 @MainActor
@@ -701,6 +702,120 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(replacementRecorder.keyboardSamples.map(\.isDown), [false])
         XCTAssertEqual(firstExitCount, 1)
         XCTAssertEqual(replacementExitCount, 1)
+    }
+
+    func testCoordinatorUpdateAppliesResolvedConfigurationToActualMetalSurface()
+        throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let drawableSize = PixelSize(width: 1_920, height: 1_080)
+        let lifecycle = PlatformLifecycleState()
+        _ = lifecycle.updateSurface(
+            displayID: "display-a",
+            headroom: DisplayHeadroom(
+                potential: 4,
+                current: 2.5,
+                reference: 1
+            ),
+            drawableSize: drawableSize
+        )
+        let metadata = VideoColorMetadata.hdr10VideoRange()
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: drawableSize,
+            drawableSize: drawableSize,
+            mode: .fit
+        ))
+        renderState.policy = .active
+        renderState.hdrRenderResolution = HDRRenderConfigurationResolver.resolve(
+            HDRRenderConfigurationResolverInput(
+                decodedLayout: HDRDecodedPixelBufferLayout(
+                    pixelFormat:
+                        kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+                    width: drawableSize.width,
+                    height: drawableSize.height,
+                    planes: [
+                        HDRDecodedPlaneDimensions(
+                            width: drawableSize.width,
+                            height: drawableSize.height
+                        ),
+                        HDRDecodedPlaneDimensions(
+                            width: drawableSize.width / 2,
+                            height: drawableSize.height / 2
+                        )
+                    ]
+                ),
+                colorMetadata: metadata,
+                decoderGeneration: 20,
+                userAllowsHDR: true,
+                platformCapabilities:
+                    HDRPlatformOutputCapabilityAdapter.current.capabilities,
+                displaySnapshot: lifecycle.displaySnapshot,
+                isDisplayRevisionExhausted: false,
+                drawableState: HDRDrawableState(
+                    isAvailable: true,
+                    appliedSurfaceContract: nil
+                )
+            )
+        )
+        let coordinator = MacStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState,
+            lifecycle: lifecycle,
+            inputSampleHandler: { _ in },
+            captureExitHandler: {}
+        )
+        let view = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 1_920, height: 1_080),
+            device: device,
+            isInputCaptureEnabled: false,
+            sampleHandler: { _ in }
+        )
+        coordinator.presenter.configure(view)
+
+        coordinator.update(
+            renderState: renderState,
+            inputPolicy: .inactive,
+            view: view,
+            inputSampleHandler: { _ in },
+            captureExitHandler: {}
+        )
+
+        let active = try XCTUnwrap(
+            coordinator.presenter.snapshot().activeConfiguration
+        )
+        XCTAssertEqual(active.decoderGeneration, 20)
+        XCTAssertEqual(active.mappingMode, .hdrEDR)
+        XCTAssertEqual(view.colorPixelFormat, .rgba16Float)
+        let layer = try XCTUnwrap(view.layer as? CAMetalLayer)
+        XCTAssertTrue(layer.wantsExtendedDynamicRangeContent)
+        XCTAssertEqual(
+            coordinator.presenter.snapshot().configurationTransitionCount,
+            1
+        )
+
+        coordinator.update(
+            renderState: renderState,
+            inputPolicy: .inactive,
+            view: view,
+            inputSampleHandler: { _ in },
+            captureExitHandler: {}
+        )
+        XCTAssertEqual(
+            coordinator.presenter.snapshot().configurationTransitionCount,
+            1
+        )
+
+        renderState.hdrRenderResolution = .closed(.inactiveSession)
+        coordinator.update(
+            renderState: renderState,
+            inputPolicy: .inactive,
+            view: view,
+            inputSampleHandler: { _ in },
+            captureExitHandler: {}
+        )
+        XCTAssertNil(coordinator.presenter.snapshot().activeConfiguration)
+        XCTAssertEqual(view.colorPixelFormat, .bgra8Unorm_srgb)
+        XCTAssertFalse(layer.wantsExtendedDynamicRangeContent)
+        coordinator.detach(view)
     }
 
     func testSurfaceCaptureControllerKeepsDirectAdmissionWithoutCursorOwnership() {

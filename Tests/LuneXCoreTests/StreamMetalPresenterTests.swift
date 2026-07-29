@@ -734,7 +734,9 @@ final class StreamMetalPresenterTests: XCTestCase {
     func testCoordinateRevisionClearsPresentationAndPipelineWithoutSurfaceChange() throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let view = MTKView(frame: .zero, device: device)
-        let runtime = RecordingStreamMetalPresenterRuntime()
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let activeRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [initialRuntime, activeRuntime]
         let surfaceAdapter = RecordingPresenterSurfaceAdapter()
         let renderState = StreamRenderState(transform: RenderTransform(
             sourceSize: PixelSize(width: 64, height: 64),
@@ -744,17 +746,37 @@ final class StreamMetalPresenterTests: XCTestCase {
         let presenter = StreamMetalPresenter(
             presentationSource: StreamVideoPresentationSource(),
             renderState: renderState,
-            runtimeFactory: { _, _ in runtime },
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
             surfaceAdapterFactory: { _ in surfaceAdapter }
         )
         presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 60,
+            frameID: 16,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 52,
+            currentHeadroom: 2
+        )
+        renderState.hdrRenderResolution = .resolved(resolved)
+        presenter.update(renderState: renderState)
 
         renderState.transform.drawableSize = PixelSize(width: 192, height: 108)
         presenter.update(renderState: renderState)
 
-        XCTAssertEqual(runtime.stopCount, 1)
-        XCTAssertEqual(runtime.invalidationCount, 0)
-        XCTAssertEqual(surfaceAdapter.contracts, [try makeSDRSurface()])
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(activeRuntime.stopCount, 1)
+        XCTAssertEqual(activeRuntime.invalidationCount, 0)
+        XCTAssertEqual(surfaceAdapter.contracts, [
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract
+        ])
+        XCTAssertEqual(
+            presenter.snapshot().configurationTransitionCount,
+            1
+        )
         XCTAssertTrue(presenter.snapshot().requiresClearBeforePresentation)
     }
 

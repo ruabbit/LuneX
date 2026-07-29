@@ -111,6 +111,11 @@ final class StreamRenderState {
     }
     private(set) var coordinateSnapshot: StreamCoordinateSnapshot?
     var headroom = DisplayHeadroom()
+    var displaySnapshot: HDRDisplaySnapshot?
+    var isDisplayRevisionExhausted = false
+    var negotiatedVideoColorMetadata: VideoColorMetadata?
+    var decodedVideoPresentationContract: StreamVideoDecodedPresentationContract?
+    var hdrRenderResolution: HDRRenderConfigurationResolution = .closed(.inactiveSession)
     @ObservationIgnored private var coordinatePublisher: StreamCoordinateSnapshotPublisher
 
     init(transform: RenderTransform = RenderTransform()) {

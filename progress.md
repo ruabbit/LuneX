@@ -1573,3 +1573,20 @@
 - 完整macOS warnings-as-errors suite位于`/tmp/LuneX-15-4_6-full.6POMvJ`，xcresult为`599 total / 598 passed / 1 skipped / 0 failed`。唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`及其`LUNEX_RUN_KEYCHAIN_TEST=1` opt-in说明；所有测试均显式`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
 - repository gates位于`/tmp/LuneX-15-4_6-repo.9opc3n`：fixture validator self-test/全树、OpenSpec strict `6/6`、generator运行前与连续三次SHA-256均为`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`，production/reference、Swift Package、Core Image、diff与排除vendor的自有whitespace边界全部通过。
 - OpenSpec 4.6标记完成，权威进度更新为`22/33`；阶段15保持`in_progress`。下一项5.1为production `AppModel`、media environment、presentation source、actual stream surface与active renderer revision接线；EDR compositor signaling、live Sunshine HDR与6.5物理显示器证据仍未完成。
+
+## 2026-07-29 阶段 15 任务 5.1 恢复
+
+- 恢复活动目标、planning-with-files与OpenSpec上下文，确认5.1仍为进行中且工作树与续接记录一致。
+- 修正后的五套扩大测试全部通过，包含旧coordinate revision用例及实际macOS `MTKView/CAMetalLayer` transition；正常测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- production event-order审计识别并修复frame-before-start交付：更高decoder generation的自包含decoded contract可建立ownership，旧revision decoder-start及旧media generation clear保持拒绝。
+- 新增乱序/旧media generation断言后，focused AppModel HDR graph从全新DerivedData通过；5.1尚未勾选，待完整审计与全套验收。
+- 首次追加记录的补丁因`findings.md`与`progress.md`尾部结构不同而在写入前被拒绝；随后以实际尾部上下文重新应用，未丢失或覆盖已有记录。
+- presentation revision exhaustion首轮四项focused为`3 passed / 1 failed`，失败精确为exhausted source拒绝后续event却保留调用方刚写入的decoder generation；该轮不计验收。已统一首次溢出与后续发布尝试的ownership清理路径，待从相同矩阵复验。
+
+## 2026-07-29 阶段 15 任务 5.1 完成
+
+- revision exhaustion与ownership四项从全新证据路径`4/4`通过；最终扩大矩阵`132/132`、完整macOS `604 total / 603 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确为显式opt-in真实Keychain测试，所有正常测试均使用`env -u LUNEX_RUN_KEYCHAIN_TEST`。
+- `StreamVideoPresentationSource`、native video processor、media environment、AppModel、lifecycle render state和actual Metal presenter现组成session/media/decoder/revision-owned production graph；真实decoded layout/metadata与真实display snapshot/current headroom进入resolver，相同resolution不重复重建surface/runtime。
+- macOS及固定iPhone/iPad/tvOS/visionOS Debug warnings-as-errors build-only均成功、零结构化诊断并生成Metal AIR/metallib。simulator规范化清单前后SHA-256同为`60efff618098f956b1cc1cb74e83f4b122b6e52e186130ece4eb02ebcab2f49d`，固定四实例保持唯一、available、`Shutdown`且全局`Booted=0`，未执行任何simulator生命周期命令。
+- repository strict/fixture/generator/reference/package/Core Image/diff/owned-whitespace门全部通过，最终证据目录`/tmp/LuneX-15-5_1-repo-final.6NWoUy`。OpenSpec 5.1标记完成，权威进度更新为`23/33`；阶段15保持`in_progress`。
+- 下一项5.2负责从active session、preference、valid source contract、platform/display capability和current headroom完整派生eligibility，并移除legacy synthetic settings fallback。5.3 diagnostics、live Sunshine HDR、compositor signaling和6.5物理显示器证据保持未完成。

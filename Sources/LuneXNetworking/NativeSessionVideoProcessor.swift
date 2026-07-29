@@ -11,12 +11,17 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
         sessionID: UUID,
         mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
-        controlProvider: any SessionControlProvider
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void = { _ in }
     ) async throws -> any SessionVideoProcessing {
-        presentationSource.beginSession(
+        if let event = presentationSource.beginSession(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration
-        )
+        ) {
+            presentationEventSink(event)
+        }
         let source = presentationSource
         do {
             let pipeline = try VideoDecodePipeline.make(
@@ -26,11 +31,12 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
                     provider: controlProvider
                 ),
                 decoderEventSink: { event in
-                    source.consume(
+                    guard let presentationEvent = source.consume(
                         event,
                         sessionID: sessionID,
                         mediaGeneration: mediaGeneration
-                    )
+                    ) else { return }
+                    presentationEventSink(presentationEvent)
                 }
             )
             do {
@@ -39,17 +45,20 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
                     mediaGeneration: mediaGeneration,
                     configuration: configuration,
                     pipeline: pipeline,
-                    presentationSource: presentationSource
+                    presentationSource: presentationSource,
+                    presentationEventSink: presentationEventSink
                 )
             } catch {
                 await pipeline.stop()
                 throw error
             }
         } catch {
-            presentationSource.clear(
+            if let event = presentationSource.clear(
                 sessionID: sessionID,
                 mediaGeneration: mediaGeneration
-            )
+            ) {
+                presentationEventSink(event)
+            }
             throw error
         }
     }
@@ -60,6 +69,9 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
     private let mediaGeneration: UInt64
     private let pipeline: VideoDecodePipeline
     private let presentationSource: StreamVideoPresentationSource
+    private let presentationEventSink: @Sendable (
+        StreamVideoPresentationEvent
+    ) -> Void
     private var assembler: NormalizedVideoAccessUnitAssembler
     private var lifecycleApplication: SessionLifecycleApplication?
     private var isDrainingTransport = false
@@ -71,12 +83,16 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
         mediaGeneration: UInt64,
         configuration: NegotiatedVideoStreamConfiguration,
         pipeline: VideoDecodePipeline,
-        presentationSource: StreamVideoPresentationSource
+        presentationSource: StreamVideoPresentationSource,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
     ) throws {
         self.sessionID = sessionID
         self.mediaGeneration = mediaGeneration
         self.pipeline = pipeline
         self.presentationSource = presentationSource
+        self.presentationEventSink = presentationEventSink
         assembler = try NormalizedVideoAccessUnitAssembler(codec: configuration.codec)
     }
 
@@ -147,10 +163,12 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
             isDrainingTransport = true
             needsResumeRecovery = false
             assembler.reset()
-            presentationSource.discardFrames(
+            if let event = presentationSource.discardFrames(
                 sessionID: sessionID,
                 mediaGeneration: mediaGeneration
-            )
+            ) {
+                presentationEventSink(event)
+            }
             await pipeline.pauseForLifecycle()
             return
         }
@@ -159,10 +177,12 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
         isDrainingTransport = false
         needsResumeRecovery = true
         assembler.reset()
-        presentationSource.discardFrames(
+        if let event = presentationSource.discardFrames(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration
-        )
+        ) {
+            presentationEventSink(event)
+        }
         do {
             try await pipeline.resumeAfterLifecyclePause()
         } catch {
@@ -178,10 +198,12 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
         isStopped = true
         assembler.reset()
         await pipeline.stop()
-        presentationSource.clear(
+        if let event = presentationSource.clear(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration
-        )
+        ) {
+            presentationEventSink(event)
+        }
     }
 }
 
