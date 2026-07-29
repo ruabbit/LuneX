@@ -52,7 +52,10 @@ final class AudioToolboxOpusDecoderTests: XCTestCase {
 
         XCTAssertEqual(decoded.sequenceNumber, 42)
         XCTAssertEqual(decoded.rtpTimestamp, 123_456)
-        XCTAssertEqual(decoded.format, .signedInt16(sampleRate: 48_000, channelCount: 2))
+        XCTAssertEqual(decoded.format, .signedInt16(
+            sampleRate: 48_000,
+            channelLayout: .stereo
+        ))
         XCTAssertGreaterThan(decoded.frameCount, 0)
         XCTAssertLessThanOrEqual(decoded.frameCount, fixture.expectedDecodedFrames)
         XCTAssertEqual(decoded.interleavedSamples.count, decoded.frameCount * 2)
@@ -141,6 +144,13 @@ final class AudioToolboxOpusDecoderTests: XCTestCase {
             XCTAssertGreaterThan(decoded.frameCount, 0, profile.name)
             XCTAssertLessThanOrEqual(decoded.frameCount, fixture.samplesPerFrame, profile.name)
             XCTAssertEqual(
+                decoded.format.channelLayout,
+                try StreamAudioChannelLayout.resolve(
+                    channelCount: profile.channelCount
+                ),
+                profile.name
+            )
+            XCTAssertEqual(
                 decoded.interleavedSamples.count,
                 decoded.frameCount * profile.channelCount,
                 profile.name
@@ -196,7 +206,9 @@ final class AudioToolboxOpusDecoderTests: XCTestCase {
     ) -> NegotiatedAudioStreamConfiguration {
         NegotiatedAudioStreamConfiguration(
             sampleRate: 48_000,
-            channelCount: channels,
+            channelLayout: try! StreamAudioChannelLayout.resolve(
+                channelCount: channels
+            ),
             streamCount: streams,
             coupledStreamCount: coupledStreams,
             samplesPerFrame: 240,

@@ -251,7 +251,7 @@ final class AudioPacketJitterBufferTests: XCTestCase {
     private func audioConfiguration() -> NegotiatedAudioStreamConfiguration {
         NegotiatedAudioStreamConfiguration(
             sampleRate: 48_000,
-            channelCount: 2,
+            channelLayout: .stereo,
             streamCount: 1,
             coupledStreamCount: 1,
             samplesPerFrame: 240,

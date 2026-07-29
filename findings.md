@@ -1345,3 +1345,11 @@
 - resolver区分inactive、nonspatial、fixed spatial和head-tracked；stale graph/route revision、无输出、无效route计数、layout不一致、mono、graph/algorithm缺失、mobile route unknown/unsupported、entitlement缺失/不可读、错误平台策略及readback失败均不会虚报active。macOS允许route capability unknown但仍要求实际environment graph；visionOS固定与head-tracked意图都要求对应output-node readback。
 - 最终focused证据`/tmp/LuneX-16-1_3-focused-r2.NN47Sb/Focused.xcresult`为`8/8 passed / 0 skipped / 0 failed`，结构化warning/error/analyzer warning均为0；macOS/iOS/tvOS/visionOS 26 warnings-as-errors typecheck全部通过。
 - OpenSpec strict为`1/1 valid / 0 issues`，generator连续SHA-256为`fec375a7964494f1fda4e3aac63ee7db1edb06e609eda4f673db4c7c7c9f4359`。该项不修改`AVAudioEngine`或route adapter，不证明任何真实设备空间音频、头部跟踪、entitlement provisioning或可听声道定位。
+
+## 2026-07-30 阶段 16 任务 1.4 验收
+
+- `NegotiatedAudioStreamConfiguration`、`StreamAudioConfiguration`和`InterleavedPCMFormat`不再分别拥有可漂移的raw channel count；三者保存同一个不可变`StreamAudioChannelLayout`值并只派生`channelCount`。RTSP原始count在进入runtime config前解析，非1/2/6/8布局fail closed。
+- production decoder把negotiated layout原样写入每个decoded PCM，concealment沿用runtime layout；pipeline调度比较完整layout identity且PCM factory复核canonical layout。同为6声道但FL/FR交换的伪布局会在negotiation validation和schedule边界被拒绝。
+- focused证据`/tmp/LuneX-16-1_4-focused.c5sr9i/Focused.xcresult`为`46/46`，扩大证据`/tmp/LuneX-16-1_4-expanded.pkFMvo/Expanded.xcresult`为`84/84`；两者0 skip/failed/warning/error/analyzer warning。覆盖RTSP、Sunshine Opus stereo/5.1/7.1 decode、pipeline、recovery、jitter、media environment、session与AppModel。
+- 最终macOS/iOS/tvOS/visionOS App generic-device Debug warnings-as-errors build全部succeeded且结构化诊断为0。Xcode更新暴露的iOS launch screen warning通过generator-owned `INFOPLIST_KEY_UILaunchScreen_Generation=YES`消除；未使用或操作simulator。
+- OpenSpec strict为`1/1 valid / 0 issues`，generator连续SHA-256为`6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`。该项仍未向`AVAudioFormat`附加显式Core Audio layout，也未建立environment graph，分别留给2.2和2.3。

@@ -207,7 +207,7 @@ final class AudioRuntimeIntegrationTests: XCTestCase {
     private func stereoConfiguration() -> NegotiatedAudioStreamConfiguration {
         NegotiatedAudioStreamConfiguration(
             sampleRate: 48_000,
-            channelCount: 2,
+            channelLayout: .stereo,
             streamCount: 1,
             coupledStreamCount: 1,
             samplesPerFrame: 240,
@@ -253,7 +253,10 @@ final class AudioRuntimeIntegrationTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> Bool {
-        let isCompatible = decoded.format == .signedInt16(sampleRate: 48_000, channelCount: 2)
+        let isCompatible = decoded.format == .signedInt16(
+            sampleRate: 48_000,
+            channelLayout: .stereo
+        )
             && (1...AVAudioPCMBufferFactory.maximumFramesPerBuffer).contains(decoded.frameCount)
             && decoded.interleavedSamples.count == decoded.frameCount * 2
         XCTAssertTrue(
@@ -267,7 +270,10 @@ final class AudioRuntimeIntegrationTests: XCTestCase {
     }
 
     private func isPipelineCompatible(_ decoded: DecodedPCMBuffer) -> Bool {
-        decoded.format == .signedInt16(sampleRate: 48_000, channelCount: 2)
+        decoded.format == .signedInt16(
+            sampleRate: 48_000,
+            channelLayout: .stereo
+        )
             && (1...AVAudioPCMBufferFactory.maximumFramesPerBuffer).contains(decoded.frameCount)
             && decoded.interleavedSamples.count == decoded.frameCount * 2
     }

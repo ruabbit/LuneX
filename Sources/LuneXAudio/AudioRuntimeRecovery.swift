@@ -269,7 +269,7 @@ actor SessionAudioRuntime {
                     rtpTimestamp: firstRTPTimeStamp &+ timestampOffset,
                     format: .signedInt16(
                         sampleRate: Int(configuration.sampleRate),
-                        channelCount: configuration.channelCount
+                        channelLayout: configuration.channelLayout
                     ),
                     frameCount: samplesPerPacket,
                     interleavedSamples: [Int16](

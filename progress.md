@@ -1754,3 +1754,10 @@
 - 审查修复了关闭head tracking时绕过平台策略与visionOS fixed readback的问题；resolver现在只根据同revision graph/route事实发布状态，macOS route unknown与移动/TV route unsupported策略保持显式分层。
 - 最终focused证据`/tmp/LuneX-16-1_3-focused-r2.NN47Sb`为`8/8 passed / 0 skipped / 0 failed`且结构化diagnostics为0；四平台26 SDK warnings-as-errors typecheck、OpenSpec strict、`git diff --check`和generator稳定性均通过。
 - 测试显式移除Keychain opt-in且未操作simulator。OpenSpec 1.3已勾选，权威进度`3/35`；下一项1.4绑定negotiated configuration与decoded PCM的单一layout identity。
+
+## 2026-07-30 阶段 16 任务 1.4 完成
+
+- negotiated audio、decoder PCM和pipeline config改为存储canonical `StreamAudioChannelLayout`，raw count只在RTSP输入边界解析一次并在各层派生；decoder、concealment和schedule不再独立重建或仅按整数比较声道语义。
+- 新增同声道数错序拒绝与RTSP/decoder identity回归，并更新所有session/AppModel测试构造点。focused`46/46`、扩大`84/84`均通过且结构化diagnostics为0。
+- 首轮iOS generic build因缺launch screen产生1条Xcode工程warning，build虽succeeded但未计零诊断验收；generator补`INFOPLIST_KEY_UILaunchScreen_Generation=YES`后，最终macOS/iOS/tvOS/visionOS四平台App build均0 warning/error/analyzer warning。
+- OpenSpec strict、`git diff --check`及generator连续SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过；Keychain opt-in保持移除且未操作simulator。OpenSpec进度`4/35`，下一项1.5。

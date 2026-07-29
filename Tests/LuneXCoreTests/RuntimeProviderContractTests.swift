@@ -63,6 +63,30 @@ final class RuntimeProviderContractTests: XCTestCase {
         }
     }
 
+    func testAudioContractRejectsNoncanonicalLayoutWithSameChannelCount() {
+        var configuration = makeAudio(channels: 6, streams: 4, coupled: 2)
+        configuration.channelLayout = StreamAudioChannelLayout(
+            kind: .wave5Point1,
+            channels: [
+                .frontRight,
+                .frontLeft,
+                .frontCenter,
+                .lowFrequencyEffects,
+                .backLeft,
+                .backRight
+            ],
+            moonlightChannelMask: 0x003F,
+            coreAudioLayoutTagRawValue: StreamAudioChannelLayout.wave5Point1
+                .coreAudioLayoutTagRawValue,
+            spatialEligibility: .ambienceBed
+        )
+
+        XCTAssertEqual(configuration.channelCount, 6)
+        XCTAssertThrowsError(try configuration.validate()) { error in
+            XCTAssertEqual(error as? RuntimeContractError, .invalidAudioConfiguration)
+        }
+    }
+
     func testNegotiatedSessionRejectsZeroPort() {
         var configuration = makeSessionConfiguration()
         configuration.audioEndpoint.port = 0
@@ -105,7 +129,9 @@ final class RuntimeProviderContractTests: XCTestCase {
     ) -> NegotiatedAudioStreamConfiguration {
         NegotiatedAudioStreamConfiguration(
             sampleRate: 48_000,
-            channelCount: channels,
+            channelLayout: try! StreamAudioChannelLayout.resolve(
+                channelCount: channels
+            ),
             streamCount: streams,
             coupledStreamCount: coupled,
             samplesPerFrame: 240,

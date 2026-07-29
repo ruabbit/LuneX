@@ -73,6 +73,51 @@ final class AudioPipelineTests: XCTestCase {
         }
     }
 
+    func testPipelineRejectsReorderedPCMWithMatchingRawChannelCount() async throws {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(engineClient: client)
+        let configuration = StreamAudioConfiguration(
+            sampleRate: 48_000,
+            channelLayout: .wave5Point1,
+            latencyPolicy: .lowLatency,
+            spatialAudioEnabled: false
+        )
+        _ = try await pipeline.configure(configuration)
+        _ = try await pipeline.start()
+        let reorderedLayout = StreamAudioChannelLayout(
+            kind: .wave5Point1,
+            channels: [
+                .frontRight,
+                .frontLeft,
+                .frontCenter,
+                .lowFrequencyEffects,
+                .backLeft,
+                .backRight
+            ],
+            moonlightChannelMask: 0x003F,
+            coreAudioLayoutTagRawValue: StreamAudioChannelLayout.wave5Point1
+                .coreAudioLayoutTagRawValue,
+            spatialEligibility: .ambienceBed
+        )
+        let decoded = DecodedPCMBuffer(
+            sequenceNumber: 1,
+            rtpTimestamp: 0,
+            format: .signedInt16(
+                sampleRate: 48_000,
+                channelLayout: reorderedLayout
+            ),
+            frameCount: 2,
+            interleavedSamples: [Int16](repeating: 1, count: 12)
+        )
+
+        XCTAssertEqual(decoded.format.channelCount, configuration.channelCount)
+        await AudioPipelineXCTAssertThrowsErrorAsync(
+            try await pipeline.schedule(decoded)
+        ) { error in
+            XCTAssertEqual(error as? AudioPipelineError, .invalidPCMBuffer)
+        }
+    }
+
     func testAudioPipelineConfiguresStartsAndStopsWithRouteSnapshot() async throws {
         let client = StubAudioEngineClient(route: AudioRouteSnapshot(
             outputNames: ["USB DAC"],
@@ -281,7 +326,10 @@ final class AudioPipelineTests: XCTestCase {
         DecodedPCMBuffer(
             sequenceNumber: sequence,
             rtpTimestamp: timestamp,
-            format: .signedInt16(sampleRate: 48_000, channelCount: 2),
+            format: .signedInt16(
+                sampleRate: 48_000,
+                channelLayout: .stereo
+            ),
             frameCount: 2,
             interleavedSamples: [100, -100, 200, -200]
         )

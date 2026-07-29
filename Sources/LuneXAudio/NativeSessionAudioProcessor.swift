@@ -10,7 +10,7 @@ struct NativeSessionAudioProcessorFactory: SessionAudioProcessorCreating {
         do {
             let streamConfiguration = StreamAudioConfiguration(
                 sampleRate: Double(configuration.sampleRate),
-                channelCount: configuration.channelCount,
+                channelLayout: configuration.channelLayout,
                 latencyPolicy: .lowLatency,
                 spatialAudioEnabled: false
             )

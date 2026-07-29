@@ -32,18 +32,22 @@ enum OpusDecoderError: Error, Equatable, Sendable, CustomStringConvertible {
 
 struct InterleavedPCMFormat: Equatable, Sendable {
     var sampleRate: Int
-    var channelCount: Int
+    var channelLayout: StreamAudioChannelLayout
     var bitsPerChannel: Int
     var isSignedInteger: Bool
     var isInterleaved: Bool
 
+    var channelCount: Int {
+        channelLayout.channelCount
+    }
+
     static func signedInt16(
         sampleRate: Int,
-        channelCount: Int
+        channelLayout: StreamAudioChannelLayout
     ) -> InterleavedPCMFormat {
         InterleavedPCMFormat(
             sampleRate: sampleRate,
-            channelCount: channelCount,
+            channelLayout: channelLayout,
             bitsPerChannel: 16,
             isSignedInteger: true,
             isInterleaved: true
@@ -129,7 +133,7 @@ actor AudioToolboxOpusDecoder {
         self.configuration = configuration
         self.pcmFormat = .signedInt16(
             sampleRate: configuration.sampleRate,
-            channelCount: configuration.channelCount
+            channelLayout: configuration.channelLayout
         )
 
         let channelCount = UInt32(configuration.channelCount)

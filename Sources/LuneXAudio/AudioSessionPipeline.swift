@@ -3,20 +3,27 @@ import Foundation
 
 struct StreamAudioConfiguration: Codable, Equatable, Hashable, Sendable {
     var sampleRate: Double
-    var channelCount: Int
+    var channelLayout: StreamAudioChannelLayout
     var latencyPolicy: AudioLatencyPolicy
     var spatialAudioEnabled: Bool
 
+    var channelCount: Int {
+        channelLayout.channelCount
+    }
+
     static let stereoLowLatency = StreamAudioConfiguration(
         sampleRate: 48_000,
-        channelCount: 2,
+        channelLayout: .stereo,
         latencyPolicy: .lowLatency,
         spatialAudioEnabled: false
     )
 
     func validate() throws {
+        let canonicalLayout = try? StreamAudioChannelLayout.resolve(
+            channelCount: channelCount
+        )
         guard sampleRate == 48_000,
-              (1...8).contains(channelCount) else {
+              canonicalLayout == channelLayout else {
             throw AudioPipelineError.invalidConfiguration
         }
     }
@@ -157,8 +164,11 @@ enum AVAudioPCMBufferFactory {
 
     static func makeBuffer(from decoded: DecodedPCMBuffer) throws -> AVAudioPCMBuffer {
         let format = decoded.format
+        let canonicalLayout = try? StreamAudioChannelLayout.resolve(
+            channelCount: format.channelCount
+        )
         guard format.sampleRate == 48_000,
-              (1...8).contains(format.channelCount),
+              canonicalLayout == format.channelLayout,
               format.bitsPerChannel == 16,
               format.isSignedInteger,
               format.isInterleaved,
@@ -304,7 +314,7 @@ actor AudioSessionPipeline {
             throw AudioPipelineError.notRunning
         }
         guard buffer.format.sampleRate == Int(configuration.sampleRate),
-              buffer.format.channelCount == configuration.channelCount,
+              buffer.format.channelLayout == configuration.channelLayout,
               buffer.format.bitsPerChannel == 16,
               buffer.format.isSignedInteger,
               buffer.format.isInterleaved,

@@ -1259,7 +1259,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         )
         let configuration = NegotiatedAudioStreamConfiguration(
             sampleRate: 48_000,
-            channelCount: 2,
+            channelLayout: .stereo,
             streamCount: 1,
             coupledStreamCount: 1,
             samplesPerFrame: 240,
@@ -1354,7 +1354,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             ),
             audio: NegotiatedAudioStreamConfiguration(
                 sampleRate: 48_000,
-                channelCount: 2,
+                channelLayout: .stereo,
                 streamCount: 1,
                 coupledStreamCount: 1,
                 samplesPerFrame: 240,

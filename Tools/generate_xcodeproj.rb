@@ -309,6 +309,7 @@ targets = [
     extra: {
       "TARGETED_DEVICE_FAMILY" => "1,2",
       "INFOPLIST_KEY_UIBackgroundModes" => "audio",
+      "INFOPLIST_KEY_UILaunchScreen_Generation" => "YES",
       "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone" => "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
       "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" => "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
     }

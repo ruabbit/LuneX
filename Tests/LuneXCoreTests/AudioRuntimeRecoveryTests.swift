@@ -218,7 +218,10 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
         DecodedPCMBuffer(
             sequenceNumber: sequence,
             rtpTimestamp: timestamp,
-            format: .signedInt16(sampleRate: 48_000, channelCount: 2),
+            format: .signedInt16(
+                sampleRate: 48_000,
+                channelLayout: .stereo
+            ),
             frameCount: 240,
             interleavedSamples: [Int16](repeating: 1, count: 480)
         )

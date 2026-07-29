@@ -75,17 +75,24 @@ struct NegotiatedVideoStreamConfiguration: Codable, Equatable, Sendable {
 
 struct NegotiatedAudioStreamConfiguration: Codable, Equatable, Sendable {
     var sampleRate: Int
-    var channelCount: Int
+    var channelLayout: StreamAudioChannelLayout
     var streamCount: Int
     var coupledStreamCount: Int
     var samplesPerFrame: Int
     var channelMapping: [UInt8]
     var maximumPacketSize: Int
 
+    var channelCount: Int {
+        channelLayout.channelCount
+    }
+
     func validate() throws {
         let codedChannelCount = streamCount + coupledStreamCount
+        let canonicalLayout = try? StreamAudioChannelLayout.resolve(
+            channelCount: channelCount
+        )
         guard sampleRate == 48_000,
-              (1...8).contains(channelCount),
+              canonicalLayout == channelLayout,
               streamCount > 0,
               coupledStreamCount >= 0,
               coupledStreamCount <= streamCount,

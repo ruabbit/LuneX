@@ -28,9 +28,17 @@ struct SunshineOpusConfiguration: Equatable, Sendable {
         samplesPerFrame: Int,
         maximumPacketSize: Int
     ) throws -> NegotiatedAudioStreamConfiguration {
+        let channelLayout: StreamAudioChannelLayout
+        do {
+            channelLayout = try StreamAudioChannelLayout.resolve(
+                channelCount: channelCount
+            )
+        } catch {
+            throw SunshineRTSPNegotiationError.invalidOpusConfiguration
+        }
         let configuration = NegotiatedAudioStreamConfiguration(
             sampleRate: 48_000,
-            channelCount: channelCount,
+            channelLayout: channelLayout,
             streamCount: streamCount,
             coupledStreamCount: coupledStreamCount,
             samplesPerFrame: samplesPerFrame,

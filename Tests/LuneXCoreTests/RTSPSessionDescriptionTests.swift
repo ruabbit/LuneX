@@ -22,10 +22,12 @@ final class RTSPSessionDescriptionTests: XCTestCase {
                        [0, 1, 2, 3, 4, 5])
         XCTAssertEqual(description.opusConfiguration(channelCount: 6, highQuality: true)?.streamCount, 4)
         let stereo = try XCTUnwrap(description.opusConfiguration(channelCount: 2, highQuality: false))
-        XCTAssertNoThrow(try stereo.makeRuntimeConfiguration(
+        let runtime = try stereo.makeRuntimeConfiguration(
             samplesPerFrame: 240,
             maximumPacketSize: 1_400
-        ))
+        )
+        XCTAssertEqual(runtime.channelLayout, .stereo)
+        XCTAssertEqual(runtime.channelCount, runtime.channelLayout.channelCount)
     }
 
     func testSetupFixturesParseSessionPortsAndExtensions() throws {
