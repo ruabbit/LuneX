@@ -1713,3 +1713,9 @@
 - `/tmp/LuneX-15-6_4-simulator-audit-r2.1eiDpv`证明6.2 before/after与当前三份规范化清单逐字一致，SHA-256均为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；四个固定26.4 runtime/name/UUID identity各唯一、available且`Shutdown`，全局`Booted=0`。
 - 首轮额外要求产品名称跨所有runtime全局唯一，因iOS/xrOS 27的系统同名实例而退出；这不表示固定UUID重复。最终按`runtime + name + UUID`验证OpenSpec固定identity，并披露跨runtime实例。本项没有创建、启动、关闭、删除、安装或运行任何模拟器。
 - OpenSpec 6.4标记完成，权威进度更新为`31/33`。6.5需要授权Sunshine HDR、compositor/物理显示器与跨屏测量证据，当前不可勾选；下一可执行项为6.6更新计划、路线图和硬件限制并封版推送。
+
+## 2026-07-29 阶段 15 任务 6.6 完成
+
+- 6.4已以`54d68fe Verify fixed HDR simulator identities`独立提交并推送，fetch确认`HEAD == origin/main == 54d68fe`且工作树clean后执行6.6。
+- 同步OpenSpec、`task_plan.md`、`findings.md`、`progress.md`、runtime roadmap和HDR合同；补齐6.5授权Sunshine版本、参考图、HDR/SDR显示器、动态headroom、跨屏、sleep/reconnect、clean stop及脱敏测量/截图证据清单。
+- OpenSpec 6.6标记完成，权威进度更新为`32/33 in_progress`；唯一剩余6.5没有硬件证据，不archive change、不把阶段15标记complete。6.6通过strict/generator/diff门并独立提交推送后，将在已推送HEAD执行一次阶段15离线自验，再进入阶段16 OpenSpec提案与实现。

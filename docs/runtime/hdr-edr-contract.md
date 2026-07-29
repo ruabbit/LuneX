@@ -715,6 +715,20 @@ simulator. Evidence is retained at
 - Clean stop, sleep/wake, display disconnect/reconnect, and no surviving EDR
   surface ownership.
 
+The final evidence package must identify the authorized Sunshine version,
+LuneX commit, test application, reference-pattern provenance, display class,
+and timestamps while redacting host/app endpoint data and display serial
+identity. It must correlate the client's bounded HDR status with an observable
+compositor/display state and either a reference-pattern capture or repeatable
+luminance/color measurement. Separate rows are required for SDR on HDR, HDR on
+SDR fallback, HDR on HDR, same-display headroom reduction/recovery,
+cross-display migration, sleep/wake or display reconnect, and clean stop.
+
+Unit tests, offscreen shader readback, simulator rendering, successful layer
+property mutation, or an unrecorded visual impression cannot individually
+satisfy task 6.5. Mobile, tvOS, and visionOS physical output remain owned by
+stages 17 and 18 rather than being inferred from stage 15 compile safety.
+
 Until those physical checks exist, stage 15 may report deterministic HDR/EDR
 implementation readiness but remains `in_progress` and must not claim verified
 HDR display output.

@@ -47,4 +47,4 @@
 - [x] 6.3 Run OpenSpec strict, generator, clean-room/dependency, Metal compilation, static analyzer, ASan, TSan, malloc ownership, and renderer resource-release gates
 - [x] 6.4 Verify fixed simulator identities remain unique and `Shutdown` without creating or explicitly booting devices
 - [ ] 6.5 Validate SDR-on-HDR, HDR-on-SDR, HDR-on-HDR, current-headroom changes, and cross-display transitions on authorized physical displays with redacted reference-pattern or measurement evidence
-- [ ] 6.6 Update planning and roadmap evidence, document platform/hardware limits, commit each completed task, and push
+- [x] 6.6 Update planning and roadmap evidence, document platform/hardware limits, commit each completed task, and push

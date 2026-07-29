@@ -1299,3 +1299,10 @@
 - 固定iPhone、iPad、Apple TV与Vision Pro的UUID在各自26.4 runtime中各出现一次，名称、runtime、UUID、available与`Shutdown`状态全部匹配；全部51个available simulator中`Booted=0`。
 - iOS 27 runtime另有同名iPhone/iPad，xrOS 27 runtime另有同名Vision Pro；它们是不同runtime的系统配置identity，不是固定26.4 UUID重复。本项首轮按名称跨runtime全局唯一的额外断言因此退出，但固定identity、三快照与状态门均已通过；最终按OpenSpec的固定identity合同验收并显式披露跨runtime实例。
 - 本项仅运行`simctl list devices available -j`和`simctl list runtimes -j`及本地结构化比较，没有build/test，也没有create、clone、boot、bootstatus、launch、shutdown、delete、install或run操作；它不证明真机或物理HDR输出。
+
+## 2026-07-29 阶段 15 任务 6.6 验收结论
+
+- 路线图、HDR合同和三份规划文件现统一记录阶段15 production、normal/十配置五平台build、strict/generator/dependency/四SDK Metal、analyzer/ASan/TSan/malloc/resource与独立simulator证据；OpenSpec权威进度为`32/33 in_progress`。
+- 1.1至6.4与6.6已完成并逐项独立提交推送；6.5没有授权Sunshine HDR、compositor EDR signaling、物理HDR/SDR参考图或测量、动态headroom、跨显示器及display reconnect证据，因此change不可archive且阶段不得标记`complete`。
+- 6.5硬件清单明确要求Sunshine版本/LuneX commit/test app/reference pattern、SDR-on-HDR、HDR-on-SDR fallback、HDR-on-HDR、同屏headroom下降/恢复、跨屏、sleep/wake或display reconnect及clean stop；证据必须脱敏并关联客户端状态与可观察compositor/display结果。
+- 阶段16及后续确定性实现可以继续推进，但空间音频、移动连续性、tvOS/visionOS编译或Release门禁都不能回填阶段15物理HDR证据。
