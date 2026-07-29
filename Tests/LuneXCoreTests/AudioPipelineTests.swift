@@ -52,7 +52,7 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(
             surround7Point1.signature,
             StreamAudioChannelLayoutSignature(
-                identifier: "wave-7.1",
+                identifier: .wave7Point1,
                 channelCount: 8,
                 moonlightChannelMask: 0x063F,
                 coreAudioLayoutTagRawValue: UInt32(kAudioChannelLayoutTag_WAVE_7_1)

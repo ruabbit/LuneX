@@ -61,14 +61,14 @@ struct SpatialAudioRouteCapabilitySnapshot: Codable, Equatable, Hashable, Sendab
     let maximumOutputChannelCount: Int
 }
 
-enum SpatialAudioPresentationMode: String, Codable, Hashable, Sendable {
+enum SpatialAudioPresentationMode: String, Codable, CaseIterable, Hashable, Sendable {
     case inactive
     case nonspatial
     case fixedSpatial = "fixed-spatial"
     case headTracked = "head-tracked"
 }
 
-enum SpatialAudioFallbackReason: String, Codable, Hashable, Sendable {
+enum SpatialAudioFallbackReason: String, Codable, CaseIterable, Hashable, Sendable {
     case staleRevision = "stale-revision"
     case outputUnavailable = "output-unavailable"
     case invalidRouteSnapshot = "invalid-route-snapshot"
@@ -118,6 +118,56 @@ struct SpatialAudioRuntimeSnapshot: Codable, Equatable, Hashable, Sendable {
             return "spatial_audio_\(presentationMode.rawValue)_\(fallbackReason.rawValue)"
         }
         return "spatial_audio_\(presentationMode.rawValue)"
+    }
+}
+
+enum SpatialAudioRuntimeHistoryError: Error, Equatable, Hashable, Sendable {
+    case invalidCapacity(Int)
+    case staleRevision(
+        latest: SpatialAudioSemanticRevision,
+        incoming: SpatialAudioSemanticRevision
+    )
+    case conflictingRevision(SpatialAudioSemanticRevision)
+}
+
+struct SpatialAudioRuntimeHistory: Equatable, Sendable {
+    static let defaultCapacity = 32
+    static let maximumCapacity = 64
+
+    let capacity: Int
+    private(set) var snapshots: [SpatialAudioRuntimeSnapshot] = []
+
+    init(capacity: Int = defaultCapacity) throws {
+        guard (1...Self.maximumCapacity).contains(capacity) else {
+            throw SpatialAudioRuntimeHistoryError.invalidCapacity(capacity)
+        }
+        self.capacity = capacity
+    }
+
+    @discardableResult
+    mutating func append(_ snapshot: SpatialAudioRuntimeSnapshot) throws -> Bool {
+        if let latest = snapshots.last {
+            if snapshot.revision == latest.revision {
+                guard snapshot == latest else {
+                    throw SpatialAudioRuntimeHistoryError.conflictingRevision(
+                        snapshot.revision
+                    )
+                }
+                return false
+            }
+            guard snapshot.revision > latest.revision else {
+                throw SpatialAudioRuntimeHistoryError.staleRevision(
+                    latest: latest.revision,
+                    incoming: snapshot.revision
+                )
+            }
+        }
+
+        snapshots.append(snapshot)
+        if snapshots.count > capacity {
+            snapshots.removeFirst(snapshots.count - capacity)
+        }
+        return true
     }
 }
 

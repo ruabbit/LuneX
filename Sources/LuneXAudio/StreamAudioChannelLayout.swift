@@ -25,7 +25,7 @@ enum StreamAudioSpatialEligibility: String, Codable, Hashable, Sendable {
 }
 
 struct StreamAudioChannelLayoutSignature: Codable, Equatable, Hashable, Sendable {
-    let identifier: String
+    let identifier: StreamAudioChannelLayoutKind
     let channelCount: Int
     let moonlightChannelMask: UInt32
     let coreAudioLayoutTagRawValue: UInt32
@@ -48,7 +48,7 @@ struct StreamAudioChannelLayout: Codable, Equatable, Hashable, Sendable {
 
     var signature: StreamAudioChannelLayoutSignature {
         StreamAudioChannelLayoutSignature(
-            identifier: kind.rawValue,
+            identifier: kind,
             channelCount: channelCount,
             moonlightChannelMask: moonlightChannelMask,
             coreAudioLayoutTagRawValue: coreAudioLayoutTagRawValue

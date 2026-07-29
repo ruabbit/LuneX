@@ -1761,3 +1761,10 @@
 - 新增同声道数错序拒绝与RTSP/decoder identity回归，并更新所有session/AppModel测试构造点。focused`46/46`、扩大`84/84`均通过且结构化diagnostics为0。
 - 首轮iOS generic build因缺launch screen产生1条Xcode工程warning，build虽succeeded但未计零诊断验收；generator补`INFOPLIST_KEY_UILaunchScreen_Generation=YES`后，最终macOS/iOS/tvOS/visionOS四平台App build均0 warning/error/analyzer warning。
 - OpenSpec strict、`git diff --check`及generator连续SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过；Keychain opt-in保持移除且未操作simulator。OpenSpec进度`4/35`，下一项1.5。
+
+## 2026-07-30 阶段 16 任务 1.5 完成
+
+- 增加192组合platform/preference/route/entitlement resolver主网格及graph/layout/algorithm/strategy/readback、stale graph/route、output/channel-limit边界；既有channel order/tag/mask、ambiguous count和同count错序拒绝继续纳入扩大门。
+- layout signature identifier改为闭合layout kind；新增1...64严格容量的`SpatialAudioRuntimeHistory`，验证duplicate revision去重、conflict/stale拒绝、旧值淘汰与只保存privacy-safe snapshot。该纯值类型不提前实现3.5 route monitor或5.2 diagnostics owner。
+- 最终focused`29/29`、扩大`78/78 passed / 0 skipped / 0 failed`；macOS/iOS/tvOS/visionOS generic-device Debug App warnings-as-errors build全部成功且编译器warning/error为0。测试显式移除Keychain opt-in，未选择、启动或修改simulator。
+- OpenSpec strict、`git diff --check`和generator初始/连续两次SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过。OpenSpec 1.5已勾选，权威进度`5/35`；下一项2.1扩展injectable engine client graph intent与actual spatial runtime snapshot合同。

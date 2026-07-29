@@ -1353,3 +1353,12 @@
 - focused证据`/tmp/LuneX-16-1_4-focused.c5sr9i/Focused.xcresult`为`46/46`，扩大证据`/tmp/LuneX-16-1_4-expanded.pkFMvo/Expanded.xcresult`为`84/84`；两者0 skip/failed/warning/error/analyzer warning。覆盖RTSP、Sunshine Opus stereo/5.1/7.1 decode、pipeline、recovery、jitter、media environment、session与AppModel。
 - 最终macOS/iOS/tvOS/visionOS App generic-device Debug warnings-as-errors build全部succeeded且结构化诊断为0。Xcode更新暴露的iOS launch screen warning通过generator-owned `INFOPLIST_KEY_UILaunchScreen_Generation=YES`消除；未使用或操作simulator。
 - OpenSpec strict为`1/1 valid / 0 issues`，generator连续SHA-256为`6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`。该项仍未向`AVAudioFormat`附加显式Core Audio layout，也未建立environment graph，分别留给2.2和2.3。
+
+## 2026-07-30 阶段 16 任务 1.5 验收
+
+- channel-order、Core Audio layout tag、Moonlight mask、3/4/5/7与越界count拒绝、同count错序PCM拒绝均保留确定性回归；layout signature的identifier从任意`String`收紧为闭合`StreamAudioChannelLayoutKind`，JSON raw value保持兼容。
+- resolver主网格覆盖macOS/iOS/tvOS/visionOS、spatial偏好开关、head-tracking偏好开关、supported/unsupported/unknown route与granted/missing/unreadable/not-required entitlement，共192组；另覆盖graph mode、algorithm、layout/strategy mismatch、listener/vision readback、独立stale graph/route revision、output unavailable与非法channel limits。
+- 新增纯值`SpatialAudioRuntimeHistory`，容量只允许1...64；同revision同snapshot不重复追加，同revision冲突及倒退revision fail closed，超容量只淘汰最旧的privacy-safe runtime snapshot。它不监听notification、不生成route revision、不接AVAudioEngine；等价平台通知的revision去重仍由3.5负责，诊断映射/作用域仍由5.2负责。
+- runtime snapshot编码只包含闭合mode/fallback/strategy/route/layout signature与revision，不提供route name/UID、host/app、raw entitlement、notification payload、sample或任意error text入口；全部稳定diagnostic code均限制在96 bytes内，测试编码上限为512 bytes。
+- 最终focused证据`/tmp/LuneX-16-1_5-focused3.qrYXoF`为`29/29 passed`，扩大证据`/tmp/LuneX-16-1_5-expanded-final.rChagi`为`78/78 passed / 0 skipped / 0 failed`；测试均显式移除`LUNEX_RUN_KEYCHAIN_TEST`。macOS/iOS/tvOS/visionOS generic-device Debug App warnings-as-errors build全部成功，编译器warning/error为0；唯一日志warning是Xcode对无AppIntents依赖的metadata extraction跳过提示。
+- OpenSpec strict为`1/1 valid / 0 issues`，generator初始及连续两次SHA-256均为`6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`，`git diff --check`通过，未选择或操作simulator。该证据不证明session-owned environment graph、实际route/entitlement、AirPods head tracking、可听多声道定位或硬件输出。
