@@ -1331,3 +1331,10 @@
 - OpenSpec `integrate-spatial-audio-runtime`包含proposal、design、3个capability specs和35项tasks；strict validation为`1/1 valid / 0 issues`，apply状态`ready`。
 - 1.1只读调查覆盖production audio graph、processor/media environment/AppModel ownership、route/interruption recovery、settings/diagnostics/UI、Moonlight channel order、Xcode 26.4 headers与四平台Swift API probe。
 - 该项不修改production runtime，不证明空间音频、head tracking、multichannel route或live Sunshine可用；只建立后续实现和物理gate的可审计合同边界。
+
+## 2026-07-30 阶段 16 任务 1.2 验收
+
+- 新增不可变`StreamAudioChannelLayout`合同：mono=`C`、stereo=`FL/FR`、WAVE 5.1=`FL/FR/C/LFE/Back L/Back R`、WAVE 7.1在其后追加`Side L/Side R`；同时保留Moonlight mask、Core Audio tag、空间eligibility与稳定signature。
+- 只接受1/2/6/8声道；3/4/5/7以及越界值因缺少可证明speaker语义而返回typed closed error。该项尚未把layout接入negotiation/decoder/engine，留给1.4与2.x。
+- 最终focused`2/2`和完整`AudioPipelineTests 13/13`通过，xcresult结构化warning/error/analyzer warning均为0；新源码通过macOS/iOS/tvOS/visionOS 26 SDK warnings-as-errors typecheck。
+- generator连续哈希为`f574f90c46d6fcc614ad9601d4df3b6787e0de1750689f9d1a5ba55d616a04ff`。测试显式移除Keychain opt-in且没有操作simulator；这些证据不证明实际声道可听位置或空间音频输出。

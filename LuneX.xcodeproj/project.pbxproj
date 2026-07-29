@@ -110,6 +110,7 @@
 				6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */,
 				D4CF4EEFA619027CF8209EA4 /* TouchInputAdapter.swift */,
 				280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */,
+				90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */,
 				2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */,
 				9C1A7ED20A6C63D1DBDE4BA2 /* AudioRuntimeRecovery.swift */,
 				1C6B6FFA15778F50114093FC /* AudioPacketJitterBuffer.swift */,
@@ -250,6 +251,7 @@
 				509B6EB9DC08AC023AD4E1E3 /* TVRemoteFocusInputAdapter.swift in Sources */,
 				0676B508055EC12E4BE2E829 /* TouchInputAdapter.swift in Sources */,
 				EA48BCED98C3AD80ED754905 /* AudioSessionPipeline.swift in Sources */,
+				7EE0A7E2FAA448FAE8A2D512 /* StreamAudioChannelLayout.swift in Sources */,
 				F7ECA194FBE954D6904382B2 /* NativeSessionAudioProcessor.swift in Sources */,
 				81828B91AB3300483CF27B1D /* AudioRuntimeRecovery.swift in Sources */,
 				8191C455B45B13E661203835 /* AudioPacketJitterBuffer.swift in Sources */,
@@ -432,6 +434,7 @@
 		49ED6FF4581FF335CD1CF9D6 /* RTSPBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13450D22D4C73E2DC264A069 /* RTSPBootstrap.swift */; };
 		49F321639E8ED73E1BD91739 /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		4A246F4717F6EB32340E9480 /* DiagnosticsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXDiagnostics/DiagnosticsStore.swift"; sourceTree = "<group>"; };
+		4A4072A4068431E6DD0CC92A /* StreamAudioChannelLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */; };
 		4A43692AD8BCEEB8B727C85B /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic; ENABLE_USER_SCRIPT_SANDBOXING = NO; GCC_NO_COMMON_BLOCKS = YES; SWIFT_OPTIMIZATION_LEVEL = -Onone; SWIFT_VERSION = 6.0; DEBUG_INFORMATION_FORMAT = dwarf; ONLY_ACTIVE_ARCH = YES;}; name = Debug; };
 		4B3298D4C3E56D5F52ED776B /* MacInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D575889CB3325F0C4CEAE602 /* MacInputAdapter.swift */; };
 		4D01F1AFD08EF95771D6169C /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
@@ -540,6 +543,7 @@
 				5D16553A18599BEEB77DEC3B /* TVRemoteFocusInputAdapter.swift in Sources */,
 				627BAC5502DE8338016671CD /* TouchInputAdapter.swift in Sources */,
 				3C3BF9A09AC62AC9BDF739CF /* AudioSessionPipeline.swift in Sources */,
+				9310AAF05201BB22BDDF680A /* StreamAudioChannelLayout.swift in Sources */,
 				A23CF5973F5545A1D2705806 /* NativeSessionAudioProcessor.swift in Sources */,
 				B74B62FFE6144F9A1C34B016 /* AudioRuntimeRecovery.swift in Sources */,
 				15E2868CAA5C0D8D2AAE920C /* AudioPacketJitterBuffer.swift in Sources */,
@@ -672,6 +676,7 @@
 				52588C27B85362A81133EA71 /* TVRemoteFocusInputAdapter.swift in Sources */,
 				CEDC8ED47CF018CD0F3F5A56 /* TouchInputAdapter.swift in Sources */,
 				C178F47B546699EC4C186CF4 /* AudioSessionPipeline.swift in Sources */,
+				4A4072A4068431E6DD0CC92A /* StreamAudioChannelLayout.swift in Sources */,
 				CE88BFE04611C31B65054415 /* NativeSessionAudioProcessor.swift in Sources */,
 				FFEC87CE8C08878EFA440FC8 /* AudioRuntimeRecovery.swift in Sources */,
 				DD498A5990E33CABB7C75AA8 /* AudioPacketJitterBuffer.swift in Sources */,
@@ -885,6 +890,7 @@
 		7E44AE9CD91CF8AAECCCC2CC /* VideoPacketAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034D057B26B7D00AA2AD265F /* VideoPacketAssembly.swift */; };
 		7E95234B4545E4AFE6142C38 /* HDRMetalVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48DC082A39B4970292F10B /* HDRMetalVideoRenderer.swift */; };
 		7EC49F1787E0F58A60DA427B /* SessionTeardown.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFA7F994587868FF358AAC05 /* SessionTeardown.swift */; };
+		7EE0A7E2FAA448FAE8A2D512 /* StreamAudioChannelLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */; };
 		7F07F080755ABD6DC2799457 /* ApplicationDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC7F7BAF41E28D7F93292D /* ApplicationDiagnostics.swift */; };
 		7F40071572B7AC57FA4485B7 /* LuneXApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FE925D93939396C8853A8E /* LuneXApp.swift */; };
 		7FC15A7869FA1283C4007FB4 /* HDRPresentationStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 691F6740F03008787D769DA4 /* HDRPresentationStatus.swift */; };
@@ -956,6 +962,7 @@
 				42D0D6A1447A495F857D2BE3 /* TVRemoteFocusInputAdapter.swift in Sources */,
 				7B6BEA39712C64ADEB30283F /* TouchInputAdapter.swift in Sources */,
 				191FDC818059758AF15CB72F /* AudioSessionPipeline.swift in Sources */,
+				9237167D0EB0E5B96C5B4326 /* StreamAudioChannelLayout.swift in Sources */,
 				831F14496421DEFFAB0BA5C2 /* NativeSessionAudioProcessor.swift in Sources */,
 				B5CADFC6D4D41AE682DD1E4A /* AudioRuntimeRecovery.swift in Sources */,
 				80C81871F05B2A45B06F5945 /* AudioPacketJitterBuffer.swift in Sources */,
@@ -1021,16 +1028,19 @@
 		8F3281F1C8AADAC8FA559DA6 /* SessionMediaEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */; };
 		8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/StreamNegotiation.swift"; sourceTree = "<group>"; };
 		90226E0C800AB73D0CC4C9B6 /* VideoColorMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBAB368A6FAB0C315E232E56 /* VideoColorMetadata.swift */; };
+		90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/StreamAudioChannelLayout.swift"; sourceTree = "<group>"; };
 		90F976152B2E278F303C0FCB /* MediaClockSynchronizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 756C2F7D0E424A7D7F302393 /* MediaClockSynchronizerTests.swift */; };
 		915C0D03B6CA308327B23B39 /* VideoColorMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBAB368A6FAB0C315E232E56 /* VideoColorMetadata.swift */; };
 		9190DD229B050AF1816197FD /* StreamMetalPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/StreamMetalPresenterTests.swift"; sourceTree = "<group>"; };
 		91A89A56CD694D32BD707CD9 /* LuneXApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FE925D93939396C8853A8E /* LuneXApp.swift */; };
 		91DBDCE7183BA3D558E443EF /* MacSessionInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213FADD9BB6C09AEE90F9AA1 /* MacSessionInputCoordinator.swift */; };
 		91F48A8AF584103D46926CDF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
+		9237167D0EB0E5B96C5B4326 /* StreamAudioChannelLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */; };
 		924C8DA2F61A43C3704C2771 /* InputEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0690E476FD5EEC1BD002B5 /* InputEvents.swift */; };
 		9259F70F625535B44BC1C823 /* peer.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AB990EDF8496554BC8B7484 /* peer.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		9264492FF71009C9A2255068 /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		9289CCB617CB52CECB470310 /* HDRPresentationStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 691F6740F03008787D769DA4 /* HDRPresentationStatus.swift */; };
+		9310AAF05201BB22BDDF680A /* StreamAudioChannelLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */; };
 		936AC5DDAECC9B0866E9A93F /* HostDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90B7F5F3E4136E717E7C010 /* HostDiscovery.swift */; };
 		9385939EF0E8DA7C2B380B21 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
@@ -1575,6 +1585,7 @@
 				670E657BBBC675F9D14F3296 /* TVRemoteFocusInputAdapter.swift in Sources */,
 				23C944B7F6935AE80E901F50 /* TouchInputAdapter.swift in Sources */,
 				E1862A01B9DF3E5C21EB7CD5 /* AudioSessionPipeline.swift in Sources */,
+				F583A2CDCA7C2F09F2346C7E /* StreamAudioChannelLayout.swift in Sources */,
 				8CF8D31D099CF758040A6EFA /* NativeSessionAudioProcessor.swift in Sources */,
 				FD44C7AAC774F8028FA73727 /* AudioRuntimeRecovery.swift in Sources */,
 				24BD23FFD510EF30F694E232 /* AudioPacketJitterBuffer.swift in Sources */,
@@ -1626,6 +1637,7 @@
 		F40C12A13C92959C12D0E4D5 /* JSONFileStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPersistence/JSONFileStores.swift"; sourceTree = "<group>"; };
 		F4B3E3133274A685A8A4BEEF /* SessionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681CDF76621660A5CB58CC57 /* SessionRecovery.swift */; };
 		F560BF8E91EA3926C7B1A4B4 /* HDRColorReferenceMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C428F6D89FFF7F82B76FC6F1 /* HDRColorReferenceMathTests.swift */; };
+		F583A2CDCA7C2F09F2346C7E /* StreamAudioChannelLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F0EAE003A94C0D85FE8AAF /* StreamAudioChannelLayout.swift */; };
 		F60F94A75308D32AD4AC9B15 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "AccentColor";
 				CODE_SIGN_STYLE = "Automatic";

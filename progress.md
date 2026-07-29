@@ -1741,3 +1741,9 @@
 - 创建`integrate-spatial-audio-runtime`的proposal、design、3个capability specs和35项tasks；OpenSpec strict通过`1/1 valid / 0 issues`，apply为`ready`。
 - 1.1盘点确认production仍是`player -> mainMixer`，孤立controller不影响真实PCM；Moonlight 5.1/7.1为WAVE顺序，Core Audio `WAVE_7_1`可无交换表达；route/recovery/AppModel/UI与entitlement/hardware证据边界已记录。
 - 四平台Swift warnings-as-errors API probe通过且没有操作simulator。OpenSpec 1.1已勾选，权威进度`1/35`；下一项1.2实现不可变channel-layout合同。
+
+## 2026-07-30 阶段 16 任务 1.2 完成
+
+- 新增`Sources/LuneXAudio/StreamAudioChannelLayout.swift`并同步generator/project：不可变mono/stereo/WAVE 5.1/WAVE 7.1语义顺序、Moonlight mask、Core Audio tag、空间eligibility、稳定signature和unsupported-count error。
+- 最终focused证据`/tmp/LuneX-16-1_2-focused-final.oYLfia`为`2/2`，扩大`AudioPipelineTests`证据`/tmp/LuneX-16-1_2-expanded.1785341970`为`13/13`；两者结构化diagnostics均为0。
+- 新合同通过四平台26 SDK warnings-as-errors typecheck，generator连续SHA-256为`f574f90c46d6fcc614ad9601d4df3b6787e0de1750689f9d1a5ba55d616a04ff`。OpenSpec 1.2已勾选，权威进度`2/35`；下一项1.3为语义空间状态snapshot与resolver。

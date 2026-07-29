@@ -2,6 +2,77 @@ import XCTest
 import AVFAudio
 
 final class AudioPipelineTests: XCTestCase {
+    func testMoonlightChannelLayoutsPreserveSemanticOrderAndCoreAudioTags() throws {
+        let mono = try StreamAudioChannelLayout.resolve(channelCount: 1)
+        let stereo = try StreamAudioChannelLayout.resolve(channelCount: 2)
+        let surround5Point1 = try StreamAudioChannelLayout.resolve(channelCount: 6)
+        let surround7Point1 = try StreamAudioChannelLayout.resolve(channelCount: 8)
+
+        XCTAssertEqual(mono.channels, [.frontCenter])
+        XCTAssertEqual(mono.coreAudioLayoutTag, kAudioChannelLayoutTag_Mono)
+        XCTAssertEqual(mono.spatialEligibility, .nonspatialMono)
+        XCTAssertEqual(stereo.channels, [.frontLeft, .frontRight])
+        XCTAssertEqual(stereo.moonlightChannelMask, 0x0003)
+        XCTAssertEqual(stereo.coreAudioLayoutTag, kAudioChannelLayoutTag_Stereo)
+        XCTAssertEqual(
+            surround5Point1.channels,
+            [
+                .frontLeft,
+                .frontRight,
+                .frontCenter,
+                .lowFrequencyEffects,
+                .backLeft,
+                .backRight
+            ]
+        )
+        XCTAssertEqual(surround5Point1.moonlightChannelMask, 0x003F)
+        XCTAssertEqual(
+            surround5Point1.coreAudioLayoutTag,
+            kAudioChannelLayoutTag_WAVE_5_1_A
+        )
+        XCTAssertEqual(
+            surround7Point1.channels,
+            [
+                .frontLeft,
+                .frontRight,
+                .frontCenter,
+                .lowFrequencyEffects,
+                .backLeft,
+                .backRight,
+                .sideLeft,
+                .sideRight
+            ]
+        )
+        XCTAssertEqual(surround7Point1.moonlightChannelMask, 0x063F)
+        XCTAssertEqual(
+            surround7Point1.coreAudioLayoutTag,
+            kAudioChannelLayoutTag_WAVE_7_1
+        )
+        XCTAssertEqual(surround7Point1.spatialEligibility, .ambienceBed)
+        XCTAssertEqual(
+            surround7Point1.signature,
+            StreamAudioChannelLayoutSignature(
+                identifier: "wave-7.1",
+                channelCount: 8,
+                moonlightChannelMask: 0x063F,
+                coreAudioLayoutTagRawValue: UInt32(kAudioChannelLayoutTag_WAVE_7_1)
+            )
+        )
+    }
+
+    func testMoonlightChannelLayoutRejectsAmbiguousAndOutOfRangeCounts() {
+        for channelCount in [Int.min, -1, 0, 3, 4, 5, 7, 9, Int.max] {
+            XCTAssertThrowsError(
+                try StreamAudioChannelLayout.resolve(channelCount: channelCount)
+            ) { error in
+                XCTAssertEqual(
+                    error as? StreamAudioChannelLayoutError,
+                    .unsupportedChannelCount(channelCount)
+                )
+            }
+        }
+    }
+
     func testAudioPipelineConfiguresStartsAndStopsWithRouteSnapshot() async throws {
         let client = StubAudioEngineClient(route: AudioRouteSnapshot(
             outputNames: ["USB DAC"],

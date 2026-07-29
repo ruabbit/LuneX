@@ -49,7 +49,7 @@
 
 阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`32/33 in_progress`。1.1至6.4与6.6的production、确定性测试、normal/五平台Debug+Release、strict/generator/dependency/Metal/analyzer/ASan/TSan/malloc/resource、simulator与跟踪证据均完成并逐项提交推送；已推送`372ca60`上的阶段级离线自验再次通过`616 total / 615 passed / 1 Keychain skip / 0 failed`、strict `6/6`、generator与固定simulator门。唯一剩余6.5要求授权Sunshine HDR源、代表性HDR/SDR物理显示器和可审计参考图或测量。没有live compositor EDR signaling、物理亮度/颜色、动态headroom和跨显示器证据时，change不可archive、阶段不可标记`complete`；下一可执行阶段为16空间音频，不以其证据替代6.5。
 
-阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`已创建并通过strict validation，权威进度`1/35`；1.1完成真实audio graph、Moonlight声道顺序、route/recovery ownership、AppModel/UI、四平台SDK API、entitlement及硬件证明边界盘点，下一项为1.2不可变mono/stereo/WAVE 5.1/7.1声道布局合同。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、route切换与entitlement行为必须保留为真机硬件证据，不以属性赋值、编译或模拟器结果替代。
+阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`已创建并通过strict validation，权威进度`2/35`；1.1完成真实audio graph/SDK/证明边界盘点，1.2完成不可变mono/stereo/WAVE 5.1/7.1声道布局、Core Audio tag、稳定signature与closed error合同。下一项为1.3 graph/platform/route/spatial/head-tracking/fallback/revision语义snapshot与resolver。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、route切换与entitlement行为必须保留为真机硬件证据，不以属性赋值、编译或模拟器结果替代。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -308,6 +308,7 @@
 | 15.6.4首轮只读审计把跨runtime同名设备误当作固定identity重复 | 1 | 三份快照与固定UUID/state实际均通过；改为按`runtime + name + UUID`验证四个固定26.4 identity，并单独披露iOS/xrOS 27 runtime的系统同名实例与全局`Booted=0` |
 | 16阶段首轮跨平台Swift API probe在双引号中使用`$0` | 1 | zsh把closure参数展开为shell路径，probe在iOS typecheck阶段失败且未改仓库；改用显式`port in`闭包参数后从四平台重新执行 |
 | 16.1.1提交前OpenSpec摘要的`jq`把generator与对象构造混用 | 1 | strict本身已通过但摘要命令在diff前退出；改为先把JSON绑定为`$root`再从tasks数组取首个pending，随后重跑完整提交前门 |
+| 16.1.2 focused结果摘要沿用旧字段`testsPassed/testsFailed` | 1 | xcresult实际字段为`passedTests/failedTests/skippedTests`；build structured diagnostics已正确为0，按当前schema重新读回`2/2` |
 
 ## 当前执行点（2026-07-29）
 
