@@ -147,6 +147,17 @@ enum SpatialAudioDiagnosticState: Hashable, Sendable {
     case recovery
     case graphFailure
 
+    var clearsCurrentAudioAction: Bool {
+        switch self {
+        case .activeNonspatial, .fixedSpatial, .headTracked,
+             .visionFixed, .visionHeadTracked, .fallback(.userDisabled):
+            true
+        case .inactive, .fallback, .missingEntitlement, .unreadableEntitlement,
+             .unsupportedRoute, .unsupportedLayout, .recovery, .graphFailure:
+            false
+        }
+    }
+
     init(runtime: SessionAudioRuntimeEvent) {
         if runtime.stage == .idle || runtime.stage == .stopped {
             self = .inactive

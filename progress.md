@@ -2043,3 +2043,20 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug build `/tmp/LuneX-16-5_2-builds.1785361191751/*/Build.xcresult`为4/4 succeeded；所有test/build结构化errors、warnings、analyzer warnings均为0。
 - repository gate `/tmp/LuneX-16-5_2-repo.2o6msb`通过OpenSpec strict `7/7`、fixture、generator、membership、legacy API absence、privacy、secret、reference与diff边界；generator SHA-256保持`733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`，前后全局`Booted=0`且未操作simulator。
 - OpenSpec 5.2已勾选，权威进度更新为`25/35`；下一项5.3处理current audio action去重与精准recovery clearing，普通测试继续移除真实Keychain opt-in。
+
+## 2026-07-30 阶段 16 任务 5.3 启动
+
+- 5.2已以`bcce83f Add stable spatial audio diagnostics`提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`25/35 ready`，当前任务5.3。
+- 本项在store层分离bounded history与current action ownership：等价action仍进入历史但不刷新current owner；AppModel健康空间状态只清理`.audio`。
+- 回归将同时持有pairing、transport、decoder、HDR、audio与input current actions，验证空间恢复只移除audio，其他五类current owner与全部历史保持不变。本项不操作simulator、不触发真实Keychain。
+- focused `/tmp/LuneX-16-5_3-focused.O2HD8t/Focused.xcresult`已结构化确认`23/23 passed / 0 skipped / 0 failed`，error/warning/analyzer warning均为0。首轮外层zsh包装器在测试成功后误读Bash专用`PIPESTATUS[0]`并以1退出，不是产品或测试失败；其余管线固定为显式`/bin/bash`。
+- expanded `/tmp/LuneX-16-5_3-expanded.kzcDJU/Expanded.xcresult`已结构化确认`138/138 passed / 0 skipped / 0 failed`，error/warning/analyzer warning均为0；diagnostics、AppModel、audio processor、media environment、runtime state与recovery回归均通过。
+- full macOS `/tmp/LuneX-16-5_3-full.NbKZws/LuneXCoreTests.xcresult`已结构化确认`716 total / 715 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；error/warning/analyzer warning均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-5_3-builds.TpwXAFYpDMUF/*/Build.xcresult`，4/4 succeeded且四份结构化error/warning/analyzer warning均为0；未使用simulator destination。
+
+## 2026-07-30 阶段 16 任务 5.3 完成
+
+- `DiagnosticsStore`现保留每次等价action的bounded history，但不刷新同category current owner/date；AppModel接受当前generation健康空间状态后只清理`.audio`，pairing、transport、decoder、HDR与input current owner及全部历史保持不变。
+- focused `/tmp/LuneX-16-5_3-focused.O2HD8t/Focused.xcresult`为`23/23`，expanded `/tmp/LuneX-16-5_3-expanded.kzcDJU/Expanded.xcresult`为`138/138`，完整macOS `/tmp/LuneX-16-5_3-full.NbKZws/LuneXCoreTests.xcresult`为`716 total / 715 passed / 1 explicit Keychain skip / 0 failed`；所有结构化diagnostics为0。
+- 四平台generic-device Debug build `/tmp/LuneX-16-5_3-builds.TpwXAFYpDMUF/*/Build.xcresult`为4/4 succeeded；repository gate `/tmp/LuneX-16-5_3-repo.uVLOZx`通过strict `7/7`、fixtures、membership/ownership/privacy/secret/reference/package/Core Image/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`。
+- OpenSpec 5.3已勾选，权威进度更新为`26/35`；下一项5.4以actual runtime替换静态stream spatial pill，并加入原生spatial/head-tracking Settings controls及inactive/fallback状态。前后全局`Booted=0`，未操作simulator，也未触发真实Keychain。

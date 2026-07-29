@@ -1325,9 +1325,13 @@ final class AppModel: ApplicationInputSink {
             }
         }
         audioRuntimeState = state
+        let diagnosticState = SpatialAudioDiagnosticState(runtime: state.runtime)
+        if diagnosticState.clearsCurrentAudioAction {
+            diagnostics.clearActionableEvents(in: [.audio])
+        }
         diagnostics.record(
             ApplicationDiagnosticFactory.spatialAudioState(
-                SpatialAudioDiagnosticState(runtime: state.runtime)
+                diagnosticState
             )
         )
     }

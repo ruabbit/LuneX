@@ -33,6 +33,12 @@ final class DiagnosticsStore {
             .max { $0.date < $1.date }
     }
 
+    func currentActionableEvent(
+        in category: ApplicationDiagnosticCategory
+    ) -> DiagnosticEvent? {
+        currentActionableEvents[category]
+    }
+
     func clearActionableEvents(in categories: Set<ApplicationDiagnosticCategory>) {
         for category in categories {
             currentActionableEvents[category] = nil
@@ -131,7 +137,10 @@ final class DiagnosticsStore {
         ))
         events.append(sanitizedEvent)
         if sanitizedEvent.action != nil || sanitizedEvent.severity == .error {
-            currentActionableEvents[sanitizedEvent.category] = sanitizedEvent
+            let current = currentActionableEvents[sanitizedEvent.category]
+            if current?.hasSameActionOwnership(as: sanitizedEvent) != true {
+                currentActionableEvents[sanitizedEvent.category] = sanitizedEvent
+            }
         }
         if events.count > capacity {
             events.removeFirst(events.count - capacity)
@@ -148,4 +157,13 @@ struct DiagnosticEvent: Identifiable, Hashable {
     var message: String
     var action: ApplicationDiagnosticAction?
     var date: Date
+
+    fileprivate func hasSameActionOwnership(as other: DiagnosticEvent) -> Bool {
+        category == other.category
+            && severity == other.severity
+            && code == other.code
+            && subsystem == other.subsystem
+            && message == other.message
+            && action == other.action
+    }
 }

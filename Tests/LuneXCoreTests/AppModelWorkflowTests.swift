@@ -2169,6 +2169,87 @@ final class AppModelWorkflowTests: XCTestCase {
                 .map(\.code),
             ["spatial_audio_missing_entitlement"]
         )
+        model.diagnostics.record(ApplicationDiagnosticFactory.pairingUnavailable)
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.streamFailure(NetworkChannelError.closed)
+        )
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.streamFailure(
+                VideoDecoderError.noActiveSession
+            )
+        )
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.hdrPresentationState(.pipelineFailure)!
+        )
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.streamFailure(
+                RemoteInputRuntimeError.deliveryFailed
+            )
+        )
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .audio)?.code,
+            "spatial_audio_missing_entitlement"
+        )
+
+        let recovered = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            sequence: 1,
+            graphGeneration: 2,
+            preferences: persistedPreferences,
+            spatialRuntime: SpatialAudioRuntimeSnapshot(
+                revision: SpatialAudioSemanticRevision(rawValue: 2),
+                layoutSignature: StreamAudioChannelLayout.stereo.signature,
+                graphMode: .environmentAmbienceBed,
+                platformStrategy: .environmentListener,
+                routeSupport: .supported,
+                presentationMode: .fixedSpatial,
+                fallbackReason: nil
+            )
+        )
+        mediaEnvironment.yieldAudioRuntime(recovered, sessionID: record.sessionID)
+        await waitUntil { model.audioRuntimeState == recovered }
+        let equivalentRecovery = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            sequence: 2,
+            graphGeneration: 2,
+            preferences: persistedPreferences,
+            spatialRuntime: recovered.runtime.spatialRuntime
+        )
+        mediaEnvironment.yieldAudioRuntime(
+            equivalentRecovery,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.audioRuntimeState == equivalentRecovery }
+
+        XCTAssertNil(model.diagnostics.currentActionableEvent(in: .audio))
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .pairing)?.code,
+            "pairing_provider_unavailable"
+        )
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .transport)?.code,
+            "transport_failed"
+        )
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .decoder)?.code,
+            "video_pipeline_failed"
+        )
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .hdr)?.code,
+            "hdr_pipeline_failure"
+        )
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .input)?.code,
+            "input_delivery_failed"
+        )
+        XCTAssertEqual(
+            model.diagnostics.events
+                .filter { $0.code == "spatial_audio_active_fixed" }
+                .count,
+            2
+        )
 
         let updatedPreferences = SessionSpatialAudioPreferences(
             spatialAudioEnabled: false,
@@ -2202,12 +2283,16 @@ final class AppModelWorkflowTests: XCTestCase {
             sessionID: record.sessionID
         )
         for _ in 0..<20 { await Task.yield() }
-        XCTAssertEqual(model.audioRuntimeState, current)
+        XCTAssertEqual(model.audioRuntimeState, equivalentRecovery)
         XCTAssertEqual(
             model.diagnostics.events
                 .filter { $0.code.hasPrefix("spatial_audio_") }
                 .map(\.code),
-            ["spatial_audio_missing_entitlement"]
+            [
+                "spatial_audio_missing_entitlement",
+                "spatial_audio_active_fixed",
+                "spatial_audio_active_fixed"
+            ]
         )
 
         await model.saveSettings()
@@ -2225,6 +2310,8 @@ final class AppModelWorkflowTests: XCTestCase {
                 .map(\.code),
             [
                 "spatial_audio_missing_entitlement",
+                "spatial_audio_active_fixed",
+                "spatial_audio_active_fixed",
                 "spatial_audio_inactive"
             ]
         )

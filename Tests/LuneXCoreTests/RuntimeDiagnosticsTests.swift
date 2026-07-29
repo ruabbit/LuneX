@@ -255,6 +255,84 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         XCTAssertEqual(store.events.count, 3)
     }
 
+    @MainActor
+    func testEquivalentAudioActionKeepsCurrentOwnershipAndBoundedHistory() {
+        let store = DiagnosticsStore(capacity: 3)
+        let audio = ApplicationDiagnosticFactory.spatialAudioState(.unsupportedRoute)
+        store.record(audio, date: Date(timeIntervalSince1970: 1))
+        store.record(
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession),
+            date: Date(timeIntervalSince1970: 2)
+        )
+        store.record(audio, date: Date(timeIntervalSince1970: 3))
+        store.record("bounded history tail", code: "tail")
+
+        XCTAssertEqual(store.events.map(\.code), [
+            "video_pipeline_failed",
+            "spatial_audio_unsupported_route",
+            "tail"
+        ])
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .audio)?.date,
+            Date(timeIntervalSince1970: 1)
+        )
+        XCTAssertEqual(store.latestStreamActionableEvent?.category, .decoder)
+    }
+
+    @MainActor
+    func testAudioRecoveryClearsOnlyAudioCurrentActionAndPreservesHistory() {
+        let store = DiagnosticsStore()
+        let diagnostics: [ApplicationDiagnostic] = [
+            ApplicationDiagnosticFactory.pairingUnavailable,
+            ApplicationDiagnosticFactory.streamFailure(NetworkChannelError.closed),
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession),
+            ApplicationDiagnosticFactory.hdrPresentationState(.pipelineFailure)!,
+            ApplicationDiagnosticFactory.spatialAudioState(.graphFailure),
+            ApplicationDiagnosticFactory.streamFailure(
+                RemoteInputRuntimeError.deliveryFailed
+            )
+        ]
+        for (index, diagnostic) in diagnostics.enumerated() {
+            store.record(
+                diagnostic,
+                date: Date(timeIntervalSince1970: TimeInterval(index + 1))
+            )
+        }
+
+        store.clearActionableEvents(in: [.audio])
+        store.record(
+            ApplicationDiagnosticFactory.spatialAudioState(.fixedSpatial),
+            date: Date(timeIntervalSince1970: 7)
+        )
+
+        XCTAssertNil(store.currentActionableEvent(in: .audio))
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .pairing)?.code,
+            "pairing_provider_unavailable"
+        )
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .transport)?.code,
+            "transport_failed"
+        )
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .decoder)?.code,
+            "video_pipeline_failed"
+        )
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .hdr)?.code,
+            "hdr_pipeline_failure"
+        )
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .input)?.code,
+            "input_delivery_failed"
+        )
+        XCTAssertEqual(store.events.count, 7)
+        XCTAssertEqual(
+            store.events.map(\.code),
+            diagnostics.map(\.code) + ["spatial_audio_active_fixed"]
+        )
+    }
+
     func testMacLifecycleAndInputDiagnosticsUseFixedPrivacyBoundedPayloads() {
         let diagnostics = MacLifecycleDiagnosticState.allTestStates.map(
             ApplicationDiagnosticFactory.macLifecycleState

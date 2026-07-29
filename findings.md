@@ -1633,3 +1633,17 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-5_2-builds.1785361191751/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-5_2-repo.2o6msb`通过OpenSpec strict `7/7`、fixtures、membership、legacy API absence、privacy/secret/reference/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；全局`Booted=0`且未操作simulator。
 - OpenSpec 5.2已勾选，权威进度更新为`25/35`；下一项5.3去重current audio action并只清理恢复后的audio ownership，不能清除transport、decoder、HDR、input或pairing action。本项不替代5.3-5.5 UI/action验收或6.6硬件证据。
+
+## 2026-07-30 阶段 16 任务 5.3 调查
+
+- `DiagnosticsStore`当前以category为current action ownership键，但每次等价action重复都会覆盖该category的event/date；历史本身保持capacity有界。5.3应保留重复历史事件，但不得让等价audio callback刷新current ownership并改变跨category最新action排序。
+- AppModel的HDR恢复已经使用`clearActionableEvents(in: [.hdr])`，空间音频应采用相同精确category清理，而不能调用`clearStreamActionableEvents()`。健康active nonspatial/fixed/head-tracked/visionOS状态及用户主动disabled fallback可清理`.audio`；inactive、recovery和actionable fallback/failure不清理。
+- current audio清理必须验证pairing、transport、decoder、HDR与input的current owner仍存在，历史事件数量/内容不删除。stop现有全stream action presentation清理属于独立session结束语义，不由5.3改写。
+- 普通测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`且不操作simulator；5.3不提前实现5.4 UI，也不替代6.6硬件证据。
+
+## 2026-07-30 阶段 16 任务 5.3 验收
+
+- `DiagnosticsStore`现将bounded history append与current owner替换分开：severity/code/subsystem/message/action相同的同category action继续进入历史，但不刷新当前owner或date；不同语义action仍可替换。
+- `SpatialAudioDiagnosticState.clearsCurrentAudioAction`只允许健康active nonspatial/fixed/head-tracked/visionOS状态和用户主动disabled fallback清理；AppModel只调用`clearActionableEvents(in: [.audio])`，actionable fallback、inactive、recovery与failure不会误清。
+- focused为`23/23`、expanded为`138/138`、完整macOS为`716 total / 715 passed / 1 explicit Keychain skip / 0 failed`；四平台generic-device Debug build为4/4 succeeded，所有结构化error/warning/analyzer warning均为0。
+- repository gate `/tmp/LuneX-16-5_3-repo.uVLOZx`通过OpenSpec strict `7/7`、fixture self-test/全树、membership、ownership、privacy、secret、reference/package/Core Image/diff和generator双次稳定性；SHA-256为`733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`，前后`Booted=0`。
