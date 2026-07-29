@@ -1423,3 +1423,22 @@
 - 全新DerivedData focused通过`14/14 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_5-focused-final.jc3pIV/StreamMetalPresenter.xcresult`）；完整macOS通过`550 total / 549 passed / 1 explicit Keychain skip / 0 failed`（`/tmp/LuneX-15-3_5-full.Dis35D/LuneXCoreTests.xcresult`），唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`且命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - macOS、固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过（`/tmp/LuneX-15-3_5-builds-1784650856524`）；simulator前后清单逐字一致，SHA-256均为`a4f4478ed56e83535f5a8e7fda2ebd80e047fb169c1271648a41a1fbd61b07af`，四实例唯一、available、`Shutdown`且全局`Booted=0`。
 - 3.5标记完成，OpenSpec权威进度`15/33`。本项不证明3.6完整failure/resource矩阵、4.x EDR surface/display adaptation或6.5物理显示器结果；下一项3.6。
+## 2026-07-29 阶段 15 任务 3.6 恢复
+
+- 用户完成macOS更新并明确恢复推进；长期目标重新激活，仍保持阶段13至20完整范围、真实Keychain仅一次验证和每类simulator单实例约束。
+- 恢复审计确认`HEAD == origin/main == fe94bcd`，仅`MetalStreamSurface.swift`与`StreamMetalPresenterTests.swift`保留3.6未提交修改，`git diff --check`通过，且没有残留`xcodebuild`、generator或Git写进程。
+- 当前环境为macOS 27.0 build `26A5388g`、Xcode 26.4 build `17E192`、Swift 6.3、macOS/iOS SDK 26.4。原固定26.4 iPhone/iPad/Apple TV/Apple Vision Pro仍available且`Shutdown`；系统更新另行新增iOS 27/xrOS 27实例，且一个非固定iOS 26.4 `iPhone 17`已经`Booted`。本任务不创建、启动、关闭或删除任何simulator，并以当前只读清单作为新的前置基线。
+- OpenSpec `implement-native-hdr-edr-pipeline`仍为spec-driven、`15/33`，当前唯一任务为3.6。恢复后显式消费protocol existential `runtime.present`返回值、删除无决策生产者的`presentationFailure`枚举项，并统一macOS/mobile暂停清屏为`requestsImmediateDraw`调度合同。
+- 首轮恢复focused从全新DerivedData通过`12/12 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_6-focused-r3.4PjdSL/StreamMetalPresenter.xcresult`），warnings-as-errors编译并实际运行production offscreen GPU路径。Xcode在启动时输出设备build-number兼容性日志，且AppIntents工具输出“No AppIntents dependency”跳过提示；两者不是Swift/Metal源码诊断，后续仍需以xcresult结构化核对。
+- focused通过后的自审发现暂停优先级和资源释放幂等性不足：暂停且无drawable会先等待而不停止runtime；runtime内部失败清理后presenter catch再次`stop()`会重复renderer stop/mapper flush。已让inactive policy优先于drawable gate，并用显式presentation-resource ownership使重复stop/invalidate不重复释放；下一次focused必须从新DerivedData验证补充断言。
+- 最终focused在补充runtime factory失败所有权测试后，从第三套全新DerivedData通过`13/13 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-3_6-focused-final.nU9UnS/StreamMetalPresenter.xcresult`）；结构化build result为`0 warning / 0 error / 0 analyzer warning`。
+- 完整macOS suite从全新DerivedData通过`558 total / 557 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-3_6-full.bdiiI8/LuneXCoreTests.xcresult`），唯一skip由日志精确确认为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化build result仍为零warning/error/analyzer warning。
+- Xcode 26.4在macOS 27 beta上执行`xcresulttool get test-results tests`时尝试移动内部`database.sqlite3`并报同名项已存在；未重复该失败路径，改用xcresult summary证明总数并用原始xcodebuild日志精确核对唯一skip。该工具兼容性问题不影响测试执行或result bundle结构化summary。
+
+## 2026-07-29 阶段 15 任务 3.6 完成
+
+- production presenter新增可注入runtime/renderer边界及结构化snapshot；configuration替换、frame cache、coordinate revision resize、pipeline/configuration failure、terminal invalidation、configure replacement/factory failure均可确定性观察。inactive policy优先于drawable gate，后台无drawable仍释放资源；显式ownership使failure后的presenter stop和重复stop/invalidate不重复renderer stop/mapper flush。
+- 最终focused `13/13`与完整macOS `558 total / 557 passed / 1 explicit Keychain skip / 0 failed`通过，xcresult为零warning/error/analyzer warning。五平台Debug warnings-as-errors build-only全部通过且各自执行一次Metal compile/link，证据目录`/tmp/LuneX-15-3_6-builds.Mzx7WR`。
+- simulator构建前后完整规范化清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定26.4 iPhone/iPad/Apple TV/Apple Vision Pro均available且`Shutdown`，最终全局`Booted=0`。未创建、启动、关闭或删除任何设备。
+- repository gates位于`/tmp/LuneX-15-3_6-repo.JEHVIJ`：OpenSpec strict `6/6`、fixture self-test/全树、generator生成前及三次运行SHA-256均为`6cd73abecaca22c14d60d0b378b34ac57c44e5fce60e8eef5f10dac959da368d`，reference/dependency/CoreImage/whitespace边界通过。
+- OpenSpec 3.6标记完成，权威进度`16/33`；阶段15保持`in_progress`。本项不证明4.x EDR surface/display adaptation、HDR signaling或6.5物理亮度/颜色，下一项4.1。

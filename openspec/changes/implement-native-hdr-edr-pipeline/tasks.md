@@ -21,7 +21,7 @@
 - [x] 3.3 Implement an injectable generation/revision-owned Metal video renderer using zero-copy luma/chroma planes and explicit viewport/video-rectangle presentation
 - [x] 3.4 Add offscreen shader readback tests against CPU reference vectors for black, reference white, primaries, near-black, peak highlights, SDR fallback, and finite bounds
 - [x] 3.5 Replace fixed-sRGB Core Image production presentation with the explicit renderer while retaining deterministic clear, fit/fill, throttled, pause, and stale-frame behavior
-- [ ] 3.6 Add presenter configuration, pipeline failure, drawable mismatch, resize, pause/resume, replacement, and resource-release tests
+- [x] 3.6 Add presenter configuration, pipeline failure, drawable mismatch, resize, pause/resume, replacement, and resource-release tests
 
 ## 4. Display, surface, and headroom adaptation
 

@@ -133,6 +133,30 @@ guessed transforms.
 - Deduplicate semantic diagnostics and exclude raw frame values, metadata blobs,
   host/app identity, endpoint, and display identifiers.
 
+## Presenter lifecycle evidence
+
+OpenSpec task 3.6 makes the production presenter boundary injectable without
+adding a public or test-only rendering path. Deterministic tests cover:
+
+- fixed SDR presenter configuration and runtime replacement;
+- failed runtime construction without retaining stale ownership;
+- partial configuration and render-pipeline failures with atomic mapper and
+  renderer cleanup;
+- active drawable unavailability, drawable/coordinate mismatch, missing
+  coordinates, and missing frames;
+- coordinate revision resize and decoded-frame replacement;
+- active 60 FPS, throttled 15 FPS, and paused/idle immediate-clear scheduling;
+- inactive policy cleanup even when no drawable can be acquired; and
+- idempotent stop, invalidation, dismantle, and replacement resource release.
+
+The final task-level evidence is `13/13` focused tests, `558 total / 557 passed /
+1 explicit Keychain skip / 0 failed` for the complete macOS suite, five-platform
+Debug builds with Metal compilation/linking, and stable repository/simulator
+gates. This proves presenter lifecycle ownership and failure convergence. It
+does not prove EDR surface configuration, display/headroom revision delivery,
+HDR signaling, or physical luminance/color output; those remain in tasks 4.x
+through 6.5.
+
 ## Verification matrix
 
 ### Deterministic evidence

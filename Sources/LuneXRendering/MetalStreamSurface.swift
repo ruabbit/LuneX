@@ -9,6 +9,69 @@ enum StreamMetalPresenterError: Error, Equatable, Sendable {
     case invalidatedRuntime
 }
 
+enum StreamMetalClearReason: Equatable, Sendable {
+    case inactivePolicy
+    case missingCoordinates
+    case drawableMismatch
+    case missingFrame
+}
+
+enum StreamMetalFrameDecision: Equatable, Sendable {
+    case waitForDrawable
+    case clear(StreamMetalClearReason)
+    case present
+}
+
+enum StreamMetalFrameDecisionResolver {
+    static func resolve(
+        policy: RenderPolicy,
+        hasDrawable: Bool,
+        hasCoordinates: Bool,
+        drawableMatchesCoordinates: Bool,
+        hasFrame: Bool
+    ) -> StreamMetalFrameDecision {
+        guard policy == .active || policy.isThrottled else {
+            return .clear(.inactivePolicy)
+        }
+        guard hasDrawable else { return .waitForDrawable }
+        guard hasCoordinates else { return .clear(.missingCoordinates) }
+        guard drawableMatchesCoordinates else { return .clear(.drawableMismatch) }
+        guard hasFrame else { return .clear(.missingFrame) }
+        return .present
+    }
+}
+
+struct StreamMetalViewSchedule: Equatable, Sendable {
+    let isPaused: Bool
+    let preferredFramesPerSecond: Int
+    let requestsImmediateDraw: Bool
+}
+
+enum StreamMetalViewScheduleResolver {
+    static func resolve(_ policy: RenderPolicy) -> StreamMetalViewSchedule {
+        switch policy {
+        case .active:
+            return StreamMetalViewSchedule(
+                isPaused: false,
+                preferredFramesPerSecond: 60,
+                requestsImmediateDraw: false
+            )
+        case .throttled:
+            return StreamMetalViewSchedule(
+                isPaused: false,
+                preferredFramesPerSecond: 15,
+                requestsImmediateDraw: false
+            )
+        case .idle, .paused:
+            return StreamMetalViewSchedule(
+                isPaused: true,
+                preferredFramesPerSecond: 60,
+                requestsImmediateDraw: true
+            )
+        }
+    }
+}
+
 struct StreamMetalPresentationPlan: Sendable {
     let configuration: HDRRenderConfigurationIdentity
     let uniforms: HDRMetalShaderUniforms
@@ -73,22 +136,80 @@ private struct StreamMetalMappedFrameIdentity: Equatable {
     }
 }
 
-final class StreamMetalPresenterRuntime: @unchecked Sendable {
+protocol HDRMetalVideoRendering: Sendable {
+    func replaceConfiguration(_ configuration: HDRRenderConfigurationIdentity) throws
+    func render(
+        frame: MetalVideoFrame,
+        configuration: HDRRenderConfigurationIdentity,
+        uniforms: HDRMetalShaderUniforms,
+        coordinateSnapshot: StreamCoordinateSnapshot,
+        target: HDRMetalRenderTarget,
+        completion: HDRMetalCommandCompletion
+    ) throws -> HDRMetalVideoRendererResult
+    func stop()
+}
+
+extension HDRMetalVideoRenderer: HDRMetalVideoRendering {}
+
+struct StreamMetalPresenterRuntimeSnapshot: Equatable, Sendable {
+    let activeConfiguration: HDRRenderConfigurationIdentity?
+    let mappedFrameGeneration: UInt64?
+    let mappedFrameID: UInt64?
+    let isInvalidated: Bool
+    let submittedFrameCount: UInt64
+    let failedPresentationCount: UInt64
+    let stopCount: UInt64
+    let invalidationCount: UInt64
+}
+
+protocol StreamMetalPresenterRuntiming: AnyObject, Sendable {
+    func present(
+        frame: DecodedVideoFrame,
+        plan: StreamMetalPresentationPlan,
+        coordinateSnapshot: StreamCoordinateSnapshot,
+        target: HDRMetalRenderTarget,
+        completion: HDRMetalCommandCompletion
+    ) throws -> HDRMetalVideoRendererResult
+    func clear(drawable: any CAMetalDrawable, color: MTLClearColor) throws
+    func stop()
+    func invalidate()
+    func snapshot() -> StreamMetalPresenterRuntimeSnapshot
+}
+
+final class StreamMetalPresenterRuntime: StreamMetalPresenterRuntiming,
+    @unchecked Sendable {
     private let mapper: any MetalVideoFrameMapping
-    private let renderer: HDRMetalVideoRenderer
+    private let renderer: any HDRMetalVideoRendering
     private let commandQueue: any MTLCommandQueue
     private let lock = NSLock()
     private var activeConfiguration: HDRRenderConfigurationIdentity?
     private var mappedFrame: MetalVideoFrame?
     private var mappedFrameIdentity: StreamMetalMappedFrameIdentity?
+    private var ownsPresentationResources = false
     private var isInvalidated = false
+    private var submittedFrameCount: UInt64 = 0
+    private var failedPresentationCount: UInt64 = 0
+    private var stopCount: UInt64 = 0
+    private var invalidationCount: UInt64 = 0
 
-    init(device: any MTLDevice, bundle: Bundle) throws {
+    convenience init(device: any MTLDevice, bundle: Bundle) throws {
         guard let commandQueue = device.makeCommandQueue() else {
             throw StreamMetalPresenterError.commandQueueUnavailable
         }
-        mapper = try CVMetalVideoFrameMapper(device: device)
-        renderer = try HDRMetalVideoRenderer(device: device, bundle: bundle)
+        try self.init(
+            mapper: CVMetalVideoFrameMapper(device: device),
+            renderer: HDRMetalVideoRenderer(device: device, bundle: bundle),
+            commandQueue: commandQueue
+        )
+    }
+
+    init(
+        mapper: any MetalVideoFrameMapping,
+        renderer: any HDRMetalVideoRendering,
+        commandQueue: any MTLCommandQueue
+    ) {
+        self.mapper = mapper
+        self.renderer = renderer
         self.commandQueue = commandQueue
     }
 
@@ -104,30 +225,39 @@ final class StreamMetalPresenterRuntime: @unchecked Sendable {
             guard !isInvalidated else {
                 throw StreamMetalPresenterError.invalidatedRuntime
             }
-            if activeConfiguration != plan.configuration {
-                try renderer.replaceConfiguration(plan.configuration)
-                mapper.flush()
-                mappedFrame = nil
-                mappedFrameIdentity = nil
-                activeConfiguration = plan.configuration
+            do {
+                if activeConfiguration != plan.configuration {
+                    ownsPresentationResources = true
+                    try renderer.replaceConfiguration(plan.configuration)
+                    mapper.flush()
+                    mappedFrame = nil
+                    mappedFrameIdentity = nil
+                    activeConfiguration = plan.configuration
+                }
+                let identity = StreamMetalMappedFrameIdentity(frame)
+                let metalFrame: MetalVideoFrame
+                if mappedFrameIdentity == identity, let mappedFrame {
+                    metalFrame = mappedFrame
+                } else {
+                    metalFrame = try mapper.map(frame)
+                    mappedFrame = metalFrame
+                    mappedFrameIdentity = identity
+                }
+                let result = try renderer.render(
+                    frame: metalFrame,
+                    configuration: plan.configuration,
+                    uniforms: plan.uniforms,
+                    coordinateSnapshot: coordinateSnapshot,
+                    target: target,
+                    completion: completion
+                )
+                submittedFrameCount &+= 1
+                return result
+            } catch {
+                failedPresentationCount &+= 1
+                releasePresentationLocked()
+                throw error
             }
-            let identity = StreamMetalMappedFrameIdentity(frame)
-            let metalFrame: MetalVideoFrame
-            if mappedFrameIdentity == identity, let mappedFrame {
-                metalFrame = mappedFrame
-            } else {
-                metalFrame = try mapper.map(frame)
-                mappedFrame = metalFrame
-                mappedFrameIdentity = identity
-            }
-            return try renderer.render(
-                frame: metalFrame,
-                configuration: plan.configuration,
-                uniforms: plan.uniforms,
-                coordinateSnapshot: coordinateSnapshot,
-                target: target,
-                completion: completion
-            )
         }
     }
 
@@ -157,11 +287,9 @@ final class StreamMetalPresenterRuntime: @unchecked Sendable {
 
     func stop() {
         lock.withLock {
-            renderer.stop()
-            mapper.flush()
-            activeConfiguration = nil
-            mappedFrame = nil
-            mappedFrameIdentity = nil
+            guard ownsPresentationResources else { return }
+            stopCount &+= 1
+            releasePresentationLocked()
         }
     }
 
@@ -169,27 +297,62 @@ final class StreamMetalPresenterRuntime: @unchecked Sendable {
         lock.withLock {
             guard !isInvalidated else { return }
             isInvalidated = true
-            renderer.stop()
-            mapper.flush()
+            invalidationCount &+= 1
+            releasePresentationLocked()
+        }
+    }
+
+    func snapshot() -> StreamMetalPresenterRuntimeSnapshot {
+        lock.withLock {
+            StreamMetalPresenterRuntimeSnapshot(
+                activeConfiguration: activeConfiguration,
+                mappedFrameGeneration: mappedFrameIdentity?.generation,
+                mappedFrameID: mappedFrameIdentity?.frameID,
+                isInvalidated: isInvalidated,
+                submittedFrameCount: submittedFrameCount,
+                failedPresentationCount: failedPresentationCount,
+                stopCount: stopCount,
+                invalidationCount: invalidationCount
+            )
+        }
+    }
+
+    private func releasePresentationLocked() {
+        guard ownsPresentationResources else {
             activeConfiguration = nil
             mappedFrame = nil
             mappedFrameIdentity = nil
+            return
         }
+        renderer.stop()
+        mapper.flush()
+        ownsPresentationResources = false
+        activeConfiguration = nil
+        mappedFrame = nil
+        mappedFrameIdentity = nil
     }
 }
 
 final class StreamMetalPresenter: NSObject, MTKViewDelegate {
+    typealias RuntimeFactory = (any MTLDevice, Bundle) throws
+        -> any StreamMetalPresenterRuntiming
+
     private let presentationSource: StreamVideoPresentationSource
+    private let runtimeFactory: RuntimeFactory
     private let lock = NSLock()
     private var renderPolicy: RenderPolicy
     private var coordinateSnapshot: StreamCoordinateSnapshot?
-    private var runtime: StreamMetalPresenterRuntime?
+    private var runtime: (any StreamMetalPresenterRuntiming)?
 
     init(
         presentationSource: StreamVideoPresentationSource,
-        renderState: StreamRenderState
+        renderState: StreamRenderState,
+        runtimeFactory: @escaping RuntimeFactory = { device, bundle in
+            try StreamMetalPresenterRuntime(device: device, bundle: bundle)
+        }
     ) {
         self.presentationSource = presentationSource
+        self.runtimeFactory = runtimeFactory
         renderPolicy = renderState.policy
         coordinateSnapshot = renderState.coordinateSnapshot
     }
@@ -197,10 +360,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     @MainActor
     func configure(_ view: MTKView) {
         guard let device = view.device else { return }
-        let runtime = try? StreamMetalPresenterRuntime(
-            device: device,
-            bundle: Bundle(for: StreamMetalPresenter.self)
-        )
+        let runtime = try? runtimeFactory(device, Bundle(for: StreamMetalPresenter.self))
         withLock {
             self.runtime?.invalidate()
             self.runtime = runtime
@@ -225,22 +385,37 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         let snapshot = withLock {
             (renderPolicy, coordinateSnapshot, runtime)
         }
-        guard let runtime = snapshot.2,
-              let drawable = view.currentDrawable else { return }
-        guard snapshot.0 == .active || snapshot.0.isThrottled else {
-            runtime.stop()
-            try? runtime.clear(drawable: drawable, color: view.clearColor)
+        guard let runtime = snapshot.2 else { return }
+        let drawable = view.currentDrawable
+        let frame = presentationSource.currentFrame()
+        let drawableMatchesCoordinates = snapshot.1.map { coordinates in
+            coordinates.drawableSize.width == drawable?.texture.width
+                && coordinates.drawableSize.height == drawable?.texture.height
+        } ?? false
+        let decision = StreamMetalFrameDecisionResolver.resolve(
+            policy: snapshot.0,
+            hasDrawable: drawable != nil,
+            hasCoordinates: snapshot.1 != nil,
+            drawableMatchesCoordinates: drawableMatchesCoordinates,
+            hasFrame: frame != nil
+        )
+        switch decision {
+        case .waitForDrawable:
             return
+        case let .clear(reason):
+            if reason == .inactivePolicy { runtime.stop() }
+            if let drawable {
+                try? runtime.clear(drawable: drawable, color: view.clearColor)
+            }
+            return
+        case .present:
+            break
         }
         guard let coordinateSnapshot = snapshot.1,
-              coordinateSnapshot.drawableSize.width == drawable.texture.width,
-              coordinateSnapshot.drawableSize.height == drawable.texture.height,
-              let frame = presentationSource.currentFrame() else {
-            try? runtime.clear(drawable: drawable, color: view.clearColor)
-            return
-        }
+              let frame,
+              let drawable else { return }
         do {
-            try runtime.present(
+            _ = try runtime.present(
                 frame: frame,
                 plan: StreamMetalPresentationPlanResolver.resolve(
                     frame: frame,
@@ -250,7 +425,8 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                 target: HDRMetalRenderTarget(
                     texture: drawable.texture,
                     drawable: drawable
-                )
+                ),
+                completion: .asynchronous
             )
         } catch {
             runtime.stop()
@@ -548,8 +724,8 @@ struct MetalStreamSurface: NSViewRepresentable {
             captureExitHandler: captureExitHandler
         )
         context.coordinator.attachmentOwner.attach(to: view)
-        apply(renderState, to: view)
-        if view.isPaused { view.draw() }
+        let schedule = apply(renderState, to: view)
+        if schedule.requestsImmediateDraw { view.draw() }
     }
 
     static func dismantleNSView(
@@ -559,20 +735,17 @@ struct MetalStreamSurface: NSViewRepresentable {
         coordinator.detach(view)
     }
 
-    private func apply(_ state: StreamRenderState, to view: MTKView) {
-        switch state.policy {
-        case .active:
-            view.isPaused = false
-            view.preferredFramesPerSecond = 60
-        case .throttled:
-            view.isPaused = false
-            view.preferredFramesPerSecond = 15
-        case .idle, .paused:
-            view.isPaused = true
-        }
+    private func apply(
+        _ state: StreamRenderState,
+        to view: MTKView
+    ) -> StreamMetalViewSchedule {
+        let schedule = StreamMetalViewScheduleResolver.resolve(state.policy)
+        view.isPaused = schedule.isPaused
+        view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
         if let layer = view.layer as? CAMetalLayer {
             DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
+        return schedule
     }
 }
 #else
@@ -601,16 +774,9 @@ struct MetalStreamSurface: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.update(renderState: renderState)
-        switch renderState.policy {
-        case .active:
-            view.isPaused = false
-            view.preferredFramesPerSecond = 60
-        case .throttled:
-            view.isPaused = false
-            view.preferredFramesPerSecond = 15
-        case .idle, .paused:
-            view.isPaused = true
-        }
+        let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)
+        view.isPaused = schedule.isPaused
+        view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
         if let snapshot = renderState.coordinateSnapshot {
             view.drawableSize = CGSize(
                 width: snapshot.drawableSize.width,
@@ -620,7 +786,7 @@ struct MetalStreamSurface: UIViewRepresentable {
         if let layer = view.layer as? CAMetalLayer {
             DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
-        if view.isPaused { view.draw() }
+        if schedule.requestsImmediateDraw { view.draw() }
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: StreamMetalPresenter) {

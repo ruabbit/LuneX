@@ -1,6 +1,7 @@
 import CoreVideo
 import Foundation
 @preconcurrency import Metal
+import MetalKit
 import XCTest
 
 final class StreamMetalPresenterTests: XCTestCase {
@@ -144,6 +145,349 @@ final class StreamMetalPresenterTests: XCTestCase {
         }
     }
 
+    func testFrameDecisionCoversDrawableMismatchMissingStateAndPause() {
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .active,
+            hasDrawable: false,
+            hasCoordinates: true,
+            drawableMatchesCoordinates: true,
+            hasFrame: true
+        ), .waitForDrawable)
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .paused(reason: "background"),
+            hasDrawable: false,
+            hasCoordinates: true,
+            drawableMatchesCoordinates: true,
+            hasFrame: true
+        ), .clear(.inactivePolicy))
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .paused(reason: "background"),
+            hasDrawable: true,
+            hasCoordinates: true,
+            drawableMatchesCoordinates: true,
+            hasFrame: true
+        ), .clear(.inactivePolicy))
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .active,
+            hasDrawable: true,
+            hasCoordinates: false,
+            drawableMatchesCoordinates: false,
+            hasFrame: true
+        ), .clear(.missingCoordinates))
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .active,
+            hasDrawable: true,
+            hasCoordinates: true,
+            drawableMatchesCoordinates: false,
+            hasFrame: true
+        ), .clear(.drawableMismatch))
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .throttled(reason: "occluded"),
+            hasDrawable: true,
+            hasCoordinates: true,
+            drawableMatchesCoordinates: true,
+            hasFrame: false
+        ), .clear(.missingFrame))
+        XCTAssertEqual(StreamMetalFrameDecisionResolver.resolve(
+            policy: .throttled(reason: "occluded"),
+            hasDrawable: true,
+            hasCoordinates: true,
+            drawableMatchesCoordinates: true,
+            hasFrame: true
+        ), .present)
+    }
+
+    func testViewScheduleResumesAt60ThrottlesAt15AndRequestsOnePausedDraw() {
+        XCTAssertEqual(
+            StreamMetalViewScheduleResolver.resolve(.active),
+            StreamMetalViewSchedule(
+                isPaused: false,
+                preferredFramesPerSecond: 60,
+                requestsImmediateDraw: false
+            )
+        )
+        XCTAssertEqual(
+            StreamMetalViewScheduleResolver.resolve(.throttled(reason: "occluded")),
+            StreamMetalViewSchedule(
+                isPaused: false,
+                preferredFramesPerSecond: 15,
+                requestsImmediateDraw: false
+            )
+        )
+        let paused = StreamMetalViewSchedule(
+            isPaused: true,
+            preferredFramesPerSecond: 60,
+            requestsImmediateDraw: true
+        )
+        XCTAssertEqual(StreamMetalViewScheduleResolver.resolve(.idle), paused)
+        XCTAssertEqual(
+            StreamMetalViewScheduleResolver.resolve(.paused(reason: "background")),
+            paused
+        )
+    }
+
+    func testRuntimeCachesFrameAndRebuildsOnCoordinateRevisionAndReplacement() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let mapper = try RecordingMetalVideoFrameMapper(device: device)
+        let renderer = RecordingHDRMetalVideoRenderer()
+        let runtime = try makeRuntime(device: device, mapper: mapper, renderer: renderer)
+        let firstFrame = try makeFrame(
+            generation: 20,
+            frameID: 1,
+            metadata: .rec709VideoRange()
+        )
+        let firstCoordinates = try makeSnapshot(revision: 30)
+        let firstPlan = try StreamMetalPresentationPlanResolver.resolve(
+            frame: firstFrame,
+            coordinateSnapshot: firstCoordinates
+        )
+        let target = try makeTarget(
+            device: device,
+            width: firstCoordinates.drawableSize.width,
+            height: firstCoordinates.drawableSize.height
+        )
+
+        for _ in 0..<2 {
+            try runtime.present(
+                frame: firstFrame,
+                plan: firstPlan,
+                coordinateSnapshot: firstCoordinates,
+                target: HDRMetalRenderTarget(texture: target),
+                completion: .asynchronous
+            )
+        }
+        XCTAssertEqual(mapper.mapCount, 1)
+        XCTAssertEqual(renderer.renderCount, 2)
+        XCTAssertEqual(renderer.configurations, [firstPlan.configuration])
+
+        let resizedCoordinates = try makeSnapshot(revision: 31)
+        let resizedPlan = try StreamMetalPresentationPlanResolver.resolve(
+            frame: firstFrame,
+            coordinateSnapshot: resizedCoordinates
+        )
+        try runtime.present(
+            frame: firstFrame,
+            plan: resizedPlan,
+            coordinateSnapshot: resizedCoordinates,
+            target: HDRMetalRenderTarget(texture: target),
+            completion: .asynchronous
+        )
+        let replacementFrame = try makeFrame(
+            generation: 20,
+            frameID: 2,
+            metadata: .rec709VideoRange()
+        )
+        try runtime.present(
+            frame: replacementFrame,
+            plan: resizedPlan,
+            coordinateSnapshot: resizedCoordinates,
+            target: HDRMetalRenderTarget(texture: target),
+            completion: .asynchronous
+        )
+
+        XCTAssertEqual(mapper.mapCount, 3)
+        XCTAssertEqual(mapper.flushCount, 2)
+        XCTAssertEqual(renderer.configurations, [
+            firstPlan.configuration,
+            resizedPlan.configuration
+        ])
+        XCTAssertEqual(runtime.snapshot(), StreamMetalPresenterRuntimeSnapshot(
+            activeConfiguration: resizedPlan.configuration,
+            mappedFrameGeneration: 20,
+            mappedFrameID: 2,
+            isInvalidated: false,
+            submittedFrameCount: 4,
+            failedPresentationCount: 0,
+            stopCount: 0,
+            invalidationCount: 0
+        ))
+    }
+
+    func testPipelineFailureFlushesConfigurationAndMappedFrame() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let mapper = try RecordingMetalVideoFrameMapper(device: device)
+        let renderer = RecordingHDRMetalVideoRenderer(renderError: .pipelineFailure)
+        let runtime = try makeRuntime(device: device, mapper: mapper, renderer: renderer)
+        let frame = try makeFrame(
+            generation: 21,
+            frameID: 3,
+            metadata: .rec709VideoRange()
+        )
+        let coordinates = try makeSnapshot(revision: 32)
+        let plan = try StreamMetalPresentationPlanResolver.resolve(
+            frame: frame,
+            coordinateSnapshot: coordinates
+        )
+        let target = try makeTarget(
+            device: device,
+            width: coordinates.drawableSize.width,
+            height: coordinates.drawableSize.height
+        )
+
+        XCTAssertThrowsError(try runtime.present(
+            frame: frame,
+            plan: plan,
+            coordinateSnapshot: coordinates,
+            target: HDRMetalRenderTarget(texture: target),
+            completion: .asynchronous
+        )) { error in
+            XCTAssertEqual(error as? RecordingRendererError, .pipelineFailure)
+        }
+        let snapshot = runtime.snapshot()
+        XCTAssertNil(snapshot.activeConfiguration)
+        XCTAssertNil(snapshot.mappedFrameGeneration)
+        XCTAssertNil(snapshot.mappedFrameID)
+        XCTAssertEqual(snapshot.submittedFrameCount, 0)
+        XCTAssertEqual(snapshot.failedPresentationCount, 1)
+        XCTAssertEqual(mapper.mapCount, 1)
+        XCTAssertEqual(mapper.flushCount, 2)
+        XCTAssertEqual(renderer.stopCount, 1)
+
+        runtime.stop()
+        XCTAssertEqual(runtime.snapshot().stopCount, 0)
+        XCTAssertEqual(mapper.flushCount, 2)
+        XCTAssertEqual(renderer.stopCount, 1)
+    }
+
+    func testConfigurationFailureFailsClosedBeforeMapping() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let mapper = try RecordingMetalVideoFrameMapper(device: device)
+        let renderer = RecordingHDRMetalVideoRenderer(
+            configurationError: .configurationFailure
+        )
+        let runtime = try makeRuntime(device: device, mapper: mapper, renderer: renderer)
+        let frame = try makeFrame(
+            generation: 22,
+            frameID: 4,
+            metadata: .rec709VideoRange()
+        )
+        let coordinates = try makeSnapshot(revision: 33)
+        let plan = try StreamMetalPresentationPlanResolver.resolve(
+            frame: frame,
+            coordinateSnapshot: coordinates
+        )
+        let target = try makeTarget(
+            device: device,
+            width: coordinates.drawableSize.width,
+            height: coordinates.drawableSize.height
+        )
+
+        XCTAssertThrowsError(try runtime.present(
+            frame: frame,
+            plan: plan,
+            coordinateSnapshot: coordinates,
+            target: HDRMetalRenderTarget(texture: target),
+            completion: .asynchronous
+        )) { error in
+            XCTAssertEqual(error as? RecordingRendererError, .configurationFailure)
+        }
+        XCTAssertEqual(mapper.mapCount, 0)
+        XCTAssertEqual(mapper.flushCount, 1)
+        XCTAssertEqual(renderer.stopCount, 1)
+        XCTAssertEqual(runtime.snapshot().failedPresentationCount, 1)
+    }
+
+    func testStopAndInvalidateReleaseOwnershipIdempotently() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let mapper = try RecordingMetalVideoFrameMapper(device: device)
+        let renderer = RecordingHDRMetalVideoRenderer()
+        let runtime = try makeRuntime(device: device, mapper: mapper, renderer: renderer)
+        let frame = try makeFrame(
+            generation: 23,
+            frameID: 5,
+            metadata: .rec709VideoRange()
+        )
+        let coordinates = try makeSnapshot(revision: 34)
+        let plan = try StreamMetalPresentationPlanResolver.resolve(
+            frame: frame,
+            coordinateSnapshot: coordinates
+        )
+        let target = try makeTarget(
+            device: device,
+            width: coordinates.drawableSize.width,
+            height: coordinates.drawableSize.height
+        )
+        try runtime.present(
+            frame: frame,
+            plan: plan,
+            coordinateSnapshot: coordinates,
+            target: HDRMetalRenderTarget(texture: target),
+            completion: .asynchronous
+        )
+
+        runtime.stop()
+        runtime.stop()
+        var snapshot = runtime.snapshot()
+        XCTAssertNil(snapshot.activeConfiguration)
+        XCTAssertEqual(snapshot.stopCount, 1)
+        XCTAssertFalse(snapshot.isInvalidated)
+
+        runtime.invalidate()
+        runtime.invalidate()
+        snapshot = runtime.snapshot()
+        XCTAssertTrue(snapshot.isInvalidated)
+        XCTAssertEqual(snapshot.stopCount, 1)
+        XCTAssertEqual(snapshot.invalidationCount, 1)
+        XCTAssertEqual(renderer.stopCount, 1)
+        XCTAssertEqual(mapper.flushCount, 2)
+    }
+
+    @MainActor
+    func testConfigureReplacementAndStopInvalidateExactlyCurrentRuntime() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let firstRuntime = RecordingStreamMetalPresenterRuntime()
+        let replacementRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [firstRuntime, replacementRuntime]
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtimes.removeFirst() }
+        )
+
+        presenter.configure(view)
+        XCTAssertEqual(view.colorPixelFormat, .bgra8Unorm_srgb)
+        XCTAssertTrue(view.framebufferOnly)
+        XCTAssertTrue((view.delegate as AnyObject?) === presenter)
+        XCTAssertEqual(firstRuntime.snapshot().invalidationCount, 0)
+
+        presenter.configure(view)
+        XCTAssertEqual(firstRuntime.snapshot().invalidationCount, 1)
+        XCTAssertEqual(replacementRuntime.snapshot().invalidationCount, 0)
+
+        presenter.stop()
+        presenter.stop()
+        XCTAssertEqual(firstRuntime.snapshot().invalidationCount, 1)
+        XCTAssertEqual(replacementRuntime.snapshot().invalidationCount, 1)
+    }
+
+    @MainActor
+    func testFailedConfigureInvalidatesPreviousRuntimeWithoutLeavingStaleOwnership() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let runtime = RecordingStreamMetalPresenterRuntime()
+        var shouldFail = false
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in
+                if shouldFail { throw TestError.runtimeCreationFailed }
+                return runtime
+            }
+        )
+
+        presenter.configure(view)
+        XCTAssertEqual(runtime.snapshot().invalidationCount, 0)
+
+        shouldFail = true
+        presenter.configure(view)
+        XCTAssertEqual(runtime.snapshot().invalidationCount, 1)
+        XCTAssertTrue((view.delegate as AnyObject?) === presenter)
+
+        presenter.stop()
+        XCTAssertEqual(runtime.snapshot().invalidationCount, 1)
+    }
+
     private func makeFrame(
         generation: UInt64,
         frameID: UInt64,
@@ -231,6 +575,21 @@ final class StreamMetalPresenterTests: XCTestCase {
         return texture
     }
 
+    private func makeRuntime(
+        device: any MTLDevice,
+        mapper: any MetalVideoFrameMapping,
+        renderer: any HDRMetalVideoRendering
+    ) throws -> StreamMetalPresenterRuntime {
+        guard let commandQueue = device.makeCommandQueue() else {
+            throw TestError.commandQueueCreationFailed
+        }
+        return StreamMetalPresenterRuntime(
+            mapper: mapper,
+            renderer: renderer,
+            commandQueue: commandQueue
+        )
+    }
+
     private func readPixel(
         _ texture: any MTLTexture,
         x: Int,
@@ -252,5 +611,140 @@ final class StreamMetalPresenterTests: XCTestCase {
         case pixelBufferLockFailed
         case pixelBufferPlaneMissing
         case targetCreationFailed
+        case commandQueueCreationFailed
+        case runtimeCreationFailed
+    }
+}
+
+private enum RecordingRendererError: Error, Equatable {
+    case configurationFailure
+    case pipelineFailure
+}
+
+private final class RecordingMetalVideoFrameMapper: MetalVideoFrameMapping,
+    @unchecked Sendable {
+    private let base: CVMetalVideoFrameMapper
+    private let lock = NSLock()
+    private var storedMapCount = 0
+    private var storedFlushCount = 0
+
+    var mapCount: Int { lock.withLock { storedMapCount } }
+    var flushCount: Int { lock.withLock { storedFlushCount } }
+
+    init(device: any MTLDevice) throws {
+        base = try CVMetalVideoFrameMapper(device: device)
+    }
+
+    func map(_ frame: DecodedVideoFrame) throws -> MetalVideoFrame {
+        lock.withLock { storedMapCount += 1 }
+        return try base.map(frame)
+    }
+
+    func flush() {
+        lock.withLock { storedFlushCount += 1 }
+        base.flush()
+    }
+}
+
+private final class RecordingHDRMetalVideoRenderer: HDRMetalVideoRendering,
+    @unchecked Sendable {
+    private let lock = NSLock()
+    private let configurationError: RecordingRendererError?
+    private let renderError: RecordingRendererError?
+    private var storedConfigurations: [HDRRenderConfigurationIdentity] = []
+    private var storedRenderCount = 0
+    private var storedStopCount = 0
+
+    var configurations: [HDRRenderConfigurationIdentity] {
+        lock.withLock { storedConfigurations }
+    }
+    var renderCount: Int { lock.withLock { storedRenderCount } }
+    var stopCount: Int { lock.withLock { storedStopCount } }
+
+    init(
+        configurationError: RecordingRendererError? = nil,
+        renderError: RecordingRendererError? = nil
+    ) {
+        self.configurationError = configurationError
+        self.renderError = renderError
+    }
+
+    func replaceConfiguration(_ configuration: HDRRenderConfigurationIdentity) throws {
+        if let configurationError { throw configurationError }
+        lock.withLock { storedConfigurations.append(configuration) }
+    }
+
+    func render(
+        frame: MetalVideoFrame,
+        configuration: HDRRenderConfigurationIdentity,
+        uniforms: HDRMetalShaderUniforms,
+        coordinateSnapshot: StreamCoordinateSnapshot,
+        target: HDRMetalRenderTarget,
+        completion: HDRMetalCommandCompletion
+    ) throws -> HDRMetalVideoRendererResult {
+        _ = uniforms
+        _ = target
+        _ = completion
+        if let renderError { throw renderError }
+        lock.withLock { storedRenderCount += 1 }
+        return .submitted(
+            frameID: frame.frameID,
+            decoderGeneration: configuration.decoderGeneration,
+            displayRevision: configuration.displayRevision,
+            coordinateRevision: coordinateSnapshot.revision
+        )
+    }
+
+    func stop() {
+        lock.withLock { storedStopCount += 1 }
+    }
+}
+
+private final class RecordingStreamMetalPresenterRuntime:
+    StreamMetalPresenterRuntiming, @unchecked Sendable {
+    private let lock = NSLock()
+    private var invalidationCount: UInt64 = 0
+
+    func present(
+        frame: DecodedVideoFrame,
+        plan: StreamMetalPresentationPlan,
+        coordinateSnapshot: StreamCoordinateSnapshot,
+        target: HDRMetalRenderTarget,
+        completion: HDRMetalCommandCompletion
+    ) throws -> HDRMetalVideoRendererResult {
+        _ = target
+        _ = completion
+        return .submitted(
+            frameID: frame.frameID,
+            decoderGeneration: plan.configuration.decoderGeneration,
+            displayRevision: plan.configuration.displayRevision,
+            coordinateRevision: coordinateSnapshot.revision
+        )
+    }
+
+    func clear(drawable: any CAMetalDrawable, color: MTLClearColor) throws {
+        _ = drawable
+        _ = color
+    }
+
+    func stop() {}
+
+    func invalidate() {
+        lock.withLock { invalidationCount &+= 1 }
+    }
+
+    func snapshot() -> StreamMetalPresenterRuntimeSnapshot {
+        lock.withLock {
+            StreamMetalPresenterRuntimeSnapshot(
+                activeConfiguration: nil,
+                mappedFrameGeneration: nil,
+                mappedFrameID: nil,
+                isInvalidated: invalidationCount > 0,
+                submittedFrameCount: 0,
+                failedPresentationCount: 0,
+                stopCount: 0,
+                invalidationCount: invalidationCount
+            )
+        }
     }
 }

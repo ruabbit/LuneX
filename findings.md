@@ -1071,3 +1071,22 @@
 - 第4组display/surface resolver尚未存在，因此当前contract有意固定`.bgra8Unorm_srgb`与EDR intent disabled：SDR使用`.sdr`，P010 HDR使用source-peak-derived、headroom精确为1的`.hdrToSDR`。display支持EDR不能直接打开layer intent，避免surface格式和shader mapping分裂。
 - presenter用frame generation、frame ID、color signature和`CVPixelBuffer`身份缓存单帧mapping；configuration变化、暂停/idle、失败、configure replacement和dismantle都会停止renderer并flush mapper。terminal invalidation不可被迟到draw复活，macOS与mobile拆卸都清delegate并暂停view。
 - focused `14/14`、完整macOS `550 total / 549 passed / 1 explicit Keychain skip / 0 failed`及五平台Debug warnings-as-errors通过；这些证据证明production explicit renderer和SDR fallback，不证明4.x EDR surface、真实display revision/headroom、HDR signaling或物理亮度/颜色。
+## 2026-07-29 阶段 15 任务 3.6 恢复调查
+
+- macOS更新没有改变Xcode 26.4或SDK 26.4，但系统build从先前检查点变化为`26A5388g`；任何更新前xcresult只能作为历史证据，3.6必须从全新DerivedData重新验收。
+- CoreSimulator在更新后新增iOS 27与xrOS 27设备，因此“全局同名唯一”不再成立；3.6的非干预约束应锁定原26.4 UDID并比较完整只读清单前后不变，不能删除系统新增实例来恢复旧哈希。当前Booted设备是非固定`iPhone 17`，不属于本任务的四个固定目标。
+- `StreamMetalPresenterRuntiming`的protocol requirement不继承concrete实现上的`@discardableResult`，production draw必须用`_ = try runtime.present(...)`显式消费返回值，不能依赖具体类型属性或屏蔽warnings-as-errors。
+- macOS `updateNSView`原先以`view.isPaused`直接决定立即draw，而mobile使用`StreamMetalViewSchedule.requestsImmediateDraw`；两端应消费同一resolver输出，才能让暂停/恢复测试证明一致的单次清屏策略。
+- `StreamMetalClearReason.presentationFailure`没有任何resolver生产路径，presentation异常已经由catch、runtime stop和clear处理；保留死枚举会虚构一个未接线的可观测状态，因此删除。
+- drawable不可用不能总是最高优先级：active/throttled无drawable应等待，但idle/paused即使没有drawable也必须先产生inactive决策，使runtime释放mapper与pipeline ownership；清黑只有drawable存在时才执行。
+- runtime需要独立记录是否拥有presentation resources，而不能只看`activeConfiguration`：`replaceConfiguration`可能部分分配后抛错，此时配置尚未发布但仍必须stop/flush。尝试replace前建立ownership、failure cleanup后清除ownership，可同时保证partial-failure释放和presenter二次stop幂等。
+- `stopCount`应统计实际资源停止转换，而不是无所有权时的重复请求；invalidate始终只转换一次terminal状态，但若资源已经被stop释放，则不应再次调用renderer stop或mapper flush。
+- presenter重新配置时若runtime factory失败，必须先失效旧runtime并发布`nil`所有权；继续保留delegate是安全的，因为draw会在无runtime时fail closed。测试通过随后调用`stop()`不再改变旧runtime计数，证明失败配置没有隐藏stale owner。
+- macOS 27 beta下Xcode 26.4的xcresult summary/build-results子命令可正常返回结构化计数和零诊断，但tests枚举子命令出现内部database move冲突；验收应保留summary为总量证据，并从原始测试日志读取唯一skip名称，不把工具自身失败误判为测试失败。
+
+## 2026-07-29 阶段 15 任务 3.6 验收结论
+
+- presenter现在把决策、调度和资源所有权分开：frame decision决定wait/clear/present，schedule统一macOS与mobile的60/15 FPS和暂停立即清屏，runtime独占mapper/renderer/configuration/mapped frame并在partial failure、stop、invalidate和replacement时收敛。
+- 暂停/idle即使拿不到drawable也先停止presentation resources；active/throttled无drawable才等待。drawable mismatch、缺坐标和缺帧保持opaque clear但不伪造成功presentation。
+- configuration replace开始前先建立临时resource ownership，使renderer部分配置后抛错仍会stop/flush；release后清除ownership，因此presenter catch的后续stop、重复stop和invalidate均不会重复释放。
+- focused、完整suite、五平台build、fixture/OpenSpec/generator/boundary及simulator不变门共同证明3.6确定性合同；它们不证明4.x float EDR surface、current headroom回调、跨屏revision、HDR signaling或物理显示效果。
