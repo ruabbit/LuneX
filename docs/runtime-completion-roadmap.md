@@ -92,9 +92,9 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`当前`17/33`；4.1 injectable platform surface adapter已完成，下一项4.2为独立于stream HDR状态的monotonic display revision与semantic headroom update。
-- 4.1确定性验收为focused `22/22`、完整macOS `567 total / 566 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自实际Metal compile/link、OpenSpec strict `6/6`与generator/fixture/boundary门通过。构建前后规范化simulator清单SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定26.4四实例保持available/`Shutdown`且全局`Booted=0`。
-- surface adapter在macOS/iOS/iPadOS按能力支持Display-P3/ITU-R 2020 float EDR，在visionOS支持Display-P3 float EDR，在tvOS返回typed unsupported；进入EDR按format/colorspace/metadata/intent提交，退出EDR先关闭intent并清metadata，失败时恢复完整snapshot。production在4.3 resolver前仍只请求SDR contract。
+- OpenSpec `implement-native-hdr-edr-pipeline`当前`18/33`；4.2 monotonic display revision与semantic headroom update已完成，下一项4.3解析唯一active surface/render configuration。
+- 4.2确定性验收为focused `19/19`、完整macOS `571 total / 570 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自实际Metal compile/link、OpenSpec strict `6/6`与generator/fixture/boundary门通过。构建前后规范化simulator清单SHA-256均为`ae1d4726c924c8a482aeb73847ca98acf2c093b8e56605773681d0f96fabc58b`，固定26.4四实例保持available/`Shutdown`且全局`Booted=0`。
+- display revision只由surface attached/detached可用性转换、内部display identity或potential/current/reference headroom语义变化触发；attachment owner在相同display/headroom下的replacement本身不是revision输入。stream active、focus、visibility和单纯drawable resize不会触发。macOS使用内部`NSScreenNumber`区分同名屏幕且不公开日志该标识，iOS分别读取potential/current EDR headroom；UIKit scene/window实际接线仍归阶段17。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

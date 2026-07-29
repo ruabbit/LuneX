@@ -1461,3 +1461,20 @@
 - macOS及固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过并各自实际执行一次Metal compile/link，证据目录`/tmp/LuneX-15-4_1-builds.VX5kfG`。构建前后规范化simulator清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定四实例均available/`Shutdown`且全局`Booted=0`，未执行simulator生命周期命令。
 - repository gates位于`/tmp/LuneX-15-4_1-repo.DWlFHH`：OpenSpec strict `6/6`、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`ed35a1f7a1233c38e2d4e3f25784fe24199727392a5d0018811e7d68e8073b4e`，production/reference、dependency、CoreImage regression、diff/自有文件whitespace边界全部通过。
 - 自审确认typed unsupported不修改native state，成功rollback保留先前active ownership，rollback failure清除ownership，tvOS不引用unavailable API且visionOS最终build通过。OpenSpec 4.1标记完成，权威进度`17/33`；阶段15保持`in_progress`，下一项4.2。
+
+## 2026-07-29 阶段 15 任务 4.2 启动
+
+- 4.1已以`18ca5ba Add atomic HDR surface adapter`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`17/33`。
+- 4.2范围限定为platform lifecycle中的独立display snapshot/revision publisher：attached/detached可用性、display identity或headroom语义变化才增长；attachment owner在相同display/headroom下的replacement本身不增长，stream active、focus、visibility和单纯drawable resize也不增长。不提前实现4.3 eligibility/configuration resolver或5.1 AppModel render-configuration接线。
+- 初始实现让revision使用checked `UInt64`增长并在耗尽时清除snapshot、fail closed；重复NaN headroom按相同无效语义去重。iOS reader改为读取真实`potentialEDRHeadroom`，macOS monitor用内部`NSScreenNumber`区分可能同名显示器且不再把identity写入public日志。
+- 首轮focused编译成功并通过18项，但既有AppKit通知测试仍期待旧`localizedName`而1项失败；xcresult为`18 passed / 1 failed`，不计验收。断言已改为内部screen number并增加重复通知/resize不增长display revision的验证。包装器末尾另误用zsh只读变量`status`，后续改用`build_status`且使用全新DerivedData。
+- 第二轮focused从全新DerivedData通过`19/19 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-4_2-focused-r2.taLuUO/DisplayLifecycle.xcresult`）；覆盖semantic display/headroom revision、detach/stale owner、NaN去重、counter exhaustion、既有AppModel headroom传播及AppKit screen/backing/resize通知。测试命令显式移除真实Keychain开关。
+- 首轮完整suite为`571 total / 569 passed / 1 Keychain skip / 1 failed`，唯一失败是另一项既有surface geometry测试仍期待旧`localizedName`；不计验收。已抽取测试侧screen-number helper统一两处identity断言，下一轮从全新DerivedData重跑。
+- 第二轮完整macOS suite从全新DerivedData通过`571 total / 570 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-4_2-full-r2.YcZB9m/LuneXCoreTests.xcresult`）；唯一skip精确为真实Keychain round-trip，结构化build result为`0 warning / 0 error / 0 analyzer warning`。
+- 首轮五平台包装器在macOS build成功且Metal compile/link各1次后，零源码诊断的`rg -c`返回空输出，导致整数断言失败；不计验收。未进入任何simulator build或生命周期操作，后续计数显式默认0并从新目录完整重跑。
+- 五平台Debug warnings-as-errors build-only从新证据目录全部通过且每个平台Metal compile/link各1次、源码诊断0（`/tmp/LuneX-15-4_2-builds-r2.7MtKMF`）。前后规范化simulator清单逐字一致，SHA-256均为`ae1d4726c924c8a482aeb73847ca98acf2c093b8e56605773681d0f96fabc58b`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`，未执行simulator生命周期命令。
+
+## 2026-07-29 阶段 15 任务 4.2 完成
+
+- repository gates位于`/tmp/LuneX-15-4_2-repo.19jLRj`：OpenSpec strict `6/6`、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`ed35a1f7a1233c38e2d4e3f25784fe24199727392a5d0018811e7d68e8073b4e`，production/reference、dependency、CoreImage regression、diff/自有文件whitespace边界全部通过。
+- 自审确认display revision与stream/focus/visibility/geometry revision独立，same-display headroom变化会发布新snapshot，stale detach不影响replacement，counter exhaustion清除snapshot，内部screen identity不进入public日志。OpenSpec 4.2标记完成，权威进度`18/33`；阶段15保持`in_progress`，下一项4.3。

@@ -30,7 +30,7 @@ still required before LuneX may claim working HDR output.
 | Metal plane mapping | `CVMetalVideoFrameMapper` maps NV12 to `.r8Unorm/.rg8Unorm` and P010 to `.r16Unorm/.rg16Unorm`; the production presenter runtime consumes those zero-copy planes after validating format, dimensions, device, generation, and color signature | Focused mapper/queue/presenter tests and real offscreen Metal execution | The standalone bounded queue is not yet the application presentation owner; display/surface revision ownership is added by tasks 4.1 through 5.1 |
 | Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations and clears frames across pause, stop, failure, and replacement | Session/lifecycle integration tests | It stores raw `DecodedVideoFrame` only and has no render/display revision fence |
 | Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. SDR uses the sRGB pipeline; HDR uses the bounded HDR-to-SDR pipeline until a resolved EDR surface exists | Focused production-runtime GPU execution, shader readback, lifecycle tests, full macOS tests, and five-platform builds | It intentionally fixes the drawable to sRGB and does not yet apply a float EDR drawable, extended-linear colorspace, display-owned headroom, or HDR metadata |
-| Display lifecycle | macOS rereads the actual `NSScreen`, headroom, display name, backing pixels, and drawable on window/screen/backing/resize notifications | AppKit notification and stale-attachment tests | Headroom has no monotonic display revision separate from general lifecycle revision |
+| Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; a separate publisher advances only for attached/detached availability, display identity, or semantic headroom changes | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, and full-suite tests | Task 5.1 must propagate this snapshot through AppModel/render state; task 4.3 defines how it participates in active configuration resolution |
 | Surface intent | `StreamMetalPresenter` applies its current SDR contract through an injectable transaction adapter; the adapter owns view/layer pixel format, colorspace, EDR metadata, and extended-range intent together | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported, rollback, rollback failure, real macOS layer fields, and production fail-closed behavior; all five platform targets compile | Tasks 4.2 through 4.6 must add display/headroom revisions, resolve when EDR is eligible, and rebuild presentation across semantic transitions |
 | AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
 
@@ -191,6 +191,39 @@ fixture, generator, dependency, reference-path, Core Image regression,
 whitespace, and simulator-inventory gates. This proves transactional field
 application and compile safety, not production EDR eligibility, current
 headroom mapping, HDR display signaling, or physical luminance/color output.
+
+## Display revision evidence
+
+OpenSpec task 4.2 separates display capability state from the pre-existing
+general lifecycle and coordinate revisions:
+
+- `HDRDisplaySnapshotPublisher` uses checked `UInt64` revisions and publishes
+  one immutable display identity/headroom snapshot;
+- attached/detached surface availability, internal display identity, or
+  potential, current, or reference headroom changes advance the revision;
+- stream activity, focus, visibility, render policy, and a geometry-only
+  drawable resize do not advance the display revision;
+- identical invalid `NaN` component states deduplicate rather than causing
+  unbounded notification churn;
+- revision exhaustion clears the active snapshot and remains fail closed; and
+- stale attachment owners cannot clear or advance a replacement surface; an
+  owner replacement with unchanged attached availability, display identity,
+  and headroom is deliberately not a revision input.
+
+macOS derives its internal identity from `NSScreenNumber`, which distinguishes
+same-name screens, while logs expose only attachment and revision state. iOS and
+iPadOS now read `potentialEDRHeadroom` independently from `currentEDRHeadroom`;
+their live scene/window ownership remains stage 17 work. No stream HDR flag or
+user preference participates in this publisher. Task 4.3 consumes those
+separate inputs when resolving an active render configuration.
+
+The task-level evidence is `19/19` focused tests; `571 total / 570 passed / 1
+explicit Keychain skip / 0 failed` for the complete macOS suite; five-platform
+Debug builds with Metal compilation/linking and no source diagnostics; stable
+simulator inventory; and all repository gates. This proves semantic revision
+publication and platform compile safety. It does not prove production
+configuration propagation, EDR selection, current-headroom tone mapping, HDR
+signaling, or physical display output.
 
 ## Verification matrix
 

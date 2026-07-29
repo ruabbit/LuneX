@@ -84,9 +84,11 @@ final class AppModelWorkflowTests: XCTestCase {
         lifecycle.isStreamActive = true
         lifecycle.isVisible = true
         lifecycle.isFocused = false
-        lifecycle.drawableSize = PixelSize(width: 2560, height: 1440)
-        lifecycle.headroom = DisplayHeadroom(potential: 2.0, current: 1.5, reference: 1.0)
-        lifecycle.updateRenderPolicy()
+        lifecycle.updateSurface(
+            displayID: "display-a",
+            headroom: DisplayHeadroom(potential: 2.0, current: 1.5, reference: 1.0),
+            drawableSize: PixelSize(width: 2560, height: 1440)
+        )
         model.renderState.transform.sourceSize = PixelSize(width: 1920, height: 1080)
 
         model.applyPlatformLifecycle(lifecycle)
@@ -123,12 +125,15 @@ final class AppModelWorkflowTests: XCTestCase {
         model.applyPlatformLifecycle(lifecycle)
         lifecycle.isStreamActive = true
         lifecycle.isVisible = false
-        lifecycle.headroom = DisplayHeadroom(
-            potential: 2.4,
-            current: 1.8,
-            reference: 1.0
+        lifecycle.updateSurface(
+            displayID: "display-a",
+            headroom: DisplayHeadroom(
+                potential: 2.4,
+                current: 1.8,
+                reference: 1.0
+            ),
+            drawableSize: lifecycle.drawableSize
         )
-        lifecycle.updateRenderPolicy()
         model.applyPlatformLifecycle(lifecycle)
         XCTAssertEqual(mediaEnvironment.currentLifecycleApplications(), [])
 

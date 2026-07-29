@@ -26,7 +26,7 @@
 ## 4. Display, surface, and headroom adaptation
 
 - [x] 4.1 Implement injectable platform surface adapters that atomically apply SDR or EDR drawable format, colorspace, and extended-range intent only where supported
-- [ ] 4.2 Extend lifecycle/display state with monotonic display revisions and semantic headroom updates independent from stream HDR state
+- [x] 4.2 Extend lifecycle/display state with monotonic display revisions and semantic headroom updates independent from stream HDR state
 - [ ] 4.3 Resolve one active surface/render configuration from stream metadata, user preference, platform capability, actual display headroom, drawable state, and decoder generation
 - [ ] 4.4 Clear incompatible presentation and rebuild surface/pipeline state across screen, backing, headroom, metadata, user-setting, stop, and replacement transitions
 - [ ] 4.5 Add macOS screen/headroom, same-display headroom, stale-window, surface transition, SDR-on-EDR, HDR-on-SDR, HDR-on-EDR, and teardown tests

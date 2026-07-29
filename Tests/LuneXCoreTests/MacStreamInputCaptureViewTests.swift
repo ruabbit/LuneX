@@ -486,7 +486,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             CGSize(width: expected.width, height: expected.height)
         )
         XCTAssertNotEqual(lifecycle.drawableSize, backingPixelSize(of: root))
-        XCTAssertEqual(lifecycle.displayID, window.screen?.localizedName)
+        XCTAssertEqual(lifecycle.displayID, displayIdentity(of: window))
     }
 
     func testSurfaceFrameAndBoundsChangesRefreshCurrentGeometry() {
@@ -539,6 +539,8 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         )
         let window = makeWindow(contentView: surface)
         monitor.attach(to: window, surface: surface)
+        let initialDisplayRevision = lifecycle.displayRevision
+        let expectedDisplayID = displayIdentity(of: window)
         let notifications: [(Notification.Name, Any?)] = [
             (NSWindow.didResizeNotification, window),
             (NSWindow.didEndLiveResizeNotification, window),
@@ -552,7 +554,8 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             NotificationCenter.default.post(name: notification.0, object: notification.1)
             await Task.yield()
             XCTAssertEqual(lifecycle.drawableSize, backingPixelSize(of: surface))
-            XCTAssertEqual(lifecycle.displayID, window.screen?.localizedName)
+            XCTAssertEqual(lifecycle.displayID, expectedDisplayID)
+            XCTAssertEqual(lifecycle.displayRevision, initialDisplayRevision)
         }
     }
 
@@ -998,6 +1001,14 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             width: Int(backingBounds.width.rounded()),
             height: Int(backingBounds.height.rounded())
         )
+    }
+
+    private func displayIdentity(of window: NSWindow) -> String? {
+        (
+            window.screen?.deviceDescription[
+                NSDeviceDescriptionKey("NSScreenNumber")
+            ] as? NSNumber
+        ).map { String($0.uint32Value) }
     }
 
     private func cgMouseEvent(

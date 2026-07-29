@@ -6,12 +6,16 @@ final class PlatformLifecycleState {
     var isStreamActive = false
     var isVisible = true
     var isFocused = true
-    var displayID: String?
+    private(set) var displayID: String?
     var drawableSize: PixelSize = .zero
-    var headroom = DisplayHeadroom()
+    private(set) var headroom = DisplayHeadroom()
+    private(set) var displayRevision = HDRDisplayRevision(rawValue: 0)
+    private(set) var displaySnapshot: HDRDisplaySnapshot?
+    private(set) var isDisplayRevisionExhausted = false
     var renderPolicy: RenderPolicy = .idle
     private(set) var revision = 0
     @ObservationIgnored private var activeSurfaceAttachmentID: UUID?
+    @ObservationIgnored private var displayPublisher = HDRDisplaySnapshotPublisher()
 
     func updateRenderPolicy() {
         renderPolicy = LifecycleRenderPolicyResolver.resolve(
@@ -32,15 +36,18 @@ final class PlatformLifecycleState {
         activeSurfaceAttachmentID = attachmentID
     }
 
+    @discardableResult
     func updateSurface(
         displayID: String?,
         headroom: DisplayHeadroom,
         drawableSize: PixelSize
-    ) {
+    ) -> HDRDisplayPublicationOutcome {
         self.displayID = displayID
         self.headroom = headroom
         self.drawableSize = drawableSize
+        let outcome = publishDisplayState(isSurfaceAttached: true)
         updateRenderPolicy()
+        return outcome
     }
 
     func clearSurfaceAttachment(_ attachmentID: UUID) -> Bool {
@@ -50,6 +57,7 @@ final class PlatformLifecycleState {
         displayID = nil
         headroom = DisplayHeadroom()
         drawableSize = .zero
+        _ = publishDisplayState(isSurfaceAttached: false)
         updateRenderPolicy()
         return true
     }
@@ -59,6 +67,20 @@ final class PlatformLifecycleState {
         guard activeSurfaceAttachmentID == attachmentID else { return false }
         activeSurfaceAttachmentID = nil
         return true
+    }
+
+    private func publishDisplayState(
+        isSurfaceAttached: Bool
+    ) -> HDRDisplayPublicationOutcome {
+        let outcome = displayPublisher.update(
+            isSurfaceAttached: isSurfaceAttached,
+            displayID: displayID,
+            headroom: headroom
+        )
+        displayRevision = displayPublisher.revision
+        displaySnapshot = displayPublisher.snapshot
+        isDisplayRevisionExhausted = displayPublisher.isRevisionExhausted
+        return outcome
     }
 }
 

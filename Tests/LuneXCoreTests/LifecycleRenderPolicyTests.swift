@@ -176,6 +176,158 @@ final class LifecycleRenderPolicyTests: XCTestCase {
         }
     }
 
+    func testDisplayRevisionChangesOnlyForSemanticDisplayState() throws {
+        let lifecycle = PlatformLifecycleState()
+        let firstHeadroom = DisplayHeadroom(
+            potential: 2.0,
+            current: 1.5,
+            reference: 1.0
+        )
+
+        XCTAssertEqual(
+            lifecycle.updateSurface(
+                displayID: "display-a",
+                headroom: firstHeadroom,
+                drawableSize: PixelSize(width: 1920, height: 1080)
+            ),
+            .published(HDRDisplaySnapshot(
+                revision: HDRDisplayRevision(rawValue: 1),
+                displayID: "display-a",
+                headroom: firstHeadroom
+            ))
+        )
+        let first = try XCTUnwrap(lifecycle.displaySnapshot)
+        XCTAssertEqual(first.revision, HDRDisplayRevision(rawValue: 1))
+
+        XCTAssertEqual(
+            lifecycle.updateSurface(
+                displayID: "display-a",
+                headroom: firstHeadroom,
+                drawableSize: PixelSize(width: 2560, height: 1440)
+            ),
+            .unchanged
+        )
+        lifecycle.setStreamActive(true)
+        lifecycle.isVisible = false
+        lifecycle.updateRenderPolicy()
+        lifecycle.isFocused = false
+        lifecycle.updateRenderPolicy()
+        XCTAssertEqual(lifecycle.displayRevision, first.revision)
+
+        let reducedHeadroom = DisplayHeadroom(
+            potential: 2.0,
+            current: 1.25,
+            reference: 1.0
+        )
+        XCTAssertEqual(
+            lifecycle.updateSurface(
+                displayID: "display-a",
+                headroom: reducedHeadroom,
+                drawableSize: PixelSize(width: 2560, height: 1440)
+            ),
+            .published(HDRDisplaySnapshot(
+                revision: HDRDisplayRevision(rawValue: 2),
+                displayID: "display-a",
+                headroom: reducedHeadroom
+            ))
+        )
+        XCTAssertEqual(
+            lifecycle.updateSurface(
+                displayID: "display-b",
+                headroom: reducedHeadroom,
+                drawableSize: PixelSize(width: 2560, height: 1440)
+            ),
+            .published(HDRDisplaySnapshot(
+                revision: HDRDisplayRevision(rawValue: 3),
+                displayID: "display-b",
+                headroom: reducedHeadroom
+            ))
+        )
+    }
+
+    func testDisplayDetachPublishesOneRevisionAndRejectsStaleOwner() throws {
+        let lifecycle = PlatformLifecycleState()
+        let currentOwner = UUID()
+        let staleOwner = UUID()
+        lifecycle.claimSurfaceAttachment(currentOwner)
+        lifecycle.updateSurface(
+            displayID: "display-a",
+            headroom: DisplayHeadroom(potential: 2.0, current: 1.5, reference: 1.0),
+            drawableSize: PixelSize(width: 1920, height: 1080)
+        )
+
+        XCTAssertFalse(lifecycle.clearSurfaceAttachment(staleOwner))
+        XCTAssertEqual(lifecycle.displayRevision, HDRDisplayRevision(rawValue: 1))
+        XCTAssertNotNil(lifecycle.displaySnapshot)
+
+        XCTAssertTrue(lifecycle.clearSurfaceAttachment(currentOwner))
+        XCTAssertEqual(lifecycle.displayRevision, HDRDisplayRevision(rawValue: 2))
+        XCTAssertNil(lifecycle.displaySnapshot)
+        XCTAssertNil(lifecycle.displayID)
+        XCTAssertEqual(lifecycle.headroom, DisplayHeadroom())
+
+        XCTAssertFalse(lifecycle.clearSurfaceAttachment(currentOwner))
+        XCTAssertEqual(lifecycle.displayRevision, HDRDisplayRevision(rawValue: 2))
+    }
+
+    func testSemanticNaNHeadroomDoesNotChurnDisplayRevision() {
+        var publisher = HDRDisplaySnapshotPublisher()
+        let invalid = DisplayHeadroom(
+            potential: .nan,
+            current: .nan,
+            reference: .nan
+        )
+
+        XCTAssertNotEqual(invalid, DisplayHeadroom())
+        XCTAssertEqual(
+            publisher.update(
+                isSurfaceAttached: true,
+                displayID: "display-a",
+                headroom: invalid
+            ),
+            .published(HDRDisplaySnapshot(
+                revision: HDRDisplayRevision(rawValue: 1),
+                displayID: "display-a",
+                headroom: invalid
+            ))
+        )
+        XCTAssertEqual(
+            publisher.update(
+                isSurfaceAttached: true,
+                displayID: "display-a",
+                headroom: invalid
+            ),
+            .unchanged
+        )
+        XCTAssertEqual(publisher.revision, HDRDisplayRevision(rawValue: 1))
+    }
+
+    func testDisplayRevisionExhaustionFailsClosed() {
+        var publisher = HDRDisplaySnapshotPublisher(
+            initialRevision: HDRDisplayRevision(rawValue: .max)
+        )
+
+        XCTAssertEqual(
+            publisher.update(
+                isSurfaceAttached: true,
+                displayID: "display-a",
+                headroom: DisplayHeadroom()
+            ),
+            .revisionExhausted
+        )
+        XCTAssertTrue(publisher.isRevisionExhausted)
+        XCTAssertNil(publisher.snapshot)
+        XCTAssertEqual(publisher.revision, HDRDisplayRevision(rawValue: .max))
+        XCTAssertEqual(
+            publisher.update(
+                isSurfaceAttached: true,
+                displayID: "display-a",
+                headroom: DisplayHeadroom()
+            ),
+            .revisionExhausted
+        )
+    }
+
     private func resolve(
         isStreamActive: Bool,
         isVisible: Bool,

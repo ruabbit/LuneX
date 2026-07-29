@@ -1107,3 +1107,18 @@
 - 平台能力是显式的：macOS/iOS支持Display-P3与ITU-R 2020 intent+metadata，visionOS支持Display-P3，tvOS只应用SDR并对EDR返回typed unsupported；最终五平台build证明条件编译不引用tvOS unavailable API。
 - production首次configure已通过adapter应用现有SDR contract；unsupported或transaction failure会失效runtime、移除delegate并暂停view。4.3之前没有production路径请求EDR，因此4.1不能作为HDR signaling或物理亮度证据。
 - task级验收为focused `22/22`、完整macOS `567 total / 566 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link、simulator清单不变及repository gates全通过。下一项4.2只建立monotonic display revision与semantic headroom update，不提前实现4.3 resolver。
+
+## 2026-07-29 阶段 15 任务 4.2 实现边界
+
+- 既有`PlatformLifecycleState.revision`由每次render-policy刷新无条件增长，focus、visibility、stream-active和重复surface通知都会改变，不能作为HDR configuration的display revision。
+- display revision的语义输入应只包含surface attached/detached可用性、内部display identity和三项headroom；attachment owner UUID及同display/headroom的replacement不是publisher输入。drawable geometry已有独立coordinate revision，stream HDR/user preference属于4.3 resolver输入，不能污染display capability revision。
+- `NSScreen.localizedName`无法区分两台同名显示器；macOS内部identity改用`NSScreenNumber`，但日志只能发布attached/revision等有界状态，不能公开该标识。
+- iOS reader原先把potential与current都读自`currentEDRHeadroom`，会丢失独立能力上限；4.2应分别读取`potentialEDRHeadroom`和`currentEDRHeadroom`。UIKit scene/window真实接线仍归阶段17，不在本项虚构运行证据。
+
+## 2026-07-29 阶段 15 任务 4.2 验收结论
+
+- `HDRDisplaySnapshotPublisher`只以surface attached/detached可用性、内部display ID与potential/current/reference headroom为语义输入；相同输入返回unchanged，attachment owner replacement本身不参与比较，checked revision溢出时清除snapshot并保持exhausted fail-closed。
+- `PlatformLifecycleState`分别维护general lifecycle revision、coordinate/drawable state和HDR display revision。stream active、focus、visibility、render policy与单纯drawable resize不改变display revision；detach只由当前attachment owner发布一次新revision，stale owner无效。
+- 重复NaN headroom被视为同一无效语义，避免系统通知导致无限revision churn；4.3仍必须决定无效headroom的closed resolution，不在4.2把它伪装成可用能力。
+- macOS内部identity使用`NSScreenNumber`而非可能重复的localized name，public日志只含attached/revision/geometry/headroom；iOS分别读取真实potential/current headroom。该证据不表示UIKit scene/window已运行接线。
+- task级验收为focused `19/19`、完整macOS `571 total / 570 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link、simulator清单不变与repository gates通过。下一项4.3解析唯一active configuration。

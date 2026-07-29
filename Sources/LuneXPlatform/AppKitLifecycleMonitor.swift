@@ -161,11 +161,20 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
             )
         }
         lifecycle.updateSurface(
-            displayID: window.screen?.localizedName,
+            displayID: displayIdentity(window.screen),
             headroom: DisplayHeadroomReader.read(screen: window.screen),
             drawableSize: drawableSize
         )
-        logger.debug("Surface changed: display=\(self.lifecycle.displayID ?? "none", privacy: .public) drawable=\(drawableSize.width, privacy: .public)x\(drawableSize.height, privacy: .public) EDR=\(self.lifecycle.headroom.current, privacy: .public)")
+        logger.debug("Surface changed: attached=\(self.lifecycle.displaySnapshot != nil, privacy: .public) revision=\(self.lifecycle.displayRevision.rawValue, privacy: .public) drawable=\(drawableSize.width, privacy: .public)x\(drawableSize.height, privacy: .public) EDR=\(self.lifecycle.headroom.current, privacy: .public)")
+    }
+
+    private func displayIdentity(_ screen: NSScreen?) -> String? {
+        guard let number = screen?.deviceDescription[
+            NSDeviceDescriptionKey("NSScreenNumber")
+        ] as? NSNumber else {
+            return nil
+        }
+        return String(number.uint32Value)
     }
 
     private func pixelDimension(_ value: CGFloat) -> Int {
