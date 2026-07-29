@@ -407,6 +407,18 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         #endif
     }
 
+    func macOSRouteOutputCapability(
+        revision: SpatialAudioSemanticRevision
+    ) -> SpatialAudioRouteCapabilitySnapshot {
+        MacAudioOutputCapabilityResolver.resolve(
+            revision: revision,
+            output: MacAudioOutputFormatSnapshot(
+                format: engine.outputNode.outputFormat(forBus: 0)
+            ),
+            graph: graphReadback()
+        )
+    }
+
     func graphReadback() -> AVAudioEngineGraphReadback {
         let playerDestinations = engine.outputConnectionPoints(
             for: player,

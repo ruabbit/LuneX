@@ -1465,3 +1465,17 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-3_3-build-macos.WS1VXb`、`/tmp/LuneX-16-3_3-build-ios.FnagNd`、`/tmp/LuneX-16-3_3-build-tvos.izQnw9`和`/tmp/LuneX-16-3_3-build-visionos.XdY9u7`；全部unsigned warnings-as-errors build succeeded且结构化诊断为0，未操作simulator。
 - OpenSpec strict、`git diff --check`、五target source membership、旧direct shared-session调用absence、output-name noninference与generator连续SHA-256 `8be5fad05baba9ff45a8f192186766ab3bf0ea483f276d0400291ee69c6d9de0`通过。
 - 本项只证明公开API编译、注入合同和production ownership接线；actual route notification、semantic revision/rebuild、signed entitlement、AirPods head tracking、物理multichannel channel identification及可听同步仍未完成。
+
+## 2026-07-30 阶段 16 任务 3.4 实现边界
+
+- macOS没有移动端`AVAudioSessionPortDescription.isSpatialAudioEnabled`或maximum output channel API。初始`.unknown` route允许production尝试environment graph；完成配置后，实际engine output format与graph connection/applicable algorithm/fallback readback才构成可观察capability。
+- 3.4输出独立`SpatialAudioRouteCapabilitySnapshot`，不在同一configure调用中改写原始graph intent。把观测结果升级为新semantic revision、串行重建并拒绝stale generation属于4.1；现在强行替换会破坏pipeline的intent/runtime同revision一致性合同。
+- macOS capability类型不接受output name输入：有效actual output加完整environment-to-mixer连接和`.auto` applicable algorithm才是`.supported`；typed graph fallback为`.unsupported`；direct/unconfigured或证据不完整保持`.unknown`。
+
+## 2026-07-30 阶段 16 任务 3.4 验收
+
+- 新增`MacAudioOutputFormatSnapshot`与纯值`MacAudioOutputCapabilityResolver`，并由`AVAudioEngineClient.macOSRouteOutputCapability(revision:)`读取真实output node format和当前graph readback。有效sample rate与1...64实际声道形成available output；macOS没有公开maximum API，因此current与maximum均报告同一实际output format声道数而不虚构上限。
+- 完整environment graph、environment-to-mixer连接及`.auto` applicable algorithm共同解析为`.supported`；任一typed graph fallback解析为`.unsupported`；direct/unconfigured或缺连接/algorithm证据保持`.unknown`。无效/非有限rate或越界声道fail closed为output unavailable。
+- focused证据`/tmp/LuneX-16-3_4-focused.Si6fg2/MacAudioOutputCapability.xcresult`为`6/6`；expanded mac/mobile adapter、audio graph及resolver证据`/tmp/LuneX-16-3_4-expanded.glUt5U/MacAudioOutputExpanded.xcresult`为`56/56 passed / 0 skipped / 0 failed`，结构化diagnostics为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-3_4-build-macos.vEBBC0`、`/tmp/LuneX-16-3_4-build-ios.6P1Ccm`、`/tmp/LuneX-16-3_4-build-tvos.eRiPFk`和`/tmp/LuneX-16-3_4-build-visionos.lyAOKD`；全部unsigned warnings-as-errors succeeded且结构化diagnostics为0，未操作simulator。
+- OpenSpec strict、five-target membership、output-name absence、`git diff --check`与generator连续SHA-256 `a306bccd3be7666c185bd9fcb2dd54418634ffba01603045638e6a71f0236a7d`通过。本项不证明真实route切换或硬件空间播放；semantic revision monitor与runtime rebuild仍属3.5/4.1。

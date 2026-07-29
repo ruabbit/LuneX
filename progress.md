@@ -1863,3 +1863,11 @@
 - 四平台generic-device Debug unsigned warnings-as-errors build全部succeeded且结构化warning/error/analyzer warning为0；iOS target device family为`1,2`并覆盖iPadOS编译面，未操作simulator。
 - OpenSpec strict、五target membership、旧direct shared-session调用absence、output-name noninference、`git diff --check`及generator稳定SHA-256 `8be5fad05baba9ff45a8f192186766ab3bf0ea483f276d0400291ee69c6d9de0`通过。
 - OpenSpec 3.3已勾选，预期权威进度`14/35`；下一项3.4为macOS actual engine output format与graph result驱动的route/output capability。当前证据不替代签名、route通知、AirPods或物理声道/可听验收。
+
+## 2026-07-30 阶段 16 任务 3.4 完成
+
+- 新增generator-owned macOS actual-output capability resolver并接入production `AVAudioEngineClient` readback：只消费真实output format与graph mode/fallback/connection/applicable algorithm，不接受output name输入。
+- focused `6/6`、expanded `56/56 passed / 0 skipped / 0 failed`，expanded结构化warning/error/analyzer warning为0；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 四平台generic-device Debug unsigned warnings-as-errors build全部succeeded且结构化diagnostics为0，未操作simulator。
+- OpenSpec strict、five-target membership、output-name absence、`git diff --check`及generator稳定SHA-256 `a306bccd3be7666c185bd9fcb2dd54418634ffba01603045638e6a71f0236a7d`通过。
+- OpenSpec 3.4已勾选，预期权威进度`15/35`；下一项3.5为有界route/interruption/media-services/spatial-capability monitor与deduplicated semantic revision。当前capability readback不替代通知接线、runtime rebuild或物理硬件验收。
