@@ -2169,3 +2169,18 @@
 - 固定identity首轮jq因`all()`作用域错误退出；不重复设备查询，对同一已保存JSON修正变量绑定后通过全部断言。
 - OpenSpec 6.5已勾选，权威进度更新为`33/35`；6.6 signed entitlement和物理音频硬件验收保持pending，下一可执行项6.7同步跟踪、硬件说明和proof boundary并执行阶段级离线自验。
 - repository final gate `/tmp/LuneX-16-6_5-repo-final.oyRbHE`通过OpenSpec strict `7/7`、apply `33/35`、三份simulator快照/固定identity/Booted=0读回、Keychain opt-in关闭、产品源码/测试/工程零diff及无残留测试进程门。
+
+## 2026-07-30 阶段 16 任务 6.7 启动
+
+- 6.5已以`ace5275 Verify spatial audio simulator inventory`独立提交并推送；确认`HEAD == origin/main`且工作树clean，OpenSpec为`33/35 ready`。
+- 6.7将新增production空间音频合同并同步runtime roadmap、entitlement/signed provisioning与6.6硬件验收说明、离线/模拟器/物理证明边界；完成后运行阶段16级fresh normal、strict、generator和已保存simulator证据自验。
+- 6.6继续保持pending；没有授权物理设备、签名profile、AirPods、built-in/wired/HDMI和live Sunshine证据时，不archive change、不把阶段16标为complete。
+- 已新增空间音频合同并把runtime roadmap从过期`17/35`更新为当前`33/35`及明确6.6物理边界；产品源码、测试、Configuration、Tools和工程文件均未修改。
+- 阶段级fresh normal `/tmp/LuneX-16-stage-acceptance.SuOHsB`通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确、结构化diagnostics为0且真实Keychain opt-in关闭。
+
+## 2026-07-30 阶段 16 任务 6.7 完成
+
+- 阶段级组合门`/tmp/LuneX-16-stage-gate.IC7uoV`通过fixture、OpenSpec strict `7/7`、apply `33/35`、generator双次稳定哈希、fresh normal `721/720/1/0`、ASan/TSan各`721/720/1/0`、resource `185/185`及固定simulator `Shutdown/Booted=0`读回。
+- `docs/runtime/spatial-audio-contract.md`现统一production graph/ownership、canonical channel layout、四平台route/API、signed entitlement、recovery/generation、actual UI/diagnostics、离线证据和6.6硬件矩阵；runtime roadmap同步为`34/35 in_progress`。
+- OpenSpec 6.7已勾选，权威进度为`34/35`。6.6保持唯一pending，change不archive、阶段不标记complete；后续可推进阶段17，但不能用移动/模拟器/离线证据回填空间音频物理验收。
+- repository final gate `/tmp/LuneX-16-6_7-repo-final.SxZAWt`通过fixture、OpenSpec strict `7/7`、apply `34/35`、generator稳定、stage normal `721/720/1/0`读回、合同/proof boundary、6.6唯一pending、Keychain opt-in关闭及产品源码/测试/配置/工具/工程零diff门。

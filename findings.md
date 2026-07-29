@@ -1755,3 +1755,16 @@
 - 首轮固定identity jq断言因`all()`改变`.`作用域退出，但三份cmp/hash和Booted=0已先通过；没有重复查询设备，改为对同一已保存JSON绑定`$inventory`后完成读回。
 - 本项只执行一次`simctl list devices available -j`和后续文件结构化比较，没有build/test或任何simulator生命周期操作。它只证明当前配置的simulator identity/state稳定，不证明真机、signed entitlement、AirPods、物理route或可听多声道行为。
 - 勾选后的repository final gate `/tmp/LuneX-16-6_5-repo-final.oyRbHE`通过OpenSpec strict `7/7`、apply `33/35`、三份规范化快照读回、固定四实例与Booted=0、Keychain opt-in关闭、产品源码/测试/工程零diff和无残留测试进程边界。
+
+## 2026-07-30 阶段 16 任务 6.7 调查
+
+- 路线图的阶段16状态仍停留在`17/35`，仓库也没有独立空间音频production/hardware合同。新增`docs/runtime/spatial-audio-contract.md`统一canonical PCM、environment graph、route/entitlement平台矩阵、recovery/generation ownership、actual UI/diagnostic、离线证据和6.6 signed/live/物理验收收据。
+- 路线图更新为`33/35 in_progress`并明确6.6保持唯一硬件缺口；6.7完成后只能到`34/35`，不能archive或把阶段标记complete。
+- 阶段级fresh normal证据`/tmp/LuneX-16-stage-acceptance.SuOHsB`通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确且结构化diagnostics为0；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+
+## 2026-07-30 阶段 16 任务 6.7 验收结论
+
+- 阶段级组合门`/tmp/LuneX-16-stage-gate.IC7uoV`通过fixture self-test/全树、OpenSpec strict `7/7`、apply `33/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、fresh normal、ASan、TSan、resource和simulator证据读回。
+- 新空间音频合同覆盖production ownership、canonical PCM、environment graph、平台route/API、entitlement/signing、recovery/generation、Settings/UI/diagnostics、确定性证据及6.6逐项物理验收和脱敏收据；路线图不再保留过期`17/35`。
+- OpenSpec 6.7已勾选，权威进度更新为`34/35 in_progress`。唯一剩余6.6没有授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine收据，因此change不可archive、阶段不可标记complete。
+- 勾选后的repository final gate `/tmp/LuneX-16-6_7-repo-final.SxZAWt`通过fixture、OpenSpec strict `7/7`、apply `34/35`、generator稳定、stage normal读回、权威合同/路线图静态边界、6.6唯一pending、Keychain opt-in关闭和产品源码/测试/配置/工具/工程零diff门。

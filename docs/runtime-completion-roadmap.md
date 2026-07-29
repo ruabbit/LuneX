@@ -30,14 +30,14 @@ flowchart LR
     U --> V["20. Release and performance validation"]
 ```
 
-## 当前执行状态（2026-07-29）
+## 当前执行状态（2026-07-30）
 
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
-| 16 | `in_progress`，OpenSpec `17/35` | canonical布局、session-owned spatial graph/fallback、平台策略/测试、embedded reader、entitlement配置、移动audio-session、macOS actual-output capability、有界语义monitor及adapter/observer矩阵已完成 | 尚未完成runtime recovery/application接线、signed provisioning及音频硬件验证 |
+| 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
@@ -119,12 +119,20 @@ flowchart LR
 
 ## 阶段 16：空间音频
 
-- OpenSpec `integrate-spatial-audio-runtime`当前`17/35 in_progress`。1.1至1.5完成实际边界、canonical布局、resolver及有界隐私history；2.1至2.6完成immutable graph intent、显式Core Audio interleaved格式、session-owned ambience-bed graph、typed direct fallback、macOS/iOS/tvOS listener与visionOS intended-experience策略，以及schedule/readback、partial failure、stop与ARC测试矩阵。3.1至3.5完成embedded entitlement、三平台配置、移动audio-session、macOS actual-output capability及有界语义route monitor；3.6补齐平台策略、maximum channel、capability/equivalent notification、missing route、output-name非推断、deactivate失败与真实observer替换/清理矩阵。下一项4.1实现runtime串行rebuild。当前离线测试和unsigned build仍不证明signed provisioning、真实硬件route行为、AirPods head tracking、声道分离或硬件可听定位。
-- 将 session 音频 decoder 的 PCM 接入一个真实 `AVAudioEngine` graph。
-- 把 `AVAudioEnvironmentNode` 放入 graph，而不是只实例化 controller。
-- 根据 route、channel layout、用户设置和 entitlement 决定 spatial/head tracking。
-- 在 macOS、iOS、tvOS 使用 `isListenerHeadTrackingEnabled`；visionOS 采用平台支持的空间音频路径。
-- route/interruption 变化后无泄漏地重建 graph，并将降级原因展示在 diagnostics。
+- `docs/runtime/spatial-audio-contract.md`是canonical PCM、environment graph、平台route/entitlement、recovery/generation、实际UI/diagnostic和物理验收的权威合同。
+- OpenSpec `integrate-spatial-audio-runtime`当前`34/35 in_progress`。1.1至3.6完成canonical mono/stereo/WAVE 5.1/7.1、显式interleaved Int16/Core Audio布局、session-owned `player -> environment -> mixer` graph、typed direct fallback、macOS/iOS/tvOS listener、visionOS intended-experience、embedded entitlement、移动audio-session、macOS actual-output capability及有界route/observer矩阵。
+- 4.1至4.6把route/policy/interruption/media-services rebuild串行化，以graph generation隔离schedule与late completion；processor、media environment和AppModel只接收当前session/media generation，preference、replacement、failure、reconnect与clean stop均有application gate。
+- 5.1至5.5完成向后兼容设置、privacy-bounded typed diagnostics、audio action ownership、actual-runtime stream overlay/Settings，以及compact/wide、localization和accessibility矩阵；desired preference不再伪造actual head-tracked状态。
+- 6.1 normal为`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`。6.2的macOS与固定iPhone/iPad/tvOS/visionOS Debug/Release共10个build全部零structured diagnostics；6.3 strict `7/7`、generator/fixture/dependency/entitlement、四SDK C/API和analyzer门通过。
+- 6.4完整ASan/TSan各`721/720/1/0`且零sanitizer report；11类malloc/resource集合`185/185`，覆盖graph replacement、observer cancellation和scheduled-buffer release/late completion。6.5的6.2 before/after/current三份simulator快照SHA-256均为`5d39940efaf4b37d2592952a96973621dda435f7a92cf2d43d911ea5df48140a`，固定四实例各唯一、available、`Shutdown`且全局`Booted=0`。
+- 6.7新增权威空间音频合同并同步路线图、signed entitlement/hardware instructions和proof boundary；阶段级fresh normal再次通过`721/720/1/0`，strict `7/7`、generator、ASan/TSan/resource与simulator证据组合读回通过。
+
+### 阶段 16 当前验收边界
+
+- 已完成的离线门证明production ownership、确定性route/recovery、实际状态UI、SDK编译、静态边界、sanitizer/resource和simulator identity；不证明Apple签名/profile允许head-pose entitlement，也不证明AirPods或物理输出实际按预期工作。
+- 6.6必须在授权signed candidate和物理设备上覆盖entitlement granted/missing、AirPods head tracking开关、fixed/nonspatial fallback、built-in speaker、wired/USB/HDMI 5.1/7.1逐声道识别、route transition、interruption/media reset、live Sunshine音画同步和clean teardown。
+- 物理收据必须关联OS/Xcode、client commit、签名configuration、脱敏Sunshine版本、negotiated layout、route类别、desired/actual状态、操作/预期/实际和teardown；不得保存secret、endpoint、profile UUID、证书/设备序列号或原始音频。
+- 当前没有6.6授权收据，任务保持pending。change为`34/35 in_progress`，不可archive、阶段不可标记`complete`；阶段17至20可以继续，但其证据不得回填6.6。
 
 ## 阶段 17：iOS/iPadOS 连续性
 
