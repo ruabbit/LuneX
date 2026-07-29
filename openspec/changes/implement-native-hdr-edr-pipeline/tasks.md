@@ -29,7 +29,7 @@
 - [x] 4.2 Extend lifecycle/display state with monotonic display revisions and semantic headroom updates independent from stream HDR state
 - [x] 4.3 Resolve one active surface/render configuration from stream metadata, user preference, platform capability, actual display headroom, drawable state, and decoder generation
 - [x] 4.4 Clear incompatible presentation and rebuild surface/pipeline state across screen, backing, headroom, metadata, user-setting, stop, and replacement transitions
-- [ ] 4.5 Add macOS screen/headroom, same-display headroom, stale-window, surface transition, SDR-on-EDR, HDR-on-SDR, HDR-on-EDR, and teardown tests
+- [x] 4.5 Add macOS screen/headroom, same-display headroom, stale-window, surface transition, SDR-on-EDR, HDR-on-SDR, HDR-on-EDR, and teardown tests
 - [ ] 4.6 Add compile-safe iOS/iPadOS, tvOS, and visionOS capability adapters with explicit unsupported/fallback results rather than AppKit assumptions
 
 ## 5. Application, diagnostics, and product integration

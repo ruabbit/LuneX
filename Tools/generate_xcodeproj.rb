@@ -228,6 +228,7 @@ test_sources = [
   "Tests/LuneXCoreTests/DiscoveryTests.swift",
   "Tests/LuneXCoreTests/LifecycleRenderPolicyTests.swift",
   "Tests/LuneXCoreTests/MacCursorCaptureOwnerTests.swift",
+  "Tests/LuneXCoreTests/MacHDRDisplayTransitionTests.swift",
   "Tests/LuneXCoreTests/MacStreamInputCaptureViewTests.swift",
   "Tests/LuneXCoreTests/MacSessionInputCoordinatorTests.swift",
   "Tests/LuneXCoreTests/MetalVideoFrameDeliveryTests.swift",

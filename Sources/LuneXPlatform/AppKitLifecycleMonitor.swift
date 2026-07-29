@@ -129,13 +129,15 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     }
 
     private func refreshVisibility() {
-        guard let window else { return }
+        guard lifecycle.isCurrentSurfaceAttachment(attachmentID),
+              let window else { return }
         lifecycle.isVisible = window.occlusionState.contains(.visible) && !window.isMiniaturized
         logger.debug("Window visibility changed: \(self.lifecycle.isVisible, privacy: .public)")
         lifecycle.updateRenderPolicy()
     }
 
     private func setFocused(_ focused: Bool) {
+        guard lifecycle.isCurrentSurfaceAttachment(attachmentID) else { return }
         lifecycle.isFocused = focused
         logger.debug("Window focus changed: \(focused, privacy: .public)")
         lifecycle.updateRenderPolicy()
@@ -146,7 +148,8 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     }
 
     private func refreshSurfaceState() {
-        guard let window,
+        guard lifecycle.isCurrentSurfaceAttachment(attachmentID),
+              let window,
               let surface,
               surface.window === window else { return }
         let backingBounds = surface.convertToBacking(surface.bounds)
@@ -160,11 +163,12 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
                 height: drawableSize.height
             )
         }
-        lifecycle.updateSurface(
+        guard lifecycle.updateSurface(
+            for: attachmentID,
             displayID: displayIdentity(window.screen),
             headroom: DisplayHeadroomReader.read(screen: window.screen),
             drawableSize: drawableSize
-        )
+        ) != nil else { return }
         logger.debug("Surface changed: attached=\(self.lifecycle.displaySnapshot != nil, privacy: .public) revision=\(self.lifecycle.displayRevision.rawValue, privacy: .public) drawable=\(drawableSize.width, privacy: .public)x\(drawableSize.height, privacy: .public) EDR=\(self.lifecycle.headroom.current, privacy: .public)")
     }
 

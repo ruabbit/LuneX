@@ -36,6 +36,10 @@ final class PlatformLifecycleState {
         activeSurfaceAttachmentID = attachmentID
     }
 
+    func isCurrentSurfaceAttachment(_ attachmentID: UUID) -> Bool {
+        activeSurfaceAttachmentID == attachmentID
+    }
+
     @discardableResult
     func updateSurface(
         displayID: String?,
@@ -48,6 +52,21 @@ final class PlatformLifecycleState {
         let outcome = publishDisplayState(isSurfaceAttached: true)
         updateRenderPolicy()
         return outcome
+    }
+
+    @discardableResult
+    func updateSurface(
+        for attachmentID: UUID,
+        displayID: String?,
+        headroom: DisplayHeadroom,
+        drawableSize: PixelSize
+    ) -> HDRDisplayPublicationOutcome? {
+        guard activeSurfaceAttachmentID == attachmentID else { return nil }
+        return updateSurface(
+            displayID: displayID,
+            headroom: headroom,
+            drawableSize: drawableSize
+        )
     }
 
     func clearSurfaceAttachment(_ attachmentID: UUID) -> Bool {

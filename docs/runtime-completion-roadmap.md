@@ -36,7 +36,7 @@ flowchart LR
 |---|---|---|---|
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
-| 15 | `in_progress`，OpenSpec `20/33` | color/luminance、decoded/Metal frame、shader/readback、surface adapter、display revision、active configuration resolver及presenter surface/runtime transition合同完成；stop/replacement恢复SDR并隔离stale view | 4.5 macOS完整transition矩阵、4.6跨平台capability、5.x生产接线/诊断及物理显示器验证仍待完成 |
+| 15 | `in_progress`，OpenSpec `21/33` | color/luminance、decoded/Metal frame、shader/readback、surface adapter、display revision、active configuration resolver、presenter transition及macOS screen/headroom/stale-window/first-clear矩阵完成 | 4.6跨平台capability、5.x生产接线/诊断及物理显示器验证仍待完成 |
 | 16 | `pending` | 已有PCM graph、route恢复与head-tracking capability policy | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
@@ -92,11 +92,12 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`当前`20/33`；4.4 resolved surface/pipeline transition合同已完成，下一项4.5补齐macOS screen/headroom/stale-window/surface/teardown与first-clear transition矩阵。
+- OpenSpec `implement-native-hdr-edr-pipeline`当前`21/33`；4.5 macOS screen/headroom/stale-window/surface/teardown与first-clear transition矩阵已完成，下一项4.6补齐iOS/iPadOS、tvOS和visionOS compile-safe capability adapters。
 - presenter在configuration identity变化时先暂停并清理旧presentation、失效runtime、原子应用resolved surface、创建replacement runtime，再发布新ownership；新surface第一drawable必须先opaque clear。coordinate/backing revision只清理presentation/pipeline cache，不伪装成display revision或更改surface。
 - closed结果与stop/replacement会幂等失效runtime、清除resolved ownership并恢复SDR；closed后可按当前render schedule恢复，旧view迟到transition不能修改replacement。unsupported、surface mutation或runtime creation failure均fail closed并撤销presenter ownership。
 - 同一presentation合同从resolver的`.requiresApplication`变为`.ready`时只刷新observer/诊断语义，不重新应用surface或创建runtime。4.4确定性验收为focused `25/25`、完整macOS `593 total / 592 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自一次Metal compile/link与零结构化诊断。simulator清单前后SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定四实例保持available/`Shutdown`且全局`Booted=0`。
-- production SwiftUI/AppModel尚未调用resolver/transition；5.1 AppModel/render state接线、production EDR signaling、live Sunshine HDR和物理亮度/颜色仍未完成。4.4的injectable transition API不得被描述为端到端production EDR。
+- 4.5用同一macOS组合矩阵验证screen identity与same-display current headroom变化会建立新display revision并替换runtime；旧window的resize/occlusion/resign-key和detach受attachment lease隔离。SDR-on-EDR、HDR-on-SDR typed fallback、HDR-on-EDR、stop恢复SDR与first opaque clear先于matching frame均已覆盖。最终focused `4/4`、扩展`96/96`、完整macOS `597 total / 596 passed / 1 Keychain skip / 0 failed`及五平台Debug Metal build通过。
+- production SwiftUI/AppModel尚未调用resolver/transition；5.1 AppModel/render state接线、production EDR signaling、live Sunshine HDR和物理亮度/颜色仍未完成。4.5的injectable组合矩阵不得被描述为端到端production EDR。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

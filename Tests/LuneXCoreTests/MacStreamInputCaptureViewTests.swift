@@ -466,6 +466,57 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(lifecycle.drawableSize, .zero)
     }
 
+    func testStaleWindowNotificationCannotOverwriteReplacementSurface() async {
+        let lifecycle = PlatformLifecycleState()
+        let oldMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let replacementMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
+        let oldSurface = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 100, height: 80),
+            sampleHandler: { _ in }
+        )
+        let replacementSurface = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 300, height: 180),
+            sampleHandler: { _ in }
+        )
+        let oldWindow = makeWindow(contentView: oldSurface)
+        let replacementWindow = makeWindow(contentView: replacementSurface)
+        oldMonitor.attach(to: oldWindow, surface: oldSurface)
+        replacementMonitor.attach(
+            to: replacementWindow,
+            surface: replacementSurface
+        )
+        let expectedDrawableSize = backingPixelSize(of: replacementSurface)
+        let expectedDisplayID = lifecycle.displayID
+        let expectedDisplayRevision = lifecycle.displayRevision
+        lifecycle.isVisible = true
+        lifecycle.isFocused = true
+
+        oldSurface.setFrameSize(NSSize(width: 777, height: 555))
+        NotificationCenter.default.post(
+            name: NSWindow.didResizeNotification,
+            object: oldWindow
+        )
+        NotificationCenter.default.post(
+            name: NSWindow.didChangeOcclusionStateNotification,
+            object: oldWindow
+        )
+        NotificationCenter.default.post(
+            name: NSWindow.didResignKeyNotification,
+            object: oldWindow
+        )
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(lifecycle.drawableSize, expectedDrawableSize)
+        XCTAssertEqual(lifecycle.displayID, expectedDisplayID)
+        XCTAssertEqual(lifecycle.displayRevision, expectedDisplayRevision)
+        XCTAssertTrue(lifecycle.isVisible)
+        XCTAssertTrue(lifecycle.isFocused)
+        oldMonitor.detach()
+        XCTAssertEqual(lifecycle.drawableSize, expectedDrawableSize)
+        replacementMonitor.detach()
+    }
+
     func testLifecycleUsesActualSurfaceBackingGeometryInsteadOfWindowContent() {
         let lifecycle = PlatformLifecycleState()
         let monitor = AppKitLifecycleMonitor(lifecycle: lifecycle)

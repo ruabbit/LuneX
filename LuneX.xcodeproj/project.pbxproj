@@ -419,6 +419,7 @@
 		45FC5B251C7AAFA42B6470E7 /* protocol.c in Sources */ = {isa = PBXBuildFile; fileRef = FCF248FE8535CFD51D28ECFF /* protocol.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		46F689254D1891EE721C30AE /* GameControllerInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF42EF73B7621E68B81787 /* GameControllerInputAdapter.swift */; };
 		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastSwiftUpdateCheck = 2640; LastUpgradeCheck = 2640; TargetAttributes = {166FE8F98C01F0283B2688DF = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; 77D2F983F33D5AB45735CDF0 = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; 1CE8A178B86B203A082A24ED = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; 7AA4E5B57949BFBF5F95F321 = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;}; B8F9EB9BE31AF4E0571170C9 = {CreatedOnToolsVersion = 26.4; LastSwiftMigration = 2640;};};}; buildConfigurationList = 479141CF4F7E78536D4D69BF /* Build configuration list for PBXProject */; compatibilityVersion = "Xcode 15.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 518DA81DB9B99529C0C0AEBE; productRefGroup = 547D009064F7C3F13BEF3460 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (166FE8F98C01F0283B2688DF, 77D2F983F33D5AB45735CDF0, 1CE8A178B86B203A082A24ED, 7AA4E5B57949BFBF5F95F321, B8F9EB9BE31AF4E0571170C9); };
+		4712564658D16EC15A962C45 /* MacHDRDisplayTransitionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MacHDRDisplayTransitionTests.swift"; sourceTree = "<group>"; };
 		471B0F4AAD82A5570440651A /* HDRMetalPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09713A15F9C87AE6BAF402FC /* HDRMetalPipeline.swift */; };
 		479141CF4F7E78536D4D69BF /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (4A43692AD8BCEEB8B727C85B /* Debug */, C28449456A5A705A7479770B /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		47C21D5E1C6FC619A4A34BE5 /* RemoteInputWireCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0440A153CC09DAFCFA271E /* RemoteInputWireCodec.swift */; };
@@ -727,6 +728,7 @@
 				9A22319E9908017D57D5E5E1 /* DiscoveryTests.swift in Sources */,
 				B54E157C6D5AE9E834114317 /* LifecycleRenderPolicyTests.swift in Sources */,
 				5AA1ACBAD82910D22EA20338 /* MacCursorCaptureOwnerTests.swift in Sources */,
+				A2C2EA2577CA42E768DD35CD /* MacHDRDisplayTransitionTests.swift in Sources */,
 				E2EB6FC033282DC22D2BF957 /* MacStreamInputCaptureViewTests.swift in Sources */,
 				C36B7EDACE203F2FA7D24DBF /* MacSessionInputCoordinatorTests.swift in Sources */,
 				7CCAB43B2EACD71201FE1AA8 /* MetalVideoFrameDeliveryTests.swift in Sources */,
@@ -1132,6 +1134,7 @@
 				938BDD632F8585548B3C76DB /* DiscoveryTests.swift */,
 				13F37678462B1A2328169961 /* LifecycleRenderPolicyTests.swift */,
 				F32801D303C6ACADF61AD5EE /* MacCursorCaptureOwnerTests.swift */,
+				4712564658D16EC15A962C45 /* MacHDRDisplayTransitionTests.swift */,
 				16736CE3819A5857F577C372 /* MacStreamInputCaptureViewTests.swift */,
 				C050244F381FB8AECBFBE492 /* MacSessionInputCoordinatorTests.swift */,
 				71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */,
@@ -1183,6 +1186,7 @@
 		A23CF5973F5545A1D2705806 /* NativeSessionAudioProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */; };
 		A247AF0E9486A2D5956313B0 /* packet.c in Sources */ = {isa = PBXBuildFile; fileRef = 39D1CB9323FAA340C52CA094 /* packet.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		A2A5578CAB516B3991698205 /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
+		A2C2EA2577CA42E768DD35CD /* MacHDRDisplayTransitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4712564658D16EC15A962C45 /* MacHDRDisplayTransitionTests.swift */; };
 		A3545F00E0D81B84268202EB /* unix.c in Sources */ = {isa = PBXBuildFile; fileRef = 63DF5880D21F53811AE8A4D8 /* unix.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		A359E90A1240D10F6B0F8B1D /* VideoDecompressionSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30984B18416A19B23F113A6C /* VideoDecompressionSessionTests.swift */; };
 		A3C464852F3EC9D4F2E283F6 /* PlatformLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */; };

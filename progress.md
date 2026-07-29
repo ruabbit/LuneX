@@ -1539,3 +1539,21 @@
 - 第一轮恢复后repository包装器把真实`Sources/LuneXApp`误写为不存在的顶层`LuneXApp`；虽然其余fixture/OpenSpec/generator/package/Core Image/whitespace门通过且扫描结果为空，该轮production boundary证据不完整，不计最终验收。改用正确路径后从新证据目录完整重跑。
 - 最终repository gates从全新目录`/tmp/LuneX-15-4_4-repo-r4.4sQhqd`通过：fixture validator self-test/全树、OpenSpec strict `6/6`与apply `20/33`、generator运行前及连续三次SHA-256 `1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`、production/reference/package/Core Image/diff及排除vendor的自有whitespace边界全部成立。
 - 最终diff自审未发现新的ownership、失败恢复、stale view或迟到clear缺口；4.4全部门禁通过，可以独立提交并推送。
+
+## 2026-07-29 阶段 15 任务 4.5 启动
+
+- 4.4已以`790d4e2 Rebuild HDR presentation transitions`独立提交并经Surge SOCKS5推送；fetch确认`HEAD == origin/main == 790d4e2`且工作树clean。
+- OpenSpec `implement-native-hdr-edr-pipeline`为`spec-driven`且权威进度`20/33`；4.5范围为macOS screen/headroom、same-display headroom、stale-window、surface transition、SDR-on-EDR、HDR-on-SDR、HDR-on-EDR、first opaque clear与teardown确定性组合测试，不提前执行4.6跨平台adapter或5.1 production graph。
+- 单层合同已有分散覆盖，但缺少lifecycle display snapshot -> resolver -> presenter的同一revision-owned组合矩阵，以及transition后实际首个draw只clear、第二个draw才present的直接证明。后续优先新增独立macOS integration test file并运行focused warnings-as-errors gate。
+- 首轮focused编译成功，stale-window、display/headroom transition和SDR/HDR模式3项通过，first-clear 1项失败（`/tmp/LuneX-15-4_5-focused-r1.UlB2Wm/MacHDRTransitions.xcresult`），不计验收。headless `MTKView.draw()`不同步回调delegate，因此transition后正确保留pending clear；测试改为显式驱动第一draw并断言只clear，再驱动第二draw断言才present。
+- 修正后focused `4/4`、扩展lifecycle/resolver/surface/presenter矩阵`96/96`、完整macOS `597 total / 596 passed / 1 Keychain skip / 0 failed`及五平台Debug build均通过，但提交前diff自审发现stale lease仅保护surface publication，旧window的occlusion/key通知仍可覆盖replacement visibility/focus，因此这些结果视为中间证据。
+- AppKit monitor现将在visibility、focus与surface回调入口统一验证current attachment lease；stale-window回归扩展为同时发送resize、occlusion与resign-key通知并锁定replacement geometry/display/visibility/focus。修复后从新证据路径重跑验收。
+
+## 2026-07-29 阶段 15 任务 4.5 完成
+
+- 最后一次lease修复后的focused从`/tmp/LuneX-15-4_5-focused-r3.3PP363/MacHDRTransitions.xcresult`通过`4/4 passed / 0 skipped / 0 failed`。最终扩展矩阵从全新DerivedData通过`96/96`，结果为`/tmp/LuneX-15-4_5-expanded-final.32w6lE/MacHDRExpanded.xcresult`，结构化warning/error/analyzer warning均为0。
+- 完整macOS suite从全新DerivedData通过`597 total / 596 passed / 1 skipped / 0 failed`，结果为`/tmp/LuneX-15-4_5-full-final.sDxaJJ/LuneXCoreTests.xcresult`，结构化诊断为0。Xcode 26.4在macOS 27读取test明细时再次触发内部`database.sqlite3` move冲突；直接查询bundle数据库确认唯一skip为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`及其显式Keychain opt-in原因，本轮始终使用`env -u LUNEX_RUN_KEYCHAIN_TEST`。
+- 五平台矩阵首个命令误用不存在的`LuneX` scheme并在任何编译前退出，不计验收且未触及simulator。最终从新目录`/tmp/LuneX-15-4_5-builds-final-r2.9oTdzH`依次完成macOS、固定iPhone/iPad/tvOS/visionOS Debug warnings-as-errors build-only；五个xcresult均为`0 warning / 0 error / 0 analyzer warning`，每个平台各生成`HDRVideoShaders.air`和`default.metallib`。
+- 构建前后规范化simulator清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；四个固定UUID均available且`Shutdown`，全局`Booted=0`。只执行build与只读清单，没有create、clone、boot、launch、shutdown或delete设备。
+- repository预扫有一条嵌套引号正则被zsh在执行前拒绝，随后使用精确路径token；最终门禁位于`/tmp/LuneX-15-4_5-repo-final.bIPQJN`。fixture validator self-test/全树、OpenSpec strict `6/6`、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference、Swift Package、Core Image、diff与排除vendor的自有whitespace边界全部通过。
+- OpenSpec 4.5标记完成，权威进度更新为`21/33`；阶段15保持`in_progress`。下一项4.6为iOS/iPadOS、tvOS与visionOS compile-safe capability adapters；5.1 production graph、EDR signaling、live Sunshine HDR和6.5物理显示器证据仍未完成。

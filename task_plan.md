@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`20/33`；4.4门禁完成，待提交推送后进入4.5 macOS transition矩阵 |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`21/33`；4.5 macOS transition矩阵完成，下一项4.6跨平台capability adapter |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`20/33`。4.4新增presenter-owned resolved transition：configuration变化先清旧presentation/失效runtime，再应用surface、创建replacement runtime并发布ownership，新surface首个drawable先opaque clear；coordinate/backing变化只清pipeline/frame cache，closed/stop/replacement恢复SDR并隔离stale view。同一presentation合同从resolver的`.requiresApplication`变为`.ready`时只刷新诊断语义，不重建surface/runtime。最终focused `25/25`、完整macOS `593 total / 592 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build及repository gates通过；当前等待独立提交推送，之后进入4.5 macOS screen/headroom/stale-window/surface/teardown与first-clear矩阵。5.1 production AppModel/render state调用链、HDR signaling、live Sunshine和物理亮度/颜色证据仍未完成。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`21/33`。4.5新增macOS lifecycle snapshot到resolver/presenter的组合矩阵，并用attachment lease统一隔离旧window的visibility、focus与surface迟到通知。screen identity与same-display current headroom变化会建立新display revision和runtime；SDR-on-EDR、HDR-on-SDR typed fallback、HDR-on-EDR、stop恢复SDR及first opaque clear先于matching frame均有确定性验证。最终focused `4/4`、扩展矩阵`96/96`、完整macOS `597 total / 596 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变及repository gates通过。下一项4.6实现iOS/iPadOS、tvOS与visionOS compile-safe capability adapters；5.1 production AppModel/render state调用链、HDR signaling、live Sunshine和物理亮度/颜色证据仍未完成。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -264,6 +264,9 @@
 | 15.1.6精确BT.709修复补丁遇到共享执行流已应用相同修改 | 1 | `apply_patch`上下文校验拒绝且未覆盖；审计现有alpha/beta/breakpoint与known-vector一致后沿用当前文件 |
 | 15.3.3恢复调查误用不存在的`HDRRenderConfiguration.swift` | 1 | `rg --files`确认真实合同文件为`HDRRenderContract.swift`，记录后改读正确文件且不重复失败命令 |
 | 15.3.3首个跨文件大补丁假设vertex shader仍为单行旧签名 | 1 | `apply_patch`整体拒绝；检查发现共享执行流已并发加入同名renderer/shader/tests并启动focused test，等待其完成后保留、审计并只补ownership缺口 |
+| 15.4.5恢复后的五平台包装误用不存在的`LuneX` scheme | 1 | 失败发生在编译前且未触及simulator；读取`xcodebuild -list`后使用四个真实App scheme和全新证据目录重跑 |
+| 15.4.5 repository预扫的reference正则含嵌套引号并被zsh拒绝 | 1 | 命令未执行且无文件变化；改用不含嵌套引号的精确`references/`路径token并完成全门 |
+| 15.4.5 repository工具发现命令同时查询不存在的复数`scripts/` | 1 | 只读`find`返回错误；沿用仓库真实`Tools/`和单数`script/`布局，不重复该路径假设 |
 | 15.3.3测试直接调用不存在的raw shader-uniform initializer | 1 | 不开放测试后门；改用合法HDR contract/configuration/mapping构造与active SDR不匹配的uniforms验证fail-closed |
 | 15.3.3测试helper加入局部`isHDR`后缺少显式`return` | 1 | 补上显式返回并用全新DerivedData重跑，失败证据不计入验收 |
 | 15.3.3共享completion合同落盘后recording stub仍实现旧submit签名 | 1 | 保留ownership revision补强，更新stub和延迟completion回归，并修正同步wait回调避免锁互等 |
@@ -293,5 +296,5 @@
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`20/33`；4.4 resolved surface/pipeline transition已完成实现，但系统更新恢复后的提交前复验发现并修复`.requiresApplication -> .ready`误重建，正在以全新证据重跑4.4全部门禁；通过并独立提交后进入4.5 macOS transition完整矩阵。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`21/33`；4.5 macOS screen/headroom/stale-window/surface/teardown与first-clear组合矩阵已完成并通过最终门禁，下一项为4.6跨平台capability adapters。
 - presenter transition API已经能消费resolved configuration并管理surface/runtime/clear/stop/replacement ownership，但production SwiftUI/AppModel尚未调用resolver/transition；5.1仍负责AppModel、lifecycle display snapshot、preference与实际surface接线。当前离线证据不证明production EDR、HDR signaling、live Sunshine HDR或物理亮度/颜色。

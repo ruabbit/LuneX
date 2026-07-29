@@ -1160,3 +1160,19 @@
 - `surfaceState`是resolver观察调用时adapter是否已具备目标contract的状态，不属于renderer、frame、surface或luminance presentation合同。把完整`HDRResolvedRenderConfiguration`用于unchanged判定会在`.requiresApplication(previous:) -> .ready`时产生无意义重建。
 - presentation等价性必须至少比较`identity`、`frameContract`和`luminanceMapping`；另外要求presenter实际记录相同surface contract且runtime仍存在。`outputMode`的fallback reason是诊断语义，若渲染合同不变应刷新最新resolved值而不是重建。
 - 回归测试必须让同一真实resolver先输出`.requiresApplication`、再以已应用target surface输出`.ready`；只比较手工构造值不足以证明resolver/presenter边界。
+
+## 2026-07-29 阶段 15 任务 4.5 调查
+
+- 现有单层测试分别覆盖AppKit screen-parameter通知与actual backing geometry、display revision语义去重与same-display headroom、stale attachment/window view callback、resolver的SDR-on-EDR/HDR-on-SDR/HDR-on-EDR，以及presenter surface/runtime transition和stop/replacement；但没有同一测试把revision-owned lifecycle snapshot经真实resolver送入presenter。
+- 4.5应新增macOS组合矩阵：display identity变化与same-display current headroom变化都必须产生新display revision并替换runtime；stale attachment clear不能撤销replacement snapshot；SDR在EDR显示上保持SDR，HDR在current headroom为1时进入typed SDR fallback，恢复headroom后进入EDR；stop/detach恢复SDR并清除ownership。
+- first opaque clear需要在真实transition后直接驱动presenter draw并验证首个drawable只clear、不present；第二次draw才允许匹配frame presentation。该合同不能只依赖snapshot中的`requiresClearBeforePresentation`布尔值。
+- 初版lease fence只保护`updateSurface`，旧window的occlusion/key通知仍可直接覆盖replacement的`isVisible/isFocused`。attachment ownership必须在AppKit monitor的visibility、focus和surface三类回调入口统一检查，而不能只保护display snapshot。
+- 4.5仍是injectable deterministic integration gate，不接线`AppModel`或SwiftUI production caller，不把离线screen/headroom值、MTKView测试或surface字段当作物理HDR signaling、峰值亮度、颜色准确性或跨显示器视觉证据。
+
+## 2026-07-29 阶段 15 任务 4.5 验收结论
+
+- `PlatformLifecycleState`以current attachment lease保护共享surface publication；`AppKitLifecycleMonitor`在visibility、focus与surface三类入口均先验证lease，因此旧window的resize、occlusion、resign-key和迟到detach均不能覆盖replacement geometry、display revision、visibility或focus。
+- 新macOS组合矩阵让screen identity与same-display current headroom变化通过真实display snapshot和resolver替换presenter runtime；SDR-on-EDR保持SDR，HDR-on-SDR进入typed `.hdrToSDR`，HDR-on-EDR进入`.hdrEDR`，stop恢复SDR并释放runtime。
+- presenter只新增可测试的drawable provider注入；production默认仍读取`MTKView.currentDrawable`。测试直接驱动transition后的两次draw，证明首个drawable只执行opaque clear，第二个draw才呈现matching frame。
+- 最终focused `4/4`、扩展矩阵`96/96`、完整macOS `597 total / 596 passed / 1 explicit Keychain skip / 0 failed`全部通过且结构化诊断为零。macOS及固定iPhone/iPad/tvOS/visionOS Debug build均生成Metal中间产物和metallib，simulator清单前后哈希一致且全局`Booted=0`。
+- 该证据证明injectable macOS lifecycle -> resolver -> presenter transition合同，不证明production `AppModel`已调用resolver、EDR compositor signaling、live Sunshine HDR、物理峰值亮度/颜色准确性或跨显示器视觉一致性；这些边界继续由4.6、5.x和6.5负责。

@@ -394,10 +394,12 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     typealias RuntimeFactory = (any MTLDevice, Bundle) throws
         -> any StreamMetalPresenterRuntiming
     typealias SurfaceAdapterFactory = @MainActor (MTKView) -> any HDRSurfaceApplying
+    typealias DrawableProvider = @MainActor (MTKView) -> (any CAMetalDrawable)?
 
     private let presentationSource: StreamVideoPresentationSource
     private let runtimeFactory: RuntimeFactory
     private let surfaceAdapterFactory: SurfaceAdapterFactory
+    private let drawableProvider: DrawableProvider
     private let lock = NSLock()
     private var renderPolicy: RenderPolicy
     private var coordinateSnapshot: StreamCoordinateSnapshot?
@@ -419,11 +421,15 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         },
         surfaceAdapterFactory: @escaping SurfaceAdapterFactory = { view in
             AppleMetalSurfaceAdapter(view: view)
+        },
+        drawableProvider: @escaping DrawableProvider = { view in
+            view.currentDrawable
         }
     ) {
         self.presentationSource = presentationSource
         self.runtimeFactory = runtimeFactory
         self.surfaceAdapterFactory = surfaceAdapterFactory
+        self.drawableProvider = drawableProvider
         renderPolicy = renderState.policy
         coordinateSnapshot = renderState.coordinateSnapshot
     }
@@ -606,7 +612,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             )
         }
         guard let runtime = snapshot.2 else { return }
-        let drawable = view.currentDrawable
+        let drawable = drawableProvider(view)
         if snapshot.4 {
             guard let drawable else { return }
             do {
@@ -765,7 +771,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         on view: MTKView,
         runtime: (any StreamMetalPresenterRuntiming)?
     ) {
-        guard let runtime, let drawable = view.currentDrawable else { return }
+        guard let runtime, let drawable = drawableProvider(view) else { return }
         try? runtime.clear(drawable: drawable, color: view.clearColor)
     }
 

@@ -321,11 +321,50 @@ and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
 
 This proves the presenter transition API and its deterministic ownership
 contract. It does not prove that `AppModel`, lifecycle display state, HDR
-preference, or the production SwiftUI surface invokes that API. Task 4.5 still
-owns the full macOS screen/headroom/stale-window and first-clear transition
-matrix; task 5.1 owns the production graph; live Sunshine HDR, compositor
-signaling, physical luminance/color, and cross-display appearance remain
-unproven.
+preference, or the production SwiftUI surface invokes that API. Task 4.5 owns
+the full macOS screen/headroom/stale-window and first-clear transition matrix;
+task 5.1 owns the production graph; live Sunshine HDR, compositor signaling,
+physical luminance/color, and cross-display appearance remain unproven.
+
+## macOS display transition matrix evidence
+
+OpenSpec task 4.5 composes the revisioned macOS lifecycle state, real
+`HDRRenderConfigurationResolver`, surface adapter, and presenter transition
+boundary without adding the task 5.1 production caller:
+
+- a display identity change and a current-headroom change on the same display
+  each publish a new display revision and replace revision-owned runtime state;
+- every AppKit visibility, focus, and surface callback verifies the active
+  attachment lease. Resize, occlusion, resign-key, and detach callbacks from a
+  replaced window cannot overwrite replacement geometry, display, visibility,
+  or focus state;
+- SDR content remains SDR on an EDR-capable display, valid HDR uses a typed
+  HDR-to-SDR fallback when current headroom is `1.0`, and valid HDR uses the EDR
+  mapping only when current headroom and the surface contract are eligible;
+- stop restores the SDR surface and releases runtime ownership; and
+- a test-only drawable provider drives two real presenter draw callbacks after
+  a transition. The first drawable is cleared opaque without presenting the
+  matching frame, while the second drawable may present it. Production keeps
+  the default `MTKView.currentDrawable` provider.
+
+The final evidence is `4/4` focused tests, `96/96` expanded lifecycle/resolver/
+surface/presenter tests, and `597 total / 596 passed / 1 explicit Keychain skip
+/ 0 failed` for the complete macOS suite, all with zero structured diagnostics.
+macOS and the fixed iPhone, iPad, tvOS, and visionOS destinations passed Debug
+warnings-as-errors builds and each produced a Metal AIR file and metallib. The
+normalized simulator inventory was byte-identical before and after, with
+SHA-256
+`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`
+and global `Booted=0`. OpenSpec strict `6/6`, fixtures, four stable generator
+hashes at
+`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`,
+and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
+
+This proves the injectable macOS lifecycle-to-resolver-to-presenter transition
+contract. It does not prove that production `AppModel` invokes it, that the
+compositor entered HDR/EDR, live Sunshine HDR interoperability, physical peak
+luminance or color accuracy, or cross-display visual consistency. Tasks 4.6,
+5.x, and the physical-display gate retain those responsibilities.
 
 ## Verification matrix
 
