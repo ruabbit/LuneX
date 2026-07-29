@@ -23,6 +23,7 @@ def file_type(path)
   return "sourcecode.swift" if path.end_with?(".swift")
   return "sourcecode.c.c" if path.end_with?(".c")
   return "sourcecode.metal" if path.end_with?(".metal")
+  return "text.plist.entitlements" if path.end_with?(".entitlements")
 
   "folder.assetcatalog"
 end
@@ -290,6 +291,12 @@ resources = [
   "Resources/Assets.xcassets"
 ]
 
+configuration_files = [
+  "Configuration/Entitlements/LuneX-macOS.entitlements",
+  "Configuration/Entitlements/LuneX-iOS.entitlements",
+  "Configuration/Entitlements/LuneX-tvOS.entitlements"
+]
+
 targets = [
   {
     name: "LuneX-macOS",
@@ -300,6 +307,7 @@ targets = [
     deployment: "26.0",
     bundle: "dev.lunex.client.macos",
     extra: {
+      "CODE_SIGN_ENTITLEMENTS" => "Configuration/Entitlements/LuneX-macOS.entitlements",
       "INFOPLIST_KEY_LSApplicationCategoryType" => "public.app-category.games"
     }
   },
@@ -312,6 +320,7 @@ targets = [
     deployment: "26.0",
     bundle: "dev.lunex.client.ios",
     extra: {
+      "CODE_SIGN_ENTITLEMENTS" => "Configuration/Entitlements/LuneX-iOS.entitlements",
       "TARGETED_DEVICE_FAMILY" => "1,2",
       "INFOPLIST_KEY_UIBackgroundModes" => "audio",
       "INFOPLIST_KEY_UILaunchScreen_Generation" => "YES",
@@ -328,6 +337,7 @@ targets = [
     deployment: "26.0",
     bundle: "dev.lunex.client.tvos",
     extra: {
+      "CODE_SIGN_ENTITLEMENTS" => "Configuration/Entitlements/LuneX-tvOS.entitlements",
       "TARGETED_DEVICE_FAMILY" => "3",
       "INFOPLIST_KEY_UIBackgroundModes" => "audio"
     }
@@ -354,7 +364,7 @@ objects = []
 file_refs = {}
 build_files = {}
 
-(sources + resources + test_sources).each do |path|
+(sources + resources + configuration_files + test_sources).each do |path|
   key = "file:#{path}"
   file_refs[path] = uuid(key)
   last_known = file_type(path)
@@ -400,19 +410,22 @@ group_ids = {
   sources: uuid("group:sources"),
   tests: uuid("group:tests"),
   resources: uuid("group:resources"),
+  configuration: uuid("group:configuration"),
   products: uuid("group:products")
 }
 
 source_children = sources.map { |path| "#{file_refs[path]} /* #{File.basename(path)} */" }.join(",\n\t\t\t\t")
 test_children = test_sources.map { |path| "#{file_refs[path]} /* #{File.basename(path)} */" }.join(",\n\t\t\t\t")
 resource_children = resources.map { |path| "#{file_refs[path]} /* #{File.basename(path)} */" }.join(",\n\t\t\t\t")
+configuration_children = configuration_files.map { |path| "#{file_refs[path]} /* #{File.basename(path)} */" }.join(",\n\t\t\t\t")
 product_children = (targets + [test_target]).map { |target| "#{target[:product_id]} /* #{target[:product]} */" }.join(",\n\t\t\t\t")
 
 objects << "#{group_ids[:sources]} /* Sources */ = {isa = PBXGroup; children = (\n\t\t\t\t#{source_children}\n\t\t\t); name = Sources; sourceTree = \"<group>\"; };"
 objects << "#{group_ids[:tests]} /* Tests */ = {isa = PBXGroup; children = (\n\t\t\t\t#{test_children}\n\t\t\t); name = Tests; sourceTree = \"<group>\"; };"
 objects << "#{group_ids[:resources]} /* Resources */ = {isa = PBXGroup; children = (\n\t\t\t\t#{resource_children}\n\t\t\t); name = Resources; sourceTree = \"<group>\"; };"
+objects << "#{group_ids[:configuration]} /* Configuration */ = {isa = PBXGroup; children = (\n\t\t\t\t#{configuration_children}\n\t\t\t); name = Configuration; sourceTree = \"<group>\"; };"
 objects << "#{group_ids[:products]} /* Products */ = {isa = PBXGroup; children = (\n\t\t\t\t#{product_children}\n\t\t\t); name = Products; sourceTree = \"<group>\"; };"
-objects << "#{group_ids[:main]} = {isa = PBXGroup; children = (\n\t\t\t\t#{group_ids[:sources]} /* Sources */,\n\t\t\t\t#{group_ids[:tests]} /* Tests */,\n\t\t\t\t#{group_ids[:resources]} /* Resources */,\n\t\t\t\t#{group_ids[:products]} /* Products */,\n\t\t\t); sourceTree = \"<group>\"; };"
+objects << "#{group_ids[:main]} = {isa = PBXGroup; children = (\n\t\t\t\t#{group_ids[:sources]} /* Sources */,\n\t\t\t\t#{group_ids[:tests]} /* Tests */,\n\t\t\t\t#{group_ids[:resources]} /* Resources */,\n\t\t\t\t#{group_ids[:configuration]} /* Configuration */,\n\t\t\t\t#{group_ids[:products]} /* Products */,\n\t\t\t); sourceTree = \"<group>\"; };"
 
 config_list_project = uuid("config-list:project")
 project_debug = uuid("config:project:Debug")

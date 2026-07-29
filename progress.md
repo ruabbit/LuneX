@@ -1846,3 +1846,11 @@
 - 最终focused`4/4`、expanded entitlement/resolver/audio graph`47/47 passed / 0 skipped / 0 failed`，结构化diagnostics均为0；真实当前进程SecTask smoke query不访问Keychain。
 - macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build全部succeeded，四份xcresult结构化diagnostics为0，未选择或操作simulator。
 - OpenSpec strict、generator稳定SHA-256 `a82a2c95509603c047d02e72a7804d46caa3a23dff90613b5a2471e06551b378`、source membership、private API boundary和`git diff --check`通过。OpenSpec 3.1已勾选，权威进度`12/35`；下一项3.2为generator-owned macOS/iOS/tvOS entitlement文件与build settings。
+
+## 2026-07-30 阶段 16 任务 3.2 完成
+
+- 新增三份独立head-pose entitlement plist并扩展generator：Configuration group持有file references，macOS/iOS/tvOS Debug/Release设置各自`CODE_SIGN_ENTITLEMENTS`，visionOS与tests保持无设置。
+- `plutil`及JSON typed gate确认每份文件只有一个Boolean true key；八组`xcodebuild -showBuildSettings`确认三平台路径和visionOS absence，test target Debug/Release同样absence。
+- `/tmp/LuneX-16-3_2-builds.UPibfE`完成四平台Debug+Release generic-device warnings-as-errors、unsigned build，8/8 succeeded且结构化diagnostics为0；未操作simulator。
+- OpenSpec strict、generator稳定SHA-256 `00c4566845e6b2b72b5ddce04f825a6e0c9e0a68111bd0b1ed8609f5044bedb7`、project membership、Resources隔离和`git diff --check`通过。OpenSpec 3.2已勾选，权威进度`13/35`；下一项3.3为移动/TV/vision `AVAudioSession` adapter。
+- 本项不证明signed provisioning或真机entitlement；不能以unsigned build和plist内容替代6.6硬件/签名验收。

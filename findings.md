@@ -1442,3 +1442,11 @@
 - 最终focused证据`/tmp/LuneX-16-3_1-focused-r2.dkzzin/HeadPoseEntitlement.xcresult`为`4/4`；expanded entitlement/resolver/audio graph证据`/tmp/LuneX-16-3_1-expanded-r2.5cImoT/HeadPoseEntitlementExpanded.xcresult`为`47/47 passed / 0 skipped / 0 failed`，两份结构化diagnostics均为0。
 - macOS、iOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-3_1-build-macos.embKfJ`、`/tmp/LuneX-16-3_1-build-ios.urWZsL`、`/tmp/LuneX-16-3_1-build-tvos.17Sn9B`和`/tmp/LuneX-16-3_1-build-visionos.VmtkJJ`；四份xcresult均`succeeded`且结构化diagnostics为0，未操作simulator。
 - OpenSpec design已修正public API边界；strict、generator连续SHA-256 `a82a2c95509603c047d02e72a7804d46caa3a23dff90613b5a2471e06551b378`、五target source membership、私有API扫描和`git diff --check`通过。3.1不证明3.2 entitlement文件、signed profile、移动端embedded readback或物理head tracking。
+
+## 2026-07-30 阶段 16 任务 3.2 验收
+
+- 新增generator-owned `Configuration/Entitlements/LuneX-{macOS,iOS,tvOS}.entitlements`；每份plist严格只有`com.apple.developer.coremotion.head-pose = true`一个Boolean key，并以`text.plist.entitlements` file reference进入独立Configuration group，不进入Sources或Resources build phase。
+- macOS/iOS/tvOS各自的Debug和Release target配置指向对应文件；visionOS与`LuneXCoreTests`两个配置均没有`CODE_SIGN_ENTITLEMENTS`。`xcodebuild -showBuildSettings`逐项读回与generator声明一致。
+- `/tmp/LuneX-16-3_2-builds.UPibfE`包含macOS、iOS、tvOS、visionOS的Debug/Release共8份generic-device result bundle；全部在`CODE_SIGNING_ALLOWED=NO`与warnings-as-errors下`succeeded`，结构化warning/error/analyzer warning均为0，没有选择或操作simulator。
+- plist lint/单key typed content、project membership、vision/test隔离、OpenSpec strict、`git diff --check`与generator连续SHA-256 `00c4566845e6b2b72b5ddce04f825a6e0c9e0a68111bd0b1ed8609f5044bedb7`通过。
+- 这些文件只表达签名请求并证明unsigned buildability；它们不证明Apple provisioning profile接受或保留entitlement，不改变3.1移动平台runtime reader的`.unreadable`边界，也不证明listener API或物理head tracking有效。

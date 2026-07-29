@@ -37,7 +37,7 @@ flowchart LR
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
-| 16 | `in_progress`，OpenSpec `12/35` | canonical布局、显式格式、session-owned spatial graph/fallback、平台策略、graph/resource测试及macOS embedded entitlement reader已完成 | 尚未完成3.2 entitlement build配置、route adapters、签名与音频硬件验证 |
+| 16 | `in_progress`，OpenSpec `13/35` | canonical布局、session-owned spatial graph/fallback、平台策略/测试、macOS embedded reader及macOS/iOS/tvOS entitlement build配置已完成 | 尚未完成audio-session/route adapters、signed provisioning与音频硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
@@ -119,7 +119,7 @@ flowchart LR
 
 ## 阶段 16：空间音频
 
-- OpenSpec `integrate-spatial-audio-runtime`当前`12/35 in_progress`。1.1至1.5完成实际边界、canonical布局、resolver及有界隐私history；2.1至2.6完成immutable graph intent、显式Core Audio interleaved格式、session-owned ambience-bed graph、typed direct fallback、macOS/iOS/tvOS listener与visionOS intended-experience策略，以及schedule/readback、partial failure、stop与ARC测试矩阵。3.1新增可注入embedded entitlement reader：macOS用公开Security SecTask并只接受literal CFBoolean true；iOS/tvOS/visionOS因public SDK不暴露SecTask查询而fail closed，不采用私有符号或仓库文件推断。下一项3.2新增generator-owned macOS/iOS/tvOS entitlement文件与build settings；该配置仍不能单独证明signed provisioning或物理head tracking。当前证据不证明AirPods head tracking、route notification、声道分离或硬件可听定位。
+- OpenSpec `integrate-spatial-audio-runtime`当前`13/35 in_progress`。1.1至1.5完成实际边界、canonical布局、resolver及有界隐私history；2.1至2.6完成immutable graph intent、显式Core Audio interleaved格式、session-owned ambience-bed graph、typed direct fallback、macOS/iOS/tvOS listener与visionOS intended-experience策略，以及schedule/readback、partial failure、stop与ARC测试矩阵。3.1新增可注入embedded entitlement reader：macOS用公开Security SecTask并只接受literal CFBoolean true；iOS/tvOS/visionOS因public SDK不暴露SecTask查询而fail closed。3.2新增generator-owned macOS/iOS/tvOS独立entitlement plist及Debug/Release build settings，visionOS/tests保持分离；四平台两配置unsigned build通过。下一项3.3实现移动/TV/vision audio-session、multichannel declaration、preferred-channel、spatial-port、deactivation与capability notification adapter。当前plist/unsigned build仍不证明signed provisioning、AirPods head tracking、route notification、声道分离或硬件可听定位。
 - 将 session 音频 decoder 的 PCM 接入一个真实 `AVAudioEngine` graph。
 - 把 `AVAudioEnvironmentNode` 放入 graph，而不是只实例化 controller。
 - 根据 route、channel layout、用户设置和 entitlement 决定 spatial/head tracking。
