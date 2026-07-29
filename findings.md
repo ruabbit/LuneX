@@ -1338,3 +1338,10 @@
 - 只接受1/2/6/8声道；3/4/5/7以及越界值因缺少可证明speaker语义而返回typed closed error。该项尚未把layout接入negotiation/decoder/engine，留给1.4与2.x。
 - 最终focused`2/2`和完整`AudioPipelineTests 13/13`通过，xcresult结构化warning/error/analyzer warning均为0；新源码通过macOS/iOS/tvOS/visionOS 26 SDK warnings-as-errors typecheck。
 - generator连续哈希为`f574f90c46d6fcc614ad9601d4df3b6787e0de1750689f9d1a5ba55d616a04ff`。测试显式移除Keychain opt-in且没有操作simulator；这些证据不证明实际声道可听位置或空间音频输出。
+
+## 2026-07-30 阶段 16 任务 1.3 验收
+
+- 新增不可变`SpatialAudioGraphSnapshot`、`SpatialAudioRouteCapabilitySnapshot`、`SpatialAudioRuntimeSnapshot`与单调`SpatialAudioSemanticRevision`，把graph mode、layout signature、平台策略、route support、entitlement、用户偏好、adapter readback和typed fallback组合成一个纯值语义边界。
+- resolver区分inactive、nonspatial、fixed spatial和head-tracked；stale graph/route revision、无输出、无效route计数、layout不一致、mono、graph/algorithm缺失、mobile route unknown/unsupported、entitlement缺失/不可读、错误平台策略及readback失败均不会虚报active。macOS允许route capability unknown但仍要求实际environment graph；visionOS固定与head-tracked意图都要求对应output-node readback。
+- 最终focused证据`/tmp/LuneX-16-1_3-focused-r2.NN47Sb/Focused.xcresult`为`8/8 passed / 0 skipped / 0 failed`，结构化warning/error/analyzer warning均为0；macOS/iOS/tvOS/visionOS 26 warnings-as-errors typecheck全部通过。
+- OpenSpec strict为`1/1 valid / 0 issues`，generator连续SHA-256为`fec375a7964494f1fda4e3aac63ee7db1edb06e609eda4f673db4c7c7c9f4359`。该项不修改`AVAudioEngine`或route adapter，不证明任何真实设备空间音频、头部跟踪、entitlement provisioning或可听声道定位。

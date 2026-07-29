@@ -2,7 +2,7 @@
 
 - [x] 1.1 Inventory the current negotiated Opus order, decoded PCM contract, engine graph, recovery ownership, Apple SDK APIs, entitlement boundary, platform differences, and physical proof limits without changing runtime behavior
 - [x] 1.2 Define immutable mono, stereo, WAVE 5.1, and WAVE 7.1 semantic channel-layout contracts with Core Audio tags, stable signatures, spatial eligibility, and closed unsupported-layout errors
-- [ ] 1.3 Define immutable graph, platform-strategy, route-capability, spatial/head-tracking, fallback, and semantic-revision snapshots with a deterministic resolver
+- [x] 1.3 Define immutable graph, platform-strategy, route-capability, spatial/head-tracking, fallback, and semantic-revision snapshots with a deterministic resolver
 - [ ] 1.4 Bind negotiated audio configuration and decoded PCM validation to the same channel-layout identity without duplicating raw channel ownership
 - [ ] 1.5 Add deterministic channel-order, layout-tag, ambiguous-count, resolver-grid, duplicate-revision, privacy-bound, and finite-capacity tests
 

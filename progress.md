@@ -1747,3 +1747,10 @@
 - 新增`Sources/LuneXAudio/StreamAudioChannelLayout.swift`并同步generator/project：不可变mono/stereo/WAVE 5.1/WAVE 7.1语义顺序、Moonlight mask、Core Audio tag、空间eligibility、稳定signature和unsupported-count error。
 - 最终focused证据`/tmp/LuneX-16-1_2-focused-final.oYLfia`为`2/2`，扩大`AudioPipelineTests`证据`/tmp/LuneX-16-1_2-expanded.1785341970`为`13/13`；两者结构化diagnostics均为0。
 - 新合同通过四平台26 SDK warnings-as-errors typecheck，generator连续SHA-256为`f574f90c46d6fcc614ad9601d4df3b6787e0de1750689f9d1a5ba55d616a04ff`。OpenSpec 1.2已勾选，权威进度`2/35`；下一项1.3为语义空间状态snapshot与resolver。
+
+## 2026-07-30 阶段 16 任务 1.3 完成
+
+- 新增`Sources/LuneXAudio/SpatialAudioRuntimeState.swift`及测试并同步generator/project：graph、平台策略、route capability、entitlement、fixed/head-tracked presentation、typed fallback和semantic revision均为不可变Sendable值。
+- 审查修复了关闭head tracking时绕过平台策略与visionOS fixed readback的问题；resolver现在只根据同revision graph/route事实发布状态，macOS route unknown与移动/TV route unsupported策略保持显式分层。
+- 最终focused证据`/tmp/LuneX-16-1_3-focused-r2.NN47Sb`为`8/8 passed / 0 skipped / 0 failed`且结构化diagnostics为0；四平台26 SDK warnings-as-errors typecheck、OpenSpec strict、`git diff --check`和generator稳定性均通过。
+- 测试显式移除Keychain opt-in且未操作simulator。OpenSpec 1.3已勾选，权威进度`3/35`；下一项1.4绑定negotiated configuration与decoded PCM的单一layout identity。
