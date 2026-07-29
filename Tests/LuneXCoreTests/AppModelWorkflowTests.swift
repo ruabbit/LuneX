@@ -100,6 +100,37 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
     }
 
+    func testRenderPreferencesDoNotSynthesizeDisplayHeadroomWithoutLifecycle() {
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: StubAppListClient(),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(
+                launchClient: StubStreamLaunchClient()
+            ),
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+
+        XCTAssertTrue(model.settings.stream.hdrEnabled)
+        XCTAssertEqual(model.renderState.headroom, DisplayHeadroom())
+        XCTAssertNil(model.renderState.displaySnapshot)
+
+        model.settings.stream.hdrEnabled = false
+        XCTAssertEqual(model.renderState.headroom, DisplayHeadroom())
+        XCTAssertNil(model.renderState.displaySnapshot)
+
+        model.settings.stream.hdrEnabled = true
+        XCTAssertEqual(model.renderState.headroom, DisplayHeadroom())
+        XCTAssertNil(model.renderState.displaySnapshot)
+    }
+
     func testLatestLifecycleIsCachedUntilMediaGenerationStartsAndThenAppliedInOrder() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
@@ -178,6 +209,131 @@ final class AppModelWorkflowTests: XCTestCase {
         await launchTask.value
     }
 
+    func testHDREligibilityWaitsForStreamingVideoReadiness() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            automaticallyReady: false
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 39,
+                    key: Data(repeating: 0x39, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+
+        let drawableSize = PixelSize(width: 3_840, height: 2_160)
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: drawableSize
+        )
+        _ = lifecycle.updateSurface(
+            displayID: "display-a",
+            headroom: DisplayHeadroom(
+                potential: 4,
+                current: 2.5,
+                reference: 1
+            ),
+            drawableSize: drawableSize
+        )
+        model.applyPlatformLifecycle(lifecycle)
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        let hdrMetadata = VideoColorMetadata.hdr10VideoRange()
+        provider.yield(
+            .launchAccepted(makeSessionLaunchResponse()),
+            sessionID: record.sessionID
+        )
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey,
+                videoColorMetadata: hdrMetadata
+            )),
+            sessionID: record.sessionID
+        )
+        provider.yield(.channelsReady(.all), sessionID: record.sessionID)
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 1 }
+
+        let hdrLayout = HDRDecodedPixelBufferLayout(
+            pixelFormat: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+            width: 3_840,
+            height: 2_160,
+            planes: [
+                HDRDecodedPlaneDimensions(width: 3_840, height: 2_160),
+                HDRDecodedPlaneDimensions(width: 1_920, height: 1_080)
+            ]
+        )
+        mediaEnvironment.yieldVideoPresentation(
+            .decoderStarted(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: 1,
+                    revision: 1
+                ),
+                contract: StreamVideoDecoderPresentationContract(
+                    decoderGeneration: 1,
+                    colorMetadata: hdrMetadata
+                )
+            ),
+            sessionID: record.sessionID
+        )
+        mediaEnvironment.yieldVideoPresentation(
+            .decodedFrame(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: 1,
+                    revision: 2
+                ),
+                contract: StreamVideoDecodedPresentationContract(
+                    decoderGeneration: 1,
+                    colorMetadata: hdrMetadata,
+                    decodedLayout: hdrLayout
+                )
+            ),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.decodedVideoPresentationContract != nil
+        }
+        XCTAssertFalse(model.session.isStreaming)
+        XCTAssertEqual(
+            model.renderState.hdrRenderResolution,
+            .closed(.inactiveSession)
+        )
+
+        mediaEnvironment.yieldReadiness(
+            [.video, .audio, .input],
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.session.isStreaming }
+        await waitUntil {
+            model.renderState.hdrRenderResolution.configuration?.outputMode == .edr
+        }
+
+        mediaEnvironment.yieldReadiness(
+            [.audio, .input],
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.hdrRenderResolution == .closed(.inactiveSession)
+        }
+        await waitUntil { model.session.phase.label.contains("Reconnecting") }
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
     func testHDRPresentationGraphTracksDecodedDisplayPreferenceAndReplacementOwnership()
         async throws {
         let provider = ControlledSessionControlProvider()
@@ -241,6 +397,16 @@ final class AppModelWorkflowTests: XCTestCase {
                 HDRDecodedPlaneDimensions(width: 1_920, height: 1_080)
             ]
         )
+        let sdrMetadata = VideoColorMetadata.rec709VideoRange()
+        let sdrLayout = HDRDecodedPixelBufferLayout(
+            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            width: 1_920,
+            height: 1_080,
+            planes: [
+                HDRDecodedPlaneDimensions(width: 1_920, height: 1_080),
+                HDRDecodedPlaneDimensions(width: 960, height: 540)
+            ]
+        )
         mediaEnvironment.yieldVideoPresentation(
             .decoderStarted(
                 ownership: StreamVideoPresentationOwnership(
@@ -288,6 +454,43 @@ final class AppModelWorkflowTests: XCTestCase {
             PixelSize(width: 3_840, height: 2_160)
         )
 
+        mediaEnvironment.yieldVideoPresentation(
+            .decodedFrame(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: 1,
+                    revision: 3
+                ),
+                contract: StreamVideoDecodedPresentationContract(
+                    decoderGeneration: 10,
+                    colorMetadata: sdrMetadata,
+                    decodedLayout: sdrLayout
+                )
+            ),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.hdrRenderResolution == .closed(.staleColorSignature)
+        }
+        mediaEnvironment.yieldVideoPresentation(
+            .decodedFrame(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: 1,
+                    revision: 4
+                ),
+                contract: StreamVideoDecodedPresentationContract(
+                    decoderGeneration: 10,
+                    colorMetadata: hdrMetadata,
+                    decodedLayout: hdrLayout
+                )
+            ),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.hdrRenderResolution.configuration?.outputMode == .edr
+        }
+
         _ = lifecycle.updateSurface(
             displayID: "display-a",
             headroom: DisplayHeadroom(
@@ -331,7 +534,6 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         model.settings.stream.hdrEnabled = true
 
-        let sdrMetadata = VideoColorMetadata.rec709VideoRange()
         provider.yield(
             .videoColorMetadata(sdrMetadata),
             sessionID: record.sessionID
@@ -345,21 +547,12 @@ final class AppModelWorkflowTests: XCTestCase {
             .closed(.inactiveSession)
         )
 
-        let sdrLayout = HDRDecodedPixelBufferLayout(
-            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-            width: 1_920,
-            height: 1_080,
-            planes: [
-                HDRDecodedPlaneDimensions(width: 1_920, height: 1_080),
-                HDRDecodedPlaneDimensions(width: 960, height: 540)
-            ]
-        )
         mediaEnvironment.yieldVideoPresentation(
             .decodedFrame(
                 ownership: StreamVideoPresentationOwnership(
                     sessionID: record.sessionID,
                     mediaGeneration: 1,
-                    revision: 4
+                    revision: 6
                 ),
                 contract: StreamVideoDecodedPresentationContract(
                     decoderGeneration: 11,
@@ -374,7 +567,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 ownership: StreamVideoPresentationOwnership(
                     sessionID: record.sessionID,
                     mediaGeneration: 1,
-                    revision: 3
+                    revision: 5
                 ),
                 contract: StreamVideoDecoderPresentationContract(
                     decoderGeneration: 11,
@@ -398,7 +591,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 ownership: StreamVideoPresentationOwnership(
                     sessionID: record.sessionID,
                     mediaGeneration: 1,
-                    revision: 5
+                    revision: 7
                 ),
                 contract: StreamVideoDecodedPresentationContract(
                     decoderGeneration: 10,
@@ -413,7 +606,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 ownership: StreamVideoPresentationOwnership(
                     sessionID: record.sessionID,
                     mediaGeneration: 1,
-                    revision: 6
+                    revision: 8
                 ),
                 decoderGeneration: 10
             ),
@@ -1470,6 +1663,23 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.loadInitialState()
         await model.refreshAppsForSelectedHost()
+        let drawableSize = PixelSize(width: 3_840, height: 2_160)
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: drawableSize
+        )
+        _ = lifecycle.updateSurface(
+            displayID: "display-a",
+            headroom: DisplayHeadroom(
+                potential: 4,
+                current: 2.5,
+                reference: 1
+            ),
+            drawableSize: drawableSize
+        )
+        model.applyPlatformLifecycle(lifecycle)
         let launchTask = Task { await model.launchSelectedApp() }
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
@@ -1480,14 +1690,71 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil { model.session.isStreaming }
 
+        let hdrMetadata = VideoColorMetadata.hdr10VideoRange()
+        provider.yield(
+            .videoColorMetadata(hdrMetadata),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.negotiatedVideoColorMetadata == hdrMetadata
+                && model.renderState.decodedVideoPresentationContract == nil
+        }
+        mediaEnvironment.yieldVideoPresentation(
+            .decoderStarted(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: 1,
+                    revision: 1
+                ),
+                contract: StreamVideoDecoderPresentationContract(
+                    decoderGeneration: 1,
+                    colorMetadata: hdrMetadata
+                )
+            ),
+            sessionID: record.sessionID
+        )
+        mediaEnvironment.yieldVideoPresentation(
+            .decodedFrame(
+                ownership: StreamVideoPresentationOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: 1,
+                    revision: 2
+                ),
+                contract: StreamVideoDecodedPresentationContract(
+                    decoderGeneration: 1,
+                    colorMetadata: hdrMetadata,
+                    decodedLayout: HDRDecodedPixelBufferLayout(
+                        pixelFormat: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+                        width: 3_840,
+                        height: 2_160,
+                        planes: [
+                            HDRDecodedPlaneDimensions(width: 3_840, height: 2_160),
+                            HDRDecodedPlaneDimensions(width: 1_920, height: 1_080)
+                        ]
+                    )
+                )
+            ),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.hdrRenderResolution.configuration?.outputMode == .edr
+        }
+
+        mediaEnvironment.blockNextStop()
         provider.yield(
             .reconnecting(attempt: 1, reason: "Control channel interrupted."),
             sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.hasBlockedStop() }
+        XCTAssertEqual(
+            model.renderState.hdrRenderResolution,
+            .closed(.inactiveSession)
         )
         await waitUntil { model.session.phase.label.contains("Reconnecting") }
         XCTAssertFalse(model.session.isStreaming)
         XCTAssertEqual(model.renderState.policy, .idle)
         XCTAssertTrue(model.hasActiveStreamSession)
+        mediaEnvironment.resumeBlockedStop()
 
         provider.yield(.rtspReady, sessionID: record.sessionID)
         provider.yield(
@@ -2262,12 +2529,20 @@ final class AppModelWorkflowTests: XCTestCase {
         return try XCTUnwrap(provider.currentStartRecords().last)
     }
 
-    private func waitUntil(_ condition: () -> Bool) async {
+    private func waitUntil(
+        _ condition: () -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
         for _ in 0..<100 {
             if condition() { return }
             await Task.yield()
         }
-        XCTFail("Timed out waiting for application session state.")
+        XCTFail(
+            "Timed out waiting for application session state.",
+            file: file,
+            line: line
+        )
     }
 
     private func driveSessionToStreaming(
@@ -2296,7 +2571,8 @@ final class AppModelWorkflowTests: XCTestCase {
 
     private func makeSessionConfiguration(
         sessionID: UUID,
-        keyMaterial: RemoteInputKeyMaterial
+        keyMaterial: RemoteInputKeyMaterial,
+        videoColorMetadata: VideoColorMetadata = .rec709VideoRange()
     ) -> NegotiatedSessionConfiguration {
         NegotiatedSessionConfiguration(
             sessionID: sessionID,
@@ -2325,7 +2601,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 width: 3_840,
                 height: 2_160,
                 frameRate: 60,
-                colorMetadata: .rec709VideoRange(),
+                colorMetadata: videoColorMetadata,
                 maximumPacketSize: 1_400
             ),
             audio: NegotiatedAudioStreamConfiguration(
@@ -2734,6 +3010,8 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var lifecycleApplications: [SessionLifecycleApplication] = []
     private var shouldBlockNextRelease = false
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
+    private var shouldBlockNextStop = false
+    private var blockedStopContinuation: CheckedContinuation<Void, Never>?
 
     init(
         automaticallyReady: Bool = true,
@@ -2832,11 +3110,19 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     }
 
     func stop(sessionID: UUID) async -> SessionTeardownReport? {
-        let continuation = withLock {
+        let state = withLock {
             stoppedSessionIDs.append(sessionID)
-            return continuations.removeValue(forKey: sessionID)
+            let continuation = continuations.removeValue(forKey: sessionID)
+            let shouldBlock = shouldBlockNextStop
+            shouldBlockNextStop = false
+            return (continuation, shouldBlock)
         }
-        continuation?.finish()
+        state.0?.finish()
+        if state.1 {
+            await withCheckedContinuation { continuation in
+                withLock { blockedStopContinuation = continuation }
+            }
+        }
         return SessionTeardownReport(
             cancelledTaskCount: 0,
             stoppedResourceCount: 3,
@@ -2921,6 +3207,23 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         let continuation = withLock {
             let value = blockedReleaseContinuation
             blockedReleaseContinuation = nil
+            return value
+        }
+        continuation?.resume()
+    }
+
+    func blockNextStop() {
+        withLock { shouldBlockNextStop = true }
+    }
+
+    func hasBlockedStop() -> Bool {
+        withLock { blockedStopContinuation != nil }
+    }
+
+    func resumeBlockedStop() {
+        let continuation = withLock {
+            let value = blockedStopContinuation
+            blockedStopContinuation = nil
             return value
         }
         continuation?.resume()

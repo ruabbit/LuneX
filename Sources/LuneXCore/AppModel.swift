@@ -945,7 +945,10 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func applySessionSnapshot(_ snapshot: StreamSessionSnapshot) {
-        defer { refreshMacInputSurfacePolicy() }
+        defer {
+            refreshMacInputSurfacePolicy()
+            refreshHDRRenderResolution()
+        }
         switch snapshot.stage {
         case .idle, .disconnected:
             clearActiveVideoPresentation()
@@ -1033,11 +1036,6 @@ final class AppModel: ApplicationInputSink {
             )
 
         case .reconnecting:
-            await stopMediaEnvironment(
-                sessionID: sessionID,
-                inputReason: .replacement
-            )
-            guard activeStreamSessionID == sessionID else { return }
             activeControlReadiness = []
             activeMediaReadiness = []
             let snapshot = try await streamSessionCoordinator.apply(
@@ -1045,6 +1043,11 @@ final class AppModel: ApplicationInputSink {
                 sessionID: sessionID
             )
             applySessionSnapshot(snapshot)
+            await stopMediaEnvironment(
+                sessionID: sessionID,
+                inputReason: .replacement
+            )
+            guard activeStreamSessionID == sessionID else { return }
 
         case let .videoColorMetadata(metadata):
             let snapshot = try await streamSessionCoordinator.apply(
@@ -1161,6 +1164,7 @@ final class AppModel: ApplicationInputSink {
         case let .readiness(readiness):
             let previousReadiness = activeMediaReadiness
             activeMediaReadiness = readiness.intersection([.video, .audio, .input])
+            refreshHDRRenderResolution()
             if previousReadiness.contains(.input),
                !activeMediaReadiness.contains(.input) {
                 await terminateMacInputGeneration(reason: .inputChannelFailure)
@@ -1557,13 +1561,6 @@ final class AppModel: ApplicationInputSink {
             height: settings.stream.height
         )
         renderState.transform.mode = settings.stream.scaleMode
-        if !hasPlatformLifecycle {
-            renderState.headroom = DisplayHeadroom(
-                potential: settings.stream.hdrEnabled ? 1.5 : 1.0,
-                current: settings.stream.hdrEnabled ? 1.25 : 1.0,
-                reference: 1.0
-            )
-        }
     }
 
     private func beginVideoPresentation(
@@ -1651,11 +1648,32 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func refreshHDRRenderResolution() {
-        guard activeStreamSessionID != nil,
+        guard session.isStreaming,
+              activeStreamSessionID != nil,
               activeMediaSessionID == activeStreamSessionID,
               activeMediaGeneration != nil,
+              activeMediaReadiness.contains(.video),
               let decoded = renderState.decodedVideoPresentationContract else {
             renderState.hdrRenderResolution = .closed(.inactiveSession)
+            return
+        }
+        guard let activeVideoDecoderGeneration else {
+            renderState.hdrRenderResolution = .closed(.inactiveSession)
+            return
+        }
+        guard decoded.decoderGeneration == activeVideoDecoderGeneration else {
+            renderState.hdrRenderResolution = .closed(.staleDecoderGeneration(
+                expected: activeVideoDecoderGeneration,
+                actual: decoded.decoderGeneration
+            ))
+            return
+        }
+        guard let negotiated = renderState.negotiatedVideoColorMetadata else {
+            renderState.hdrRenderResolution = .closed(.invalidSourceContract)
+            return
+        }
+        guard negotiated == decoded.colorMetadata else {
+            renderState.hdrRenderResolution = .closed(.staleColorSignature)
             return
         }
         let drawableSize = renderState.coordinateSnapshot?.drawableSize

@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`23/33`；5.1 production graph接线完成，下一项5.2移除synthetic settings eligibility fallback |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`24/33`；5.2 active-session eligibility与synthetic settings fallback移除完成，下一项5.3 diagnostics |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`23/33`。5.1已把negotiated/decoded color metadata、decoder/media generation、真实lifecycle display snapshot/current headroom与user preference接入`AppModel`，并通过revision-owned presentation event连接media environment、actual stream surface和active renderer transition。最终扩大矩阵`132/132`、完整macOS `604 total / 603 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。下一项5.2从active session、preference、valid source、platform/display/current headroom完整派生eligibility并移除legacy synthetic settings fallback；5.3 diagnostics、live Sunshine、compositor signaling及物理亮度/颜色证据仍未完成。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`24/33`。5.2已删除settings-derived synthetic headroom，并要求streaming session、当前media/video readiness、active decoder generation、negotiated/decoded metadata一致后才由既有resolver结合user preference、platform/display capability与current headroom选择SDR/EDR/fallback；reconnect先发布fail-closed snapshot再等待media teardown。最终扩大矩阵`134/134`、完整macOS `606 total / 605 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。下一项5.3为privacy-bounded deduplicated HDR diagnostics；5.4 application integration gate、5.5 HDR status/settings UI、live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -277,6 +277,8 @@
 | 15.3.6 Xcode 26.4在macOS 27 beta上枚举xcresult tests时内部database move冲突 | 1 | 不重复失败子命令；用xcresult summary/build-results证明总数与零诊断，并从原始xcodebuild日志精确确认唯一Keychain skip |
 | 15.4.2首轮focused的既有AppKit通知测试仍期待`localizedName` | 1 | production已改用可区分同名屏幕的内部`NSScreenNumber`；测试改为计算同一编号，并锁定重复通知/resize不增加display revision |
 | 15.4.2 focused包装器使用zsh只读变量名`status` | 1 | 测试已经完成且xcresult可读；后续新目录包装器改用`build_status`，不复用该失败退出码 |
+| 15.5.2 reconnect回归跨control/media stream并发发送metadata与decoded events | 1 | xcresult精确定位EDR等待；测试先等待negotiated metadata生效再发送decoder/frame，保留production reconnect时序修复并从新目录重跑 |
+| 15.5.2 repository包装器的strict-valid变量行混入无意义字符串 | 1 | fixture/strict后、generator前退出且未改代码/设备；修正赋值并从全新证据目录完整重跑，不复用部分结果 |
 | 15.4.2首轮完整suite发现另一项geometry测试仍期待`localizedName` | 1 | 失败suite为`569 passed / 1 Keychain skip / 1 failed`且不计验收；抽取共享screen-number helper更新全部旧断言后从新DerivedData重跑 |
 | 15.4.2五平台包装器把`rg -c`零匹配解析为空字符串 | 1 | macOS build本身成功但包装器证据不计；计数改用显式`|| printf 0`，从新证据目录和全新DerivedData完整重跑五平台 |
 | 15.4.2提交后GitHub直连超时 | 2 | `github.com:22`、`ssh.github.com:443`与HTTPS 443均超时而DNS正常；检查现有Surge系统代理后用SOCKS5恢复GitHub连接。fetch确认首次无输出push实际已成功发布`d37aed8`，不强推或重复提交4.2 |
@@ -299,5 +301,5 @@
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`23/33`；5.1 production `AppModel`/media/presentation/render graph接线已完成并通过任务级验收，下一项5.2为完整eligibility派生和synthetic settings fallback移除。
-- production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；5.2、5.3、5.4和6.5保持未完成。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`24/33`；5.2 active-session eligibility与synthetic settings fallback移除已完成并通过任务级验收，下一项5.3为deduplicated privacy-bounded HDR diagnostics。
+- production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，且5.2已收紧active-session eligibility并移除synthetic headroom。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；5.3 diagnostics、5.4 application gate、5.5 status/settings UI和6.5物理显示器验收保持未完成。

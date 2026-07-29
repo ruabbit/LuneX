@@ -1208,3 +1208,26 @@
 - 五平台Debug warnings-as-errors build位于`/tmp/LuneX-15-5_1-builds-final.D40JCi`，五个xcresult均`succeeded`且warning/error/analyzer warning为0，每个平台均生成`HDRVideoShaders.air`和`default.metallib`。simulator前后规范化清单逐字一致，SHA-256均为`60efff618098f956b1cc1cb74e83f4b122b6e52e186130ece4eb02ebcab2f49d`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`。
 - repository gates位于`/tmp/LuneX-15-5_1-repo-final.6NWoUy`：OpenSpec strict `6/6`、勾选前apply `22/33`、fixture self-test/全树、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference、Swift Package、Core Image、diff及排除vendor的自有whitespace边界全部通过。
 - 此证据证明production ownership与调用图，不证明compositor实际进入EDR、live Sunshine HDR、物理峰值亮度/颜色准确性、跨显示器视觉一致性或设备性能。5.2 synthetic settings eligibility移除、5.3 diagnostics、5.4 application gate和6.5物理显示器证明仍未完成。
+
+## 2026-07-29 阶段 15 任务 5.2 调查
+
+- 底层`HDRRenderConfigurationResolver`已经分别验证decoded source contract、user preference、platform surface/headroom capability、真实display snapshot/current headroom和drawable，但application入口仍有两个策略缺口。
+- `updateRenderPreferences()`在尚无platform lifecycle时会根据`settings.stream.hdrEnabled`合成potential/current headroom `1.5/1.25`；5.1 resolver没有消费该值，因此尚未误启用EDR，但UI/legacy state仍把设置伪装成显示器状态，5.2必须删除。
+- `refreshHDRRenderResolution()`当前只验证session/media ID、media generation和decoded contract；还应要求`session.isStreaming`、video readiness、active decoder generation，并验证negotiated metadata与decoded metadata完全一致。否则reconnect/readiness loss或同代异常metadata可能暂时保留不属于active source contract的resolution。
+- 5.2保持typed边界：非active/video-ready owner返回`.inactiveSession`；negotiated metadata缺失或与decoded contract不一致返回`.staleColorSignature`。platform/display/current-headroom及HDR preference继续由既有resolver决定，不使用potential headroom、settings或常量替代current headroom。
+- 系统更新后5.2扩大矩阵从全新DerivedData通过`134/134 passed / 0 skipped / 0 failed`，xcresult结构化warning/error/analyzer warning均为0。Xcode 26.4在macOS 27 beta启动时另有DVT build-number、destination选择与旧SSH remote-device pruning工具提示，不属于源码结构化诊断，后续完整门禁继续单独记录。
+- 提交前时序审计发现显式reconnect先等待media teardown、后应用reconnecting snapshot；若teardown挂起，旧EDR resolution会在等待期间继续存活。5.2将权威reconnecting snapshot前置到teardown之前，并以可控挂起stop回归证明session/presenter先fail closed；另补video readiness丢失立即关闭resolution的回归。
+- 修正测试跨流前置条件后，transition focused从全新DerivedData通过`2/2 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-5_2-transition-focused-r2.Cal540/Focused.xcresult`），结构化warning/error/analyzer warning均为0。
+- 最终扩大AppModel/resolver/media/presenter/macOS surface矩阵从`/tmp/LuneX-15-5_2-expanded-final.XXyEAk/Expanded.xcresult`通过`134/134 passed / 0 skipped / 0 failed`，结构化warning/error/analyzer warning均为0。
+- 完整macOS warnings-as-errors suite从`/tmp/LuneX-15-5_2-full-final.feeAfW/LuneXCoreTests.xcresult`通过`606 total / 605 passed / 1 skipped / 0 failed`；唯一skip为显式opt-in真实Keychain测试，结构化warning/error/analyzer warning均为0。
+- 五平台Debug warnings-as-errors build-only位于`/tmp/LuneX-15-5_2-builds-final.5HWLf7`：macOS、固定iPhone/iPad/tvOS/visionOS均`succeeded`、结构化diagnostics为0，并各生成一套`HDRVideoShaders.air`和`default.metallib`。
+- simulator规范化before/after清单逐字一致，SHA-256均为`1e519a51173fb10edc516770dc4df32c5cf1396442152fc30638d88c6c0adf79`；四个固定UUID各唯一、available、`Shutdown`，全局`Booted=0`。只执行build与只读list/compare，没有create、clone、boot、launch、shutdown或delete。
+
+## 2026-07-29 阶段 15 任务 5.2 验收结论
+
+- production eligibility现在要求权威streaming snapshot、当前session/media generation、video readiness、active decoder generation及negotiated/decoded metadata一致，再由既有resolver组合user preference、platform/display capability、真实display snapshot/current headroom与drawable state；任一active ownership缺失均fail closed。
+- `updateRenderPreferences()`不再依据HDR设置合成display headroom。preference只作为独立resolver输入，不再伪装成显示器能力；没有lifecycle/current headroom时不能凭设置启用EDR。
+- reconnect会先应用权威reconnecting snapshot并关闭render/input/HDR eligibility，再等待generation-owned media teardown；即使测试环境挂起stop，旧EDR resolution也不会继续存活。readiness丢失、旧decoder generation、metadata mismatch、stop与replacement均有回归。
+- focused transition `2/2`、扩大矩阵`134/134`、完整macOS `606 total / 605 passed / 1 explicit Keychain skip / 0 failed`以及五平台Debug warnings-as-errors Metal build均通过；正常测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- repository最终门禁位于`/tmp/LuneX-15-5_2-repo-final-r2.L9LM2w`：fixture validator self-test/全树、OpenSpec strict `6/6`、勾选前apply `23/33`且task 24=false、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference/package/Core Image/diff及自有whitespace边界全部通过。
+- 此任务证明离线production eligibility与fail-closed时序，不证明compositor EDR signaling、live Sunshine HDR、物理峰值亮度、颜色准确性或跨显示器视觉一致性。5.3 diagnostics、5.4 application integration gate、5.5 HDR status/settings UI和6.5物理显示器验收继续保持未完成。

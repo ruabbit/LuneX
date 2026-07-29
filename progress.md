@@ -1590,3 +1590,25 @@
 - macOS及固定iPhone/iPad/tvOS/visionOS Debug warnings-as-errors build-only均成功、零结构化诊断并生成Metal AIR/metallib。simulator规范化清单前后SHA-256同为`60efff618098f956b1cc1cb74e83f4b122b6e52e186130ece4eb02ebcab2f49d`，固定四实例保持唯一、available、`Shutdown`且全局`Booted=0`，未执行任何simulator生命周期命令。
 - repository strict/fixture/generator/reference/package/Core Image/diff/owned-whitespace门全部通过，最终证据目录`/tmp/LuneX-15-5_1-repo-final.6NWoUy`。OpenSpec 5.1标记完成，权威进度更新为`23/33`；阶段15保持`in_progress`。
 - 下一项5.2负责从active session、preference、valid source contract、platform/display capability和current headroom完整派生eligibility，并移除legacy synthetic settings fallback。5.3 diagnostics、live Sunshine HDR、compositor signaling和6.5物理显示器证据保持未完成。
+
+## 2026-07-29 阶段 15 任务 5.2 启动
+
+- 5.1已以`a49e9e9 Connect native HDR presentation graph`独立提交并经Surge SOCKS5推送；fetch确认`HEAD == origin/main == a49e9e9`且工作树clean。OpenSpec权威进度`23/33`，下一项精确为5.2。
+- 5.2范围限定为删除settings-derived synthetic headroom，并在production eligibility入口要求streaming session、current media/video readiness、active decoder generation及negotiated/decoded metadata一致；不提前实现5.3 diagnostics、5.4 broader integration gate或5.5 UI。
+- 系统更新后恢复确认goal仍active、Xcode 26.4/Swift 6.3可用、全局`Booted=0`，工作树仅含暂停前5.2修改。focused `3/3`证据保持有效；新扩大矩阵`134/134 passed / 0 skipped / 0 failed`，xcresult结构化diagnostics为0，所有测试显式移除真实Keychain开关。
+- 提交前审计发现reconnect snapshot晚于media teardown的fail-closed时序缺口。production现先应用权威reconnecting snapshot、关闭HDR/input/render policy，再执行generation-owned media teardown；测试增加挂起stop期间resolution已关闭，以及video readiness丢失立即关闭的断言。待从全新DerivedData重跑focused/扩大矩阵后再进入完整门禁。
+- 首轮新transition focused为`2 total / 1 passed / 1 failed`：video readiness丢失回归通过，reconnect回归在通用wait helper超时。该xcresult不计验收；先让helper转发真实调用点，再以新证据目录定位具体等待，避免盲目重复。
+- 诊断轮把失败精确定位到HDR激活等待：测试跨control/media两个独立stream并发发送HDR metadata与decoded events，metadata若后到会按正确ownership语义清除先到frame。测试改为先等待negotiated metadata生效再发送decoder/frame；production reconnect顺序修复保持不变。该轮另有已断开remote-device notification service的Xcode工具提示，不连接或管理该设备，也不计作源码验收。
+- 修正后的transition focused从`/tmp/LuneX-15-5_2-transition-focused-r2.Cal540/Focused.xcresult`通过`2/2 passed / 0 skipped / 0 failed`，xcresult结构化warning/error/analyzer warning均为0。下一步从全新DerivedData重跑五组扩大矩阵。
+- 最终五组扩大矩阵从`/tmp/LuneX-15-5_2-expanded-final.XXyEAk/Expanded.xcresult`通过`134/134 passed / 0 skipped / 0 failed`，xcresult结构化warning/error/analyzer warning均为0。下一步运行完整macOS suite，继续显式禁用真实Keychain路径。
+- 完整macOS suite从`/tmp/LuneX-15-5_2-full-final.feeAfW/LuneXCoreTests.xcresult`通过`606 total / 605 passed / 1 skipped / 0 failed`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化diagnostics为0。下一步只读核对固定simulator后运行五平台build-only。
+- 五平台build-only位于`/tmp/LuneX-15-5_2-builds-final.5HWLf7`：macOS、固定iPhone/iPad/tvOS/visionOS全部warnings-as-errors成功，五个xcresult均为零结构化diagnostics，每个平台均生成Metal AIR/metallib。
+- simulator before/after清单逐字一致，SHA-256均为`1e519a51173fb10edc516770dc4df32c5cf1396442152fc30638d88c6c0adf79`；固定四实例保持唯一、available、`Shutdown`且全局`Booted=0`，未执行任何生命周期命令。下一步运行repository gates。
+- 首轮repository包装器在strict-valid变量赋值行混入无意义字符串，fixture与OpenSpec strict完成后、generator和边界门禁前退出；未改代码/project/设备，该目录不计验收。修正后从全新目录完整重跑。
+
+## 2026-07-29 阶段 15 任务 5.2 完成
+
+- repository最终门禁从新目录`/tmp/LuneX-15-5_2-repo-final-r2.L9LM2w`完整通过：fixture validator self-test/全树、OpenSpec strict `6/6`、勾选前apply `23/33`且task 24=false、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference/package/Core Image/diff及自有whitespace边界全部通过。
+- 5.2实现删除settings-derived synthetic headroom，并把HDR/EDR eligibility收紧到权威streaming snapshot、current media/video readiness、active decoder generation、matching negotiated/decoded metadata，再结合user preference、platform/display capability和真实current headroom解析。
+- reconnect顺序改为先应用reconnecting snapshot并关闭render/input/HDR eligibility，再等待media teardown；focused `2/2`、扩大矩阵`134/134`、完整macOS `606 total / 605 passed / 1 Keychain skip / 0 failed`及五平台Debug Metal build均已通过任务级验收。正常测试未启用真实Keychain。
+- OpenSpec 5.2标记完成，权威进度更新为`24/33`；阶段15保持`in_progress`。下一项5.3为deduplicated privacy-bounded active-SDR/active-EDR/fallback/error diagnostics。5.4 application gate、5.5 status/settings UI、live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
