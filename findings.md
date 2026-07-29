@@ -1542,3 +1542,21 @@
 - `AppModel`在4.3只新增显式`.audioRuntime` no-op以维持枚举穷尽；当前状态、偏好写回及stop/failure/reconnect/replacement清理仍由4.4实现，diagnostics与UI仍由5.x实现。
 - 验收证据为focused `27/27`、expanded `93/93`、完整macOS `702 total / 701 passed / 1 explicit Keychain skip / 0 failed`和macOS/iOS/iPadOS/tvOS/visionOS generic-device Debug unsigned warnings-as-errors build 4/4；所有xcresult结构化diagnostics为0。
 - OpenSpec strict `7/7`、generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`、membership/privacy/reference/package/Core Image/fixture/secret/diff门均通过；前后全局`Booted=0`且未操作simulator。该证据不证明4.4 AppModel绑定、签名entitlement、AirPods head tracking、route transition可听同步或物理多声道定位。
+
+## 2026-07-30 阶段 16 任务 4.4 调查
+
+- 现有`AppModel`已经用`activeStreamSessionID + activeMediaSessionID + activeMediaGeneration`保护input、lifecycle和video presentation，但audio runtime仍是event switch no-op，且stop/failure/reconnect路径没有应用层actual audio state可清理。
+- preference application需要与input/lifecycle相同的显式wrapper，至少包含session ID、media generation和`SessionSpatialAudioPreferences`。environment必须在processor异步调用前后复核generation；否则same-session replacement期间的迟到完成可能被上层误认为当前应用成功。
+- 4.4应保留一份未持久化的desired preferences，使stream外修改能在下一media generation启动后立即应用，也使active-stream修改通过当前processor串行化。把字段加入`AppSettings`、旧JSON默认/迁移和save/load行为仍属于5.1，不能在本项提前完成。
+- `AppModel`的actual audio state必须只接受wrapper、processor event和当前active session/media generation四者一致且sequence/graph不回退的事件。start可读取environment snapshot消除订阅前窗口，随后统一stream中的重复事件应去重。
+- 清理应集中为单一helper，并在media stop、media failure、control/session failure、reconnect、replacement、remote termination与local stop路径调用；偏好本身属于用户意图，不应因会话清理被重置。
+
+## 2026-07-30 阶段 16 任务 4.4 验收结论
+
+- `SessionSpatialAudioPreferenceApplication`把偏好写入绑定到`sessionID + mediaGeneration`；environment在异步processor调用前后复核current generation，replacement后迟到完成统一收敛为`.staleAudioApplication`，不会冒充当前应用成功。
+- `AppModel`现持有未持久化的desired `spatialAudioPreferences`与current-generation `audioRuntimeState`。新media generation启动时先清除旧actual state、读取environment snapshot、应用当前desired preference，再消费统一event stream；snapshot与buffered重复事件由严格递增sequence和不回退graph generation去重。
+- actual audio state只在active stream/media session、wrapper generation及processor session全部匹配时更新，并在local stop、remote termination、media/control failure、reconnect、replacement与environment teardown路径清理；desired preference在teardown后保留。`AppSettings`持久化、旧JSON默认与迁移没有在4.4提前实现，仍归5.1。
+- 修正后focused `/tmp/LuneX-16-4_4-focused-r2.VmkTPP/Focused.xcresult`为`32/32`；expanded `/tmp/LuneX-16-4_4-expanded.hAMfHp/Expanded.xcresult`为`114/114`；完整macOS `/tmp/LuneX-16-4_4-full.RGwfr7/LuneXCoreTests.xcresult`为`706 total / 705 passed / 1 explicit Keychain skip / 0 failed`。三份xcresult结构化warning/error/analyzer warning均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_4-builds.1785357260030/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- 最终repository gate `/tmp/LuneX-16-4_4-repo-final.s9yPFw`通过OpenSpec strict `7/7`、fixture、source/test membership、privacy/reference/package/Core Image/secret/diff边界和generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip是显式真实Keychain测试，全局`Booted=0`且未操作simulator。
+- 该证据证明AppModel current-generation状态与偏好接线，不证明设置已经持久化/UI已经接线，也不证明signed entitlement、AirPods head tracking、真实route transition、可听多声道定位或live Sunshine播放；这些仍分别属于5.x和6.6。

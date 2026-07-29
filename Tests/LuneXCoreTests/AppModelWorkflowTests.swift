@@ -2098,6 +2098,153 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testAppModelBindsSpatialPreferencesAndCurrentAudioRuntime() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 41,
+                    key: Data(repeating: 0x41, count: 16)
+                ))
+            ])
+        )
+        let preferences = SessionSpatialAudioPreferences(
+            spatialAudioEnabled: true,
+            headTrackingEnabled: false
+        )
+
+        try await model.updateSpatialAudioPreferences(preferences)
+        XCTAssertEqual(model.spatialAudioPreferences, preferences)
+        XCTAssertNil(model.audioRuntimeState)
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil {
+            model.session.isStreaming
+                && mediaEnvironment
+                    .currentSpatialAudioPreferenceApplications().count == 1
+        }
+
+        XCTAssertEqual(
+            mediaEnvironment.currentSpatialAudioPreferenceApplications(),
+            [SessionSpatialAudioPreferenceApplication(
+                sessionID: record.sessionID,
+                mediaGeneration: 1,
+                preferences: preferences
+            )]
+        )
+        let current = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            sequence: 0,
+            graphGeneration: 1,
+            preferences: preferences
+        )
+        mediaEnvironment.yieldAudioRuntime(current, sessionID: record.sessionID)
+        await waitUntil { model.audioRuntimeState == current }
+
+        let wrongGeneration = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 2,
+            sequence: 100,
+            graphGeneration: 100,
+            preferences: .nativeDefault
+        )
+        mediaEnvironment.yieldAudioRuntime(
+            wrongGeneration,
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(model.audioRuntimeState, current)
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertNil(model.audioRuntimeState)
+        XCTAssertEqual(model.spatialAudioPreferences, preferences)
+    }
+
+    func testReconnectClearsAudioRuntimeAndRejectsPriorMediaGeneration() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 42,
+                    key: Data(repeating: 0x42, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        let first = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            sequence: 0,
+            graphGeneration: 1
+        )
+        mediaEnvironment.yieldAudioRuntime(first, sessionID: record.sessionID)
+        await waitUntil { model.audioRuntimeState == first }
+
+        mediaEnvironment.blockNextStop()
+        provider.yield(
+            .reconnecting(attempt: 1, reason: "Control channel interrupted."),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.hasBlockedStop() }
+        XCTAssertNil(model.audioRuntimeState)
+        mediaEnvironment.resumeBlockedStop()
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 2 }
+
+        let stale = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            sequence: 99,
+            graphGeneration: 99
+        )
+        mediaEnvironment.yieldAudioRuntime(stale, sessionID: record.sessionID)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.audioRuntimeState)
+
+        let replacement = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 2,
+            sequence: 0,
+            graphGeneration: 1
+        )
+        mediaEnvironment.yieldAudioRuntime(
+            replacement,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.audioRuntimeState == replacement }
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertNil(model.audioRuntimeState)
+    }
+
     func testControlReadinessCannotBypassMediaEnvironmentReadiness() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment(automaticallyReady: false)
@@ -2219,6 +2366,17 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
+        let audioRuntime = makeAudioRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            sequence: 0,
+            graphGeneration: 1
+        )
+        mediaEnvironment.yieldAudioRuntime(
+            audioRuntime,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.audioRuntimeState == audioRuntime }
 
         mediaEnvironment.finish(
             sessionID: record.sessionID,
@@ -2232,6 +2390,7 @@ final class AppModelWorkflowTests: XCTestCase {
             return XCTFail("Media environment failure must fail the application session.")
         }
         XCTAssertEqual(model.renderState.policy, .idle)
+        XCTAssertNil(model.audioRuntimeState)
         XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
         XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [record.sessionID])
     }
@@ -2804,6 +2963,30 @@ final class AppModelWorkflowTests: XCTestCase {
         return lifecycle
     }
 
+    private func makeAudioRuntimeState(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        sequence: UInt64,
+        graphGeneration: UInt64,
+        preferences: SessionSpatialAudioPreferences = .nativeDefault
+    ) -> SessionMediaAudioRuntimeState {
+        SessionMediaAudioRuntimeState(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            runtime: SessionAudioRuntimeEvent(
+                sessionID: sessionID,
+                sequence: sequence,
+                graphGeneration: graphGeneration,
+                cause: .initial,
+                stage: .running,
+                spatialRuntime: nil,
+                preferences: preferences,
+                concealedFrameCount: 0,
+                lastAction: .none
+            )
+        )
+    }
+
     private func makeHDRApplicationFrame(
         generation: UInt64,
         frameID: UInt64,
@@ -3347,6 +3530,8 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var sentInputApplications: [SessionInputApplication] = []
     private var releasedInputApplications: [SessionInputReleaseApplication] = []
     private var lifecycleApplications: [SessionLifecycleApplication] = []
+    private var spatialAudioPreferenceApplications:
+        [SessionSpatialAudioPreferenceApplication] = []
     private var shouldBlockNextRelease = false
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
     private var shouldBlockNextStop = false
@@ -3416,6 +3601,26 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
             }
         }
         withLock { lifecycleApplications.append(application) }
+    }
+
+    func updateSpatialAudioPreferences(
+        _ application: SessionSpatialAudioPreferenceApplication
+    ) async throws {
+        let state = withLock {
+            (
+                continuations[application.sessionID] != nil,
+                UInt64(startRecords.count)
+            )
+        }
+        guard state.0 else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard application.mediaGeneration == state.1 else {
+            throw SessionMediaEnvironmentError.staleAudioApplication
+        }
+        withLock {
+            spatialAudioPreferenceApplications.append(application)
+        }
     }
 
     func sendInput(_ application: SessionInputApplication) async throws {
@@ -3509,6 +3714,13 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         continuation(for: sessionID)?.yield(.videoPresentation(event))
     }
 
+    func yieldAudioRuntime(
+        _ state: SessionMediaAudioRuntimeState,
+        sessionID: UUID
+    ) {
+        continuation(for: sessionID)?.yield(.audioRuntime(state))
+    }
+
     func finish(sessionID: UUID, throwing error: Error) {
         let continuation = withLock { continuations.removeValue(forKey: sessionID) }
         continuation?.finish(throwing: error)
@@ -3532,6 +3744,11 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func currentLifecycleApplications() -> [SessionLifecycleApplication] {
         withLock { lifecycleApplications }
+    }
+
+    func currentSpatialAudioPreferenceApplications()
+        -> [SessionSpatialAudioPreferenceApplication] {
+        withLock { spatialAudioPreferenceApplications }
     }
 
     func blockNextRelease() {
@@ -3625,6 +3842,12 @@ private final class BlockingSessionMediaEnvironment: SessionMediaEnvironment, @u
     }
 
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
+    }
+
+    func updateSpatialAudioPreferences(
+        _ application: SessionSpatialAudioPreferenceApplication
+    ) async throws {
         _ = application
     }
 

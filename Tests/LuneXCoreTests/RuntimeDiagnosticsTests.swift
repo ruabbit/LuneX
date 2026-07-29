@@ -173,6 +173,18 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testStaleAudioPreferenceApplicationUsesSafeAudioDiagnostic() {
+        let diagnostic = ApplicationDiagnosticFactory.streamFailure(
+            SessionMediaEnvironmentError.staleAudioApplication
+        )
+
+        XCTAssertEqual(diagnostic.category, .audio)
+        XCTAssertEqual(diagnostic.code, "application_audio_stale")
+        XCTAssertEqual(diagnostic.action, .checkAudioOutput)
+        XCTAssertFalse(diagnostic.summary.localizedCaseInsensitiveContains("generation"))
+    }
+
+    @MainActor
     func testUnknownFailureNeverCopiesSecretBearingDescription() {
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(
             SecretBearingDiagnosticError()

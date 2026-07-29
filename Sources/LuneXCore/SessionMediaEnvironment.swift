@@ -9,6 +9,7 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
     case staleLifecycleApplication
     case inputUnavailable
     case staleInputApplication
+    case staleAudioApplication
 
     var description: String {
         switch self {
@@ -28,6 +29,8 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
             return "The active media generation is not ready to accept input."
         case .staleInputApplication:
             return "The input application does not belong to the current media generation."
+        case .staleAudioApplication:
+            return "The audio preference application does not belong to the current media generation."
         }
     }
 
@@ -84,6 +87,12 @@ struct SessionInputReleaseApplication: Equatable, Sendable {
     var mediaGeneration: UInt64
 }
 
+struct SessionSpatialAudioPreferenceApplication: Equatable, Sendable {
+    var sessionID: UUID
+    var mediaGeneration: UInt64
+    var preferences: SessionSpatialAudioPreferences
+}
+
 protocol SessionVideoProcessing: Sendable {
     func consume(_ event: VideoReceiveEvent) async throws -> Bool
     func updateColorMetadata(_ metadata: VideoColorMetadata) async throws
@@ -132,6 +141,10 @@ protocol SessionMediaEnvironment: Sendable {
     ) async throws
 
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws
+
+    func updateSpatialAudioPreferences(
+        _ application: SessionSpatialAudioPreferenceApplication
+    ) async throws
 
     func sendInput(_ application: SessionInputApplication) async throws
 
@@ -576,6 +589,35 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         self.active = current
         if lifecycleOperation?.application == application {
             lifecycleOperation = nil
+        }
+    }
+
+    func updateSpatialAudioPreferences(
+        _ application: SessionSpatialAudioPreferenceApplication
+    ) async throws {
+        guard let active, active.sessionID == application.sessionID else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard active.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleAudioApplication
+        }
+        let processor = active.audioProcessor
+        do {
+            try await processor.updateSpatialAudioPreferences(
+                application.preferences
+            )
+        } catch {
+            guard let current = self.active,
+                  current.sessionID == application.sessionID,
+                  current.generation == application.mediaGeneration else {
+                throw SessionMediaEnvironmentError.staleAudioApplication
+            }
+            throw error
+        }
+        guard let current = self.active,
+              current.sessionID == application.sessionID,
+              current.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleAudioApplication
         }
     }
 

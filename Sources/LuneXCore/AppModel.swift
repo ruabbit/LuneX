@@ -145,6 +145,8 @@ final class AppModel: ApplicationInputSink {
     var latestRemoteInputFeedback: RemoteInputFeedback?
     private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
     private(set) var hdrPresentationStatus = HDRPresentationStatus.inactive
+    private(set) var spatialAudioPreferences = SessionSpatialAudioPreferences.nativeDefault
+    private(set) var audioRuntimeState: SessionMediaAudioRuntimeState?
 
     let videoPresentationSource: StreamVideoPresentationSource
 
@@ -832,6 +834,23 @@ final class AppModel: ApplicationInputSink {
         renderState.policy = .idle
     }
 
+    func updateSpatialAudioPreferences(
+        _ preferences: SessionSpatialAudioPreferences
+    ) async throws {
+        guard preferences != spatialAudioPreferences else { return }
+        spatialAudioPreferences = preferences
+        guard let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration else {
+            return
+        }
+        try await applySpatialAudioPreferences(
+            preferences,
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+    }
+
     func sendRemoteInput(_ event: RemoteInputEvent) async throws {
         guard let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
@@ -998,6 +1017,7 @@ final class AppModel: ApplicationInputSink {
         switch snapshot.stage {
         case .idle, .disconnected:
             clearActiveVideoPresentation()
+            clearActiveAudioRuntime()
             activeStreamSessionID = nil
             activeControlReadiness = []
             activeMediaReadiness = []
@@ -1038,12 +1058,14 @@ final class AppModel: ApplicationInputSink {
             updateRenderPreferences()
 
         case .reconnecting:
+            clearActiveAudioRuntime()
             streamLaunchUI.isLaunching = false
             let suffix = snapshot.reconnectAttempt.map { " (Attempt \($0))" } ?? ""
             session.phase = .connecting(stage: "Reconnecting\(suffix)")
             renderState.policy = .idle
 
         case .stopping:
+            clearActiveAudioRuntime()
             streamLaunchUI.isLaunching = false
             session.phase = .stopping
             renderState.policy = .idle
@@ -1155,8 +1177,17 @@ final class AppModel: ApplicationInputSink {
             return false
         }
         latestRemoteInputFeedback = nil
+        clearActiveAudioRuntime()
         activeMediaSessionID = sessionID
         activeMediaGeneration = environmentSnapshot.generation
+        if let audioRuntime = environmentSnapshot.audioRuntime {
+            applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
+        }
+        try await applySpatialAudioPreferences(
+            spatialAudioPreferences,
+            sessionID: sessionID,
+            mediaGeneration: environmentSnapshot.generation
+        )
         beginVideoPresentation(
             negotiatedColorMetadata: configuration.video.colorMetadata
         )
@@ -1236,9 +1267,65 @@ final class AppModel: ApplicationInputSink {
                 presentationEvent,
                 sessionID: sessionID
             )
-        case .audioRuntime:
-            break
+        case let .audioRuntime(audioRuntime):
+            applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
         }
+    }
+
+    private func applySpatialAudioPreferences(
+        _ preferences: SessionSpatialAudioPreferences,
+        sessionID: UUID,
+        mediaGeneration: UInt64
+    ) async throws {
+        let application = SessionSpatialAudioPreferenceApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            preferences: preferences
+        )
+        do {
+            try await sessionMediaEnvironment.updateSpatialAudioPreferences(
+                application
+            )
+        } catch {
+            guard activeStreamSessionID == sessionID,
+                  activeMediaSessionID == sessionID,
+                  activeMediaGeneration == mediaGeneration else {
+                throw SessionMediaEnvironmentError.staleAudioApplication
+            }
+            throw error
+        }
+        guard activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration == mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleAudioApplication
+        }
+    }
+
+    private func applyAudioRuntimeState(
+        _ state: SessionMediaAudioRuntimeState,
+        sessionID: UUID
+    ) {
+        guard activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration,
+              state.sessionID == sessionID,
+              state.mediaGeneration == mediaGeneration,
+              state.runtime.sessionID == sessionID else {
+            return
+        }
+        if let current = audioRuntimeState {
+            guard current.sessionID == sessionID,
+                  current.mediaGeneration == mediaGeneration,
+                  state.runtime.sequence > current.runtime.sequence,
+                  state.runtime.graphGeneration >= current.runtime.graphGeneration else {
+                return
+            }
+        }
+        audioRuntimeState = state
+    }
+
+    private func clearActiveAudioRuntime() {
+        audioRuntimeState = nil
     }
 
     private func applyAggregatedReadiness(sessionID: UUID) async throws {
@@ -1261,6 +1348,7 @@ final class AppModel: ApplicationInputSink {
         activeMediaSessionID = nil
         activeMediaGeneration = nil
         activeDecodedSourceSize = nil
+        clearActiveAudioRuntime()
         clearActiveVideoPresentation()
         activeMediaReadiness = []
         activeControlReadiness = []
@@ -1288,6 +1376,7 @@ final class AppModel: ApplicationInputSink {
         activeMediaSessionID = nil
         activeMediaGeneration = nil
         activeDecodedSourceSize = nil
+        clearActiveAudioRuntime()
         clearActiveVideoPresentation()
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
@@ -1501,6 +1590,7 @@ final class AppModel: ApplicationInputSink {
         activeMediaSessionID = nil
         activeMediaGeneration = nil
         activeDecodedSourceSize = nil
+        clearActiveAudioRuntime()
         clearActiveVideoPresentation()
         activeControlReadiness = []
         activeMediaReadiness = []

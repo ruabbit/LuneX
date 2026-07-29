@@ -384,6 +384,8 @@ enum ApplicationDiagnosticFactory {
                 return inputFailure(code: "application_input_unavailable")
             case .staleInputApplication:
                 return inputFailure(code: "application_input_stale")
+            case .staleAudioApplication:
+                return audioFailure(code: "application_audio_stale")
             }
         }
         if error is VideoDecoderError || error is VideoDecodePipelineError ||

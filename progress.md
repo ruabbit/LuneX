@@ -1952,3 +1952,22 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_3-builds.DF4774/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - OpenSpec strict `7/7`、source/test membership、privacy/reference/package/Core Image/fixture/secret/diff静态门与generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`通过；测试始终显式移除真实Keychain opt-in，前后全局`Booted=0`且未操作simulator。
 - OpenSpec 4.3已勾选，预期权威进度`20/35`；下一项4.4绑定AppModel actual audio/spatial state及preference changes并在stop/failure/reconnect/replacement清理。4.3只保留AppModel显式no-op，不证明4.4/5.x或6.6物理验收。
+
+## 2026-07-30 阶段 16 任务 4.4 启动
+
+- 4.3已以`2bb2405 Forward spatial audio runtime state`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`20/35`，进入4.4。
+- 本项新增generation-scoped preference application、AppModel未持久化desired preferences、actual audio runtime state和统一清理；AppSettings持久化/迁移、正式diagnostics与UI分别保留给5.1、5.2和5.4。
+- 继续显式移除真实Keychain opt-in，不创建、启动或操作simulator；4.4离线状态接线不替代签名entitlement、AirPods head tracking、真实route transition或可听多声道验收。
+- production与测试fake已完成第一版接线：environment在processor preference调用前后复核generation；AppModel启动时应用desired preference、读取environment snapshot、消费单调actual runtime event，并在stop/failure/reconnect/replacement清空actual state而保留用户意图。下一步先运行静态差异检查和4.4 focused编译测试。
+- 首轮focused编译成功且environment/AppModel `31/31`用例通过，唯一失败是新diagnostic测试把既有固定安全摘要中的通用单词`session`误判为隐私泄漏；文案不含UUID、host/app、generation或原始错误。删除该过严断言，保留category/code/action和无generation检查，并从全新DerivedData重跑完整focused gate。
+- 4.4首轮repository包装器在OpenSpec strict已经生成`7/7 valid`结果后，误按旧JSON schema读取`summary.valid`并立即退出；当前CLI字段为`summary.totals`。该轮未运行generator、未修改工程文件且不计验收，后续从全新证据目录按当前schema完整重跑。
+- 4.4第二轮repository包装器通过strict、fixtures、generator与静态边界后，误用summary风格的`testStatus`/`identifier`读取`xcresulttool tests`明细，导致唯一skip集合被解析为空并退出；实际test node字段为`result`/`nodeIdentifier`，只读复核唯一skip是显式Keychain用例。该轮不计最终组合验收，后续用正确字段从全新证据目录完整重跑。
+
+## 2026-07-30 阶段 16 任务 4.4 完成
+
+- 新增generation-scoped spatial preference application与稳定`.staleAudioApplication` audio diagnostic；environment在processor异步调用前后复核session/generation，replacement期间的迟到完成不能覆盖当前generation。
+- AppModel现拥有未持久化desired preference与current actual audio runtime；新generation读取snapshot并应用desired preference，stream event只接受匹配session/generation、严格递增sequence和不回退graph generation。stop、远端结束、media/control failure、reconnect和replacement均清理actual state但保留desired preference。
+- 最终focused `/tmp/LuneX-16-4_4-focused-r2.VmkTPP/Focused.xcresult`为`32/32`，expanded `/tmp/LuneX-16-4_4-expanded.hAMfHp/Expanded.xcresult`为`114/114`，完整macOS `/tmp/LuneX-16-4_4-full.RGwfr7/LuneXCoreTests.xcresult`为`706 total / 705 passed / 1 explicit Keychain skip / 0 failed`；全部结构化diagnostics为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_4-builds.1785357260030/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- 最终repository gate `/tmp/LuneX-16-4_4-repo-final.s9yPFw`通过OpenSpec strict `7/7`、fixtures、membership、reference/package/Core Image/secret/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain用例，前后全局`Booted=0`且未操作simulator。
+- OpenSpec 4.4已勾选，权威进度更新为`21/35`；下一项4.5补齐route/interruption、capability downgrade/recovery、preference、underrun/concealment、stale completion、stop/restart和generation replacement回归矩阵。本项不证明5.x settings/UI或6.6签名/物理可听验收。

@@ -334,6 +334,74 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(report.stoppedResourceCount, 5)
     }
 
+    func testSpatialAudioPreferenceApplicationIsGenerationScopedAcrossReplacement()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        var stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let preferences = SessionSpatialAudioPreferences(
+            spatialAudioEnabled: false,
+            headTrackingEnabled: false
+        )
+        let firstApplication = SessionSpatialAudioPreferenceApplication(
+            sessionID: sessionID,
+            mediaGeneration: firstGeneration,
+            preferences: preferences
+        )
+        try await environment.updateSpatialAudioPreferences(firstApplication)
+        let firstProcessor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let firstUpdates = await firstProcessor.preferenceUpdates()
+        XCTAssertEqual(firstUpdates, [preferences])
+        _ = await environment.stop(sessionID: sessionID)
+
+        stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let replacementGeneration = await environment.snapshot().generation
+        await XCTAssertThrowsErrorAsync(
+            try await environment.updateSpatialAudioPreferences(firstApplication)
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleAudioApplication
+            )
+        }
+
+        let replacementApplication = SessionSpatialAudioPreferenceApplication(
+            sessionID: sessionID,
+            mediaGeneration: replacementGeneration,
+            preferences: .nativeDefault
+        )
+        try await environment.updateSpatialAudioPreferences(replacementApplication)
+        let replacementProcessor = try XCTUnwrap(
+            audioProcessorFactory.processor(at: 1)
+        )
+        let replacementUpdates = await replacementProcessor.preferenceUpdates()
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        XCTAssertEqual(replacementUpdates, [.nativeDefault])
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
     func testInputApplicationIsGenerationScopedAcrossSameSessionReplacement() async throws {
         let calls = MediaEnvironmentCallRecorder()
         let environment = makeEnvironment(
@@ -2220,6 +2288,7 @@ private actor ControlledAudioProcessor: SessionAudioProcessing {
     private let finishStreamOnStop: Bool
     private let eventStream: AsyncStream<SessionAudioRuntimeEvent>
     private let eventContinuation: AsyncStream<SessionAudioRuntimeEvent>.Continuation
+    private var appliedPreferences: [SessionSpatialAudioPreferences] = []
 
     init(
         calls: MediaEnvironmentCallRecorder,
@@ -2245,7 +2314,11 @@ private actor ControlledAudioProcessor: SessionAudioProcessing {
     func updateSpatialAudioPreferences(
         _ preferences: SessionSpatialAudioPreferences
     ) async throws {
-        _ = preferences
+        appliedPreferences.append(preferences)
+    }
+
+    func preferenceUpdates() -> [SessionSpatialAudioPreferences] {
+        appliedPreferences
     }
 
     func emit(_ event: SessionAudioRuntimeEvent) {
