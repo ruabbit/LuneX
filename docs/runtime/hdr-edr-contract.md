@@ -610,6 +610,24 @@ This proves the deterministic normal suite and its side-effect boundary; it is
 not live-host or physical-display evidence. The post-mark repository evidence
 is retained at `/tmp/LuneX-15-6_1-repo-final.nERR5w`.
 
+### Five-platform Debug and Release builds
+
+The build matrix at `/tmp/LuneX-15-6_2-builds.0NL62s` used separate
+DerivedData and xcresult paths for Debug and Release on macOS, the fixed
+iPhone, the fixed iPad, tvOS, and visionOS destinations. All ten
+warnings-as-errors builds succeeded with zero structured warnings, errors, or
+analyzer warnings. Every configuration produced exactly one Metal AIR file
+and one metallib.
+
+The build-only commands did not manage simulator lifecycle. A read-only
+before/after inventory was byte-identical with SHA-256
+`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`;
+the fixed instances remained unique, available, and `Shutdown`, and global
+`Booted=0`. This task proves configuration and SDK compile safety, not
+simulator runtime, compositor EDR signaling, or physical HDR output. The
+independent simulator-inventory task remains separate. Post-mark repository
+evidence is retained at `/tmp/LuneX-15-6_2-repo-final.gB9WWq`.
+
 ## Verification matrix
 
 ### Deterministic evidence

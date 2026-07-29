@@ -43,7 +43,7 @@
 ## 6. Verification and tracking
 
 - [x] 6.1 Run normal tests with live-host and real-Keychain paths disabled and verify the only allowed skip
-- [ ] 6.2 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with warnings as errors and isolated DerivedData
+- [x] 6.2 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with warnings as errors and isolated DerivedData
 - [ ] 6.3 Run OpenSpec strict, generator, clean-room/dependency, Metal compilation, static analyzer, ASan, TSan, malloc ownership, and renderer resource-release gates
 - [ ] 6.4 Verify fixed simulator identities remain unique and `Shutdown` without creating or explicitly booting devices
 - [ ] 6.5 Validate SDR-on-HDR, HDR-on-SDR, HDR-on-HDR, current-headroom changes, and cross-display transitions on authorized physical displays with redacted reference-pattern or measurement evidence

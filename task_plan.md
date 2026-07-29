@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`28/33`；6.1 normal tests/Keychain skip验证完成，下一项6.2五平台Debug/Release构建 |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`29/33`；6.2五平台Debug/Release构建完成，下一项6.3质量/资源门禁 |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`28/33`。6.1从全新DerivedData独立运行normal macOS suite，运行环境无`LUNEX_RUN_*` opt-in，结果为`616 total / 615 passed / 1 Keychain skip / 0 failed`且结构化diagnostics为0；唯一skip精确为真实Keychain round-trip，源码没有其他live-host运行入口。下一项6.2为macOS Debug/Release及固定iPhone/iPad/tvOS/visionOS warnings-as-errors隔离构建；live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`29/33`。6.2对macOS、固定iPhone、iPad、tvOS和visionOS分别执行Debug/Release共10个隔离warnings-as-errors构建；全部xcresult为零structured diagnostics，每个配置各生成一个Metal AIR/metallib。build-only前后simulator清单逐字一致且全局`Booted=0`，但6.4仍保留独立验收。下一项6.3为OpenSpec/generator/clean-room/dependency/Metal/analyzer/sanitizer/malloc/resource-release综合门禁；live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 

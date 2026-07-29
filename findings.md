@@ -1276,3 +1276,10 @@
 - 独立normal gate使用全新DerivedData并显式`env -u LUNEX_RUN_KEYCHAIN_TEST`；运行前环境没有任何`LUNEX_RUN_*` opt-in。结果`616 total / 615 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。
 - xcresult的warning/error/analyzer warning均为0，expected failure为0。该任务证明normal suite与副作用边界，不证明live Sunshine HDR、compositor EDR signaling或物理显示器输出。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_1-repo-final.nERR5w`：OpenSpec `28/33`、task 28=true/task 29=false、strict `6/6`、generator hash稳定且fixture/reference/package/Core Image/diff/owned-whitespace边界全部通过。
+
+## 2026-07-29 阶段 15 任务 6.2 验收结论
+
+- macOS、固定iPhone、固定iPad、tvOS与visionOS分别用独立DerivedData/xcresult执行Debug和Release，共10个warnings-as-errors build；全部`succeeded`且structured warning/error/analyzer warning为0。
+- 每个配置均生成精确一个`HDRVideoShaders.air`与一个`default.metallib`，证明Metal资源进入所有目标和配置，不证明compositor EDR signaling或物理HDR输出。
+- build-only前后只读simulator inventory逐字一致，SHA-256均为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`。该证据不提前替代6.4独立验收。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_2-repo-final.gB9WWq`：OpenSpec `29/33`、task 29=true/task 30=false、strict `6/6`、generator与全部仓库边界稳定。

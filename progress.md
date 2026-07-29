@@ -1683,3 +1683,11 @@
 - xcresult为`616 total / 615 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；expected failure为0，结构化warning/error/analyzer warning均为0，没有再次访问真实Keychain。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_1-repo-final.nERR5w`：OpenSpec `28/33`、task 28=true/task 29=false、strict `6/6`、generator hash稳定且所有仓库边界成立。
 - OpenSpec 6.1标记完成，权威进度更新为`28/33`；下一项6.2为macOS Debug/Release及固定iPhone/iPad/tvOS/visionOS targets的隔离warnings-as-errors构建。
+
+## 2026-07-29 阶段 15 任务 6.2 完成
+
+- 从已推送且clean的`64c24eb`启动6.2；前置只读盘点确认固定iPhone/iPad/Apple TV/Vision Pro实例唯一、available、`Shutdown`且全局`Booted=0`。
+- 证据目录`/tmp/LuneX-15-6_2-builds.0NL62s`包含macOS、固定iPhone、固定iPad、tvOS与visionOS的Debug/Release共10个隔离warnings-as-errors build。全部xcresult为`succeeded`且structured warning/error/analyzer warning为0，每个配置各生成一个Metal AIR与metallib。
+- simulator before/after清单逐字一致，SHA-256同为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；未执行任何create/boot/launch/shutdown/delete命令。6.4仍需独立读回，不以本项提前勾选。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_2-repo-final.gB9WWq`：OpenSpec `29/33`、task 29=true/task 30=false、strict `6/6`、generator hash稳定且所有仓库边界成立。
+- OpenSpec 6.2标记完成，权威进度更新为`29/33`；下一项6.3为OpenSpec strict、generator、clean-room/dependency、Metal compilation、analyzer、ASan、TSan、malloc ownership与renderer resource-release综合门禁。
