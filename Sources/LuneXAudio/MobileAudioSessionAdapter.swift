@@ -105,6 +105,7 @@ final class MobileAudioSessionAdapter:
     @unchecked Sendable
 {
     private let client: any MobileAudioSessionSystemClient
+    private let lock = NSLock()
     private var isActive = false
     private var requestedOutputChannelCount: Int?
 
@@ -116,6 +117,14 @@ final class MobileAudioSessionAdapter:
     }
 
     func activate(
+        for configuration: StreamAudioConfiguration
+    ) throws -> MobileAudioSessionRuntimeSnapshot {
+        try lock.withLock {
+            try activateLocked(for: configuration)
+        }
+    }
+
+    private func activateLocked(
         for configuration: StreamAudioConfiguration
     ) throws -> MobileAudioSessionRuntimeSnapshot {
         try configuration.validate()
@@ -151,7 +160,7 @@ final class MobileAudioSessionAdapter:
                 notifyOthersOnDeactivation: false
             )
             isActive = true
-            return currentSnapshot()
+            return currentSnapshotLocked()
         } catch {
             requestedOutputChannelCount = nil
             try? client.setSupportsMultichannelContent(false)
@@ -168,17 +177,25 @@ final class MobileAudioSessionAdapter:
     func deactivate(
         notifyOthersOnDeactivation: Bool
     ) -> MobileAudioSessionRuntimeSnapshot {
-        requestedOutputChannelCount = nil
-        try? client.setSupportsMultichannelContent(false)
-        try? client.setActive(
-            false,
-            notifyOthersOnDeactivation: notifyOthersOnDeactivation
-        )
-        isActive = false
-        return currentSnapshot()
+        lock.withLock {
+            requestedOutputChannelCount = nil
+            try? client.setSupportsMultichannelContent(false)
+            try? client.setActive(
+                false,
+                notifyOthersOnDeactivation: notifyOthersOnDeactivation
+            )
+            isActive = false
+            return currentSnapshotLocked()
+        }
     }
 
     func currentSnapshot() -> MobileAudioSessionRuntimeSnapshot {
+        lock.withLock {
+            currentSnapshotLocked()
+        }
+    }
+
+    private func currentSnapshotLocked() -> MobileAudioSessionRuntimeSnapshot {
         MobileAudioSessionRuntimeSnapshot(
             isActive: isActive,
             supportsMultichannelContent:

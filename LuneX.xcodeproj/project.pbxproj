@@ -786,6 +786,7 @@
 				AF43ED6A4ED69CDB13C328D9 /* MobileAudioSessionAdapterTests.swift in Sources */,
 				E75F2F7390AA0C5DFEB26C59 /* MacAudioOutputCapabilityTests.swift in Sources */,
 				620375111407043FB573FEA0 /* SpatialAudioRouteMonitorTests.swift in Sources */,
+				AA2CFB43BCB08260DAC43D49 /* NativeSessionAudioProcessorTests.swift in Sources */,
 				F172451920061FA8B868459C /* AudioPacketJitterBufferTests.swift in Sources */,
 				D0BC380E1BD3EC5E17FA857C /* AudioToolboxOpusDecoderTests.swift in Sources */,
 				50B03CE871B2A77E61BE1E23 /* ClientIdentityGenerationTests.swift in Sources */,
@@ -1219,6 +1220,7 @@
 		9FDCED4F38E2E40016BB139E /* SessionMediaEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */; };
 		9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/PairingStateMachineTests.swift"; sourceTree = "<group>"; };
 		A02A99B2E84D53C7B2CEA407 /* HDRRenderConfigurationResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1F04BD4939CFE0FFAC7BE0 /* HDRRenderConfigurationResolver.swift */; };
+		A072F16E9D9A535C3550A89F /* NativeSessionAudioProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/NativeSessionAudioProcessorTests.swift"; sourceTree = "<group>"; };
 		A09317A2A71A45E2B151B4CE /* RemoteInputRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */; };
 		A0937472EE5878FA82CB0F7E /* Tests */ = {isa = PBXGroup; children = (
 				2ACF9C6C82903CEB2A8E982F /* AppCatalogTests.swift */,
@@ -1231,6 +1233,7 @@
 				480CAB64EDE6D69180B3725E /* MobileAudioSessionAdapterTests.swift */,
 				02A1776CDBB94C8994CD0B0A /* MacAudioOutputCapabilityTests.swift */,
 				ABD03EF66A0BAE7ADAF5884C /* SpatialAudioRouteMonitorTests.swift */,
+				A072F16E9D9A535C3550A89F /* NativeSessionAudioProcessorTests.swift */,
 				D921D7FF58CFA0F11C098563 /* AudioPacketJitterBufferTests.swift */,
 				9F821FB80CF8F9AE0A3442DD /* AudioToolboxOpusDecoderTests.swift */,
 				6E567EC0931E47947A8C65F4 /* ClientIdentityGenerationTests.swift */,
@@ -1317,6 +1320,7 @@
 		A97D58BABC85A2E6F3E6D0C2 /* PairingStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */; };
 		A98BAC7E720E34687CF77B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DB7571B8334F5E7680A9B20 /* Assets.xcassets */; };
 		AA29A40578CDF8CFEFC593B9 /* HDRRenderContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FD909C5E7642EE14FD9AEC /* HDRRenderContract.swift */; };
+		AA2CFB43BCB08260DAC43D49 /* NativeSessionAudioProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A072F16E9D9A535C3550A89F /* NativeSessionAudioProcessorTests.swift */; };
 		AAE953452CCD6DDD91445CEA /* Resources */ = {isa = PBXGroup; children = (
 				0DB7571B8334F5E7680A9B20 /* Assets.xcassets */
 			); name = Resources; sourceTree = "<group>"; };

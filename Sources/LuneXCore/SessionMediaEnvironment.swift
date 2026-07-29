@@ -97,6 +97,10 @@ protocol SessionVideoProcessorCreating: Sendable {
 
 protocol SessionAudioProcessing: Sendable {
     func consume(_ event: AudioReceiveEvent) async throws -> Bool
+    func audioRuntimeEvents() async -> AsyncStream<SessionAudioRuntimeEvent>
+    func updateSpatialAudioPreferences(
+        _ preferences: SessionSpatialAudioPreferences
+    ) async throws
     func stop() async
 }
 

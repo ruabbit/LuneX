@@ -69,6 +69,21 @@ final class MobileAudioSessionRouteCapabilityReader:
     }
 }
 
+final class AudioEngineRouteCapabilityReader:
+    SpatialAudioRouteCapabilityReading,
+    @unchecked Sendable
+{
+    private let engineClient: any AudioEngineClient
+
+    init(engineClient: any AudioEngineClient) {
+        self.engineClient = engineClient
+    }
+
+    func currentRouteCapability() -> SpatialAudioRouteCapabilityState {
+        engineClient.currentSpatialRouteCapability()
+    }
+}
+
 enum SpatialAudioInterruptionState: String, Codable, Hashable, Sendable {
     case active
     case interrupted
@@ -399,6 +414,13 @@ final class SpatialAudioRouteMonitor: @unchecked Sendable {
         }
         eventSource.stop()
         continuation?.finish()
+    }
+
+    func refresh() {
+        guard let generation = lock.withLock({ state.generation }) else {
+            return
+        }
+        receive(.refresh, generation: generation)
     }
 
     func start() -> AsyncStream<SpatialAudioRouteMonitorSnapshot> {

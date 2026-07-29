@@ -86,6 +86,20 @@ protocol AudioEngineClient: Sendable {
     ) throws
     func stop(drain: Bool)
     func routeSnapshot() -> AudioRouteSnapshot
+    func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState
+}
+
+extension AudioEngineClient {
+    func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState {
+        let route = routeSnapshot()
+        let channelCount = max(route.outputChannelCount, 0)
+        return SpatialAudioRouteCapabilityState(
+            outputAvailable: channelCount > 0,
+            systemSpatialSupport: .unknown,
+            currentOutputChannelCount: channelCount,
+            maximumOutputChannelCount: channelCount
+        )
+    }
 }
 
 struct AVAudioEngineGraphReadback: Equatable, Sendable {
@@ -258,6 +272,7 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding
     private let spatialPlatformAdapter: any AVAudioSpatialPlatformApplying
     private let mobileAudioSessionAdapter: any MobileAudioSessionApplying
+    private let lock = NSRecursiveLock()
     private var configuration: StreamAudioConfiguration?
     private var configuredGraphMode = SpatialAudioGraphMode.unconfigured
     private var configuredGraphFallback: SpatialAudioGraphFallbackReason?
@@ -280,6 +295,15 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     }
 
     func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
+        try lock.withLock {
+            try configureLocked(configuration, graphIntent: graphIntent)
+        }
+    }
+
+    private func configureLocked(
         _ configuration: StreamAudioConfiguration,
         graphIntent: SpatialAudioGraphIntent
     ) throws -> SpatialAudioRuntimeSnapshot {
@@ -364,50 +388,87 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     }
 
     func start() throws {
-        guard !engine.isRunning else { return }
-        try engine.start()
-        player.play()
+        try lock.withLock {
+            guard !engine.isRunning else { return }
+            try engine.start()
+            player.play()
+        }
     }
 
     func schedule(
         _ buffer: DecodedPCMBuffer,
         completion: @escaping @Sendable () -> Void
     ) throws {
-        guard configuration != nil else {
-            throw AudioPipelineError.missingConfiguration
-        }
-        let audioBuffer = try AVAudioPCMBufferFactory.makeBuffer(from: buffer)
-        player.scheduleBuffer(
-            audioBuffer,
-            completionCallbackType: .dataConsumed
-        ) { _ in
-            completion()
+        try lock.withLock {
+            guard configuration != nil else {
+                throw AudioPipelineError.missingConfiguration
+            }
+            let audioBuffer = try AVAudioPCMBufferFactory.makeBuffer(from: buffer)
+            player.scheduleBuffer(
+                audioBuffer,
+                completionCallbackType: .dataConsumed
+            ) { _ in
+                completion()
+            }
         }
     }
 
     func stop(drain: Bool) {
-        player.stop()
-        engine.stop()
-        engine.reset()
-        resetGraphConnections()
-        configuration = nil
-        #if os(iOS) || os(tvOS) || os(visionOS)
-        mobileAudioSessionAdapter.deactivate(
-            notifyOthersOnDeactivation: true
-        )
-        #endif
+        lock.withLock {
+            player.stop()
+            engine.stop()
+            engine.reset()
+            resetGraphConnections()
+            configuration = nil
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            mobileAudioSessionAdapter.deactivate(
+                notifyOthersOnDeactivation: true
+            )
+            #endif
+        }
     }
 
     func routeSnapshot() -> AudioRouteSnapshot {
-        #if os(iOS) || os(tvOS) || os(visionOS)
-        return mobileAudioSessionAdapter.currentSnapshot()
-            .audioRouteSnapshot(preferredConfiguration: configuration)
-        #else
-        AudioRouteInspector.currentRoute(engine: engine, preferredConfiguration: configuration)
-        #endif
+        lock.withLock {
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            return mobileAudioSessionAdapter.currentSnapshot()
+                .audioRouteSnapshot(preferredConfiguration: configuration)
+            #else
+            return AudioRouteInspector.currentRoute(
+                engine: engine,
+                preferredConfiguration: configuration
+            )
+            #endif
+        }
+    }
+
+    func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState {
+        lock.withLock {
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            return SpatialAudioRouteCapabilityState(
+                mobileAudioSessionAdapter.currentSnapshot().routeCapability(
+                    revision: .init(rawValue: 0)
+                )
+            )
+            #else
+            return SpatialAudioRouteCapabilityState(
+                macOSRouteOutputCapabilityLocked(
+                    revision: .init(rawValue: 0)
+                )
+            )
+            #endif
+        }
     }
 
     func macOSRouteOutputCapability(
+        revision: SpatialAudioSemanticRevision
+    ) -> SpatialAudioRouteCapabilitySnapshot {
+        lock.withLock {
+            macOSRouteOutputCapabilityLocked(revision: revision)
+        }
+    }
+
+    private func macOSRouteOutputCapabilityLocked(
         revision: SpatialAudioSemanticRevision
     ) -> SpatialAudioRouteCapabilitySnapshot {
         MacAudioOutputCapabilityResolver.resolve(
@@ -415,11 +476,17 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
             output: MacAudioOutputFormatSnapshot(
                 format: engine.outputNode.outputFormat(forBus: 0)
             ),
-            graph: graphReadback()
+            graph: graphReadbackLocked()
         )
     }
 
     func graphReadback() -> AVAudioEngineGraphReadback {
+        lock.withLock {
+            graphReadbackLocked()
+        }
+    }
+
+    private func graphReadbackLocked() -> AVAudioEngineGraphReadback {
         let playerDestinations = engine.outputConnectionPoints(
             for: player,
             outputBus: 0

@@ -240,6 +240,7 @@ test_sources = [
   "Tests/LuneXCoreTests/MobileAudioSessionAdapterTests.swift",
   "Tests/LuneXCoreTests/MacAudioOutputCapabilityTests.swift",
   "Tests/LuneXCoreTests/SpatialAudioRouteMonitorTests.swift",
+  "Tests/LuneXCoreTests/NativeSessionAudioProcessorTests.swift",
   "Tests/LuneXCoreTests/AudioPacketJitterBufferTests.swift",
   "Tests/LuneXCoreTests/AudioToolboxOpusDecoderTests.swift",
   "Tests/LuneXCoreTests/ClientIdentityGenerationTests.swift",

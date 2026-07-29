@@ -1505,3 +1505,23 @@
 - spatial route/policy以完整`SpatialAudioGraphIntent`和单调semantic revision进入runtime：等价revision不重建，同revision冲突、陈旧revision、route revision不一致和跨平台intent均typed fail closed；中断期间只保存latest intent，resume只重建一次。
 - graph rebuild会通过`AudioSessionPipeline.configure()`失效旧scheduled-buffer generation并重置media clock，但累计concealment frame count属于会话诊断，不能因route/policy rebuild清零。
 - 等待operation gate期间被取消的Task必须在取得gate后检查cancellation再执行；否则processor replacement取消旧monitor任务后，排队的旧schedule/policy操作仍可能迟到修改runtime。
+
+## 2026-07-30 阶段 16 任务 4.2 调查
+
+- OpenSpec 4.2 的所有权边界是 `NativeSessionAudioProcessor`/factory：它们必须拥有同一音频 generation 的 route monitor、当前内存态 spatial/head-tracking preferences、graph generation 和 bounded semantic audio event stream；4.3 才把事件绑定到 media generation 并经 `NativeSessionMediaEnvironment` 转发，5.1 才负责设置持久化/迁移。
+- route monitor 的 source revision 不能直接作为 processor graph-policy revision。用户偏好更新也会产生 graph revision；若两个来源各自递增同一数值，后续 route revision 会与 preference revision 冲突或变旧。processor 必须保存 source monitor revision，并把每个 route/pref 语义变化重新映射到自己唯一、严格单调的 policy revision。
+- production route capability 必须来自实际播放 graph 的共享 owner。移动平台应由 `AVAudioEngineClient` 暴露其同一个 `MobileAudioSessionAdapter` 的当前 capability；macOS 应由同一个 engine client 读取 actual output format 和 graph readback。独立创建 reader/adapter 会形成与实际 engine 不一致的影子状态。
+- Apple AVFAudio 当前文档明确 `AVAudioSession.routeChangeNotification` 在 secondary thread 交付，并建议 route/spatial capability 变化后重新查询当前 route capability。因此 route reader 与 runtime 对共享 adapter/engine 的并发访问必须同步；现有 `@unchecked Sendable` 但无锁的 production owners 在接入 monitor 后不再足够。
+- semantic processor event 应避免转发 `AudioPipelineSnapshot.lastErrorMessage`、route output names 或 clock payload。4.2 可发布固定 cause、session ID、event sequence、graph generation、runtime stage、bounded `SpatialAudioRuntimeSnapshot?`、concealment count 和 bounded recovery action；graph failure 以 `.failed` stage 收敛，5.2 再映射正式诊断代码。
+- graph generation 只在真实 graph 建立/重建后递增：initial start 为第一代，running spatial-policy rebuild 和 resumable interruption rebuild各增加一次；等价 policy、deferred policy、pause 和 stop 不虚增。
+- interruption begin/media-services lost 必须先暂停 runtime、再应用新 policy revision，使 revision 留在 interrupted 状态等待；interruption end/media-services reset 必须先应用最新 intent、再恢复 graph。这样避免先重建随后立即停止，并保持 interruption 期间 latest-wins。
+- processor stop 顺序应为：标记 stopping、取消 observation task、停止 monitor并等待 observation 退出、停止 runtime、关闭 decoder、发布并 finish event stream。consumer 自己取消 `AsyncStream` 订阅不得反向停止 processor。
+
+## 2026-07-30 阶段 16 任务 4.2 验收结论
+
+- `NativeSessionAudioProcessorFactory`现在用同一个`AudioEngineClient`创建实际播放pipeline和route capability reader；移动audio-session adapter与macOS graph/output readback均加锁，notification thread与runtime actor不会并发读写未保护的AVFAudio owner。
+- processor拥有route observation、当前内存态spatial/head-tracking preference、独立严格单调policy revision、真实graph generation和capacity `1...64`的`bufferingNewest` semantic event stream。事件只含session ID、固定cause、stage、bounded spatial snapshot、preference、concealment和typed recovery action，不含route/output名称、host/app identity、clock payload或free-form graph error。
+- route和preference变化通过同一operation gate串行进入runtime；interruption期间只保留latest intent，等价语义不重建也不发布，真实graph rebuild/resume才增长graph generation。consumer取消自己的迭代不会停止processor。
+- graph failure路径曾在route observation task内取消自身，使后续runtime snapshot命中cancellation check并漏发`.failed`。最终实现只stop/finish monitor流，先收敛并发布失败快照，observer自然退出；late callback、后续preference mutation和replacement外状态均被拒绝。
+- 任务级验收为focused `8/8`、expanded audio matrix `88/88`、完整macOS `698 total / 697 passed / 1 explicit Keychain skip / 0 failed`，以及macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build 4/4通过；所有xcresult结构化diagnostics为0。
+- OpenSpec strict、scope/privacy静态门、`git diff --check`和generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`通过；全程显式关闭真实Keychain opt-in，前后全局`Booted=0`且没有操作simulator。该证据不替代4.3 media-generation转发、4.4 AppModel接线或6.6签名/物理可听验收。

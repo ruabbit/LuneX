@@ -123,7 +123,12 @@ enum OpusHeadEncoder {
     }
 }
 
-actor AudioToolboxOpusDecoder {
+protocol SessionAudioDecoding: Sendable {
+    func decode(_ packet: ReceivedAudioPacket) async throws -> DecodedPCMBuffer
+    func close() async
+}
+
+actor AudioToolboxOpusDecoder: SessionAudioDecoding {
     private let configuration: NegotiatedAudioStreamConfiguration
     private let pcmFormat: InterleavedPCMFormat
     private var converterOwner: OwnedAudioConverter?

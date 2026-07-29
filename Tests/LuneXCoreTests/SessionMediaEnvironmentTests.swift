@@ -1266,19 +1266,21 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             channelMapping: [0, 1],
             maximumPacketSize: 1_400
         )
-        let decoder = try AudioToolboxOpusDecoder(configuration: configuration)
         let engine = MediaEnvironmentAudioEngineClient()
-        let runtime = try SessionAudioRuntime(
-            pipeline: AudioSessionPipeline(engineClient: engine),
-            clock: MediaClockSynchronizer(),
-            configuration: .stereoLowLatency,
-            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        let factory = NativeSessionAudioProcessorFactory(
+            initialPreferences: SessionSpatialAudioPreferences(
+                spatialAudioEnabled: false,
+                headTrackingEnabled: false
+            ),
+            engineClientFactory: { engine },
+            routeEventSourceFactory: {
+                MediaEnvironmentAudioRouteEventSource()
+            },
+            eventTimeProvider: { 0 }
         )
-        _ = try await runtime.start(at: 0)
-        let processor = try NativeSessionAudioProcessor(
-            configuration: configuration,
-            decoder: decoder,
-            runtime: runtime
+        let processor = try await factory.makeAudioProcessor(
+            sessionID: UUID(),
+            configuration: configuration
         )
         var becameReady = false
         for (index, packet) in fixture.packets.enumerated() {
@@ -1907,9 +1909,34 @@ private actor RecordingAudioProcessor: SessionAudioProcessing {
         return true
     }
 
+    func audioRuntimeEvents() async -> AsyncStream<SessionAudioRuntimeEvent> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func updateSpatialAudioPreferences(
+        _ preferences: SessionSpatialAudioPreferences
+    ) async throws {
+        _ = preferences
+    }
+
     func stop() async {
         await calls.append("audio.processor.stop")
     }
+}
+
+private final class MediaEnvironmentAudioRouteEventSource:
+    SpatialAudioRouteMonitorEventSourcing,
+    @unchecked Sendable
+{
+    func start(
+        handler: @escaping @Sendable (SpatialAudioRouteMonitorEvent) -> Void
+    ) {
+        _ = handler
+    }
+
+    func stop() {}
 }
 
 private func XCTAssertThrowsErrorAsync<T>(

@@ -1909,3 +1909,28 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors最终build位于`/tmp/LuneX-16-4_1-builds.1785353391/*/Build-final.xcresult`，4/4 succeeded；六份最终xcresult结构化warning/error/analyzer warning均为0。
 - OpenSpec strict、`git diff --check`、scope boundary及generator双次稳定SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过；未访问真实Keychain，未创建、启动或操作simulator。
 - OpenSpec 4.1已勾选，预期权威进度`18/35`；下一项4.2扩展`NativeSessionAudioProcessor`及factory以拥有route monitor、当前spatial preferences、graph generation和semantic audio-state stream。4.1不接线processor/media environment/AppModel，也不证明签名权限或物理空间音频。
+
+## 2026-07-30 阶段 16 任务 4.2 启动
+
+- 4.1已以`2e95452 Serialize spatial audio recovery`独立提交并推送；fetch确认`HEAD == origin/main`且工作树clean后进入4.2。
+- 本项只扩展`NativeSessionAudioProcessor`和factory的route monitor、spatial preference、graph generation及semantic audio-state stream ownership；media environment forwarding、AppModel和UI分别保留给4.3、4.4和5.x。
+- 恢复后核对长期goal仍为active，OpenSpec为`18/35 ready`且下一项4.2；catchup只发现本段启动日志未提交，代码仍等于`origin/main`的`2e95452`。
+- Apple AVFAudio文档确认route notification在secondary thread交付并要求route/capability变化后重新查询当前能力。4.2设计因此将让monitor读取实际engine owner，并同步保护共享mobile adapter/macOS engine readback；processor使用独立单调policy revision，避免route与preference各自revision碰撞。
+- 预定semantic event只携带bounded cause/stage/spatial snapshot/recovery fields，不携带output names、free-form graph error或clock payload；graph generation只随真实initial/rebuild递增。测试仍显式移除真实Keychain opt-in，不操作simulator。
+
+## 2026-07-30 系统更新后恢复
+
+- 持久goal保持`active`，目标仍为阶段13至20；OpenSpec `integrate-spatial-audio-runtime`为`18/35 ready`，继续当前4.2，不跳过未完成的live/hardware证据。
+- 环境核对为Xcode 26.4、Swift 6.3；iOS/tvOS/visionOS 26.4与27.0 runtime存在，当前没有Booted simulator。本项不需要创建、启动、安装、运行或关闭simulator。
+- 工作树中的audio/runtime/test与planning改动均属于暂停前4.2；consumer-cancellation测试已经移除无关的`Task.result`读取，取消后只yield一次，再以成功graph reconfigure和未停止route source证明processor存活。
+- 恢复后的首轮focused命令误用无test action的`LuneX-macOS` scheme，在任何编译前退出；该轮不计证据。下一轮改用`LuneXCoreTests`、全新DerivedData/result bundle并继续显式`env -u LUNEX_RUN_KEYCHAIN_TEST`。
+- 首次有效focused运行编译与7/8 case通过，consumer cancellation case已通过；唯一graph-failure case超时。根因是route observer在`convergeRuntimeFailure`中取消自身，导致紧随其后的`runtime.snapshot` cancellation check抛出而不发布`.failed`。修复为只stop/finish monitor流，不自取消observer，待发布失败快照后自然退出。
+
+## 2026-07-30 阶段 16 任务 4.2 完成
+
+- processor/factory现统一拥有实际engine route reader、route monitor、内存态spatial preferences、独立policy revision、graph generation和有界semantic audio event stream；AudioToolbox decoder抽象为可注入`SessionAudioDecoding`，所有factory部分失败路径均停止monitor/runtime并关闭decoder。
+- route/preference/scheduling/stop经processor operation gate串行；中断latest-wins、等价去重、failure收敛、consumer cancellation不反向停止、late callback抑制和stop顺序均有确定性回归。自取消导致`.failed`漏发的问题已经修复。
+- 最终focused `/tmp/LuneX-16-4_2-focused-r4.bBXtAK/Focused.xcresult`为`8/8`；expanded `/tmp/LuneX-16-4_2-expanded.NWbZpu/Expanded.xcresult`为`88/88`；完整macOS `/tmp/LuneX-16-4_2-full.yxRLuS/LuneXCoreTests.xcresult`为`698 total / 697 passed / 1 explicit Keychain skip / 0 failed`。全部结构化warning/error/analyzer warning为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_2-builds.lp76FS/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。前后全局`Booted=0`，没有创建、启动或操作simulator。
+- OpenSpec strict、scope/privacy静态门、`git diff --check`与generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`通过；测试始终显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- OpenSpec 4.2已勾选，权威进度更新为`19/35`；下一项4.3把current-generation audio runtime state经`NativeSessionMediaEnvironment`转发并拒绝stale processor/rebuild事件。4.2不证明AppModel/UI已接线，也不证明签名entitlement、AirPods head tracking、route transition可听同步或物理多声道定位。
