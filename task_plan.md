@@ -33,7 +33,7 @@
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
-| 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`30/35`；normal suite与五平台Debug/Release构建矩阵已验收，下一项6.3综合质量门禁 |
+| 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`31/35`；normal、平台构建与综合质量门已验收，下一项6.4 sanitizer/resource门 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
@@ -49,7 +49,7 @@
 
 阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`32/33 in_progress`。1.1至6.4与6.6的production、确定性测试、normal/五平台Debug+Release、strict/generator/dependency/Metal/analyzer/ASan/TSan/malloc/resource、simulator与跟踪证据均完成并逐项提交推送；已推送`372ca60`上的阶段级离线自验再次通过`616 total / 615 passed / 1 Keychain skip / 0 failed`、strict `6/6`、generator与固定simulator门。唯一剩余6.5要求授权Sunshine HDR源、代表性HDR/SDR物理显示器和可审计参考图或测量。没有live compositor EDR signaling、物理亮度/颜色、动态headroom和跨显示器证据时，change不可archive、阶段不可标记`complete`；下一可执行阶段为16空间音频，不以其证据替代6.5。
 
-阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`30/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1从已推送clean HEAD在live-host和真实Keychain路径关闭时通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，并确认测试树不存在live-host opt-in入口。6.2从同一已推送HEAD完成macOS和固定iPhone/iPad/tvOS/visionOS的Debug/Release共10个隔离warnings-as-errors build：全部`succeeded`、结构化diagnostics为0且各有一份Metal AIR/metallib，固定simulator规范化清单前后不变、全部`Shutdown`且全局`Booted=0`。下一项6.3执行OpenSpec strict、generator、clean-room/dependency、direct SDK API、static analyzer和repository-boundary综合门禁。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、真实route切换与signed entitlement行为仍是6.6真机硬件证据，不能由离线测试、属性赋值、编译或模拟器替代。
+阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`31/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1从已推送clean HEAD在live-host和真实Keychain路径关闭时通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，并确认测试树不存在live-host opt-in入口。6.2从同一已推送HEAD完成macOS和固定iPhone/iPad/tvOS/visionOS的Debug/Release共10个隔离warnings-as-errors build：全部`succeeded`、结构化diagnostics为0且各有一份Metal AIR/metallib，固定simulator规范化清单前后不变、全部`Shutdown`且全局`Booted=0`。6.3完成OpenSpec/fixture/generator、clean-room/dependency/entitlement、四SDK ENet C/API probe和Debug/Release analyzer：自有bridge为0 finding，固定ENet各4项无漂移。下一项6.4执行ASan、TSan、malloc scribble/guard、graph replacement、observer cancellation和scheduled-buffer release资源门。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、真实route切换与signed entitlement行为仍是6.6真机硬件证据，不能由离线测试、属性赋值、编译或模拟器替代。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -77,6 +77,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 16.6.3 analyzer最终TSV期望值在含单引号description后把分隔符写成字面量反斜杠`t` | 1 | Debug/Release analyzer与xcresult均已成功且plist完整；不重跑分析，用字段化`printf`从同一bundle重建expected并复核8项精确相等 |
+| 16.6.3首轮repository包装器把每个entitlement路径在pbxproj中的file reference与Debug/Release settings误断言为2处 | 1 | 实际生成器稳定且每个平台精确为3处；修正为file reference加两配置的3处，从全新证据目录重跑完整repository/API gate |
 | 16.6.2第二轮repository gate用`! rg`检查Keychain opt-in，说明文档中的否定示例仍被打印且反向条件未显式计数 | 1 | 移除文档中的赋值字面量，改为先捕获匹配结果并显式断言为空，从全新目录重跑完整最终门 |
 | 16.6.2首轮repository gate沿用旧OpenSpec strict摘要字段`.summary.failed/.passed/.total` | 1 | strict实际已通过`7/7`但包装器在生成器前退出；按当前schema改读`.summary.totals`并从全新证据目录重跑完整提交前门 |
 | 16.6.1结构化验收包装器使用macOS `/bin/bash` 3.2不支持的`mapfile` | 1 | xcresult已成功生成且测试通过；不重跑suite，改用POSIX兼容的换行计数与精确字符串比较，从同一只读bundle完成全部断言 |

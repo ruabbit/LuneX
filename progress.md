@@ -2124,3 +2124,18 @@
 - simulator规范化before/after清单逐字一致，SHA-256均为`5d39940efaf4b37d2592952a96973621dda435f7a92cf2d43d911ea5df48140a`；原始JSON差异仅为三个26.4 runtime的`lastUsage.arm64`时间。固定四实例仍唯一、available、`Shutdown`且全局`Booted=0`，未执行任何设备生命周期命令。
 - repository final gate `/tmp/LuneX-16-6_2-repo-final-r3.dInpIv`通过OpenSpec strict `7/7`、apply `30/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、simulator不变、产品源码零diff与真实Keychain opt-in零新增门。
 - OpenSpec 6.2已勾选，权威进度更新为`30/35`；下一项6.3为OpenSpec strict、generator stability、clean-room/dependency、direct SDK API probes、static analyzer及repository-boundary gates。6.5独立simulator验收和6.6真机硬件验收保持未完成。
+
+## 2026-07-30 阶段 16 任务 6.3 启动
+
+- 6.2已以`d7e0d4b Verify spatial audio platform builds`独立提交并推送；fetch确认`HEAD == origin/main`且起始工作树clean，OpenSpec为`30/35 ready`，当前任务6.3。
+- 将从当前提交重新运行fixture/OpenSpec/generator、clean-room/reference/package/entitlement/dependency边界、四SDK ENet/bridge严格C编译、四平台空间音频public API正向与预期失败probe，以及macOS Debug/Release analyzer。
+- 本项不运行真实Keychain、ASan、TSan、malloc/resource gate或simulator lifecycle操作；6.4与6.5保持独立验收，6.6 signed entitlement和物理听感仍未完成。
+
+## 2026-07-30 阶段 16 任务 6.3 完成
+
+- repository/API gate `/tmp/LuneX-16-6_3-repository-r2.L5luEV`通过fixture self-test/全树、OpenSpec strict `7/7`、apply `30/35`、generator四次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、clean-room/reference/package/dependency/entitlement/private-symbol/whitespace边界。
+- macOS/iOS/tvOS/visionOS四SDK严格C门均覆盖固定8个ENet source和自有bridge并通过；四平台public spatial API正向probe通过，visionOS listener与三移动平台`SecTask`预期失败probe精确符合SDK availability。
+- Debug/Release analyzer `/tmp/LuneX-16-6_3-analyzer.HjnMkl`均成功，xcresult为0 error、0 compiler warning、4 analyzer warning；结构化plist确认自有bridge为0 finding，固定ENet四项在两配置逐字段一致。
+- analyzer最终比较首次因expected TSV在含单引号description后写入字面量反斜杠`t`而退出；两次analyzer无需重跑，从同一xcresult/plist以字段化expected复核8项精确相等。
+- repository final gate `/tmp/LuneX-16-6_3-repo-final.tSc9IJ`通过OpenSpec strict `7/7`、apply `31/35`、generator稳定、fixture、四SDK C/API和analyzer证据读回、产品源码零diff与真实Keychain opt-in零新增门。
+- OpenSpec 6.3已勾选，权威进度更新为`31/35`；下一项6.4运行ASan、TSan、malloc scribble/guard、resource ownership、graph replacement、observer cancellation和scheduled-buffer release gates。

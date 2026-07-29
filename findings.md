@@ -1709,3 +1709,19 @@
 - 原始CoreSimulator JSON只有iOS/tvOS/xrOS 26.4 runtime的`lastUsage.arm64`时间因destination解析而更新，设备identity/state规范化内容无变化。6.5仍须从当前环境独立执行只读身份/状态验收，不能复用本项结论提前勾选。
 - 本项没有运行测试或真实Keychain，真实Keychain opt-in始终关闭。构建通过只证明五平台SDK、配置、Swift/Clang/Metal/asset/link路径可编译，不证明签名entitlement被profile接受、AirPods listener head tracking、visionOS物理空间体验、真实route transition、可听多声道分离/同步或live Sunshine播放。
 - 勾选后的repository final gate `/tmp/LuneX-16-6_2-repo-final-r3.dInpIv`通过OpenSpec strict `7/7`、apply `30/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、规范化simulator不变、产品源码零diff和真实Keychain opt-in零新增门。
+
+## 2026-07-30 阶段 16 任务 6.3 调查
+
+- 6.3从已推送且clean的`d7e0d4b`重新执行OpenSpec strict、fixture self-test/全树、generator稳定性、clean-room/reference/package/依赖/entitlement/自有whitespace边界，不复用6.2的build pass代替当前仓库质量证据。
+- 依赖门继续限定Apple SDK、仓库自有Swift/C bridge与固定MIT ENet `aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1`；四SDK严格C语法检查必须覆盖8个ENet source和`LuneXENetBridge.c`。Xcode工程不得新增Swift Package、GPL Moonlight/FFmpeg/libopus/SDL/Qt产品依赖、reference checkout或二进制。
+- direct SDK probe同时覆盖WAVE 7.1 layout、interleaved PCM format、ambience-bed/`.auto`、macOS/iOS/tvOS listener head tracking、visionOS intended spatial experience、移动`AVAudioSession`多声道/route capability notification和macOS public `SecTask`读取。另以预期失败证明visionOS listener属性不可用、iOS/tvOS/visionOS公开SDK没有`SecTaskCreateFromSelf`。
+- static analyzer继续以当前固定ENet基线验收：自有`LuneXENetBridge`必须0 finding；Debug/Release的ENet必须各自精确保持3个dead store与1个public-API null-dereference finding，新增、消失或字段漂移都不算通过。Swift空间音频实现仍主要由warnings-as-errors、direct SDK probes和确定性测试覆盖，不能把Clang analyzer描述为Swift全语义分析。
+
+## 2026-07-30 阶段 16 任务 6.3 验收结论
+
+- repository/API证据位于`/tmp/LuneX-16-6_3-repository-r2.L5luEV`：fixture self-test/全树、OpenSpec strict `7/7`、apply `30/35`、generator初始与连续三次SHA-256均为`e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`，reference/package/binary/GPL依赖、entitlement、private-symbol与自有whitespace边界全部通过。
+- 固定MIT ENet revision/source/license未漂移；8个ENet source与自有`LuneXENetBridge.c`针对macOS、iOS simulator、tvOS simulator和visionOS simulator 26.4 SDK的严格C语法检查全部通过。
+- 四平台direct Swift probe以warnings-as-errors通过WAVE 7.1 layout、interleaved PCM、ambience-bed/`.auto`、平台空间策略、移动`AVAudioSession`多声道/route capability通知与macOS public `SecTask`。预期失败probe精确确认visionOS listener属性不可用，iOS/tvOS/visionOS公开SDK均找不到`SecTaskCreateFromSelf`。
+- analyzer证据位于`/tmp/LuneX-16-6_3-analyzer.HjnMkl`。Debug/Release xcresult均`succeeded`、0 error、0 compiler warning、4 analyzer warning；自有bridge两配置均0 finding，ENet两配置均精确为`compress.c:320` dead store、`unix.c:521/526` dead store和`unix.c:867` potential null dereference，没有新增或漂移。
+- 该任务证明当前源码/依赖/SDK编译与静态边界，不证明signed profile接受head-pose entitlement、listener property在AirPods上实际生效、visionOS空间体验可听、route transition、多声道声道识别、同步或live Sunshine播放；这些仍属于6.6。
+- 勾选后的repository final gate `/tmp/LuneX-16-6_3-repo-final.tSc9IJ`通过OpenSpec strict `7/7`、apply `31/35`、generator双次稳定、fixture、四SDK C/API证据读回、analyzer 8项精确比较、产品源码零diff和真实Keychain opt-in零新增门。
