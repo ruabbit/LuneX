@@ -10,6 +10,7 @@ enum SessionAudioRuntimeStage: String, Equatable, Sendable {
 
 enum AudioGraphRebuildReason: String, Equatable, Sendable {
     case routeChanged
+    case spatialPolicyChanged
     case underrun
     case packetLossExceeded
     case concealmentFailed
@@ -18,6 +19,8 @@ enum AudioGraphRebuildReason: String, Equatable, Sendable {
 enum AudioRuntimeRecoveryAction: Equatable, Sendable {
     case none
     case routeChangeDeferred
+    case spatialPolicyDeferred(SpatialAudioSemanticRevision)
+    case spatialPolicyUnchanged(SpatialAudioSemanticRevision)
     case interruptionPaused
     case interruptionResumeDeferred
     case interruptionResumed
@@ -42,8 +45,14 @@ enum AudioRuntimeDiscontinuity: Equatable, Sendable {
 enum AudioRuntimeRecoveryError: Error, Equatable, Sendable {
     case invalidPolicy
     case invalidState
+    case invalidGraphIntent
     case stopped
     case nonMonotonicEventTime
+    case staleSpatialPolicyRevision(
+        current: SpatialAudioSemanticRevision,
+        incoming: SpatialAudioSemanticRevision
+    )
+    case conflictingSpatialPolicyRevision(SpatialAudioSemanticRevision)
     case graphFailed(String)
     case arithmeticOverflow
 }
@@ -74,11 +83,35 @@ struct SessionAudioRuntimeSnapshot: Equatable, Sendable {
     var lastAction: AudioRuntimeRecoveryAction
 }
 
+private actor SessionAudioRuntimeOperationGate {
+    private var isHeld = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        if !isHeld {
+            isHeld = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func release() {
+        guard !waiters.isEmpty else {
+            isHeld = false
+            return
+        }
+        waiters.removeFirst().resume()
+    }
+}
+
 actor SessionAudioRuntime {
     private let pipeline: AudioSessionPipeline
     private let clock: MediaClockSynchronizer
     private let configuration: StreamAudioConfiguration
-    private let graphIntent: SpatialAudioGraphIntent
+    private let operationGate = SessionAudioRuntimeOperationGate()
+    private var graphIntent: SpatialAudioGraphIntent
     private let policy: AudioRuntimeRecoveryPolicy
     private var stage: SessionAudioRuntimeStage = .idle
     private var concealedFrameCount: UInt64 = 0
@@ -102,6 +135,14 @@ actor SessionAudioRuntime {
     }
 
     func start(at timeNanoseconds: UInt64) async throws -> SessionAudioRuntimeSnapshot {
+        try await serializedOperation {
+            try await self.startSerialized(at: timeNanoseconds)
+        }
+    }
+
+    private func startSerialized(
+        at timeNanoseconds: UInt64
+    ) async throws -> SessionAudioRuntimeSnapshot {
         guard stage == .idle || stage == .stopped else {
             throw AudioRuntimeRecoveryError.invalidState
         }
@@ -129,6 +170,18 @@ actor SessionAudioRuntime {
         _ decoded: DecodedPCMBuffer,
         presentationTimeNanoseconds: UInt64
     ) async throws -> AudioScheduleReceipt {
+        try await serializedOperation {
+            try await self.scheduleSerialized(
+                decoded,
+                presentationTimeNanoseconds: presentationTimeNanoseconds
+            )
+        }
+    }
+
+    private func scheduleSerialized(
+        _ decoded: DecodedPCMBuffer,
+        presentationTimeNanoseconds: UInt64
+    ) async throws -> AudioScheduleReceipt {
         guard stage == .running else {
             if stage == .stopped { throw AudioRuntimeRecoveryError.stopped }
             throw AudioRuntimeRecoveryError.invalidState
@@ -152,6 +205,15 @@ actor SessionAudioRuntime {
     }
 
     func handle(
+        _ event: AudioRuntimeDiscontinuity,
+        at timeNanoseconds: UInt64
+    ) async throws -> SessionAudioRuntimeSnapshot {
+        try await serializedOperation {
+            try await self.handleSerialized(event, at: timeNanoseconds)
+        }
+    }
+
+    private func handleSerialized(
         _ event: AudioRuntimeDiscontinuity,
         at timeNanoseconds: UInt64
     ) async throws -> SessionAudioRuntimeSnapshot {
@@ -224,7 +286,70 @@ actor SessionAudioRuntime {
         }
     }
 
+    func applySpatialPolicy(
+        _ intent: SpatialAudioGraphIntent,
+        at timeNanoseconds: UInt64
+    ) async throws -> SessionAudioRuntimeSnapshot {
+        try await serializedOperation {
+            try await self.applySpatialPolicySerialized(
+                intent,
+                at: timeNanoseconds
+            )
+        }
+    }
+
+    private func applySpatialPolicySerialized(
+        _ intent: SpatialAudioGraphIntent,
+        at timeNanoseconds: UInt64
+    ) async throws -> SessionAudioRuntimeSnapshot {
+        guard stage != .stopped else { throw AudioRuntimeRecoveryError.stopped }
+        guard stage != .failed else { throw AudioRuntimeRecoveryError.invalidState }
+        try validateEventTime(timeNanoseconds)
+        guard intent.hasConsistentRevision,
+              intent.platform == graphIntent.platform else {
+            throw AudioRuntimeRecoveryError.invalidGraphIntent
+        }
+
+        if intent.revision < graphIntent.revision {
+            throw AudioRuntimeRecoveryError.staleSpatialPolicyRevision(
+                current: graphIntent.revision,
+                incoming: intent.revision
+            )
+        }
+        if intent.revision == graphIntent.revision {
+            guard intent == graphIntent else {
+                throw AudioRuntimeRecoveryError
+                    .conflictingSpatialPolicyRevision(intent.revision)
+            }
+            lastAction = .spatialPolicyUnchanged(intent.revision)
+            latestEventTimeNanoseconds = timeNanoseconds
+            return try await makeSnapshot(at: timeNanoseconds)
+        }
+
+        guard stage == .running || stage == .interrupted else {
+            throw AudioRuntimeRecoveryError.invalidState
+        }
+        graphIntent = intent
+        if stage == .interrupted {
+            lastAction = .spatialPolicyDeferred(intent.revision)
+            latestEventTimeNanoseconds = timeNanoseconds
+            return try await makeSnapshot(at: timeNanoseconds)
+        }
+        return try await rebuildGraph(
+            reason: .spatialPolicyChanged,
+            at: timeNanoseconds
+        )
+    }
+
     func stop(at timeNanoseconds: UInt64) async throws -> SessionAudioRuntimeSnapshot {
+        try await serializedOperation {
+            try await self.stopSerialized(at: timeNanoseconds)
+        }
+    }
+
+    private func stopSerialized(
+        at timeNanoseconds: UInt64
+    ) async throws -> SessionAudioRuntimeSnapshot {
         try validateEventTime(timeNanoseconds)
         if stage != .stopped {
             _ = await pipeline.stop(reason: .sessionEnded, drain: false)
@@ -237,8 +362,10 @@ actor SessionAudioRuntime {
     }
 
     func snapshot(at timeNanoseconds: UInt64) async throws -> SessionAudioRuntimeSnapshot {
-        try validateEventTime(timeNanoseconds)
-        return try await makeSnapshot(at: timeNanoseconds)
+        try await serializedOperation {
+            try self.validateEventTime(timeNanoseconds)
+            return try await self.makeSnapshot(at: timeNanoseconds)
+        }
     }
 
     private func concealOrResynchronize(
@@ -372,6 +499,21 @@ actor SessionAudioRuntime {
         if let latestEventTimeNanoseconds,
            timeNanoseconds < latestEventTimeNanoseconds {
             throw AudioRuntimeRecoveryError.nonMonotonicEventTime
+        }
+    }
+
+    private func serializedOperation<Value>(
+        _ operation: () async throws -> Value
+    ) async throws -> Value {
+        await operationGate.acquire()
+        do {
+            try Task.checkCancellation()
+            let value = try await operation()
+            await operationGate.release()
+            return value
+        } catch {
+            await operationGate.release()
+            throw error
         }
     }
 }

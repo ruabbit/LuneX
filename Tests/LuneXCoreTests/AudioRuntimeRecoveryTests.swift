@@ -206,6 +206,333 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
         }
     }
 
+    func testNewSpatialPolicyRevisionRebuildsExactlyOnceWithExactIntent() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        let revisedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true
+        )
+
+        let rebuilt = try await harness.runtime.applySpatialPolicy(
+            revisedIntent,
+            at: 1
+        )
+
+        XCTAssertEqual(rebuilt.stage, .running)
+        XCTAssertEqual(rebuilt.lastAction, .graphRebuilt(.spatialPolicyChanged))
+        XCTAssertEqual(rebuilt.pipeline.spatialRuntime?.revision, revisedIntent.revision)
+        XCTAssertEqual(
+            harness.client.snapshotGraphIntents(),
+            [harness.graphIntent, revisedIntent]
+        )
+    }
+
+    func testEquivalentSpatialPolicyIsBoundedAndInvalidRevisionsAreRejected() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+
+        let unchanged = try await harness.runtime.applySpatialPolicy(
+            harness.graphIntent,
+            at: 1
+        )
+
+        XCTAssertEqual(
+            unchanged.lastAction,
+            .spatialPolicyUnchanged(harness.graphIntent.revision)
+        )
+        XCTAssertEqual(harness.client.snapshotGraphIntents(), [harness.graphIntent])
+
+        let staleIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 0)
+        )
+        await RecoveryXCTAssertThrowsErrorAsync(
+            try await harness.runtime.applySpatialPolicy(staleIntent, at: 2)
+        ) { error in
+            XCTAssertEqual(
+                error as? AudioRuntimeRecoveryError,
+                .staleSpatialPolicyRevision(
+                    current: harness.graphIntent.revision,
+                    incoming: staleIntent.revision
+                )
+            )
+        }
+
+        let conflictingIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: harness.graphIntent.revision,
+            userEnablesSpatialAudio: true
+        )
+        await RecoveryXCTAssertThrowsErrorAsync(
+            try await harness.runtime.applySpatialPolicy(conflictingIntent, at: 2)
+        ) { error in
+            XCTAssertEqual(
+                error as? AudioRuntimeRecoveryError,
+                .conflictingSpatialPolicyRevision(harness.graphIntent.revision)
+            )
+        }
+
+        let wrongPlatform = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            platform: .iOS
+        )
+        await RecoveryXCTAssertThrowsErrorAsync(
+            try await harness.runtime.applySpatialPolicy(wrongPlatform, at: 2)
+        ) { error in
+            XCTAssertEqual(error as? AudioRuntimeRecoveryError, .invalidGraphIntent)
+        }
+
+        let inconsistentIntent = SpatialAudioGraphIntent(
+            revision: .init(rawValue: 2),
+            platform: harness.graphIntent.platform,
+            route: harness.graphIntent.route,
+            entitlement: harness.graphIntent.entitlement,
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: false
+        )
+        await RecoveryXCTAssertThrowsErrorAsync(
+            try await harness.runtime.applySpatialPolicy(inconsistentIntent, at: 2)
+        ) { error in
+            XCTAssertEqual(error as? AudioRuntimeRecoveryError, .invalidGraphIntent)
+        }
+        XCTAssertEqual(harness.client.snapshotGraphIntents(), [harness.graphIntent])
+    }
+
+    func testInterruptedRuntimeDefersAndResumesOnlyLatestSpatialPolicy() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        _ = try await harness.runtime.handle(.interruptionBegan, at: 1)
+        let revisionTwo = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true
+        )
+        let revisionThree = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 3),
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: true
+        )
+
+        let firstDeferred = try await harness.runtime.applySpatialPolicy(
+            revisionTwo,
+            at: 2
+        )
+        let latestDeferred = try await harness.runtime.applySpatialPolicy(
+            revisionThree,
+            at: 3
+        )
+
+        XCTAssertEqual(
+            firstDeferred.lastAction,
+            .spatialPolicyDeferred(revisionTwo.revision)
+        )
+        XCTAssertEqual(
+            latestDeferred.lastAction,
+            .spatialPolicyDeferred(revisionThree.revision)
+        )
+        XCTAssertEqual(harness.client.snapshotGraphIntents(), [harness.graphIntent])
+
+        let resumed = try await harness.runtime.handle(
+            .interruptionEnded(shouldResume: true),
+            at: 4
+        )
+
+        XCTAssertEqual(resumed.lastAction, .interruptionResumed)
+        XCTAssertEqual(resumed.pipeline.spatialRuntime?.revision, revisionThree.revision)
+        XCTAssertEqual(
+            harness.client.snapshotGraphIntents(),
+            [harness.graphIntent, revisionThree]
+        )
+    }
+
+    func testSpatialPolicyRebuildPreservesConcealmentAndRejectsLateCompletion() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        let concealed = try await harness.runtime.handle(
+            .packetLoss(
+                firstSequenceNumber: 1,
+                firstRTPTimeStamp: 1,
+                packetCount: 1,
+                samplesPerPacket: 240
+            ),
+            at: 1
+        )
+        XCTAssertEqual(concealed.concealedFrameCount, 240)
+        let scheduledBeforeRebuild = await harness.pipeline.scheduledBufferCount()
+        XCTAssertEqual(scheduledBeforeRebuild, 1)
+        let revisedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true
+        )
+
+        let rebuilt = try await harness.runtime.applySpatialPolicy(
+            revisedIntent,
+            at: 2
+        )
+        harness.client.completeAllSchedules()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(rebuilt.concealedFrameCount, 240)
+        XCTAssertEqual(rebuilt.clock.master, .unavailable)
+        let scheduledAfterLateCompletion = await harness.pipeline.scheduledBufferCount()
+        XCTAssertEqual(scheduledAfterLateCompletion, 0)
+    }
+
+    func testSpatialPolicyGraphFailureCleansResourcesAndFailsClosed() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        harness.client.failNextConfigure()
+        let revisedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true
+        )
+
+        await RecoveryXCTAssertThrowsErrorAsync(
+            try await harness.runtime.applySpatialPolicy(revisedIntent, at: 1)
+        ) { error in
+            XCTAssertEqual(
+                error as? AudioRuntimeRecoveryError,
+                .graphFailed("invalidConfiguration")
+            )
+        }
+        let failed = try await harness.runtime.snapshot(at: 2)
+
+        XCTAssertEqual(failed.stage, .failed)
+        XCTAssertEqual(failed.pipeline.stage, .failed)
+        XCTAssertEqual(failed.clock.master, .unavailable)
+        XCTAssertTrue(harness.client.snapshotScheduledBuffers().isEmpty)
+    }
+
+    func testInFlightSpatialPolicyRebuildSerializesScheduleSnapshotAndStop() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        harness.client.blockNextConfigure()
+        let revisedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true
+        )
+        let policyTask = Task {
+            try await harness.runtime.applySpatialPolicy(revisedIntent, at: 1)
+        }
+        XCTAssertTrue(harness.client.waitUntilConfigureIsBlocked())
+        let probe = RecoveryOperationProbe()
+        let scheduledPCM = pcm(sequence: 9, timestamp: 0)
+        let scheduleTask = Task {
+            do {
+                let receipt = try await harness.runtime.schedule(
+                    scheduledPCM,
+                    presentationTimeNanoseconds: 2
+                )
+                await probe.markScheduleFinished()
+                return receipt
+            } catch {
+                await probe.markScheduleFinished()
+                throw error
+            }
+        }
+        await Task.yield()
+        let snapshotTask = Task {
+            do {
+                let snapshot = try await harness.runtime.snapshot(at: 2)
+                await probe.markSnapshotFinished()
+                return snapshot
+            } catch {
+                await probe.markSnapshotFinished()
+                throw error
+            }
+        }
+        await Task.yield()
+        let stopTask = Task {
+            do {
+                let snapshot = try await harness.runtime.stop(at: 2)
+                await probe.markStopFinished()
+                return snapshot
+            } catch {
+                await probe.markStopFinished()
+                throw error
+            }
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let blockedOperations = await probe.snapshot()
+        XCTAssertEqual(
+            blockedOperations,
+            RecoveryOperationProbe.Snapshot(
+                scheduleFinished: false,
+                snapshotFinished: false,
+                stopFinished: false
+            )
+        )
+        XCTAssertFalse(
+            harness.client.snapshotCalls().contains("schedule:9")
+        )
+
+        harness.client.releaseBlockedConfigure()
+        let policySnapshot = try await policyTask.value
+        _ = try? await scheduleTask.value
+        let observedSnapshot = try await snapshotTask.value
+        let stopped = try await stopTask.value
+
+        XCTAssertEqual(
+            policySnapshot.pipeline.spatialRuntime?.revision,
+            revisedIntent.revision
+        )
+        XCTAssertNotEqual(observedSnapshot.pipeline.stage, .configured)
+        XCTAssertEqual(stopped.stage, .stopped)
+        let finishedOperations = await probe.snapshot()
+        XCTAssertEqual(
+            finishedOperations,
+            RecoveryOperationProbe.Snapshot(
+                scheduleFinished: true,
+                snapshotFinished: true,
+                stopFinished: true
+            )
+        )
+    }
+
+    func testCancelledOperationWaitingForSpatialRebuildDoesNotSchedule() async throws {
+        let harness = try makeHarness()
+        _ = try await harness.runtime.start(at: 0)
+        harness.client.blockNextConfigure()
+        let revisedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: true
+        )
+        let policyTask = Task {
+            try await harness.runtime.applySpatialPolicy(revisedIntent, at: 1)
+        }
+        XCTAssertTrue(harness.client.waitUntilConfigureIsBlocked())
+        let scheduledPCM = pcm(sequence: 10, timestamp: 0)
+        let scheduleTask = Task {
+            try await harness.runtime.schedule(
+                scheduledPCM,
+                presentationTimeNanoseconds: 2
+            )
+        }
+        await Task.yield()
+        scheduleTask.cancel()
+
+        harness.client.releaseBlockedConfigure()
+        _ = try await policyTask.value
+        await RecoveryXCTAssertThrowsErrorAsync(
+            try await scheduleTask.value
+        ) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertFalse(
+            harness.client.snapshotCalls().contains("schedule:10")
+        )
+    }
+
     private func makeHarness() throws -> RecoveryHarness {
         let client = RecoveryAudioEngineClient()
         let pipeline = AudioSessionPipeline(engineClient: client)
@@ -219,6 +546,7 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
         )
         return RecoveryHarness(
             runtime: runtime,
+            pipeline: pipeline,
             client: client,
             graphIntent: graphIntent
         )
@@ -240,17 +568,54 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
 
 private struct RecoveryHarness {
     var runtime: SessionAudioRuntime
+    var pipeline: AudioSessionPipeline
     var client: RecoveryAudioEngineClient
     var graphIntent: SpatialAudioGraphIntent
 }
 
+private actor RecoveryOperationProbe {
+    struct Snapshot: Equatable {
+        let scheduleFinished: Bool
+        let snapshotFinished: Bool
+        let stopFinished: Bool
+    }
+
+    private var scheduleFinished = false
+    private var snapshotFinished = false
+    private var stopFinished = false
+
+    func markScheduleFinished() {
+        scheduleFinished = true
+    }
+
+    func markSnapshotFinished() {
+        snapshotFinished = true
+    }
+
+    func markStopFinished() {
+        stopFinished = true
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(
+            scheduleFinished: scheduleFinished,
+            snapshotFinished: snapshotFinished,
+            stopFinished: stopFinished
+        )
+    }
+}
+
 private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let lock = NSLock()
+    private let blockedConfigureEntered = DispatchSemaphore(value: 0)
+    private let blockedConfigureRelease = DispatchSemaphore(value: 0)
     private var calls: [String] = []
     private var scheduledBuffers: [DecodedPCMBuffer] = []
+    private var scheduleCompletions: [@Sendable () -> Void] = []
     private var scheduleCallCount = 0
     private var failingScheduleCall: Int?
     private var shouldFailNextConfigure = false
+    private var shouldBlockNextConfigure = false
     private var graphIntents: [SpatialAudioGraphIntent] = []
 
     func configure(
@@ -264,6 +629,14 @@ private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sen
         let shouldFail = lock.withLock { () -> Bool in
             defer { shouldFailNextConfigure = false }
             return shouldFailNextConfigure
+        }
+        let shouldBlock = lock.withLock { () -> Bool in
+            defer { shouldBlockNextConfigure = false }
+            return shouldBlockNextConfigure
+        }
+        if shouldBlock {
+            blockedConfigureEntered.signal()
+            blockedConfigureRelease.wait()
         }
         if shouldFail { throw AudioPipelineError.invalidConfiguration }
         return makeNonspatialRuntime(
@@ -286,7 +659,10 @@ private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sen
             return scheduleCallCount == failingScheduleCall
         }
         if shouldFail { throw AudioPipelineError.invalidPCMBuffer }
-        lock.withLock { scheduledBuffers.append(buffer) }
+        lock.withLock {
+            scheduledBuffers.append(buffer)
+            scheduleCompletions.append(completion)
+        }
     }
 
     func stop(drain: Bool) {
@@ -310,8 +686,28 @@ private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sen
         lock.withLock { shouldFailNextConfigure = true }
     }
 
+    func blockNextConfigure() {
+        lock.withLock { shouldBlockNextConfigure = true }
+    }
+
+    func waitUntilConfigureIsBlocked() -> Bool {
+        blockedConfigureEntered.wait(timeout: .now() + 2) == .success
+    }
+
+    func releaseBlockedConfigure() {
+        blockedConfigureRelease.signal()
+    }
+
     func failScheduleCall(_ call: Int) {
         lock.withLock { failingScheduleCall = call }
+    }
+
+    func completeAllSchedules() {
+        let completions = lock.withLock { () -> [@Sendable () -> Void] in
+            defer { scheduleCompletions.removeAll() }
+            return scheduleCompletions
+        }
+        completions.forEach { $0() }
     }
 
     func snapshotCalls() -> [String] {

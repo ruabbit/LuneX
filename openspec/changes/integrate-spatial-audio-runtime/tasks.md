@@ -26,7 +26,7 @@
 
 ## 4. Recovery, session generation, and application ownership
 
-- [ ] 4.1 Extend `SessionAudioRuntime` to serialize route/spatial policy revisions with scheduling, defer changes during interruption, rebuild atomically, and preserve media-clock/concealment behavior
+- [x] 4.1 Extend `SessionAudioRuntime` to serialize route/spatial policy revisions with scheduling, defer changes during interruption, rebuild atomically, and preserve media-clock/concealment behavior
 - [ ] 4.2 Extend `NativeSessionAudioProcessor` and its factory to own the route monitor, current spatial preferences, graph generation, and semantic audio-state event stream
 - [ ] 4.3 Forward current-generation audio runtime state through `NativeSessionMediaEnvironment` alongside readiness and discard stale processor/rebuild events
 - [ ] 4.4 Bind `AppModel` audio/spatial state and preference changes to the active session/media generation, clearing current state on stop, failure, reconnect, and replacement

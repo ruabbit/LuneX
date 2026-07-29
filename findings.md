@@ -1499,3 +1499,9 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build根目录为`/tmp/LuneX-16-3_6-build-{macos,ios,tvos,visionos}.1785352431964`；四份xcresult全部`succeeded`且结构化diagnostics为0，未选择或操作simulator。
 - OpenSpec strict、覆盖静态门、`git diff --check`及generator连续SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。两次外层包装器错误均发生在xcodebuild参数展开或成功后退出码读取，并已用正确Bash包装器和新DerivedData完整重跑最终focused/expanded门。
 - 本项为离线/编译测试矩阵，不证明4.1 runtime rebuild、signed provisioning、AirPods head tracking、物理多声道channel identification或route transition可听同步。
+### 2026-07-30 阶段 16 SessionAudioRuntime 空间策略串行化
+
+- Swift actor在跨actor `await`期间允许重入，不能单独保证schedule、route/policy rebuild、snapshot和stop看不到半配置状态；`SessionAudioRuntime`需要独立FIFO operation gate覆盖全部公开运行时操作。
+- spatial route/policy以完整`SpatialAudioGraphIntent`和单调semantic revision进入runtime：等价revision不重建，同revision冲突、陈旧revision、route revision不一致和跨平台intent均typed fail closed；中断期间只保存latest intent，resume只重建一次。
+- graph rebuild会通过`AudioSessionPipeline.configure()`失效旧scheduled-buffer generation并重置media clock，但累计concealment frame count属于会话诊断，不能因route/policy rebuild清零。
+- 等待operation gate期间被取消的Task必须在取得gate后检查cancellation再执行；否则processor replacement取消旧monitor任务后，排队的旧schedule/policy操作仍可能迟到修改runtime。

@@ -1890,3 +1890,22 @@
 - 最终focused `24/24`、expanded `77/77 passed / 0 skipped / 0 failed`；macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build全部succeeded，六份xcresult的warning/error/analyzer warning均为0。
 - OpenSpec strict、覆盖静态门、`git diff --check`与generator稳定SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain，也未创建、启动或操作simulator。
 - OpenSpec 3.6已勾选，权威进度更新为`17/35`；下一项4.1将route/spatial policy revision串行接入`SessionAudioRuntime`，处理interruption期间延后、原子rebuild及media-clock/concealment保持。3.6不证明runtime接线、签名权限或物理空间音频。
+
+## 2026-07-30 阶段 16 任务 4.1 启动
+
+- 3.6已以`1101a7c Expand spatial route adapter tests`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean后进入4.1。
+- 本项只扩展`SessionAudioRuntime`的route/spatial policy revision串行化、interruption延后、原子rebuild及media-clock/concealment保持；monitor ownership、processor event stream、media environment和AppModel分别保留给4.2至4.4。
+- 更新后环境复核为macOS 27.0、Xcode 26.4、Swift 6.3；长期goal保持active，OpenSpec权威进度仍为`17/35`，没有运行中的build/test或simulator操作。
+- `SessionAudioRuntime`已加入FIFO异步operation gate并新增typed spatial-policy revision入口；聚焦测试正在覆盖单次精确重建、等价/冲突/陈旧拒绝、中断latest-wins、concealment/clock保持、late completion、graph failure及in-flight操作串行化。
+- 首次测试命令误用不含test action的`LuneX-macOS` scheme且未预建日志目录，未进入编译；切换`LuneXCoreTests`后首轮编译准确暴露4处XCTest同步autoclosure内`await`错误，已改为先读取actor值再断言。两次均为命令/测试代码问题，不是产品运行失败。
+- 聚焦r2继续在编译期拒绝并发测试Task捕获XCTestCase `self`；已在创建Task前生成immutable PCM值，避免sending closure跨并发域捕获测试实例。
+
+## 2026-07-30 阶段 16 任务 4.1 完成
+
+- `SessionAudioRuntime`现以独立FIFO异步operation gate串行化start、schedule、discontinuity、spatial policy、stop和snapshot；等待期间取消的Task在取得gate后立即抛出`CancellationError`，不会执行迟到调度。
+- 新spatial-policy入口严格校验consistent route revision、固定平台和单调event/revision：等价intent返回bounded unchanged，冲突/陈旧/非法intent typed fail closed；更高revision在running时原子重建，在interruption时latest-wins延后到resume。
+- policy rebuild使用精确最新intent，失效旧scheduled-buffer generation、拒绝late completion并重置media clock，同时保持累计concealment frame count；graph失败清理pipeline并把runtime收敛到failed。
+- 最终focused `/tmp/LuneX-16-4_1-focused-final-r2.1785353593.xcresult` 为`17/17 passed`，expanded `/tmp/LuneX-16-4_1-expanded-final-r2.1785353609.xcresult` 为`74/74 passed`；均`0 skipped / 0 failed`并显式移除真实Keychain opt-in。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors最终build位于`/tmp/LuneX-16-4_1-builds.1785353391/*/Build-final.xcresult`，4/4 succeeded；六份最终xcresult结构化warning/error/analyzer warning均为0。
+- OpenSpec strict、`git diff --check`、scope boundary及generator双次稳定SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过；未访问真实Keychain，未创建、启动或操作simulator。
+- OpenSpec 4.1已勾选，预期权威进度`18/35`；下一项4.2扩展`NativeSessionAudioProcessor`及factory以拥有route monitor、当前spatial preferences、graph generation和semantic audio-state stream。4.1不接线processor/media environment/AppModel，也不证明签名权限或物理空间音频。
