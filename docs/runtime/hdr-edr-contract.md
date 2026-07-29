@@ -666,6 +666,23 @@ signaling, physical luminance/color, cross-display visual consistency, power,
 or thermal performance. The post-mark repository evidence is retained at
 `/tmp/LuneX-15-6_3-repo-final.cuq58y`.
 
+### Independent simulator inventory gate
+
+Task 6.4 performed only read-only `simctl list` queries. The normalized
+inventory from before and after task 6.2 and the independent current readback
+are byte-identical with SHA-256
+`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`.
+Each fixed UUID occurs exactly once in its specified 26.4 runtime with the
+expected name, is available, and is `Shutdown`; the full available inventory
+contains zero `Booted` devices.
+
+iOS 27 and xrOS 27 runtimes also contain system-configured instances sharing
+the iPhone, iPad, and Vision Pro product names. They are separate runtime
+identities, not duplicates of the four fixed 26.4 UUIDs, and this task did not
+create, boot, launch, shut down, delete, install to, or otherwise manage any
+simulator. Evidence is retained at
+`/tmp/LuneX-15-6_4-simulator-audit-r2.1eiDpv`.
+
 ## Verification matrix
 
 ### Deterministic evidence
@@ -681,8 +698,8 @@ or thermal performance. The post-mark repository evidence is retained at
   replacement tests reject stale output and release resources.
 - Normal tests, five-platform Debug/Release, analyzer, sanitizer, malloc,
   generator, dependency, and direct Metal gates pass without real Keychain or
-  live-host side effects. The independent simulator-inventory gate remains task
-  6.4.
+  live-host side effects. The independent fixed-identity simulator-inventory
+  gate also passes without device lifecycle operations.
 
 ### Physical evidence required for completion
 

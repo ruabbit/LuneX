@@ -1706,3 +1706,10 @@
 - 两个bash包装器最初在shell启动前被外层JavaScript模板的`${...}`解析阻止；analyzer expected TSV和ASan skip复核各有一次旧文本口径不匹配。以上均改为字段/当前日志语义判定，不重跑已成功的analyzer或ASan。首轮resource虽`343/343`，但因`llvm-profdata`继承MallocStackLogging产生1条工具warning而不计最终零诊断证据。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_3-repo-final.cuq58y`：OpenSpec `30/33`、task 30=true/task 31=false、strict `6/6`、generator与全部仓库边界稳定。
 - OpenSpec 6.3标记完成，权威进度更新为`30/33`；下一项6.4仅执行固定simulator identity/state的独立只读验收，不创建、启动、关闭、删除、安装或运行模拟器。6.5物理HDR/SDR显示器与live Sunshine证据仍未完成。
+
+## 2026-07-29 阶段 15 任务 6.4 完成
+
+- 6.3已以`80ba050 Run HDR quality and resource gates`独立提交并推送，fetch确认`HEAD == origin/main == 80ba050`且工作树clean后进入只读6.4。
+- `/tmp/LuneX-15-6_4-simulator-audit-r2.1eiDpv`证明6.2 before/after与当前三份规范化清单逐字一致，SHA-256均为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；四个固定26.4 runtime/name/UUID identity各唯一、available且`Shutdown`，全局`Booted=0`。
+- 首轮额外要求产品名称跨所有runtime全局唯一，因iOS/xrOS 27的系统同名实例而退出；这不表示固定UUID重复。最终按`runtime + name + UUID`验证OpenSpec固定identity，并披露跨runtime实例。本项没有创建、启动、关闭、删除、安装或运行任何模拟器。
+- OpenSpec 6.4标记完成，权威进度更新为`31/33`。6.5需要授权Sunshine HDR、compositor/物理显示器与跨屏测量证据，当前不可勾选；下一可执行项为6.6更新计划、路线图和硬件限制并封版推送。

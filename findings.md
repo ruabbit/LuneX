@@ -1292,3 +1292,10 @@
 - 最终24类malloc/resource-release集合位于`/tmp/LuneX-15-6_3-resource-r2.eougt0`，以scribble/pre-scribble、guard edges、stack logging、逐次heap check和error-abort通过`343/343`，零malloc报告和结构化诊断；覆盖session/network/video/audio/input/lifecycle及阶段15 frame/shader/pipeline/renderer/surface/presenter/macOS display/AppModel ownership。
 - 首轮resource同样`343/343`且零malloc错误，但`llvm-profdata`继承MallocStackLogging产生1条工具warning，因此不计最终零诊断证据；关闭无关code coverage后从全新DerivedData重跑同一测试与allocator合同。该离线门不证明live Sunshine HDR、compositor EDR signaling、物理亮度/颜色/跨屏一致性或设备功耗/性能。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_3-repo-final.cuq58y`：OpenSpec `30/33`、task 30=true/task 31=false、strict `6/6`、generator hash与fixture/reference/package/Core Image/ENet/diff/owned-whitespace边界全部稳定。
+
+## 2026-07-29 阶段 15 任务 6.4 验收结论
+
+- 只读证据位于`/tmp/LuneX-15-6_4-simulator-audit-r2.1eiDpv`；6.2构建前、构建后与当前三份规范化清单逐字一致，SHA-256均为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`。
+- 固定iPhone、iPad、Apple TV与Vision Pro的UUID在各自26.4 runtime中各出现一次，名称、runtime、UUID、available与`Shutdown`状态全部匹配；全部51个available simulator中`Booted=0`。
+- iOS 27 runtime另有同名iPhone/iPad，xrOS 27 runtime另有同名Vision Pro；它们是不同runtime的系统配置identity，不是固定26.4 UUID重复。本项首轮按名称跨runtime全局唯一的额外断言因此退出，但固定identity、三快照与状态门均已通过；最终按OpenSpec的固定identity合同验收并显式披露跨runtime实例。
+- 本项仅运行`simctl list devices available -j`和`simctl list runtimes -j`及本地结构化比较，没有build/test，也没有create、clone、boot、bootstatus、launch、shutdown、delete、install或run操作；它不证明真机或物理HDR输出。
