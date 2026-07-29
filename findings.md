@@ -1725,3 +1725,20 @@
 - analyzer证据位于`/tmp/LuneX-16-6_3-analyzer.HjnMkl`。Debug/Release xcresult均`succeeded`、0 error、0 compiler warning、4 analyzer warning；自有bridge两配置均0 finding，ENet两配置均精确为`compress.c:320` dead store、`unix.c:521/526` dead store和`unix.c:867` potential null dereference，没有新增或漂移。
 - 该任务证明当前源码/依赖/SDK编译与静态边界，不证明signed profile接受head-pose entitlement、listener property在AirPods上实际生效、visionOS空间体验可听、route transition、多声道声道识别、同步或live Sunshine播放；这些仍属于6.6。
 - 勾选后的repository final gate `/tmp/LuneX-16-6_3-repo-final.tSc9IJ`通过OpenSpec strict `7/7`、apply `31/35`、generator双次稳定、fixture、四SDK C/API证据读回、analyzer 8项精确比较、产品源码零diff和真实Keychain opt-in零新增门。
+
+## 2026-07-30 阶段 16 任务 6.4 调查
+
+- 6.4从已推送且clean的`ab82fcb`运行完整macOS ASan与TSan suite；两轮都必须保持normal的`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`、结构化零诊断和零sanitizer report，不用6.1普通测试或阶段15 sanitizer pass替代。
+- malloc scribble/guard/resource gate选择11个空间音频直接相关suite：`AudioPipelineTests`、`AudioRuntimeRecoveryTests`、`AudioToolboxOpusDecoderTests`、`SpatialAudioRouteMonitorTests`、`NativeSessionAudioProcessorTests`、`SessionMediaEnvironmentTests`、`AppModelWorkflowTests`、`MobileAudioSessionAdapterTests`、`HeadPoseEntitlementReaderTests`、`SpatialAudioRuntimeStateTests`和`SpatialAudioPresentationStatusTests`。
+- 该选择明确覆盖scheduled-buffer capacity/release和late completion、partial graph cleanup/reconfigure、route/policy graph replacement、observer source replacement/deinit/cancellation、processor stop/failure、same-session media replacement、stale preference completion、application replacement与clean stop。关闭code coverage避免`llvm-profdata`继承malloc环境产生工具噪声。
+- sanitizer/malloc通过仍只证明所选确定性路径没有检测到内存、线程或heap ownership问题；不能证明AVAudioEngine/AirPods/route硬件、signed entitlement、可听声道分离或长时真实流资源行为。
+- 首轮完整ASan把sanitizer作为裸`ENABLE_ADDRESS_SANITIZER=YES` build setting传入，XCTest在任何测试执行前于`__sanitizer::VerifyInterceptorsWorking()`中abort；这不是产品源码finding。阶段15成功命令使用Xcode测试动作开关`-enableAddressSanitizer YES`和显式`ASAN_OPTIONS`，按该口径从全新DerivedData运行`SpatialAudioRuntimeStateTests`启动探针，`/tmp/LuneX-16-6_4-asan-probe.vIYl4j`通过`16/16`、零结构化诊断和零sanitizer report。
+- 修正后的完整ASan证据`/tmp/LuneX-16-6_4-asan-final.PQ8zJN`通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，xcresult结构化error/warning/analyzer warning均为0，日志中没有AddressSanitizer或LeakSanitizer报告。
+
+## 2026-07-30 阶段 16 任务 6.4 验收结论
+
+- 完整TSan证据`/tmp/LuneX-16-6_4-tsan-final.or1COq`同样通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`；唯一skip精确、xcresult结构化诊断为0，日志没有ThreadSanitizer报告。
+- 最终malloc/resource证据`/tmp/LuneX-16-6_4-resource-final.v7bmDv`关闭coverage并开启scribble、pre-scribble、guard edges、stack logging、逐分配heap check和error-abort，精确11个suite通过`185/185`、零skip、零结构化诊断与零allocator报告。
+- xcresult的实际case清单证明执行了scheduled-buffer capacity/release与late completion、backend failure、partial graph cleanup、failed reconfigure、policy rebuild/late completion、observer replacement/deinit/cancellation、processor failure/stop/late callback、same-session media replacement、stale preference completion、AppModel replacement和clean stop，不是仅靠selector或进程退出码推断覆盖。
+- 三轮最终测试均显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain；只使用macOS destination且没有执行simulator生命周期命令。该门不证明signed entitlement、AirPods head tracking、真实route、多声道听感/同步、live Sunshine或长时硬件资源行为。
+- 勾选后的repository final gate `/tmp/LuneX-16-6_4-repo-final.7VDx6H`通过fixture self-test/全树、OpenSpec strict `7/7`、apply `32/35`、generator连续两次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、三份质量证据读回、真实Keychain opt-in关闭和产品源码/测试/工程零diff边界。

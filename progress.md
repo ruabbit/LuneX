@@ -2139,3 +2139,20 @@
 - analyzer最终比较首次因expected TSV在含单引号description后写入字面量反斜杠`t`而退出；两次analyzer无需重跑，从同一xcresult/plist以字段化expected复核8项精确相等。
 - repository final gate `/tmp/LuneX-16-6_3-repo-final.tSc9IJ`通过OpenSpec strict `7/7`、apply `31/35`、generator稳定、fixture、四SDK C/API和analyzer证据读回、产品源码零diff与真实Keychain opt-in零新增门。
 - OpenSpec 6.3已勾选，权威进度更新为`31/35`；下一项6.4运行ASan、TSan、malloc scribble/guard、resource ownership、graph replacement、observer cancellation和scheduled-buffer release gates。
+
+## 2026-07-30 阶段 16 任务 6.4 启动
+
+- 6.3已以`ab82fcb Run spatial audio quality gates`独立提交并推送；fetch确认`HEAD == origin/main`且起始工作树clean，OpenSpec为`31/35 ready`，当前任务6.4。
+- 将从当前提交分别用全新DerivedData/result bundle运行完整ASan与TSan；malloc强化门关闭coverage并选择11个空间音频graph/scheduling/observer/processor/media/AppModel相关suite。
+- 所有命令继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，不再次访问真实Keychain；本项只使用macOS test destination，不执行任何simulator生命周期操作。
+- 首轮完整ASan使用裸`ENABLE_ADDRESS_SANITIZER=YES`后，XCTest在运行任何case前于sanitizer interceptor bootstrap阶段abort；该bundle不计产品验收。对照阶段15成功命令后改用`-enableAddressSanitizer YES`、显式`ASAN_OPTIONS`和全新DerivedData，最小启动探针`/tmp/LuneX-16-6_4-asan-probe.vIYl4j`已通过`16/16`且零诊断/零sanitizer report，随后按相同口径运行完整suite。
+- 完整ASan最终证据`/tmp/LuneX-16-6_4-asan-final.PQ8zJN`通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确、结构化诊断为0，日志无AddressSanitizer/LeakSanitizer报告；接着从全新DerivedData运行完整TSan。
+
+## 2026-07-30 阶段 16 任务 6.4 完成
+
+- 完整TSan最终证据`/tmp/LuneX-16-6_4-tsan-final.or1COq`通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确、结构化诊断为0且日志无ThreadSanitizer report。
+- 11类malloc/resource集合`/tmp/LuneX-16-6_4-resource-final.v7bmDv`在关闭coverage、开启scribble/pre-scribble/guard edges/stack logging/逐分配heap check/error-abort后通过`185/185`，实际suite清单精确匹配且无skip、无allocator report、无结构化诊断。
+- 最终只读组合门再次从三份xcresult/log验证ASan与TSan各`721/720/1/0`、resource `185/185`、唯一Keychain skip、零诊断和零sanitizer/malloc report；实际case覆盖graph replacement、observer cancellation、scheduled-buffer release/late completion、processor/media/AppModel replacement与clean stop。
+- OpenSpec 6.4已勾选，权威进度更新为`32/35`；下一项6.5仅从当前环境只读验收固定simulator identity/state，不创建、克隆、启动、安装、运行、关闭或删除设备。6.6 signed entitlement和物理音频硬件验收保持未完成。
+- repository final gate `/tmp/LuneX-16-6_4-repo-final.7VDx6H`通过fixture self-test/全树、OpenSpec strict `7/7`、apply `32/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、ASan/TSan/resource证据读回、Keychain opt-in关闭、产品源码/测试/工程零diff及无残留测试进程门。
+- generator不支持`--help`且会忽略参数直接生成工程；调查调用生成结果与当前工程字节一致。正式门改为明确运行并比较生成前与连续两次哈希，不依赖帮助模式。
