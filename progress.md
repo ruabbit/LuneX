@@ -1652,3 +1652,26 @@
 - OpenSpec 5.4标记完成，权威进度更新为`26/33`；阶段15保持`in_progress`。下一项5.5为accessibility-safe native HDR status/settings presentation；6.1–6.6验证/硬件/跟踪任务保持未完成。
 - 5.4只增强test target：production graph不新增test hook或抽象，shared recording runtime只记录production presenter已经接受的configuration identity；App targets仍以原始production runtime、mapper与renderer构建。
 - 确定性gate不证明compositor实际进入EDR、live Sunshine HDR、物理峰值亮度/颜色准确性、跨显示器视觉一致性或异步GPU fault穷尽；这些边界继续由5.5、6.5及后续阶段保留。
+
+## 2026-07-29 阶段 15 任务 5.5 启动
+
+- 用户完成macOS更新后恢复执行。goal仍active；Git/OpenSpec复核为`HEAD == origin/main == f03151d`、工作树clean、`26/33`，下一项5.5。
+- 环境复核为macOS 27.0 build `26A5388g`、Xcode 26.4 build `17E192`、Swift 6.3、Apple SDK 26.4。固定四个26.4 simulator保持唯一、available、`Shutdown`且全局`Booted=0`，未执行任何生命周期命令。
+- 5.5范围限定为privacy-bounded observable HDR presentation state、实际状态驱动的stream overlay、Settings当前模式/fallback状态行和明确accessibility label/value；不暴露raw metadata、frame值、host/app identity、display identifier、headroom或revision，不提前执行6.1–6.6。
+- 正常测试继续使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，不会再次触发真实Keychain授权；完成实现后先跑focused映射/AppModel/UI接线验收，再进入扩大矩阵与任务级完整门。
+- 首轮focused在测试编译阶段因新文件引用`AppModelWorkflowTests.swift`内的三个`private` stub失败，production源码没有报错，测试尚未执行，该证据目录不计验收。测试改为只构造默认无副作用依赖并注入`.unavailable` runtime provider与内存identity store；不调用load、不访问网络/文件/Keychain，待从全新DerivedData重跑。
+- macOS 27.0配Xcode 26.4在xcodebuild启动时输出DVT device build-number/empty supported-platform提示；实际target graph与SDK 26.4编译继续启动。该工具层提示与Swift/Clang/xcresult结构化源码诊断分开记录。
+- 修正后的focused从全新DerivedData通过`4/4 passed / 0 skipped / 0 failed`，证据`/tmp/LuneX-15-5_5-focused-r2.UDfWjY/HDRPresentationStatus.xcresult`；xcresult结构化warning/error/analyzer warning均为0。覆盖完整语义映射、privacy-bounded固定文案、AppModel当前状态与stale presenter ownership、RootView实际状态/无障碍接线。
+- focused test target不编译`RootView.swift`，因此下一步单独构建真实`LuneX-macOS` App target，再运行AppModel/diagnostics/status扩大测试矩阵；源码接线断言不能替代App target编译。
+- 真实`LuneX-macOS` Debug App从`/tmp/LuneX-15-5_5-macos-app.N9ylXY`通过warnings-as-errors build，RootView与status model实际编译，xcresult结构化warning/error/analyzer warning均为0，并生成Metal AIR/metallib。
+- diagnostics/AppModel/presenter/status扩大矩阵从`/tmp/LuneX-15-5_5-expanded.tygcGG/HDRPresentationExpanded.xcresult`通过`88/88 passed / 0 skipped / 0 failed`，结构化diagnostics为0。
+- 完整diff UI自审发现三项状态固定横排在较长fallback/error文案与compact宽度下有溢出风险；改用原生`ViewThatFits`在横排不适配时切换为纵排，并将响应式接线加入5.5 focused gate。此前focused/expanded/build降为修改前中间证据，最终门禁将从新DerivedData重跑。
+
+## 2026-07-29 阶段 15 任务 5.5 完成
+
+- 响应式修改后的focused gate从`/tmp/LuneX-15-5_5-focused-final.4vTrJf/HDRPresentationStatus.xcresult`通过`4/4 passed / 0 skipped / 0 failed`。完整macOS gate从`/tmp/LuneX-15-5_5-full.S8E3xi/LuneXCoreTests.xcresult`通过`616 total / 615 passed / 1 skipped / 0 failed`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，所有结构化diagnostics为0。
+- 最终真实macOS App build位于`/tmp/LuneX-15-5_5-macos-app-final.do7VL5`；固定iPhone/iPad/tvOS/visionOS build位于`/tmp/LuneX-15-5_5-builds-final.EKRCNe`。五平台均warnings-as-errors成功、结构化diagnostics为0，并各生成一个Metal AIR与metallib。
+- simulator before/after规范化清单逐字一致，SHA-256同为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`，未执行任何create/boot/launch/shutdown/delete命令。
+- 勾选前repository gates位于`/tmp/LuneX-15-5_5-repo-pre.bVdzlK`：fixture self-test/全树、OpenSpec strict `6/6`、apply `26/33`且task 27=false、generator初始与连续三次SHA-256均为`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`，reference/package/Core Image/diff/owned-whitespace边界全部通过。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-5_5-repo-final.xPjFOk`：fixture/OpenSpec strict `6/6`、apply `27/33`且task 27=true/task 28=false、generator hash稳定、reference/package/Core Image/diff/owned-whitespace边界全部通过。
+- OpenSpec 5.5标记完成，权威进度更新为`27/33`；阶段15保持`in_progress`。下一项6.1为normal tests与唯一Keychain skip确认；6.2–6.6、live Sunshine HDR、compositor EDR signaling、物理亮度/颜色/跨显示器证据及设备功耗/性能仍未完成。

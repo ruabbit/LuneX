@@ -715,10 +715,13 @@ private struct StreamStatusOverlay: View {
                 .disabled(appModel.session.phase == .disconnected)
             }
 
-            HStack(spacing: 12) {
-                StatusPill(label: appModel.settings.input.preferRelativeMouseMode ? "Relative mouse" : "Direct pointer", systemImage: "cursorarrow.motionlines")
-                StatusPill(label: appModel.settings.stream.hdrEnabled ? "HDR/EDR on" : "SDR", systemImage: "sun.max")
-                StatusPill(label: "Spatial gated", systemImage: "airpodspro")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    statusPills
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    statusPills
+                }
             }
 
             Text(
@@ -731,6 +734,26 @@ private struct StreamStatusOverlay: View {
         .padding(12)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var statusPills: some View {
+        let hdrContent = appModel.hdrPresentationStatus.content
+
+        StatusPill(
+            label: appModel.settings.input.preferRelativeMouseMode
+                ? "Relative mouse"
+                : "Direct pointer",
+            systemImage: "cursorarrow.motionlines"
+        )
+        StatusPill(
+            label: hdrContent.overlayLabel,
+            systemImage: hdrContent.systemImage
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("HDR presentation")
+        .accessibilityValue(hdrContent.accessibilityValue)
+        StatusPill(label: "Spatial gated", systemImage: "airpodspro")
     }
 }
 
@@ -821,6 +844,7 @@ private struct SettingsView: View {
                 NumberSettingRow(title: "Frame rate", value: $appModel.settings.stream.frameRate, range: 30...240, step: 30, suffix: "fps")
                 NumberSettingRow(title: "Bitrate", value: $appModel.settings.stream.bitrateKbps, range: 10_000...200_000, step: 5_000, suffix: "Kbps")
                 Toggle("HDR / EDR", isOn: $appModel.settings.stream.hdrEnabled)
+                HDRPresentationStatusRow(status: appModel.hdrPresentationStatus)
                 Picker("Scale", selection: $appModel.settings.stream.scaleMode) {
                     ForEach(RenderScaleMode.allCases, id: \.self) { mode in
                         Text(mode.rawValue.capitalized).tag(mode)
@@ -851,6 +875,27 @@ private struct SettingsView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
+    }
+}
+
+private struct HDRPresentationStatusRow: View {
+    let status: HDRPresentationStatus
+
+    var body: some View {
+        let content = status.content
+
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent("Current output") {
+                Label(content.settingsValue, systemImage: content.systemImage)
+            }
+            Text(content.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Current HDR presentation")
+        .accessibilityValue(content.accessibilityValue)
     }
 }
 

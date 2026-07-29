@@ -144,6 +144,7 @@ final class AppModel: ApplicationInputSink {
     var streamLaunchUI = StreamLaunchUIState()
     var latestRemoteInputFeedback: RemoteInputFeedback?
     private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
+    private(set) var hdrPresentationStatus = HDRPresentationStatus.inactive
 
     let videoPresentationSource: StreamVideoPresentationSource
 
@@ -334,6 +335,10 @@ final class AppModel: ApplicationInputSink {
     func publishHDRPresentationDiagnostic(
         _ state: HDRPresentationDiagnosticState
     ) {
+        let presentationStatus = HDRPresentationStatus(state)
+        if presentationStatus != hdrPresentationStatus {
+            hdrPresentationStatus = presentationStatus
+        }
         guard state != lastHDRPresentationDiagnosticState else { return }
         lastHDRPresentationDiagnosticState = state
         switch state {

@@ -1252,3 +1252,20 @@
 - 五平台Debug warnings-as-errors build与Metal artifacts通过；simulator before/after规范化SHA-256同为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定实例保持唯一、available、`Shutdown`且全局`Booted=0`。
 - 勾选前repository gates位于`/tmp/LuneX-15-5_4-repo-pre.pu7Q0g`，fixture/OpenSpec strict/generator/reference/package/Core Image/diff/owned-whitespace边界全部通过。OpenSpec 5.4完成后权威进度为`26/33`，下一项5.5。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-5_4-repo-final.qhBCAc`，确认OpenSpec `26/33`、task 26=true/task 27=false、generator SHA-256保持`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`且所有仓库边界成立。
+
+## 2026-07-29 阶段 15 任务 5.5 恢复调查
+
+- 暂停恢复后确认活动goal未变，`HEAD == origin/main == f03151d`、工作树clean，OpenSpec仍为`26/33`且下一项精确为5.5。macOS已更新至27.0 build `26A5388g`，但当前工具链仍是Xcode 26.4、Swift 6.3与Apple SDK 26.4，不能把OS更新描述成SDK升级。
+- 固定iPhone、iPad、Apple TV和Vision Pro 26.4实例仍各自唯一、available、`Shutdown`，全局`Booted=0`；本轮只读列出设备，没有create/boot/launch/shutdown/delete操作。
+- `StreamStatusOverlay`目前按`settings.stream.hdrEnabled`显示`HDR/EDR on`，因此在inactive、SDR、typed fallback、closed与pipeline failure时会误报实际输出；`SettingsView`只有偏好Toggle，没有当前presentation状态或降级说明。
+- `AppModel`只以`@ObservationIgnored lastHDRPresentationDiagnosticState`做诊断去重，SwiftUI无法观察真实HDR状态。5.5应新增只读observable安全状态，映射时丢弃platform associated value、headroom、display/revision、metadata、frame与host/app标识，仅保留固定模式与粗粒度fallback语义。
+- UI将保留HDR preference toggle，把overlay改为实际presentation状态，并在Settings用原生状态行显示当前模式与固定降级说明；VoiceOver必须获得明确label/value，不能只依赖颜色或图标。确定性测试负责映射、隐私边界、AppModel状态/ownership/recovery及UI接线，不替代6.5物理显示器验收。
+- production现新增`HDRPresentationStatus`作为AppModel observable read-only状态：它把diagnostic platform associated value折叠为固定fallback类别，把stale revision表达为`updating`，且类型本身没有headroom、display/revision、metadata、frame、host或app payload入口。
+- stream overlay现读取实际`appModel.hdrPresentationStatus`而不是HDR偏好；Settings保留HDR/EDR toggle，并用`LabeledContent`显示当前output、固定detail与system icon。两处均提供显式accessibility label/value，不依赖颜色或图标传达状态。
+- 修正后的5.5 focused gate从`/tmp/LuneX-15-5_5-focused-r2.UDfWjY/HDRPresentationStatus.xcresult`通过`4/4 passed / 0 skipped / 0 failed`，覆盖全部状态/typed fallback映射、固定privacy-safe copy、AppModel replacement owner拒绝/恢复与RootView接线；xcresult结构化warning/error/analyzer warning均为0。
+- 提交前UI自审发现fallback/error标签增长后，overlay固定三项单行`HStack`可能在compact iPhone或iPad分屏溢出。production改用`ViewThatFits(in: .horizontal)`：可容纳时横排，空间不足时纵排；状态内容、尺寸与VoiceOver语义不因布局选择而改变。
+- 响应式修改后的focused gate为`4/4 passed / 0 skipped / 0 failed`；完整macOS suite为`616 total / 615 passed / 1 skipped / 0 failed`，唯一skip精确为显式opt-in真实Keychain round-trip，xcresult结构化warning/error/analyzer warning均为0。正常测试未设置`LUNEX_RUN_KEYCHAIN_TEST`。
+- 最终真实macOS App与固定iPhone/iPad/tvOS/visionOS Debug build全部warnings-as-errors通过、结构化diagnostics为0，并各生成一个Metal AIR与metallib。simulator before/after清单逐字一致，SHA-256同为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；固定实例保持唯一、available、`Shutdown`且全局`Booted=0`。
+- 5.5勾选前repository gates位于`/tmp/LuneX-15-5_5-repo-pre.bVdzlK`：fixture self-test/全树、OpenSpec strict `6/6`、apply `26/33`且task 27=false、generator初始与连续三次SHA-256均为`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`，reference/package/Core Image/diff/owned-whitespace边界全部通过。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-5_5-repo-final.xPjFOk`：OpenSpec `27/33`、task 27=true/task 28=false、strict `6/6`、generator hash稳定且全部仓库边界成立。
+- 该任务证明隐私受限、可观察、可访问且响应式的原生HDR当前状态呈现；不证明live Sunshine HDR、compositor EDR signaling、物理峰值亮度或颜色准确性、跨显示器视觉一致性及设备功耗/性能。

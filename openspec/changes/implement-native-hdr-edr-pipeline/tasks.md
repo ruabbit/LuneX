@@ -38,7 +38,7 @@
 - [x] 5.2 Derive HDR/EDR eligibility from active session, user preference, valid source contract, platform support, display capability, and current headroom without synthetic settings fallback
 - [x] 5.3 Publish deduplicated privacy-bounded active-SDR, active-EDR, SDR-fallback, invalid-input, unsupported-output, stale-revision, and pipeline-failure diagnostics with scoped recovery clearing
 - [x] 5.4 Add an application integration gate covering SDR presentation, HDR EDR mapping, headroom downgrade/recovery, metadata change, cross-display revision, stale-frame rejection, and clean stop
-- [ ] 5.5 Add accessibility-safe native stream status/settings presentation for current HDR mode and fallback without exposing raw metadata, frame values, host identity, or display identifiers
+- [x] 5.5 Add accessibility-safe native stream status/settings presentation for current HDR mode and fallback without exposing raw metadata, frame values, host identity, or display identifiers
 
 ## 6. Verification and tracking
 

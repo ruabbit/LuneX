@@ -552,6 +552,47 @@ compositor EDR signaling, physical peak luminance or color accuracy,
 cross-display visual consistency, or exhaustive asynchronous GPU-fault
 telemetry.
 
+### Native accessible presentation status
+
+The application publishes a separate `HDRPresentationStatus` for native UI.
+It maps the current diagnostic state to fixed inactive, SDR, EDR, typed SDR
+fallback, invalid-input, unsupported-output, updating, or pipeline-failure
+semantics. The UI model has no field for host or application identity, display
+identity, revision, headroom, frame values, or raw color metadata, and it
+collapses the platform associated value before presentation.
+
+The stream overlay now reports actual presentation state instead of the HDR
+preference. Settings retain the preference toggle and add the current output
+plus a fixed fallback or failure explanation. Both surfaces provide explicit
+accessibility labels and values rather than relying on color or icons.
+`ViewThatFits` keeps the three stream status items horizontal when they fit and
+uses a vertical layout at compact widths.
+
+The final status-focused gate passed `4/4`. The complete macOS
+warnings-as-errors suite passed
+`616 total / 615 passed / 1 explicit Keychain skip / 0 failed`; the sole skip
+was
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`
+with `LUNEX_RUN_KEYCHAIN_TEST` absent. The final macOS App build and fixed
+iPhone, iPad, tvOS, and visionOS Debug builds had zero structured diagnostics
+and each produced one AIR file and one metallib.
+
+The normalized simulator inventory was byte-identical before and after with
+SHA-256
+`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`;
+all four fixed instances remained unique, available, and `Shutdown`, and global
+`Booted=0`. Evidence is retained at
+`/tmp/LuneX-15-5_5-focused-final.4vTrJf`,
+`/tmp/LuneX-15-5_5-full.S8E3xi`,
+`/tmp/LuneX-15-5_5-macos-app-final.do7VL5`,
+`/tmp/LuneX-15-5_5-builds-final.EKRCNe`, and
+`/tmp/LuneX-15-5_5-repo-final.xPjFOk`.
+
+This status integration proves bounded native presentation semantics and
+compile-safe responsive UI. It does not prove live Sunshine HDR, compositor EDR
+signaling, physical luminance or color accuracy, cross-display visual
+consistency, or device power and performance.
+
 ## Verification matrix
 
 ### Deterministic evidence
