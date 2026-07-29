@@ -1675,3 +1675,11 @@
 - 勾选前repository gates位于`/tmp/LuneX-15-5_5-repo-pre.bVdzlK`：fixture self-test/全树、OpenSpec strict `6/6`、apply `26/33`且task 27=false、generator初始与连续三次SHA-256均为`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`，reference/package/Core Image/diff/owned-whitespace边界全部通过。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-5_5-repo-final.xPjFOk`：fixture/OpenSpec strict `6/6`、apply `27/33`且task 27=true/task 28=false、generator hash稳定、reference/package/Core Image/diff/owned-whitespace边界全部通过。
 - OpenSpec 5.5标记完成，权威进度更新为`27/33`；阶段15保持`in_progress`。下一项6.1为normal tests与唯一Keychain skip确认；6.2–6.6、live Sunshine HDR、compositor EDR signaling、物理亮度/颜色/跨显示器证据及设备功耗/性能仍未完成。
+
+## 2026-07-29 阶段 15 任务 6.1 完成
+
+- 从已推送且clean的`93096e3`启动6.1；测试源码审计确认`LUNEX_RUN_KEYCHAIN_TEST`是唯一`LUNEX_RUN_*`读取点，normal suite不存在其他live-host运行入口。
+- 独立gate位于`/tmp/LuneX-15-6_1-normal.5ecda4`：运行前无任何`LUNEX_RUN_*` opt-in，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，并从全新DerivedData运行完整macOS warnings-as-errors tests。
+- xcresult为`616 total / 615 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；expected failure为0，结构化warning/error/analyzer warning均为0，没有再次访问真实Keychain。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_1-repo-final.nERR5w`：OpenSpec `28/33`、task 28=true/task 29=false、strict `6/6`、generator hash稳定且所有仓库边界成立。
+- OpenSpec 6.1标记完成，权威进度更新为`28/33`；下一项6.2为macOS Debug/Release及固定iPhone/iPad/tvOS/visionOS targets的隔离warnings-as-errors构建。

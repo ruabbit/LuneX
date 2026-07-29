@@ -1269,3 +1269,10 @@
 - 5.5勾选前repository gates位于`/tmp/LuneX-15-5_5-repo-pre.bVdzlK`：fixture self-test/全树、OpenSpec strict `6/6`、apply `26/33`且task 27=false、generator初始与连续三次SHA-256均为`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`，reference/package/Core Image/diff/owned-whitespace边界全部通过。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-5_5-repo-final.xPjFOk`：OpenSpec `27/33`、task 27=true/task 28=false、strict `6/6`、generator hash稳定且全部仓库边界成立。
 - 该任务证明隐私受限、可观察、可访问且响应式的原生HDR当前状态呈现；不证明live Sunshine HDR、compositor EDR signaling、物理峰值亮度或颜色准确性、跨显示器视觉一致性及设备功耗/性能。
+
+## 2026-07-29 阶段 15 任务 6.1 验收结论
+
+- 测试源码中唯一`LUNEX_RUN_*`读取点是`HostAndPersistenceTests`的`LUNEX_RUN_KEYCHAIN_TEST`；没有可由normal suite意外启用的live-host XCTest入口，协议互操作继续使用仓库自有脱敏fixtures。
+- 独立normal gate使用全新DerivedData并显式`env -u LUNEX_RUN_KEYCHAIN_TEST`；运行前环境没有任何`LUNEX_RUN_*` opt-in。结果`616 total / 615 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。
+- xcresult的warning/error/analyzer warning均为0，expected failure为0。该任务证明normal suite与副作用边界，不证明live Sunshine HDR、compositor EDR signaling或物理显示器输出。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_1-repo-final.nERR5w`：OpenSpec `28/33`、task 28=true/task 29=false、strict `6/6`、generator hash稳定且fixture/reference/package/Core Image/diff/owned-whitespace边界全部通过。

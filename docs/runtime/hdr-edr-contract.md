@@ -593,6 +593,23 @@ compile-safe responsive UI. It does not prove live Sunshine HDR, compositor EDR
 signaling, physical luminance or color accuracy, cross-display visual
 consistency, or device power and performance.
 
+### Normal test gate
+
+The stage-level normal test gate ran from a fresh DerivedData directory with no
+ambient `LUNEX_RUN_*` opt-in and with `LUNEX_RUN_KEYCHAIN_TEST` explicitly
+removed from the `xcodebuild` environment. Source inspection found the
+Keychain round-trip as the only `LUNEX_RUN_*` call site and no normal-suite
+live-host execution entry.
+
+The result at `/tmp/LuneX-15-6_1-normal.5ecda4` was
+`616 total / 615 passed / 1 skipped / 0 failed`, with zero expected failures
+and zero structured warning, error, or analyzer-warning diagnostics. The only
+skipped test was
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`.
+This proves the deterministic normal suite and its side-effect boundary; it is
+not live-host or physical-display evidence. The post-mark repository evidence
+is retained at `/tmp/LuneX-15-6_1-repo-final.nERR5w`.
+
 ## Verification matrix
 
 ### Deterministic evidence
