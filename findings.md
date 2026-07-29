@@ -1137,3 +1137,26 @@
 - EDR不合格但支持SDR tone mapping时返回typed HDR-to-SDR fallback且headroom固定为`1`；否则closed。输出只携带display revision，并以`.ready`或`.requiresApplication(previous:)`表达4.4 transition需求。
 - focused `23/23`、完整macOS `582 total / 581 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link均通过；simulator规范化清单前后SHA-256同为`acf879865a6beef7e7491896dc562a30cf3ee75aa248fbaebcc3a0376e3f9c3c`，固定四实例均available/`Shutdown`且全局`Booted=0`。
 - 该证据只证明resolver确定性合同。production `StreamMetalPresenter`尚未消费它，4.4尚未执行真实surface/pipeline transition，5.1尚未接线AppModel/render state；production EDR、HDR signaling、live Sunshine HDR和物理亮度/颜色仍未证明。
+
+## 2026-07-29 阶段 15 任务 4.4 实现边界
+
+- 4.3 resolved configuration已经包含generation、color signature、display revision、mapping、luminance mapping和surface contract；4.4应消费该值并管理presenter/surface/runtime ownership，不再自行重算EDR资格。
+- configuration identity变化对应metadata、decoder generation、display/headroom或preference语义变化：旧runtime必须先失效，surface adapter成功应用后才能创建并发布新runtime，新surface第一帧必须是opaque clear，之后只接受与resolved contract匹配的frame。
+- coordinate/backing revision不属于display revision，也不改变surface contract；它应清理旧presentation与runtime pipeline/frame cache，但可在同一runtime中按相同resolved configuration重新建立pipeline，避免把resize伪装成display/HDR变化。
+- stop与surface replacement必须使runtime幂等失效、清除resolved ownership并恢复SDR contract；旧view发起的transition必须返回stale-surface closed结果，不能修改replacement。
+- 5.1仍负责把AppModel、platform lifecycle/display snapshot、user preference和presentation source接到该transition API；4.4 focused验证不得宣称production调用链已经存在。
+
+## 2026-07-29 阶段 15 任务 4.4 验收结论
+
+- `StreamMetalPresenter`只消费4.3 resolved configuration，不重算EDR资格。identity变化会先暂停/尝试清旧drawable、失效旧runtime，再应用完整surface、创建replacement runtime并发布新ownership；新revision在presentation前必须先完成一次opaque clear，迟到clear不能清除更新revision的flag。
+- coordinate/backing revision保持独立：只标记clear并stop runtime-owned mapping/pipeline cache，不改变surface contract或display revision。resolved frame在present前重新验证generation、color signature和完整decoded contract，并使用resolved luminance mapping。
+- resolver closed、stop和view replacement都会清除resolved/runtime ownership并恢复SDR；closed后可重建runtime恢复，重复stop幂等，旧view迟到transition不改变replacement。unsupported、surface mutation或runtime creation failure均detach/fail closed且不保留presenter surface声明。
+- presenter以identity、完整validated frame contract、luminance mapping、实际surface ownership和非空runtime判定presentation等价；真实resolver的`.requiresApplication -> .ready`只刷新observer/诊断语义，不重跑adapter、不失效runtime、不增加transition count。
+- 最终focused `25/25`、完整macOS `593 total / 592 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link和simulator不变门通过；repository strict/fixture/generator/reference/dependency/Core Image/diff/自有whitespace门通过。
+- 该证据证明injectable presenter transition合同，不证明production SwiftUI/AppModel已调用resolver/transition。4.5仍负责完整macOS screen/headroom/stale-window/surface/teardown与first-clear矩阵，5.1负责production graph；HDR signaling、live Sunshine、物理亮度/颜色及跨显示器视觉结果仍未证明。
+
+## 2026-07-29 阶段 15 任务 4.4 提交前缺陷
+
+- `surfaceState`是resolver观察调用时adapter是否已具备目标contract的状态，不属于renderer、frame、surface或luminance presentation合同。把完整`HDRResolvedRenderConfiguration`用于unchanged判定会在`.requiresApplication(previous:) -> .ready`时产生无意义重建。
+- presentation等价性必须至少比较`identity`、`frameContract`和`luminanceMapping`；另外要求presenter实际记录相同surface contract且runtime仍存在。`outputMode`的fallback reason是诊断语义，若渲染合同不变应刷新最新resolved值而不是重建。
+- 回归测试必须让同一真实resolver先输出`.requiresApplication`、再以已应用target surface输出`.ready`；只比较手工构造值不足以证明resolver/presenter边界。

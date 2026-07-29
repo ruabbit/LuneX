@@ -1501,3 +1501,41 @@
 - 首轮repository组合门的reference-path正则在zsh嵌套引号层被截断并以`unmatched "`退出；失败发生在临时目录创建后、generator/OpenSpec/fixture执行前，不计验收。后续拆分边界扫描并使用新证据目录完整重跑。
 - 第二轮repository门的generator运行前/三次SHA-256均为预期`1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`，OpenSpec原始结果也为6项全部valid；但包装器误按旧schema读取`summary`而主动失败。该轮部分结果不计最终验收，后续按`summary.totals`与`.items[].valid`从新目录完整重跑。
 - 最终repository gates位于`/tmp/LuneX-15-4_3-repo-final.9MawyM`：OpenSpec strict `6/6`、apply `19/33`且4.3已完成、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`，production/reference、无Swift Package依赖、Core Image regression、diff与自有文件whitespace边界全部通过。
+
+## 2026-07-29 阶段 15 任务 4.4 启动
+
+- 4.3已以`e0a4cee Resolve HDR render configurations`独立提交并经Surge SOCKS5推送；代理远端核对确认`HEAD == origin/main == e0a4cee`且工作树clean。
+- 首次远端核对漏加代理，`git fetch origin main`无输出挂起后主动中止；未修改工作树。改用既有SOCKS5命令后成功，后续GitHub操作固定带代理。
+- 重新读取change design/spec、surface adapter、resolver、Metal presenter/runtime/renderer、display publisher与focused tests。4.4只建立resolved configuration到surface/runtime的transition ownership，不提前实现5.1 AppModel/lifecycle/preference调用链或5.3 diagnostics。
+- 首轮focused在测试启动前编译失败：`configure(_:)`中的SDR `surface`局部声明在`do`块内，却在后续锁内记录ownership，报`Cannot find 'surface' in scope`。失败证据`/tmp/LuneX-15-4_4-focused.x4nEnC/StreamMetalTransitions.xcresult`不计验收；已提升局部声明，后续使用全新路径重跑。
+- macOS更新后恢复确认活动目标仍覆盖阶段13至20；系统为macOS 27 beta build `26A5388g`，Xcode仍为26.4 build `17E192`、Swift 6.3。`HEAD == origin/main == e0a4cee`，4.4的两项源码/测试修改及三份持久化计划修改仍完整保留，未发现残留构建或Git写操作。
+- 第二轮focused从全新DerivedData通过`19/19 passed / 0 skipped / 0 failed`，结构化结果为零warning/error/analyzer warning（`/tmp/LuneX-15-4_4-focused-r2.EkWQ89/StreamMetalTransitions.xcresult`）。该结果证明当前resolved transition基础合同可编译运行，但尚未覆盖closed后恢复、EDR stop恢复SDR及幂等、replacement旧view隔离、surface failure ownership与迟到clear revision隔离，因此4.4仍为进行中。
+- 第三轮focused加入closed恢复、EDR stop幂等、replacement旧view隔离、typed unsupported与surface mutation failure后运行`24`项，`23 passed / 1 failed`（`/tmp/LuneX-15-4_4-focused-r3.lerTso/StreamMetalTransitions.xcresult`），不计验收。唯一失败是恢复用例以默认`.idle` render policy却断言view恢复为非paused；实现按当前策略保持paused是正确行为，测试改为显式`.active`后从全新证据路径重跑。
+- 第四轮focused从全新DerivedData通过`24/24 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-4_4-focused-r4.k7LJb3/StreamMetalTransitions.xcresult`），结构化build result为`0 warning / 0 error / 0 analyzer warning`。新增矩阵证明closed后能按当前active策略重建runtime/surface，EDR stop幂等恢复SDR，旧view迟到transition不修改replacement，typed unsupported与已回滚mutation failure均撤销presenter的surface/runtime ownership。
+- 完整macOS suite从全新DerivedData通过`592 total / 591 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-4_4-full.bjZpFY/LuneXCoreTests.xcresult`）；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化build result为`0 warning / 0 error / 0 analyzer warning`。
+- 首轮五平台包装器被默认zsh在首个build前以`${!names[@]}: bad substitution`拒绝；只完成了前置只读simulator清单，未执行xcodebuild或任何设备生命周期操作，不计验收。后续显式使用Bash、全新证据目录和新的前置清单完整重跑。
+- 第二轮五平台Debug warnings-as-errors build-only从全新DerivedData全部通过，macOS、固定iPhone/iPad/tvOS/visionOS各自实际执行一次Metal compile/link且结构化diagnostics均为零（`/tmp/LuneX-15-4_4-builds-r2.PHAPtV`）。构建前后规范化simulator清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`，未执行任何simulator生命周期命令。
+- 首轮repository组合门的fixture、OpenSpec strict/apply、generator三次稳定、reference/dependency/Core Image/diff边界均已通过，但自写“所有tracked文本”whitespace口径误纳入固定vendor ENet并命中其172处上游尾随空格，因此整轮不计最终验收。核对确认命中全部位于`ThirdParty/ENet`，LuneX自有文件与当前diff均clean；后续恢复既有“排除vendor、自有文件+diff”边界并从全新目录完整重跑。
+- 最终repository gates位于`/tmp/LuneX-15-4_4-repo-r2.U0Xavj`：OpenSpec strict `6/6`、apply在勾选前正确为`19/33`、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`，production/reference、无Swift Package依赖、Core Image regression、diff与排除vendor的自有文件whitespace边界全部通过。
+
+## 2026-07-29 阶段 15 任务 4.4 完成
+
+- `StreamMetalPresenter`新增resolved configuration transition ownership：configuration变化清旧presentation、失效runtime、应用surface、创建replacement runtime后才发布新ownership；首个新surface drawable先opaque clear，coordinate/backing变化只清pipeline/frame cache，stop/closed/replacement恢复SDR并隔离stale view。
+- 同一presentation合同从resolver的`.requiresApplication`变为`.ready`时只刷新最新resolved observer/诊断语义，不重建surface/runtime；最终focused `25/25`、完整macOS `593 total / 592 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。OpenSpec 4.4标记完成，权威进度更新为`20/33`，阶段15保持`in_progress`，提交推送后进入4.5 macOS screen/headroom/stale-window/surface/teardown与first-clear transition矩阵。
+- production SwiftUI/AppModel尚未调用resolver/transition，5.1仍负责AppModel/lifecycle/preference/actual surface接线；本次离线证据不证明production EDR signaling、live Sunshine HDR、物理亮度/颜色或跨显示器视觉结果。
+
+## 2026-07-29 阶段 15 任务 4.4 提交前复验
+
+- macOS更新后恢复持久化计划、活动目标与OpenSpec；`HEAD == origin/main == e0a4cee`，4.4未提交diff完整，Xcode 26.4、Swift 6.3及26.4 simulator runtimes可用。只读清单显示所有设备为`Shutdown`，未创建、启动、关闭或删除simulator。
+- 提交前自审确认合成`HDRResolvedRenderConfiguration`相等性错误包含observer-only `surfaceState`：同一presentation合同首次从`.requiresApplication`应用成功后，下一次resolver返回`.ready`会误触发surface/runtime重建。
+- 已把unchanged语义限定为identity、完整validated frame contract、luminance mapping、实际surface ownership及非空runtime；命中时只刷新最新resolved诊断值，不失效runtime或重跑adapter。新增真实resolver两次解析回归，锁定adapter contract、runtime factory/invalidation及transition count均不增加。
+- 4.4完成标记暂保留但视为提交前复验中；只有新的focused、完整macOS、五平台build、simulator不变和repository gates全部通过后，旧验收才会被替换并提交。
+- 第一轮恢复后focused额外开启静态分析，25项测试全部通过，但固定第三方`ThirdParty/ENet`产生4条既有analyzer issue，且未关闭的AppIntents extractor产生1条metadata skip提示；该bundle不作为零诊断验收证据。没有修改vendor，后续恢复项目既定分层口径。
+- 最终focused从全新DerivedData通过`25/25 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-4_4-focused-r6.c32hIZ/StreamMetalTransitions.xcresult`）；结构化warning/error/analyzer warning均为0，日志诊断为0，Metal compile/link各1次。命令显式移除真实Keychain开关并以`LM_SKIP_METADATA_EXTRACTION=YES`关闭项目未使用的AppIntents规则。
+- 完整macOS suite从全新DerivedData通过`593 total / 592 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-4_4-full-r2.wpnfVE/LuneXCoreTests.xcresult`）；唯一skip从原始日志精确确认是`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化warning/error/analyzer warning均为0，日志诊断为0，Metal compile/link各1次。
+- Xcode 26.4在macOS 27 beta上再次于读取xcresult tests明细时报告内部`database.sqlite3` move冲突；不重跑已成功suite，使用可读的summary/build-results及原始日志证明总数、唯一skip和零诊断，与既有工具缺陷边界一致。
+- macOS及固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only从全新DerivedData全部通过（`/tmp/LuneX-15-4_4-builds-r3.Kir4YH`）；每个平台结构化warning/error/analyzer warning均为0，并实际执行Metal compile/link各1次。
+- 构建前后完整规范化simulator清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；四个固定UUID各唯一、available、`Shutdown`，全局`Booted=0`。只执行build与只读list/compare，没有create、boot、launch、shutdown或delete设备。
+- 第一轮恢复后repository包装器把真实`Sources/LuneXApp`误写为不存在的顶层`LuneXApp`；虽然其余fixture/OpenSpec/generator/package/Core Image/whitespace门通过且扫描结果为空，该轮production boundary证据不完整，不计最终验收。改用正确路径后从新证据目录完整重跑。
+- 最终repository gates从全新目录`/tmp/LuneX-15-4_4-repo-r4.4sQhqd`通过：fixture validator self-test/全树、OpenSpec strict `6/6`与apply `20/33`、generator运行前及连续三次SHA-256 `1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`、production/reference/package/Core Image/diff及排除vendor的自有whitespace边界全部成立。
+- 最终diff自审未发现新的ownership、失败恢复、stale view或迟到clear缺口；4.4全部门禁通过，可以独立提交并推送。

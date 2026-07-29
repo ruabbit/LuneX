@@ -77,6 +77,31 @@ struct StreamMetalPresentationPlan: Sendable {
     let uniforms: HDRMetalShaderUniforms
 }
 
+enum StreamMetalConfigurationTransitionError: Error, Equatable, Sendable {
+    case resolutionClosed(HDRRenderResolutionError)
+    case staleSurface
+    case surfaceApplicationFailed
+    case surfaceUnsupported(AppleRenderingPlatform)
+    case runtimeCreationFailed
+}
+
+enum StreamMetalConfigurationTransitionOutcome: Equatable, Sendable {
+    case applied(
+        previous: HDRRenderConfigurationIdentity?,
+        current: HDRRenderConfigurationIdentity
+    )
+    case unchanged(HDRRenderConfigurationIdentity)
+    case closed(StreamMetalConfigurationTransitionError)
+}
+
+struct StreamMetalPresenterSnapshot: Equatable, Sendable {
+    let activeConfiguration: HDRRenderConfigurationIdentity?
+    let appliedSurfaceContract: HDRSurfaceContract?
+    let requiresClearBeforePresentation: Bool
+    let configurationTransitionCount: UInt64
+    let closedTransitionCount: UInt64
+}
+
 enum StreamMetalPresentationPlanResolver {
     static func resolve(
         frame: DecodedVideoFrame,
@@ -117,6 +142,38 @@ enum StreamMetalPresentationPlanResolver {
                 frameContract: frameContract,
                 configuration: configuration,
                 luminanceMapping: luminanceMapping
+            )
+        )
+    }
+
+    static func resolve(
+        frame: DecodedVideoFrame,
+        resolvedConfiguration: HDRResolvedRenderConfiguration
+    ) throws -> StreamMetalPresentationPlan {
+        let frameContract = try HDRDecodedVideoContractValidator.validateForMetalMapping(
+            pixelBuffer: frame.pixelBuffer,
+            colorMetadata: frame.colorMetadata
+        )
+        let expected = resolvedConfiguration.identity
+        guard frame.generation == expected.decoderGeneration else {
+            throw HDRRenderResolutionError.staleDecoderGeneration(
+                expected: expected.decoderGeneration,
+                actual: frame.generation
+            )
+        }
+        guard frame.renderBinding.colorSignature == expected.colorSignature,
+              frameContract.colorSignature == expected.colorSignature else {
+            throw HDRRenderResolutionError.staleColorSignature
+        }
+        guard frameContract == resolvedConfiguration.frameContract else {
+            throw HDRRenderResolutionError.incompatibleDecodedLayout
+        }
+        return StreamMetalPresentationPlan(
+            configuration: expected,
+            uniforms: try HDRMetalShaderUniforms(
+                frameContract: frameContract,
+                configuration: expected,
+                luminanceMapping: resolvedConfiguration.luminanceMapping
             )
         )
     }
@@ -347,6 +404,12 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     private var runtime: (any StreamMetalPresenterRuntiming)?
     private var surfaceAdapter: (any HDRSurfaceApplying)?
     private weak var surfaceView: MTKView?
+    private var activeResolvedConfiguration: HDRResolvedRenderConfiguration?
+    private var appliedSurfaceContract: HDRSurfaceContract?
+    private var requiresClearBeforePresentation = false
+    private var presentationRevision: UInt64 = 0
+    private var configurationTransitionCount: UInt64 = 0
+    private var closedTransitionCount: UInt64 = 0
 
     init(
         presentationSource: StreamVideoPresentationSource,
@@ -368,14 +431,18 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     @MainActor
     func configure(_ view: MTKView) {
         guard let device = view.device else { return }
+        if let previousView = surfaceView, previousView !== view {
+            stop()
+        }
         let adapter: any HDRSurfaceApplying
         if surfaceView === view, let surfaceAdapter {
             adapter = surfaceAdapter
         } else {
             adapter = surfaceAdapterFactory(view)
         }
+        let surface: HDRSurfaceContract
         do {
-            let surface = try HDRSurfaceContract(
+            surface = try HDRSurfaceContract(
                 drawablePixelFormat: .bgra8UnormSRGB,
                 outputColorSpace: .sRGB,
                 outputGamut: .sRGB,
@@ -394,18 +461,132 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         surfaceAdapter = adapter
         surfaceView = view
         let runtime = try? runtimeFactory(device, Bundle(for: StreamMetalPresenter.self))
-        withLock {
-            self.runtime?.invalidate()
+        let previousRuntime = withLock {
+            let previous = self.runtime
             self.runtime = runtime
+            activeResolvedConfiguration = nil
+            appliedSurfaceContract = surface
+            requiresClearBeforePresentation = false
+            presentationRevision &+= 1
+            return previous
         }
+        previousRuntime?.invalidate()
         view.framebufferOnly = true
         view.delegate = self
     }
 
+    @MainActor
     func update(renderState: StreamRenderState) {
-        withLock {
+        let transition = withLock {
+            let previousRevision = coordinateSnapshot?.revision
             renderPolicy = renderState.policy
             coordinateSnapshot = renderState.coordinateSnapshot
+            guard previousRevision != coordinateSnapshot?.revision else {
+                return (false, nil as (any StreamMetalPresenterRuntiming)?)
+            }
+            requiresClearBeforePresentation = true
+            presentationRevision &+= 1
+            return (true, runtime)
+        }
+        guard transition.0 else { return }
+        transition.1?.stop()
+        if StreamMetalViewScheduleResolver.resolve(renderState.policy).requestsImmediateDraw {
+            surfaceView?.draw()
+        }
+    }
+
+    @MainActor
+    @discardableResult
+    func transition(
+        _ resolution: HDRRenderConfigurationResolution,
+        on view: MTKView
+    ) -> StreamMetalConfigurationTransitionOutcome {
+        guard surfaceView === view, let adapter = surfaceAdapter else {
+            return closeTransition(.staleSurface)
+        }
+        switch resolution {
+        case let .closed(error):
+            closeActivePresentation(on: view, adapter: adapter, restoreSDR: true)
+            return closeTransition(.resolutionClosed(error))
+        case let .resolved(configuration):
+            let targetSurface = configuration.identity.surfaceContract
+            let state = withLock {
+                (
+                    activeResolvedConfiguration,
+                    appliedSurfaceContract,
+                    runtime
+                )
+            }
+            if let activeConfiguration = state.0,
+               activeConfiguration.identity == configuration.identity,
+               activeConfiguration.frameContract == configuration.frameContract,
+               activeConfiguration.luminanceMapping == configuration.luminanceMapping,
+               state.1 == targetSurface,
+               state.2 != nil {
+                withLock {
+                    activeResolvedConfiguration = configuration
+                }
+                return .unchanged(configuration.identity)
+            }
+
+            let previousIdentity = state.0?.identity
+            let previousSurface = state.1
+            view.isPaused = true
+            clearCurrentDrawable(on: view, runtime: state.2)
+            deactivateRuntimeForTransition()
+
+            let surfaceOutcome: HDRSurfaceApplicationOutcome
+            do {
+                surfaceOutcome = try adapter.apply(targetSurface)
+            } catch {
+                failSurfaceConfiguration(view)
+                return closeTransition(.surfaceApplicationFailed)
+            }
+            guard surfaceOutcome.activeContract == targetSurface else {
+                failSurfaceConfiguration(view)
+                if case let .unsupported(platform, _) = surfaceOutcome {
+                    return closeTransition(.surfaceUnsupported(platform))
+                }
+                return closeTransition(.surfaceApplicationFailed)
+            }
+
+            let replacementRuntime: any StreamMetalPresenterRuntiming
+            do {
+                guard let device = view.device else {
+                    throw StreamMetalPresenterError.commandQueueUnavailable
+                }
+                replacementRuntime = try runtimeFactory(
+                    device,
+                    Bundle(for: StreamMetalPresenter.self)
+                )
+            } catch {
+                restoreSurfaceAfterFailedTransition(
+                    previousSurface,
+                    adapter: adapter
+                )
+                failSurfaceConfiguration(view)
+                return closeTransition(.runtimeCreationFailed)
+            }
+
+            withLock {
+                runtime = replacementRuntime
+                activeResolvedConfiguration = configuration
+                appliedSurfaceContract = targetSurface
+                requiresClearBeforePresentation = true
+                presentationRevision &+= 1
+                configurationTransitionCount &+= 1
+            }
+            view.delegate = self
+            let schedule = withLock {
+                StreamMetalViewScheduleResolver.resolve(renderPolicy)
+            }
+            view.isPaused = schedule.isPaused
+            view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
+            view.draw()
+            return .applied(
+                previous: previousIdentity,
+                current: configuration.identity
+            )
         }
     }
 
@@ -415,10 +596,30 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         let snapshot = withLock {
-            (renderPolicy, coordinateSnapshot, runtime)
+            (
+                renderPolicy,
+                coordinateSnapshot,
+                runtime,
+                activeResolvedConfiguration,
+                requiresClearBeforePresentation,
+                presentationRevision
+            )
         }
         guard let runtime = snapshot.2 else { return }
         let drawable = view.currentDrawable
+        if snapshot.4 {
+            guard let drawable else { return }
+            do {
+                try runtime.clear(drawable: drawable, color: view.clearColor)
+                withLock {
+                    guard presentationRevision == snapshot.5 else { return }
+                    requiresClearBeforePresentation = false
+                }
+            } catch {
+                runtime.stop()
+            }
+            return
+        }
         let frame = presentationSource.currentFrame()
         let drawableMatchesCoordinates = snapshot.1.map { coordinates in
             coordinates.drawableSize.width == drawable?.texture.width
@@ -447,12 +648,21 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
               let frame,
               let drawable else { return }
         do {
-            _ = try runtime.present(
-                frame: frame,
-                plan: StreamMetalPresentationPlanResolver.resolve(
+            let plan: StreamMetalPresentationPlan
+            if let resolvedConfiguration = snapshot.3 {
+                plan = try StreamMetalPresentationPlanResolver.resolve(
+                    frame: frame,
+                    resolvedConfiguration: resolvedConfiguration
+                )
+            } else {
+                plan = try StreamMetalPresentationPlanResolver.resolve(
                     frame: frame,
                     coordinateSnapshot: coordinateSnapshot
-                ),
+                )
+            }
+            _ = try runtime.present(
+                frame: frame,
+                plan: plan,
                 coordinateSnapshot: coordinateSnapshot,
                 target: HDRMetalRenderTarget(
                     texture: drawable.texture,
@@ -466,21 +676,136 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         }
     }
 
+    @MainActor
     func stop() {
-        withLock {
-            runtime?.invalidate()
+        let view = surfaceView
+        view?.isPaused = true
+        let oldRuntime = withLock {
+            let previous = runtime
             runtime = nil
+            activeResolvedConfiguration = nil
+            requiresClearBeforePresentation = false
+            presentationRevision &+= 1
+            return previous
+        }
+        if let view {
+            clearCurrentDrawable(on: view, runtime: oldRuntime)
+        }
+        oldRuntime?.invalidate()
+        let restoredSurface: HDRSurfaceContract?
+        if let adapter = surfaceAdapter {
+            restoredSurface = applySDRSurface(using: adapter)
+        } else {
+            restoredSurface = nil
+        }
+        withLock { appliedSurfaceContract = restoredSurface }
+    }
+
+    func snapshot() -> StreamMetalPresenterSnapshot {
+        withLock {
+            StreamMetalPresenterSnapshot(
+                activeConfiguration: activeResolvedConfiguration?.identity,
+                appliedSurfaceContract: appliedSurfaceContract,
+                requiresClearBeforePresentation: requiresClearBeforePresentation,
+                configurationTransitionCount: configurationTransitionCount,
+                closedTransitionCount: closedTransitionCount
+            )
         }
     }
 
     @MainActor
     private func failSurfaceConfiguration(_ view: MTKView) {
-        withLock {
-            runtime?.invalidate()
+        let previousRuntime = withLock {
+            let previous = runtime
             runtime = nil
+            activeResolvedConfiguration = nil
+            appliedSurfaceContract = nil
+            requiresClearBeforePresentation = false
+            presentationRevision &+= 1
+            return previous
         }
+        previousRuntime?.invalidate()
         view.delegate = nil
         view.isPaused = true
+    }
+
+    @MainActor
+    private func closeActivePresentation(
+        on view: MTKView,
+        adapter: any HDRSurfaceApplying,
+        restoreSDR: Bool
+    ) {
+        view.isPaused = true
+        let previousRuntime = withLock { runtime }
+        clearCurrentDrawable(on: view, runtime: previousRuntime)
+        deactivateRuntimeForTransition()
+        let restoredSurface = restoreSDR
+            ? applySDRSurface(using: adapter)
+            : nil
+        withLock {
+            appliedSurfaceContract = restoredSurface
+            requiresClearBeforePresentation = false
+        }
+    }
+
+    private func deactivateRuntimeForTransition() {
+        let previousRuntime = withLock {
+            let previous = runtime
+            runtime = nil
+            activeResolvedConfiguration = nil
+            requiresClearBeforePresentation = true
+            presentationRevision &+= 1
+            return previous
+        }
+        previousRuntime?.invalidate()
+    }
+
+    @MainActor
+    private func clearCurrentDrawable(
+        on view: MTKView,
+        runtime: (any StreamMetalPresenterRuntiming)?
+    ) {
+        guard let runtime, let drawable = view.currentDrawable else { return }
+        try? runtime.clear(drawable: drawable, color: view.clearColor)
+    }
+
+    @MainActor
+    private func applySDRSurface(
+        using adapter: any HDRSurfaceApplying
+    ) -> HDRSurfaceContract? {
+        guard let surface = try? HDRSurfaceContract(
+            drawablePixelFormat: .bgra8UnormSRGB,
+            outputColorSpace: .sRGB,
+            outputGamut: .sRGB,
+            extendedRangeIntent: .disabled,
+            metadataMode: .none
+        ), let outcome = try? adapter.apply(surface),
+              outcome.activeContract == surface else {
+            return nil
+        }
+        return surface
+    }
+
+    @MainActor
+    private func restoreSurfaceAfterFailedTransition(
+        _ previousSurface: HDRSurfaceContract?,
+        adapter: any HDRSurfaceApplying
+    ) {
+        if let previousSurface,
+           let outcome = try? adapter.apply(previousSurface),
+           outcome.activeContract == previousSurface {
+            withLock { appliedSurfaceContract = previousSurface }
+        } else {
+            let restoredSurface = applySDRSurface(using: adapter)
+            withLock { appliedSurfaceContract = restoredSurface }
+        }
+    }
+
+    private func closeTransition(
+        _ error: StreamMetalConfigurationTransitionError
+    ) -> StreamMetalConfigurationTransitionOutcome {
+        withLock { closedTransitionCount &+= 1 }
+        return .closed(error)
     }
 
     private func withLock<T>(_ operation: () throws -> T) rethrows -> T {

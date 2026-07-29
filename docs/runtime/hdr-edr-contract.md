@@ -29,19 +29,21 @@ still required before LuneX may claim working HDR output.
 | Decoded frame | `DecodedVideoFrame` retains decoder generation and immutable `VideoColorMetadata` | Decoder and pipeline generation tests | No derived immutable render color signature or display revision is attached |
 | Metal plane mapping | `CVMetalVideoFrameMapper` maps NV12 to `.r8Unorm/.rg8Unorm` and P010 to `.r16Unorm/.rg16Unorm`; the production presenter runtime consumes those zero-copy planes after validating format, dimensions, device, generation, and color signature | Focused mapper/queue/presenter tests and real offscreen Metal execution | The standalone bounded queue is not yet the application presentation owner; display/surface revision ownership is added by tasks 4.1 through 5.1 |
 | Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations and clears frames across pause, stop, failure, and replacement | Session/lifecycle integration tests | It stores raw `DecodedVideoFrame` only and has no render/display revision fence |
-| Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. SDR uses the sRGB pipeline; HDR uses the bounded HDR-to-SDR pipeline until a resolved EDR surface exists | Focused production-runtime GPU execution, shader readback, lifecycle tests, full macOS tests, and five-platform builds | It intentionally fixes the drawable to sRGB and does not yet apply a float EDR drawable, extended-linear colorspace, display-owned headroom, or HDR metadata |
+| Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. It now owns an injectable resolved-configuration transition that clears old presentation, applies SDR or EDR surface state, replaces runtime ownership, and rejects stale views | Focused production-runtime GPU execution, shader readback, lifecycle/transition tests, full macOS tests, and five-platform builds | The SwiftUI/AppModel update graph does not call the resolver or transition yet, so its production caller path still starts in the fixed SDR fallback |
 | Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; a separate publisher advances only for attached/detached availability, display identity, or semantic headroom changes | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, and full-suite tests | Task 5.1 must propagate this snapshot through AppModel/render state; task 4.3 defines how it participates in active configuration resolution |
-| Surface intent | `StreamMetalPresenter` applies its current SDR contract through an injectable transaction adapter; the adapter owns view/layer pixel format, colorspace, EDR metadata, and extended-range intent together | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported, rollback, rollback failure, real macOS layer fields, and production fail-closed behavior; all five platform targets compile | Tasks 4.2 through 4.6 must add display/headroom revisions, resolve when EDR is eligible, and rebuild presentation across semantic transitions |
+| Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and can atomically transition to a resolved SDR/EDR contract while replacing runtime ownership; the adapter owns view/layer pixel format, colorspace, EDR metadata, and extended-range intent together | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported, rollback, closed recovery, stop/replacement, stale-view isolation, real macOS layer fields, and fail-closed behavior; all five platform targets compile | Task 4.5 must complete the macOS transition matrix, task 4.6 must finish explicit cross-platform capability coverage, and task 5.1 must provide the production caller |
 | AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
 
-The production truth after task 4.3 is therefore: LuneX presents both SDR and
+The production truth after task 4.4 is therefore: LuneX presents both SDR and
 HDR decoded layouts through the explicit shader and revision-owned Metal
 renderer. Surface fields have one atomic, platform-capability-gated owner, and
-the deterministic resolver can select SDR, EDR, or a diagnosed SDR fallback,
-but the production presenter does not consume that resolver yet. It still
-requests only sRGB SDR, so HDR is deliberately tone-mapped to headroom `1.0`.
-No production EDR selection, HDR signaling, or physical HDR result is claimed
-until tasks 4.4 through 5.4 and the hardware gate pass.
+the deterministic resolver can select SDR, EDR, or a diagnosed SDR fallback.
+The presenter can consume that resolved value through a tested transition API,
+but the SwiftUI/AppModel production graph does not call it yet. That caller path
+still requests only sRGB SDR, so HDR remains deliberately tone-mapped to
+headroom `1.0`. No end-to-end production EDR selection, HDR signaling, or
+physical HDR result is claimed until tasks 5.1 through 5.4 and the hardware
+gate pass.
 
 ## Apple SDK 26.4 API matrix
 
@@ -268,6 +270,62 @@ the resolver, that task 4.4 has applied a real surface/pipeline transition, or
 that task 5.1 has propagated the configuration through `AppModel` and render
 state. It also does not prove production EDR signaling, physical HDR
 luminance/color, or live Sunshine HDR interoperability.
+
+## Presentation transition evidence
+
+OpenSpec task 4.4 adds one resolved-configuration transition owner to
+`StreamMetalPresenter` without adding the task 5.1 application caller:
+
+- changing decoder generation, color signature, display/headroom revision,
+  mapping mode, user-derived resolution, or surface contract pauses the view,
+  clears any available old drawable, invalidates the old runtime, applies the
+  resolved surface, constructs a replacement runtime, and only then publishes
+  the new configuration;
+- the new configuration requires one opaque clear before frame presentation.
+  A monotonic presentation revision prevents a late successful clear from
+  releasing the clear requirement of a newer transition;
+- a coordinate/backing revision is independent from display revision. It marks
+  the next drawable for clear and stops the current runtime resources so the
+  same resolved configuration rebuilds its mapped frame and pipeline without
+  mutating the surface contract;
+- resolved frames are revalidated against the active decoder generation,
+  immutable color signature, decoded frame contract, and resolved luminance
+  mapping before presentation;
+- a closed resolver result invalidates the runtime, restores SDR, and pauses
+  the view, while a later valid resolution can construct a fresh runtime and
+  recover under the current render schedule;
+- stop and view replacement invalidate runtime ownership idempotently, clear
+  resolved ownership, and restore SDR. A transition from the old view returns
+  typed stale-surface closure without changing the replacement adapter; and
+- unsupported surface output, surface mutation failure, or runtime creation
+  failure detach presentation and publish no active configuration. A successful
+  native rollback may leave the adapter at its previous surface, but the
+  presenter deliberately relinquishes reported ownership until recovery.
+
+Readiness-only resolver changes from `.requiresApplication` to `.ready` do not
+rebuild an otherwise identical presentation contract; the presenter refreshes
+the observer-facing resolved value while retaining the applied surface and
+runtime ownership.
+
+The task-level evidence is `25/25` focused tests; `593 total / 592 passed / 1
+explicit Keychain skip / 0 failed` for the complete macOS suite; and
+five-platform Debug warnings-as-errors builds with one Metal compile/link and
+zero structured diagnostics per platform. The normalized simulator inventory
+was byte-identical before and after, with SHA-256
+`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`;
+all four fixed 26.4 instances remained available and `Shutdown`, with no
+simulator lifecycle command run. OpenSpec strict `6/6`, fixtures, three stable
+generator runs with project SHA-256
+`1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`,
+and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
+
+This proves the presenter transition API and its deterministic ownership
+contract. It does not prove that `AppModel`, lifecycle display state, HDR
+preference, or the production SwiftUI surface invokes that API. Task 4.5 still
+owns the full macOS screen/headroom/stale-window and first-clear transition
+matrix; task 5.1 owns the production graph; live Sunshine HDR, compositor
+signaling, physical luminance/color, and cross-display appearance remain
+unproven.
 
 ## Verification matrix
 

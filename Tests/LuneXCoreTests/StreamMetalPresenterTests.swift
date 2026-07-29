@@ -524,6 +524,593 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertTrue(view.isPaused)
     }
 
+    func testResolvedPlanUsesActiveDisplayRevisionAndEDRLuminanceMapping() throws {
+        let frame = try makeFrame(
+            generation: 30,
+            frameID: 10,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 41,
+            currentHeadroom: 2.5
+        )
+        let plan = try StreamMetalPresentationPlanResolver.resolve(
+            frame: frame,
+            resolvedConfiguration: resolved
+        )
+
+        XCTAssertEqual(plan.configuration, resolved.identity)
+        XCTAssertEqual(plan.configuration.displayRevision.rawValue, 41)
+        XCTAssertEqual(plan.configuration.mappingMode, .hdrEDR)
+        XCTAssertEqual(plan.uniforms.mappingMode, 1)
+        XCTAssertEqual(plan.uniforms.currentHeadroom, 2.5)
+
+        let stale = try makeFrame(
+            generation: 29,
+            frameID: 11,
+            metadata: .hdr10VideoRange()
+        )
+        XCTAssertThrowsError(try StreamMetalPresentationPlanResolver.resolve(
+            frame: stale,
+            resolvedConfiguration: resolved
+        )) { error in
+            XCTAssertEqual(
+                error as? HDRRenderResolutionError,
+                .staleDecoderGeneration(expected: 30, actual: 29)
+            )
+        }
+    }
+
+    @MainActor
+    func testResolvedTransitionInvalidatesOldRuntimeAndPublishesNewOwnership() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let replacementRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [initialRuntime, replacementRuntime]
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 31,
+            frameID: 12,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 42,
+            currentHeadroom: 3,
+            appliedSurfaceContract: try makeSDRSurface()
+        )
+
+        let outcome = presenter.transition(.resolved(resolved), on: view)
+
+        XCTAssertEqual(outcome, .applied(
+            previous: nil,
+            current: resolved.identity
+        ))
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(replacementRuntime.invalidationCount, 0)
+        XCTAssertEqual(surfaceAdapter.contracts, [
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract
+        ])
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: resolved.identity,
+            appliedSurfaceContract: resolved.identity.surfaceContract,
+            requiresClearBeforePresentation: true,
+            configurationTransitionCount: 1,
+            closedTransitionCount: 0
+        ))
+    }
+
+    @MainActor
+    func testSurfaceReadinessChangeDoesNotRebuildMatchingPresentation() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let replacementRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimeCreationCount = 0
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in
+                runtimeCreationCount += 1
+                return runtimeCreationCount == 1
+                    ? initialRuntime
+                    : replacementRuntime
+            },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 39,
+            frameID: 20,
+            metadata: .hdr10VideoRange()
+        )
+        let requiresApplication = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 50,
+            currentHeadroom: 3,
+            appliedSurfaceContract: try makeSDRSurface()
+        )
+        XCTAssertEqual(
+            requiresApplication.surfaceState,
+            .requiresApplication(previous: try makeSDRSurface())
+        )
+        XCTAssertEqual(
+            presenter.transition(.resolved(requiresApplication), on: view),
+            .applied(previous: nil, current: requiresApplication.identity)
+        )
+        let ready = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 50,
+            currentHeadroom: 3,
+            appliedSurfaceContract: requiresApplication.identity.surfaceContract
+        )
+        XCTAssertEqual(ready.surfaceState, .ready)
+        XCTAssertNotEqual(requiresApplication, ready)
+        let appliedContracts = surfaceAdapter.contracts
+
+        let outcome = presenter.transition(.resolved(ready), on: view)
+
+        XCTAssertEqual(outcome, .unchanged(ready.identity))
+        XCTAssertEqual(runtimeCreationCount, 2)
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(replacementRuntime.invalidationCount, 0)
+        XCTAssertEqual(surfaceAdapter.contracts, appliedContracts)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: ready.identity,
+            appliedSurfaceContract: ready.identity.surfaceContract,
+            requiresClearBeforePresentation: true,
+            configurationTransitionCount: 1,
+            closedTransitionCount: 0
+        ))
+    }
+
+    @MainActor
+    func testClosedResolutionInvalidatesEDRRuntimeAndRestoresSDRSurface() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let edrRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [initialRuntime, edrRuntime]
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 32,
+            frameID: 13,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 43,
+            currentHeadroom: 2
+        )
+        XCTAssertEqual(
+            presenter.transition(.resolved(resolved), on: view),
+            .applied(previous: nil, current: resolved.identity)
+        )
+
+        let outcome = presenter.transition(
+            .closed(.invalidCurrentDisplayHeadroom),
+            on: view
+        )
+
+        XCTAssertEqual(
+            outcome,
+            .closed(.resolutionClosed(.invalidCurrentDisplayHeadroom))
+        )
+        XCTAssertEqual(edrRuntime.invalidationCount, 1)
+        XCTAssertEqual(surfaceAdapter.contracts, [
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract,
+            try makeSDRSurface()
+        ])
+        XCTAssertTrue(view.isPaused)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: nil,
+            appliedSurfaceContract: try makeSDRSurface(),
+            requiresClearBeforePresentation: false,
+            configurationTransitionCount: 1,
+            closedTransitionCount: 1
+        ))
+    }
+
+    @MainActor
+    func testCoordinateRevisionClearsPresentationAndPipelineWithoutSurfaceChange() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let runtime = RecordingStreamMetalPresenterRuntime()
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 64, height: 64),
+            drawableSize: PixelSize(width: 128, height: 96),
+            mode: .fit
+        ))
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState,
+            runtimeFactory: { _, _ in runtime },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+
+        renderState.transform.drawableSize = PixelSize(width: 192, height: 108)
+        presenter.update(renderState: renderState)
+
+        XCTAssertEqual(runtime.stopCount, 1)
+        XCTAssertEqual(runtime.invalidationCount, 0)
+        XCTAssertEqual(surfaceAdapter.contracts, [try makeSDRSurface()])
+        XCTAssertTrue(presenter.snapshot().requiresClearBeforePresentation)
+    }
+
+    @MainActor
+    func testRuntimeCreationFailureRestoresPreviousSurfaceAndDetaches() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        var shouldFail = false
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in
+                if shouldFail { throw TestError.runtimeCreationFailed }
+                return initialRuntime
+            },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 33,
+            frameID: 14,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 44,
+            currentHeadroom: 2
+        )
+        shouldFail = true
+
+        let outcome = presenter.transition(.resolved(resolved), on: view)
+
+        XCTAssertEqual(outcome, .closed(.runtimeCreationFailed))
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(surfaceAdapter.contracts, [
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract,
+            try makeSDRSurface()
+        ])
+        XCTAssertNil(view.delegate)
+        XCTAssertTrue(view.isPaused)
+        XCTAssertNil(presenter.snapshot().activeConfiguration)
+    }
+
+    @MainActor
+    func testClosedResolutionCanRecoverWithReplacementRuntimeAndSurface() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let edrRuntime = RecordingStreamMetalPresenterRuntime()
+        let recoveredRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [initialRuntime, edrRuntime, recoveredRuntime]
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let renderState = StreamRenderState()
+        renderState.policy = .active
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState,
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 34,
+            frameID: 15,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 45,
+            currentHeadroom: 2.5
+        )
+        XCTAssertEqual(
+            presenter.transition(.resolved(resolved), on: view),
+            .applied(previous: nil, current: resolved.identity)
+        )
+        XCTAssertEqual(
+            presenter.transition(
+                .closed(.invalidCurrentDisplayHeadroom),
+                on: view
+            ),
+            .closed(.resolutionClosed(.invalidCurrentDisplayHeadroom))
+        )
+
+        let outcome = presenter.transition(.resolved(resolved), on: view)
+
+        XCTAssertEqual(
+            outcome,
+            .applied(previous: nil, current: resolved.identity)
+        )
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(edrRuntime.invalidationCount, 1)
+        XCTAssertEqual(recoveredRuntime.invalidationCount, 0)
+        XCTAssertEqual(surfaceAdapter.contracts, [
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract,
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract
+        ])
+        XCTAssertTrue((view.delegate as AnyObject?) === presenter)
+        XCTAssertFalse(view.isPaused)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: resolved.identity,
+            appliedSurfaceContract: resolved.identity.surfaceContract,
+            requiresClearBeforePresentation: true,
+            configurationTransitionCount: 2,
+            closedTransitionCount: 1
+        ))
+    }
+
+    @MainActor
+    func testStopFromEDRRestoresSDRAndIsIdempotent() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let edrRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [initialRuntime, edrRuntime]
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 35,
+            frameID: 16,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 46,
+            currentHeadroom: 2
+        )
+        XCTAssertEqual(
+            presenter.transition(.resolved(resolved), on: view),
+            .applied(previous: nil, current: resolved.identity)
+        )
+
+        presenter.stop()
+        presenter.stop()
+
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(edrRuntime.invalidationCount, 1)
+        XCTAssertEqual(surfaceAdapter.contracts, [
+            try makeSDRSurface(),
+            resolved.identity.surfaceContract,
+            try makeSDRSurface()
+        ])
+        XCTAssertTrue(view.isPaused)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: nil,
+            appliedSurfaceContract: try makeSDRSurface(),
+            requiresClearBeforePresentation: false,
+            configurationTransitionCount: 1,
+            closedTransitionCount: 0
+        ))
+    }
+
+    @MainActor
+    func testStaleOldViewTransitionCannotMutateReplacementSurface() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let oldView = MTKView(frame: .zero, device: device)
+        let replacementView = MTKView(frame: .zero, device: device)
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let edrRuntime = RecordingStreamMetalPresenterRuntime()
+        let replacementRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [initialRuntime, edrRuntime, replacementRuntime]
+        let oldAdapter = RecordingPresenterSurfaceAdapter()
+        let replacementAdapter = RecordingPresenterSurfaceAdapter()
+        var adapters = [oldAdapter, replacementAdapter]
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
+            surfaceAdapterFactory: { _ in adapters.removeFirst() }
+        )
+        presenter.configure(oldView)
+        let frame = try makeFrame(
+            generation: 36,
+            frameID: 17,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 47,
+            currentHeadroom: 3
+        )
+        XCTAssertEqual(
+            presenter.transition(.resolved(resolved), on: oldView),
+            .applied(previous: nil, current: resolved.identity)
+        )
+        presenter.configure(replacementView)
+        let oldContracts = oldAdapter.contracts
+        let replacementContracts = replacementAdapter.contracts
+
+        let outcome = presenter.transition(.resolved(resolved), on: oldView)
+
+        XCTAssertEqual(outcome, .closed(.staleSurface))
+        XCTAssertEqual(oldAdapter.contracts, oldContracts)
+        XCTAssertEqual(replacementAdapter.contracts, replacementContracts)
+        XCTAssertEqual(initialRuntime.invalidationCount, 1)
+        XCTAssertEqual(edrRuntime.invalidationCount, 1)
+        XCTAssertEqual(replacementRuntime.invalidationCount, 0)
+        XCTAssertTrue((replacementView.delegate as AnyObject?) === presenter)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: nil,
+            appliedSurfaceContract: try makeSDRSurface(),
+            requiresClearBeforePresentation: false,
+            configurationTransitionCount: 1,
+            closedTransitionCount: 1
+        ))
+    }
+
+    @MainActor
+    func testUnsupportedTransitionClosesWithoutClaimingSurfaceOwnership() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let runtime = RecordingStreamMetalPresenterRuntime()
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtime },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 37,
+            frameID: 18,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 48,
+            currentHeadroom: 2
+        )
+        surfaceAdapter.unsupportedPlatform = .tvOS
+
+        let outcome = presenter.transition(.resolved(resolved), on: view)
+
+        XCTAssertEqual(outcome, .closed(.surfaceUnsupported(.tvOS)))
+        XCTAssertEqual(runtime.invalidationCount, 1)
+        XCTAssertEqual(surfaceAdapter.activeContract, try makeSDRSurface())
+        XCTAssertEqual(surfaceAdapter.contracts, [try makeSDRSurface()])
+        XCTAssertNil(view.delegate)
+        XCTAssertTrue(view.isPaused)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: nil,
+            appliedSurfaceContract: nil,
+            requiresClearBeforePresentation: false,
+            configurationTransitionCount: 0,
+            closedTransitionCount: 1
+        ))
+    }
+
+    @MainActor
+    func testSurfaceMutationFailureClosesWithoutClaimingRolledBackSurface() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let runtime = RecordingStreamMetalPresenterRuntime()
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in runtime },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+        presenter.configure(view)
+        let frame = try makeFrame(
+            generation: 38,
+            frameID: 19,
+            metadata: .hdr10VideoRange()
+        )
+        let resolved = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 49,
+            currentHeadroom: 2
+        )
+        surfaceAdapter.failure = .mutationFailed(
+            .drawablePixelFormat(.rgba16Float)
+        )
+
+        let outcome = presenter.transition(.resolved(resolved), on: view)
+
+        XCTAssertEqual(outcome, .closed(.surfaceApplicationFailed))
+        XCTAssertEqual(runtime.invalidationCount, 1)
+        XCTAssertEqual(surfaceAdapter.activeContract, try makeSDRSurface())
+        XCTAssertEqual(surfaceAdapter.contracts, [try makeSDRSurface()])
+        XCTAssertNil(view.delegate)
+        XCTAssertTrue(view.isPaused)
+        XCTAssertEqual(presenter.snapshot(), StreamMetalPresenterSnapshot(
+            activeConfiguration: nil,
+            appliedSurfaceContract: nil,
+            requiresClearBeforePresentation: false,
+            configurationTransitionCount: 0,
+            closedTransitionCount: 1
+        ))
+    }
+
+    private func makeResolvedConfiguration(
+        for frame: DecodedVideoFrame,
+        displayRevision: UInt64,
+        currentHeadroom: Double,
+        appliedSurfaceContract: HDRSurfaceContract? = nil
+    ) throws -> HDRResolvedRenderConfiguration {
+        let resolution = HDRRenderConfigurationResolver.resolve(
+            HDRRenderConfigurationResolverInput(
+                decodedLayout: HDRDecodedPixelBufferLayout(
+                    pixelBuffer: frame.pixelBuffer
+                ),
+                colorMetadata: frame.colorMetadata,
+                decoderGeneration: frame.generation,
+                userAllowsHDR: true,
+                platformCapabilities: HDRPlatformOutputCapabilities(
+                    platform: .macOS,
+                    headroomSource: .currentPotentialAndReference,
+                    extendedRangeSurfaceSupport: .intentAndMetadata,
+                    supportedEDRGamuts: [.displayP3, .ituR2020],
+                    supportsSDRToneMapping: true
+                ),
+                displaySnapshot: HDRDisplaySnapshot(
+                    revision: HDRDisplayRevision(rawValue: displayRevision),
+                    displayID: "not-published",
+                    headroom: DisplayHeadroom(
+                        potential: max(currentHeadroom, 4),
+                        current: currentHeadroom,
+                        reference: 1
+                    )
+                ),
+                isDisplayRevisionExhausted: false,
+                drawableState: HDRDrawableState(
+                    isAvailable: true,
+                    appliedSurfaceContract: appliedSurfaceContract
+                )
+            )
+        )
+        guard let configuration = resolution.configuration else {
+            throw TestError.configurationResolutionFailed
+        }
+        return configuration
+    }
+
+    private func makeSDRSurface() throws -> HDRSurfaceContract {
+        try HDRSurfaceContract(
+            drawablePixelFormat: .bgra8UnormSRGB,
+            outputColorSpace: .sRGB,
+            outputGamut: .sRGB,
+            extendedRangeIntent: .disabled,
+            metadataMode: .none
+        )
+    }
+
     private func makeFrame(
         generation: UInt64,
         frameID: UInt64,
@@ -649,16 +1236,33 @@ final class StreamMetalPresenterTests: XCTestCase {
         case targetCreationFailed
         case commandQueueCreationFailed
         case runtimeCreationFailed
+        case configurationResolutionFailed
     }
 }
 
 @MainActor
 private final class RecordingPresenterSurfaceAdapter: HDRSurfaceApplying {
     var failure: HDRSurfaceApplicationError?
+    var unsupportedPlatform: AppleRenderingPlatform?
+    private(set) var activeContract: HDRSurfaceContract?
+    private(set) var contracts: [HDRSurfaceContract] = []
 
     func apply(_ contract: HDRSurfaceContract) throws -> HDRSurfaceApplicationOutcome {
         if let failure { throw failure }
-        return .applied(previous: nil, current: contract)
+        if let unsupportedPlatform,
+           contract.extendedRangeIntent == .enabled {
+            return .unsupported(
+                platform: unsupportedPlatform,
+                requested: contract
+            )
+        }
+        guard activeContract != contract else {
+            return .unchanged(contract)
+        }
+        let previous = activeContract
+        activeContract = contract
+        contracts.append(contract)
+        return .applied(previous: previous, current: contract)
     }
 }
 
@@ -749,7 +1353,13 @@ private final class RecordingHDRMetalVideoRenderer: HDRMetalVideoRendering,
 private final class RecordingStreamMetalPresenterRuntime:
     StreamMetalPresenterRuntiming, @unchecked Sendable {
     private let lock = NSLock()
-    private var invalidationCount: UInt64 = 0
+    private var storedClearCount: UInt64 = 0
+    private var storedStopCount: UInt64 = 0
+    private var storedInvalidationCount: UInt64 = 0
+
+    var clearCount: UInt64 { lock.withLock { storedClearCount } }
+    var stopCount: UInt64 { lock.withLock { storedStopCount } }
+    var invalidationCount: UInt64 { lock.withLock { storedInvalidationCount } }
 
     func present(
         frame: DecodedVideoFrame,
@@ -771,12 +1381,15 @@ private final class RecordingStreamMetalPresenterRuntime:
     func clear(drawable: any CAMetalDrawable, color: MTLClearColor) throws {
         _ = drawable
         _ = color
+        lock.withLock { storedClearCount &+= 1 }
     }
 
-    func stop() {}
+    func stop() {
+        lock.withLock { storedStopCount &+= 1 }
+    }
 
     func invalidate() {
-        lock.withLock { invalidationCount &+= 1 }
+        lock.withLock { storedInvalidationCount &+= 1 }
     }
 
     func snapshot() -> StreamMetalPresenterRuntimeSnapshot {
@@ -785,11 +1398,11 @@ private final class RecordingStreamMetalPresenterRuntime:
                 activeConfiguration: nil,
                 mappedFrameGeneration: nil,
                 mappedFrameID: nil,
-                isInvalidated: invalidationCount > 0,
+                isInvalidated: storedInvalidationCount > 0,
                 submittedFrameCount: 0,
                 failedPresentationCount: 0,
-                stopCount: 0,
-                invalidationCount: invalidationCount
+                stopCount: storedStopCount,
+                invalidationCount: storedInvalidationCount
             )
         }
     }
