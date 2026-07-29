@@ -2184,3 +2184,12 @@
 - `docs/runtime/spatial-audio-contract.md`现统一production graph/ownership、canonical channel layout、四平台route/API、signed entitlement、recovery/generation、actual UI/diagnostics、离线证据和6.6硬件矩阵；runtime roadmap同步为`34/35 in_progress`。
 - OpenSpec 6.7已勾选，权威进度为`34/35`。6.6保持唯一pending，change不archive、阶段不标记complete；后续可推进阶段17，但不能用移动/模拟器/离线证据回填空间音频物理验收。
 - repository final gate `/tmp/LuneX-16-6_7-repo-final.SxZAWt`通过fixture、OpenSpec strict `7/7`、apply `34/35`、generator稳定、stage normal `721/720/1/0`读回、合同/proof boundary、6.6唯一pending、Keychain opt-in关闭及产品源码/测试/配置/工具/工程零diff门。
+
+## 2026-07-30 阶段 17 OpenSpec 恢复与产物起草
+
+- macOS更新后恢复active goal；确认仓库在`main`，`HEAD == origin/main == 7ec593a`，起始dirty仅为阶段17 proposal和调查记录，没有产品源码、测试或工程配置修改。
+- 运行planning-with-files session catch-up并核对交接、Git、OpenSpec与三份持久文件；未发现未同步的额外实现。
+- 读取当前UIKit lifecycle、mobile Metal surface、EDR reader、decoded frame、AppModel/media ownership、generator和阶段16 OpenSpec样式；本机Xcode 26.4 SDK确认actual view/window、scene notifications、mobile EDR与sample-buffer PiP public API边界。
+- 起草`integrate-mobile-scene-pip-continuity`三个capability specs、cross-module design和36项tasks；下一步执行OpenSpec strict、artifact status、generator稳定性和diff边界，自验通过后独立commit/push，再进入apply 1.1。
+- 首轮artifact status已为4/4 done，但strict发现4个requirement把`SHALL`换行到描述第二行，validator只检查首行而拒绝；该轮不计验收，生成器哈希仍稳定且没有产品源码漂移。已把四个首行改为显式规范词，准备从新证据目录完整复验。
+- 最终规划产物门`/tmp/LuneX-17-openspec-final.FWT2cM`通过4/4 artifacts done、OpenSpec strict `1/1`、apply `0/36`、三个spec目录、生成器连续两次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、`git diff --check`与产品源码/测试/配置/工具/工程零diff边界。下一步独立提交推送artifact后直接进入1.1。

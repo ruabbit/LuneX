@@ -1768,3 +1768,15 @@
 - 新空间音频合同覆盖production ownership、canonical PCM、environment graph、平台route/API、entitlement/signing、recovery/generation、Settings/UI/diagnostics、确定性证据及6.6逐项物理验收和脱敏收据；路线图不再保留过期`17/35`。
 - OpenSpec 6.7已勾选，权威进度更新为`34/35 in_progress`。唯一剩余6.6没有授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine收据，因此change不可archive、阶段不可标记complete。
 - 勾选后的repository final gate `/tmp/LuneX-16-6_7-repo-final.SxZAWt`通过fixture、OpenSpec strict `7/7`、apply `34/35`、generator稳定、stage normal读回、权威合同/路线图静态边界、6.6唯一pending、Keychain opt-in关闭和产品源码/测试/配置/工具/工程零diff门。
+
+## 2026-07-30 阶段 17 OpenSpec 调查
+
+- 新change固定为`integrate-mobile-scene-pip-continuity`，capability拆为`mobile-scene-window-lifecycle`、`mobile-pip-background-continuity`和`mobile-display-edr`。现有代码只有policy-only `MobileContinuityPolicyResolver`、`PictureInPictureStateCoordinator`和把SwiftUI `scenePhase`简化为visible/focused的`UIKitLifecycleMonitor`，没有actual UIWindowScene/window/Stage Manager/PiP controller接线。
+- Xcode 26.4 iOS simulator SDK确认`AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)`和`AVPictureInPictureSampleBufferPlaybackDelegate`可用；Swift importer要求`pictureInPictureController(_:skipByInterval:completion:)`，content-source controller initializer返回非optional。
+- actual geometry可从附着stream `UIView`的`didMoveToWindow`、`layoutSubviews`、`safeAreaInsetsDidChange`、`window?.windowScene`和`window?.screen`读取；scene通知使用`UIScene.didActivateNotification`、`willDeactivateNotification`、`didEnterBackgroundNotification`和`willEnterForegroundNotification`。trait变化应使用iOS 17+ `registerForTraitChanges`而不是deprecated `traitCollectionDidChange`。
+- mobile EDR必须从actual `window.screen.currentEDRHeadroom`读取，并结合screen brightness/mode、trait、layout、scene恢复和surface/windowScene attachment事件发布display revision；不能使用`UIScreen.main`或只在启动时采样。`UIScreen.didConnect/didDisconnectNotification`在iOS 26已deprecated，warnings-as-errors设计不得使用。
+- macOS更新后恢复确认`HEAD == origin/main == 7ec593a`，active goal未丢失；session catch-up只有交接与恢复消息，没有额外产品源码、测试或工程配置改动。
+- Context7当前Apple文档索引只返回UIKit总览，没有本阶段新API精确签名；规范和实现证据以本机Xcode 26.4 public SDK headers、compile probes和确定性注入测试为准，并保留API编译/模拟器/signed artifact/真机四层证明边界。
+- OpenSpec固定三条所有权：actual UIKit stream view/window/screen是scene、geometry和EDR唯一来源；PiP复用当前`DecodedVideoFrame.pixelBuffer`且不得创建第二decoder；所有scene/PiP/EDR回调按session/media/surface generation过滤，迟到回调只能清理不能发布。
+- PiP只有native delegate确认start后才能报告active；background mode声明、controller存在和用户preference都不能伪造实际连续性。scene进入后台时若没有current-generation active PiP或permitted active audio，runtime必须暂停前台渲染并pause/stop unsupported work。
+- 阶段17 artifact拆为36项：5项值合同、6项actual UIKit scene/window、5项mobile EDR、7项native PiP、6项background/AppModel/UI、7项验证与验收；6.6真机任务在没有授权硬件证据前保持pending。
