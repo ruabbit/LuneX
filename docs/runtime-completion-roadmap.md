@@ -92,9 +92,10 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`当前`18/33`；4.2 monotonic display revision与semantic headroom update已完成，下一项4.3解析唯一active surface/render configuration。
-- 4.2确定性验收为focused `19/19`、完整macOS `571 total / 570 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自实际Metal compile/link、OpenSpec strict `6/6`与generator/fixture/boundary门通过。构建前后规范化simulator清单SHA-256均为`ae1d4726c924c8a482aeb73847ca98acf2c093b8e56605773681d0f96fabc58b`，固定26.4四实例保持available/`Shutdown`且全局`Booted=0`。
-- display revision只由surface attached/detached可用性转换、内部display identity或potential/current/reference headroom语义变化触发；attachment owner在相同display/headroom下的replacement本身不是revision输入。stream active、focus、visibility和单纯drawable resize不会触发。macOS使用内部`NSScreenNumber`区分同名屏幕且不公开日志该标识，iOS分别读取potential/current EDR headroom；UIKit scene/window实际接线仍归阶段17。
+- OpenSpec `implement-native-hdr-edr-pipeline`当前`19/33`；4.3 deterministic active surface/render configuration resolver已完成，下一项4.4清除不兼容presentation并原子重建surface/pipeline ownership。
+- 4.3确定性验收为focused `23/23`、完整macOS `582 total / 581 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自实际Metal compile/link；构建前后规范化simulator清单SHA-256均为`acf879865a6beef7e7491896dc562a30cf3ee75aa248fbaebcc3a0376e3f9c3c`，固定26.4四实例保持available/`Shutdown`且全局`Booted=0`。
+- resolver重新验证实际decoded layout与metadata，从decoder generation、HDR preference、platform capability、revision-owned display snapshot、current headroom、drawable和adapter-owned surface解析唯一SDR、EDR、typed SDR fallback或closed结果。SDR-on-EDR保持SDR；HDR只在用户允许、平台具备intent/metadata和EDR gamut、current headroom有限且`> 1`时进入EDR，且只以current headroom作为映射上限。
+- 4.3输出只携带display revision而不携带display identity，并仅标记surface为ready或requires application。production `StreamMetalPresenter`尚未消费resolver，4.4真实surface/pipeline transition与5.1 AppModel/render state接线尚未完成；当前证据不证明production EDR、HDR signaling、live Sunshine HDR或物理亮度/颜色。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

@@ -1480,3 +1480,24 @@
 - 自审确认display revision与stream/focus/visibility/geometry revision独立，same-display headroom变化会发布新snapshot，stale detach不影响replacement，counter exhaustion清除snapshot，内部screen identity不进入public日志。OpenSpec 4.2标记完成，权威进度`18/33`；阶段15保持`in_progress`，下一项4.3。
 - 恢复后的最终生成器/strict/apply/diff门再次通过，并将文档触发条件收紧为attached/detached可用性、display identity和headroom；相同display/headroom下的attachment owner replacement本身不是revision输入。4.2已提交为`d37aed8 Add revisioned display headroom state`。
 - 首次组合命令未返回push诊断，随后直连SSH 22、SSH 443和HTTPS 443均超时而DNS正常；发现本机Surge系统代理后，以SOCKS5恢复GitHub连接。fetch确认首次push实际已发布`d37aed8`，因此不强推本地amend，而把3行诊断记录重放为远端4.2提交之后的独立跟踪提交。
+
+## 2026-07-29 阶段 15 任务 4.3 启动
+
+- `d37aed8 Add revisioned display headroom state`与跟踪提交`c191e52 Record HDR task push recovery`均已推送，确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`18/33`。
+- 已重新读取change proposal/design/spec/tasks及现有render contract、decoded validator、luminance mapping、surface adapter、presenter与display publisher。4.3实现纯resolver和确定性测试，不提前修改production presenter/AppModel，不执行4.4 transition orchestration。
+- 输入锁定为actual decoded layout/metadata、decoder generation、user preference、injected platform capabilities、revision-owned display snapshot/exhaustion及drawable/applied surface state；输出区分SDR、EDR、typed SDR fallback、closed error和surface application requirement，且不携带display identity。
+- 首轮focused误用不含test action的`LuneX-macOS` scheme，Xcode在编译前以“not currently configured for the test action”退出；该结果不计验收。项目已有`LuneXCoreTests` scheme，后续使用新DerivedData/result bundle重跑。
+- 第二轮focused进入编译后因`HDRRenderConfigurationResolverInput`无用途地声明`Hashable`失败；display snapshot只保证带NaN去重语义的`Equatable`，不应强制hash。已移除input hash约束，resolved configuration/output仍保持`Hashable`，失败bundle不计验收。
+- 第三轮focused实际运行`23`项，`22 passed / 1 failed`；失败fixture同时把8-bit伪HDR metadata配到P010，validator正确优先报告bit-depth/layout mismatch。fixture改为NV12以隔离metadata缺陷，失败bundle不计验收。
+- 第四轮仍为`22 passed / 1 failed`：即使改用NV12，8-bit HDR按既有合同仍应先返回layout mismatch。fixture改为合法HDR10/P010字段加全零content-light metadata，使结构检查通过后唯一触发invalid metadata；此前bundle继续不计验收。
+- 最终focused从全新DerivedData通过`23/23 passed / 0 skipped / 0 failed`（`/tmp/LuneX-15-4_3-focused-final.NgLzao/HDRRenderConfigurationResolver.xcresult`），结构化结果为零warning/error/analyzer warning；覆盖SDR-on-EDR、HDR EDR、P3/2020选择、typed fallback、无fallback closed、metadata/layout、generation/display/drawable和display identity隐私边界。
+
+## 2026-07-29 阶段 15 任务 4.3 完成
+
+- 完整macOS suite从全新DerivedData通过`582 total / 581 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-4_3-full.TvTnJC/LuneXCoreTests.xcresult`）；唯一skip为显式禁用的`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化结果为零warning/error/analyzer warning。
+- macOS及固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过并各自实际执行一次Metal compile/link，证据目录`/tmp/LuneX-15-4_3-builds.Fu1BUO`。构建前后规范化simulator清单逐字一致，SHA-256均为`acf879865a6beef7e7491896dc562a30cf3ee75aa248fbaebcc3a0376e3f9c3c`；固定四实例均唯一、available、`Shutdown`且全局`Booted=0`，未执行simulator生命周期命令。
+- `HDRRenderConfigurationResolver`从实际decoded layout/metadata、decoder generation、HDR preference、platform capability、revision-owned display snapshot/current headroom、drawable与adapter-owned surface解析唯一immutable SDR、EDR、typed HDR-to-SDR fallback或closed结果，并只公开display revision。
+- OpenSpec 4.3标记完成，权威进度`19/33`；阶段15保持`in_progress`，下一项4.4负责清除不兼容presentation并原子应用surface/pipeline transition。production presenter/AppModel尚未接线resolver，当前证据不证明production EDR、HDR signaling、live Sunshine HDR或物理亮度/颜色。
+- 首轮repository组合门的reference-path正则在zsh嵌套引号层被截断并以`unmatched "`退出；失败发生在临时目录创建后、generator/OpenSpec/fixture执行前，不计验收。后续拆分边界扫描并使用新证据目录完整重跑。
+- 第二轮repository门的generator运行前/三次SHA-256均为预期`1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`，OpenSpec原始结果也为6项全部valid；但包装器误按旧schema读取`summary`而主动失败。该轮部分结果不计最终验收，后续按`summary.totals`与`.items[].valid`从新目录完整重跑。
+- 最终repository gates位于`/tmp/LuneX-15-4_3-repo-final.9MawyM`：OpenSpec strict `6/6`、apply `19/33`且4.3已完成、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`1275a7954c8c23a5e3113a036addb0548efefc81c8a7f141257e7156ac3d08d0`，production/reference、无Swift Package依赖、Core Image regression、diff与自有文件whitespace边界全部通过。

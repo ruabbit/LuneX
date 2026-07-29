@@ -213,6 +213,8 @@ enum HDRRenderResolutionError: Error, Equatable, Hashable, Sendable,
     case unsupportedPlatformOutput(AppleRenderingPlatform)
     case missingCurrentDisplayHeadroom
     case invalidCurrentDisplayHeadroom
+    case insufficientCurrentDisplayHeadroom
+    case drawableUnavailable
     case userDisabledHDRWithoutSDRFallback
     case unsupportedSurfaceContract
     case incompatibleMappingAndSurface
@@ -240,6 +242,10 @@ enum HDRRenderResolutionError: Error, Equatable, Hashable, Sendable,
             return "Current display headroom is unavailable."
         case .invalidCurrentDisplayHeadroom:
             return "Current display headroom is invalid."
+        case .insufficientCurrentDisplayHeadroom:
+            return "Current display headroom cannot present extended-range output."
+        case .drawableUnavailable:
+            return "The stream drawable is unavailable."
         case .userDisabledHDRWithoutSDRFallback:
             return "HDR is disabled and no SDR tone-map fallback is available."
         case .unsupportedSurfaceContract:

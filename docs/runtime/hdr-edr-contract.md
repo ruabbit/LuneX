@@ -34,13 +34,14 @@ still required before LuneX may claim working HDR output.
 | Surface intent | `StreamMetalPresenter` applies its current SDR contract through an injectable transaction adapter; the adapter owns view/layer pixel format, colorspace, EDR metadata, and extended-range intent together | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported, rollback, rollback failure, real macOS layer fields, and production fail-closed behavior; all five platform targets compile | Tasks 4.2 through 4.6 must add display/headroom revisions, resolve when EDR is eligible, and rebuild presentation across semantic transitions |
 | AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
 
-The production truth after task 4.1 is therefore: LuneX presents both SDR and
+The production truth after task 4.3 is therefore: LuneX presents both SDR and
 HDR decoded layouts through the explicit shader and revision-owned Metal
-renderer. Surface fields now have one atomic, platform-capability-gated owner,
-but the current production resolver still requests only sRGB SDR, so HDR is
-deliberately tone-mapped to headroom `1.0`. No production EDR selection, HDR
-signaling, or physical HDR result is claimed until tasks 4.2 through 5.4 and the
-hardware gate pass.
+renderer. Surface fields have one atomic, platform-capability-gated owner, and
+the deterministic resolver can select SDR, EDR, or a diagnosed SDR fallback,
+but the production presenter does not consume that resolver yet. It still
+requests only sRGB SDR, so HDR is deliberately tone-mapped to headroom `1.0`.
+No production EDR selection, HDR signaling, or physical HDR result is claimed
+until tasks 4.4 through 5.4 and the hardware gate pass.
 
 ## Apple SDK 26.4 API matrix
 
@@ -224,6 +225,49 @@ simulator inventory; and all repository gates. This proves semantic revision
 publication and platform compile safety. It does not prove production
 configuration propagation, EDR selection, current-headroom tone mapping, HDR
 signaling, or physical display output.
+
+## Active configuration resolution evidence
+
+OpenSpec task 4.3 adds one pure `HDRRenderConfigurationResolver` that resolves
+the complete immutable render identity without mutating a view, layer,
+presenter, queue, or application model:
+
+- the resolver revalidates the actual decoded pixel-buffer layout against
+  `VideoColorMetadata` instead of trusting a caller-provided HDR claim;
+- decoder generation, display revision, and drawable availability must all be
+  present and nonzero, and display revision exhaustion remains fail closed;
+- SDR content always resolves to the SDR path, including on an EDR-capable
+  display or when the user disables HDR;
+- HDR enters EDR only when the user permits it, the platform supports intent
+  and HDR metadata, at least one supported Display-P3 or ITU-R 2020 EDR gamut
+  exists, and current headroom is finite, greater than `1.0`, and no greater
+  than the bounded maximum of `64.0`;
+- ITU-R 2020 is preferred when both EDR gamuts are supported, and only current
+  headroom bounds luminance mapping; potential and reference headroom never
+  substitute for it;
+- ineligible HDR produces a typed user-disabled, platform-unsupported,
+  headroom-unavailable, headroom-invalid, or headroom-insufficient SDR fallback
+  when platform tone mapping exists, otherwise a typed closed error; and
+- the resolved value retains only display revision, never internal display
+  identity, and reports whether the adapter-owned surface is already ready or
+  requires task 4.4 to apply the requested contract.
+
+The task-level evidence is `23/23` focused tests; `582 total / 581 passed / 1
+explicit Keychain skip / 0 failed` for the complete macOS suite; five-platform
+Debug builds with one Metal compile and link and no source diagnostics per
+platform; and OpenSpec, fixture, generator, dependency, clean-room, Core Image
+regression, diff, and whitespace gates. The fixed simulator inventory was
+byte-identical before and after those builds, with SHA-256
+`acf879865a6beef7e7491896dc562a30cf3ee75aa248fbaebcc3a0376e3f9c3c`;
+all fixed devices remained available and `Shutdown`, with no simulator
+lifecycle command run.
+
+This proves deterministic eligibility, mapping, fallback, and closed-error
+resolution. It does not prove that production `StreamMetalPresenter` consumes
+the resolver, that task 4.4 has applied a real surface/pipeline transition, or
+that task 5.1 has propagated the configuration through `AppModel` and render
+state. It also does not prove production EDR signaling, physical HDR
+luminance/color, or live Sunshine HDR interoperability.
 
 ## Verification matrix
 

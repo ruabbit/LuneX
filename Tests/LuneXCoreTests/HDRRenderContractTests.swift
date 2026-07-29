@@ -255,6 +255,8 @@ final class HDRRenderContractTests: XCTestCase {
             .unsupportedPlatformOutput(.visionOS),
             .missingCurrentDisplayHeadroom,
             .invalidCurrentDisplayHeadroom,
+            .insufficientCurrentDisplayHeadroom,
+            .drawableUnavailable,
             .userDisabledHDRWithoutSDRFallback,
             .unsupportedSurfaceContract,
             .incompatibleMappingAndSurface,
@@ -269,8 +271,8 @@ final class HDRRenderContractTests: XCTestCase {
         XCTAssertTrue(errors.allSatisfy { !$0.description.isEmpty })
         XCTAssertEqual(errors.map(\.testCategory), [
             "session", "source", "source", "layout", "layout", "platform", "headroom",
-            "headroom", "preference", "surface", "surface", "generation", "source",
-            "display", "display", "display"
+            "headroom", "headroom", "drawable", "preference", "surface", "surface",
+            "generation", "source", "display", "display", "display"
         ])
     }
 }
@@ -333,7 +335,9 @@ private extension HDRRenderResolutionError {
         case .invalidSourceContract, .incompatibleSourceAndMapping, .staleColorSignature: "source"
         case .unsupportedDecodedLayout, .incompatibleDecodedLayout: "layout"
         case .unsupportedPlatformOutput: "platform"
-        case .missingCurrentDisplayHeadroom, .invalidCurrentDisplayHeadroom: "headroom"
+        case .missingCurrentDisplayHeadroom, .invalidCurrentDisplayHeadroom,
+             .insufficientCurrentDisplayHeadroom: "headroom"
+        case .drawableUnavailable: "drawable"
         case .userDisabledHDRWithoutSDRFallback: "preference"
         case .unsupportedSurfaceContract, .incompatibleMappingAndSurface: "surface"
         case .staleDecoderGeneration: "generation"

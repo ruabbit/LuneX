@@ -1122,3 +1122,18 @@
 - 重复NaN headroom被视为同一无效语义，避免系统通知导致无限revision churn；4.3仍必须决定无效headroom的closed resolution，不在4.2把它伪装成可用能力。
 - macOS内部identity使用`NSScreenNumber`而非可能重复的localized name，public日志只含attached/revision/geometry/headroom；iOS分别读取真实potential/current headroom。该证据不表示UIKit scene/window已运行接线。
 - task级验收为focused `19/19`、完整macOS `571 total / 570 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link、simulator清单不变与repository gates通过。下一项4.3解析唯一active configuration。
+
+## 2026-07-29 阶段 15 任务 4.3 实现边界
+
+- `HDRRenderConfigurationIdentity`已拥有decoder generation、color signature、display revision、mapping mode和surface contract，但production resolver仍用coordinate revision并固定SDR surface；4.3只建立正确的纯解析合同，4.4负责转换编排，5.1负责AppModel/presenter实际接线。
+- resolver应从实际`HDRDecodedPixelBufferLayout`与`VideoColorMetadata`重新执行既有validator，不能把调用方声称的HDR状态当作有效输入。malformed metadata/layout保持closed，合法HDR才允许EDR或typed SDR fallback。
+- EDR资格需要用户允许、platform具备intent+metadata surface、至少一个受支持EDR gamut、revision-owned current headroom有限且大于1；只用current headroom作为映射上限，potential/reference不替代它。SDR内容在EDR display上仍解析为SDR。
+- resolved output只携带display revision，不携带内部display identity；并明确标记当前adapter-owned surface已匹配或仍需4.4应用，防止4.3确定性解析被误报成production EDR已激活。
+
+## 2026-07-29 阶段 15 任务 4.3 验收结论
+
+- `HDRRenderConfigurationResolver`重新调用decoded layout/metadata validator，generation为0、display snapshot缺失或revision为0、revision exhausted、drawable unavailable、malformed layout/metadata均返回typed closed error；不信任调用方声明的HDR状态。
+- SDR内容始终解析为SDR。HDR进入EDR必须同时满足用户允许、platform支持intent与HDR metadata、至少一个Display-P3/ITU-R 2020 EDR gamut、current headroom有限且`> 1`并不超过`64`；同时支持两个gamut时优先ITU-R 2020，potential/reference不替代current。
+- EDR不合格但支持SDR tone mapping时返回typed HDR-to-SDR fallback且headroom固定为`1`；否则closed。输出只携带display revision，并以`.ready`或`.requiresApplication(previous:)`表达4.4 transition需求。
+- focused `23/23`、完整macOS `582 total / 581 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link均通过；simulator规范化清单前后SHA-256同为`acf879865a6beef7e7491896dc562a30cf3ee75aa248fbaebcc3a0376e3f9c3c`，固定四实例均available/`Shutdown`且全局`Booted=0`。
+- 该证据只证明resolver确定性合同。production `StreamMetalPresenter`尚未消费它，4.4尚未执行真实surface/pipeline transition，5.1尚未接线AppModel/render state；production EDR、HDR signaling、live Sunshine HDR和物理亮度/颜色仍未证明。
