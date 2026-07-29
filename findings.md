@@ -1680,3 +1680,17 @@
 - 修复后focused为`8/8`，macOS universal、iOS/iPadOS、tvOS、visionOS generic-device Debug build均succeeded且结构化diagnostics为0。勾选前repository gate `/tmp/LuneX-16-5_5-repo-pre.UJvBhh`和勾选后final gate `/tmp/LuneX-16-5_5-repo-final.m6xKRr`均通过strict `7/7`、fixtures、membership、UI/迁移/ownership、privacy/secret/reference/package/Core Image/diff、generator和模拟器不变边界；final apply为`28/35`且6.1仍pending。
 - 当前`xcresulttool get diagnostics`已落入deprecated legacy object路径；验收改用受支持的`get test-results summary/tests`与`get build-results`结构化字段。该工具迁移不改变xcresult本身，也不作为产品失败。
 - 本项没有触发真实Keychain或live-host路径，前后全局`Booted=0`且未操作simulator。signed entitlement、AirPods head tracking、真实route transition、可听多声道定位/同步、visionOS物理空间音频和live Sunshine播放继续保留给6.6/既有硬件门。
+
+## 2026-07-30 阶段 16 任务 6.1 调查
+
+- 从已推送且clean的`7bc3814`进入6.1。当前测试源码中唯一`ProcessInfo.processInfo.environment`和`LUNEX_RUN_*`读取点是`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`的`LUNEX_RUN_KEYCHAIN_TEST`；normal命令必须显式移除该变量。
+- 测试树没有live-host XCTest、Sunshine地址/凭据环境开关或环境触发的discovery/pairing/launch/stream路径。6.1只能证明normal suite没有真实Keychain和live-host副作用；阶段13 9.2所需live-host XCTest仍是缺失实现，不能描述为skip或disabled pass。
+- 6.1将从全新DerivedData/result bundle运行完整macOS normal suite，以结构化test summary/tests和build-results同时断言0 failure、唯一允许skip精确匹配、0 error/warning/analyzer warning；测试前后只读比较simulator inventory并要求全局`Booted=0`。
+
+## 2026-07-30 阶段 16 任务 6.1 验收
+
+- 从已推送clean `7bc3814`使用全新DerivedData运行normal suite，结果`/tmp/LuneX-16-6_1-normal.430OTY/Normal.xcresult`为`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，expected failure为0；build-results的error/warning/analyzer warning均为0。
+- 唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，环境中也不存在任何`LUNEX_RUN_*`、Sunshine、Moonlight或Keychain opt-in，因此没有再次访问真实Keychain。
+- 源码结构化扫描确认`Tests/LuneXCoreTests/HostAndPersistenceTests.swift`是Tests/Sources唯一环境读取文件，`LUNEX_RUN_KEYCHAIN_TEST`是唯一`LUNEX_RUN_*` token；没有live-host XCTest或host环境入口。这证明normal suite无live-host side effect，不证明阶段13缺失的live-host XCTest已经通过。
+- 测试前后simulator inventory逐字节一致且全局`Booted=0`，没有执行任何simulator lifecycle操作。本项不提供signed entitlement、AirPods、实际route、多声道听感、同步或live Sunshine硬件证据。
+- 勾选后repository final gate `/tmp/LuneX-16-6_1-repo-final.zd8HeZ`通过OpenSpec strict `7/7`、apply `29/35`、normal xcresult只读复核、fixture self-test/全树、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、环境入口和simulator不变边界；6.2保持pending。

@@ -43,7 +43,7 @@
 
 ## 6. Verification, hardware acceptance, and tracking
 
-- [ ] 6.1 Run normal tests with live-host and real-Keychain paths disabled and verify the only allowed Keychain skip
+- [x] 6.1 Run normal tests with live-host and real-Keychain paths disabled and verify the only allowed Keychain skip
 - [ ] 6.2 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with warnings as errors and isolated DerivedData
 - [ ] 6.3 Run OpenSpec strict, generator stability, clean-room/dependency, direct SDK API probes, static analyzer, and repository-boundary gates
 - [ ] 6.4 Run ASan, TSan, malloc scribble/guard/resource ownership, graph replacement, observer cancellation, and scheduled-buffer release gates

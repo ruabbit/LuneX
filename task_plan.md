@@ -33,7 +33,7 @@
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
-| 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`28/35`；responsive、本地化、accessibility与actual-state UI矩阵已完成，下一项6.1 normal-test/Keychain skip验收 |
+| 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`29/35`；normal suite与唯一Keychain skip已验收，下一项6.2五平台Debug/Release构建矩阵 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
@@ -49,7 +49,7 @@
 
 阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`32/33 in_progress`。1.1至6.4与6.6的production、确定性测试、normal/五平台Debug+Release、strict/generator/dependency/Metal/analyzer/ASan/TSan/malloc/resource、simulator与跟踪证据均完成并逐项提交推送；已推送`372ca60`上的阶段级离线自验再次通过`616 total / 615 passed / 1 Keychain skip / 0 failed`、strict `6/6`、generator与固定simulator门。唯一剩余6.5要求授权Sunshine HDR源、代表性HDR/SDR物理显示器和可审计参考图或测量。没有live compositor EDR signaling、物理亮度/颜色、动态headroom和跨显示器证据时，change不可archive、阶段不可标记`complete`；下一可执行阶段为16空间音频，不以其证据替代6.5。
 
-阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`28/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.3完成设置迁移、稳定privacy-bounded diagnostics和current action ownership；5.4至5.5完成actual-runtime stream/Settings状态、原生偏好控件、responsive compact/wide、本地化resource、完整accessibility及desired-vs-actual回归。下一项6.1在live-host和真实Keychain路径关闭时重新运行normal tests并精确验证唯一允许的Keychain skip。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、真实route切换与signed entitlement行为仍是6.6真机硬件证据，不能由离线测试、属性赋值、编译或模拟器替代。
+阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`29/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1从已推送clean HEAD在live-host和真实Keychain路径关闭时通过`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`，并确认测试树不存在live-host opt-in入口。下一项6.2运行macOS Debug/Release和固定iPhone/iPad/tvOS/visionOS warnings-as-errors隔离构建矩阵。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、真实route切换与signed entitlement行为仍是6.6真机硬件证据，不能由离线测试、属性赋值、编译或模拟器替代。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -77,6 +77,7 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 16.6.1结构化验收包装器使用macOS `/bin/bash` 3.2不支持的`mapfile` | 1 | xcresult已成功生成且测试通过；不重跑suite，改用POSIX兼容的换行计数与精确字符串比较，从同一只读bundle完成全部断言 |
 | 16.5.5记录macOS universal失败的首个跨文件补丁误判`findings.md`现有调查文本 | 1 | `apply_patch`整体拒绝且未产生部分修改；读取真实尾部后按现有四条调查记录精确追加 |
 | 16.5.5首轮四平台build在macOS universal的x86_64批次将`Text + Text`弃用诊断提升为错误 | 1 | arm64 focused/full均通过但该跨平台轮不计验收；按macOS 26 SwiftUI合同改为可本地化`Text`插值，更新接线回归后从全新证据目录重跑 |
 | 16.5.5首轮focused在8项测试全部通过后由zsh读取不存在的`PIPESTATUS[0]`而退出1 | 1 | xcresult结构化确认测试成功且零诊断，但该包装器不计最终组合证据；改用显式`/bin/bash`和全新DerivedData/result bundle重跑 |
@@ -351,4 +352,4 @@
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
-- 阶段16 `integrate-spatial-audio-runtime`权威进度`28/35`；4.3至4.6已完成current-generation environment forwarding、AppModel actual state/preference binding、恢复/replacement矩阵与合法WAVE 7.1 application integration gate，5.1至5.5完成设置迁移、稳定privacy-bounded diagnostics、精准`.audio` ownership、actual runtime UI、responsive/localization/accessibility及desired-vs-actual测试矩阵。下一项6.1重新验收normal tests和唯一允许的真实Keychain skip；已完成的离线门仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
+- 阶段16 `integrate-spatial-audio-runtime`权威进度`29/35`；4.3至4.6已完成current-generation environment forwarding、AppModel actual state/preference binding、恢复/replacement矩阵与合法WAVE 7.1 application integration gate，5.1至5.5完成设置/诊断/actual UI矩阵，6.1完成normal suite与唯一Keychain skip验收。下一项6.2执行macOS Debug/Release和固定iPhone/iPad/tvOS/visionOS构建矩阵；已完成的离线门仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。

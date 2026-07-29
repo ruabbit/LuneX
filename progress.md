@@ -2095,3 +2095,18 @@
 - 唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；所有普通测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`并继续使用Debug文件fallback，没有再次授权或访问真实Keychain。
 - repository pre-gate `/tmp/LuneX-16-5_5-repo-pre.UJvBhh`与勾选后final gate `/tmp/LuneX-16-5_5-repo-final.m6xKRr`均通过OpenSpec strict `7/7`、fixture self-test/全树、source/test membership、responsive/localization/accessibility/actual-state UI wiring、settings migration、diagnostic ownership、privacy/secret/reference/package/Core Image/diff边界，以及generator连续两次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`；final apply为`28/35`且6.1仍pending。
 - 前后simulator inventory完全一致且全局`Booted=0`；本任务未创建、启动、安装、运行、关闭或删除任何simulator。OpenSpec 5.5已勾选，权威进度更新为`28/35`，下一项6.1重新运行normal tests并验证live-host/真实Keychain路径关闭和唯一允许skip。
+
+## 2026-07-30 阶段 16 任务 6.1 启动
+
+- 5.5已以`7bc3814 Verify responsive spatial audio UI`独立提交并推送；fetch确认`HEAD == origin/main`且工作树clean，OpenSpec为`28/35 ready`，当前任务6.1。
+- 测试源码静态审计确认唯一环境opt-in为`LUNEX_RUN_KEYCHAIN_TEST`，没有live-host XCTest或相应环境入口。normal suite将显式移除Keychain opt-in，从全新DerivedData运行，并精确断言唯一skip。
+- 本项不访问真实Keychain、不发起live-host连接、不操作simulator；缺失的live-host XCTest、授权Sunshine互操作和物理音频行为继续保持未完成。
+
+## 2026-07-30 阶段 16 任务 6.1 完成
+
+- normal suite `/tmp/LuneX-16-6_1-normal.430OTY/Normal.xcresult`从已推送clean `7bc3814`和全新DerivedData运行，结构化结果为`721 total / 720 passed / 1 skipped / 0 failed / 0 expected failures`，build error/warning/analyzer warning均为0。
+- 唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，ambient opt-in为空。
+- Tests/Sources只有一个环境读取文件和一个`LUNEX_RUN_*` token，均属于一次性真实Keychain用例；live-host XCTest/环境入口不存在，因此normal suite没有隐藏host副作用，但不替代阶段13 9.2缺失实现。
+- 首个结构化包装器因macOS Bash 3.2没有`mapfile`而在只读验收阶段退出；suite无需重跑，POSIX兼容包装器从同一bundle完成全部断言。前后simulator inventory一致且`Booted=0`。
+- repository final gate `/tmp/LuneX-16-6_1-repo-final.zd8HeZ`通过OpenSpec strict `7/7`、apply `29/35`、normal xcresult复核、fixture self-test/全树、environment opt-in边界、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`和simulator不变门。
+- OpenSpec 6.1已勾选，权威进度更新为`29/35`；下一项6.2运行macOS Debug/Release和固定iPhone、iPad、tvOS、visionOS warnings-as-errors隔离构建。
