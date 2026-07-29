@@ -1726,3 +1726,18 @@
 - 全新DerivedData完整macOS suite从`/tmp/LuneX-15-stage-acceptance.fbXbLy/Stage15Acceptance.xcresult`通过`616 total / 615 passed / 1 Keychain skip / 0 failed`，唯一skip精确为真实Keychain opt-in，结构化diagnostics为0。
 - OpenSpec strict `6/6`、进度`32/33`且6.5唯一pending、generator SHA-256 `600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`、固定simulator只读状态门全部通过。
 - 该自验只封版阶段15离线证据，不把6.5标记完成。记录提交推送后进入阶段16空间音频OpenSpec提案与实现，并保持阶段13/14/15的live/hardware缺口不变。
+
+## 2026-07-29 阶段 16 启动
+
+- 用户确认macOS更新完成并恢复推进。`planning-with-files` catchup、活动goal、Git、OpenSpec和工具链均已复核：`HEAD == origin/main == 24321b2`、工作树clean、阶段15 `32/33 in_progress`，macOS 27.0/Xcode 26.4/Swift 6.3/OpenSpec 1.3.1。
+- 固定simulator约束继续生效；只读检查为全局`Booted=0`，本阶段在具体任务要求前不执行create/clone/boot/bootstatus/launch/shutdown/delete/install/run。
+- Keychain已完成唯一一次真实验证；后续命令继续显式`env -u LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback，不再次触发授权。
+- 当前先审计实际audio graph、route/interruption/reconnect ownership、AppModel/UI与SDK availability，随后创建并严格验证OpenSpec `integrate-spatial-audio-runtime`，再按任务逐项实现、自验、提交和推送。
+- 已完成第一轮production盘点：`AVAudioEngineClient`当前只有`player -> mainMixer`，`SpatialAudioController`持有另一棵未接入播放的environment node，`NativeSessionAudioProcessorFactory`固定`spatialAudioEnabled: false`；现有能力resolver和diagnostics不是session/runtime owner。
+- 已核对Xcode 26.4 SDK headers与Apple官方文档：多声道bed应使用带channel layout的`.ambienceBed`，移动/TV/vision平台需结合`setSupportsMultichannelContent`和spatial capability通知；listener head tracking property在visionOS unavailable。以上作为阶段16 OpenSpec设计输入，尚未修改production源码。
+
+## 2026-07-29 阶段 16 OpenSpec与任务 1.1 完成
+
+- 创建`integrate-spatial-audio-runtime`的proposal、design、3个capability specs和35项tasks；OpenSpec strict通过`1/1 valid / 0 issues`，apply为`ready`。
+- 1.1盘点确认production仍是`player -> mainMixer`，孤立controller不影响真实PCM；Moonlight 5.1/7.1为WAVE顺序，Core Audio `WAVE_7_1`可无交换表达；route/recovery/AppModel/UI与entitlement/hardware证据边界已记录。
+- 四平台Swift warnings-as-errors API probe通过且没有操作simulator。OpenSpec 1.1已勾选，权威进度`1/35`；下一项1.2实现不可变channel-layout合同。

@@ -1312,3 +1312,22 @@
 - 从已推送且clean的`372ca60`与全新DerivedData重跑完整macOS suite，结果为`616 total / 615 passed / 1 explicit Keychain skip / 0 failed`，xcresult结构化warning/error/analyzer warning均为0；证据`/tmp/LuneX-15-stage-acceptance.fbXbLy`。
 - 同一自验重新确认OpenSpec strict `6/6`、权威进度`32/33`且唯一pending为6.5、generator SHA-256 `600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`、`HEAD == origin/main`和工作树clean。
 - 新的只读simulator清单与6.2快照逐字一致；四个固定identity各唯一、available且`Shutdown`，全局`Booted=0`。阶段级自验不证明live Sunshine/compositor/物理HDR，阶段15保持`in_progress`且change不可archive。
+
+## 2026-07-29 阶段 16 恢复调查
+
+- 系统更新后实时环境为macOS 27.0 build `26A5388g`、Xcode 26.4 build `17E192`、Swift 6.3、Apple SDK 26.4与OpenSpec 1.3.1；Git为`HEAD == origin/main == 24321b2`且工作树clean。
+- 活动长期goal仍为`active`，无需重建。阶段13/14/15的live/hardware缺口不变，阶段15仍为`32/33 in_progress`且不可archive。
+- 阶段16不能把孤立`AVAudioEnvironmentNode.isListenerHeadTrackingEnabled`赋值或policy resolver当作真实空间音频。验收必须检查decoded PCM是否进入session-owned environment graph，以及route/interruption/reconnect/replacement generation是否由同一runtime所有。
+- 空间音频的离线合同、编译和模拟器证据与AirPods/head tracking、可听定位、route切换、entitlement和实际设备输出是不同证明层级；后者必须继续保留为授权真机硬件gate。
+- Xcode 26.4 `AVAudioEnvironmentNode.h`明确：environment node是3D mixer；默认只有mono input被spatialize。多声道bed必须给input bus保留真实`AudioChannelLayout`并使用`AVAudio3DMixingSourceModeAmbienceBed`，其声道按layout作为环绕listener的far-field source；`.pointSource`会把整条bus作为单一位置来源，不能用于保留Moonlight 5.1/7.1声道语义。
+- 同一SDK声明`isListenerHeadTrackingEnabled`仅在macOS 15+/iOS 18+/tvOS 18+可用且在visionOS unavailable。visionOS仍支持`AVAudioEnvironmentNode`和3D mixing，但需要单独的平台空间体验策略，不得报告手动listener head-tracking property已启用。
+- iOS/tvOS/visionOS的`AVAudioSessionPortDescription.isSpatialAudioEnabled`表示当前port支持且用户已启用空间音频；Apple同时要求提供多声道内容的app调用`setSupportsMultichannelContent(true)`，监听`AVAudioSession.spatialPlaybackCapabilitiesChangedNotification`，并结合maximum/preferred output channel count处理真实多声道硬件。macOS没有这些`AVAudioSession` API，必须以实际engine output format/graph能力和硬件验收分层。
+- Apple官方文档指向包括`AVAudioEnvironmentNode`、`isListenerHeadTrackingEnabled`、`AVAudio3DMixing.sourceMode`/`.ambienceBed`、`AVAudioSession.setSupportsMultichannelContent(_:)`、spatial playback capability notification及`com.apple.developer.coremotion.head-pose` entitlement。官方页面与SDK声明只证明API合同，不证明LuneX二进制获得provisioning entitlement或兼容AirPods实际产生头部跟踪。
+- Moonlight clean-room reference确认decoded output的逻辑顺序为`FL, FR, C, LFE, Back L, Back R, Side L, Side R`；5.1使用前六项，7.1使用全部八项。Core Audio的`kAudioChannelLayoutTag_WAVE_7_1`精确采用同一八声道顺序，避免用`MPEG_7_1_C`时交换rear/side。5.1使用WAVE/MPEG 5.1 A的`L, R, C, LFE, Ls, Rs`合同并保留Moonlight mask来源。
+- 四平台Swift warnings-as-errors probe已通过：共同的explicit channel-layout format、`.ambienceBed`和`.auto`可编译；macOS/iOS/tvOS listener property可编译；iOS/tvOS的multichannel/spatial port APIs可编译；visionOS 26的`outputNode.intendedSpatialExperience = .headTracked`可编译。
+
+## 2026-07-29 阶段 16 OpenSpec与任务 1.1 验收
+
+- OpenSpec `integrate-spatial-audio-runtime`包含proposal、design、3个capability specs和35项tasks；strict validation为`1/1 valid / 0 issues`，apply状态`ready`。
+- 1.1只读调查覆盖production audio graph、processor/media environment/AppModel ownership、route/interruption recovery、settings/diagnostics/UI、Moonlight channel order、Xcode 26.4 headers与四平台Swift API probe。
+- 该项不修改production runtime，不证明空间音频、head tracking、multichannel route或live Sunshine可用；只建立后续实现和物理gate的可审计合同边界。
