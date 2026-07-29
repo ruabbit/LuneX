@@ -2150,10 +2150,25 @@ final class AppModelWorkflowTests: XCTestCase {
             mediaGeneration: 1,
             sequence: 0,
             graphGeneration: 1,
-            preferences: persistedPreferences
+            preferences: persistedPreferences,
+            spatialRuntime: SpatialAudioRuntimeSnapshot(
+                revision: SpatialAudioSemanticRevision(rawValue: 1),
+                layoutSignature: StreamAudioChannelLayout.stereo.signature,
+                graphMode: .environmentAmbienceBed,
+                platformStrategy: .environmentListener,
+                routeSupport: .supported,
+                presentationMode: .fixedSpatial,
+                fallbackReason: .missingEntitlement
+            )
         )
         mediaEnvironment.yieldAudioRuntime(current, sessionID: record.sessionID)
         await waitUntil { model.audioRuntimeState == current }
+        XCTAssertEqual(
+            model.diagnostics.events
+                .filter { $0.code.hasPrefix("spatial_audio_") }
+                .map(\.code),
+            ["spatial_audio_missing_entitlement"]
+        )
 
         let updatedPreferences = SessionSpatialAudioPreferences(
             spatialAudioEnabled: false,
@@ -2188,6 +2203,12 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(model.audioRuntimeState, current)
+        XCTAssertEqual(
+            model.diagnostics.events
+                .filter { $0.code.hasPrefix("spatial_audio_") }
+                .map(\.code),
+            ["spatial_audio_missing_entitlement"]
+        )
 
         await model.saveSettings()
         let savedSettings = try await settingsRepository.loadSettings()
@@ -2198,6 +2219,15 @@ final class AppModelWorkflowTests: XCTestCase {
         await model.stopStream()
         await launchTask.value
         XCTAssertNil(model.audioRuntimeState)
+        XCTAssertEqual(
+            model.diagnostics.events
+                .filter { $0.code.hasPrefix("spatial_audio_") }
+                .map(\.code),
+            [
+                "spatial_audio_missing_entitlement",
+                "spatial_audio_inactive"
+            ]
+        )
         XCTAssertEqual(model.spatialAudioPreferences, updatedPreferences)
     }
 
@@ -3257,7 +3287,8 @@ final class AppModelWorkflowTests: XCTestCase {
         mediaGeneration: UInt64,
         sequence: UInt64,
         graphGeneration: UInt64,
-        preferences: SessionSpatialAudioPreferences = .nativeDefault
+        preferences: SessionSpatialAudioPreferences = .nativeDefault,
+        spatialRuntime: SpatialAudioRuntimeSnapshot? = nil
     ) -> SessionMediaAudioRuntimeState {
         SessionMediaAudioRuntimeState(
             sessionID: sessionID,
@@ -3268,7 +3299,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 graphGeneration: graphGeneration,
                 cause: .initial,
                 stage: .running,
-                spatialRuntime: nil,
+                spatialRuntime: spatialRuntime,
                 preferences: preferences,
                 concealedFrameCount: 0,
                 lastAction: .none

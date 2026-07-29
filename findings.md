@@ -1614,3 +1614,22 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors最终build位于`/tmp/LuneX-16-5_1-final.1785360178629/{macOS,iOS,tvOS,visionOS}/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-5_1-repo-final-r2.Qm9CQl`通过OpenSpec strict `7/7`、fixtures、source/test membership、settings migration scope、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain用例，全局`Booted=0`且未操作simulator。
 - 本项不包含5.2正式diagnostics、5.3 action ownership、5.4 native UI或5.5 UI回归，也不证明signed entitlement、AirPods head tracking、真实route transition、可听多声道输出或live Sunshine播放。
+
+## 2026-07-30 阶段 16 任务 5.2 调查
+
+- macOS更新结束后恢复确认`main == origin/main == eb16c80`、工作树clean、Xcode 26.4与26.4 Apple平台SDK仍可用，全局`Booted=0`；5.2不创建、启动、安装、运行、关闭或删除simulator。
+- 现有`DiagnosticsStore.record(spatialAudioState:)`把`AudioRouteState.unavailableReason`自由文本直接拼入summary，所有状态共用`spatial_audio_state`，无法稳定区分active fixed/head-tracked/visionOS、fallback、missing entitlement、unsupported route/layout、recovery与graph failure。
+- `ApplicationDiagnosticFactory.hdrPresentationState`已经建立typed diagnostic state到固定category/severity/code/summary/action的可复用模式。5.2应新增空间音频typed state与固定映射，并由`AppModel`仅从当前active media generation的`audioRuntimeState`发布。
+- diagnostic payload不得包含route UID/name、host/app identity、raw entitlement value、channel samples、notification payload、free-form graph error或session/generation identifier。5.2只完成稳定状态、固定映射、current-generation接线与privacy测试；跨类别current action去重和recovery clearing scope仍由5.3完成。
+- 普通测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，沿用已验证的Debug文件fallback，不再次访问真实Keychain。signed entitlement、AirPods head tracking、真实route transition、可听多声道定位/同步、visionOS物理空间音频和live Sunshine播放仍保留给6.6/硬件证据。
+
+## 2026-07-30 阶段 16 任务 5.2 验收结论
+
+- 新增封闭`SpatialAudioDiagnosticState`与`SpatialAudioDiagnosticFallback`，把current runtime的inactive、active nonspatial、fixed、head-tracked、visionOS fixed/head-tracked、typed fallback、missing/unreadable entitlement、unsupported route/layout、recovery和graph failure映射为固定category/severity/code/summary/action。
+- 删除旧`DiagnosticsStore.record(spatialAudioState:)`及其自由文本`unavailableReason`拼接。诊断factory不接收route UID/name、host/app identity、raw entitlement、channel sample、notification payload、free-form graph error或session/generation identifier。
+- AppModel只在既有active session/media generation、processor session、严格递增sequence与不回退graph generation全部通过后记录空间诊断；wrong/stale generation不发布，真实stop/reconnect/replacement清理保留bounded history并记录inactive。
+- recovery只对应interruption/media-services-loss语义；普通packet concealment不会伪装为空间图恢复。graph failure只由明确`.graphUnavailable`产生，一般processor/audio failure保持inactive并由既有audio-pipeline诊断负责。
+- 最终focused `/tmp/LuneX-16-5_2-focused-final.ho4eUn/Focused.xcresult`为`21/21`，expanded `/tmp/LuneX-16-5_2-expanded.ADG2gj/Expanded.xcresult`为`136/136`，完整macOS `/tmp/LuneX-16-5_2-full.cyD4Kp/LuneXCoreTests.xcresult`为`714 total / 713 passed / 1 explicit Keychain skip / 0 failed`；结构化diagnostics均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-5_2-builds.1785361191751/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-5_2-repo.2o6msb`通过OpenSpec strict `7/7`、fixtures、membership、legacy API absence、privacy/secret/reference/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；全局`Booted=0`且未操作simulator。
+- OpenSpec 5.2已勾选，权威进度更新为`25/35`；下一项5.3去重current audio action并只清理恢复后的audio ownership，不能清除transport、decoder、HDR、input或pairing action。本项不替代5.3-5.5 UI/action验收或6.6硬件证据。

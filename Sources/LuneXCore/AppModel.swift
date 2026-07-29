@@ -1325,10 +1325,19 @@ final class AppModel: ApplicationInputSink {
             }
         }
         audioRuntimeState = state
+        diagnostics.record(
+            ApplicationDiagnosticFactory.spatialAudioState(
+                SpatialAudioDiagnosticState(runtime: state.runtime)
+            )
+        )
     }
 
     private func clearActiveAudioRuntime() {
+        guard audioRuntimeState != nil else { return }
         audioRuntimeState = nil
+        diagnostics.record(
+            ApplicationDiagnosticFactory.spatialAudioState(.inactive)
+        )
     }
 
     private func applyAggregatedReadiness(sessionID: UUID) async throws {

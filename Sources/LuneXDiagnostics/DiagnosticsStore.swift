@@ -104,20 +104,6 @@ final class DiagnosticsStore {
         ))
     }
 
-    func record(spatialAudioState: AudioRouteState, date: Date = Date()) {
-        let status = spatialAudioState.headTrackingEnabled ? "enabled" : "disabled"
-        let reason = spatialAudioState.unavailableReason.map { "; \($0)" } ?? ""
-        append(DiagnosticEvent(
-            category: .audio,
-            severity: spatialAudioState.unavailableReason == nil ? .info : .warning,
-            code: "spatial_audio_state",
-            subsystem: "audio.spatial",
-            message: "Spatial audio \(spatialAudioState.spatialAudioAvailable ? "available" : "unavailable"), head tracking \(status)\(reason)",
-            action: nil,
-            date: date
-        ))
-    }
-
     func record(runtimeEvent: RuntimeDiagnosticEvent) {
         let duration = runtimeEvent.elapsedMilliseconds.map { String(format: " %.2f ms", $0) } ?? ""
         let fieldSummary = runtimeEvent.fields.isEmpty

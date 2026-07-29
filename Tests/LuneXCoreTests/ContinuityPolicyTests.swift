@@ -47,21 +47,6 @@ final class ContinuityPolicyTests: XCTestCase {
         XCTAssertEqual(state.unavailableReason, "Head tracking is unavailable on this platform SDK")
     }
 
-    @MainActor
-    func testDiagnosticsStoreRecordsSpatialAudioUnavailableReason() {
-        let diagnostics = DiagnosticsStore()
-
-        diagnostics.record(spatialAudioState: AudioRouteState(
-            spatialAudioAvailable: true,
-            headTrackingAvailable: false,
-            headTrackingEnabled: false,
-            unavailableReason: "Missing entitlement"
-        ), date: Date(timeIntervalSince1970: 20))
-
-        XCTAssertEqual(diagnostics.events.last?.subsystem, "audio.spatial")
-        XCTAssertEqual(diagnostics.events.last?.message, "Spatial audio available, head tracking disabled; Missing entitlement")
-    }
-
     func testMobileContinuityUsesPictureInPictureWhenSupported() {
         let action = MobileContinuityPolicyResolver.resolve(MobileContinuityContext(
             platform: .iPadOS,

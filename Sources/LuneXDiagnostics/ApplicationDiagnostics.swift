@@ -121,6 +121,102 @@ enum MacInputDiagnosticState: Hashable, Sendable {
     case relativeReady
 }
 
+enum SpatialAudioDiagnosticFallback: CaseIterable, Hashable, Sendable {
+    case userDisabled
+    case outputUnavailable
+    case invalidRoute
+    case staleRevision
+    case renderingAlgorithmUnavailable
+    case incompatiblePlatformStrategy
+    case headTrackingNotApplied
+    case visionExperienceNotApplied
+}
+
+enum SpatialAudioDiagnosticState: Hashable, Sendable {
+    case inactive
+    case activeNonspatial
+    case fixedSpatial
+    case headTracked
+    case visionFixed
+    case visionHeadTracked
+    case fallback(SpatialAudioDiagnosticFallback)
+    case missingEntitlement
+    case unreadableEntitlement
+    case unsupportedRoute
+    case unsupportedLayout
+    case recovery
+    case graphFailure
+
+    init(runtime: SessionAudioRuntimeEvent) {
+        if runtime.stage == .idle || runtime.stage == .stopped {
+            self = .inactive
+            return
+        }
+        if runtime.stage == .failed || runtime.cause == .failed {
+            self = runtime.spatialRuntime?.fallbackReason == .graphUnavailable
+                ? .graphFailure
+                : .inactive
+            return
+        }
+        if runtime.stage == .interrupted
+            || runtime.cause == .interruptionBegan
+            || runtime.cause == .mediaServicesLost {
+            self = .recovery
+            return
+        }
+        guard let spatial = runtime.spatialRuntime else {
+            self = .activeNonspatial
+            return
+        }
+        if let fallback = spatial.fallbackReason {
+            switch fallback {
+            case .graphUnavailable:
+                self = .graphFailure
+            case .missingEntitlement:
+                self = .missingEntitlement
+            case .unreadableEntitlement:
+                self = .unreadableEntitlement
+            case .routeUnsupported:
+                self = .unsupportedRoute
+            case .unsupportedLayout, .layoutMismatch:
+                self = .unsupportedLayout
+            case .userDisabled:
+                self = .fallback(.userDisabled)
+            case .outputUnavailable:
+                self = .fallback(.outputUnavailable)
+            case .invalidRouteSnapshot:
+                self = .fallback(.invalidRoute)
+            case .staleRevision:
+                self = .fallback(.staleRevision)
+            case .renderingAlgorithmUnavailable:
+                self = .fallback(.renderingAlgorithmUnavailable)
+            case .incompatiblePlatformStrategy:
+                self = .fallback(.incompatiblePlatformStrategy)
+            case .headTrackingNotApplied:
+                self = .fallback(.headTrackingNotApplied)
+            case .visionExperienceNotApplied:
+                self = .fallback(.visionExperienceNotApplied)
+            }
+            return
+        }
+
+        switch spatial.presentationMode {
+        case .inactive:
+            self = .inactive
+        case .nonspatial:
+            self = .activeNonspatial
+        case .fixedSpatial:
+            self = spatial.platformStrategy == .visionOutputExperience
+                ? .visionFixed
+                : .fixedSpatial
+        case .headTracked:
+            self = spatial.platformStrategy == .visionOutputExperience
+                ? .visionHeadTracked
+                : .headTracked
+        }
+    }
+}
+
 enum ApplicationDiagnosticFactory {
     static let pairingUnavailable = ApplicationDiagnostic(
         category: .pairing,
@@ -202,6 +298,129 @@ enum ApplicationDiagnosticFactory {
             code: code,
             summary: summary,
             action: nil
+        )
+    }
+
+    static func spatialAudioState(
+        _ state: SpatialAudioDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let severity: RuntimeDiagnosticSeverity
+        let code: String
+        let summary: String
+        let action: ApplicationDiagnosticAction?
+
+        switch state {
+        case .inactive:
+            severity = .info
+            code = "spatial_audio_inactive"
+            summary = "Spatial audio is inactive."
+            action = nil
+        case .activeNonspatial:
+            severity = .info
+            code = "spatial_audio_active_nonspatial"
+            summary = "Audio is active on the nonspatial playback path."
+            action = nil
+        case .fixedSpatial:
+            severity = .info
+            code = "spatial_audio_active_fixed"
+            summary = "Spatial audio is active in fixed mode."
+            action = nil
+        case .headTracked:
+            severity = .info
+            code = "spatial_audio_active_head_tracked"
+            summary = "Spatial audio and listener head tracking are active."
+            action = nil
+        case .visionFixed:
+            severity = .info
+            code = "spatial_audio_active_vision_fixed"
+            summary = "visionOS spatial audio is active in fixed mode."
+            action = nil
+        case .visionHeadTracked:
+            severity = .info
+            code = "spatial_audio_active_vision_head_tracked"
+            summary = "visionOS spatial audio is active with head tracking."
+            action = nil
+        case let .fallback(fallback):
+            switch fallback {
+            case .userDisabled:
+                severity = .info
+                code = "spatial_audio_fallback_user_disabled"
+                summary = "Spatial audio is using the nonspatial path because it is disabled."
+                action = nil
+            case .outputUnavailable:
+                severity = .warning
+                code = "spatial_audio_fallback_output_unavailable"
+                summary = "Spatial audio is unavailable because there is no active audio output."
+                action = .checkAudioOutput
+            case .invalidRoute:
+                severity = .warning
+                code = "spatial_audio_fallback_invalid_route"
+                summary = "Spatial audio is unavailable because the current output state is invalid."
+                action = .checkAudioOutput
+            case .staleRevision:
+                severity = .warning
+                code = "spatial_audio_fallback_stale_revision"
+                summary = "A stale spatial audio revision was rejected."
+                action = .retryStream
+            case .renderingAlgorithmUnavailable:
+                severity = .warning
+                code = "spatial_audio_fallback_rendering_unavailable"
+                summary = "Spatial audio is using the nonspatial path because native rendering is unavailable."
+                action = .checkAudioOutput
+            case .incompatiblePlatformStrategy:
+                severity = .error
+                code = "spatial_audio_fallback_platform_strategy"
+                summary = "Spatial audio could not apply the required platform playback strategy."
+                action = .retryStream
+            case .headTrackingNotApplied:
+                severity = .warning
+                code = "spatial_audio_fallback_head_tracking_not_applied"
+                summary = "Spatial audio remains fixed because listener head tracking was not applied."
+                action = .checkAudioOutput
+            case .visionExperienceNotApplied:
+                severity = .warning
+                code = "spatial_audio_fallback_vision_experience_not_applied"
+                summary = "visionOS spatial audio could not apply the requested experience."
+                action = .retryStream
+            }
+        case .missingEntitlement:
+            severity = .warning
+            code = "spatial_audio_missing_entitlement"
+            summary = "Spatial audio remains fixed because listener head tracking is not authorized."
+            action = .updateBuild
+        case .unreadableEntitlement:
+            severity = .warning
+            code = "spatial_audio_unreadable_entitlement"
+            summary = "Spatial audio remains fixed because listener head-tracking authorization could not be read."
+            action = .updateBuild
+        case .unsupportedRoute:
+            severity = .warning
+            code = "spatial_audio_unsupported_route"
+            summary = "Spatial audio is using the nonspatial path on the current output."
+            action = .checkAudioOutput
+        case .unsupportedLayout:
+            severity = .warning
+            code = "spatial_audio_unsupported_layout"
+            summary = "Spatial audio is unavailable for the negotiated channel layout."
+            action = .reviewStreamSettings
+        case .recovery:
+            severity = .info
+            code = "spatial_audio_recovery"
+            summary = "Spatial audio playback is paused while native audio recovers."
+            action = nil
+        case .graphFailure:
+            severity = .error
+            code = "spatial_audio_graph_failure"
+            summary = "The native spatial audio graph failed."
+            action = .checkAudioOutput
+        }
+
+        return ApplicationDiagnostic(
+            category: .audio,
+            severity: severity,
+            code: code,
+            summary: summary,
+            action: action
         )
     }
 

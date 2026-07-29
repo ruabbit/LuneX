@@ -326,6 +326,137 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         }
     }
 
+    func testSpatialAudioDiagnosticsUseStablePrivacyBoundedSemanticPayloads() {
+        let states: [SpatialAudioDiagnosticState] = [
+            .inactive,
+            .activeNonspatial,
+            .fixedSpatial,
+            .headTracked,
+            .visionFixed,
+            .visionHeadTracked,
+            .fallback(.userDisabled),
+            .fallback(.outputUnavailable),
+            .fallback(.invalidRoute),
+            .fallback(.staleRevision),
+            .fallback(.renderingAlgorithmUnavailable),
+            .fallback(.incompatiblePlatformStrategy),
+            .fallback(.headTrackingNotApplied),
+            .fallback(.visionExperienceNotApplied),
+            .missingEntitlement,
+            .unreadableEntitlement,
+            .unsupportedRoute,
+            .unsupportedLayout,
+            .recovery,
+            .graphFailure
+        ]
+        let diagnostics = states.map(ApplicationDiagnosticFactory.spatialAudioState)
+        let forbiddenValues = [
+            "private-route-uid",
+            "private-output-name",
+            "private-host",
+            "private-app",
+            "raw-entitlement-value",
+            "channel-sample",
+            "notification-payload",
+            "free-form-graph-error",
+            "5D41FA2B-B199-46D8-B966-D4EB557AA2B3",
+            "mediaGeneration"
+        ]
+
+        XCTAssertEqual(Set(diagnostics.map(\.code)).count, diagnostics.count)
+        XCTAssertTrue(diagnostics.allSatisfy { $0.category == .audio })
+        XCTAssertTrue(diagnostics.allSatisfy { $0.subsystem == "stream.audio" })
+        for diagnostic in diagnostics {
+            for value in forbiddenValues {
+                XCTAssertFalse(
+                    diagnostic.code.localizedCaseInsensitiveContains(value)
+                )
+                XCTAssertFalse(
+                    diagnostic.summary.localizedCaseInsensitiveContains(value)
+                )
+            }
+        }
+    }
+
+    func testSpatialRuntimeMapsClosedActiveFallbackRecoveryAndFailureStates() {
+        let fixed = makeSpatialRuntimeEvent(
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .fixedSpatial
+            )
+        )
+        let visionHeadTracked = makeSpatialRuntimeEvent(
+            spatialRuntime: makeSpatialRuntime(
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .headTracked
+            )
+        )
+        let missingEntitlement = makeSpatialRuntimeEvent(
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .fixedSpatial,
+                fallbackReason: .missingEntitlement
+            )
+        )
+        let unsupportedRoute = makeSpatialRuntimeEvent(
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .nonspatial,
+                fallbackReason: .routeUnsupported
+            )
+        )
+        let unsupportedLayout = makeSpatialRuntimeEvent(
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .nonspatial,
+                fallbackReason: .unsupportedLayout
+            )
+        )
+        let recovery = makeSpatialRuntimeEvent(
+            cause: .interruptionBegan,
+            stage: .interrupted,
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .fixedSpatial
+            )
+        )
+        let graphFailure = makeSpatialRuntimeEvent(
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .nonspatial,
+                fallbackReason: .graphUnavailable
+            )
+        )
+        let nonGraphFailure = makeSpatialRuntimeEvent(
+            cause: .failed,
+            stage: .failed,
+            spatialRuntime: makeSpatialRuntime(
+                presentationMode: .fixedSpatial
+            )
+        )
+
+        XCTAssertEqual(SpatialAudioDiagnosticState(runtime: fixed), .fixedSpatial)
+        XCTAssertEqual(
+            SpatialAudioDiagnosticState(runtime: visionHeadTracked),
+            .visionHeadTracked
+        )
+        XCTAssertEqual(
+            SpatialAudioDiagnosticState(runtime: missingEntitlement),
+            .missingEntitlement
+        )
+        XCTAssertEqual(
+            SpatialAudioDiagnosticState(runtime: unsupportedRoute),
+            .unsupportedRoute
+        )
+        XCTAssertEqual(
+            SpatialAudioDiagnosticState(runtime: unsupportedLayout),
+            .unsupportedLayout
+        )
+        XCTAssertEqual(SpatialAudioDiagnosticState(runtime: recovery), .recovery)
+        XCTAssertEqual(
+            SpatialAudioDiagnosticState(runtime: graphFailure),
+            .graphFailure
+        )
+        XCTAssertEqual(
+            SpatialAudioDiagnosticState(runtime: nonGraphFailure),
+            .inactive
+        )
+    }
+
     func testHDRResolutionErrorsMapToClosedSemanticDiagnosticClasses() {
         let invalidInput: [HDRRenderResolutionError] = [
             .invalidSourceContract,
@@ -430,6 +561,42 @@ private extension MacInputDiagnosticState {
         .directReady,
         .relativeReady
     ]
+}
+
+private func makeSpatialRuntimeEvent(
+    cause: SessionAudioRuntimeEventCause = .initial,
+    stage: SessionAudioRuntimeStage = .running,
+    spatialRuntime: SpatialAudioRuntimeSnapshot?
+) -> SessionAudioRuntimeEvent {
+    SessionAudioRuntimeEvent(
+        sessionID: UUID(uuidString: "93FBD084-17D1-4DD2-BD11-D8E16921A670")!,
+        sequence: 0,
+        graphGeneration: 1,
+        cause: cause,
+        stage: stage,
+        spatialRuntime: spatialRuntime,
+        preferences: .nativeDefault,
+        concealedFrameCount: 0,
+        lastAction: .none
+    )
+}
+
+private func makeSpatialRuntime(
+    platformStrategy: SpatialAudioPlatformStrategy = .environmentListener,
+    presentationMode: SpatialAudioPresentationMode,
+    fallbackReason: SpatialAudioFallbackReason? = nil
+) -> SpatialAudioRuntimeSnapshot {
+    SpatialAudioRuntimeSnapshot(
+        revision: SpatialAudioSemanticRevision(rawValue: 1),
+        layoutSignature: StreamAudioChannelLayout.stereo.signature,
+        graphMode: presentationMode == .nonspatial
+            ? .nonspatialMixer
+            : .environmentAmbienceBed,
+        platformStrategy: platformStrategy,
+        routeSupport: fallbackReason == .routeUnsupported ? .unsupported : .supported,
+        presentationMode: presentationMode,
+        fallbackReason: fallbackReason
+    )
 }
 
 private struct SecretBearingDiagnosticError: Error, CustomStringConvertible {

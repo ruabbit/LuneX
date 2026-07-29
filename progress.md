@@ -2026,3 +2026,20 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors最终build位于`/tmp/LuneX-16-5_1-final.1785360178629/{macOS,iOS,tvOS,visionOS}/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-5_1-repo-final-r2.Qm9CQl`通过OpenSpec strict `7/7`、fixtures、membership、settings migration scope、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式Keychain测试，前后全局`Booted=0`且未操作simulator。
 - OpenSpec 5.1已勾选，权威进度更新为`24/35`；下一项5.2替换free-form spatial diagnostics为稳定privacy-bounded active/fixed/head-tracked/visionOS/fallback/entitlement/route-layout/recovery/graph-failure状态。本项不替代5.2-5.5产品诊断/UI或6.6硬件证据。
+
+## 2026-07-30 阶段 16 任务 5.2 启动
+
+- 系统更新后的恢复门通过：`main == origin/main == eb16c80`、工作树clean、Xcode 26.4、26.4平台SDK齐全、全局`Booted=0`；OpenSpec `integrate-spatial-audio-runtime`为`spec-driven / 24 of 35 / ready`。
+- 当前任务以typed `SpatialAudioDiagnosticState`替换旧free-form spatial diagnostics，并把AppModel current-generation actual runtime接入固定诊断；稳定code/summary/severity/action和privacy-bounded payload必须由确定性测试锁定。
+- 5.2不提前完成5.3的跨类别action去重/恢复清理，不操作simulator，不触发真实Keychain；物理route、signed entitlement、AirPods、可听声道与live Sunshine证据继续保留未完成。
+- 第一版删除`DiagnosticsStore.record(spatialAudioState:)`自由文本入口，新增封闭runtime到diagnostic state映射、固定factory payload与AppModel current-generation接线；stale generation不发布，真实clear保留历史并发布inactive。
+- 首轮focused的21项测试和xcresult均通过，但zsh包装器读取`PIPESTATUS[0]`为空，不作为最终组合证据。随后收紧语义，避免把一般packet recovery或processor failure误报为空间图恢复/失败，并用显式Bash与全新目录重跑。
+- 最终focused `/tmp/LuneX-16-5_2-focused-final.ho4eUn/Focused.xcresult`明确`EXIT=0`且`21/21 passed / 0 skipped / 0 failed`；下一步运行扩大runtime/application回归。
+
+## 2026-07-30 阶段 16 任务 5.2 完成
+
+- typed spatial diagnostic state/factory、旧free-form API删除与AppModel current-generation发布已完成；stale generation不发布，stop/reconnect/replacement记录inactive但不删除bounded历史。5.3的current action去重与跨类别recovery clearing没有提前实现。
+- focused `/tmp/LuneX-16-5_2-focused-final.ho4eUn/Focused.xcresult`为`21/21`，expanded `/tmp/LuneX-16-5_2-expanded.ADG2gj/Expanded.xcresult`为`136/136`，完整macOS `/tmp/LuneX-16-5_2-full.cyD4Kp/LuneXCoreTests.xcresult`为`714 total / 713 passed / 1 explicit Keychain skip / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug build `/tmp/LuneX-16-5_2-builds.1785361191751/*/Build.xcresult`为4/4 succeeded；所有test/build结构化errors、warnings、analyzer warnings均为0。
+- repository gate `/tmp/LuneX-16-5_2-repo.2o6msb`通过OpenSpec strict `7/7`、fixture、generator、membership、legacy API absence、privacy、secret、reference与diff边界；generator SHA-256保持`733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`，前后全局`Booted=0`且未操作simulator。
+- OpenSpec 5.2已勾选，权威进度更新为`25/35`；下一项5.3处理current audio action去重与精准recovery clearing，普通测试继续移除真实Keychain opt-in。
