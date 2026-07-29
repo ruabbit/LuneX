@@ -47,6 +47,6 @@
 - [x] 6.2 Build macOS Debug/Release and fixed iPhone, iPad, tvOS, and visionOS targets with warnings as errors and isolated DerivedData
 - [x] 6.3 Run OpenSpec strict, generator stability, clean-room/dependency, direct SDK API probes, static analyzer, and repository-boundary gates
 - [x] 6.4 Run ASan, TSan, malloc scribble/guard/resource ownership, graph replacement, observer cancellation, and scheduled-buffer release gates
-- [ ] 6.5 Verify fixed simulator identities remain unique and `Shutdown` without creating, cloning, booting, launching, installing, running, shutting down, or deleting devices
+- [x] 6.5 Verify fixed simulator identities remain unique and `Shutdown` without creating, cloning, booting, launching, installing, running, shutting down, or deleting devices
 - [ ] 6.6 Validate signed entitlement behavior, AirPods head tracking, fixed/nonspatial route fallback, built-in speakers, wired/HDMI multichannel channel identification, route transitions, audible synchronization, and clean teardown on authorized physical devices with redacted evidence
 - [ ] 6.7 Update OpenSpec, planning files, runtime roadmap, audio contract, entitlement/hardware instructions, and proof boundaries; commit and push each completed task and perform a stage-level self-acceptance

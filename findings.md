@@ -1742,3 +1742,16 @@
 - xcresult的实际case清单证明执行了scheduled-buffer capacity/release与late completion、backend failure、partial graph cleanup、failed reconfigure、policy rebuild/late completion、observer replacement/deinit/cancellation、processor failure/stop/late callback、same-session media replacement、stale preference completion、AppModel replacement和clean stop，不是仅靠selector或进程退出码推断覆盖。
 - 三轮最终测试均显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain；只使用macOS destination且没有执行simulator生命周期命令。该门不证明signed entitlement、AirPods head tracking、真实route、多声道听感/同步、live Sunshine或长时硬件资源行为。
 - 勾选后的repository final gate `/tmp/LuneX-16-6_4-repo-final.7VDx6H`通过fixture self-test/全树、OpenSpec strict `7/7`、apply `32/35`、generator连续两次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、三份质量证据读回、真实Keychain opt-in关闭和产品源码/测试/工程零diff边界。
+
+## 2026-07-30 阶段 16 任务 6.5 调查
+
+- 独立simulator门从当前环境重新只读获取available inventory，并与6.2最终构建前后规范化清单比较；固定身份按`runtime + name + UUID + availability + state`核对，避免把其他已安装runtime中Apple提供的同名默认设备误判为固定26.4实例重复。
+- 除四个固定UUID各唯一、available、`Shutdown`外，独立断言当前全部available simulator的`Booted=0`。本项不执行build/test，也不调用create、clone、boot、bootstatus、install、launch、run、shutdown或delete。
+
+## 2026-07-30 阶段 16 任务 6.5 验收结论
+
+- 证据目录`/tmp/LuneX-16-6_5-simulator-audit.ILGwlv`保存当前raw/normalized inventory和固定四实例读回。6.2 before、6.2 after与当前三份规范化清单逐字节一致，SHA-256均为`5d39940efaf4b37d2592952a96973621dda435f7a92cf2d43d911ea5df48140a`。
+- 当前available inventory共51项；固定iPhone、iPad、Apple TV和Apple Vision Pro在各自26.4 runtime中的runtime/name/UUID组合各唯一，每个UUID全局各出现一次，四者均`isAvailable=true`、`Shutdown`，全部available设备`Booted=0`。
+- 首轮固定identity jq断言因`all()`改变`.`作用域退出，但三份cmp/hash和Booted=0已先通过；没有重复查询设备，改为对同一已保存JSON绑定`$inventory`后完成读回。
+- 本项只执行一次`simctl list devices available -j`和后续文件结构化比较，没有build/test或任何simulator生命周期操作。它只证明当前配置的simulator identity/state稳定，不证明真机、signed entitlement、AirPods、物理route或可听多声道行为。
+- 勾选后的repository final gate `/tmp/LuneX-16-6_5-repo-final.oyRbHE`通过OpenSpec strict `7/7`、apply `33/35`、三份规范化快照读回、固定四实例与Booted=0、Keychain opt-in关闭、产品源码/测试/工程零diff和无残留测试进程边界。

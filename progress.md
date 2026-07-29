@@ -2156,3 +2156,16 @@
 - OpenSpec 6.4已勾选，权威进度更新为`32/35`；下一项6.5仅从当前环境只读验收固定simulator identity/state，不创建、克隆、启动、安装、运行、关闭或删除设备。6.6 signed entitlement和物理音频硬件验收保持未完成。
 - repository final gate `/tmp/LuneX-16-6_4-repo-final.7VDx6H`通过fixture self-test/全树、OpenSpec strict `7/7`、apply `32/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、ASan/TSan/resource证据读回、Keychain opt-in关闭、产品源码/测试/工程零diff及无残留测试进程门。
 - generator不支持`--help`且会忽略参数直接生成工程；调查调用生成结果与当前工程字节一致。正式门改为明确运行并比较生成前与连续两次哈希，不依赖帮助模式。
+
+## 2026-07-30 阶段 16 任务 6.5 启动
+
+- 6.4已以`44aa494 Verify spatial audio memory safety`独立提交并推送；确认`HEAD == origin/main`且工作树clean，OpenSpec为`32/35 ready`，当前任务6.5。
+- 本项只执行`simctl list devices available -j`并结构化读取当前清单，与6.2 before/after规范化快照比较；不执行build/test或任何simulator生命周期命令。
+
+## 2026-07-30 阶段 16 任务 6.5 完成
+
+- 独立只读证据`/tmp/LuneX-16-6_5-simulator-audit.ILGwlv`证明6.2 before/after与当前三份规范化清单逐字一致，SHA-256均为`5d39940efaf4b37d2592952a96973621dda435f7a92cf2d43d911ea5df48140a`。
+- 当前51个available simulator中，固定四个26.4 runtime/name/UUID组合和UUID均各自唯一、available、`Shutdown`，全局`Booted=0`。只执行一次只读list及文件比较，没有create、clone、boot、bootstatus、install、launch、run、shutdown、delete、build或test。
+- 固定identity首轮jq因`all()`作用域错误退出；不重复设备查询，对同一已保存JSON修正变量绑定后通过全部断言。
+- OpenSpec 6.5已勾选，权威进度更新为`33/35`；6.6 signed entitlement和物理音频硬件验收保持pending，下一可执行项6.7同步跟踪、硬件说明和proof boundary并执行阶段级离线自验。
+- repository final gate `/tmp/LuneX-16-6_5-repo-final.oyRbHE`通过OpenSpec strict `7/7`、apply `33/35`、三份simulator快照/固定identity/Booted=0读回、Keychain opt-in关闭、产品源码/测试/工程零diff及无残留测试进程门。
