@@ -469,6 +469,10 @@ final class AudioPipelineTests: XCTestCase {
             let graph = client.graphReadback()
             XCTAssertEqual(graph.mode, .environmentAmbienceBed)
             XCTAssertNil(graph.fallbackReason)
+            XCTAssertEqual(graph.platformStrategy, .environmentListener)
+            XCTAssertTrue(graph.listenerHeadTrackingCapable)
+            XCTAssertFalse(graph.listenerHeadTrackingReadback)
+            XCTAssertNil(graph.visionExperienceReadback)
             XCTAssertTrue(graph.playerAttached)
             XCTAssertTrue(graph.environmentAttached)
             XCTAssertTrue(graph.playerConnectedToEnvironment)
@@ -529,6 +533,10 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(actual.fallbackReason, .userDisabled)
         XCTAssertEqual(graph.mode, .nonspatialMixer)
         XCTAssertNil(graph.fallbackReason)
+        XCTAssertEqual(graph.platformStrategy, .none)
+        XCTAssertFalse(graph.listenerHeadTrackingCapable)
+        XCTAssertFalse(graph.listenerHeadTrackingReadback)
+        XCTAssertNil(graph.visionExperienceReadback)
         XCTAssertFalse(graph.playerConnectedToEnvironment)
         XCTAssertTrue(graph.playerConnectedToMainMixer)
         XCTAssertFalse(graph.environmentConnectedToMainMixer)
@@ -536,6 +544,87 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertNil(graph.selectedRenderingAlgorithmRawValue)
         XCTAssertTrue(graph.applicableRenderingAlgorithmRawValues.isEmpty)
         client.stop(drain: false)
+    }
+
+    func testProductionListenerStrategyRequiresGrantedEntitlementForHeadTracking()
+        throws
+    {
+        let client = AVAudioEngineClient()
+        let graphIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            entitlement: .missing,
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: true
+        )
+
+        let actual = try client.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent
+        )
+        let graph = client.graphReadback()
+
+        XCTAssertEqual(actual.graphMode, .environmentAmbienceBed)
+        XCTAssertEqual(actual.platformStrategy, .environmentListener)
+        XCTAssertEqual(actual.presentationMode, .fixedSpatial)
+        XCTAssertEqual(actual.fallbackReason, .missingEntitlement)
+        XCTAssertFalse(actual.headTrackingActive)
+        XCTAssertEqual(graph.platformStrategy, .environmentListener)
+        XCTAssertTrue(graph.listenerHeadTrackingCapable)
+        XCTAssertFalse(graph.listenerHeadTrackingReadback)
+        XCTAssertNil(graph.visionExperienceReadback)
+        client.stop(drain: false)
+    }
+
+    func testClientPublishesInjectedListenerReadbackAndResetsPlatformState()
+        throws
+    {
+        let cases: [(
+            readback: Bool,
+            mode: SpatialAudioPresentationMode,
+            fallback: SpatialAudioFallbackReason?
+        )] = [
+            (true, .headTracked, nil),
+            (false, .fixedSpatial, .headTrackingNotApplied)
+        ]
+
+        for testCase in cases {
+            let adapter = RecordingSpatialPlatformAdapter(
+                readback: AVAudioSpatialPlatformReadback(
+                    strategy: .environmentListener,
+                    listenerHeadTrackingCapable: true,
+                    listenerHeadTrackingReadback: testCase.readback,
+                    visionExperienceReadback: nil
+                )
+            )
+            let client = AVAudioEngineClient(
+                spatialPlatformAdapter: adapter
+            )
+            let graphIntent = makeAudioGraphIntent(
+                channelCount: 2,
+                entitlement: .granted,
+                userEnablesSpatialAudio: true,
+                userEnablesHeadTracking: true
+            )
+
+            let actual = try client.configure(
+                .stereoLowLatency,
+                graphIntent: graphIntent
+            )
+
+            XCTAssertEqual(actual.presentationMode, testCase.mode)
+            XCTAssertEqual(actual.fallbackReason, testCase.fallback)
+            XCTAssertEqual(actual.headTrackingActive, testCase.readback)
+            XCTAssertEqual(adapter.appliedIntents, [graphIntent])
+            XCTAssertEqual(adapter.resetCount, 1)
+
+            client.stop(drain: false)
+            XCTAssertEqual(adapter.resetCount, 2)
+            let stopped = client.graphReadback()
+            XCTAssertEqual(stopped.platformStrategy, .none)
+            XCTAssertFalse(stopped.listenerHeadTrackingCapable)
+            XCTAssertFalse(stopped.listenerHeadTrackingReadback)
+            XCTAssertNil(stopped.visionExperienceReadback)
+        }
     }
 
     func testProductionClientReportsMonoAndUnsupportedRouteFallbacksExactly()
@@ -627,6 +716,7 @@ final class AudioPipelineTests: XCTestCase {
             XCTAssertFalse(actual.spatialAudioActive)
             XCTAssertEqual(graph.mode, .nonspatialMixer)
             XCTAssertEqual(graph.fallbackReason, testCase.graphFallback)
+            XCTAssertEqual(graph.platformStrategy, .none)
             XCTAssertTrue(graph.playerConnectedToMainMixer)
             XCTAssertFalse(graph.playerConnectedToEnvironment)
             XCTAssertFalse(graph.environmentConnectedToMainMixer)
@@ -897,6 +987,34 @@ final class AudioPipelineTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Timed out waiting for scheduled audio completion")
+    }
+}
+
+private final class RecordingSpatialPlatformAdapter:
+    AVAudioSpatialPlatformApplying
+{
+    let readback: AVAudioSpatialPlatformReadback
+    private(set) var appliedIntents: [SpatialAudioGraphIntent] = []
+    private(set) var resetCount = 0
+
+    init(readback: AVAudioSpatialPlatformReadback) {
+        self.readback = readback
+    }
+
+    func apply(
+        engine: AVAudioEngine,
+        environment: AVAudioEnvironmentNode,
+        intent: SpatialAudioGraphIntent
+    ) -> AVAudioSpatialPlatformReadback {
+        appliedIntents.append(intent)
+        return readback
+    }
+
+    func reset(
+        engine: AVAudioEngine,
+        environment: AVAudioEnvironmentNode
+    ) {
+        resetCount += 1
     }
 }
 

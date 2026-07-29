@@ -1408,3 +1408,12 @@
 - focused gate为`/tmp/LuneX-16-2_4-focused.Ay4a8o`，通过`39/39`；expanded recovery/runtime/media gate为`/tmp/LuneX-16-2_4-expanded.YVmJGf`，通过`74/74`。两份xcresult均为`0 warning / 0 error / 0 analyzer warning`，测试显式移除真实Keychain opt-in。
 - macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build位于`/tmp/LuneX-16-2_4-build-{macos,ios,tvos,visionos}.1785346796029`；四份xcresult均`succeeded`且结构化diagnostics为0，没有选择或操作simulator。
 - repository final gate位于`/tmp/LuneX-16-2_4-repo-final.c5LkRu`：OpenSpec `9/35 ready`与strict、唯一environment owner、2.5 API未提前出现、`git diff --check`和generator SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过。
+
+## 2026-07-30 阶段 16 任务 2.5 验收
+
+- `ProductionAVAudioSpatialPlatformAdapter`把平台API封装在编译期分支内：macOS/iOS/tvOS只在environment graph成功后设置`isListenerHeadTrackingEnabled`，且请求值必须同时满足用户开启head tracking与embedded entitlement为`.granted`；actual Bool读回进入graph snapshot。缺失、不可读或未要求的entitlement不会把production listener属性设为true。
+- visionOS 26分支不引用不可用的listener API，而是把`AVAudioOutputNode.intendedSpatialExperience`设置为`.headTracked`或`.fixed`，并通过`HeadTrackedSpatialAudio`/`FixedSpatialAudio`实际类型读回。graph reset、direct fallback、reconfigure和stop使用`.bypassed`；其他平台统一将listener属性恢复为false。
+- focused证据`/tmp/LuneX-16-2_5-focused.iNPJG2/PlatformSpatial.xcresult`为`41/41`；expanded证据`/tmp/LuneX-16-2_5-expanded.EOEpX4/PlatformSpatialExpanded.xcresult`为`76/76 passed / 0 skipped / 0 failed`。两份均以warnings-as-errors运行并有0 warning/error/analyzer warning，测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS/iOS/tvOS/visionOS generic-device Debug build位于`/tmp/LuneX-16-2_5-build-{macos,ios,tvos,visionos}.1785347392506`；四份`Build.xcresult`均`succeeded`且结构化diagnostics为0。visionOS成功编译证明listener属性没有泄漏进该分支，但不证明设备实际采用或可听到目标空间体验。
+- repository gate位于`/tmp/LuneX-16-2_5-repo-final.yqhF1t`：OpenSpec strict、唯一production environment owner、分平台API边界、clean-room扫描、`git diff --check`及generator连续SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过。首次静态脚本把listener赋值、读回、reset三处错误断言为两处并提前退出；修正门禁期望为3后，仅执行未完成扫描并通过，源码与工程文件未因该错误变化。
+- 2.5只证明compile-safe production策略、确定性readback合同及清理行为，不证明AirPods head tracking、visionOS可听空间定位、签名profile包含head-pose entitlement、route transition或物理多声道分离；这些仍属于后续3.x、2.6及6.6。

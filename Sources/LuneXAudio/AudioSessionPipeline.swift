@@ -1,4 +1,5 @@
 import AVFAudio
+import AudioToolbox
 import Foundation
 
 struct StreamAudioConfiguration: Codable, Equatable, Hashable, Sendable {
@@ -90,6 +91,10 @@ protocol AudioEngineClient: Sendable {
 struct AVAudioEngineGraphReadback: Equatable, Sendable {
     let mode: SpatialAudioGraphMode
     let fallbackReason: SpatialAudioGraphFallbackReason?
+    let platformStrategy: SpatialAudioPlatformStrategy
+    let listenerHeadTrackingCapable: Bool
+    let listenerHeadTrackingReadback: Bool
+    let visionExperienceReadback: VisionSpatialExperienceReadback?
     let playerAttached: Bool
     let environmentAttached: Bool
     let playerConnectedToEnvironment: Bool
@@ -99,6 +104,84 @@ struct AVAudioEngineGraphReadback: Equatable, Sendable {
     let selectedRenderingAlgorithmRawValue: Int?
     let applicableRenderingAlgorithmRawValues: [Int]
     let inputLayoutTagRawValue: UInt32?
+}
+
+struct AVAudioSpatialPlatformReadback: Equatable, Sendable {
+    let strategy: SpatialAudioPlatformStrategy
+    let listenerHeadTrackingCapable: Bool
+    let listenerHeadTrackingReadback: Bool
+    let visionExperienceReadback: VisionSpatialExperienceReadback?
+
+    static let none = AVAudioSpatialPlatformReadback(
+        strategy: .none,
+        listenerHeadTrackingCapable: false,
+        listenerHeadTrackingReadback: false,
+        visionExperienceReadback: nil
+    )
+}
+
+protocol AVAudioSpatialPlatformApplying {
+    func apply(
+        engine: AVAudioEngine,
+        environment: AVAudioEnvironmentNode,
+        intent: SpatialAudioGraphIntent
+    ) -> AVAudioSpatialPlatformReadback
+    func reset(
+        engine: AVAudioEngine,
+        environment: AVAudioEnvironmentNode
+    )
+}
+
+struct ProductionAVAudioSpatialPlatformAdapter:
+    AVAudioSpatialPlatformApplying
+{
+    func apply(
+        engine: AVAudioEngine,
+        environment: AVAudioEnvironmentNode,
+        intent: SpatialAudioGraphIntent
+    ) -> AVAudioSpatialPlatformReadback {
+        #if os(visionOS)
+        engine.outputNode.intendedSpatialExperience =
+            intent.userEnablesHeadTracking ? .headTracked : .fixed
+        let actual = engine.outputNode.intendedSpatialExperience
+        let experience: VisionSpatialExperienceReadback?
+        if actual is HeadTrackedSpatialAudio {
+            experience = .headTracked
+        } else if actual is FixedSpatialAudio {
+            experience = .fixed
+        } else {
+            experience = nil
+        }
+        return AVAudioSpatialPlatformReadback(
+            strategy: .visionOutputExperience,
+            listenerHeadTrackingCapable: false,
+            listenerHeadTrackingReadback: false,
+            visionExperienceReadback: experience
+        )
+        #else
+        let requestsHeadTracking = intent.userEnablesHeadTracking
+            && intent.entitlement == .granted
+        environment.isListenerHeadTrackingEnabled = requestsHeadTracking
+        return AVAudioSpatialPlatformReadback(
+            strategy: .environmentListener,
+            listenerHeadTrackingCapable: true,
+            listenerHeadTrackingReadback:
+                environment.isListenerHeadTrackingEnabled,
+            visionExperienceReadback: nil
+        )
+        #endif
+    }
+
+    func reset(
+        engine: AVAudioEngine,
+        environment: AVAudioEnvironmentNode
+    ) {
+        #if os(visionOS)
+        engine.outputNode.intendedSpatialExperience = .bypassed
+        #else
+        environment.isListenerHeadTrackingEnabled = false
+        #endif
+    }
 }
 
 enum AVAudioEnvironmentGraphBuildError: Error, Equatable, Sendable {
@@ -173,16 +256,21 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let player = AVAudioPlayerNode()
     private let environment = AVAudioEnvironmentNode()
     private let environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding
+    private let spatialPlatformAdapter: any AVAudioSpatialPlatformApplying
     private var configuration: StreamAudioConfiguration?
     private var configuredGraphMode = SpatialAudioGraphMode.unconfigured
     private var configuredGraphFallback: SpatialAudioGraphFallbackReason?
     private var applicableRenderingAlgorithmRawValues: [Int] = []
+    private var platformReadback = AVAudioSpatialPlatformReadback.none
 
     init(
         environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding =
-            ProductionAVAudioEnvironmentGraphBuilder()
+            ProductionAVAudioEnvironmentGraphBuilder(),
+        spatialPlatformAdapter: any AVAudioSpatialPlatformApplying =
+            ProductionAVAudioSpatialPlatformAdapter()
     ) {
         self.environmentGraphBuilder = environmentGraphBuilder
+        self.spatialPlatformAdapter = spatialPlatformAdapter
         engine.attach(player)
         engine.attach(environment)
     }
@@ -234,6 +322,11 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
                 applicableRenderingAlgorithmRawValues =
                     graphResult.applicableRenderingAlgorithmRawValues
                 configuredGraphMode = .environmentAmbienceBed
+                platformReadback = spatialPlatformAdapter.apply(
+                    engine: engine,
+                    environment: environment,
+                    intent: graphIntent
+                )
             } catch {
                 resetGraphConnections()
                 configuredGraphFallback = graphFallbackReason(for: error)
@@ -254,12 +347,13 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
                         AVAudio3DMixingRenderingAlgorithm.auto.rawValue
                     ),
             fallbackReason: configuredGraphFallback,
-            platformStrategy: configuredGraphMode == .environmentAmbienceBed
-                ? .environmentListener
-                : .none,
-            listenerHeadTrackingCapable: false,
-            listenerHeadTrackingReadback: false,
-            visionExperienceReadback: nil
+            platformStrategy: platformReadback.strategy,
+            listenerHeadTrackingCapable:
+                platformReadback.listenerHeadTrackingCapable,
+            listenerHeadTrackingReadback:
+                platformReadback.listenerHeadTrackingReadback,
+            visionExperienceReadback:
+                platformReadback.visionExperienceReadback
         )
         return SpatialAudioRuntimeResolver.resolve(
             intent: graphIntent,
@@ -319,6 +413,13 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         return AVAudioEngineGraphReadback(
             mode: configuredGraphMode,
             fallbackReason: configuredGraphFallback,
+            platformStrategy: platformReadback.strategy,
+            listenerHeadTrackingCapable:
+                platformReadback.listenerHeadTrackingCapable,
+            listenerHeadTrackingReadback:
+                platformReadback.listenerHeadTrackingReadback,
+            visionExperienceReadback:
+                platformReadback.visionExperienceReadback,
             playerAttached: engine.attachedNodes.contains(player),
             environmentAttached: engine.attachedNodes.contains(environment),
             playerConnectedToEnvironment: playerDestinations.contains {
@@ -343,11 +444,16 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     }
 
     private func resetGraphConnections() {
+        spatialPlatformAdapter.reset(
+            engine: engine,
+            environment: environment
+        )
         engine.disconnectNodeOutput(player)
         engine.disconnectNodeOutput(environment)
         configuredGraphMode = .unconfigured
         configuredGraphFallback = nil
         applicableRenderingAlgorithmRawValues = []
+        platformReadback = .none
     }
 
     private func configureDirectMixer(format: AVAudioFormat) throws {
@@ -396,7 +502,7 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         case .iOS, .tvOS:
             return route.systemSpatialSupport == .supported
         case .visionOS:
-            return false
+            return route.systemSpatialSupport == .supported
         }
     }
 }

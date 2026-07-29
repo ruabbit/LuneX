@@ -1814,3 +1814,12 @@
 - macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build全部成功，证据`/tmp/LuneX-16-2_4-build-{macos,ios,tvos,visionos}.1785346796029`；四份xcresult结构化diagnostics为0，未创建、启动、安装、运行、关闭或删除simulator。
 - repository final gate为`/tmp/LuneX-16-2_4-repo-final.c5LkRu`：OpenSpec `9/35 ready`与strict、唯一environment owner、2.5 API边界、generator稳定SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`和`git diff --check`通过。
 - OpenSpec 2.4已勾选，权威进度更新为`9/35`；下一项2.5只实现平台正确的listener head tracking/visionOS intended spatial experience，不把属性readback、编译或模拟器当作AirPods/可听定位真机证明。
+
+## 2026-07-30 阶段 16 任务 2.5 完成
+
+- 新增injectable `AVAudioSpatialPlatformApplying`与production adapter。macOS/iOS/tvOS仅在用户开启且entitlement为`.granted`时请求`isListenerHeadTrackingEnabled`，并把实际属性读回交给resolver；关闭、缺失entitlement、fallback、reconfigure和stop都不会保留true状态。
+- visionOS 26只编译`AVAudioOutputNode.intendedSpatialExperience`分支，按用户偏好设置并读回`.headTracked`或`.fixed`，reset/direct fallback/stop恢复`.bypassed`。graph readback新增平台策略、listener capability/readback和vision experience字段。
+- focused warnings-as-errors gate为`/tmp/LuneX-16-2_5-focused.iNPJG2`，通过`41/41`；expanded audio/recovery/runtime/media gate为`/tmp/LuneX-16-2_5-expanded.EOEpX4`，通过`76/76 passed / 0 skipped / 0 failed`。两份结构化diagnostics均为0，测试显式移除真实Keychain opt-in。
+- macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build均成功，证据`/tmp/LuneX-16-2_5-build-{macos,ios,tvos,visionos}.1785347392506`；四份xcresult均0 warning/error/analyzer warning，未选择或操作simulator。
+- repository gate为`/tmp/LuneX-16-2_5-repo-final.yqhF1t`：OpenSpec strict、唯一environment owner、compile branch/API扫描、clean-room边界、generator稳定哈希与`git diff --check`通过。首轮静态脚本误将3处listener API引用断言为2并提前退出；修正预期后只完成余下门禁，未更改产品实现或工程内容。
+- OpenSpec 2.5已勾选，权威进度更新为`10/35`；下一项2.6补齐topology、schedule/readback、vision策略、partial failure、stop/idempotence和resource release测试。当前证据不声称AirPods、signed entitlement、visionOS可听定位或物理多声道输出已验证。
