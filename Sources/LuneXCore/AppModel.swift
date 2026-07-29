@@ -1236,6 +1236,8 @@ final class AppModel: ApplicationInputSink {
                 presentationEvent,
                 sessionID: sessionID
             )
+        case .audioRuntime:
+            break
         }
     }
 

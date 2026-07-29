@@ -45,6 +45,13 @@ enum SessionMediaEnvironmentEvent: Equatable, Sendable {
     case readiness(SessionChannelReadiness)
     case feedback(RemoteInputFeedback)
     case videoPresentation(StreamVideoPresentationEvent)
+    case audioRuntime(SessionMediaAudioRuntimeState)
+}
+
+struct SessionMediaAudioRuntimeState: Equatable, Sendable {
+    var sessionID: UUID
+    var mediaGeneration: UInt64
+    var runtime: SessionAudioRuntimeEvent
 }
 
 struct SessionMediaEnvironmentSnapshot: Equatable, Sendable {
@@ -56,6 +63,7 @@ struct SessionMediaEnvironmentSnapshot: Equatable, Sendable {
     var activeResourceCount: Int
     var lastTeardownReport: SessionTeardownReport?
     var lifecycleApplication: SessionLifecycleApplication? = nil
+    var audioRuntime: SessionMediaAudioRuntimeState? = nil
 }
 
 struct SessionLifecycleApplication: Equatable, Sendable {
@@ -152,6 +160,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var readiness: SessionChannelReadiness
         var lifecycleApplication: SessionLifecycleApplication?
         var lifecycleReservation: SessionLifecycleApplication?
+        var audioRuntime: SessionMediaAudioRuntimeState?
     }
 
     private struct TeardownOperation {
@@ -318,6 +327,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 endpoint: configuration.audioEndpoint,
                 configuration: configuration.audio
             )
+            let audioRuntimeStream = await audioProcessor.audioRuntimeEvents()
             try await remoteInputProvider.startInput(
                 sessionID: sessionID,
                 endpoint: configuration.inputEndpoint,
@@ -339,7 +349,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 inputProvider: remoteInputProvider,
                 readiness: [.input],
                 lifecycleApplication: nil,
-                lifecycleReservation: nil
+                lifecycleReservation: nil,
+                audioRuntime: nil
             )
             startingSession = nil
             cancelledStartingGenerations.remove(mediaGeneration)
@@ -386,6 +397,29 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                                 generation: mediaGeneration
                             )
                         }
+                    }
+                    try Task.checkCancellation()
+                    throw SessionMediaEnvironmentError.streamEnded(.audio)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    await self?.fail(
+                        error,
+                        sessionID: sessionID,
+                        generation: mediaGeneration
+                    )
+                    throw error
+                }
+            }
+            _ = try await tracker.startTask(name: "audio-runtime-consumer") { [weak self] in
+                do {
+                    for await event in audioRuntimeStream {
+                        try Task.checkCancellation()
+                        await self?.publishAudioRuntime(
+                            event,
+                            sessionID: sessionID,
+                            generation: mediaGeneration
+                        )
                     }
                     try Task.checkCancellation()
                     throw SessionMediaEnvironmentError.streamEnded(.audio)
@@ -640,7 +674,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 activeTaskCount: 0,
                 activeResourceCount: 0,
                 lastTeardownReport: lastTeardownReport,
-                lifecycleApplication: nil
+                lifecycleApplication: nil,
+                audioRuntime: nil
             )
         }
         let resources = await active.tracker.snapshot()
@@ -652,8 +687,34 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             activeTaskCount: resources.activeTasks.count,
             activeResourceCount: resources.activeResources.count,
             lastTeardownReport: lastTeardownReport,
-            lifecycleApplication: active.lifecycleApplication
+            lifecycleApplication: active.lifecycleApplication,
+            audioRuntime: active.audioRuntime
         )
+    }
+
+    private func publishAudioRuntime(
+        _ event: SessionAudioRuntimeEvent,
+        sessionID: UUID,
+        generation: UInt64
+    ) {
+        guard var active,
+              active.sessionID == sessionID,
+              active.generation == generation,
+              event.sessionID == sessionID else { return }
+        if let current = active.audioRuntime?.runtime {
+            guard event.sequence > current.sequence,
+                  event.graphGeneration >= current.graphGeneration else {
+                return
+            }
+        }
+        let state = SessionMediaAudioRuntimeState(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            runtime: event
+        )
+        active.audioRuntime = state
+        self.active = active
+        active.continuation.yield(.audioRuntime(state))
     }
 
     private func publishFeedback(

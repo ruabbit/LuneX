@@ -1525,3 +1525,20 @@
 - graph failure路径曾在route observation task内取消自身，使后续runtime snapshot命中cancellation check并漏发`.failed`。最终实现只stop/finish monitor流，先收敛并发布失败快照，observer自然退出；late callback、后续preference mutation和replacement外状态均被拒绝。
 - 任务级验收为focused `8/8`、expanded audio matrix `88/88`、完整macOS `698 total / 697 passed / 1 explicit Keychain skip / 0 failed`，以及macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build 4/4通过；所有xcresult结构化diagnostics为0。
 - OpenSpec strict、scope/privacy静态门、`git diff --check`和generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`通过；全程显式关闭真实Keychain opt-in，前后全局`Booted=0`且没有操作simulator。该证据不替代4.3 media-generation转发、4.4 AppModel接线或6.6签名/物理可听验收。
+
+## 2026-07-30 阶段 16 任务 4.3 调查
+
+- 现有`NativeSessionMediaEnvironment`在active generation建立后拥有video/audio/input三个consumer task和五个resource，并以`sessionID + mediaGeneration`保护readiness、feedback、lifecycle与input；audio processor的semantic stream尚未被读取，因此4.2事件仍到不了应用层。
+- 4.3应新增显式`SessionMediaAudioRuntimeState` wrapper，把processor事件绑定到environment的`sessionID + mediaGeneration`，同时在`ActiveSession`/snapshot保留latest current-generation值。只转发裸`SessionAudioRuntimeEvent`无法区分复用同一session ID后的replacement generation。
+- environment除了检查session/generation，还应拒绝processor event session不匹配、sequence不严格递增或graph generation回退的事件。processor已保证正常序列，但environment是跨owner边界，仍需fail-closed防止旧rebuild或注入式测试provider污染active snapshot。
+- audio runtime consumer应作为第4个`SessionResourceTracker` task：正常运行时processor event stream保持打开；stream意外结束视为audio channel结束，teardown时则由tracker先取消consumer，再按既有逆序停止input、audio processor、video processor和receivers。
+- 4.3只让`AppModel`对新枚举case保持显式no-op以维持编译；active state、preference application和clear行为属于4.4，diagnostic code与UI属于5.x。
+
+## 2026-07-30 阶段 16 任务 4.3 验收结论
+
+- `NativeSessionMediaEnvironment`现在把processor semantic event封装为`SessionMediaAudioRuntimeState(sessionID, mediaGeneration, runtime)`，经统一event stream转发并在active snapshot保存latest值；停止或失败后snapshot不保留旧generation状态。
+- audio runtime stream由第4个tracked consumer拥有。consumer只接受当前environment `sessionID + mediaGeneration`且要求processor event session匹配、sequence严格递增、graph generation不回退；同session replacement后的旧processor事件、重复/回退sequence、回退graph和错session事件均不污染新snapshot。
+- audio runtime stream意外结束会以typed `.streamEnded(.audio)`失败统一media stream；正常teardown先取消4个consumer，再逆序停止5个resource，不把正常processor stop误报为audio failure。
+- `AppModel`在4.3只新增显式`.audioRuntime` no-op以维持枚举穷尽；当前状态、偏好写回及stop/failure/reconnect/replacement清理仍由4.4实现，diagnostics与UI仍由5.x实现。
+- 验收证据为focused `27/27`、expanded `93/93`、完整macOS `702 total / 701 passed / 1 explicit Keychain skip / 0 failed`和macOS/iOS/iPadOS/tvOS/visionOS generic-device Debug unsigned warnings-as-errors build 4/4；所有xcresult结构化diagnostics为0。
+- OpenSpec strict `7/7`、generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`、membership/privacy/reference/package/Core Image/fixture/secret/diff门均通过；前后全局`Booted=0`且未操作simulator。该证据不证明4.4 AppModel绑定、签名entitlement、AirPods head tracking、route transition可听同步或物理多声道定位。

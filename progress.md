@@ -1934,3 +1934,21 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_2-builds.lp76FS/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。前后全局`Booted=0`，没有创建、启动或操作simulator。
 - OpenSpec strict、scope/privacy静态门、`git diff --check`与generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`通过；测试始终显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
 - OpenSpec 4.2已勾选，权威进度更新为`19/35`；下一项4.3把current-generation audio runtime state经`NativeSessionMediaEnvironment`转发并拒绝stale processor/rebuild事件。4.2不证明AppModel/UI已接线，也不证明签名entitlement、AirPods head tracking、route transition可听同步或物理多声道定位。
+
+## 2026-07-30 阶段 16 任务 4.3 启动
+
+- 4.2已以`6ab3e50 Own spatial audio processor state`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec权威进度`19/35`，进入4.3。
+- 本项新增media-generation-owned audio runtime wrapper、environment event/snapshot转发、第4个tracked consumer及stale sequence/graph/session过滤；AppModel只保持枚举穷尽，实际应用状态和preference binding留给4.4。
+- 继续显式移除真实Keychain opt-in，不创建、启动或操作simulator；4.3离线证据不替代签名entitlement、AirPods、route transition或物理多声道验收。
+- 系统更新后恢复确认Xcode 26.4、Swift 6.3、长期goal active且`main == origin/main`；catchup中的未同步内容正是本项4.3未提交改动，没有回滚或覆盖。
+- 测试替身已改为持有长期打开的audio runtime stream，正常stop才结束；环境测试任务计数同步为4，并新增current-generation转发/snapshot、sequence与graph回退、同session replacement迟到事件、runtime stream意外结束四类回归。下一步从全新隔离DerivedData运行focused gate。
+- focused `/tmp/LuneX-16-4_3-focused.4BWxwO/Focused.xcresult`已结构化确认`27/27 passed / 0 skipped / 0 failed`，warning/error/analyzer warning为0。首次诊断读回误用已废弃的`xcresulttool get issues`子命令，测试结果本身不受影响；已改用Xcode 26.4的`get build-results`并成功读取零诊断，后续证据统一使用新子命令。
+
+## 2026-07-30 阶段 16 任务 4.3 完成
+
+- `NativeSessionMediaEnvironment`新增media-generation-owned audio runtime wrapper、统一event/snapshot转发和第4个tracked consumer；只接受当前session/generation、匹配processor session、严格递增sequence且不回退graph generation的事件。
+- 同session replacement迟到processor事件、错session、sequence重复/回退、graph回退和runtime stream意外结束均有确定性回归；默认测试processor改为正常生命周期内保持stream打开，stop时才finish，避免伪造production早停。
+- focused `/tmp/LuneX-16-4_3-focused.4BWxwO/Focused.xcresult`为`27/27`，expanded `/tmp/LuneX-16-4_3-expanded.AQ1t5f/Expanded.xcresult`为`93/93`，完整macOS `/tmp/LuneX-16-4_3-full.3CnFbV/LuneXCoreTests.xcresult`为`702 total / 701 passed / 1 explicit Keychain skip / 0 failed`；三份结构化diagnostics均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_3-builds.DF4774/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- OpenSpec strict `7/7`、source/test membership、privacy/reference/package/Core Image/fixture/secret/diff静态门与generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`通过；测试始终显式移除真实Keychain opt-in，前后全局`Booted=0`且未操作simulator。
+- OpenSpec 4.3已勾选，预期权威进度`20/35`；下一项4.4绑定AppModel actual audio/spatial state及preference changes并在stop/failure/reconnect/replacement清理。4.3只保留AppModel显式no-op，不证明4.4/5.x或6.6物理验收。

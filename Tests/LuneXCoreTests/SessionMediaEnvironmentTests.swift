@@ -29,7 +29,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         let active = await environment.snapshot()
         XCTAssertEqual(active.sessionID, sessionID)
         XCTAssertEqual(active.readiness, [.input])
-        XCTAssertEqual(active.activeTaskCount, 3)
+        XCTAssertEqual(active.activeTaskCount, 4)
         XCTAssertEqual(active.activeResourceCount, 5)
 
         video.yield(.packet(ReceivedVideoPacket(
@@ -82,6 +82,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 observedFeedback = feedback
             case .videoPresentation:
                 break
+            case .audioRuntime:
+                break
             }
         }
         XCTAssertEqual(finalReadiness, [.video, .audio, .input])
@@ -95,7 +97,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         let optionalReport = await environment.stop(sessionID: sessionID)
         let report = try XCTUnwrap(optionalReport)
         XCTAssertTrue(report.isClean)
-        XCTAssertEqual(report.cancelledTaskCount, 3)
+        XCTAssertEqual(report.cancelledTaskCount, 4)
         XCTAssertEqual(report.stoppedResourceCount, 5)
         let ended = try await iterator.next()
         XCTAssertNil(ended)
@@ -113,6 +115,223 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         let stopped = await environment.snapshot()
         XCTAssertNil(stopped.sessionID)
         XCTAssertEqual(stopped.lastTeardownReport, report)
+    }
+
+    func testForwardsCurrentGenerationAudioRuntimeAndStoresSnapshot() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        let readiness = try await iterator.next()
+        XCTAssertEqual(readiness, .readiness([.input]))
+        let generation = await environment.snapshot().generation
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let runtime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 0,
+            graphGeneration: 1
+        )
+
+        await processor.emit(runtime)
+        let expected = SessionMediaAudioRuntimeState(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            runtime: runtime
+        )
+        let forwarded = try await iterator.next()
+        XCTAssertEqual(forwarded, .audioRuntime(expected))
+        let snapshot = await environment.snapshot()
+        XCTAssertEqual(snapshot.audioRuntime, expected)
+        XCTAssertEqual(snapshot.audioRuntime?.mediaGeneration, snapshot.generation)
+
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testRejectsRegressiveAudioRuntimeSequencesAndGraphGenerations() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let initial = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 10,
+            graphGeneration: 3
+        )
+        let valid = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 11,
+            graphGeneration: 3,
+            cause: .routeChanged
+        )
+
+        await processor.emit(initial)
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 9,
+            graphGeneration: 4
+        ))
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 10,
+            graphGeneration: 4
+        ))
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 11,
+            graphGeneration: 2
+        ))
+        await processor.emit(audioRuntimeEvent(
+            sessionID: UUID(),
+            sequence: 12,
+            graphGeneration: 4
+        ))
+        await processor.emit(valid)
+
+        guard case let .audioRuntime(first) = try await iterator.next() else {
+            return XCTFail("Expected the first current audio runtime event.")
+        }
+        guard case let .audioRuntime(second) = try await iterator.next() else {
+            return XCTFail("Expected the next monotonic audio runtime event.")
+        }
+        XCTAssertEqual(first.runtime, initial)
+        XCTAssertEqual(second.runtime, valid)
+        let snapshot = await environment.snapshot()
+        XCTAssertEqual(snapshot.audioRuntime?.runtime, valid)
+
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testSameSessionReplacementDiscardsPriorProcessorAudioRuntime() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(
+            calls: calls,
+            finishStreamOnStop: false
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        let firstStream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var firstIterator = firstStream.makeAsyncIterator()
+        _ = try await firstIterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let firstProcessor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let firstRuntime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 0,
+            graphGeneration: 1
+        )
+        await firstProcessor.emit(firstRuntime)
+        _ = try await firstIterator.next()
+        _ = await environment.stop(sessionID: sessionID)
+
+        let replacementStream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var replacementIterator = replacementStream.makeAsyncIterator()
+        _ = try await replacementIterator.next()
+        let replacementGeneration = await environment.snapshot().generation
+        let replacementProcessor = try XCTUnwrap(audioProcessorFactory.processor(at: 1))
+        let staleRuntime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 50,
+            graphGeneration: 50,
+            cause: .recovery
+        )
+        let replacementRuntime = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 0,
+            graphGeneration: 1
+        )
+
+        await firstProcessor.emit(staleRuntime)
+        await replacementProcessor.emit(replacementRuntime)
+        let expected = SessionMediaAudioRuntimeState(
+            sessionID: sessionID,
+            mediaGeneration: replacementGeneration,
+            runtime: replacementRuntime
+        )
+        let forwarded = try await replacementIterator.next()
+        XCTAssertEqual(forwarded, .audioRuntime(expected))
+        let replacementSnapshot = await environment.snapshot()
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        XCTAssertEqual(replacementSnapshot.audioRuntime, expected)
+        XCTAssertNotEqual(replacementSnapshot.audioRuntime?.runtime, staleRuntime)
+
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testAudioRuntimeStreamEndingFailsSessionAndTearsDownCleanly() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+
+        await processor.finish()
+        do {
+            _ = try await iterator.next()
+            XCTFail("An ended audio runtime lifetime must fail the unified media stream.")
+        } catch {
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .streamEnded(.audio)
+            )
+        }
+        let optionalReport = await environment.stop(sessionID: sessionID)
+        let report = try XCTUnwrap(optionalReport)
+        XCTAssertTrue(report.isClean)
+        XCTAssertEqual(report.stoppedResourceCount, 5)
     }
 
     func testInputApplicationIsGenerationScopedAcrossSameSessionReplacement() async throws {
@@ -798,7 +1017,7 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         }
         await waitUntil {
             let snapshot = await environment.snapshot()
-            return snapshot.sessionID == sessionID && snapshot.activeTaskCount == 3
+            return snapshot.sessionID == sessionID && snapshot.activeTaskCount == 4
         }
 
         consumer.cancel()
@@ -1306,7 +1525,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         video: ControlledVideoReceiveProvider,
         audio: ControlledAudioReceiveProvider,
         input: ControlledRemoteInputProvider,
-        videoProcessorFactory: (any SessionVideoProcessorCreating)? = nil
+        videoProcessorFactory: (any SessionVideoProcessorCreating)? = nil,
+        audioProcessorFactory: (any SessionAudioProcessorCreating)? = nil
     ) -> NativeSessionMediaEnvironment {
         NativeSessionMediaEnvironment(
             videoReceiveProvider: video,
@@ -1314,8 +1534,28 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             remoteInputProvider: input,
             videoProcessorFactory: videoProcessorFactory
                 ?? RecordingVideoProcessorFactory(calls: calls),
-            audioProcessorFactory: RecordingAudioProcessorFactory(calls: calls),
+            audioProcessorFactory: audioProcessorFactory
+                ?? RecordingAudioProcessorFactory(calls: calls),
             teardownGracePeriod: .seconds(1)
+        )
+    }
+
+    private func audioRuntimeEvent(
+        sessionID: UUID,
+        sequence: UInt64,
+        graphGeneration: UInt64,
+        cause: SessionAudioRuntimeEventCause = .initial
+    ) -> SessionAudioRuntimeEvent {
+        SessionAudioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: sequence,
+            graphGeneration: graphGeneration,
+            cause: cause,
+            stage: .running,
+            spatialRuntime: nil,
+            preferences: .nativeDefault,
+            concealedFrameCount: 0,
+            lastAction: .none
         )
     }
 
@@ -1898,9 +2138,14 @@ private struct RecordingAudioProcessorFactory: SessionAudioProcessorCreating {
 
 private actor RecordingAudioProcessor: SessionAudioProcessing {
     let calls: MediaEnvironmentCallRecorder
+    private let eventStream: AsyncStream<SessionAudioRuntimeEvent>
+    private let eventContinuation: AsyncStream<SessionAudioRuntimeEvent>.Continuation
 
     init(calls: MediaEnvironmentCallRecorder) {
         self.calls = calls
+        let pair = AsyncStream<SessionAudioRuntimeEvent>.makeStream()
+        eventStream = pair.stream
+        eventContinuation = pair.continuation
     }
 
     func consume(_ event: AudioReceiveEvent) async throws -> Bool {
@@ -1910,9 +2155,7 @@ private actor RecordingAudioProcessor: SessionAudioProcessing {
     }
 
     func audioRuntimeEvents() async -> AsyncStream<SessionAudioRuntimeEvent> {
-        AsyncStream { continuation in
-            continuation.finish()
-        }
+        eventStream
     }
 
     func updateSpatialAudioPreferences(
@@ -1922,6 +2165,101 @@ private actor RecordingAudioProcessor: SessionAudioProcessing {
     }
 
     func stop() async {
+        eventContinuation.finish()
+        await calls.append("audio.processor.stop")
+    }
+}
+
+private final class ControlledAudioProcessorFactory:
+    SessionAudioProcessorCreating,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private let calls: MediaEnvironmentCallRecorder
+    private let finishStreamOnStop: Bool
+    private var processors: [ControlledAudioProcessor] = []
+
+    init(
+        calls: MediaEnvironmentCallRecorder,
+        finishStreamOnStop: Bool = true
+    ) {
+        self.calls = calls
+        self.finishStreamOnStop = finishStreamOnStop
+    }
+
+    func makeAudioProcessor(
+        sessionID: UUID,
+        configuration: NegotiatedAudioStreamConfiguration
+    ) async throws -> any SessionAudioProcessing {
+        _ = sessionID
+        _ = configuration
+        let processor = ControlledAudioProcessor(
+            calls: calls,
+            finishStreamOnStop: finishStreamOnStop
+        )
+        withLock { processors.append(processor) }
+        await calls.append("audio.processor.start")
+        return processor
+    }
+
+    func processor(at index: Int) -> ControlledAudioProcessor? {
+        withLock {
+            processors.indices.contains(index) ? processors[index] : nil
+        }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private actor ControlledAudioProcessor: SessionAudioProcessing {
+    private let calls: MediaEnvironmentCallRecorder
+    private let finishStreamOnStop: Bool
+    private let eventStream: AsyncStream<SessionAudioRuntimeEvent>
+    private let eventContinuation: AsyncStream<SessionAudioRuntimeEvent>.Continuation
+
+    init(
+        calls: MediaEnvironmentCallRecorder,
+        finishStreamOnStop: Bool
+    ) {
+        self.calls = calls
+        self.finishStreamOnStop = finishStreamOnStop
+        let pair = AsyncStream<SessionAudioRuntimeEvent>.makeStream()
+        eventStream = pair.stream
+        eventContinuation = pair.continuation
+    }
+
+    func consume(_ event: AudioReceiveEvent) async throws -> Bool {
+        _ = event
+        await calls.append("audio.consume")
+        return true
+    }
+
+    func audioRuntimeEvents() async -> AsyncStream<SessionAudioRuntimeEvent> {
+        eventStream
+    }
+
+    func updateSpatialAudioPreferences(
+        _ preferences: SessionSpatialAudioPreferences
+    ) async throws {
+        _ = preferences
+    }
+
+    func emit(_ event: SessionAudioRuntimeEvent) {
+        eventContinuation.yield(event)
+    }
+
+    func finish() {
+        eventContinuation.finish()
+    }
+
+    func stop() async {
+        if finishStreamOnStop {
+            eventContinuation.finish()
+        }
         await calls.append("audio.processor.stop")
     }
 }
