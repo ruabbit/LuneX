@@ -294,6 +294,146 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(Array(UnsafeBufferPointer(start: pointer, count: 4)), decoded.interleavedSamples)
     }
 
+    func testAVAudioFormatFactoryPreservesExplicitMoonlightLayouts() throws {
+        let layouts: [StreamAudioChannelLayout] = [
+            .mono,
+            .stereo,
+            .wave5Point1,
+            .wave7Point1
+        ]
+
+        for layout in layouts {
+            let format = try AVAudioStreamFormatFactory.makeInterleavedInt16(
+                sampleRate: 48_000,
+                channelLayout: layout
+            )
+            let description = format.streamDescription.pointee
+            let expectedBytesPerFrame = UInt32(
+                layout.channelCount * MemoryLayout<Int16>.size
+            )
+
+            XCTAssertEqual(format.commonFormat, .pcmFormatInt16)
+            XCTAssertEqual(format.sampleRate, 48_000)
+            XCTAssertTrue(format.isInterleaved)
+            XCTAssertEqual(Int(format.channelCount), layout.channelCount)
+            XCTAssertEqual(
+                format.channelLayout?.layoutTag,
+                layout.coreAudioLayoutTag
+            )
+            XCTAssertEqual(
+                Int(format.channelLayout?.channelCount ?? 0),
+                layout.channelCount
+            )
+            XCTAssertEqual(description.mFormatID, kAudioFormatLinearPCM)
+            XCTAssertNotEqual(
+                description.mFormatFlags & kAudioFormatFlagIsSignedInteger,
+                0
+            )
+            XCTAssertNotEqual(
+                description.mFormatFlags & kAudioFormatFlagIsPacked,
+                0
+            )
+            XCTAssertEqual(description.mBitsPerChannel, 16)
+            XCTAssertEqual(
+                Int(description.mChannelsPerFrame),
+                layout.channelCount
+            )
+            XCTAssertEqual(description.mFramesPerPacket, 1)
+            XCTAssertEqual(description.mBytesPerFrame, expectedBytesPerFrame)
+            XCTAssertEqual(description.mBytesPerPacket, expectedBytesPerFrame)
+        }
+    }
+
+    func testAVAudioFormatFactoryRejectsInvalidRateAndNoncanonicalOrder() {
+        XCTAssertThrowsError(
+            try AVAudioStreamFormatFactory.makeInterleavedInt16(
+                sampleRate: 44_100,
+                channelLayout: .stereo
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AVAudioStreamFormatError,
+                .invalidSampleRate
+            )
+        }
+        let reordered = StreamAudioChannelLayout(
+            kind: .wave5Point1,
+            channels: [
+                .frontRight,
+                .frontLeft,
+                .frontCenter,
+                .lowFrequencyEffects,
+                .backLeft,
+                .backRight
+            ],
+            moonlightChannelMask: 0x003F,
+            coreAudioLayoutTagRawValue: StreamAudioChannelLayout.wave5Point1
+                .coreAudioLayoutTagRawValue,
+            spatialEligibility: .ambienceBed
+        )
+
+        XCTAssertThrowsError(
+            try AVAudioStreamFormatFactory.makeInterleavedInt16(
+                sampleRate: 48_000,
+                channelLayout: reordered
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AVAudioStreamFormatError,
+                .noncanonicalChannelLayout
+            )
+        }
+    }
+
+    func testPCMBufferFactoryOwnsOneExactInterleavedBufferForEveryLayout() throws {
+        let layouts: [StreamAudioChannelLayout] = [
+            .mono,
+            .stereo,
+            .wave5Point1,
+            .wave7Point1
+        ]
+
+        for layout in layouts {
+            let decoded = makePCM(
+                channelLayout: layout,
+                frameCount: 5
+            )
+            let buffer = try AVAudioPCMBufferFactory.makeBuffer(from: decoded)
+            let audioBuffers = UnsafeMutableAudioBufferListPointer(
+                buffer.mutableAudioBufferList
+            )
+            let byteCount = decoded.interleavedSamples.count
+                * MemoryLayout<Int16>.size
+
+            XCTAssertEqual(buffer.frameCapacity, 5)
+            XCTAssertEqual(buffer.frameLength, 5)
+            XCTAssertEqual(
+                buffer.format.channelLayout?.layoutTag,
+                layout.coreAudioLayoutTag
+            )
+            XCTAssertEqual(audioBuffers.count, 1)
+            XCTAssertEqual(
+                Int(audioBuffers[0].mNumberChannels),
+                layout.channelCount
+            )
+            XCTAssertEqual(Int(audioBuffers[0].mDataByteSize), byteCount)
+            XCTAssertEqual(
+                Int(buffer.audioBufferList.pointee.mBuffers.mDataByteSize),
+                byteCount
+            )
+            let pointer = try XCTUnwrap(
+                audioBuffers[0].mData?.assumingMemoryBound(to: Int16.self)
+            )
+            XCTAssertEqual(
+                Array(UnsafeBufferPointer(
+                    start: pointer,
+                    count: decoded.interleavedSamples.count
+                )),
+                decoded.interleavedSamples
+            )
+        }
+    }
+
     func testProductionClientBuildsPlayerMixerGraphWithoutStartingHardware() throws {
         let client = AVAudioEngineClient()
         let graphIntent = makeAudioGraphIntent(
@@ -535,6 +675,25 @@ final class AudioPipelineTests: XCTestCase {
             ),
             frameCount: 2,
             interleavedSamples: [100, -100, 200, -200]
+        )
+    }
+
+    private func makePCM(
+        channelLayout: StreamAudioChannelLayout,
+        frameCount: Int
+    ) -> DecodedPCMBuffer {
+        let sampleCount = frameCount * channelLayout.channelCount
+        return DecodedPCMBuffer(
+            sequenceNumber: 9,
+            rtpTimestamp: 1_920,
+            format: .signedInt16(
+                sampleRate: 48_000,
+                channelLayout: channelLayout
+            ),
+            frameCount: frameCount,
+            interleavedSamples: (0..<sampleCount).map {
+                Int16($0 - sampleCount / 2)
+            }
         )
     }
 

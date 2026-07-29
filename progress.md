@@ -1775,3 +1775,18 @@
 - focused warnings-as-errors gate位于`/tmp/LuneX-16-2_1-focused.1G5ijI`并通过`27/27`；最终expanded gate位于`/tmp/LuneX-16-2_1-expanded.NyQDxe`并通过`68/68 passed / 0 skipped / 0 failed`。两份xcresult结构化warning/error/analyzer warning均为0，测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - macOS、iOS、tvOS、visionOS generic-device Debug App build分别位于`/tmp/LuneX-16-2_1-build-macos.J9pfNu`、`/tmp/LuneX-16-2_1-build-ios.vgZNuJ`、`/tmp/LuneX-16-2_1-build-tvos.bDeb2F`和`/tmp/LuneX-16-2_1-build-visionos.hhYFzw`；全部warnings-as-errors succeeded，结构化diagnostics为0，未启动、安装、运行或修改simulator。
 - OpenSpec strict、纯值协议与未提前实现2.2至2.5的源码边界、`git diff --check`、generator连续SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过。OpenSpec 2.1已勾选，权威进度`6/35`；下一项2.2构造带显式Core Audio channel layout的interleaved `AVAudioFormat`并验证buffer-list channel/byte ownership。
+
+## 2026-07-30 阶段 16 任务 2.2 启动
+
+- `6e541b6 Add spatial audio engine intent contract`已推送，fetch确认`HEAD == origin/main`且工作树clean后进入2.2。
+- Apple AVFAudio文档、Xcode 26.4 headers与本地Swift探针确认多于2声道必须使用explicit `AVAudioChannelLayout` initializer；当前production的channel-count initializer无法建立5.1/7.1 format。
+- 当前只实现共享explicit format factory和PCM buffer-list channel/byte ownership，不attach environment node、不设置ambience-bed/algorithm/head tracking或平台route API。测试继续显式移除Keychain opt-in且不操作simulator。
+
+## 2026-07-30 阶段 16 任务 2.2 完成
+
+- 新增`Sources/LuneXAudio/AVAudioStreamFormatFactory.swift`并同步generator/project；只为48 kHz canonical mono/stereo/WAVE 5.1/WAVE 7.1构造显式layout、interleaved Int16格式，并读回验证完整ASBD。production engine connection与PCM buffer使用同一factory。
+- buffer factory在copy前验证单一interleaved buffer、exact channel count、exact mutable/immutable byte size与非nil owner pointer；新增四layout格式/ASBD/ownership/样本顺序矩阵，以及44.1 kHz和同声道数错序layout拒绝测试。
+- focused gate位于`/tmp/LuneX-16-2_2-focused.X4QVoy`并通过`20/20`；expanded audio/runtime/media/spatial gate位于`/tmp/LuneX-16-2_2-expanded.4871bi`并通过`71/71 passed / 0 skipped / 0 failed`。两份xcresult结构化warning/error/analyzer warning均为0。
+- macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors App build分别位于`/tmp/LuneX-16-2_2-build-macos.1785345411219`、`/tmp/LuneX-16-2_2-build-ios.1785345411220`、`/tmp/LuneX-16-2_2-build-tvos.1785345411220`和`/tmp/LuneX-16-2_2-build-visionos.1785345411220`；四份result bundle均succeeded且结构化diagnostics为0。包装器的zsh只读`status`错误不改变xcodebuild终态，已直接从xcresult读回。
+- repository gate位于`/tmp/LuneX-16-2_2-repo-pre.uF5zts`：OpenSpec strict、generator三次SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`、五target membership与`git diff --check`通过。测试继续显式移除Keychain opt-in且未操作simulator。
+- OpenSpec 2.2已勾选，权威进度更新为`7/35`；下一项2.3 attach session-owned environment node并建立eligible ambience-bed graph。2.2不证明environment graph、route/head tracking、entitlement或硬件空间音频。

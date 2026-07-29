@@ -104,12 +104,13 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         guard graphIntent.hasConsistentRevision else {
             throw AudioPipelineError.invalidGraphIntent
         }
-        guard let format = AVAudioFormat(
-                  commonFormat: .pcmFormatInt16,
-                  sampleRate: configuration.sampleRate,
-                  channels: AVAudioChannelCount(configuration.channelCount),
-                  interleaved: true
-              ) else {
+        let format: AVAudioFormat
+        do {
+            format = try AVAudioStreamFormatFactory.makeInterleavedInt16(
+                sampleRate: configuration.sampleRate,
+                channelLayout: configuration.channelLayout
+            )
+        } catch {
             throw AudioPipelineError.invalidConfiguration
         }
 
@@ -197,17 +198,22 @@ enum AVAudioPCMBufferFactory {
               format.isInterleaved,
               (1...maximumFramesPerBuffer).contains(decoded.frameCount),
               decoded.interleavedSamples.count == decoded.frameCount * format.channelCount,
-              let frameCapacity = AVAudioFrameCount(exactly: decoded.frameCount),
-              let audioFormat = AVAudioFormat(
-                  commonFormat: .pcmFormatInt16,
-                  sampleRate: Double(format.sampleRate),
-                  channels: AVAudioChannelCount(format.channelCount),
-                  interleaved: true
-              ),
-              let buffer = AVAudioPCMBuffer(
-                  pcmFormat: audioFormat,
-                  frameCapacity: frameCapacity
-              ) else {
+              let frameCapacity = AVAudioFrameCount(exactly: decoded.frameCount) else {
+            throw AudioPipelineError.invalidPCMBuffer
+        }
+        let audioFormat: AVAudioFormat
+        do {
+            audioFormat = try AVAudioStreamFormatFactory.makeInterleavedInt16(
+                sampleRate: Double(format.sampleRate),
+                channelLayout: format.channelLayout
+            )
+        } catch {
+            throw AudioPipelineError.invalidPCMBuffer
+        }
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: audioFormat,
+            frameCapacity: frameCapacity
+        ) else {
             throw AudioPipelineError.invalidPCMBuffer
         }
 
@@ -216,7 +222,9 @@ enum AVAudioPCMBufferFactory {
         let audioBuffers = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
         guard audioBuffers.count == 1,
               Int(audioBuffers[0].mNumberChannels) == format.channelCount,
-              Int(audioBuffers[0].mDataByteSize) >= byteCount,
+              Int(audioBuffers[0].mDataByteSize) == byteCount,
+              Int(buffer.audioBufferList.pointee.mBuffers.mDataByteSize)
+                == byteCount,
               let destination = audioBuffers[0].mData else {
             throw AudioPipelineError.invalidPCMBuffer
         }

@@ -1370,3 +1370,17 @@
 - production `AVAudioEngineClient`在2.1仍保持`player -> mainMixer`，返回`.nonspatialMixer`和typed fallback，不虚报environment graph或head tracking。2.1没有创建`AVAudioEnvironmentNode`、显式channel-layout `AVAudioFormat`、`.ambienceBed`、listener head tracking、visionOS intended experience或route notification；这些分别保留给2.2至3.x。
 - focused证据`/tmp/LuneX-16-2_1-focused.1G5ijI/Focused.xcresult`为`27/27`；最终expanded证据`/tmp/LuneX-16-2_1-expanded.NyQDxe/Expanded.xcresult`为`68/68 passed / 0 skipped / 0 failed`，结构化warning/error/analyzer warning均为0。覆盖exact intent转交、actual snapshot保存、revision/layout/route/false activation拒绝、rebuild复用、failure/stop清理、Codable/Sendable往返、Opus集成与media teardown。
 - macOS、iOS、tvOS、visionOS generic-device Debug App warnings-as-errors build全部succeeded且四份xcresult均为零结构化诊断。OpenSpec strict、纯值协议源码边界、2.2至2.5 API未提前出现、`git diff --check`及generator连续SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过；测试显式移除Keychain opt-in且未操作simulator。
+
+## 2026-07-30 阶段 16 任务 2.2 调查
+
+- Apple AVFAudio文档与Xcode 26.4 headers一致：`AVAudioFormat(commonFormat:sampleRate:channels:interleaved:)`对超过2声道返回nil，显式5.1/7.1必须先用`AVAudioChannelLayout(layoutTag:)`再调用channel-layout initializer。WAVE 5.1 A与WAVE 7.1 tag在四平台SDK可用。
+- `AVAudioBuffer.audioBufferList`的byte size按当前frame length解释；header把mutable list描述为capacity，但本机Xcode 26.4只读探针观察到buffer初始size为0、设置`frameLength`后mutable与immutable list均变为当前length的精确字节数。2.2不依赖大于关系，而是在`frameCapacity == frameLength`后要求单一interleaved buffer、精确channel count和精确byte count。
+- 首个探针误用不存在的`UnsafeAudioBufferListPointer`并在编译前失败；改为只对已验证的单一interleaved buffer读取`audioBufferList.pointee.mBuffers`后，mono/stereo/WAVE 5.1/WAVE 7.1均读回正确tag、1个buffer、1/2/6/8个channels及精确Int16字节数。
+
+## 2026-07-30 阶段 16 任务 2.2 验收结论
+
+- 新增共享`AVAudioStreamFormatFactory`，只接受48 kHz与canonical mono/stereo/WAVE 5.1/WAVE 7.1合同；它使用显式`AVAudioChannelLayout`并读回验证Int16、interleaved、layout tag、channel count及Core Audio ASBD的format ID/flags/bits/frames/bytes。production engine connection与PCM buffer factory均复用该格式，不再用会拒绝5.1/7.1的裸channel-count initializer。
+- PCM copy只接受一个interleaved `AudioBuffer`，在`frameLength == frameCapacity`后要求`mNumberChannels`及mutable/immutable `mDataByteSize`与decoded sample count精确一致且owner pointer非nil；四种布局测试同时验证样本顺序未变化。同声道数错序layout与44.1 kHz输入均fail closed。
+- focused证据`/tmp/LuneX-16-2_2-focused.X4QVoy/Focused.xcresult`为`20/20`，expanded证据`/tmp/LuneX-16-2_2-expanded.4871bi/Expanded.xcresult`为`71/71 passed / 0 skipped / 0 failed`；两份结构化warning/error/analyzer warning均为0。macOS/iOS/tvOS/visionOS generic-device Debug App四份xcresult均succeeded且结构化诊断为0。
+- OpenSpec strict通过，generator连续SHA-256均为`ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`，新文件同时属于四个App target和test support，`git diff --check`通过。测试显式移除Keychain opt-in且未操作simulator。
+- 2.2没有attach `AVAudioEnvironmentNode`、设置source mode/rendering algorithm、启用listener head tracking、设置visionOS intended experience或监听route/session notification。production仍返回`.nonspatialMixer`；environment graph属于2.3，实际空间音频与硬件证明仍未完成。
