@@ -2007,3 +2007,22 @@
 - 首次commit后的推送前全文一致性扫描发现`task_plan.md`末尾阶段摘要仍为`22/35 / 当前4.6`；在任何push前修正为`23/35 / 当前5.1`，重新验证并amend同一任务提交。
 - 首次amend验证包装器用`rg -c`断言零匹配，`rg`在正确的零匹配下返回1并被`set -e`提前终止；该轮未执行stage/amend。改为显式`if rg ...; then fail`后重跑。
 - OpenSpec 4.6已勾选，权威进度更新为`23/35`；下一项5.1实现spatial-audio/head-tracking设置默认值、持久化、旧JSON迁移与active-stream更新。本项不替代5.2-5.4产品状态/诊断/UI或6.6签名与物理可听证据。
+
+## 2026-07-30 阶段 16 任务 5.1 启动
+
+- 4.6已以`77540aa Cover spatial audio application integration`独立提交并推送；fetch确认`HEAD == origin/main`且工作树clean，OpenSpec权威进度`23/35`，进入5.1。
+- 本项新增向后兼容`AppSettings.audio`默认值、旧JSON缺键迁移、JSON repository round-trip，以及AppModel从持久化desired设置派生首代/reconnect preference并在active stream内更新。
+- 保持现有显式Save Settings持久化语义，不提前实现5.2 diagnostics、5.3 action ownership或5.4 Settings/stream UI。普通测试继续显式移除真实Keychain opt-in，本项不操作simulator。
+- 首轮focused在测试执行前被编译器拒绝：actor `loadSettings()`的`await`位于`XCTAssertEqual`同步autoclosure。production无编译错误；先await到局部`AppSettings`再断言，并从全新DerivedData重跑，失败bundle不计验收。
+- 四平台Debug build均已成功形成xcresult；首次结构化读回包装器使用zsh只读变量`status`并在首个平台赋值时退出。build无需重跑，改用`result_state`从四份现有结果只读复核。
+- 第二次结构化读回误用不存在的`.result`字段；Xcode 26.4 `build-results`实际为`.status`，首份结果已显示`succeeded`与零诊断，但组合断言按`null`退出。改用当前schema继续只读复核。
+- 首轮repository gate的strict、fixture、generator与membership已通过，但“旧stored preference应为零匹配”使用`rg -c ... || true`，零匹配产生空字符串并使`test "" = 0`退出。该轮不计最终验收；改为显式`if rg ...; then fail`并从新证据目录完整重跑。
+- 第二轮repository gate通过到secret boundary，privacy扫描却覆盖整个既有`HostAndPersistenceTests.swift`并命中历史identity/证书测试，不是本次settings新增内容。该轮不计最终验收；收紧为`AppSettings.swift`全文和当前diff新增行后完整重跑。
+
+## 2026-07-30 阶段 16 任务 5.1 完成
+
+- 新增`AppSettings.audio`及与runtime preference的单一转换；完全缺失或partial旧JSON逐键补`.nativeDefault`，错误类型仍fail closed。AppModel desired preference直接从settings派生，active stream更新同步修改可持久化值并应用到当前media generation。
+- 最终focused `/tmp/LuneX-16-5_1-focused-final.2KOvVZ/Focused.xcresult`为`5/5`；最终完整macOS `/tmp/LuneX-16-5_1-final.1785360178629/full/LuneXCoreTests.xcresult`为`713 total / 712 passed / 1 explicit Keychain skip / 0 failed`；全部结构化diagnostics为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors最终build位于`/tmp/LuneX-16-5_1-final.1785360178629/{macOS,iOS,tvOS,visionOS}/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-5_1-repo-final-r2.Qm9CQl`通过OpenSpec strict `7/7`、fixtures、membership、settings migration scope、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式Keychain测试，前后全局`Booted=0`且未操作simulator。
+- OpenSpec 5.1已勾选，权威进度更新为`24/35`；下一项5.2替换free-form spatial diagnostics为稳定privacy-bounded active/fixed/head-tracked/visionOS/fallback/entitlement/route-layout/recovery/graph-failure状态。本项不替代5.2-5.5产品诊断/UI或6.6硬件证据。

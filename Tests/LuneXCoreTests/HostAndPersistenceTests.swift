@@ -58,6 +58,107 @@ final class HostAndPersistenceTests: XCTestCase {
         XCTAssertEqual(settings.stream.frameRate, 120)
         XCTAssertEqual(settings.stream.scaleMode, .fit)
         XCTAssertTrue(settings.input.preferRelativeMouseMode)
+        XCTAssertEqual(settings.audio, .defaults)
+        XCTAssertEqual(
+            settings.audio.sessionPreferences,
+            .nativeDefault
+        )
+    }
+
+    func testJSONSettingsRepositoryMigratesLegacyAudioDefaultsAndPersistsChanges()
+        async throws
+    {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileURL = directory.appendingPathComponent("settings.json")
+        let repository = JSONFileAppSettingsRepository(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let currentData = try JSONEncoder().encode(AppSettings.defaults)
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: currentData) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "audio")
+        let legacyData = try JSONSerialization.data(
+            withJSONObject: legacyObject,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try legacyData.write(to: fileURL, options: [.atomic])
+
+        var migrated = try await repository.loadSettings()
+        XCTAssertEqual(migrated.audio, .defaults)
+        XCTAssertFalse(legacyData.contains(Data(#""audio""#.utf8)))
+
+        legacyObject["audio"] = ["spatialAudioEnabled": false]
+        let partialAudioData = try JSONSerialization.data(
+            withJSONObject: legacyObject,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try partialAudioData.write(to: fileURL, options: [.atomic])
+        migrated = try await repository.loadSettings()
+        XCTAssertEqual(
+            migrated.audio,
+            AudioPreferences(
+                spatialAudioEnabled: false,
+                headTrackingEnabled: true
+            )
+        )
+
+        migrated.audio.headTrackingEnabled = false
+        try await repository.saveSettings(migrated)
+        let reloaded = try await repository.loadSettings()
+        let persistedData = try Data(contentsOf: fileURL)
+
+        XCTAssertEqual(reloaded, migrated)
+        XCTAssertEqual(
+            reloaded.audio,
+            AudioPreferences(
+                spatialAudioEnabled: false,
+                headTrackingEnabled: false
+            )
+        )
+        XCTAssertEqual(
+            reloaded.audio.sessionPreferences,
+            SessionSpatialAudioPreferences(
+                spatialAudioEnabled: false,
+                headTrackingEnabled: false
+            )
+        )
+        XCTAssertTrue(persistedData.contains(Data(#""audio""#.utf8)))
+        XCTAssertTrue(
+            persistedData.contains(Data(#""headTrackingEnabled""#.utf8))
+        )
+    }
+
+    func testAudioSettingsMigrationRejectsMalformedStoredTypes() throws {
+        let malformed = Data(
+            """
+            {
+              "spatialAudioEnabled": "yes",
+              "headTrackingEnabled": true
+            }
+            """.utf8
+        )
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AudioPreferences.self, from: malformed)
+        )
+    }
+
+    func testAudioPreferencesConvertToAndFromSessionPreferences() {
+        let sessionPreferences = SessionSpatialAudioPreferences(
+            spatialAudioEnabled: false,
+            headTrackingEnabled: false
+        )
+
+        XCTAssertEqual(
+            AudioPreferences(sessionPreferences).sessionPreferences,
+            sessionPreferences
+        )
     }
 
     func testJSONFileAppCatalogSnapshotRepositoryRoundTripsSnapshots() async throws {

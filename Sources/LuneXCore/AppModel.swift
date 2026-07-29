@@ -145,7 +145,6 @@ final class AppModel: ApplicationInputSink {
     var latestRemoteInputFeedback: RemoteInputFeedback?
     private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
     private(set) var hdrPresentationStatus = HDRPresentationStatus.inactive
-    private(set) var spatialAudioPreferences = SessionSpatialAudioPreferences.nativeDefault
     private(set) var audioRuntimeState: SessionMediaAudioRuntimeState?
 
     let videoPresentationSource: StreamVideoPresentationSource
@@ -258,6 +257,10 @@ final class AppModel: ApplicationInputSink {
 
     var selectedApp: RemoteApp? {
         selectedApps.first { $0.id == streamLaunchUI.selectedAppID } ?? selectedApps.first
+    }
+
+    var spatialAudioPreferences: SessionSpatialAudioPreferences {
+        settings.audio.sessionPreferences
     }
 
     var runtimeProviderAvailability: RuntimeProviderAvailability {
@@ -838,7 +841,7 @@ final class AppModel: ApplicationInputSink {
         _ preferences: SessionSpatialAudioPreferences
     ) async throws {
         guard preferences != spatialAudioPreferences else { return }
-        spatialAudioPreferences = preferences
+        settings.audio = AudioPreferences(preferences)
         guard let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration else {

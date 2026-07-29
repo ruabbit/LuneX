@@ -35,7 +35,7 @@
 
 ## 5. Settings, diagnostics, and native product state
 
-- [ ] 5.1 Add backward-compatible spatial-audio and head-tracking settings defaults, persistence, migration, and active-stream update behavior
+- [x] 5.1 Add backward-compatible spatial-audio and head-tracking settings defaults, persistence, migration, and active-stream update behavior
 - [ ] 5.2 Replace free-form spatial diagnostics with stable privacy-bounded active, fixed, head-tracked, visionOS, fallback, entitlement, route/layout, recovery, and graph-failure states
 - [ ] 5.3 Deduplicate current audio action ownership and scope recovery clearing so transport, decoder, HDR, input, and pairing actions remain intact
 - [ ] 5.4 Replace the static stream spatial pill with actual runtime state and add native spatial/head-tracking Settings controls plus inactive/fallback status

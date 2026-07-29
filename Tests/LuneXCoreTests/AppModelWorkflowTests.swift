@@ -2101,6 +2101,15 @@ final class AppModelWorkflowTests: XCTestCase {
     func testAppModelBindsSpatialPreferencesAndCurrentAudioRuntime() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let persistedPreferences = SessionSpatialAudioPreferences(
+            spatialAudioEnabled: true,
+            headTrackingEnabled: false
+        )
+        var persistedSettings = AppSettings.defaults
+        persistedSettings.audio = AudioPreferences(persistedPreferences)
+        let settingsRepository = InMemoryAppSettingsRepository(
+            settings: persistedSettings
+        )
         let model = makeLaunchReadyModel(
             sessionControlProvider: provider,
             sessionMediaEnvironment: mediaEnvironment,
@@ -2110,17 +2119,14 @@ final class AppModelWorkflowTests: XCTestCase {
                     keyID: 41,
                     key: Data(repeating: 0x41, count: 16)
                 ))
-            ])
-        )
-        let preferences = SessionSpatialAudioPreferences(
-            spatialAudioEnabled: true,
-            headTrackingEnabled: false
+            ]),
+            settingsRepository: settingsRepository
         )
 
-        try await model.updateSpatialAudioPreferences(preferences)
-        XCTAssertEqual(model.spatialAudioPreferences, preferences)
-        XCTAssertNil(model.audioRuntimeState)
         await model.loadInitialState()
+        XCTAssertEqual(model.spatialAudioPreferences, persistedPreferences)
+        XCTAssertEqual(model.settings.audio, AudioPreferences(persistedPreferences))
+        XCTAssertNil(model.audioRuntimeState)
         await model.refreshAppsForSelectedHost()
         let launchTask = Task { await model.launchSelectedApp() }
         let record = try await waitForSessionStart(provider)
@@ -2136,7 +2142,7 @@ final class AppModelWorkflowTests: XCTestCase {
             [SessionSpatialAudioPreferenceApplication(
                 sessionID: record.sessionID,
                 mediaGeneration: 1,
-                preferences: preferences
+                preferences: persistedPreferences
             )]
         )
         let current = makeAudioRuntimeState(
@@ -2144,10 +2150,30 @@ final class AppModelWorkflowTests: XCTestCase {
             mediaGeneration: 1,
             sequence: 0,
             graphGeneration: 1,
-            preferences: preferences
+            preferences: persistedPreferences
         )
         mediaEnvironment.yieldAudioRuntime(current, sessionID: record.sessionID)
         await waitUntil { model.audioRuntimeState == current }
+
+        let updatedPreferences = SessionSpatialAudioPreferences(
+            spatialAudioEnabled: false,
+            headTrackingEnabled: false
+        )
+        try await model.updateSpatialAudioPreferences(updatedPreferences)
+        await waitUntil {
+            mediaEnvironment
+                .currentSpatialAudioPreferenceApplications().count == 2
+        }
+        XCTAssertEqual(model.spatialAudioPreferences, updatedPreferences)
+        XCTAssertEqual(model.settings.audio, AudioPreferences(updatedPreferences))
+        XCTAssertEqual(
+            mediaEnvironment.currentSpatialAudioPreferenceApplications().last,
+            SessionSpatialAudioPreferenceApplication(
+                sessionID: record.sessionID,
+                mediaGeneration: 1,
+                preferences: updatedPreferences
+            )
+        )
 
         let wrongGeneration = makeAudioRuntimeState(
             sessionID: record.sessionID,
@@ -2163,10 +2189,16 @@ final class AppModelWorkflowTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(model.audioRuntimeState, current)
 
+        await model.saveSettings()
+        let savedSettings = try await settingsRepository.loadSettings()
+        XCTAssertEqual(
+            savedSettings.audio,
+            AudioPreferences(updatedPreferences)
+        )
         await model.stopStream()
         await launchTask.value
         XCTAssertNil(model.audioRuntimeState)
-        XCTAssertEqual(model.spatialAudioPreferences, preferences)
+        XCTAssertEqual(model.spatialAudioPreferences, updatedPreferences)
     }
 
     func testReconnectClearsAudioRuntimeAndRejectsPriorMediaGeneration() async throws {
@@ -3166,7 +3198,9 @@ final class AppModelWorkflowTests: XCTestCase {
         videoPresentationSource: StreamVideoPresentationSource? = nil,
         launchClient: StubStreamLaunchClient,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating,
-        runtimeProviders: RuntimeProviderInventory? = nil
+        runtimeProviders: RuntimeProviderInventory? = nil,
+        settingsRepository: any AppSettingsRepository =
+            InMemoryAppSettingsRepository()
     ) -> AppModel {
         let host = MoonlightHost(
             id: UUID(uuidString: "45F0C9CB-D795-49B2-A733-F68397632233")!,
@@ -3185,7 +3219,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 repository: InMemoryHostRepository(hosts: [host]),
                 serverInfoClient: StubServerInfoClient()
             ),
-            settingsRepository: InMemoryAppSettingsRepository(),
+            settingsRepository: settingsRepository,
             appCatalogManager: AppCatalogManager(
                 appListClient: StubAppListClient(),
                 artworkCache: InMemoryArtworkCache()

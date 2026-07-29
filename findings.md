@@ -1596,3 +1596,21 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_6-builds.1785359087336/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-4_6-repo.rgF6wJ`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain测试，全局`Booted=0`且未操作simulator。
 - 本项只证明离线application integration和已有runtime diagnostic code，不等于5.1设置持久化、5.2正式diagnostics owner、5.3 action ownership、5.4 UI，也不证明signed entitlement、AirPods head tracking、真实route transition、可听7.1定位/同步、visionOS物理空间音频或live Sunshine播放。
+
+## 2026-07-30 阶段 16 任务 5.1 调查
+
+- 当前`AppSettings`只有stream/input/continuity，直接合成`Codable`；新增必填字段会让现有`settings.json`解码失败。迁移应只对新audio字段使用`decodeIfPresent ?? .defaults`，保留所有旧字段的既有严格解码，避免用宽松全对象fallback掩盖损坏文件。
+- `SessionSpatialAudioPreferences.nativeDefault`为spatial audio与head tracking都启用。持久化设置默认值必须与该runtime合同完全一致，并提供单一纯值转换，不能在AppModel另存一份可能与`settings`漂移的desired状态。
+- 现有Settings采用显式`saveSettings()`持久化，5.1不改变其他设置的保存语义。`updateSpatialAudioPreferences`应同步修改`settings.audio`并立即应用到当前session/media generation；无active stream时只更新desired设置，后续start/reconnect读取同一值。
+- 旧JSON迁移证据必须经过真实`JSONFileAppSettingsRepository`加载、补默认、保存和重载，而不只测试`JSONDecoder`。active-stream证据必须证明loaded非默认值用于首代启动、运行时更新进入同一generation、stop后保留并可由repository重载。
+- 5.1不新增Settings UI、实际runtime状态行或正式spatial diagnostics；它们分别属于5.4、5.2/5.5，不能由持久化字段和environment调用计数提前标记完成。
+
+## 2026-07-30 阶段 16 任务 5.1 验收结论
+
+- `AppSettings.audio`持久化spatial-audio/head-tracking布尔值，默认值直接由`SessionSpatialAudioPreferences.nativeDefault`构造；AppModel的`spatialAudioPreferences`改为从`settings.audio`派生，删除第二份stored desired状态，避免load/save/runtime之间漂移。
+- `AppSettings`只对新增顶层`audio`键使用默认迁移；`AudioPreferences`对两个新增子键分别`decodeIfPresent`，因此完全缺失或partial旧JSON都可补默认，错误类型仍严格解码失败。真实`JSONFileAppSettingsRepository`测试覆盖旧文件加载、partial迁移、保存后新键落盘和重载。
+- AppModel workflow从repository加载非默认desired偏好，首代media generation只应用一次；active stream更新同时修改可持久化`settings.audio`并进入同一generation，显式save可重载，stop只清actual runtime而保留desired设置。
+- 最终focused `/tmp/LuneX-16-5_1-focused-final.2KOvVZ/Focused.xcresult`为`5/5 passed / 0 skipped / 0 failed`；最终完整macOS `/tmp/LuneX-16-5_1-final.1785360178629/full/LuneXCoreTests.xcresult`为`713 total / 712 passed / 1 explicit Keychain skip / 0 failed`，结构化errors、warnings和analyzer warnings均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors最终build位于`/tmp/LuneX-16-5_1-final.1785360178629/{macOS,iOS,tvOS,visionOS}/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-5_1-repo-final-r2.Qm9CQl`通过OpenSpec strict `7/7`、fixtures、source/test membership、settings migration scope、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain用例，全局`Booted=0`且未操作simulator。
+- 本项不包含5.2正式diagnostics、5.3 action ownership、5.4 native UI或5.5 UI回归，也不证明signed entitlement、AirPods head tracking、真实route transition、可听多声道输出或live Sunshine播放。
