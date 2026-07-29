@@ -1691,3 +1691,18 @@
 - simulator before/after清单逐字一致，SHA-256同为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；未执行任何create/boot/launch/shutdown/delete命令。6.4仍需独立读回，不以本项提前勾选。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_2-repo-final.gB9WWq`：OpenSpec `29/33`、task 29=true/task 30=false、strict `6/6`、generator hash稳定且所有仓库边界成立。
 - OpenSpec 6.2标记完成，权威进度更新为`29/33`；下一项6.3为OpenSpec strict、generator、clean-room/dependency、Metal compilation、analyzer、ASan、TSan、malloc ownership与renderer resource-release综合门禁。
+
+## 2026-07-29 阶段 15 任务 6.3 启动
+
+- macOS更新完成后恢复审计确认`HEAD == origin/main == 4895be6`且起始工作树clean；当前环境为macOS 27.0 build `26A5388g`、Xcode 26.4 build `17E192`、Swift 6.3、OpenSpec 1.3.1。
+- 6.3从当前提交重新执行fixture/OpenSpec/generator/clean-room/dependency、独立Metal产物、Debug/Release analyzer、完整ASan/TSan及扩展HDR renderer/presenter的malloc/resource-release门，不复用6.2构建或阶段14旧结果。
+- 所有测试继续显式`env -u LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback，不再次触发真实Keychain授权；本项不执行任何simulator create、clone、boot、launch、shutdown、delete、install或run操作。
+
+## 2026-07-29 阶段 15 任务 6.3 完成
+
+- repository/Metal门位于`/tmp/LuneX-15-6_3-repo.nmQyYT`：fixture、OpenSpec strict `6/6`、generator三次哈希`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`、clean-room/dependency/Core Image/whitespace、固定ENet和四SDK direct Metal compile/link全部通过。
+- Debug/Release analyzer位于`/tmp/LuneX-15-6_3-static.UVX4ks`：自有bridge零finding，固定ENet两配置各4项且逐字段不漂移。完整ASan与TSan各`616 total / 615 passed / 1 Keychain skip / 0 failed`，零sanitizer report与结构化诊断，证据分别为`/tmp/LuneX-15-6_3-asan.UQAIlh`和`/tmp/LuneX-15-6_3-tsan.ITcsdz`。
+- 最终24类malloc/resource-release门在关闭无关coverage后从`/tmp/LuneX-15-6_3-resource-r2.eougt0`通过`343/343`，零malloc报告及结构化diagnostics；阶段15新增的frame delivery、shader readback、pipeline、renderer、surface adapter、presenter、macOS display transition与AppModel均在选择集中。
+- 两个bash包装器最初在shell启动前被外层JavaScript模板的`${...}`解析阻止；analyzer expected TSV和ASan skip复核各有一次旧文本口径不匹配。以上均改为字段/当前日志语义判定，不重跑已成功的analyzer或ASan。首轮resource虽`343/343`，但因`llvm-profdata`继承MallocStackLogging产生1条工具warning而不计最终零诊断证据。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_3-repo-final.cuq58y`：OpenSpec `30/33`、task 30=true/task 31=false、strict `6/6`、generator与全部仓库边界稳定。
+- OpenSpec 6.3标记完成，权威进度更新为`30/33`；下一项6.4仅执行固定simulator identity/state的独立只读验收，不创建、启动、关闭、删除、安装或运行模拟器。6.5物理HDR/SDR显示器与live Sunshine证据仍未完成。

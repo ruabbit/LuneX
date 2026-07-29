@@ -1283,3 +1283,12 @@
 - 每个配置均生成精确一个`HDRVideoShaders.air`与一个`default.metallib`，证明Metal资源进入所有目标和配置，不证明compositor EDR signaling或物理HDR输出。
 - build-only前后只读simulator inventory逐字一致，SHA-256均为`1213126bde9e530f4ecf568822aaab79d4519a8758ab3b508903b426546c3e12`；固定四实例唯一、available、`Shutdown`且全局`Booted=0`。该证据不提前替代6.4独立验收。
 - 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_2-repo-final.gB9WWq`：OpenSpec `29/33`、task 29=true/task 30=false、strict `6/6`、generator与全部仓库边界稳定。
+
+## 2026-07-29 阶段 15 任务 6.3 验收结论
+
+- repository与独立Metal证据位于`/tmp/LuneX-15-6_3-repo.nmQyYT`：OpenSpec strict `6/6`、fixture self-test/全树、generator初始及连续三次SHA-256均为`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`，clean-room/reference/package/Core Image/owned-whitespace、固定ENet revision/license/source和四SDK AIR/metallib编译链接全部通过。
+- macOS Debug/Release analyzer位于`/tmp/LuneX-15-6_3-static.UVX4ks`；结构化plist证明自有`LuneXENetBridge`为零finding，固定ENet在两配置各稳定4项：`compress.c:320`、`unix.c:521`、`unix.c:526`三个dead store和`unix.c:867`潜在null dereference，没有新增或漂移。
+- 完整ASan/LeakSanitizer与TSan分别位于`/tmp/LuneX-15-6_3-asan.UQAIlh`和`/tmp/LuneX-15-6_3-tsan.ITcsdz`；两者均为`616 total / 615 passed / 1 explicit Keychain skip / 0 failed`，零sanitizer报告且xcresult结构化diagnostics为0。
+- 最终24类malloc/resource-release集合位于`/tmp/LuneX-15-6_3-resource-r2.eougt0`，以scribble/pre-scribble、guard edges、stack logging、逐次heap check和error-abort通过`343/343`，零malloc报告和结构化诊断；覆盖session/network/video/audio/input/lifecycle及阶段15 frame/shader/pipeline/renderer/surface/presenter/macOS display/AppModel ownership。
+- 首轮resource同样`343/343`且零malloc错误，但`llvm-profdata`继承MallocStackLogging产生1条工具warning，因此不计最终零诊断证据；关闭无关code coverage后从全新DerivedData重跑同一测试与allocator合同。该离线门不证明live Sunshine HDR、compositor EDR signaling、物理亮度/颜色/跨屏一致性或设备功耗/性能。
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-6_3-repo-final.cuq58y`：OpenSpec `30/33`、task 30=true/task 31=false、strict `6/6`、generator hash与fixture/reference/package/Core Image/ENet/diff/owned-whitespace边界全部稳定。

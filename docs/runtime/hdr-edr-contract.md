@@ -32,10 +32,10 @@ still required before LuneX may claim working HDR output.
 | Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. The SwiftUI/AppModel graph now supplies the resolved/closed value, and the presenter clears old presentation, applies SDR or EDR surface state, replaces runtime ownership, and rejects stale views | Focused production-runtime GPU execution, shader readback, lifecycle/transition/application graph tests, full macOS tests, and five-platform builds | Deterministic transition does not prove compositor signaling or physical display output |
 | Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; AppModel propagates the revision-owned public snapshot and exhaustion state into render resolution | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, application graph, and full-suite tests | iOS/iPadOS live scene/window ownership remains stage 17 work |
 | Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and atomically transitions to the AppModel-resolved SDR/EDR contract while replacing runtime ownership; one platform capability resolution drives both resolver and surface behavior | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported/fallback, rollback, application graph, macOS transitions, real layer fields, and exact cross-platform capability boundaries; all five platform targets compile | Stage 17/18 and task 6.5 retain mobile, tvOS/visionOS, compositor, and physical-display acceptance |
-| AppModel eligibility | AppModel resolves HDR only for a streaming session with the current media generation, video readiness, matching active decoder generation, matching negotiated/decoded metadata, a real lifecycle display snapshot/current headroom, supported platform output, and enabled user preference; settings no longer synthesize display headroom | Application workflow tests cover inactive/video-not-ready closure, source/generation mismatch, preference, display/headroom, replacement, reconnect-before-teardown fail-closed ordering, stale events, stop, and failure | Task 5.4 application integration, task 5.5 status/settings UI, and live/physical acceptance remain pending |
-| HDR diagnostics | Resolver and actual presenter states publish stable active-SDR, active-EDR, typed SDR-fallback, invalid-input, unsupported-output, stale-revision, and pipeline-failure codes. Equivalent semantic states deduplicate, recovery clears only the current HDR action, and presenter UUID leases reject replacement-view callbacks | Factory/error-matrix, bounded-history, AppModel scoped-recovery, real presenter replacement, complete macOS, and five-platform build tests | Task 5.5 still owns accessibility-safe current status/settings UI; synchronous submission evidence does not cover every asynchronous GPU completion fault |
+| AppModel eligibility | AppModel resolves HDR only for a streaming session with the current media generation, video readiness, matching active decoder generation, matching negotiated/decoded metadata, a real lifecycle display snapshot/current headroom, supported platform output, and enabled user preference; settings no longer synthesize display headroom | Application workflow and task 5.4 integration tests cover inactive/video-not-ready closure, source/generation mismatch, preference, display/headroom, replacement, reconnect-before-teardown fail-closed ordering, stale events, stop, and failure | Live Sunshine, compositor, and physical-display acceptance remain pending |
+| HDR diagnostics | Resolver and actual presenter states publish stable active-SDR, active-EDR, typed SDR-fallback, invalid-input, unsupported-output, stale-revision, and pipeline-failure codes. Equivalent semantic states deduplicate, recovery clears only the current HDR action, and presenter UUID leases reject replacement-view callbacks. A privacy-bounded observable status drives the accessible stream overlay and Settings UI | Factory/error-matrix, bounded-history, AppModel scoped-recovery, real presenter replacement, status/UI integration, complete macOS, and five-platform build tests | Synchronous submission evidence does not cover every asynchronous GPU completion fault; live and physical output remain pending |
 
-The production truth after task 5.3 is therefore: LuneX carries negotiated and
+The production truth after task 6.3 is therefore: LuneX carries negotiated and
 decoded color metadata plus actual pixel-buffer layout through a
 session/media/decoder-generation-owned, monotonic presentation event stream.
 AppModel first requires current streaming/media/video/decoder/source ownership,
@@ -48,9 +48,10 @@ eligibility with privacy-bounded semantic diagnostics. Surface events are owned
 by one presenter UUID, so an old SwiftUI view cannot clear or replace the
 replacement presenter's state. Recovery clears only the current HDR action and
 retains bounded redacted history. This is not proof that a compositor entered
-HDR/EDR or that a physical display reached a luminance/color target. Task 5.4
-application integration, task 5.5 status/settings UI, live Sunshine HDR,
-compositor EDR signaling, and task 6.5 physical display evidence remain pending.
+HDR/EDR or that a physical display reached a luminance/color target. The
+application integration, accessible status UI, normal/build, analyzer,
+sanitizer, and resource gates are complete; live Sunshine HDR, compositor EDR
+signaling, and task 6.5 physical display evidence remain pending.
 
 ## Apple SDK 26.4 API matrix
 
@@ -628,6 +629,43 @@ simulator runtime, compositor EDR signaling, or physical HDR output. The
 independent simulator-inventory task remains separate. Post-mark repository
 evidence is retained at `/tmp/LuneX-15-6_2-repo-final.gB9WWq`.
 
+### Deep quality and resource gate
+
+The task 6.3 repository gate at `/tmp/LuneX-15-6_3-repo.nmQyYT` passed all six
+OpenSpec changes in strict mode, fixture self-test and full-tree validation,
+three byte-stable generator runs with project SHA-256
+`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`,
+clean-room/reference/package/Core Image/owned-whitespace boundaries, and the
+pinned ENet revision/license/source comparison. Fresh direct Metal compilation
+and linking produced nonempty AIR and metallib artifacts for macOS, iOS
+Simulator, tvOS Simulator, and visionOS Simulator SDKs.
+
+macOS Debug and Release analyzer results at
+`/tmp/LuneX-15-6_3-static.UVX4ks` contain zero repository-owned bridge
+findings. Both configurations retain exactly the disclosed pinned ENet
+baseline: dead stores at `compress.c:320`, `unix.c:521`, and `unix.c:526`, plus
+the potential null dereference at `unix.c:867`.
+
+The complete ASan/LeakSanitizer and TSan suites at
+`/tmp/LuneX-15-6_3-asan.UQAIlh` and
+`/tmp/LuneX-15-6_3-tsan.ITcsdz` each passed
+`616 total / 615 passed / 1 explicit Keychain skip / 0 failed`, with no
+sanitizer report and zero structured diagnostics. The final 24-class
+malloc/resource-release gate at
+`/tmp/LuneX-15-6_3-resource-r2.eougt0` passed `343/343` with scribble,
+pre-scribble, guard edges, stack logging, per-allocation heap checks, and
+error-abort enabled; it includes frame delivery, shader readback, pipeline,
+renderer, surface, presenter, macOS display transition, and application
+ownership. Code coverage was disabled only to prevent `llvm-profdata` from
+inheriting malloc stack logging; the selected test and allocator contracts were
+unchanged. All test commands explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`.
+
+This gate proves deterministic compile, static-analysis, sanitizer, and
+resource-ownership behavior. It does not prove a live host, compositor EDR
+signaling, physical luminance/color, cross-display visual consistency, power,
+or thermal performance. The post-mark repository evidence is retained at
+`/tmp/LuneX-15-6_3-repo-final.cuq58y`.
+
 ## Verification matrix
 
 ### Deterministic evidence
@@ -642,8 +680,9 @@ evidence is retained at `/tmp/LuneX-15-6_2-repo-final.gB9WWq`.
 - Generation, display revision, headroom change, resize, stop, failure, and
   replacement tests reject stale output and release resources.
 - Normal tests, five-platform Debug/Release, analyzer, sanitizer, malloc,
-  generator, dependency, and simulator-inventory gates pass without real
-  Keychain or live-host side effects.
+  generator, dependency, and direct Metal gates pass without real Keychain or
+  live-host side effects. The independent simulator-inventory gate remains task
+  6.4.
 
 ### Physical evidence required for completion
 
