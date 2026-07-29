@@ -1823,3 +1823,12 @@
 - macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build均成功，证据`/tmp/LuneX-16-2_5-build-{macos,ios,tvos,visionos}.1785347392506`；四份xcresult均0 warning/error/analyzer warning，未选择或操作simulator。
 - repository gate为`/tmp/LuneX-16-2_5-repo-final.yqhF1t`：OpenSpec strict、唯一environment owner、compile branch/API扫描、clean-room边界、generator稳定哈希与`git diff --check`通过。首轮静态脚本误将3处listener API引用断言为2并提前退出；修正预期后只完成余下门禁，未更改产品实现或工程内容。
 - OpenSpec 2.5已勾选，权威进度更新为`10/35`；下一项2.6补齐topology、schedule/readback、vision策略、partial failure、stop/idempotence和resource release测试。当前证据不声称AirPods、signed entitlement、visionOS可听定位或物理多声道输出已验证。
+
+## 2026-07-30 阶段 16 任务 2.6 完成
+
+- 扩展`AudioPipelineTests`：同count错序PCM拒绝后容量保持可用；stereo/WAVE 5.1/WAVE 7.1 production ambience-bed graph在schedule前后readback稳定；head-tracked graph降级到direct mixer会先清平台状态，重复stop稳定。
+- partial environment connection和algorithm failure均验证不调用platform apply、清理environment拓扑并继续PCM；新增client/injected adapter ARC释放回归，并继续复用visionOS strategy、resolver、recovery和late-completion矩阵。
+- focused gate为`/tmp/LuneX-16-2_6-focused-r2.zgzpXm`，通过`43/43`；expanded gate为`/tmp/LuneX-16-2_6-expanded.VNUinJ`，通过`78/78 passed / 0 skipped / 0 failed`。两份结构化diagnostics均为0，测试显式移除真实Keychain opt-in。
+- macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build全部成功且四份xcresult结构化diagnostics为0，未选择或操作simulator。首次visionOS外层编排未形成xcresult，因此没有计为通过；直接exec在新隔离目录完整重跑后验收。
+- OpenSpec strict、generator稳定SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`、完整diff自审和`git diff --check`通过。OpenSpec 2.6已勾选，权威进度`11/35`；下一项3.1为injectable Security-backed embedded entitlement reader。
+- 当前ARC/readback/build证据不替代6.4 malloc/resource gate，也不证明AirPods head tracking、visionOS可听空间定位、signed entitlement provisioning或物理多声道输出。

@@ -1417,3 +1417,13 @@
 - macOS/iOS/tvOS/visionOS generic-device Debug build位于`/tmp/LuneX-16-2_5-build-{macos,ios,tvos,visionos}.1785347392506`；四份`Build.xcresult`均`succeeded`且结构化diagnostics为0。visionOS成功编译证明listener属性没有泄漏进该分支，但不证明设备实际采用或可听到目标空间体验。
 - repository gate位于`/tmp/LuneX-16-2_5-repo-final.yqhF1t`：OpenSpec strict、唯一production environment owner、分平台API边界、clean-room扫描、`git diff --check`及generator连续SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过。首次静态脚本把listener赋值、读回、reset三处错误断言为两处并提前退出；修正门禁期望为3后，仅执行未完成扫描并通过，源码与工程文件未因该错误变化。
 - 2.5只证明compile-safe production策略、确定性readback合同及清理行为，不证明AirPods head tracking、visionOS可听空间定位、签名profile包含head-pose entitlement、route transition或物理多声道分离；这些仍属于后续3.x、2.6及6.6。
+
+## 2026-07-30 阶段 16 任务 2.6 验收
+
+- 同为六声道但语义顺序错误的PCM现在明确验证会在backend schedule前被拒绝，scheduled buffer/frame容量不变，随后合法WAVE 5.1仍可排入；这证明layout mismatch失败是transactional，不会污染队列。
+- production stereo/WAVE 5.1/WAVE 7.1 ambience-bed graph各自成功schedule合法PCM，schedule前后完整`AVAudioEngineGraphReadback`不变，stop后拓扑和configuration清除。head-tracked graph切换到用户关闭的direct mixer时先reset平台状态，不再次apply adapter；重复stop产生相同unconfigured readback。
+- rendering-algorithm unavailable和partial connection failure均验证不会调用平台spatial apply，会清理environment连接并继续direct-mixer PCM；stop的reset次数精确覆盖initial reset、failure cleanup与stop。visionOS `.headTracked`/`.fixed`策略、错误listener策略、resolver fallback和runtime rebuild/late completion继续由扩大矩阵覆盖。
+- `WeakReference`只证明stop后移除外部强引用时`AVAudioEngineClient`及其injected adapter可由ARC释放；它不替代任务6.4的malloc scribble/guard、engine node、scheduled-buffer和完整resource gate。重复stop只证明状态幂等，属性/strategy readback仍不证明AirPods或visionOS可听行为。
+- focused证据`/tmp/LuneX-16-2_6-focused-r2.zgzpXm/SpatialGraphMatrix.xcresult`为`43/43`；expanded证据`/tmp/LuneX-16-2_6-expanded.VNUinJ/SpatialGraphMatrixExpanded.xcresult`为`78/78 passed / 0 skipped / 0 failed`，两者结构化warning/error/analyzer warning均为0。
+- macOS、iOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-2_6-build-macos.d7CcWo`、`/tmp/LuneX-16-2_6-build-ios.wRIX1u`、`/tmp/LuneX-16-2_6-build-tvos.KmJkTN`和`/tmp/LuneX-16-2_6-build-visionos-r2.bw1wr9`；四份xcresult均`succeeded`且结构化diagnostics为0。测试显式移除Keychain opt-in，未选择或操作simulator。
+- OpenSpec strict、generator重生成前后SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`、测试修改范围及`git diff --check`通过。OpenSpec权威进度更新为`11/35`；下一项3.1实现Security-backed embedded head-pose entitlement reader。

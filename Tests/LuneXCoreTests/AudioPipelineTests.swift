@@ -120,6 +120,22 @@ final class AudioPipelineTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? AudioPipelineError, .invalidPCMBuffer)
         }
+        XCTAssertEqual(
+            client.snapshotCalls(),
+            ["configure", "route", "start", "route"]
+        )
+        let rejectedBufferCount = await pipeline.scheduledBufferCount()
+        let rejectedFrameCount = await pipeline.scheduledFrameCount()
+        XCTAssertEqual(rejectedBufferCount, 0)
+        XCTAssertEqual(rejectedFrameCount, 0)
+
+        let valid = makePCM(channelLayout: .wave5Point1, frameCount: 2)
+        let receipt = try await pipeline.schedule(valid)
+        let acceptedBufferCount = await pipeline.scheduledBufferCount()
+        let acceptedFrameCount = await pipeline.scheduledFrameCount()
+        XCTAssertEqual(receipt.sequenceNumber, valid.sequenceNumber)
+        XCTAssertEqual(acceptedBufferCount, 1)
+        XCTAssertEqual(acceptedFrameCount, valid.frameCount)
     }
 
     func testAudioPipelineConfiguresStartsAndStopsWithRouteSnapshot() async throws {
@@ -495,6 +511,13 @@ final class AudioPipelineTests: XCTestCase {
                 graph.inputLayoutTagRawValue,
                 layout.coreAudioLayoutTagRawValue
             )
+            XCTAssertNoThrow(
+                try client.schedule(
+                    makePCM(channelLayout: layout, frameCount: 4),
+                    completion: {}
+                )
+            )
+            XCTAssertEqual(client.graphReadback(), graph)
 
             client.stop(drain: false)
             let stoppedGraph = client.graphReadback()
@@ -627,6 +650,70 @@ final class AudioPipelineTests: XCTestCase {
         }
     }
 
+    func testReconfigureClearsHeadTrackingBeforeDirectMixerAndRepeatedStopIsStable()
+        throws
+    {
+        let adapter = RecordingSpatialPlatformAdapter(
+            readback: AVAudioSpatialPlatformReadback(
+                strategy: .environmentListener,
+                listenerHeadTrackingCapable: true,
+                listenerHeadTrackingReadback: true,
+                visionExperienceReadback: nil
+            )
+        )
+        let client = AVAudioEngineClient(spatialPlatformAdapter: adapter)
+        let headTrackedIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            entitlement: .granted,
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: true
+        )
+
+        let headTracked = try client.configure(
+            .stereoLowLatency,
+            graphIntent: headTrackedIntent
+        )
+        XCTAssertEqual(headTracked.presentationMode, .headTracked)
+        XCTAssertEqual(adapter.appliedIntents, [headTrackedIntent])
+        XCTAssertEqual(adapter.resetCount, 1)
+
+        let disabledIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            revision: .init(rawValue: 2),
+            userEnablesSpatialAudio: false
+        )
+        let disabled = try client.configure(
+            .stereoLowLatency,
+            graphIntent: disabledIntent
+        )
+        let directGraph = client.graphReadback()
+
+        XCTAssertEqual(disabled.presentationMode, .nonspatial)
+        XCTAssertEqual(disabled.fallbackReason, .userDisabled)
+        XCTAssertEqual(directGraph.mode, .nonspatialMixer)
+        XCTAssertEqual(directGraph.platformStrategy, .none)
+        XCTAssertFalse(directGraph.listenerHeadTrackingReadback)
+        XCTAssertNil(directGraph.visionExperienceReadback)
+        XCTAssertTrue(directGraph.playerConnectedToMainMixer)
+        XCTAssertFalse(directGraph.playerConnectedToEnvironment)
+        XCTAssertFalse(directGraph.environmentConnectedToMainMixer)
+        XCTAssertEqual(adapter.appliedIntents, [headTrackedIntent])
+        XCTAssertEqual(adapter.resetCount, 2)
+
+        client.stop(drain: false)
+        let stoppedOnce = client.graphReadback()
+        client.stop(drain: false)
+        let stoppedTwice = client.graphReadback()
+
+        XCTAssertEqual(stoppedOnce, stoppedTwice)
+        XCTAssertEqual(stoppedTwice.mode, .unconfigured)
+        XCTAssertEqual(stoppedTwice.platformStrategy, .none)
+        XCTAssertFalse(stoppedTwice.playerConnectedToMainMixer)
+        XCTAssertFalse(stoppedTwice.playerConnectedToEnvironment)
+        XCTAssertFalse(stoppedTwice.environmentConnectedToMainMixer)
+        XCTAssertEqual(adapter.resetCount, 4)
+    }
+
     func testProductionClientReportsMonoAndUnsupportedRouteFallbacksExactly()
         throws
     {
@@ -694,10 +781,19 @@ final class AudioPipelineTests: XCTestCase {
         ]
 
         for testCase in cases {
+            let adapter = RecordingSpatialPlatformAdapter(
+                readback: AVAudioSpatialPlatformReadback(
+                    strategy: .environmentListener,
+                    listenerHeadTrackingCapable: true,
+                    listenerHeadTrackingReadback: true,
+                    visionExperienceReadback: nil
+                )
+            )
             let client = AVAudioEngineClient(
                 environmentGraphBuilder: InjectedEnvironmentGraphBuilder(
                     failure: testCase.failure
-                )
+                ),
+                spatialPlatformAdapter: adapter
             )
             let graphIntent = makeAudioGraphIntent(
                 channelCount: 2,
@@ -723,6 +819,8 @@ final class AudioPipelineTests: XCTestCase {
             XCTAssertNil(graph.sourceModeRawValue)
             XCTAssertNil(graph.selectedRenderingAlgorithmRawValue)
             XCTAssertTrue(graph.applicableRenderingAlgorithmRawValues.isEmpty)
+            XCTAssertTrue(adapter.appliedIntents.isEmpty)
+            XCTAssertEqual(adapter.resetCount, 2)
             XCTAssertNoThrow(
                 try client.schedule(
                     makePCM(sequence: 7, timestamp: 1_920),
@@ -735,7 +833,40 @@ final class AudioPipelineTests: XCTestCase {
             XCTAssertEqual(stopped.mode, .unconfigured)
             XCTAssertNil(stopped.fallbackReason)
             XCTAssertFalse(stopped.playerConnectedToMainMixer)
+            XCTAssertEqual(adapter.resetCount, 3)
         }
+    }
+
+    func testStoppedClientReleasesInjectedSpatialAdapterOwnership() throws {
+        var adapter: RecordingSpatialPlatformAdapter? =
+            RecordingSpatialPlatformAdapter(
+                readback: AVAudioSpatialPlatformReadback(
+                    strategy: .environmentListener,
+                    listenerHeadTrackingCapable: true,
+                    listenerHeadTrackingReadback: false,
+                    visionExperienceReadback: nil
+                )
+            )
+        let releasedAdapter = WeakReference(try XCTUnwrap(adapter))
+        var client: AVAudioEngineClient? = AVAudioEngineClient(
+            spatialPlatformAdapter: try XCTUnwrap(adapter)
+        )
+        let releasedClient = WeakReference(try XCTUnwrap(client))
+
+        _ = try client?.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(
+                channelCount: 2,
+                userEnablesSpatialAudio: true
+            )
+        )
+        client?.stop(drain: false)
+
+        client = nil
+        adapter = nil
+
+        XCTAssertNil(releasedClient.value)
+        XCTAssertNil(releasedAdapter.value)
     }
 
     func testInvalidStreamConfigurationFailsBeforeBackendConfiguration() async throws {
@@ -1015,6 +1146,14 @@ private final class RecordingSpatialPlatformAdapter:
         environment: AVAudioEnvironmentNode
     ) {
         resetCount += 1
+    }
+}
+
+private final class WeakReference<Value: AnyObject> {
+    weak var value: Value?
+
+    init(_ value: Value) {
+        self.value = value
     }
 }
 

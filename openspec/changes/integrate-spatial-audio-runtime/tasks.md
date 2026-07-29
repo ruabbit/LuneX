@@ -13,7 +13,7 @@
 - [x] 2.3 Attach the production environment node and connect player-to-environment-to-mixer for eligible ambience-bed audio, selecting only an applicable rendering algorithm
 - [x] 2.4 Implement typed mono, user-disabled, unsupported-route, unsupported-algorithm, and graph-failure fallback to nonspatial PCM without false activation
 - [x] 2.5 Apply macOS/iOS/tvOS listener head tracking and visionOS 26 output-node intended spatial experience through compile-safe platform strategies
-- [ ] 2.6 Add graph topology, schedule/readback, layout mismatch, algorithm fallback, head-tracking readback, visionOS strategy, partial-failure, stop, idempotence, and resource-release tests
+- [x] 2.6 Add graph topology, schedule/readback, layout mismatch, algorithm fallback, head-tracking readback, visionOS strategy, partial-failure, stop, idempotence, and resource-release tests
 
 ## 3. Platform route, entitlement, and capability adapters
 
