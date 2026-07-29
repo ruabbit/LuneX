@@ -1577,3 +1577,22 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_5-builds.1785357974699/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-4_5-repo.A1M8ns`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/diff边界和generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain测试，全局`Booted=0`且未操作simulator。
 - 本项证明确定性恢复/replacement矩阵，不等于4.6已完成真实7.1 application链路，也不证明signed entitlement、真实route硬件切换、AirPods head tracking、可听声道定位或live Sunshine播放。
+
+## 2026-07-30 阶段 16 任务 4.6 恢复调查
+
+- macOS更新后重新核对为macOS 27.0、Xcode 26.4；`main == origin/main == 2a9d54f`且工作树clean，全局`Booted=0`。4.6不需要simulator，本项不创建、启动、安装、运行或关闭任何simulator，也继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- OpenSpec权威状态仍为`22/35 ready`，下一项4.6要求一条application integration gate。测试不能以`ControlledSessionMediaEnvironment`预制状态代替真实路径，必须让`AppModel`驱动`NativeSessionMediaEnvironment`、`NativeSessionAudioProcessorFactory`和`SessionAudioRuntime`，只在网络、视频解码、Opus解码、engine、route source和entitlement边界注入确定性fake。
+- 仓库生成的`sunshine-multistream-5ms-opus.json`给出合法非HQ 7.1参数：8声道、5 streams、3 coupled streams；RTSP fixture/clean-room parser合同使用WAVE顺序identity mapping `[0,1,2,3,4,5,6,7]`。该配置满足`streamCount + coupledStreamCount == channelCount`并须由`NegotiatedAudioStreamConfiguration.validate()`实际校验。
+- application gate将验证初始missing entitlement在environment graph上产生fixed spatial和稳定`spatial_audio_fixed-spatial_missing-entitlement`，route降级后产生nonspatial、`.routeUnsupported`和对应稳定code；正式`DiagnosticsStore`空间状态映射、去重与action ownership仍属于5.2/5.3，4.6不能提前声称完成。
+- reconnect必须立即清除AppModel旧actual state、停止第一代environment资源并建立同session第二代media generation；第一代route source迟到事件不得覆盖replacement。clean stop必须同时证明AppModel状态清空、environment snapshot无active session/audio runtime、两代provider/processor/decoder/engine停止且control provider收敛。
+
+## 2026-07-30 阶段 16 任务 4.6 验收结论
+
+- 新application gate使用合法WAVE 7.1配置（48 kHz、5 streams、3 coupled、240 frames、identity mapping）穿过真实`AppModel -> NativeSessionMediaEnvironment -> NativeSessionAudioProcessorFactory -> NativeSessionAudioProcessor -> SessionAudioRuntime`，只在receive、decode、video processor、route source、entitlement reader和`AudioEngineClient`外部边界注入专用fake。
+- 初始graph为`.environmentAmbienceBed`与`.wave7Point1`；missing entitlement如实报告`.fixedSpatial`、`.missingEntitlement`和稳定代码`spatial_audio_fixed-spatial_missing-entitlement`。video readiness不能单独进入streaming，两个连续5 ms audio packet形成10 ms jitter target后实际排入8声道、240 frame、1,920 interleaved sample PCM。
+- route capability降级重建为`.nonspatial`、`.routeUnsupported`、sequence `1`和graph generation `2`；reconnect立即清除AppModel旧actual state并停止第一代receive/processor/engine/decoder/source，第一代迟到route callback不能污染第二代。第二代从media generation `2`、runtime sequence `0`和graph generation `1`开始。
+- clean stop保留desired preference但清除actual state、active session、task、resource与audio runtime；两代video/audio receiver、video processor、engine、decoder和route source均停止，input/control teardown计数与幂等所有权路径一致。
+- focused `/tmp/LuneX-16-4_6-focused-r4.BIVX3s/Focused.xcresult`为`1/1`，expanded `/tmp/LuneX-16-4_6-expanded.zm2GVX/Expanded.xcresult`为`116/116`，完整macOS `/tmp/LuneX-16-4_6-full.4tYlIq/LuneXCoreTests.xcresult`为`710 total / 709 passed / 1 explicit Keychain skip / 0 failed`；全部结构化errors、warnings和analyzer warnings为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_6-builds.1785359087336/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-4_6-repo.rgF6wJ`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式真实Keychain测试，全局`Booted=0`且未操作simulator。
+- 本项只证明离线application integration和已有runtime diagnostic code，不等于5.1设置持久化、5.2正式diagnostics owner、5.3 action ownership、5.4 UI，也不证明signed entitlement、AirPods head tracking、真实route transition、可听7.1定位/同步、visionOS物理空间音频或live Sunshine播放。

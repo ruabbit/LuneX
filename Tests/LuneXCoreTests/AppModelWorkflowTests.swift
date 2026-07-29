@@ -2245,6 +2245,261 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.audioRuntimeState)
     }
 
+    func testNativeApplicationIntegrationCoversSpatialAudioReplacementAndCleanStop()
+        async throws
+    {
+        let control = ControlledSessionControlProvider()
+        let videoReceive = ApplicationIntegrationVideoReceiveProvider()
+        let audioReceive = ApplicationIntegrationAudioReceiveProvider()
+        let remoteInput = ApplicationIntegrationRemoteInputProvider()
+        let videoProcessors = ApplicationIntegrationVideoProcessorFactory()
+        let audioRegistry = ApplicationIntegrationAudioRegistry(
+            initialCapability: applicationIntegrationRouteCapability(.supported)
+        )
+        let audioFactory = NativeSessionAudioProcessorFactory(
+            entitlementReader: ApplicationIntegrationEntitlementReader(state: .missing),
+            decoderFactory: { configuration in
+                try audioRegistry.makeDecoder(configuration: configuration)
+            },
+            engineClientFactory: {
+                audioRegistry.makeEngine()
+            },
+            routeEventSourceFactory: {
+                audioRegistry.makeRouteSource()
+            },
+            eventTimeProvider: {
+                audioRegistry.nextEventTime()
+            }
+        )
+        let environment = NativeSessionMediaEnvironment(
+            videoReceiveProvider: videoReceive,
+            audioReceiveProvider: audioReceive,
+            remoteInputProvider: remoteInput,
+            videoProcessorFactory: videoProcessors,
+            audioProcessorFactory: audioFactory,
+            teardownGracePeriod: .seconds(1)
+        )
+        let runtimeProviders = RuntimeProviderInventory(
+            sessionControl: control,
+            videoReceive: videoReceive,
+            audioReceive: audioReceive,
+            remoteInput: remoteInput
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: control,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 46,
+                    key: Data(repeating: 0x46, count: 16)
+                ))
+            ]),
+            runtimeProviders: runtimeProviders
+        )
+        let audioConfiguration = try makeWave7Point1AudioConfiguration()
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(control)
+        let configuration = makeSessionConfiguration(
+            sessionID: record.sessionID,
+            keyMaterial: record.request.remoteInputKey,
+            audioConfiguration: audioConfiguration
+        )
+
+        control.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
+        control.yield(.rtspReady, sessionID: record.sessionID)
+        control.yield(.negotiated(configuration), sessionID: record.sessionID)
+        control.yield(.channelsReady(.all), sessionID: record.sessionID)
+        await waitUntil {
+            videoReceive.startCount() == 1
+                && audioReceive.startCount() == 1
+                && audioRegistry.engineCount() == 1
+                && model.audioRuntimeState != nil
+        }
+
+        let firstState = try XCTUnwrap(model.audioRuntimeState)
+        let firstSpatial = try XCTUnwrap(firstState.runtime.spatialRuntime)
+        let firstEngine = try XCTUnwrap(audioRegistry.engine(at: 0))
+        let firstDecoder = try XCTUnwrap(audioRegistry.decoder(at: 0))
+        let firstSource = try XCTUnwrap(audioRegistry.routeSource(at: 0))
+        XCTAssertEqual(firstState.mediaGeneration, 1)
+        XCTAssertEqual(firstState.runtime.graphGeneration, 1)
+        XCTAssertEqual(firstSpatial.presentationMode, .fixedSpatial)
+        XCTAssertEqual(firstSpatial.fallbackReason, .missingEntitlement)
+        XCTAssertEqual(
+            firstSpatial.diagnosticCode,
+            "spatial_audio_fixed-spatial_missing-entitlement"
+        )
+        XCTAssertEqual(firstEngine.configurations().map(\.channelLayout), [.wave7Point1])
+        XCTAssertEqual(firstEngine.graphIntents().map(\.entitlement), [.missing])
+        XCTAssertEqual(firstEngine.graphModes(), [.environmentAmbienceBed])
+        XCTAssertEqual(firstDecoder.configuration(), audioConfiguration)
+        XCTAssertFalse(model.session.isStreaming)
+
+        videoReceive.yield(
+            .packet(ReceivedVideoPacket(
+                sequenceNumber: 1,
+                frameIndex: 1,
+                receiveTimeNanoseconds: 1,
+                isFirstPacket: true,
+                isLastPacket: true,
+                payload: Data([0x01])
+            )),
+            startIndex: 0
+        )
+        await waitUntil { videoProcessors.consumeCount(at: 0) == 1 }
+        XCTAssertFalse(model.session.isStreaming)
+
+        audioReceive.yield(
+            .packet(ReceivedAudioPacket(
+                sequenceNumber: 1,
+                timestamp: 0,
+                receiveTimeNanoseconds: 1_000_000,
+                payload: Data([0xA1])
+            )),
+            startIndex: 0
+        )
+        audioReceive.yield(
+            .packet(ReceivedAudioPacket(
+                sequenceNumber: 2,
+                timestamp: 240,
+                receiveTimeNanoseconds: 12_000_000,
+                payload: Data([0xA2])
+            )),
+            startIndex: 0
+        )
+        await waitUntil {
+            model.session.isStreaming && !firstEngine.scheduledBuffers().isEmpty
+        }
+        let firstPCM = try XCTUnwrap(firstEngine.scheduledBuffers().first)
+        XCTAssertEqual(firstPCM.format.channelLayout, .wave7Point1)
+        XCTAssertEqual(firstPCM.format.channelCount, 8)
+        XCTAssertEqual(firstPCM.frameCount, 240)
+        XCTAssertEqual(firstPCM.interleavedSamples.count, 1_920)
+
+        firstEngine.setCapability(applicationIntegrationRouteCapability(.unsupported))
+        firstSource.emit(.routeChanged)
+        await waitUntil {
+            model.audioRuntimeState?.runtime.spatialRuntime?.fallbackReason
+                == .routeUnsupported
+        }
+        let downgraded = try XCTUnwrap(model.audioRuntimeState)
+        let downgradedSpatial = try XCTUnwrap(downgraded.runtime.spatialRuntime)
+        XCTAssertEqual(downgraded.runtime.sequence, 1)
+        XCTAssertEqual(downgraded.runtime.graphGeneration, 2)
+        XCTAssertEqual(downgradedSpatial.presentationMode, .nonspatial)
+        XCTAssertEqual(downgradedSpatial.fallbackReason, .routeUnsupported)
+        XCTAssertEqual(
+            downgradedSpatial.diagnosticCode,
+            "spatial_audio_nonspatial_route-unsupported"
+        )
+
+        control.yield(
+            .reconnecting(attempt: 1, reason: "Control channel interrupted."),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.audioRuntimeState == nil
+                && firstEngine.wasStopped()
+                && firstDecoder.isClosed()
+                && firstSource.wasStopped()
+                && videoProcessors.wasStopped(at: 0)
+                && videoReceive.stopCount() == 1
+                && audioReceive.stopCount() == 1
+        }
+        XCTAssertFalse(model.session.isStreaming)
+        let firstGenerationSnapshot = await waitForEnvironmentTeardown(environment)
+        XCTAssertNil(firstGenerationSnapshot.sessionID)
+        XCTAssertNil(firstGenerationSnapshot.audioRuntime)
+        XCTAssertTrue(firstGenerationSnapshot.lastTeardownReport?.isClean == true)
+
+        firstEngine.setCapability(applicationIntegrationRouteCapability(.supported))
+        firstSource.emitLate(.routeChanged)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.audioRuntimeState)
+        XCTAssertEqual(firstEngine.graphIntents().count, 2)
+
+        control.yield(.rtspReady, sessionID: record.sessionID)
+        control.yield(.negotiated(configuration), sessionID: record.sessionID)
+        await waitUntil {
+            videoReceive.startCount() == 2
+                && audioReceive.startCount() == 2
+                && audioRegistry.engineCount() == 2
+                && model.audioRuntimeState?.mediaGeneration == 2
+        }
+        control.yield(.channelsReady(.control), sessionID: record.sessionID)
+        let replacement = try XCTUnwrap(model.audioRuntimeState)
+        let replacementSpatial = try XCTUnwrap(replacement.runtime.spatialRuntime)
+        let replacementEngine = try XCTUnwrap(audioRegistry.engine(at: 1))
+        let replacementDecoder = try XCTUnwrap(audioRegistry.decoder(at: 1))
+        let replacementSource = try XCTUnwrap(audioRegistry.routeSource(at: 1))
+        XCTAssertEqual(replacement.runtime.sequence, 0)
+        XCTAssertEqual(replacement.runtime.graphGeneration, 1)
+        XCTAssertEqual(replacementSpatial.presentationMode, .fixedSpatial)
+        XCTAssertEqual(replacementSpatial.fallbackReason, .missingEntitlement)
+        XCTAssertEqual(replacementEngine.graphModes(), [.environmentAmbienceBed])
+        XCTAssertFalse(model.session.isStreaming)
+
+        videoReceive.yield(
+            .packet(ReceivedVideoPacket(
+                sequenceNumber: 2,
+                frameIndex: 2,
+                receiveTimeNanoseconds: 2,
+                isFirstPacket: true,
+                isLastPacket: true,
+                payload: Data([0x02])
+            )),
+            startIndex: 1
+        )
+        audioReceive.yield(
+            .packet(ReceivedAudioPacket(
+                sequenceNumber: 3,
+                timestamp: 480,
+                receiveTimeNanoseconds: 2_000_000,
+                payload: Data([0xA3])
+            )),
+            startIndex: 1
+        )
+        audioReceive.yield(
+            .packet(ReceivedAudioPacket(
+                sequenceNumber: 4,
+                timestamp: 720,
+                receiveTimeNanoseconds: 13_000_000,
+                payload: Data([0xA4])
+            )),
+            startIndex: 1
+        )
+        await waitUntil {
+            model.session.isStreaming && !replacementEngine.scheduledBuffers().isEmpty
+        }
+
+        await model.stopStream()
+        await launchTask.value
+        let stoppedSnapshot = await environment.snapshot()
+        let remoteInputSnapshot = remoteInput.snapshot()
+        XCTAssertNil(model.audioRuntimeState)
+        XCTAssertEqual(model.spatialAudioPreferences, .nativeDefault)
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertNil(stoppedSnapshot.sessionID)
+        XCTAssertNil(stoppedSnapshot.audioRuntime)
+        XCTAssertEqual(stoppedSnapshot.activeTaskCount, 0)
+        XCTAssertEqual(stoppedSnapshot.activeResourceCount, 0)
+        XCTAssertTrue(stoppedSnapshot.lastTeardownReport?.isClean == true)
+        XCTAssertEqual(videoReceive.stopCount(), 2)
+        XCTAssertEqual(audioReceive.stopCount(), 2)
+        XCTAssertEqual(remoteInputSnapshot.startCount, 2)
+        XCTAssertEqual(remoteInputSnapshot.releaseCount, 4)
+        XCTAssertEqual(remoteInputSnapshot.stopCount, 2)
+        XCTAssertTrue(videoProcessors.wasStopped(at: 1))
+        XCTAssertTrue(replacementEngine.wasStopped())
+        XCTAssertTrue(replacementDecoder.isClosed())
+        XCTAssertTrue(replacementSource.wasStopped())
+        XCTAssertEqual(control.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
     func testControlReadinessCannotBypassMediaEnvironmentReadiness() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment(automaticallyReady: false)
@@ -3067,6 +3322,27 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func waitForEnvironmentTeardown(
+        _ environment: NativeSessionMediaEnvironment,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async -> SessionMediaEnvironmentSnapshot {
+        var snapshot = await environment.snapshot()
+        for _ in 0..<200 {
+            if snapshot.sessionID == nil, snapshot.lastTeardownReport != nil {
+                return snapshot
+            }
+            await Task.yield()
+            snapshot = await environment.snapshot()
+        }
+        XCTFail(
+            "Timed out waiting for media environment teardown.",
+            file: file,
+            line: line
+        )
+        return snapshot
+    }
+
     private func driveSessionToStreaming(
         _ provider: ControlledSessionControlProvider,
         record: ControlledSessionControlProvider.StartRecord
@@ -3094,7 +3370,8 @@ final class AppModelWorkflowTests: XCTestCase {
     private func makeSessionConfiguration(
         sessionID: UUID,
         keyMaterial: RemoteInputKeyMaterial,
-        videoColorMetadata: VideoColorMetadata = .rec709VideoRange()
+        videoColorMetadata: VideoColorMetadata = .rec709VideoRange(),
+        audioConfiguration: NegotiatedAudioStreamConfiguration? = nil
     ) -> NegotiatedSessionConfiguration {
         NegotiatedSessionConfiguration(
             sessionID: sessionID,
@@ -3126,7 +3403,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 colorMetadata: videoColorMetadata,
                 maximumPacketSize: 1_400
             ),
-            audio: NegotiatedAudioStreamConfiguration(
+            audio: audioConfiguration ?? NegotiatedAudioStreamConfiguration(
                 sampleRate: 48_000,
                 channelLayout: .stereo,
                 streamCount: 1,
@@ -3142,6 +3419,22 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             requiredChannels: .all
         )
+    }
+
+    private func makeWave7Point1AudioConfiguration()
+        throws -> NegotiatedAudioStreamConfiguration
+    {
+        let configuration = NegotiatedAudioStreamConfiguration(
+            sampleRate: 48_000,
+            channelLayout: .wave7Point1,
+            streamCount: 5,
+            coupledStreamCount: 3,
+            samplesPerFrame: 240,
+            channelMapping: [0, 1, 2, 3, 4, 5, 6, 7],
+            maximumPacketSize: 1_400
+        )
+        try configuration.validate()
+        return configuration
     }
 
     private func makeUnpairedHost() -> MoonlightHost {
@@ -3182,6 +3475,592 @@ private enum MissingStreamProvider: String, CaseIterable {
     case videoReceive
     case audioReceive
     case remoteInput
+}
+
+private func applicationIntegrationRouteCapability(
+    _ support: SpatialAudioRouteSupport
+) -> SpatialAudioRouteCapabilityState {
+    SpatialAudioRouteCapabilityState(
+        outputAvailable: true,
+        systemSpatialSupport: support,
+        currentOutputChannelCount: 8,
+        maximumOutputChannelCount: 8
+    )
+}
+
+private struct ApplicationIntegrationEntitlementReader: HeadPoseEntitlementReading {
+    let state: SpatialAudioEntitlementState
+
+    func readHeadPoseEntitlement() -> SpatialAudioEntitlementState {
+        state
+    }
+}
+
+private final class ApplicationIntegrationVideoReceiveProvider:
+    VideoReceiveProvider,
+    @unchecked Sendable
+{
+    private typealias Continuation =
+        AsyncThrowingStream<VideoReceiveEvent, Error>.Continuation
+
+    private struct Start {
+        let sessionID: UUID
+        let continuation: Continuation
+    }
+
+    private let lock = NSLock()
+    private var starts: [Start] = []
+    private var stoppedSessionIDs: [UUID] = []
+
+    func receiveVideo(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        configuration: NegotiatedVideoStreamConfiguration
+    ) async -> AsyncThrowingStream<VideoReceiveEvent, Error> {
+        _ = endpoint
+        _ = configuration
+        let pair = AsyncThrowingStream<VideoReceiveEvent, Error>.makeStream()
+        withLock {
+            starts.append(Start(sessionID: sessionID, continuation: pair.continuation))
+        }
+        return pair.stream
+    }
+
+    func stopVideo(sessionID: UUID) async {
+        let continuations = withLock { () -> [Continuation] in
+            stoppedSessionIDs.append(sessionID)
+            return starts
+                .filter { $0.sessionID == sessionID }
+                .map(\.continuation)
+        }
+        continuations.forEach { $0.finish() }
+    }
+
+    func yield(_ event: VideoReceiveEvent, startIndex: Int) {
+        let continuation = withLock {
+            starts.indices.contains(startIndex) ? starts[startIndex].continuation : nil
+        }
+        continuation?.yield(event)
+    }
+
+    func startCount() -> Int {
+        withLock { starts.count }
+    }
+
+    func stopCount() -> Int {
+        withLock { stoppedSessionIDs.count }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationAudioReceiveProvider:
+    AudioReceiveProvider,
+    @unchecked Sendable
+{
+    private typealias Continuation =
+        AsyncThrowingStream<AudioReceiveEvent, Error>.Continuation
+
+    private struct Start {
+        let sessionID: UUID
+        let continuation: Continuation
+    }
+
+    private let lock = NSLock()
+    private var starts: [Start] = []
+    private var stoppedSessionIDs: [UUID] = []
+
+    func receiveAudio(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        configuration: NegotiatedAudioStreamConfiguration
+    ) async -> AsyncThrowingStream<AudioReceiveEvent, Error> {
+        _ = endpoint
+        _ = configuration
+        let pair = AsyncThrowingStream<AudioReceiveEvent, Error>.makeStream()
+        withLock {
+            starts.append(Start(sessionID: sessionID, continuation: pair.continuation))
+        }
+        return pair.stream
+    }
+
+    func stopAudio(sessionID: UUID) async {
+        let continuations = withLock { () -> [Continuation] in
+            stoppedSessionIDs.append(sessionID)
+            return starts
+                .filter { $0.sessionID == sessionID }
+                .map(\.continuation)
+        }
+        continuations.forEach { $0.finish() }
+    }
+
+    func yield(_ event: AudioReceiveEvent, startIndex: Int) {
+        let continuation = withLock {
+            starts.indices.contains(startIndex) ? starts[startIndex].continuation : nil
+        }
+        continuation?.yield(event)
+    }
+
+    func startCount() -> Int {
+        withLock { starts.count }
+    }
+
+    func stopCount() -> Int {
+        withLock { stoppedSessionIDs.count }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationRemoteInputProvider:
+    RemoteInputProvider,
+    @unchecked Sendable
+{
+    struct Snapshot {
+        let startCount: Int
+        let releaseCount: Int
+        let stopCount: Int
+    }
+
+    private let lock = NSLock()
+    private var activeSessionID: UUID?
+    private var startCounter = 0
+    private var releaseCounter = 0
+    private var stopCounter = 0
+    private var feedbackContinuations: [AsyncStream<RemoteInputFeedback>.Continuation] = []
+
+    func startInput(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        configuration: NegotiatedInputConfiguration
+    ) async throws {
+        _ = endpoint
+        _ = configuration
+        withLock {
+            activeSessionID = sessionID
+            startCounter += 1
+        }
+    }
+
+    func send(_ event: RemoteInputEvent, sessionID: UUID) async throws {
+        _ = event
+        guard withLock({ activeSessionID == sessionID }) else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+    }
+
+    func feedback(sessionID: UUID) async -> AsyncStream<RemoteInputFeedback> {
+        _ = sessionID
+        let pair = AsyncStream<RemoteInputFeedback>.makeStream()
+        withLock { feedbackContinuations.append(pair.continuation) }
+        return pair.stream
+    }
+
+    func releaseAll(sessionID: UUID) async {
+        withLock {
+            guard activeSessionID == sessionID else { return }
+            releaseCounter += 1
+        }
+    }
+
+    func stopInput(sessionID: UUID) async {
+        let continuation = withLock { () -> AsyncStream<RemoteInputFeedback>.Continuation? in
+            guard activeSessionID == sessionID else { return nil }
+            activeSessionID = nil
+            stopCounter += 1
+            return feedbackContinuations.popLast()
+        }
+        continuation?.finish()
+    }
+
+    func snapshot() -> Snapshot {
+        withLock {
+            Snapshot(
+                startCount: startCounter,
+                releaseCount: releaseCounter,
+                stopCount: stopCounter
+            )
+        }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationVideoProcessorFactory:
+    SessionVideoProcessorCreating,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var processors: [ApplicationIntegrationVideoProcessor] = []
+
+    func makeVideoProcessor(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        configuration: NegotiatedVideoStreamConfiguration,
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
+    ) async throws -> any SessionVideoProcessing {
+        _ = sessionID
+        _ = mediaGeneration
+        _ = configuration
+        _ = controlProvider
+        _ = presentationEventSink
+        let processor = ApplicationIntegrationVideoProcessor()
+        withLock { processors.append(processor) }
+        return processor
+    }
+
+    func consumeCount(at index: Int) -> Int {
+        withLock {
+            processors.indices.contains(index) ? processors[index].consumeCount() : 0
+        }
+    }
+
+    func wasStopped(at index: Int) -> Bool {
+        withLock {
+            processors.indices.contains(index) && processors[index].wasStopped()
+        }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationVideoProcessor:
+    SessionVideoProcessing,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var consumed = 0
+    private var stopped = false
+
+    func consume(_ event: VideoReceiveEvent) async throws -> Bool {
+        _ = event
+        return withLock {
+            guard !stopped else { return false }
+            consumed += 1
+            return true
+        }
+    }
+
+    func updateColorMetadata(_ metadata: VideoColorMetadata) async throws {
+        _ = metadata
+    }
+
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
+    }
+
+    func stop() async {
+        withLock { stopped = true }
+    }
+
+    func consumeCount() -> Int {
+        withLock { consumed }
+    }
+
+    func wasStopped() -> Bool {
+        withLock { stopped }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationAudioRegistry: @unchecked Sendable {
+    private let lock = NSLock()
+    private let initialCapability: SpatialAudioRouteCapabilityState
+    private var engines: [ApplicationIntegrationAudioEngineClient] = []
+    private var decoders: [ApplicationIntegrationAudioDecoder] = []
+    private var routeSources: [ApplicationIntegrationRouteEventSource] = []
+    private var eventTime: UInt64 = 1_000_000
+
+    init(initialCapability: SpatialAudioRouteCapabilityState) {
+        self.initialCapability = initialCapability
+    }
+
+    func makeDecoder(
+        configuration: NegotiatedAudioStreamConfiguration
+    ) throws -> any SessionAudioDecoding {
+        try configuration.validate()
+        let decoder = ApplicationIntegrationAudioDecoder(configuration: configuration)
+        withLock { decoders.append(decoder) }
+        return decoder
+    }
+
+    func makeEngine() -> any AudioEngineClient {
+        let engine = ApplicationIntegrationAudioEngineClient(
+            capability: initialCapability
+        )
+        withLock { engines.append(engine) }
+        return engine
+    }
+
+    func makeRouteSource() -> any SpatialAudioRouteMonitorEventSourcing {
+        let source = ApplicationIntegrationRouteEventSource()
+        withLock { routeSources.append(source) }
+        return source
+    }
+
+    func nextEventTime() -> UInt64 {
+        withLock {
+            eventTime += 1_000_000
+            return eventTime
+        }
+    }
+
+    func engineCount() -> Int {
+        withLock { engines.count }
+    }
+
+    func engine(at index: Int) -> ApplicationIntegrationAudioEngineClient? {
+        withLock { engines.indices.contains(index) ? engines[index] : nil }
+    }
+
+    func decoder(at index: Int) -> ApplicationIntegrationAudioDecoder? {
+        withLock { decoders.indices.contains(index) ? decoders[index] : nil }
+    }
+
+    func routeSource(at index: Int) -> ApplicationIntegrationRouteEventSource? {
+        withLock { routeSources.indices.contains(index) ? routeSources[index] : nil }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationAudioDecoder:
+    SessionAudioDecoding,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private let negotiatedConfiguration: NegotiatedAudioStreamConfiguration
+    private var closed = false
+
+    init(configuration: NegotiatedAudioStreamConfiguration) {
+        negotiatedConfiguration = configuration
+    }
+
+    func decode(_ packet: ReceivedAudioPacket) async throws -> DecodedPCMBuffer {
+        let configuration = negotiatedConfiguration
+        guard !withLock({ closed }) else {
+            throw OpusDecoderError.closed
+        }
+        return DecodedPCMBuffer(
+            sequenceNumber: packet.sequenceNumber,
+            rtpTimestamp: packet.timestamp,
+            format: .signedInt16(
+                sampleRate: configuration.sampleRate,
+                channelLayout: configuration.channelLayout
+            ),
+            frameCount: configuration.samplesPerFrame,
+            interleavedSamples: [Int16](
+                repeating: Int16(packet.sequenceNumber),
+                count: configuration.samplesPerFrame * configuration.channelCount
+            )
+        )
+    }
+
+    func close() async {
+        withLock { closed = true }
+    }
+
+    func configuration() -> NegotiatedAudioStreamConfiguration {
+        negotiatedConfiguration
+    }
+
+    func isClosed() -> Bool {
+        withLock { closed }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationAudioEngineClient:
+    AudioEngineClient,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var capability: SpatialAudioRouteCapabilityState
+    private var configuredAudio: [StreamAudioConfiguration] = []
+    private var intents: [SpatialAudioGraphIntent] = []
+    private var modes: [SpatialAudioGraphMode] = []
+    private var scheduled: [DecodedPCMBuffer] = []
+    private var stopped = false
+
+    init(capability: SpatialAudioRouteCapabilityState) {
+        self.capability = capability
+    }
+
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
+        try configuration.validate()
+        let usesEnvironment = graphIntent.userEnablesSpatialAudio
+            && configuration.channelLayout.spatialEligibility == .ambienceBed
+            && graphIntent.route.outputAvailable
+            && graphIntent.route.systemSpatialSupport != .unsupported
+        let graphMode: SpatialAudioGraphMode = usesEnvironment
+            ? .environmentAmbienceBed
+            : .nonspatialMixer
+        let strategy: SpatialAudioPlatformStrategy = usesEnvironment
+            ? .environmentListener
+            : .none
+        let graph = SpatialAudioGraphSnapshot(
+            revision: graphIntent.revision,
+            mode: graphMode,
+            layoutSignature: configuration.channelLayout.signature,
+            hasApplicableRenderingAlgorithm: usesEnvironment,
+            platformStrategy: strategy,
+            listenerHeadTrackingCapable: usesEnvironment,
+            listenerHeadTrackingReadback: false,
+            visionExperienceReadback: nil
+        )
+        withLock {
+            configuredAudio.append(configuration)
+            intents.append(graphIntent)
+            modes.append(graphMode)
+            stopped = false
+        }
+        return SpatialAudioRuntimeResolver.resolve(
+            intent: graphIntent,
+            layout: configuration.channelLayout,
+            graph: graph
+        )
+    }
+
+    func start() throws {
+        withLock { stopped = false }
+    }
+
+    func schedule(
+        _ buffer: DecodedPCMBuffer,
+        completion: @escaping @Sendable () -> Void
+    ) throws {
+        withLock { scheduled.append(buffer) }
+        completion()
+    }
+
+    func stop(drain: Bool) {
+        _ = drain
+        withLock { stopped = true }
+    }
+
+    func routeSnapshot() -> AudioRouteSnapshot {
+        AudioRouteSnapshot(
+            outputNames: ["Bounded Integration Output"],
+            sampleRate: 48_000,
+            outputChannelCount: 8,
+            preferredBufferDuration: 0.005
+        )
+    }
+
+    func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState {
+        withLock { capability }
+    }
+
+    func setCapability(_ capability: SpatialAudioRouteCapabilityState) {
+        withLock { self.capability = capability }
+    }
+
+    func configurations() -> [StreamAudioConfiguration] {
+        withLock { configuredAudio }
+    }
+
+    func graphIntents() -> [SpatialAudioGraphIntent] {
+        withLock { intents }
+    }
+
+    func graphModes() -> [SpatialAudioGraphMode] {
+        withLock { modes }
+    }
+
+    func scheduledBuffers() -> [DecodedPCMBuffer] {
+        withLock { scheduled }
+    }
+
+    func wasStopped() -> Bool {
+        withLock { stopped }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private final class ApplicationIntegrationRouteEventSource:
+    SpatialAudioRouteMonitorEventSourcing,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var handler: (@Sendable (SpatialAudioRouteMonitorEvent) -> Void)?
+    private var lateHandler: (@Sendable (SpatialAudioRouteMonitorEvent) -> Void)?
+    private var stopped = false
+
+    func start(
+        handler: @escaping @Sendable (SpatialAudioRouteMonitorEvent) -> Void
+    ) {
+        withLock {
+            self.handler = handler
+            lateHandler = handler
+            stopped = false
+        }
+    }
+
+    func stop() {
+        withLock {
+            handler = nil
+            stopped = true
+        }
+    }
+
+    func emit(_ event: SpatialAudioRouteMonitorEvent) {
+        withLock { handler }?(event)
+    }
+
+    func emitLate(_ event: SpatialAudioRouteMonitorEvent) {
+        withLock { lateHandler }?(event)
+    }
+
+    func wasStopped() -> Bool {
+        withLock { stopped }
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
 }
 
 private struct StubServerInfoClient: ServerInfoClient {

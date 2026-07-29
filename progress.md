@@ -1986,3 +1986,24 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_5-builds.1785357974699/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-4_5-repo.A1M8ns`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式Keychain测试，前后全局`Booted=0`且未操作simulator。
 - OpenSpec 4.5已勾选，权威进度更新为`22/35`；下一项4.6新增跨negotiated 7.1 PCM、environment graph、readiness、route downgrade、entitlement fallback、reconnect replacement、diagnostics与clean stop的application integration gate。本项不替代4.6或6.6硬件证据。
+
+## 2026-07-30 阶段 16 任务 4.6 启动
+
+- 系统更新后已恢复持久goal与planning-with-files/OpenSpec上下文；`main == origin/main == 2a9d54f`且工作树clean，macOS 27.0、Xcode 26.4、全局`Booted=0`。
+- 4.6将新增一条真实native application integration gate：`AppModel -> NativeSessionMediaEnvironment -> NativeSessionAudioProcessor -> SessionAudioRuntime -> injectable AudioEngineClient`，使用合法WAVE 7.1 `5 streams / 3 coupled / identity mapping`和有效8声道interleaved PCM。
+- gate覆盖三路media readiness、missing-entitlement fixed spatial、route unsupported downgrade、stable runtime diagnostic code、reconnect replacement、旧generation迟到route rejection与两代clean stop。5.2正式diagnostics store、signed entitlement、AirPods head tracking、真实route/可听声道/live Sunshine证据明确不在本项冒充完成。
+- 普通测试继续显式`env -u LUNEX_RUN_KEYCHAIN_TEST`；4.6不操作simulator。
+- 首轮focused编译零Swift/Clang诊断，但测试在首包readiness等待超时：production realtime jitter policy要求两个5ms packet形成10ms target delay，单包按设计不交付。失败bundle不计验收；两代输入均改为两个连续包后从全新DerivedData重跑。
+- 第二轮已执行完整reconnect/stop链路，唯一失败是remote input release计数预期为2而实际为4：每代先由AppModel input-generation termination释放，再由environment resource teardown幂等释放，随后各`stopInput`一次。断言校正为两代合计4次release/2次stop后从全新目录重跑。
+- 第三轮在reconnect teardown snapshot的clean断言发生竞态：provider stop计数在resource shutdown中先更新，actor的`lastTeardownReport`在operation返回后才发布；同步条件可能早一个actor重入窗口满足。测试改为明确等待`sessionID == nil && lastTeardownReport != nil`再验收clean，不更改production行为。
+
+## 2026-07-30 阶段 16 任务 4.6 完成
+
+- 新增一条合法WAVE 7.1 application integration gate，真实穿过AppModel、native media environment、audio processor/factory、session audio runtime与可注入engine边界；覆盖三路readiness、missing-entitlement fixed spatial、route downgrade、reconnect replacement、旧generation迟到route拒绝和两代clean stop。
+- focused `/tmp/LuneX-16-4_6-focused-r4.BIVX3s/Focused.xcresult`为`1/1`，expanded `/tmp/LuneX-16-4_6-expanded.zm2GVX/Expanded.xcresult`为`116/116`，完整macOS `/tmp/LuneX-16-4_6-full.4tYlIq/LuneXCoreTests.xcresult`为`710 total / 709 passed / 1 explicit Keychain skip / 0 failed`；全部结构化diagnostics为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-4_6-builds.1785359087336/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-4_6-repo.rgF6wJ`通过OpenSpec strict `7/7`、fixtures、test membership、reference/package/Core Image/secret/privacy/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`；唯一skip为显式Keychain测试，前后全局`Booted=0`且未操作simulator。
+- 首次完成落账补丁因`findings.md`现有标题为“任务 4.6 恢复调查”而不是预期的“任务 4.6 调查”被整体拒绝，文件未发生部分修改；读取精确锚点后以本次补丁完成。
+- 首次commit后的推送前全文一致性扫描发现`task_plan.md`末尾阶段摘要仍为`22/35 / 当前4.6`；在任何push前修正为`23/35 / 当前5.1`，重新验证并amend同一任务提交。
+- 首次amend验证包装器用`rg -c`断言零匹配，`rg`在正确的零匹配下返回1并被`set -e`提前终止；该轮未执行stage/amend。改为显式`if rg ...; then fail`后重跑。
+- OpenSpec 4.6已勾选，权威进度更新为`23/35`；下一项5.1实现spatial-audio/head-tracking设置默认值、持久化、旧JSON迁移与active-stream更新。本项不替代5.2-5.4产品状态/诊断/UI或6.6签名与物理可听证据。
