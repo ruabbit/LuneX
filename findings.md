@@ -1694,3 +1694,18 @@
 - 源码结构化扫描确认`Tests/LuneXCoreTests/HostAndPersistenceTests.swift`是Tests/Sources唯一环境读取文件，`LUNEX_RUN_KEYCHAIN_TEST`是唯一`LUNEX_RUN_*` token；没有live-host XCTest或host环境入口。这证明normal suite无live-host side effect，不证明阶段13缺失的live-host XCTest已经通过。
 - 测试前后simulator inventory逐字节一致且全局`Booted=0`，没有执行任何simulator lifecycle操作。本项不提供signed entitlement、AirPods、实际route、多声道听感、同步或live Sunshine硬件证据。
 - 勾选后repository final gate `/tmp/LuneX-16-6_1-repo-final.zd8HeZ`通过OpenSpec strict `7/7`、apply `29/35`、normal xcresult只读复核、fixture self-test/全树、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、环境入口和simulator不变边界；6.2保持pending。
+
+## 2026-07-30 阶段 16 任务 6.2 调查
+
+- 固定构建身份继续使用26.4 runtime中的iPhone 17 Pro `23A27088-C19F-4F77-A455-4E50E393167E`、iPad Pro 13-inch (M5) `409A5908-8C39-4797-A41C-04503A05FA3D`、Apple TV `11D0B224-D778-4A13-A156-272A45AFF119`和Apple Vision Pro `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`。只读盘点确认四者各自唯一、available、`Shutdown`，全局`Booted=0`。
+- 6.2对macOS和四个固定destination分别执行Debug/Release，共10个隔离DerivedData/result bundle的App build；所有命令使用Swift/Clang warnings-as-errors、禁用签名并移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 项目不链接或使用AppIntents；沿用已验证的Xcode/SwiftBuild公开设置`LM_SKIP_METADATA_EXTRACTION=YES`，从构建图移除无意义的metadata skip rule，避免把Xcode工具提示混入零诊断门，同时不跳过Swift、Clang、Metal、asset或link构建。
+- 每份xcresult必须为`succeeded`且structured error/warning/analyzer warning为0；每个隔离配置还必须生成一个Metal AIR与一个metallib。该证据只证明配置/SDK/资源编译安全，不证明simulator runtime、signed entitlement或物理空间音频。
+
+## 2026-07-30 阶段 16 任务 6.2 验收结论
+
+- 从已推送且clean的`394601c`运行的10配置矩阵位于`/tmp/LuneX-16-6_2-builds.BW59PU`。macOS、固定iPhone、固定iPad、tvOS与visionOS的Debug/Release全部`succeeded`，每份xcresult的structured error/warning/analyzer warning均为0，每个隔离DerivedData恰好生成一个`HDRVideoShaders.air`和一个`default.metallib`。
+- 独立读回确认四个simulator destination精确命中预定名称和UUID。规范化available设备清单前后SHA-256均为`5d39940efaf4b37d2592952a96973621dda435f7a92cf2d43d911ea5df48140a`；固定四实例仍唯一、available、`Shutdown`且全局`Booted=0`，没有执行create、clone、boot、install、launch、run、shutdown或delete。
+- 原始CoreSimulator JSON只有iOS/tvOS/xrOS 26.4 runtime的`lastUsage.arm64`时间因destination解析而更新，设备identity/state规范化内容无变化。6.5仍须从当前环境独立执行只读身份/状态验收，不能复用本项结论提前勾选。
+- 本项没有运行测试或真实Keychain，真实Keychain opt-in始终关闭。构建通过只证明五平台SDK、配置、Swift/Clang/Metal/asset/link路径可编译，不证明签名entitlement被profile接受、AirPods listener head tracking、visionOS物理空间体验、真实route transition、可听多声道分离/同步或live Sunshine播放。
+- 勾选后的repository final gate `/tmp/LuneX-16-6_2-repo-final-r3.dInpIv`通过OpenSpec strict `7/7`、apply `30/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、规范化simulator不变、产品源码零diff和真实Keychain opt-in零新增门。

@@ -2110,3 +2110,17 @@
 - 首个结构化包装器因macOS Bash 3.2没有`mapfile`而在只读验收阶段退出；suite无需重跑，POSIX兼容包装器从同一bundle完成全部断言。前后simulator inventory一致且`Booted=0`。
 - repository final gate `/tmp/LuneX-16-6_1-repo-final.zd8HeZ`通过OpenSpec strict `7/7`、apply `29/35`、normal xcresult复核、fixture self-test/全树、environment opt-in边界、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`和simulator不变门。
 - OpenSpec 6.1已勾选，权威进度更新为`29/35`；下一项6.2运行macOS Debug/Release和固定iPhone、iPad、tvOS、visionOS warnings-as-errors隔离构建。
+
+## 2026-07-30 阶段 16 任务 6.2 启动
+
+- 6.1已以`394601c Verify normal spatial audio tests`独立提交并推送；fetch确认`HEAD == origin/main`且工作树clean，OpenSpec为`29/35 ready`，当前任务6.2。
+- 固定26.4 simulator UUID为iPhone `23A27088-C19F-4F77-A455-4E50E393167E`、iPad `409A5908-8C39-4797-A41C-04503A05FA3D`、Apple TV `11D0B224-D778-4A13-A156-272A45AFF119`、Vision Pro `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`；四者唯一、available、`Shutdown`且全局`Booted=0`。
+- 将顺序运行macOS和四个固定destination各Debug/Release共10个隔离warnings-as-errors build，设置`LM_SKIP_METADATA_EXTRACTION=YES`并验证每份xcresult零诊断、每配置Metal AIR/metallib存在；不执行任何simulator lifecycle操作。
+
+## 2026-07-30 阶段 16 任务 6.2 完成
+
+- 证据目录`/tmp/LuneX-16-6_2-builds.BW59PU`包含macOS、固定iPhone、固定iPad、tvOS与visionOS的Debug/Release共10个隔离DerivedData/result bundle。全部build为`succeeded`，structured error/warning/analyzer warning为0，每个配置各生成一个Metal AIR与metallib。
+- 构建命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`、禁用签名、启用Swift/Clang/Metal warnings-as-errors并设置`LM_SKIP_METADATA_EXTRACTION=YES`；未运行测试或再次访问真实Keychain。
+- simulator规范化before/after清单逐字一致，SHA-256均为`5d39940efaf4b37d2592952a96973621dda435f7a92cf2d43d911ea5df48140a`；原始JSON差异仅为三个26.4 runtime的`lastUsage.arm64`时间。固定四实例仍唯一、available、`Shutdown`且全局`Booted=0`，未执行任何设备生命周期命令。
+- repository final gate `/tmp/LuneX-16-6_2-repo-final-r3.dInpIv`通过OpenSpec strict `7/7`、apply `30/35`、generator双次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、simulator不变、产品源码零diff与真实Keychain opt-in零新增门。
+- OpenSpec 6.2已勾选，权威进度更新为`30/35`；下一项6.3为OpenSpec strict、generator stability、clean-room/dependency、direct SDK API probes、static analyzer及repository-boundary gates。6.5独立simulator验收和6.6真机硬件验收保持未完成。
