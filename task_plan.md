@@ -275,6 +275,7 @@
 | 15.4.2 focused包装器使用zsh只读变量名`status` | 1 | 测试已经完成且xcresult可读；后续新目录包装器改用`build_status`，不复用该失败退出码 |
 | 15.4.2首轮完整suite发现另一项geometry测试仍期待`localizedName` | 1 | 失败suite为`569 passed / 1 Keychain skip / 1 failed`且不计验收；抽取共享screen-number helper更新全部旧断言后从新DerivedData重跑 |
 | 15.4.2五平台包装器把`rg -c`零匹配解析为空字符串 | 1 | macOS build本身成功但包装器证据不计；计数改用显式`|| printf 0`，从新证据目录和全新DerivedData完整重跑五平台 |
+| 15.4.2提交后GitHub直连超时 | 2 | `github.com:22`、`ssh.github.com:443`与HTTPS 443均超时而DNS正常；检查现有Surge系统代理后用SOCKS5恢复GitHub连接。fetch确认首次无输出push实际已成功发布`d37aed8`，不强推或重复提交4.2 |
 
 ## 当前执行点（2026-07-29）
 

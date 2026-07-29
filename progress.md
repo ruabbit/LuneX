@@ -1478,3 +1478,5 @@
 
 - repository gates位于`/tmp/LuneX-15-4_2-repo.19jLRj`：OpenSpec strict `6/6`、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`ed35a1f7a1233c38e2d4e3f25784fe24199727392a5d0018811e7d68e8073b4e`，production/reference、dependency、CoreImage regression、diff/自有文件whitespace边界全部通过。
 - 自审确认display revision与stream/focus/visibility/geometry revision独立，same-display headroom变化会发布新snapshot，stale detach不影响replacement，counter exhaustion清除snapshot，内部screen identity不进入public日志。OpenSpec 4.2标记完成，权威进度`18/33`；阶段15保持`in_progress`，下一项4.3。
+- 恢复后的最终生成器/strict/apply/diff门再次通过，并将文档触发条件收紧为attached/detached可用性、display identity和headroom；相同display/headroom下的attachment owner replacement本身不是revision输入。4.2已提交为`d37aed8 Add revisioned display headroom state`。
+- 首次组合命令未返回push诊断，随后直连SSH 22、SSH 443和HTTPS 443均超时而DNS正常；发现本机Surge系统代理后，以SOCKS5恢复GitHub连接。fetch确认首次push实际已发布`d37aed8`，因此不强推本地amend，而把3行诊断记录重放为远端4.2提交之后的独立跟踪提交。
