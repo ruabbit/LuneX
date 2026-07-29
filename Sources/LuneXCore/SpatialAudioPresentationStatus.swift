@@ -49,7 +49,7 @@ enum SpatialAudioPresentationFallback: Hashable, Sendable {
         }
     }
 
-    var detail: String {
+    var detail: LocalizedStringResource {
         switch self {
         case .staleRevision:
             "Waiting for current audio route state."
@@ -181,71 +181,56 @@ struct SpatialAudioPresentationStatus: Hashable, Sendable {
                 overlayLabel: "Spatial inactive",
                 settingsValue: "Inactive",
                 detail: "No active audio presentation.",
-                systemImage: "speaker.slash",
-                accessibilityValue: "Inactive. No active audio presentation."
+                systemImage: "speaker.slash"
             )
         case .nonspatial:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Nonspatial",
                 settingsValue: "Nonspatial",
                 detail: "Current audio is using standard channel playback.",
-                systemImage: "speaker.wave.2",
-                accessibilityValue:
-                    "Nonspatial. Current audio is using standard channel playback."
+                systemImage: "speaker.wave.2"
             )
         case .fixedSpatial:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Fixed spatial",
                 settingsValue: "Fixed spatial",
                 detail: "Current audio is using fixed spatial playback.",
-                systemImage: "wave.3.right.circle",
-                accessibilityValue:
-                    "Fixed spatial. Current audio is using fixed spatial playback."
+                systemImage: "wave.3.right.circle"
             )
         case .headTracked:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Head tracked",
                 settingsValue: "Head tracked",
                 detail: "Current spatial audio is following listener head movement.",
-                systemImage: "person.wave.2",
-                accessibilityValue:
-                    "Head tracked. Current spatial audio is following listener head movement."
+                systemImage: "person.wave.2"
             )
         case .visionFixed:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Vision fixed",
                 settingsValue: "visionOS fixed spatial",
                 detail: "Current audio is using a fixed visionOS spatial experience.",
-                systemImage: "viewfinder.circle",
-                accessibilityValue:
-                    "visionOS fixed spatial. Current audio is using a fixed visionOS spatial experience."
+                systemImage: "viewfinder.circle"
             )
         case .visionHeadTracked:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Vision head tracked",
                 settingsValue: "visionOS head tracked",
                 detail: "Current audio is using a head-tracked visionOS spatial experience.",
-                systemImage: "person.wave.2",
-                accessibilityValue:
-                    "visionOS head tracked. Current audio is using a head-tracked visionOS spatial experience."
+                systemImage: "person.wave.2"
             )
         case .recovering:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Audio recovering",
                 settingsValue: "Recovering",
                 detail: "Waiting for the current audio graph to resume.",
-                systemImage: "arrow.triangle.2.circlepath",
-                accessibilityValue:
-                    "Recovering. Waiting for the current audio graph to resume."
+                systemImage: "arrow.triangle.2.circlepath"
             )
         case .failed:
             base = SpatialAudioPresentationStatusContent(
                 overlayLabel: "Audio stopped",
                 settingsValue: "Output stopped",
                 detail: "The current audio graph could not continue.",
-                systemImage: "xmark.octagon",
-                accessibilityValue:
-                    "Output stopped. The current audio graph could not continue."
+                systemImage: "xmark.octagon"
             )
         }
         guard let fallback else { return base }
@@ -256,16 +241,28 @@ struct SpatialAudioPresentationStatus: Hashable, Sendable {
                 : base.overlayLabel,
             settingsValue: base.settingsValue,
             detail: detail,
-            systemImage: base.systemImage,
-            accessibilityValue: "\(base.settingsValue). \(detail)"
+            systemImage: base.systemImage
         )
     }
 }
 
-struct SpatialAudioPresentationStatusContent: Hashable, Sendable {
-    let overlayLabel: String
-    let settingsValue: String
-    let detail: String
+struct SpatialAudioPresentationStatusContent: Sendable {
+    let overlayLabel: LocalizedStringResource
+    let settingsValue: LocalizedStringResource
+    let detail: LocalizedStringResource
     let systemImage: String
-    let accessibilityValue: String
+}
+
+enum SpatialAudioSettingsLayout: Hashable, Sendable {
+    case compact
+    case wide
+
+    init(
+        horizontalSizeClassIsCompact: Bool,
+        usesAccessibilityTextSize: Bool
+    ) {
+        self = horizontalSizeClassIsCompact || usesAccessibilityTextSize
+            ? .compact
+            : .wide
+    }
 }

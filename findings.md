@@ -1663,3 +1663,20 @@
 - macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-5_4-builds.JIxcKyvQdoBh/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
 - repository gate `/tmp/LuneX-16-5_4-repo.Uk74JV`通过OpenSpec strict `7/7`、fixture self-test/全树、source/test membership、actual-state UI wiring、privacy/secret/reference/package/Core Image/diff边界与generator双次稳定性；SHA-256为`e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`，前后模拟器清单一致且`Booted=0`。
 - 本项不替代5.5完整responsive/localization/accessibility/migration/ownership/UI矩阵，也不证明signed entitlement、AirPods head tracking、真实route transition、可听多声道定位/同步、visionOS物理空间音频或live Sunshine播放。
+
+## 2026-07-30 阶段 16 任务 5.5 调查
+
+- 5.4已提供actual runtime状态和基本accessibility，但`SpatialAudioPresentationStatusContent`仍保存动态`String`；Apple SwiftUI文档明确stored `String`不会自动触发本地化，而`LocalizedStringResource`可直接用于`Label`，stored string至少需要显式`LocalizedStringKey`。固定presentation copy应改为resource而不是在View层猜测字符串是否可本地化。
+- Apple响应式布局文档建议`ViewThatFits`按真实可用空间选择首个可容纳布局；size class可表达iPhone/iPad compact语义，Dynamic Type accessibility size还应强制纵向，避免regular size class下的长本地化文案或放大文字被双列压缩。
+- Settings当前空间音频Section是三个独立纵向row，没有明确wide形态。5.5应在compact/accessibility text下使用单列，在wide下优先“偏好控件/实际状态”双列并保留`ViewThatFits`纵向fallback；每列使用稳定min width，避免窗口缩放时文字与Toggle互相遮挡。
+- 现有5.1真实JSON repository测试已经覆盖缺失`audio`、partial audio、保存与重载；5.3/AppModel测试已经覆盖current audio action只清理`.audio`。5.5需要把这些合同和UI actual-state接线连起来：用户更新desired preference后，在新runtime event到达前presentation不得从settings合成；current-generation recovery才更新actual状态并清理audio owner。
+- macOS 26已弃用`Text + Text`，warnings-as-errors在universal macOS build的x86_64批次精确暴露；SwiftUI `LocalizedStringKey.StringInterpolation`支持直接插入`Text`，因此accessibility value使用一个可本地化格式包住两个resource-backed `Text`占位符，让翻译可调整顺序且不拼接stored `String`。
+
+## 2026-07-30 阶段 16 任务 5.5 验收
+
+- 空间音频presentation固定copy已全部改为`LocalizedStringResource`；stream overlay与Settings状态行仍消费同一个current-generation actual runtime content。accessibility value使用本地化`Text`插值，不使用macOS 26弃用的`Text + Text`，也不把resource降级为动态`String`拼接。
+- `SpatialAudioSettingsLayout`把compact horizontal size class和accessibility Dynamic Type收敛到单列；regular/wide优先显示“偏好/实际状态”双列，并由`ViewThatFits(in: .horizontal)`在窗口不足时回退单列。测试同时锁定migration、`.audio` diagnostic ownership，以及desired preference更新不会在新runtime event前伪造actual presentation。
+- 系统更新后宿主为macOS 27.0，Xcode仍为26.4/Swift 6.3。更新后重新运行的expanded为`153 total / 152 passed / 1 explicit Keychain skip / 0 failed`，完整macOS为`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`；两份xcresult的build error/warning/analyzer warning均为0。
+- 修复后focused为`8/8`，macOS universal、iOS/iPadOS、tvOS、visionOS generic-device Debug build均succeeded且结构化diagnostics为0。勾选前repository gate `/tmp/LuneX-16-5_5-repo-pre.UJvBhh`和勾选后final gate `/tmp/LuneX-16-5_5-repo-final.m6xKRr`均通过strict `7/7`、fixtures、membership、UI/迁移/ownership、privacy/secret/reference/package/Core Image/diff、generator和模拟器不变边界；final apply为`28/35`且6.1仍pending。
+- 当前`xcresulttool get diagnostics`已落入deprecated legacy object路径；验收改用受支持的`get test-results summary/tests`与`get build-results`结构化字段。该工具迁移不改变xcresult本身，也不作为产品失败。
+- 本项没有触发真实Keychain或live-host路径，前后全局`Booted=0`且未操作simulator。signed entitlement、AirPods head tracking、真实route transition、可听多声道定位/同步、visionOS物理空间音频和live Sunshine播放继续保留给6.6/既有硬件门。

@@ -760,7 +760,7 @@ private struct StreamStatusOverlay: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Spatial audio presentation")
-        .accessibilityValue(spatialContent.accessibilityValue)
+        .accessibilityValue(spatialAudioAccessibilityValue(spatialContent))
     }
 }
 
@@ -840,6 +840,8 @@ private struct DiagnosticsView: View {
 
 private struct SettingsView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         @Bindable var appModel = appModel
@@ -866,16 +868,7 @@ private struct SettingsView: View {
             }
 
             Section("Spatial Audio") {
-                Toggle(isOn: spatialAudioEnabled) {
-                    Label("Spatial audio", systemImage: "wave.3.right.circle")
-                }
-                Toggle(isOn: headTrackingEnabled) {
-                    Label("Head tracking", systemImage: "person.wave.2")
-                }
-                .disabled(!appModel.settings.audio.spatialAudioEnabled)
-                SpatialAudioPresentationStatusRow(
-                    status: appModel.spatialAudioPresentationStatus
-                )
+                spatialAudioSettingsContent
             }
 
             Section("Continuity") {
@@ -894,6 +887,60 @@ private struct SettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var spatialAudioSettingsContent: some View {
+        switch spatialAudioSettingsLayout {
+        case .compact:
+            compactSpatialAudioSettings
+        case .wide:
+            ViewThatFits(in: .horizontal) {
+                wideSpatialAudioSettings
+                compactSpatialAudioSettings
+            }
+        }
+    }
+
+    private var spatialAudioSettingsLayout: SpatialAudioSettingsLayout {
+        SpatialAudioSettingsLayout(
+            horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
+            usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize
+        )
+    }
+
+    private var compactSpatialAudioSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            spatialAudioPreferenceControls
+            SpatialAudioPresentationStatusRow(
+                status: appModel.spatialAudioPresentationStatus
+            )
+        }
+    }
+
+    private var wideSpatialAudioSettings: some View {
+        HStack(alignment: .top, spacing: 20) {
+            spatialAudioPreferenceControls
+                .frame(minWidth: 220, maxWidth: .infinity, alignment: .leading)
+            Divider()
+            SpatialAudioPresentationStatusRow(
+                status: appModel.spatialAudioPresentationStatus
+            )
+            .frame(minWidth: 280, maxWidth: .infinity, alignment: .leading)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var spatialAudioPreferenceControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: spatialAudioEnabled) {
+                Label("Spatial audio", systemImage: "wave.3.right.circle")
+            }
+            Toggle(isOn: headTrackingEnabled) {
+                Label("Head tracking", systemImage: "person.wave.2")
+            }
+            .disabled(!appModel.settings.audio.spatialAudioEnabled)
         }
     }
 
@@ -980,7 +1027,7 @@ private struct SpatialAudioPresentationStatusRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Current spatial audio presentation")
-        .accessibilityValue(content.accessibilityValue)
+        .accessibilityValue(spatialAudioAccessibilityValue(content))
     }
 }
 
@@ -1039,17 +1086,37 @@ private struct PanelHeader: View {
 }
 
 private struct StatusPill: View {
-    let label: String
+    let label: Text
     let systemImage: String
 
+    init(label: String, systemImage: String) {
+        self.label = Text(verbatim: label)
+        self.systemImage = systemImage
+    }
+
+    init(label: LocalizedStringResource, systemImage: String) {
+        self.label = Text(label)
+        self.systemImage = systemImage
+    }
+
     var body: some View {
-        Label(label, systemImage: systemImage)
+        Label {
+            label
+        } icon: {
+            Image(systemName: systemImage)
+        }
             .font(.caption)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(.quaternary)
             .clipShape(Capsule())
     }
+}
+
+private func spatialAudioAccessibilityValue(
+    _ content: SpatialAudioPresentationStatusContent
+) -> Text {
+    Text("\(Text(content.settingsValue)). \(Text(content.detail))")
 }
 
 private extension RenderPolicy {

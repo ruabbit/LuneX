@@ -84,8 +84,10 @@ final class SpatialAudioPresentationStatusTests: XCTestCase {
                 fallback: .missingEntitlement
             )
         )
-        XCTAssertEqual(fixed.content.overlayLabel, "Fixed spatial")
-        XCTAssertTrue(fixed.content.detail.contains("signed entitlement"))
+        XCTAssertEqual(localized(fixed.content.overlayLabel), "Fixed spatial")
+        XCTAssertTrue(
+            localized(fixed.content.detail).contains("signed entitlement")
+        )
         XCTAssertEqual(
             vision,
             SpatialAudioPresentationStatus(
@@ -93,11 +95,11 @@ final class SpatialAudioPresentationStatusTests: XCTestCase {
                 fallback: .visionExperienceNotApplied
             )
         )
-        XCTAssertEqual(disabled.content.overlayLabel, "Spatial off")
-        XCTAssertEqual(disabled.content.settingsValue, "Nonspatial")
+        XCTAssertEqual(localized(disabled.content.overlayLabel), "Spatial off")
+        XCTAssertEqual(localized(disabled.content.settingsValue), "Nonspatial")
     }
 
-    func testPresentationContentIsFixedAndPrivacyBoundedForEveryFallback() {
+    func testPresentationResourcesResolveFixedPrivacyBoundedAccessibleCopy() {
         let fallbacks: [SpatialAudioPresentationFallback] = [
             .staleRevision,
             .outputUnavailable,
@@ -129,25 +131,60 @@ final class SpatialAudioPresentationStatusTests: XCTestCase {
                 mode: .nonspatial,
                 fallback: fallback
             ).content
+            let accessibilityValue = [
+                localized(content.settingsValue),
+                localized(content.detail)
+            ].joined(separator: ". ")
             let text = [
-                content.overlayLabel,
-                content.settingsValue,
-                content.detail,
-                content.accessibilityValue
+                localized(content.overlayLabel),
+                localized(content.settingsValue),
+                localized(content.detail),
+                accessibilityValue
             ].joined(separator: " ")
 
-            XCTAssertFalse(content.overlayLabel.isEmpty)
-            XCTAssertFalse(content.settingsValue.isEmpty)
-            XCTAssertFalse(content.detail.isEmpty)
+            XCTAssertFalse(localized(content.overlayLabel).isEmpty)
+            XCTAssertFalse(localized(content.settingsValue).isEmpty)
+            XCTAssertFalse(localized(content.detail).isEmpty)
             XCTAssertFalse(content.systemImage.isEmpty)
-            XCTAssertFalse(content.accessibilityValue.isEmpty)
+            XCTAssertFalse(accessibilityValue.isEmpty)
             for fragment in forbiddenFragments {
                 XCTAssertFalse(text.contains(fragment))
             }
         }
     }
 
-    func testRootViewUsesActualRuntimeAndNativePreferenceControls() throws {
+    func testSettingsLayoutUsesCompactForNarrowOrAccessibilityText() {
+        XCTAssertEqual(
+            SpatialAudioSettingsLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false
+            ),
+            .wide
+        )
+        XCTAssertEqual(
+            SpatialAudioSettingsLayout(
+                horizontalSizeClassIsCompact: true,
+                usesAccessibilityTextSize: false
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            SpatialAudioSettingsLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: true
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            SpatialAudioSettingsLayout(
+                horizontalSizeClassIsCompact: true,
+                usesAccessibilityTextSize: true
+            ),
+            .compact
+        )
+    }
+
+    func testRootViewUsesResponsiveLocalizedAccessibleActualState() throws {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -166,14 +203,47 @@ final class SpatialAudioPresentationStatusTests: XCTestCase {
             "try await appModel.updateSpatialAudioPreferences(preferences)"
         ))
         XCTAssertTrue(source.contains(
+            "@Environment(\\.dynamicTypeSize) private var dynamicTypeSize"
+        ))
+        XCTAssertTrue(source.contains(
+            "SpatialAudioSettingsLayout("
+        ))
+        XCTAssertTrue(source.contains(
+            "ViewThatFits(in: .horizontal)"
+        ))
+        XCTAssertTrue(source.contains(
             "Toggle(isOn: spatialAudioEnabled)"
         ))
         XCTAssertTrue(source.contains(
             "Toggle(isOn: headTrackingEnabled)"
         ))
+        XCTAssertTrue(source.contains(
+            ".accessibilityLabel(\"Spatial audio presentation\")"
+        ))
+        XCTAssertTrue(source.contains(
+            ".accessibilityLabel(\"Current spatial audio presentation\")"
+        ))
+        XCTAssertTrue(source.contains(
+            ".accessibilityValue(spatialAudioAccessibilityValue("
+        ))
+        XCTAssertTrue(source.contains(
+            "Text(\"\\(Text(content.settingsValue)). \\(Text(content.detail))\")"
+        ))
+        XCTAssertTrue(source.contains("Text(content.detail)"))
+        XCTAssertTrue(source.contains(
+            "Label(content.settingsValue, systemImage: content.systemImage)"
+        ))
+        XCTAssertFalse(source.contains("+ Text(content.detail)"))
+        XCTAssertFalse(source.contains(
+            "Text(verbatim: content.detail)"
+        ))
         XCTAssertFalse(source.contains(
             "StatusPill(label: \"Spatial gated\""
         ))
+    }
+
+    private func localized(_ resource: LocalizedStringResource) -> String {
+        String(localized: resource)
     }
 
     private func makeEvent(

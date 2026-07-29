@@ -2127,6 +2127,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.spatialAudioPreferences, persistedPreferences)
         XCTAssertEqual(model.settings.audio, AudioPreferences(persistedPreferences))
         XCTAssertNil(model.audioRuntimeState)
+        XCTAssertEqual(model.spatialAudioPresentationStatus, .inactive)
         await model.refreshAppsForSelectedHost()
         let launchTask = Task { await model.launchSelectedApp() }
         let record = try await waitForSessionStart(provider)
@@ -2163,6 +2164,13 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         mediaEnvironment.yieldAudioRuntime(current, sessionID: record.sessionID)
         await waitUntil { model.audioRuntimeState == current }
+        XCTAssertEqual(
+            model.spatialAudioPresentationStatus,
+            SpatialAudioPresentationStatus(
+                mode: .fixedSpatial,
+                fallback: .missingEntitlement
+            )
+        )
         XCTAssertEqual(
             model.diagnostics.events
                 .filter { $0.code.hasPrefix("spatial_audio_") }
@@ -2209,6 +2217,13 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         mediaEnvironment.yieldAudioRuntime(recovered, sessionID: record.sessionID)
         await waitUntil { model.audioRuntimeState == recovered }
+        XCTAssertEqual(
+            model.spatialAudioPresentationStatus,
+            SpatialAudioPresentationStatus(
+                mode: .fixedSpatial,
+                fallback: nil
+            )
+        )
         let equivalentRecovery = makeAudioRuntimeState(
             sessionID: record.sessionID,
             mediaGeneration: 1,
@@ -2263,6 +2278,13 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.spatialAudioPreferences, updatedPreferences)
         XCTAssertEqual(model.settings.audio, AudioPreferences(updatedPreferences))
         XCTAssertEqual(
+            model.spatialAudioPresentationStatus,
+            SpatialAudioPresentationStatus(
+                mode: .fixedSpatial,
+                fallback: nil
+            )
+        )
+        XCTAssertEqual(
             mediaEnvironment.currentSpatialAudioPreferenceApplications().last,
             SessionSpatialAudioPreferenceApplication(
                 sessionID: record.sessionID,
@@ -2304,6 +2326,7 @@ final class AppModelWorkflowTests: XCTestCase {
         await model.stopStream()
         await launchTask.value
         XCTAssertNil(model.audioRuntimeState)
+        XCTAssertEqual(model.spatialAudioPresentationStatus, .inactive)
         XCTAssertEqual(
             model.diagnostics.events
                 .filter { $0.code.hasPrefix("spatial_audio_") }

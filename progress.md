@@ -2077,3 +2077,21 @@
 - focused为`9/9`，expanded为`146/146`，完整macOS为`720 total / 719 passed / 1 explicit Keychain skip / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，三份测试xcresult的结构化diagnostics均为0。
 - 四平台generic-device Debug unsigned warnings-as-errors build `/tmp/LuneX-16-5_4-builds.JIxcKyvQdoBh/*/Build.xcresult`为4/4 succeeded且结构化diagnostics为0；repository gate `/tmp/LuneX-16-5_4-repo.Uk74JV`通过strict `7/7`、fixtures、generator、membership、UI wiring、privacy/secret/reference/package/Core Image/diff与模拟器不变边界。
 - OpenSpec 5.4已勾选，权威进度更新为`27/35`；下一项5.5负责完整responsive compact/wide、localization-safe copy、accessibility、migration、diagnostic ownership与actual-state UI wiring测试。全程未触发真实Keychain，前后`Booted=0`且未操作simulator。
+
+## 2026-07-30 阶段 16 任务 5.5 启动
+
+- 5.4已以`7221c10 Present actual spatial audio state`提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`27/35 ready`，当前任务5.5。
+- 已核对Apple SwiftUI当前文档：stored `String`不会自动本地化，`LocalizedStringResource`可直接用于`Label`；`ViewThatFits`用于按可用空间选择布局，size class与accessibility Dynamic Type可作为明确compact条件。
+- 实现将把空间presentation copy改为本地化resource，以resource组合显式accessibility value；Settings新增compact/accessibility单列和wide双列+fit fallback。回归将锁定布局决策、本地化资源、accessibility、已有JSON migration、diagnostic ownership及desired preference不伪造actual state。
+- 首轮focused的8项测试和xcresult均通过且结构化diagnostics为0，但zsh包装器在`TEST SUCCEEDED`后读取不存在的`PIPESTATUS[0]`而退出1；该bundle不计最终组合证据，改用显式`/bin/bash`与全新DerivedData/result bundle重跑。
+- 最终focused `/tmp/LuneX-16-5_5-focused-final.WvMx9M/Focused.xcresult`为`8/8`；expanded `/tmp/LuneX-16-5_5-expanded.MXyeC7/Expanded.xcresult`为`153 total / 152 passed / 1 explicit Keychain skip / 0 failed`。两份结构化diagnostics均为0，普通测试均显式移除`LUNEX_RUN_KEYCHAIN_TEST`，全局`Booted=0`。
+- 完整macOS `/tmp/LuneX-16-5_5-full.wno5fl/LuneXCoreTests.xcresult`为`721 total / 720 passed / 1 explicit Keychain skip / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化error/warning/analyzer warning均为0。
+- 首轮四平台build在macOS universal x86_64批次被warnings-as-errors拒绝：macOS 26弃用`Text + Text`；arm64此前通过但该跨平台轮不计验收。accessibility value改为一个本地化格式中的两个resource-backed `Text`插值，允许翻译重排并保持无动态`String`拼接，随后从全新证据目录复验。
+
+## 2026-07-30 阶段 16 任务 5.5 完成
+
+- 修复后的focused `/tmp/LuneX-16-5_5-focused-interpolation.PaelqZ/Focused.xcresult`结构化读回为`8/8 passed / 0 skipped / 0 failed`；四平台最终build `/tmp/LuneX-16-5_5-builds-final.WD1MzP/{macOS,iOS,tvOS,visionOS}/Build.xcresult`全部`succeeded`且error/warning/analyzer warning均为0。
+- macOS更新完成后使用全新DerivedData复验：expanded `/tmp/LuneX-16-5_5-expanded-post-update.4tXrcu/Expanded.xcresult`为`153 total / 152 passed / 1 skipped / 0 failed`；完整suite `/tmp/LuneX-16-5_5-full-post-update.QxPwgF/LuneXCoreTests.xcresult`为`721 total / 720 passed / 1 skipped / 0 failed`。两份build-results均为0 diagnostics。
+- 唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；所有普通测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`并继续使用Debug文件fallback，没有再次授权或访问真实Keychain。
+- repository pre-gate `/tmp/LuneX-16-5_5-repo-pre.UJvBhh`与勾选后final gate `/tmp/LuneX-16-5_5-repo-final.m6xKRr`均通过OpenSpec strict `7/7`、fixture self-test/全树、source/test membership、responsive/localization/accessibility/actual-state UI wiring、settings migration、diagnostic ownership、privacy/secret/reference/package/Core Image/diff边界，以及generator连续两次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`；final apply为`28/35`且6.1仍pending。
+- 前后simulator inventory完全一致且全局`Booted=0`；本任务未创建、启动、安装、运行、关闭或删除任何simulator。OpenSpec 5.5已勾选，权威进度更新为`28/35`，下一项6.1重新运行normal tests并验证live-host/真实Keychain路径关闭和唯一允许skip。
