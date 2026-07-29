@@ -1832,3 +1832,17 @@
 - macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build全部成功且四份xcresult结构化diagnostics为0，未选择或操作simulator。首次visionOS外层编排未形成xcresult，因此没有计为通过；直接exec在新隔离目录完整重跑后验收。
 - OpenSpec strict、generator稳定SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`、完整diff自审和`git diff --check`通过。OpenSpec 2.6已勾选，权威进度`11/35`；下一项3.1为injectable Security-backed embedded entitlement reader。
 - 当前ARC/readback/build证据不替代6.4 malloc/resource gate，也不证明AirPods head tracking、visionOS可听空间定位、signed entitlement provisioning或物理多声道输出。
+
+## 2026-07-30 阶段 16 任务 3.1 启动
+
+- `b2fb0c5 Expand spatial audio graph tests`已推送，fetch确认`HEAD == origin/main`且工作树clean后进入3.1。
+- Context7 Apple Security源码、本机SDK header和Swift typecheck确认SecTask entitlement查询是macOS公开API；iOS 26.4不导出该Swift符号。当前实现将使用macOS Security backend与其他平台fail-closed backend，不调用私有API。
+- 本项只实现injectable embedded entitlement query和true/false/missing/malformed/unreadable解析测试；3.2才新增generator-owned entitlement文件/build settings，route/session接线仍属于3.3至4.x。
+
+## 2026-07-30 阶段 16 任务 3.1 完成
+
+- 新增`EmbeddedHeadPoseEntitlementReader.swift`及独立tests并同步generator/project。macOS production使用公开Security SecTask查询，typed boundary只允许literal CFBoolean true获得`.granted`；false/missing、malformed和read error全部fail closed。
+- iOS/tvOS/visionOS 26.4 SDK不公开SecTask查询符号，production编译分支明确返回`.unreadable`且不声明私有API；OpenSpec design已同步这一限制和后续signed-artifact/physical proof边界。
+- 最终focused`4/4`、expanded entitlement/resolver/audio graph`47/47 passed / 0 skipped / 0 failed`，结构化diagnostics均为0；真实当前进程SecTask smoke query不访问Keychain。
+- macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build全部succeeded，四份xcresult结构化diagnostics为0，未选择或操作simulator。
+- OpenSpec strict、generator稳定SHA-256 `a82a2c95509603c047d02e72a7804d46caa3a23dff90613b5a2471e06551b378`、source membership、private API boundary和`git diff --check`通过。OpenSpec 3.1已勾选，权威进度`12/35`；下一项3.2为generator-owned macOS/iOS/tvOS entitlement文件与build settings。

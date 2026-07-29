@@ -1427,3 +1427,18 @@
 - focused证据`/tmp/LuneX-16-2_6-focused-r2.zgzpXm/SpatialGraphMatrix.xcresult`为`43/43`；expanded证据`/tmp/LuneX-16-2_6-expanded.VNUinJ/SpatialGraphMatrixExpanded.xcresult`为`78/78 passed / 0 skipped / 0 failed`，两者结构化warning/error/analyzer warning均为0。
 - macOS、iOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-2_6-build-macos.d7CcWo`、`/tmp/LuneX-16-2_6-build-ios.wRIX1u`、`/tmp/LuneX-16-2_6-build-tvos.KmJkTN`和`/tmp/LuneX-16-2_6-build-visionos-r2.bw1wr9`；四份xcresult均`succeeded`且结构化diagnostics为0。测试显式移除Keychain opt-in，未选择或操作simulator。
 - OpenSpec strict、generator重生成前后SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`、测试修改范围及`git diff --check`通过。OpenSpec权威进度更新为`11/35`；下一项3.1实现Security-backed embedded head-pose entitlement reader。
+
+## 2026-07-30 阶段 16 任务 3.1 调查
+
+- Apple Security开源实现确认`SecTaskCopyValueForEntitlement`首次查询时加载当前进程签名entitlements；key缺失或unsigned/no-entitlements blob返回nil且不生成error，blob读取/解析失败才返回error。返回值是未类型化`CFTypeRef`，因此reader必须只接受真实CFBoolean。
+- Xcode 26.4本机header与warnings-as-errors typecheck确认`SecTaskCreateFromSelf`和`SecTaskCopyValueForEntitlement`只由macOS SDK公开；同一Swift源码在iOS 26.4 SDK中两个符号均不存在。不得通过私有声明、`dlsym`或未公开csops绕过平台API边界。
+- 3.1采用可注入typed query：macOS production使用公开Security backend；其他平台默认返回unreadable并保持head tracking fail closed。true映射granted，missing/false映射missing，非Boolean和Security读取失败映射unreadable。3.2的entitlement文件只能证明请求配置，不是移动端runtime embedded-value readback。
+
+## 2026-07-30 阶段 16 任务 3.1 验收
+
+- 新增`EmbeddedEntitlementQuerying`与`HeadPoseEntitlementReading`纯值协议、闭合query result和`SecurityEmbeddedHeadPoseEntitlementReader`。Security backend每次创建current-process task，正确释放可选CFError；error优先于同时返回的value，只有CF type ID精确为CFBoolean且值为true时发布`.granted`。
+- false或缺失值映射`.missing`；字符串`"true"`、CFNumber `1`及任何Security读取错误映射`.unreadable`。测试同时验证reader实际传递exact `com.apple.developer.coremotion.head-pose` key，并在当前macOS测试进程执行一次真实SecTask查询，结果收敛到闭合非malformed状态。
+- macOS公开SecTask probe通过；iOS/tvOS/visionOS相同probe均由SDK以符号不在scope拒绝。production源码只在`#if os(macOS)`内import Security和引用SecTask，其他平台返回`.unreadable`，没有`dlsym`、csops或`@_silgen_name`私有绕过。
+- 最终focused证据`/tmp/LuneX-16-3_1-focused-r2.dkzzin/HeadPoseEntitlement.xcresult`为`4/4`；expanded entitlement/resolver/audio graph证据`/tmp/LuneX-16-3_1-expanded-r2.5cImoT/HeadPoseEntitlementExpanded.xcresult`为`47/47 passed / 0 skipped / 0 failed`，两份结构化diagnostics均为0。
+- macOS、iOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-3_1-build-macos.embKfJ`、`/tmp/LuneX-16-3_1-build-ios.urWZsL`、`/tmp/LuneX-16-3_1-build-tvos.17Sn9B`和`/tmp/LuneX-16-3_1-build-visionos.VmtkJJ`；四份xcresult均`succeeded`且结构化diagnostics为0，未操作simulator。
+- OpenSpec design已修正public API边界；strict、generator连续SHA-256 `a82a2c95509603c047d02e72a7804d46caa3a23dff90613b5a2471e06551b378`、五target source membership、私有API扫描和`git diff --check`通过。3.1不证明3.2 entitlement文件、signed profile、移动端embedded readback或物理head tracking。

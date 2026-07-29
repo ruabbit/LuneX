@@ -45,7 +45,7 @@ Output names remain diagnostic-only and are never used to infer AirPods or spati
 
 ### Separate entitlement intent, embedded value, and hardware proof
 
-Repository entitlements for macOS/iOS/tvOS request `com.apple.developer.coremotion.head-pose`. Production reads the embedded signed entitlement through an injectable Security-backed reader; only a literal true value is eligible. Absence, false, read failure, or a provisioning profile that omits the entitlement disables listener head tracking while preserving fixed spatial playback.
+Repository entitlements for macOS/iOS/tvOS request `com.apple.developer.coremotion.head-pose`. The injectable reader accepts only a literal Boolean true. On macOS, production reads the embedded signed value through the public Security `SecTask` API. Xcode 26.4 does not expose `SecTaskCreateFromSelf` or `SecTaskCopyValueForEntitlement` in the iOS, tvOS, or visionOS public SDK, so those production branches fail closed instead of declaring private symbols or inferring the embedded value from a repository file. Absence, false, malformed data, read failure, or an unavailable public reader disables listener head tracking while preserving fixed spatial playback. Mobile/tv entitlement acceptance therefore remains tied to the platform API readback plus external signed-artifact and physical-device evidence; an entitlement request file alone is not runtime proof.
 
 visionOS does not use this listener property. On visionOS 26 the output node receives `.headTracked` or `.fixed` intended spatial experience according to the user setting; the runtime reports this platform strategy separately. Neither branch is marked hardware-verified until physical acceptance.
 
