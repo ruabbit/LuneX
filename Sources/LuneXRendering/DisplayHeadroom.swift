@@ -2,7 +2,7 @@ import Foundation
 
 #if os(macOS)
 import AppKit
-#elseif os(iOS)
+#elseif os(iOS) || os(tvOS)
 import UIKit
 #endif
 
@@ -97,7 +97,7 @@ enum DisplayHeadroomReader {
             reference: screen.maximumReferenceExtendedDynamicRangeColorComponentValue
         )
     }
-    #elseif os(iOS)
+    #elseif os(iOS) || os(tvOS)
     @MainActor
     static func read(screen: UIScreen) -> DisplayHeadroom {
         DisplayHeadroom(

@@ -8,6 +8,25 @@ struct HDRSurfaceAdapterCapabilities: Equatable, Sendable {
     let extendedRangeSurfaceSupport: HDRExtendedRangeSurfaceSupport
     let supportedEDRGamuts: Set<HDROutputGamut>
 
+    init(
+        platform: AppleRenderingPlatform,
+        extendedRangeSurfaceSupport: HDRExtendedRangeSurfaceSupport,
+        supportedEDRGamuts: Set<HDROutputGamut>
+    ) {
+        self.platform = platform
+        self.extendedRangeSurfaceSupport = extendedRangeSurfaceSupport
+        self.supportedEDRGamuts = supportedEDRGamuts
+    }
+
+    init(platformCapabilities: HDRPlatformOutputCapabilities) {
+        self.init(
+            platform: platformCapabilities.platform,
+            extendedRangeSurfaceSupport:
+                platformCapabilities.extendedRangeSurfaceSupport,
+            supportedEDRGamuts: platformCapabilities.supportedEDRGamuts
+        )
+    }
+
     func supports(_ contract: HDRSurfaceContract) -> Bool {
         guard contract.extendedRangeIntent == .enabled else { return true }
         return extendedRangeSurfaceSupport != .unavailable
@@ -15,33 +34,7 @@ struct HDRSurfaceAdapterCapabilities: Equatable, Sendable {
     }
 
     static var current: Self {
-        #if os(macOS)
-        return Self(
-            platform: .macOS,
-            extendedRangeSurfaceSupport: .intentAndMetadata,
-            supportedEDRGamuts: [.displayP3, .ituR2020]
-        )
-        #elseif os(iOS)
-        return Self(
-            platform: .iOS,
-            extendedRangeSurfaceSupport: .intentAndMetadata,
-            supportedEDRGamuts: [.displayP3, .ituR2020]
-        )
-        #elseif os(tvOS)
-        return Self(
-            platform: .tvOS,
-            extendedRangeSurfaceSupport: .unavailable,
-            supportedEDRGamuts: []
-        )
-        #elseif os(visionOS)
-        return Self(
-            platform: .visionOS,
-            extendedRangeSurfaceSupport: .intentAndMetadata,
-            supportedEDRGamuts: [.displayP3]
-        )
-        #else
-        #error("LuneX requires an explicit HDR surface capability for this platform.")
-        #endif
+        Self(platformCapabilities: HDRPlatformOutputCapabilityAdapter.current.capabilities)
     }
 }
 

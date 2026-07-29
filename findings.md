@@ -1176,3 +1176,17 @@
 - presenter只新增可测试的drawable provider注入；production默认仍读取`MTKView.currentDrawable`。测试直接驱动transition后的两次draw，证明首个drawable只执行opaque clear，第二个draw才呈现matching frame。
 - 最终focused `4/4`、扩展矩阵`96/96`、完整macOS `597 total / 596 passed / 1 explicit Keychain skip / 0 failed`全部通过且结构化诊断为零。macOS及固定iPhone/iPad/tvOS/visionOS Debug build均生成Metal中间产物和metallib，simulator清单前后哈希一致且全局`Booted=0`。
 - 该证据证明injectable macOS lifecycle -> resolver -> presenter transition合同，不证明production `AppModel`已调用resolver、EDR compositor signaling、live Sunshine HDR、物理峰值亮度/颜色准确性或跨显示器视觉一致性；这些边界继续由4.6、5.x和6.5负责。
+
+## 2026-07-29 阶段 15 任务 4.6 调查
+
+- Apple官方文档与Xcode 26.4 SDK一致表明：`CAMetalLayer.wantsExtendedDynamicRangeContent`和`edrMetadata`在macOS/iOS可用、tvOS显式unavailable；visionOS SDK可编译这些surface字段。`UIScreen.currentEDRHeadroom`与`potentialEDRHeadroom`在iOS/iPadOS/tvOS可用，但visionOS没有等价current headroom来源。
+- 当前`HDRSurfaceAdapterCapabilities.current`独立硬编码平台surface支持，而resolver调用者需要另一份`HDRPlatformOutputCapabilities`；这会让surface API、headroom来源、gamut与SDR fallback声明漂移，且目前没有production capability factory。
+- 4.6应提供单一compile-safe平台adapter：macOS/iOS返回platform-supported候选；tvOS返回typed surface-unavailable SDR fallback；visionOS即使surface字段可编译，也因current headroom不可用返回typed headroom-unavailable SDR fallback。iPadOS沿用iOS分支但不假设AppKit。
+- capability结果只说明平台API边界，不代表具体设备/显示器支持EDR，也不替代5.1 production graph、5.2 active-session eligibility或6.5物理显示器证明。
+
+## 2026-07-29 阶段 15 任务 4.6 验收结论
+
+- `HDRPlatformOutputCapabilityAdapter`成为resolver候选能力与native surface能力的单一平台来源。macOS为current/potential/reference headroom与P3/BT.2020 intent+metadata；iOS/iPadOS为current/potential headroom与P3/BT.2020 intent+metadata。
+- tvOS可读取`UIScreen.currentEDRHeadroom/potentialEDRHeadroom`，但SDK明确没有`CAMetalLayer` EDR intent/metadata，因此返回`.extendedRangeSurfaceUnavailable`并让HDR resolver选择`.platformOutputUnsupported(.tvOS)`的SDR tone-map fallback。
+- visionOS可编译layer EDR intent/metadata与P3 surface，但没有可用的current display headroom来源，因此返回`.currentHeadroomUnavailable`并让HDR resolver选择同名SDR fallback；不会用potential、固定值或设置合成值冒充current headroom。
+- 四平台矩阵、surface派生和resolver fallback均有确定性测试，五个平台从同一source graph实际完成build-only。此证据只证明API/capability边界与compile safety，不证明移动scene/window ownership、tvOS/visionOS物理HDR、compositor signaling或设备显示结果。

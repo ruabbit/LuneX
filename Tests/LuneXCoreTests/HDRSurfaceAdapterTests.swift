@@ -3,6 +3,39 @@ import QuartzCore
 import XCTest
 
 final class HDRSurfaceAdapterTests: XCTestCase {
+    func testSurfaceCapabilitiesDeriveFromPlatformOutputAdapter() {
+        let platforms: [AppleRenderingPlatform] = [
+            .macOS, .iOS, .tvOS, .visionOS
+        ]
+
+        for platform in platforms {
+            let output = HDRPlatformOutputCapabilityAdapter.resolve(for: platform)
+            let surface = HDRSurfaceAdapterCapabilities(
+                platformCapabilities: output.capabilities
+            )
+
+            XCTAssertEqual(surface.platform, output.capabilities.platform)
+            XCTAssertEqual(
+                surface.extendedRangeSurfaceSupport,
+                output.capabilities.extendedRangeSurfaceSupport
+            )
+            XCTAssertEqual(
+                surface.supportedEDRGamuts,
+                output.capabilities.supportedEDRGamuts
+            )
+        }
+
+        #if os(macOS)
+        XCTAssertEqual(
+            HDRSurfaceAdapterCapabilities.current,
+            HDRSurfaceAdapterCapabilities(
+                platformCapabilities:
+                    HDRPlatformOutputCapabilityAdapter.current.capabilities
+            )
+        )
+        #endif
+    }
+
     @MainActor
     func testEDRApplicationUsesSafeOrderedTransactionAndIsIdempotent() throws {
         let backend = RecordingHDRSurfaceBackend(capabilities: .macOS)

@@ -31,10 +31,10 @@ still required before LuneX may claim working HDR output.
 | Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations and clears frames across pause, stop, failure, and replacement | Session/lifecycle integration tests | It stores raw `DecodedVideoFrame` only and has no render/display revision fence |
 | Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. It now owns an injectable resolved-configuration transition that clears old presentation, applies SDR or EDR surface state, replaces runtime ownership, and rejects stale views | Focused production-runtime GPU execution, shader readback, lifecycle/transition tests, full macOS tests, and five-platform builds | The SwiftUI/AppModel update graph does not call the resolver or transition yet, so its production caller path still starts in the fixed SDR fallback |
 | Display lifecycle | macOS rereads the actual `NSScreen`, potential/current/reference headroom, internal screen identity, backing pixels, and drawable on window/screen/backing/resize notifications; a separate publisher advances only for attached/detached availability, display identity, or semantic headroom changes | AppKit notification, stale-attachment, same-state deduplication, same-display headroom, overflow, and full-suite tests | Task 5.1 must propagate this snapshot through AppModel/render state; task 4.3 defines how it participates in active configuration resolution |
-| Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and can atomically transition to a resolved SDR/EDR contract while replacing runtime ownership; the adapter owns view/layer pixel format, colorspace, EDR metadata, and extended-range intent together | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported, rollback, closed recovery, stop/replacement, stale-view isolation, real macOS layer fields, and fail-closed behavior; all five platform targets compile | Task 4.5 must complete the macOS transition matrix, task 4.6 must finish explicit cross-platform capability coverage, and task 5.1 must provide the production caller |
+| Surface intent | `StreamMetalPresenter` applies its initial SDR contract through an injectable transaction adapter and can atomically transition to a resolved SDR/EDR contract while replacing runtime ownership; one platform capability resolution drives both resolver and surface behavior | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported/fallback, rollback, macOS transitions, real layer fields, and exact cross-platform capability boundaries; all five platform targets compile | Task 5.1 must provide the production caller; stage 17/18 and task 6.5 retain mobile, tvOS/visionOS, and physical-display acceptance |
 | AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
 
-The production truth after task 4.4 is therefore: LuneX presents both SDR and
+The production truth after task 4.6 is therefore: LuneX presents both SDR and
 HDR decoded layouts through the explicit shader and revision-owned Metal
 renderer. Surface fields have one atomic, platform-capability-gated owner, and
 the deterministic resolver can select SDR, EDR, or a diagnosed SDR fallback.
@@ -363,8 +363,49 @@ and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
 This proves the injectable macOS lifecycle-to-resolver-to-presenter transition
 contract. It does not prove that production `AppModel` invokes it, that the
 compositor entered HDR/EDR, live Sunshine HDR interoperability, physical peak
-luminance or color accuracy, or cross-display visual consistency. Tasks 4.6,
-5.x, and the physical-display gate retain those responsibilities.
+luminance or color accuracy, or cross-display visual consistency. Tasks 5.x
+and the physical-display gate retain those responsibilities.
+
+## Cross-platform capability evidence
+
+OpenSpec task 4.6 replaces independent platform hard-coding in the resolver and
+surface adapter with one `HDRPlatformOutputCapabilityAdapter`:
+
+- macOS resolves as a supported candidate with current, potential, and
+  reference headroom, intent plus metadata, and Display-P3/ITU-R 2020 gamuts;
+- iOS/iPadOS resolves as a supported candidate with current and potential
+  `UIScreen` headroom, intent plus metadata, and Display-P3/ITU-R 2020 gamuts;
+- tvOS reads current and potential `UIScreen` headroom but returns the typed
+  `.extendedRangeSurfaceUnavailable` SDR fallback because the SDK makes the
+  `CAMetalLayer` EDR controls unavailable. The render resolver reports
+  `.platformOutputUnsupported(.tvOS)` instead of attempting an EDR surface; and
+- visionOS can compile the Display-P3 layer intent/metadata path but returns
+  `.currentHeadroomUnavailable` because it has no verified current display
+  headroom source. The resolver selects the matching SDR fallback rather than
+  substituting potential headroom, settings, or a constant.
+
+`HDRSurfaceAdapterCapabilities.current` now derives from the same resolved
+platform capabilities used by the render resolver, so supported gamuts and
+surface API availability cannot drift between the two owners. These are
+platform API candidates and fallback policies, not per-device EDR claims.
+
+The task-level evidence is `33/33` focused tests and `599 total / 598 passed /
+1 explicit Keychain skip / 0 failed` for the complete macOS suite. macOS and
+the fixed iPhone, iPad, tvOS, and visionOS destinations passed Debug
+warnings-as-errors builds and compiled the repository Metal shader. The
+normalized simulator inventory was byte-identical before and after with
+SHA-256
+`2bb77586c245e0839dcb73d06a66e5ec85ce0d2424d504654f3e1c307e5d6534`;
+all fixed instances remained `Shutdown`, and global `Booted=0`. OpenSpec strict
+`6/6`, fixtures, four stable generator hashes at
+`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`,
+and reference, dependency, Core Image, diff, and owned-whitespace gates passed.
+
+This proves compile-safe capability/fallback policy only. It does not prove
+iOS/iPadOS scene or window ownership, tvOS/visionOS physical HDR output,
+compositor EDR signaling, live Sunshine HDR, luminance/color accuracy, or
+cross-display visual consistency. Tasks 5.x, stages 17/18, and task 6.5 retain
+those gates.
 
 ## Verification matrix
 

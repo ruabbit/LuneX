@@ -118,21 +118,43 @@ final class HDRRenderConfigurationResolverTests: XCTestCase {
     }
 
     func testUnsupportedPlatformUsesTypedSDRFallback() throws {
+        let platformResolution = HDRPlatformOutputCapabilityAdapter.resolve(
+            for: .tvOS
+        )
+        XCTAssertEqual(
+            platformResolution.fallbackReason,
+            .extendedRangeSurfaceUnavailable
+        )
         let resolution = HDRRenderConfigurationResolver.resolve(makeInput(
             colorMetadata: .hdr10VideoRange(),
-            capabilities: HDRPlatformOutputCapabilities(
-                platform: .tvOS,
-                headroomSource: .currentAndPotential,
-                extendedRangeSurfaceSupport: .unavailable,
-                supportedEDRGamuts: [],
-                supportsSDRToneMapping: true
-            ),
+            capabilities: platformResolution.capabilities,
             display: makeDisplay(current: 3)
         ))
 
         XCTAssertEqual(
             try XCTUnwrap(resolution.configuration).outputMode,
             .sdrFallback(.platformOutputUnsupported(.tvOS))
+        )
+    }
+
+    func testVisionPlatformUsesCurrentHeadroomUnavailableFallback() throws {
+        let platformResolution = HDRPlatformOutputCapabilityAdapter.resolve(
+            for: .visionOS
+        )
+        XCTAssertEqual(
+            platformResolution.fallbackReason,
+            .currentHeadroomUnavailable
+        )
+
+        let resolution = HDRRenderConfigurationResolver.resolve(makeInput(
+            colorMetadata: .hdr10VideoRange(),
+            capabilities: platformResolution.capabilities,
+            display: makeDisplay(current: 3)
+        ))
+
+        XCTAssertEqual(
+            try XCTUnwrap(resolution.configuration).outputMode,
+            .sdrFallback(.currentHeadroomUnavailable)
         )
     }
 

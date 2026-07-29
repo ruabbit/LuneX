@@ -1557,3 +1557,19 @@
 - 构建前后规范化simulator清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；四个固定UUID均available且`Shutdown`，全局`Booted=0`。只执行build与只读清单，没有create、clone、boot、launch、shutdown或delete设备。
 - repository预扫有一条嵌套引号正则被zsh在执行前拒绝，随后使用精确路径token；最终门禁位于`/tmp/LuneX-15-4_5-repo-final.bIPQJN`。fixture validator self-test/全树、OpenSpec strict `6/6`、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、production/reference、Swift Package、Core Image、diff与排除vendor的自有whitespace边界全部通过。
 - OpenSpec 4.5标记完成，权威进度更新为`21/33`；阶段15保持`in_progress`。下一项4.6为iOS/iPadOS、tvOS与visionOS compile-safe capability adapters；5.1 production graph、EDR signaling、live Sunshine HDR和6.5物理显示器证据仍未完成。
+
+## 2026-07-29 阶段 15 任务 4.6 启动
+
+- 4.5已以`5048a89 Verify macOS HDR display transitions`独立提交并经Surge SOCKS5推送；fetch确认`HEAD == origin/main == 5048a89`且工作树clean。OpenSpec权威进度`21/33`，下一项精确为4.6。
+- Context7查询Apple Developer Documentation时连接失败；改用Apple官方developer文档检索与本机Xcode 26.4 SDK header交叉验证。未加引号的QuartzCore swiftinterface glob被zsh在读取前拒绝，随后改为逐平台SDK header路径。
+- 4.6范围限定为平台capability结果和surface能力的单一来源、typed unsupported/fallback与确定性测试；不提前接入5.1 `AppModel`/media/render graph，不把平台API availability当作设备EDR或物理HDR证明。
+- 新增`HDRPlatformOutputCapabilityAdapter`与typed capability resolution：macOS/iOS为候选supported，tvOS因extended-range surface API不可用返回SDR fallback，visionOS因缺少current headroom来源返回SDR fallback。`HDRSurfaceAdapterCapabilities.current`改为从同一平台结果派生，消除resolver/surface两套硬编码；tvOS的compile-safe `DisplayHeadroomReader`读取`UIScreen` current/potential EDR headroom，但仍因surface边界禁止宣称HDR输出。
+- 4.6 focused warnings-as-errors测试位于`/tmp/LuneX-15-4_6-focused.qhzI9m`，`HDRRenderContractTests`、`HDRSurfaceAdapterTests`、`HDRRenderConfigurationResolverTests`共`33/33 passed / 0 skipped / 0 failed`；覆盖四平台精确矩阵、surface派生一致性、tvOS unsupported-output SDR fallback及visionOS current-headroom-unavailable fallback。
+- 五平台compile-safe Debug build位于`/tmp/LuneX-15-4_6-builds.UzHQPD`：macOS、固定iPhone、固定iPad、tvOS、visionOS全部warnings-as-errors成功并生成Metal产物；每个build log仅有Xcode `appintentsmetadataprocessor`在未链接AppIntents时跳过提取的工具提示，没有Swift/Clang/Metal源码诊断。
+- 构建前后规范化available simulator清单逐字一致，SHA-256均为`2bb77586c245e0839dcb73d06a66e5ec85ce0d2424d504654f3e1c307e5d6534`；四个固定UUID始终`Shutdown`，全局`Booted=0`。未执行create、clone、boot、launch、shutdown或delete。
+
+## 2026-07-29 阶段 15 任务 4.6 完成
+
+- 完整macOS warnings-as-errors suite位于`/tmp/LuneX-15-4_6-full.6POMvJ`，xcresult为`599 total / 598 passed / 1 skipped / 0 failed`。唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`及其`LUNEX_RUN_KEYCHAIN_TEST=1` opt-in说明；所有测试均显式`env -u LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- repository gates位于`/tmp/LuneX-15-4_6-repo.9opc3n`：fixture validator self-test/全树、OpenSpec strict `6/6`、generator运行前与连续三次SHA-256均为`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`，production/reference、Swift Package、Core Image、diff与排除vendor的自有whitespace边界全部通过。
+- OpenSpec 4.6标记完成，权威进度更新为`22/33`；阶段15保持`in_progress`。下一项5.1为production `AppModel`、media environment、presentation source、actual stream surface与active renderer revision接线；EDR compositor signaling、live Sunshine HDR与6.5物理显示器证据仍未完成。

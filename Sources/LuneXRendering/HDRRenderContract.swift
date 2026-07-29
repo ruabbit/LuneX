@@ -98,6 +98,93 @@ struct HDRPlatformOutputCapabilities: Codable, Hashable, Sendable {
     let supportsSDRToneMapping: Bool
 }
 
+enum HDRPlatformOutputCapabilityFallbackReason: String, Codable, Hashable, Sendable {
+    case extendedRangeSurfaceUnavailable
+    case currentHeadroomUnavailable
+}
+
+enum HDRPlatformOutputCapabilityResolution: Codable, Hashable, Sendable {
+    case supported(HDRPlatformOutputCapabilities)
+    case sdrFallback(
+        capabilities: HDRPlatformOutputCapabilities,
+        reason: HDRPlatformOutputCapabilityFallbackReason
+    )
+
+    var capabilities: HDRPlatformOutputCapabilities {
+        switch self {
+        case let .supported(capabilities),
+             let .sdrFallback(capabilities, _):
+            return capabilities
+        }
+    }
+
+    var fallbackReason: HDRPlatformOutputCapabilityFallbackReason? {
+        guard case let .sdrFallback(_, reason) = self else { return nil }
+        return reason
+    }
+}
+
+enum HDRPlatformOutputCapabilityAdapter {
+    static var current: HDRPlatformOutputCapabilityResolution {
+        #if os(macOS)
+        resolve(for: .macOS)
+        #elseif os(iOS)
+        resolve(for: .iOS)
+        #elseif os(tvOS)
+        resolve(for: .tvOS)
+        #elseif os(visionOS)
+        resolve(for: .visionOS)
+        #else
+        #error("LuneX requires an explicit HDR output capability for this platform.")
+        #endif
+    }
+
+    static func resolve(
+        for platform: AppleRenderingPlatform
+    ) -> HDRPlatformOutputCapabilityResolution {
+        switch platform {
+        case .macOS:
+            return .supported(HDRPlatformOutputCapabilities(
+                platform: .macOS,
+                headroomSource: .currentPotentialAndReference,
+                extendedRangeSurfaceSupport: .intentAndMetadata,
+                supportedEDRGamuts: [.displayP3, .ituR2020],
+                supportsSDRToneMapping: true
+            ))
+        case .iOS:
+            return .supported(HDRPlatformOutputCapabilities(
+                platform: .iOS,
+                headroomSource: .currentAndPotential,
+                extendedRangeSurfaceSupport: .intentAndMetadata,
+                supportedEDRGamuts: [.displayP3, .ituR2020],
+                supportsSDRToneMapping: true
+            ))
+        case .tvOS:
+            return .sdrFallback(
+                capabilities: HDRPlatformOutputCapabilities(
+                    platform: .tvOS,
+                    headroomSource: .currentAndPotential,
+                    extendedRangeSurfaceSupport: .unavailable,
+                    supportedEDRGamuts: [],
+                    supportsSDRToneMapping: true
+                ),
+                reason: .extendedRangeSurfaceUnavailable
+            )
+        case .visionOS:
+            return .sdrFallback(
+                capabilities: HDRPlatformOutputCapabilities(
+                    platform: .visionOS,
+                    headroomSource: .unavailable,
+                    extendedRangeSurfaceSupport: .intentAndMetadata,
+                    supportedEDRGamuts: [.displayP3],
+                    supportsSDRToneMapping: true
+                ),
+                reason: .currentHeadroomUnavailable
+            )
+        }
+    }
+}
+
 enum HDRMappingMode: String, Codable, Hashable, Sendable {
     case sdr
     case hdrEDR

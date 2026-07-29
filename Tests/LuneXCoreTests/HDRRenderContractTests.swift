@@ -73,27 +73,75 @@ final class HDRRenderContractTests: XCTestCase {
         XCTAssertTrue(capabilities.supportsSDRToneMapping)
     }
 
-    func testPlatformCapabilitiesDistinguishTVAndVisionOutputBoundaries() {
-        let tvOS = HDRPlatformOutputCapabilities(
-            platform: .tvOS,
-            headroomSource: .currentAndPotential,
-            extendedRangeSurfaceSupport: .unavailable,
-            supportedEDRGamuts: [],
-            supportsSDRToneMapping: true
-        )
-        let visionOS = HDRPlatformOutputCapabilities(
-            platform: .visionOS,
-            headroomSource: .unavailable,
-            extendedRangeSurfaceSupport: .intentAndMetadata,
-            supportedEDRGamuts: [.displayP3],
-            supportsSDRToneMapping: true
-        )
+    func testPlatformCapabilityAdapterPublishesExactCrossPlatformMatrix() {
+        let expected: [(
+            AppleRenderingPlatform,
+            HDRPlatformOutputCapabilityResolution
+        )] = [
+            (
+                .macOS,
+                .supported(HDRPlatformOutputCapabilities(
+                    platform: .macOS,
+                    headroomSource: .currentPotentialAndReference,
+                    extendedRangeSurfaceSupport: .intentAndMetadata,
+                    supportedEDRGamuts: [.displayP3, .ituR2020],
+                    supportsSDRToneMapping: true
+                ))
+            ),
+            (
+                .iOS,
+                .supported(HDRPlatformOutputCapabilities(
+                    platform: .iOS,
+                    headroomSource: .currentAndPotential,
+                    extendedRangeSurfaceSupport: .intentAndMetadata,
+                    supportedEDRGamuts: [.displayP3, .ituR2020],
+                    supportsSDRToneMapping: true
+                ))
+            ),
+            (
+                .tvOS,
+                .sdrFallback(
+                    capabilities: HDRPlatformOutputCapabilities(
+                        platform: .tvOS,
+                        headroomSource: .currentAndPotential,
+                        extendedRangeSurfaceSupport: .unavailable,
+                        supportedEDRGamuts: [],
+                        supportsSDRToneMapping: true
+                    ),
+                    reason: .extendedRangeSurfaceUnavailable
+                )
+            ),
+            (
+                .visionOS,
+                .sdrFallback(
+                    capabilities: HDRPlatformOutputCapabilities(
+                        platform: .visionOS,
+                        headroomSource: .unavailable,
+                        extendedRangeSurfaceSupport: .intentAndMetadata,
+                        supportedEDRGamuts: [.displayP3],
+                        supportsSDRToneMapping: true
+                    ),
+                    reason: .currentHeadroomUnavailable
+                )
+            )
+        ]
 
-        XCTAssertNotEqual(tvOS, visionOS)
-        XCTAssertEqual(tvOS.headroomSource, .currentAndPotential)
-        XCTAssertEqual(tvOS.extendedRangeSurfaceSupport, .unavailable)
-        XCTAssertEqual(visionOS.headroomSource, .unavailable)
-        XCTAssertEqual(visionOS.extendedRangeSurfaceSupport, .intentAndMetadata)
+        for (platform, expectedResolution) in expected {
+            let resolution = HDRPlatformOutputCapabilityAdapter.resolve(for: platform)
+            XCTAssertEqual(resolution, expectedResolution)
+            XCTAssertEqual(resolution.capabilities.platform, platform)
+            XCTAssertEqual(
+                resolution.fallbackReason,
+                expectedResolution.fallbackReason
+            )
+        }
+
+        #if os(macOS)
+        XCTAssertEqual(
+            HDRPlatformOutputCapabilityAdapter.current,
+            HDRPlatformOutputCapabilityAdapter.resolve(for: .macOS)
+        )
+        #endif
     }
 
     func testConfigurationIdentityIncludesGenerationColorDisplayMappingAndSurface() throws {
