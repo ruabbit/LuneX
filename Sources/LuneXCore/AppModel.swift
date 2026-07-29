@@ -147,6 +147,10 @@ final class AppModel: ApplicationInputSink {
     private(set) var hdrPresentationStatus = HDRPresentationStatus.inactive
     private(set) var audioRuntimeState: SessionMediaAudioRuntimeState?
 
+    var spatialAudioPresentationStatus: SpatialAudioPresentationStatus {
+        SpatialAudioPresentationStatus(audioRuntimeState)
+    }
+
     let videoPresentationSource: StreamVideoPresentationSource
 
     private let hostLibraryManager: HostLibraryManager

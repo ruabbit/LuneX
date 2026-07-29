@@ -49,7 +49,7 @@
 
 阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`32/33 in_progress`。1.1至6.4与6.6的production、确定性测试、normal/五平台Debug+Release、strict/generator/dependency/Metal/analyzer/ASan/TSan/malloc/resource、simulator与跟踪证据均完成并逐项提交推送；已推送`372ca60`上的阶段级离线自验再次通过`616 total / 615 passed / 1 Keychain skip / 0 failed`、strict `6/6`、generator与固定simulator门。唯一剩余6.5要求授权Sunshine HDR源、代表性HDR/SDR物理显示器和可审计参考图或测量。没有live compositor EDR signaling、物理亮度/颜色、动态headroom和跨显示器证据时，change不可archive、阶段不可标记`complete`；下一可执行阶段为16空间音频，不以其证据替代6.5。
 
-阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`26/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1新增`AppSettings.audio`及兼容迁移；5.2完成稳定privacy-bounded spatial diagnostics；5.3分离bounded history与current action ownership，等价action不刷新当前owner，健康空间状态只清理`.audio`并保留transport/decoder/HDR/input/pairing。下一项5.4以actual runtime替换静态stream pill并加入原生spatial/head-tracking Settings controls和inactive/fallback状态。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、真实route切换与signed entitlement行为仍是6.6真机硬件证据，不能由离线测试、属性赋值、编译或模拟器替代。
+阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`27/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1新增`AppSettings.audio`及兼容迁移；5.2完成稳定privacy-bounded spatial diagnostics；5.3分离bounded history与current action ownership；5.4以actual runtime替换静态stream pill，并加入原生spatial/head-tracking Settings controls及inactive/fallback状态。下一项5.5补齐responsive compact/wide、localization-safe copy、完整accessibility、migration、diagnostic ownership和actual-state UI wiring测试矩阵。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；在具体任务要求前不创建、启动、安装、运行或关闭任何simulator。AirPods/head tracking、可听多声道定位、真实route切换与signed entitlement行为仍是6.6真机硬件证据，不能由离线测试、属性赋值、编译或模拟器替代。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -77,6 +77,7 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 16.5.4首轮focused测试以无类型`nil`调用两个Optional presentation initializer | 1 | production源码已编译；把nil fixture显式标注为`SessionMediaAudioRuntimeState?.none`，失败bundle不计验收并从全新DerivedData重跑 |
 | 16.5.3只读repository检索把含反引号的pattern放进zsh双引号 | 1 | 该子命令在检索前发生命令替换且未改仓库；后续含Markdown反引号的pattern使用单引号，不重复该命令 |
 | 16.5.3首轮focused包装器在测试成功后读取zsh中不存在的`PIPESTATUS[0]` | 1 | 保留已成功生成的xcresult并结构化确认23/23通过、零诊断；其余管线显式使用`/bin/bash`，不重复该包装器 |
 | 16.5.2并行读取同一xcresult的summary/tests/build明细触发Xcode临时`database.sqlite3`同名冲突 | 1 | summary与build结果已成功且bundle未损坏；tests明细改为串行只读，确认唯一skip为显式真实Keychain用例 |

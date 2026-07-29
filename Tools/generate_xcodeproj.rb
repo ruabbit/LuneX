@@ -49,6 +49,7 @@ sources = [
   "Sources/LuneXApp/RootView.swift",
   "Sources/LuneXCore/AppModel.swift",
   "Sources/LuneXCore/HDRPresentationStatus.swift",
+  "Sources/LuneXCore/SpatialAudioPresentationStatus.swift",
   "Sources/LuneXCore/ApplicationInputSink.swift",
   "Sources/LuneXCore/AppSettings.swift",
   "Sources/LuneXCore/ClientIdentity.swift",
@@ -141,6 +142,7 @@ sources = [
 test_support_sources = [
   "Sources/LuneXCore/AppModel.swift",
   "Sources/LuneXCore/HDRPresentationStatus.swift",
+  "Sources/LuneXCore/SpatialAudioPresentationStatus.swift",
   "Sources/LuneXCore/ApplicationInputSink.swift",
   "Sources/LuneXCore/AppSettings.swift",
   "Sources/LuneXCore/ClientIdentity.swift",
@@ -266,6 +268,7 @@ test_sources = [
   "Tests/LuneXCoreTests/HDRMetalShaderReadbackTests.swift",
   "Tests/LuneXCoreTests/HDRMetalVideoRendererTests.swift",
   "Tests/LuneXCoreTests/HDRPresentationStatusTests.swift",
+  "Tests/LuneXCoreTests/SpatialAudioPresentationStatusTests.swift",
   "Tests/LuneXCoreTests/HDRRenderContractTests.swift",
   "Tests/LuneXCoreTests/HDRRenderConfigurationResolverTests.swift",
   "Tests/LuneXCoreTests/HDRSurfaceAdapterTests.swift",

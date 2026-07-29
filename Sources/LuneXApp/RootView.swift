@@ -739,6 +739,7 @@ private struct StreamStatusOverlay: View {
     @ViewBuilder
     private var statusPills: some View {
         let hdrContent = appModel.hdrPresentationStatus.content
+        let spatialContent = appModel.spatialAudioPresentationStatus.content
 
         StatusPill(
             label: appModel.settings.input.preferRelativeMouseMode
@@ -753,7 +754,13 @@ private struct StreamStatusOverlay: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("HDR presentation")
         .accessibilityValue(hdrContent.accessibilityValue)
-        StatusPill(label: "Spatial gated", systemImage: "airpodspro")
+        StatusPill(
+            label: spatialContent.overlayLabel,
+            systemImage: spatialContent.systemImage
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spatial audio presentation")
+        .accessibilityValue(spatialContent.accessibilityValue)
     }
 }
 
@@ -858,6 +865,19 @@ private struct SettingsView: View {
                 Toggle("Virtual controller", isOn: $appModel.settings.input.showVirtualController)
             }
 
+            Section("Spatial Audio") {
+                Toggle(isOn: spatialAudioEnabled) {
+                    Label("Spatial audio", systemImage: "wave.3.right.circle")
+                }
+                Toggle(isOn: headTrackingEnabled) {
+                    Label("Head tracking", systemImage: "person.wave.2")
+                }
+                .disabled(!appModel.settings.audio.spatialAudioEnabled)
+                SpatialAudioPresentationStatusRow(
+                    status: appModel.spatialAudioPresentationStatus
+                )
+            }
+
             Section("Continuity") {
                 Toggle("Audio continuity", isOn: $appModel.settings.continuity.audioContinuityEnabled)
                 Toggle("Picture in Picture", isOn: $appModel.settings.continuity.pictureInPictureEnabled)
@@ -873,6 +893,50 @@ private struct SettingsView: View {
                     Label("Save Settings", systemImage: "checkmark.circle")
                 }
                 .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var spatialAudioEnabled: Binding<Bool> {
+        Binding(
+            get: {
+                appModel.settings.audio.spatialAudioEnabled
+            },
+            set: { enabled in
+                applySpatialAudioPreferences(SessionSpatialAudioPreferences(
+                    spatialAudioEnabled: enabled,
+                    headTrackingEnabled:
+                        appModel.settings.audio.headTrackingEnabled
+                ))
+            }
+        )
+    }
+
+    private var headTrackingEnabled: Binding<Bool> {
+        Binding(
+            get: {
+                appModel.settings.audio.headTrackingEnabled
+            },
+            set: { enabled in
+                applySpatialAudioPreferences(SessionSpatialAudioPreferences(
+                    spatialAudioEnabled:
+                        appModel.settings.audio.spatialAudioEnabled,
+                    headTrackingEnabled: enabled
+                ))
+            }
+        )
+    }
+
+    private func applySpatialAudioPreferences(
+        _ preferences: SessionSpatialAudioPreferences
+    ) {
+        Task {
+            do {
+                try await appModel.updateSpatialAudioPreferences(preferences)
+            } catch {
+                appModel.diagnostics.record(
+                    ApplicationDiagnosticFactory.streamFailure(error)
+                )
             }
         }
     }
@@ -895,6 +959,27 @@ private struct HDRPresentationStatusRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Current HDR presentation")
+        .accessibilityValue(content.accessibilityValue)
+    }
+}
+
+private struct SpatialAudioPresentationStatusRow: View {
+    let status: SpatialAudioPresentationStatus
+
+    var body: some View {
+        let content = status.content
+
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent("Current playback") {
+                Label(content.settingsValue, systemImage: content.systemImage)
+            }
+            Text(content.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Current spatial audio presentation")
         .accessibilityValue(content.accessibilityValue)
     }
 }

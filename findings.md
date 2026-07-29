@@ -1647,3 +1647,19 @@
 - `SpatialAudioDiagnosticState.clearsCurrentAudioAction`只允许健康active nonspatial/fixed/head-tracked/visionOS状态和用户主动disabled fallback清理；AppModel只调用`clearActionableEvents(in: [.audio])`，actionable fallback、inactive、recovery与failure不会误清。
 - focused为`23/23`、expanded为`138/138`、完整macOS为`716 total / 715 passed / 1 explicit Keychain skip / 0 failed`；四平台generic-device Debug build为4/4 succeeded，所有结构化error/warning/analyzer warning均为0。
 - repository gate `/tmp/LuneX-16-5_3-repo.uVLOZx`通过OpenSpec strict `7/7`、fixture self-test/全树、membership、ownership、privacy、secret、reference/package/Core Image/diff和generator双次稳定性；SHA-256为`733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`，前后`Booted=0`。
+
+## 2026-07-30 阶段 16 任务 5.4 调查
+
+- `RootView`的stream overlay仍以静态`Spatial gated`显示空间音频，Settings只有HDR/Input/Continuity控件；实际`SessionMediaAudioRuntimeState?`已经由AppModel current generation持有，不能从`settings.audio`推测当前播放模式。
+- 现有HDR模式提供可复用边界：Core层把actual runtime映射为privacy-bounded presentation status/content，overlay和Settings都消费同一content。空间音频需要保留actual presentation mode，同时把missing entitlement、route/layout、algorithm与用户disabled等fallback作为固定detail，避免fixed spatial因head-tracking fallback被误显示为完全不可用。
+- `AppModel.updateSpatialAudioPreferences`已经先更新持久化settings值，并对活动session/media generation调用environment；SwiftUI Toggle应使用自定义Binding调用该async入口，而不是直接绑定`settings.audio`绕过active-stream更新。空间音频关闭时head tracking控件应disabled，但保留用户选择以便重新启用。
+- Apple SwiftUI文档确认`Form`适合跨平台设置界面，`Toggle`应由`Binding<Bool>`驱动，dependent control可用`disabled(_:)`收敛交互；5.4沿用系统控件与现有8pt状态表面，不引入自绘开关或额外卡片。
+
+## 2026-07-30 阶段 16 任务 5.4 验收
+
+- 新增封闭`SpatialAudioPresentationStatus`，只从AppModel current-generation `audioRuntimeState`派生inactive、nonspatial、fixed、head-tracked、visionOS fixed/head-tracked、recovering和failed实际模式；所有`SpatialAudioFallbackReason`映射为固定privacy-bounded detail，fallback不会覆盖仍在工作的实际fixed模式。
+- stream overlay与Settings当前播放行消费同一actual-runtime content；旧静态`Spatial gated`已删除。原生spatial/head-tracking `Toggle`通过自定义`Binding`调用既有async `updateSpatialAudioPreferences`，空间音频关闭时只禁用head-tracking交互而保留其desired preference。
+- focused `/tmp/LuneX-16-5_4-focused-r2.OhQjwn/Focused.xcresult`为`9/9`，expanded `/tmp/LuneX-16-5_4-expanded.Z1D2el/Expanded.xcresult`为`146/146`，完整macOS `/tmp/LuneX-16-5_4-full.i0kzuI/LuneXCoreTests.xcresult`为`720 total / 719 passed / 1 explicit Keychain skip / 0 failed`；所有结构化error、warning和analyzer warning均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build位于`/tmp/LuneX-16-5_4-builds.JIxcKyvQdoBh/*/Build.xcresult`，4/4 succeeded且结构化diagnostics为0。
+- repository gate `/tmp/LuneX-16-5_4-repo.Uk74JV`通过OpenSpec strict `7/7`、fixture self-test/全树、source/test membership、actual-state UI wiring、privacy/secret/reference/package/Core Image/diff边界与generator双次稳定性；SHA-256为`e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`，前后模拟器清单一致且`Booted=0`。
+- 本项不替代5.5完整responsive/localization/accessibility/migration/ownership/UI矩阵，也不证明signed entitlement、AirPods head tracking、真实route transition、可听多声道定位/同步、visionOS物理空间音频或live Sunshine播放。

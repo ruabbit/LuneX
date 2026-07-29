@@ -2060,3 +2060,20 @@
 - focused `/tmp/LuneX-16-5_3-focused.O2HD8t/Focused.xcresult`为`23/23`，expanded `/tmp/LuneX-16-5_3-expanded.kzcDJU/Expanded.xcresult`为`138/138`，完整macOS `/tmp/LuneX-16-5_3-full.NbKZws/LuneXCoreTests.xcresult`为`716 total / 715 passed / 1 explicit Keychain skip / 0 failed`；所有结构化diagnostics为0。
 - 四平台generic-device Debug build `/tmp/LuneX-16-5_3-builds.TpwXAFYpDMUF/*/Build.xcresult`为4/4 succeeded；repository gate `/tmp/LuneX-16-5_3-repo.uVLOZx`通过strict `7/7`、fixtures、membership/ownership/privacy/secret/reference/package/Core Image/diff边界及generator双次稳定SHA-256 `733bedca4c341da86c790bfdc406301e4d244d827cca0292c767a9db107ae3e6`。
 - OpenSpec 5.3已勾选，权威进度更新为`26/35`；下一项5.4以actual runtime替换静态stream spatial pill，并加入原生spatial/head-tracking Settings controls及inactive/fallback状态。前后全局`Booted=0`，未操作simulator，也未触发真实Keychain。
+
+## 2026-07-30 阶段 16 任务 5.4 启动
+
+- 5.3已以`78972fa Scope spatial audio action recovery`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`26/35 ready`，进入5.4。
+- 本项新增actual-runtime-derived空间音频presentation status/content，以同一状态驱动stream pill和Settings当前播放行；原生spatial/head-tracking Toggle通过现有async AppModel入口应用到活动generation，不能直接改settings绕过runtime。
+- 5.4补状态映射与基本UI接线回归；5.5保留responsive compact/wide、localization-safe copy、完整accessibility、preference migration、diagnostic ownership与actual-state UI矩阵。普通测试继续移除真实Keychain opt-in，本项不操作simulator。
+- 第一版已新增closed presentation mode/fallback/content映射、AppModel actual状态派生、overlay实际pill、Settings原生Toggle与当前播放行；Toggle通过自定义Binding调用async runtime入口，失败收敛为既有typed diagnostic。测试覆盖inactive/nonspatial/fixed/head-tracked/vision/recovery/failure、fallback保留actual mode、privacy copy与静态UI接线。
+- 首轮focused `/tmp/LuneX-16-5_4-focused.m6j5Ot/Focused.xcresult`在测试执行前因无类型`nil`同时匹配runtime-state与runtime-event两个Optional initializer而编译失败；production源码无诊断。nil fixture改为明确`SessionMediaAudioRuntimeState?.none`，该bundle不计验收并从全新目录重跑。
+- 修正后的focused `/tmp/LuneX-16-5_4-focused-r2.OhQjwn/Focused.xcresult`通过`9/9`：4个空间音频presentation/UI接线测试、4个HDR相邻presentation测试及1个AppModel实际空间音频状态绑定测试全部通过；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用全新DerivedData，未操作simulator。
+- 扩大回归`/tmp/LuneX-16-5_4-expanded.Z1D2el/Expanded.xcresult`通过`146/146`，覆盖presentation、runtime diagnostics、AppModel workflow、native audio processor、media environment、spatial resolver和audio recovery；focused与expanded两份xcresult的结构化error、warning和analyzer warning均为0，检查时全局`Booted=0`。
+
+## 2026-07-30 阶段 16 任务 5.4 完成
+
+- actual-runtime presentation status、stream overlay、Settings原生spatial/head-tracking Toggle与当前播放状态行已完成；静态`Spatial gated`已删除，fallback保留实际播放模式，Toggle通过async AppModel入口更新当前generation。
+- focused为`9/9`，expanded为`146/146`，完整macOS为`720 total / 719 passed / 1 explicit Keychain skip / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，三份测试xcresult的结构化diagnostics均为0。
+- 四平台generic-device Debug unsigned warnings-as-errors build `/tmp/LuneX-16-5_4-builds.JIxcKyvQdoBh/*/Build.xcresult`为4/4 succeeded且结构化diagnostics为0；repository gate `/tmp/LuneX-16-5_4-repo.Uk74JV`通过strict `7/7`、fixtures、generator、membership、UI wiring、privacy/secret/reference/package/Core Image/diff与模拟器不变边界。
+- OpenSpec 5.4已勾选，权威进度更新为`27/35`；下一项5.5负责完整responsive compact/wide、localization-safe copy、accessibility、migration、diagnostic ownership与actual-state UI wiring测试。全程未触发真实Keychain，前后`Booted=0`且未操作simulator。
