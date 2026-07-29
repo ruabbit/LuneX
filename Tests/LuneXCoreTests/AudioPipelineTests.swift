@@ -434,29 +434,106 @@ final class AudioPipelineTests: XCTestCase {
         }
     }
 
-    func testProductionClientBuildsPlayerMixerGraphWithoutStartingHardware() throws {
+    func testProductionClientBuildsEnvironmentAmbienceBedGraphForEveryEligibleLayout() throws {
+        let layouts: [StreamAudioChannelLayout] = [
+            .stereo,
+            .wave5Point1,
+            .wave7Point1
+        ]
+
+        for layout in layouts {
+            let client = AVAudioEngineClient()
+            let configuration = StreamAudioConfiguration(
+                sampleRate: 48_000,
+                channelLayout: layout,
+                latencyPolicy: .lowLatency
+            )
+            let graphIntent = makeAudioGraphIntent(
+                channelCount: layout.channelCount,
+                userEnablesSpatialAudio: true
+            )
+
+            let actual = try client.configure(
+                configuration,
+                graphIntent: graphIntent
+            )
+
+            XCTAssertEqual(actual.revision, graphIntent.revision)
+            XCTAssertEqual(actual.layoutSignature, layout.signature)
+            XCTAssertEqual(actual.graphMode, .environmentAmbienceBed)
+            XCTAssertEqual(actual.platformStrategy, .environmentListener)
+            XCTAssertEqual(actual.presentationMode, .fixedSpatial)
+            XCTAssertNil(actual.fallbackReason)
+            XCTAssertTrue(actual.spatialAudioActive)
+
+            let graph = client.graphReadback()
+            XCTAssertEqual(graph.mode, .environmentAmbienceBed)
+            XCTAssertTrue(graph.playerAttached)
+            XCTAssertTrue(graph.environmentAttached)
+            XCTAssertTrue(graph.playerConnectedToEnvironment)
+            XCTAssertFalse(graph.playerConnectedToMainMixer)
+            XCTAssertTrue(graph.environmentConnectedToMainMixer)
+            XCTAssertEqual(
+                graph.sourceModeRawValue,
+                AVAudio3DMixingSourceMode.ambienceBed.rawValue
+            )
+            XCTAssertEqual(
+                graph.selectedRenderingAlgorithmRawValue,
+                AVAudio3DMixingRenderingAlgorithm.auto.rawValue
+            )
+            XCTAssertTrue(
+                graph.applicableRenderingAlgorithmRawValues.contains(
+                    AVAudio3DMixingRenderingAlgorithm.auto.rawValue
+                )
+            )
+            XCTAssertEqual(
+                graph.inputLayoutTagRawValue,
+                layout.coreAudioLayoutTagRawValue
+            )
+
+            client.stop(drain: false)
+            let stoppedGraph = client.graphReadback()
+            XCTAssertEqual(stoppedGraph.mode, .unconfigured)
+            XCTAssertFalse(stoppedGraph.playerConnectedToEnvironment)
+            XCTAssertFalse(stoppedGraph.environmentConnectedToMainMixer)
+            XCTAssertThrowsError(
+                try client.schedule(
+                    makePCM(sequence: 1, timestamp: 0),
+                    completion: {}
+                )
+            ) { error in
+                XCTAssertEqual(
+                    error as? AudioPipelineError,
+                    .missingConfiguration
+                )
+            }
+        }
+    }
+
+    func testProductionClientKeepsDisabledSpatialAudioOnDirectMixerPath() throws {
         let client = AVAudioEngineClient()
         let graphIntent = makeAudioGraphIntent(
             channelCount: 2,
-            userEnablesSpatialAudio: true
+            userEnablesSpatialAudio: false
         )
 
         let actual = try client.configure(
             .stereoLowLatency,
             graphIntent: graphIntent
         )
+        let graph = client.graphReadback()
 
-        XCTAssertEqual(actual.revision, graphIntent.revision)
-        XCTAssertEqual(actual.layoutSignature, StreamAudioChannelLayout.stereo.signature)
         XCTAssertEqual(actual.graphMode, .nonspatialMixer)
-        XCTAssertEqual(actual.platformStrategy, .none)
         XCTAssertEqual(actual.presentationMode, .nonspatial)
-        XCTAssertEqual(actual.fallbackReason, .graphUnavailable)
-        XCTAssertFalse(actual.spatialAudioActive)
+        XCTAssertEqual(actual.fallbackReason, .userDisabled)
+        XCTAssertEqual(graph.mode, .nonspatialMixer)
+        XCTAssertFalse(graph.playerConnectedToEnvironment)
+        XCTAssertTrue(graph.playerConnectedToMainMixer)
+        XCTAssertFalse(graph.environmentConnectedToMainMixer)
+        XCTAssertNil(graph.sourceModeRawValue)
+        XCTAssertNil(graph.selectedRenderingAlgorithmRawValue)
+        XCTAssertTrue(graph.applicableRenderingAlgorithmRawValues.isEmpty)
         client.stop(drain: false)
-        XCTAssertThrowsError(try client.schedule(makePCM(sequence: 1, timestamp: 0), completion: {})) { error in
-            XCTAssertEqual(error as? AudioPipelineError, .missingConfiguration)
-        }
     }
 
     func testInvalidStreamConfigurationFailsBeforeBackendConfiguration() async throws {

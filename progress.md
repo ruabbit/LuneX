@@ -1790,3 +1790,18 @@
 - macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors App build分别位于`/tmp/LuneX-16-2_2-build-macos.1785345411219`、`/tmp/LuneX-16-2_2-build-ios.1785345411220`、`/tmp/LuneX-16-2_2-build-tvos.1785345411220`和`/tmp/LuneX-16-2_2-build-visionos.1785345411220`；四份result bundle均succeeded且结构化diagnostics为0。包装器的zsh只读`status`错误不改变xcodebuild终态，已直接从xcresult读回。
 - repository gate位于`/tmp/LuneX-16-2_2-repo-pre.uF5zts`：OpenSpec strict、generator三次SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`、五target membership与`git diff --check`通过。测试继续显式移除Keychain opt-in且未操作simulator。
 - OpenSpec 2.2已勾选，权威进度更新为`7/35`；下一项2.3 attach session-owned environment node并建立eligible ambience-bed graph。2.2不证明environment graph、route/head tracking、entitlement或硬件空间音频。
+
+## 2026-07-30 阶段 16 任务 2.3 启动
+
+- 2.2已以`7a4db76 Validate explicit spatial audio formats`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean后进入2.3。
+- Context7 Apple AVFAudio、Xcode 26.4 headers与未启动硬件的本机probe确认：先连接environment output再读取applicable algorithms，eligible bed使用`.ambienceBed`，且只在`.auto`属于applicable集合时选择它。
+- 当前实现把environment纳入`AVAudioEngineClient`唯一所有权，eligible路径连接`player -> environment -> mainMixer`，disabled/unsupported路径保持direct mixer；移除持有第二个孤立environment的旧controller。2.5之前不启用listener head tracking或visionOS intended experience，3.x之前不监听route/session notification。
+
+## 2026-07-30 阶段 16 任务 2.3 完成
+
+- `AVAudioEngineClient`新增唯一session-owned environment node、actual graph readback和平台/route/layout eligibility；eligible stereo/WAVE 5.1/WAVE 7.1连接`player -> environment -> mainMixer`，只在连接后applicable集合含`.auto`时选择`.ambienceBed + .auto`。disabled路径保持direct mixer，stop清除graph connections。
+- 删除`AudioRouteState.swift`中持有第二个无声environment的旧`SpatialAudioController`。production当前没有listener head tracking、visionOS intended experience或route/session notification接线。
+- 最终focused gate位于`/tmp/LuneX-16-2_3-focused-final.KFeHQK`并通过`21/21`；expanded gate位于`/tmp/LuneX-16-2_3-expanded.GD6mkP`并通过`72/72 passed / 0 skipped / 0 failed`。两份xcresult结构化warning/error/analyzer warning均为0。
+- macOS/iOS/tvOS/visionOS generic-device Debug warnings-as-errors build位于`/tmp/LuneX-16-2_3-build-{macos,ios,tvos,visionos}.1785346100312`；四份result bundle均succeeded且结构化diagnostics为0，未选择或操作simulator。
+- repository pre-gate位于`/tmp/LuneX-16-2_3-repo-pre.EqUwFd`：OpenSpec strict、唯一environment owner、applicable algorithm顺序、2.5/3.x API未提前出现、`git diff --check`和generator三次SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过。
+- OpenSpec 2.3已勾选，权威进度更新为`8/35`；下一项2.4实现mono、用户关闭、unsupported route/algorithm和graph failure的完整typed nonspatial fallback，不虚报activation。

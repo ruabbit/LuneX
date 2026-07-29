@@ -1,4 +1,3 @@
-import AVFAudio
 import Foundation
 
 struct AudioRouteState: Codable, Equatable, Hashable, Sendable {
@@ -92,45 +91,5 @@ enum SpatialAudioAvailabilityResolver {
             headTrackingEnabled: context.userEnabledHeadTracking,
             unavailableReason: nil
         )
-    }
-}
-
-@MainActor
-final class SpatialAudioController {
-    private let environmentNode = AVAudioEnvironmentNode()
-
-    func updateHeadTracking(context: SpatialAudioCapabilityContext) -> AudioRouteState {
-        let state = SpatialAudioAvailabilityResolver.resolve(context)
-        return updateHeadTracking(enabled: state.headTrackingEnabled && state.headTrackingAvailable, state: state)
-    }
-
-    func updateHeadTracking(enabled: Bool) -> AudioRouteState {
-        updateHeadTracking(enabled: enabled, state: nil)
-    }
-
-    private func updateHeadTracking(enabled: Bool, state: AudioRouteState?) -> AudioRouteState {
-        #if os(macOS) || os(iOS) || os(tvOS)
-        environmentNode.isListenerHeadTrackingEnabled = enabled
-        return state.map {
-            AudioRouteState(
-                spatialAudioAvailable: $0.spatialAudioAvailable,
-                headTrackingAvailable: $0.headTrackingAvailable,
-                headTrackingEnabled: environmentNode.isListenerHeadTrackingEnabled && $0.headTrackingAvailable,
-                unavailableReason: $0.unavailableReason
-            )
-        } ?? AudioRouteState(
-            spatialAudioAvailable: true,
-            headTrackingAvailable: true,
-            headTrackingEnabled: environmentNode.isListenerHeadTrackingEnabled,
-            unavailableReason: nil
-        )
-        #else
-        return AudioRouteState(
-            spatialAudioAvailable: true,
-            headTrackingAvailable: false,
-            headTrackingEnabled: false,
-            unavailableReason: "Head tracking is unavailable on this platform SDK"
-        )
-        #endif
     }
 }

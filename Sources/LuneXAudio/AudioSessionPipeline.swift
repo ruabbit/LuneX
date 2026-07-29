@@ -87,13 +87,29 @@ protocol AudioEngineClient: Sendable {
     func routeSnapshot() -> AudioRouteSnapshot
 }
 
+struct AVAudioEngineGraphReadback: Equatable, Sendable {
+    let mode: SpatialAudioGraphMode
+    let playerAttached: Bool
+    let environmentAttached: Bool
+    let playerConnectedToEnvironment: Bool
+    let playerConnectedToMainMixer: Bool
+    let environmentConnectedToMainMixer: Bool
+    let sourceModeRawValue: Int?
+    let selectedRenderingAlgorithmRawValue: Int?
+    let applicableRenderingAlgorithmRawValues: [Int]
+    let inputLayoutTagRawValue: UInt32?
+}
+
 final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
+    private let environment = AVAudioEnvironmentNode()
     private var configuration: StreamAudioConfiguration?
+    private var configuredGraphMode = SpatialAudioGraphMode.unconfigured
 
     init() {
         engine.attach(player)
+        engine.attach(environment)
     }
 
     func configure(
@@ -101,7 +117,8 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         graphIntent: SpatialAudioGraphIntent
     ) throws -> SpatialAudioRuntimeSnapshot {
         try configuration.validate()
-        guard graphIntent.hasConsistentRevision else {
+        guard graphIntent.hasConsistentRevision,
+              graphIntent.platform == .current else {
             throw AudioPipelineError.invalidGraphIntent
         }
         let format: AVAudioFormat
@@ -118,7 +135,7 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         if engine.isRunning {
             engine.stop()
         }
-        engine.disconnectNodeOutput(player)
+        resetGraphConnections()
         self.configuration = nil
         #if os(iOS) || os(tvOS) || os(visionOS)
         let session = AVAudioSession.sharedInstance()
@@ -126,15 +143,37 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         try session.setPreferredIOBufferDuration(configuration.latencyPolicy.preferredBufferDuration)
         try session.setActive(true)
         #endif
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+
+        let usesEnvironment = environmentGraphIsEligible(
+            configuration: configuration,
+            graphIntent: graphIntent
+        )
+        if usesEnvironment {
+            engine.connect(environment, to: engine.mainMixerNode, format: nil)
+            engine.connect(player, to: environment, format: format)
+            let applicableAlgorithms = environment.applicableRenderingAlgorithms
+                .compactMap {
+                    AVAudio3DMixingRenderingAlgorithm(rawValue: $0.intValue)
+                }
+            guard applicableAlgorithms.contains(.auto) else {
+                resetGraphConnections()
+                throw AudioPipelineError.invalidConfiguration
+            }
+            player.sourceMode = .ambienceBed
+            player.renderingAlgorithm = .auto
+            configuredGraphMode = .environmentAmbienceBed
+        } else {
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+            configuredGraphMode = .nonspatialMixer
+        }
         engine.prepare()
         self.configuration = configuration
         let graph = SpatialAudioGraphSnapshot(
             revision: graphIntent.revision,
-            mode: .nonspatialMixer,
+            mode: configuredGraphMode,
             layoutSignature: configuration.channelLayout.signature,
-            hasApplicableRenderingAlgorithm: false,
-            platformStrategy: .none,
+            hasApplicableRenderingAlgorithm: usesEnvironment,
+            platformStrategy: usesEnvironment ? .environmentListener : .none,
             listenerHeadTrackingCapable: false,
             listenerHeadTrackingReadback: false,
             visionExperienceReadback: nil
@@ -172,6 +211,7 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         player.stop()
         engine.stop()
         engine.reset()
+        resetGraphConnections()
         configuration = nil
         #if os(iOS) || os(tvOS) || os(visionOS)
         try? AVAudioSession.sharedInstance().setActive(false)
@@ -180,6 +220,74 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
 
     func routeSnapshot() -> AudioRouteSnapshot {
         AudioRouteInspector.currentRoute(engine: engine, preferredConfiguration: configuration)
+    }
+
+    func graphReadback() -> AVAudioEngineGraphReadback {
+        let playerDestinations = engine.outputConnectionPoints(
+            for: player,
+            outputBus: 0
+        )
+        let environmentDestinations = engine.outputConnectionPoints(
+            for: environment,
+            outputBus: 0
+        )
+        let usesEnvironment = configuredGraphMode == .environmentAmbienceBed
+        let applicableAlgorithms = usesEnvironment
+            ? environment.applicableRenderingAlgorithms.map(\.intValue)
+            : []
+        let inputFormat = player.outputFormat(forBus: 0)
+        return AVAudioEngineGraphReadback(
+            mode: configuredGraphMode,
+            playerAttached: engine.attachedNodes.contains(player),
+            environmentAttached: engine.attachedNodes.contains(environment),
+            playerConnectedToEnvironment: playerDestinations.contains {
+                $0.node === environment
+            },
+            playerConnectedToMainMixer: playerDestinations.contains {
+                $0.node === engine.mainMixerNode
+            },
+            environmentConnectedToMainMixer: environmentDestinations.contains {
+                $0.node === engine.mainMixerNode
+            },
+            sourceModeRawValue: usesEnvironment ? player.sourceMode.rawValue : nil,
+            selectedRenderingAlgorithmRawValue: usesEnvironment
+                ? player.renderingAlgorithm.rawValue
+                : nil,
+            applicableRenderingAlgorithmRawValues: applicableAlgorithms,
+            inputLayoutTagRawValue: inputFormat.channelLayout.map {
+                UInt32($0.layoutTag)
+            }
+        )
+    }
+
+    private func resetGraphConnections() {
+        engine.disconnectNodeOutput(player)
+        engine.disconnectNodeOutput(environment)
+        configuredGraphMode = .unconfigured
+    }
+
+    private func environmentGraphIsEligible(
+        configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) -> Bool {
+        let route = graphIntent.route
+        guard graphIntent.userEnablesSpatialAudio,
+              configuration.channelLayout.spatialEligibility == .ambienceBed,
+              route.outputAvailable,
+              route.currentOutputChannelCount > 0,
+              route.maximumOutputChannelCount > 0,
+              route.currentOutputChannelCount
+                <= route.maximumOutputChannelCount else {
+            return false
+        }
+        switch graphIntent.platform {
+        case .macOS:
+            return route.systemSpatialSupport != .unsupported
+        case .iOS, .tvOS:
+            return route.systemSpatialSupport == .supported
+        case .visionOS:
+            return false
+        }
     }
 }
 

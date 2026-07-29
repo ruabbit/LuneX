@@ -1384,3 +1384,17 @@
 - focused证据`/tmp/LuneX-16-2_2-focused.X4QVoy/Focused.xcresult`为`20/20`，expanded证据`/tmp/LuneX-16-2_2-expanded.4871bi/Expanded.xcresult`为`71/71 passed / 0 skipped / 0 failed`；两份结构化warning/error/analyzer warning均为0。macOS/iOS/tvOS/visionOS generic-device Debug App四份xcresult均succeeded且结构化诊断为0。
 - OpenSpec strict通过，generator连续SHA-256均为`ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`，新文件同时属于四个App target和test support，`git diff --check`通过。测试显式移除Keychain opt-in且未操作simulator。
 - 2.2没有attach `AVAudioEnvironmentNode`、设置source mode/rendering algorithm、启用listener head tracking、设置visionOS intended experience或监听route/session notification。production仍返回`.nonspatialMixer`；environment graph属于2.3，实际空间音频与硬件证明仍未完成。
+
+## 2026-07-30 阶段 16 任务 2.3 调查
+
+- Apple AVFAudio文档与Xcode 26.4 headers要求在environment成功连接destination后读取`applicableRenderingAlgorithms`；`ambienceBed`按input bus的channel layout把声道作为global-space far-field sources分布，listener位置不影响bed，不能用会把全bus折叠为单一位置的`pointSource`。
+- `.auto`会为当前播放硬件选择可用的最高质量算法；设置`renderingAlgorithm`前必须确认它出现在当前environment output format的applicable集合。未启动engine的本机探针确认mono/stereo/WAVE 5.1/WAVE 7.1均返回`.auto`，并能读回`sourceMode == .ambienceBed`与`renderingAlgorithm == .auto`。
+- 2.3的production owner应是现有`AVAudioEngineClient`本身，而不是`AudioRouteState.swift`里持有第二个无声environment的旧controller。固定空间bed不要求head-pose entitlement；listener head tracking和visionOS intended output experience仍分别属于2.5，route/session notification属于3.x。
+
+## 2026-07-30 阶段 16 任务 2.3 验收结论
+
+- `AVAudioEngineClient`现在同时拥有player与唯一environment node。eligible macOS/iOS/tvOS fixed-spatial intent按`environment -> mainMixer`、`player -> environment`顺序连接，input继续使用2.2的显式layout格式；连接完成后读取applicable集合，只有包含`.auto`才设置`sourceMode = .ambienceBed`与`renderingAlgorithm = .auto`。平台不匹配的intent直接fail closed。
+- 新增纯值`AVAudioEngineGraphReadback`，不跨actor暴露AVFAudio对象；它从actual attached nodes、connection points、source/algorithm readback与player output layout生成拓扑证据。测试覆盖stereo/WAVE 5.1/WAVE 7.1均为environment bed，disabled intent保持`player -> mainMixer`，stop后两条environment connection均清除。
+- 旧`SpatialAudioController`及其孤立environment node已删除，production源码中只剩一个`AVAudioEnvironmentNode()` owner。2.3没有设置`isListenerHeadTrackingEnabled`、visionOS `intendedSpatialExperience`或route/session notification；visionOS在2.5前保持direct mixer。
+- 最终focused证据`/tmp/LuneX-16-2_3-focused-final.KFeHQK/Focused.xcresult`为`21/21`，expanded证据`/tmp/LuneX-16-2_3-expanded.GD6mkP/Expanded.xcresult`为`72/72 passed / 0 skipped / 0 failed`；结构化diagnostics均为0。四平台generic-device Debug App build均succeeded且结构化warning/error/analyzer warning为0。
+- OpenSpec strict、唯一owner/API边界、`git diff --check`和generator连续SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过；测试显式移除Keychain opt-in且未操作simulator。当前无法注入algorithm/connection failure，完整typed fallback属于2.4，资源故障矩阵属于2.6。
