@@ -257,6 +257,7 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let environment = AVAudioEnvironmentNode()
     private let environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding
     private let spatialPlatformAdapter: any AVAudioSpatialPlatformApplying
+    private let mobileAudioSessionAdapter: any MobileAudioSessionApplying
     private var configuration: StreamAudioConfiguration?
     private var configuredGraphMode = SpatialAudioGraphMode.unconfigured
     private var configuredGraphFallback: SpatialAudioGraphFallbackReason?
@@ -267,10 +268,13 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding =
             ProductionAVAudioEnvironmentGraphBuilder(),
         spatialPlatformAdapter: any AVAudioSpatialPlatformApplying =
-            ProductionAVAudioSpatialPlatformAdapter()
+            ProductionAVAudioSpatialPlatformAdapter(),
+        mobileAudioSessionAdapter: any MobileAudioSessionApplying =
+            MobileAudioSessionAdapter()
     ) {
         self.environmentGraphBuilder = environmentGraphBuilder
         self.spatialPlatformAdapter = spatialPlatformAdapter
+        self.mobileAudioSessionAdapter = mobileAudioSessionAdapter
         engine.attach(player)
         engine.attach(environment)
     }
@@ -301,10 +305,7 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         resetGraphConnections()
         self.configuration = nil
         #if os(iOS) || os(tvOS) || os(visionOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setPreferredSampleRate(configuration.sampleRate)
-        try session.setPreferredIOBufferDuration(configuration.latencyPolicy.preferredBufferDuration)
-        try session.setActive(true)
+        _ = try mobileAudioSessionAdapter.activate(for: configuration)
         #endif
 
         let usesEnvironment = environmentGraphIsEligible(
@@ -391,12 +392,19 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         resetGraphConnections()
         configuration = nil
         #if os(iOS) || os(tvOS) || os(visionOS)
-        try? AVAudioSession.sharedInstance().setActive(false)
+        mobileAudioSessionAdapter.deactivate(
+            notifyOthersOnDeactivation: true
+        )
         #endif
     }
 
     func routeSnapshot() -> AudioRouteSnapshot {
+        #if os(iOS) || os(tvOS) || os(visionOS)
+        return mobileAudioSessionAdapter.currentSnapshot()
+            .audioRouteSnapshot(preferredConfiguration: configuration)
+        #else
         AudioRouteInspector.currentRoute(engine: engine, preferredConfiguration: configuration)
+        #endif
     }
 
     func graphReadback() -> AVAudioEngineGraphReadback {
@@ -571,16 +579,6 @@ enum AudioRouteInspector {
         engine: AVAudioEngine = AVAudioEngine(),
         preferredConfiguration: StreamAudioConfiguration? = nil
     ) -> AudioRouteSnapshot {
-        #if os(iOS) || os(tvOS) || os(visionOS)
-        let session = AVAudioSession.sharedInstance()
-        let outputNames = session.currentRoute.outputs.map(\.portName)
-        return AudioRouteSnapshot(
-            outputNames: outputNames.isEmpty ? ["System Output"] : outputNames,
-            sampleRate: session.sampleRate > 0 ? session.sampleRate : (preferredConfiguration?.sampleRate ?? 48_000),
-            outputChannelCount: session.outputNumberOfChannels > 0 ? session.outputNumberOfChannels : (preferredConfiguration?.channelCount ?? 2),
-            preferredBufferDuration: session.ioBufferDuration
-        )
-        #else
         let format = engine.outputNode.outputFormat(forBus: 0)
         return AudioRouteSnapshot(
             outputNames: ["System Output"],
@@ -588,7 +586,6 @@ enum AudioRouteInspector {
             outputChannelCount: Int(format.channelCount) > 0 ? Int(format.channelCount) : (preferredConfiguration?.channelCount ?? 2),
             preferredBufferDuration: preferredConfiguration?.latencyPolicy.preferredBufferDuration
         )
-        #endif
     }
 }
 

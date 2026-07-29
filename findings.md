@@ -1450,3 +1450,18 @@
 - `/tmp/LuneX-16-3_2-builds.UPibfE`包含macOS、iOS、tvOS、visionOS的Debug/Release共8份generic-device result bundle；全部在`CODE_SIGNING_ALLOWED=NO`与warnings-as-errors下`succeeded`，结构化warning/error/analyzer warning均为0，没有选择或操作simulator。
 - plist lint/单key typed content、project membership、vision/test隔离、OpenSpec strict、`git diff --check`与generator连续SHA-256 `00c4566845e6b2b72b5ddce04f825a6e0c9e0a68111bd0b1ed8609f5044bedb7`通过。
 - 这些文件只表达签名请求并证明unsigned buildability；它们不证明Apple provisioning profile接受或保留entitlement，不改变3.1移动平台runtime reader的`.unreadable`边界，也不证明listener API或物理head tracking有效。
+
+## 2026-07-30 阶段 16 任务 3.3 SDK与实现边界
+
+- Xcode 26.4的iOS、tvOS与visionOS public SDK均公开`AVAudioSession` playback category、`setSupportsMultichannelContent(_:)`、`maximumOutputNumberOfChannels`、`setPreferredOutputNumberOfChannels(_:)`、route port `isSpatialAudioEnabled`和`spatialPlaybackCapabilitiesChangedNotification`；三平台warnings-as-errors typecheck probe通过。
+- 端口`isSpatialAudioEnabled`才表示当前port支持且用户启用了空间播放；output name只能保留为诊断数据，不能以AirPods等名称推断能力。preferred output channel必须裁剪到当前maximum，maximum为0时不能提交无依据的请求。
+- 3.3只收拢playback配置、多声道声明、preferred channel、port readback、停用与capability notification名称；NotificationCenter observer、route/interruption/media-services聚合、去重和semantic revision仍由3.5负责。
+
+## 2026-07-30 阶段 16 任务 3.3 验收
+
+- 新增`MobileAudioSessionAdapter`与可注入system client。production在iOS/iPadOS、tvOS、visionOS配置`.playback`/`.moviePlayback`，按逻辑声道数声明多声道内容，把preferred output channel裁剪到非零hardware maximum，并从当前route port的`isSpatialAudioEnabled`形成typed capability；output name不参与能力推断。
+- adapter在激活失败时清除多声道声明并停用session；正常stop清除声明、使用`notifyOthersOnDeactivation`停用并清空本次requested channel。`AVAudioEngineClient`不再直接访问`AVAudioSession.sharedInstance()`，route readback也由同一adapter提供。
+- focused证据`/tmp/LuneX-16-3_3-focused.3ZIL0h/MobileAudioSessionAdapter.xcresult`为`7/7`；expanded audio graph/resolver/runtime证据`/tmp/LuneX-16-3_3-expanded.msmYHr/MobileAudioSessionExpanded.xcresult`为`52/52 passed / 0 skipped / 0 failed`，结构化warning/error/analyzer warning均为0。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug build分别位于`/tmp/LuneX-16-3_3-build-macos.WS1VXb`、`/tmp/LuneX-16-3_3-build-ios.FnagNd`、`/tmp/LuneX-16-3_3-build-tvos.izQnw9`和`/tmp/LuneX-16-3_3-build-visionos.XdY9u7`；全部unsigned warnings-as-errors build succeeded且结构化诊断为0，未操作simulator。
+- OpenSpec strict、`git diff --check`、五target source membership、旧direct shared-session调用absence、output-name noninference与generator连续SHA-256 `8be5fad05baba9ff45a8f192186766ab3bf0ea483f276d0400291ee69c6d9de0`通过。
+- 本项只证明公开API编译、注入合同和production ownership接线；actual route notification、semantic revision/rebuild、signed entitlement、AirPods head tracking、物理multichannel channel identification及可听同步仍未完成。

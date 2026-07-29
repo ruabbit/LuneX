@@ -1854,3 +1854,12 @@
 - `/tmp/LuneX-16-3_2-builds.UPibfE`完成四平台Debug+Release generic-device warnings-as-errors、unsigned build，8/8 succeeded且结构化diagnostics为0；未操作simulator。
 - OpenSpec strict、generator稳定SHA-256 `00c4566845e6b2b72b5ddce04f825a6e0c9e0a68111bd0b1ed8609f5044bedb7`、project membership、Resources隔离和`git diff --check`通过。OpenSpec 3.2已勾选，权威进度`13/35`；下一项3.3为移动/TV/vision `AVAudioSession` adapter。
 - 本项不证明signed provisioning或真机entitlement；不能以unsigned build和plist内容替代6.6硬件/签名验收。
+
+## 2026-07-30 阶段 16 任务 3.3 完成
+
+- 新增generator-owned `MobileAudioSessionAdapter.swift`与注入测试；production engine在iOS/iPadOS、tvOS、visionOS通过同一owner配置playback/moviePlayback、multichannel declaration、sample rate/buffer duration、maximum-clamped preferred channels、route spatial-port readback与deactivation。
+- 激活失败原子回滚多声道声明与session active状态；stop清除声明并通知其他音频。output name仅保留为有界诊断值，capability只读取port布尔值；capability notification名称已适配，实际observer/去重保留3.5。
+- focused `7/7`、expanded audio graph/resolver/runtime `52/52 passed / 0 skipped / 0 failed`；两份结果均使用`env -u LUNEX_RUN_KEYCHAIN_TEST`，expanded结构化diagnostics为0。
+- 四平台generic-device Debug unsigned warnings-as-errors build全部succeeded且结构化warning/error/analyzer warning为0；iOS target device family为`1,2`并覆盖iPadOS编译面，未操作simulator。
+- OpenSpec strict、五target membership、旧direct shared-session调用absence、output-name noninference、`git diff --check`及generator稳定SHA-256 `8be5fad05baba9ff45a8f192186766ab3bf0ea483f276d0400291ee69c6d9de0`通过。
+- OpenSpec 3.3已勾选，预期权威进度`14/35`；下一项3.4为macOS actual engine output format与graph result驱动的route/output capability。当前证据不替代签名、route通知、AirPods或物理声道/可听验收。
