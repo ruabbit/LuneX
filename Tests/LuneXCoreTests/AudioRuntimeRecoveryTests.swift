@@ -47,6 +47,10 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
                 "stop:false", "configure", "route", "start", "route"
             ]
         )
+        XCTAssertEqual(
+            harness.client.snapshotGraphIntents(),
+            [harness.graphIntent, harness.graphIntent]
+        )
     }
 
     func testInterruptionPausesAndConditionallyResumesGraph() async throws {
@@ -206,12 +210,18 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
         let client = RecoveryAudioEngineClient()
         let pipeline = AudioSessionPipeline(engineClient: client)
         let clock = try MediaClockSynchronizer()
+        let graphIntent = makeAudioGraphIntent(channelCount: 2)
         let runtime = try SessionAudioRuntime(
             pipeline: pipeline,
             clock: clock,
-            configuration: .stereoLowLatency
+            configuration: .stereoLowLatency,
+            graphIntent: graphIntent
         )
-        return RecoveryHarness(runtime: runtime, client: client)
+        return RecoveryHarness(
+            runtime: runtime,
+            client: client,
+            graphIntent: graphIntent
+        )
     }
 
     private func pcm(sequence: UInt16, timestamp: UInt32) -> DecodedPCMBuffer {
@@ -231,6 +241,7 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
 private struct RecoveryHarness {
     var runtime: SessionAudioRuntime
     var client: RecoveryAudioEngineClient
+    var graphIntent: SpatialAudioGraphIntent
 }
 
 private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sendable {
@@ -240,16 +251,25 @@ private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sen
     private var scheduleCallCount = 0
     private var failingScheduleCall: Int?
     private var shouldFailNextConfigure = false
+    private var graphIntents: [SpatialAudioGraphIntent] = []
 
-    func configure(_ configuration: StreamAudioConfiguration) throws {
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
         lock.withLock {
             calls.append("configure")
+            graphIntents.append(graphIntent)
         }
         let shouldFail = lock.withLock { () -> Bool in
             defer { shouldFailNextConfigure = false }
             return shouldFailNextConfigure
         }
         if shouldFail { throw AudioPipelineError.invalidConfiguration }
+        return makeNonspatialRuntime(
+            configuration: configuration,
+            graphIntent: graphIntent
+        )
     }
 
     func start() throws {
@@ -300,6 +320,10 @@ private final class RecoveryAudioEngineClient: AudioEngineClient, @unchecked Sen
 
     func snapshotScheduledBuffers() -> [DecodedPCMBuffer] {
         lock.withLock { scheduledBuffers }
+    }
+
+    func snapshotGraphIntents() -> [SpatialAudioGraphIntent] {
+        lock.withLock { graphIntents }
     }
 }
 

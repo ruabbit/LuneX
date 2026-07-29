@@ -20,6 +20,7 @@ enum SpatialAudioGraphMode: String, Codable, Hashable, Sendable {
 }
 
 enum SpatialAudioPlatformStrategy: String, Codable, Hashable, Sendable {
+    case none
     case environmentListener = "environment-listener"
     case visionOutputExperience = "vision-output-experience"
 }
@@ -59,6 +60,40 @@ struct SpatialAudioRouteCapabilitySnapshot: Codable, Equatable, Hashable, Sendab
     let systemSpatialSupport: SpatialAudioRouteSupport
     let currentOutputChannelCount: Int
     let maximumOutputChannelCount: Int
+}
+
+struct SpatialAudioGraphIntent: Codable, Equatable, Hashable, Sendable {
+    let revision: SpatialAudioSemanticRevision
+    let platform: SpatialAudioPlatform
+    let route: SpatialAudioRouteCapabilitySnapshot
+    let entitlement: SpatialAudioEntitlementState
+    let userEnablesSpatialAudio: Bool
+    let userEnablesHeadTracking: Bool
+
+    static func disabled(
+        platform: SpatialAudioPlatform = .current,
+        channelCount: Int,
+        revision: SpatialAudioSemanticRevision = .init(rawValue: 0)
+    ) -> SpatialAudioGraphIntent {
+        SpatialAudioGraphIntent(
+            revision: revision,
+            platform: platform,
+            route: SpatialAudioRouteCapabilitySnapshot(
+                revision: revision,
+                outputAvailable: true,
+                systemSpatialSupport: .unknown,
+                currentOutputChannelCount: channelCount,
+                maximumOutputChannelCount: channelCount
+            ),
+            entitlement: .notRequired,
+            userEnablesSpatialAudio: false,
+            userEnablesHeadTracking: false
+        )
+    }
+
+    var hasConsistentRevision: Bool {
+        route.revision == revision
+    }
 }
 
 enum SpatialAudioPresentationMode: String, Codable, CaseIterable, Hashable, Sendable {
@@ -119,6 +154,37 @@ struct SpatialAudioRuntimeSnapshot: Codable, Equatable, Hashable, Sendable {
         }
         return "spatial_audio_\(presentationMode.rawValue)"
     }
+
+    func isConsistent(
+        with intent: SpatialAudioGraphIntent,
+        layout: StreamAudioChannelLayout
+    ) -> Bool {
+        guard revision == intent.revision,
+              layoutSignature == layout.signature,
+              routeSupport == intent.route.systemSpatialSupport,
+              graphMode != .unconfigured else {
+            return false
+        }
+        guard spatialAudioActive else {
+            return platformStrategy == .none
+                || platformStrategy == .environmentListener
+                || platformStrategy == .visionOutputExperience
+        }
+        guard intent.userEnablesSpatialAudio,
+              layout.spatialEligibility == .ambienceBed,
+              graphMode == .environmentAmbienceBed else {
+            return false
+        }
+        if headTrackingActive && !intent.userEnablesHeadTracking {
+            return false
+        }
+        switch intent.platform {
+        case .macOS, .iOS, .tvOS:
+            return platformStrategy == .environmentListener
+        case .visionOS:
+            return platformStrategy == .visionOutputExperience
+        }
+    }
 }
 
 enum SpatialAudioRuntimeHistoryError: Error, Equatable, Hashable, Sendable {
@@ -172,6 +238,23 @@ struct SpatialAudioRuntimeHistory: Equatable, Sendable {
 }
 
 enum SpatialAudioRuntimeResolver {
+    static func resolve(
+        intent: SpatialAudioGraphIntent,
+        layout: StreamAudioChannelLayout,
+        graph: SpatialAudioGraphSnapshot
+    ) -> SpatialAudioRuntimeSnapshot {
+        resolve(SpatialAudioResolutionInput(
+            revision: intent.revision,
+            platform: intent.platform,
+            layout: layout,
+            graph: graph,
+            route: intent.route,
+            entitlement: intent.entitlement,
+            userEnablesSpatialAudio: intent.userEnablesSpatialAudio,
+            userEnablesHeadTracking: intent.userEnablesHeadTracking
+        ))
+    }
+
     static func resolve(
         _ input: SpatialAudioResolutionInput
     ) -> SpatialAudioRuntimeSnapshot {

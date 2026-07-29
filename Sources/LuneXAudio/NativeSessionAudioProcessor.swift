@@ -11,12 +11,14 @@ struct NativeSessionAudioProcessorFactory: SessionAudioProcessorCreating {
             let streamConfiguration = StreamAudioConfiguration(
                 sampleRate: Double(configuration.sampleRate),
                 channelLayout: configuration.channelLayout,
-                latencyPolicy: .lowLatency,
-                spatialAudioEnabled: false
+                latencyPolicy: .lowLatency
             )
             let runtime = try SessionAudioRuntime(
                 clock: MediaClockSynchronizer(),
-                configuration: streamConfiguration
+                configuration: streamConfiguration,
+                graphIntent: .disabled(
+                    channelCount: streamConfiguration.channelCount
+                )
             )
             do {
                 _ = try await runtime.start(at: 0)

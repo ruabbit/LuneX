@@ -78,6 +78,7 @@ actor SessionAudioRuntime {
     private let pipeline: AudioSessionPipeline
     private let clock: MediaClockSynchronizer
     private let configuration: StreamAudioConfiguration
+    private let graphIntent: SpatialAudioGraphIntent
     private let policy: AudioRuntimeRecoveryPolicy
     private var stage: SessionAudioRuntimeStage = .idle
     private var concealedFrameCount: UInt64 = 0
@@ -88,6 +89,7 @@ actor SessionAudioRuntime {
         pipeline: AudioSessionPipeline = AudioSessionPipeline(),
         clock: MediaClockSynchronizer,
         configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent,
         policy: AudioRuntimeRecoveryPolicy = .realtime
     ) throws {
         try configuration.validate()
@@ -95,6 +97,7 @@ actor SessionAudioRuntime {
         self.pipeline = pipeline
         self.clock = clock
         self.configuration = configuration
+        self.graphIntent = graphIntent
         self.policy = policy
     }
 
@@ -104,7 +107,10 @@ actor SessionAudioRuntime {
         }
         try validateEventTime(timeNanoseconds)
         await clock.reset()
-        let configured = try await pipeline.configure(configuration)
+        let configured = try await pipeline.configure(
+            configuration,
+            graphIntent: graphIntent
+        )
         guard configured.stage == .configured else {
             return try await failGraph(configured.lastErrorMessage, at: timeNanoseconds)
         }
@@ -314,7 +320,10 @@ actor SessionAudioRuntime {
         at timeNanoseconds: UInt64
     ) async throws -> SessionAudioRuntimeSnapshot {
         await clock.reset()
-        let configured = try await pipeline.configure(configuration)
+        let configured = try await pipeline.configure(
+            configuration,
+            graphIntent: graphIntent
+        )
         guard configured.stage == .configured else {
             return try await failGraph(configured.lastErrorMessage, at: timeNanoseconds)
         }

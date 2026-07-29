@@ -18,7 +18,8 @@ final class AudioRuntimeIntegrationTests: XCTestCase {
         let runtime = try SessionAudioRuntime(
             pipeline: pipeline,
             clock: clock,
-            configuration: .stereoLowLatency
+            configuration: .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
         )
         let tracker = SessionResourceTracker()
         let teardownRecorder = AudioIntegrationTeardownRecorder()
@@ -129,7 +130,8 @@ final class AudioRuntimeIntegrationTests: XCTestCase {
         let runtime = try SessionAudioRuntime(
             pipeline: pipeline,
             clock: MediaClockSynchronizer(),
-            configuration: .stereoLowLatency
+            configuration: .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
         )
         _ = try await runtime.start(at: 0)
 
@@ -316,7 +318,15 @@ private final class IntegrationAudioEngineClient: AudioEngineClient, @unchecked 
     private var scheduledBuffers: [DecodedPCMBuffer] = []
     private var consumedCallbacks: [@Sendable () -> Void] = []
 
-    func configure(_ configuration: StreamAudioConfiguration) throws {}
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
+        makeNonspatialRuntime(
+            configuration: configuration,
+            graphIntent: graphIntent
+        )
+    }
 
     func start() throws {}
 

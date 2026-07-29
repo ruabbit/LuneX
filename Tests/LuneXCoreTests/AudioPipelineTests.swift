@@ -79,10 +79,14 @@ final class AudioPipelineTests: XCTestCase {
         let configuration = StreamAudioConfiguration(
             sampleRate: 48_000,
             channelLayout: .wave5Point1,
-            latencyPolicy: .lowLatency,
-            spatialAudioEnabled: false
+            latencyPolicy: .lowLatency
         )
-        _ = try await pipeline.configure(configuration)
+        _ = try await pipeline.configure(
+            configuration,
+            graphIntent: makeAudioGraphIntent(
+                channelCount: configuration.channelCount
+            )
+        )
         _ = try await pipeline.start()
         let reorderedLayout = StreamAudioChannelLayout(
             kind: .wave5Point1,
@@ -126,17 +130,30 @@ final class AudioPipelineTests: XCTestCase {
             preferredBufferDuration: 0.005
         ))
         let pipeline = AudioSessionPipeline(engineClient: client, now: Date(timeIntervalSince1970: 1))
+        let graphIntent = makeAudioGraphIntent(channelCount: 2)
 
-        let configured = try await pipeline.configure(.stereoLowLatency, now: Date(timeIntervalSince1970: 2))
+        let configured = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent,
+            now: Date(timeIntervalSince1970: 2)
+        )
         let running = try await pipeline.start(now: Date(timeIntervalSince1970: 3))
         let stopped = await pipeline.stop(reason: .userInitiated, drain: false, now: Date(timeIntervalSince1970: 4))
 
         XCTAssertEqual(configured.stage, .configured)
         XCTAssertEqual(configured.configuration, .stereoLowLatency)
         XCTAssertEqual(configured.route?.outputNames, ["USB DAC"])
+        XCTAssertEqual(
+            configured.spatialRuntime,
+            makeNonspatialRuntime(
+                configuration: .stereoLowLatency,
+                graphIntent: graphIntent
+            )
+        )
         XCTAssertEqual(running.stage, .running)
         XCTAssertEqual(stopped.stage, .stopped)
         XCTAssertEqual(stopped.lastStopReason, .userInitiated)
+        XCTAssertNil(stopped.spatialRuntime)
 
         let calls = client.snapshotCalls()
         XCTAssertEqual(calls, ["configure", "route", "start", "route", "stop:false", "route"])
@@ -159,7 +176,10 @@ final class AudioPipelineTests: XCTestCase {
             maximumScheduledBuffers: 2,
             now: Date(timeIntervalSince1970: 1)
         )
-        _ = try await pipeline.configure(.stereoLowLatency)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
         _ = try await pipeline.start()
 
         let first = try await pipeline.schedule(makePCM(sequence: 7, timestamp: 240))
@@ -188,7 +208,10 @@ final class AudioPipelineTests: XCTestCase {
     func testStopClearsQueueAndIgnoresLateCompletion() async throws {
         let client = StubAudioEngineClient()
         let pipeline = AudioSessionPipeline(engineClient: client)
-        _ = try await pipeline.configure(.stereoLowLatency)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
         _ = try await pipeline.start()
         _ = try await pipeline.schedule(makePCM(sequence: 1, timestamp: 0))
 
@@ -208,17 +231,25 @@ final class AudioPipelineTests: XCTestCase {
     func testFailedReconfigureClearsOldGraphAndCannotRestart() async throws {
         let client = StubAudioEngineClient()
         let pipeline = AudioSessionPipeline(engineClient: client)
-        _ = try await pipeline.configure(.stereoLowLatency)
+        let graphIntent = makeAudioGraphIntent(channelCount: 2)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent
+        )
         _ = try await pipeline.start()
         _ = try await pipeline.schedule(makePCM(sequence: 1, timestamp: 0))
         client.failNextConfigure()
 
-        let failed = try await pipeline.configure(.stereoLowLatency)
+        let failed = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent
+        )
         let restarted = try await pipeline.start()
 
         XCTAssertEqual(failed.stage, .failed)
         XCTAssertNil(failed.configuration)
         XCTAssertNil(failed.route)
+        XCTAssertNil(failed.spatialRuntime)
         XCTAssertEqual(restarted.stage, .failed)
         XCTAssertEqual(restarted.lastErrorMessage, "missingConfiguration")
         let scheduledCount = await pipeline.scheduledBufferCount()
@@ -231,7 +262,10 @@ final class AudioPipelineTests: XCTestCase {
             engineClient: client,
             maximumScheduledBuffers: 1
         )
-        _ = try await pipeline.configure(.stereoLowLatency)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
         _ = try await pipeline.start()
         client.failNextSchedule()
 
@@ -262,8 +296,23 @@ final class AudioPipelineTests: XCTestCase {
 
     func testProductionClientBuildsPlayerMixerGraphWithoutStartingHardware() throws {
         let client = AVAudioEngineClient()
+        let graphIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            userEnablesSpatialAudio: true
+        )
 
-        try client.configure(.stereoLowLatency)
+        let actual = try client.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent
+        )
+
+        XCTAssertEqual(actual.revision, graphIntent.revision)
+        XCTAssertEqual(actual.layoutSignature, StreamAudioChannelLayout.stereo.signature)
+        XCTAssertEqual(actual.graphMode, .nonspatialMixer)
+        XCTAssertEqual(actual.platformStrategy, .none)
+        XCTAssertEqual(actual.presentationMode, .nonspatial)
+        XCTAssertEqual(actual.fallbackReason, .graphUnavailable)
+        XCTAssertFalse(actual.spatialAudioActive)
         client.stop(drain: false)
         XCTAssertThrowsError(try client.schedule(makePCM(sequence: 1, timestamp: 0), completion: {})) { error in
             XCTAssertEqual(error as? AudioPipelineError, .missingConfiguration)
@@ -276,7 +325,10 @@ final class AudioPipelineTests: XCTestCase {
         var invalid = StreamAudioConfiguration.stereoLowLatency
         invalid.sampleRate = 44_100
 
-        let failed = try await pipeline.configure(invalid)
+        let failed = try await pipeline.configure(
+            invalid,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
 
         XCTAssertEqual(failed.stage, .failed)
         XCTAssertNil(failed.configuration)
@@ -286,7 +338,10 @@ final class AudioPipelineTests: XCTestCase {
     func testEngineStartFailureStopsPartialGraphAndClearsConfiguration() async throws {
         let client = StubAudioEngineClient()
         let pipeline = AudioSessionPipeline(engineClient: client)
-        _ = try await pipeline.configure(.stereoLowLatency)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
         client.failNextStart()
 
         let failed = try await pipeline.start()
@@ -294,6 +349,7 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(failed.stage, .failed)
         XCTAssertNil(failed.configuration)
         XCTAssertNil(failed.route)
+        XCTAssertNil(failed.spatialRuntime)
         XCTAssertEqual(
             client.snapshotCalls(),
             ["configure", "route", "start", "stop:false"]
@@ -312,6 +368,10 @@ final class AudioPipelineTests: XCTestCase {
                 outputChannelCount: 2,
                 preferredBufferDuration: 0.005
             ),
+            spatialRuntime: makeNonspatialRuntime(
+                configuration: .stereoLowLatency,
+                graphIntent: makeAudioGraphIntent(channelCount: 2)
+            ),
             lastStopReason: nil,
             lastErrorMessage: nil,
             updatedAt: Date(timeIntervalSince1970: 10)
@@ -320,6 +380,149 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(diagnostics.events.last?.subsystem, "audio")
         XCTAssertEqual(diagnostics.events.last?.message, "Audio running: 48000 Hz, 2 ch, output available")
         XCTAssertFalse(diagnostics.events.last?.message.contains("Built-in Output") == true)
+    }
+
+    func testPipelineForwardsExactGraphIntentAndStoresActualRuntime() async throws {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(engineClient: client)
+        let configuration = StreamAudioConfiguration(
+            sampleRate: 48_000,
+            channelLayout: .wave7Point1,
+            latencyPolicy: .lowLatency
+        )
+        let graphIntent = makeAudioGraphIntent(
+            channelCount: configuration.channelCount,
+            revision: .init(rawValue: 41),
+            platform: .iOS,
+            routeSupport: .supported,
+            entitlement: .granted,
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: true
+        )
+        let actual = SpatialAudioRuntimeSnapshot(
+            revision: graphIntent.revision,
+            layoutSignature: configuration.channelLayout.signature,
+            graphMode: .environmentAmbienceBed,
+            platformStrategy: .environmentListener,
+            routeSupport: .supported,
+            presentationMode: .headTracked,
+            fallbackReason: nil
+        )
+        client.returnNextSpatialRuntime(actual)
+
+        let configured = try await pipeline.configure(
+            configuration,
+            graphIntent: graphIntent
+        )
+
+        XCTAssertEqual(client.lastConfigureRequest()?.configuration, configuration)
+        XCTAssertEqual(client.lastConfigureRequest()?.graphIntent, graphIntent)
+        XCTAssertEqual(configured.spatialRuntime, actual)
+    }
+
+    func testPipelineRejectsInconsistentActualRuntimeSnapshots() async throws {
+        let configuration = StreamAudioConfiguration.stereoLowLatency
+        let graphIntent = makeAudioGraphIntent(
+            channelCount: configuration.channelCount,
+            revision: .init(rawValue: 42),
+            routeSupport: .supported
+        )
+        let valid = makeNonspatialRuntime(
+            configuration: configuration,
+            graphIntent: graphIntent
+        )
+        let invalidSnapshots = [
+            SpatialAudioRuntimeSnapshot(
+                revision: .init(rawValue: 43),
+                layoutSignature: valid.layoutSignature,
+                graphMode: valid.graphMode,
+                platformStrategy: valid.platformStrategy,
+                routeSupport: valid.routeSupport,
+                presentationMode: valid.presentationMode,
+                fallbackReason: valid.fallbackReason
+            ),
+            SpatialAudioRuntimeSnapshot(
+                revision: valid.revision,
+                layoutSignature: StreamAudioChannelLayout.wave5Point1.signature,
+                graphMode: valid.graphMode,
+                platformStrategy: valid.platformStrategy,
+                routeSupport: valid.routeSupport,
+                presentationMode: valid.presentationMode,
+                fallbackReason: valid.fallbackReason
+            ),
+            SpatialAudioRuntimeSnapshot(
+                revision: valid.revision,
+                layoutSignature: valid.layoutSignature,
+                graphMode: valid.graphMode,
+                platformStrategy: valid.platformStrategy,
+                routeSupport: .unknown,
+                presentationMode: valid.presentationMode,
+                fallbackReason: valid.fallbackReason
+            ),
+            SpatialAudioRuntimeSnapshot(
+                revision: valid.revision,
+                layoutSignature: valid.layoutSignature,
+                graphMode: .nonspatialMixer,
+                platformStrategy: .none,
+                routeSupport: valid.routeSupport,
+                presentationMode: .fixedSpatial,
+                fallbackReason: nil
+            )
+        ]
+
+        for invalid in invalidSnapshots {
+            let client = StubAudioEngineClient()
+            client.returnNextSpatialRuntime(invalid)
+            let pipeline = AudioSessionPipeline(engineClient: client)
+
+            let failed = try await pipeline.configure(
+                configuration,
+                graphIntent: graphIntent
+            )
+
+            XCTAssertEqual(failed.stage, .failed)
+            XCTAssertEqual(
+                failed.lastErrorMessage,
+                String(describing: AudioPipelineError.invalidSpatialRuntimeSnapshot)
+            )
+            XCTAssertNil(failed.configuration)
+            XCTAssertNil(failed.route)
+            XCTAssertNil(failed.spatialRuntime)
+            XCTAssertEqual(client.snapshotCalls(), ["configure", "stop:false"])
+        }
+    }
+
+    func testPipelineRejectsIntentWithMismatchedRouteRevisionBeforeBackend() async throws {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(engineClient: client)
+        let revision = SpatialAudioSemanticRevision(rawValue: 50)
+        let invalidIntent = SpatialAudioGraphIntent(
+            revision: revision,
+            platform: .macOS,
+            route: SpatialAudioRouteCapabilitySnapshot(
+                revision: .init(rawValue: 49),
+                outputAvailable: true,
+                systemSpatialSupport: .unknown,
+                currentOutputChannelCount: 2,
+                maximumOutputChannelCount: 2
+            ),
+            entitlement: .notRequired,
+            userEnablesSpatialAudio: false,
+            userEnablesHeadTracking: false
+        )
+
+        let failed = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: invalidIntent
+        )
+
+        XCTAssertEqual(failed.stage, .failed)
+        XCTAssertEqual(
+            failed.lastErrorMessage,
+            String(describing: AudioPipelineError.invalidGraphIntent)
+        )
+        XCTAssertNil(failed.spatialRuntime)
+        XCTAssertEqual(client.snapshotCalls(), ["stop:false"])
     }
 
     private func makePCM(sequence: UInt16, timestamp: UInt32) -> DecodedPCMBuffer {
@@ -356,6 +559,11 @@ private final class StubAudioEngineClient: AudioEngineClient, @unchecked Sendabl
     private var shouldFailNextConfigure = false
     private var shouldFailNextStart = false
     private var shouldFailNextSchedule = false
+    private var nextSpatialRuntime: SpatialAudioRuntimeSnapshot?
+    private var configureRequests: [(
+        configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    )] = []
 
     init(route: AudioRouteSnapshot = AudioRouteSnapshot(
         outputNames: ["System Output"],
@@ -366,12 +574,24 @@ private final class StubAudioEngineClient: AudioEngineClient, @unchecked Sendabl
         self.route = route
     }
 
-    func configure(_ configuration: StreamAudioConfiguration) throws {
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
         calls.append("configure")
+        configureRequests.append((configuration, graphIntent))
         if shouldFailNextConfigure {
             shouldFailNextConfigure = false
             throw AudioPipelineError.invalidConfiguration
         }
+        if let nextSpatialRuntime {
+            self.nextSpatialRuntime = nil
+            return nextSpatialRuntime
+        }
+        return makeNonspatialRuntime(
+            configuration: configuration,
+            graphIntent: graphIntent
+        )
     }
 
     func start() throws {
@@ -422,6 +642,62 @@ private final class StubAudioEngineClient: AudioEngineClient, @unchecked Sendabl
     func failNextStart() {
         shouldFailNextStart = true
     }
+
+    func returnNextSpatialRuntime(_ spatialRuntime: SpatialAudioRuntimeSnapshot) {
+        nextSpatialRuntime = spatialRuntime
+    }
+
+    func lastConfigureRequest() -> (
+        configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    )? {
+        configureRequests.last
+    }
+}
+
+func makeAudioGraphIntent(
+    channelCount: Int,
+    revision: SpatialAudioSemanticRevision = .init(rawValue: 1),
+    platform: SpatialAudioPlatform = .macOS,
+    routeSupport: SpatialAudioRouteSupport = .unknown,
+    entitlement: SpatialAudioEntitlementState = .notRequired,
+    userEnablesSpatialAudio: Bool = false,
+    userEnablesHeadTracking: Bool = false
+) -> SpatialAudioGraphIntent {
+    SpatialAudioGraphIntent(
+        revision: revision,
+        platform: platform,
+        route: SpatialAudioRouteCapabilitySnapshot(
+            revision: revision,
+            outputAvailable: true,
+            systemSpatialSupport: routeSupport,
+            currentOutputChannelCount: channelCount,
+            maximumOutputChannelCount: channelCount
+        ),
+        entitlement: entitlement,
+        userEnablesSpatialAudio: userEnablesSpatialAudio,
+        userEnablesHeadTracking: userEnablesHeadTracking
+    )
+}
+
+func makeNonspatialRuntime(
+    configuration: StreamAudioConfiguration,
+    graphIntent: SpatialAudioGraphIntent
+) -> SpatialAudioRuntimeSnapshot {
+    SpatialAudioRuntimeResolver.resolve(
+        intent: graphIntent,
+        layout: configuration.channelLayout,
+        graph: SpatialAudioGraphSnapshot(
+            revision: graphIntent.revision,
+            mode: .nonspatialMixer,
+            layoutSignature: configuration.channelLayout.signature,
+            hasApplicableRenderingAlgorithm: false,
+            platformStrategy: .none,
+            listenerHeadTrackingCapable: false,
+            listenerHeadTrackingReadback: false,
+            visionExperienceReadback: nil
+        )
+    )
 }
 
 private func AudioPipelineXCTAssertThrowsErrorAsync<T>(

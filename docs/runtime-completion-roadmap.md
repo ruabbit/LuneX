@@ -37,7 +37,7 @@ flowchart LR
 | 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，video/audio处理管线，remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | production仍缺video/audio network receiver；指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据 |
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
-| 16 | `in_progress`，OpenSpec `5/35` | canonical声道布局贯穿RTSP negotiated config、decoded PCM、concealment与pipeline；具备graph/route/platform resolver及有界、隐私安全、revision严格的snapshot history | 尚无session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
+| 16 | `in_progress`，OpenSpec `6/35` | canonical布局、resolver/history及纯值graph intent/actual snapshot合同贯穿engine client、pipeline和rebuild；错误结果fail closed且stop清理actual状态 | 尚无显式layout `AVAudioFormat`、session-owned environment graph、实际`isListenerHeadTrackingEnabled`接线、entitlement/route硬件验证 |
 | 17 | `pending` | 已有continuity policy与UIKit lifecycle类型 | 尚无scene/window geometry、Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
@@ -119,7 +119,7 @@ flowchart LR
 
 ## 阶段 16：空间音频
 
-- OpenSpec `integrate-spatial-audio-runtime`当前`5/35 in_progress`。1.1完成实际边界盘点，1.2完成mono/stereo/WAVE 5.1/7.1布局identity，1.3完成不可变graph/route/platform/fallback/revision snapshot和确定性resolver，1.4让RTSP negotiated config、decoded PCM、concealment与pipeline共享canonical layout，1.5完成192组合resolver主网格、graph/readback边界、closed privacy编码与1...64容量的revision-strict history；下一项2.1扩展engine client graph intent/actual snapshot合同。这些离线合同不证明真实graph、route、entitlement或头部跟踪。
+- OpenSpec `integrate-spatial-audio-runtime`当前`6/35 in_progress`。1.1至1.5完成实际边界、canonical布局、resolver及有界隐私history；2.1以不可变`SpatialAudioGraphIntent`把revision、平台、route、entitlement和偏好传入injectable engine client并返回actual `SpatialAudioRuntimeSnapshot`。pipeline拒绝revision/layout/route与false activation不一致，failure/stop清除actual graph state，rebuild复用同一intent；production现只诚实报告nonspatial mixer。下一项2.2构造显式Core Audio layout的interleaved `AVAudioFormat`。这些离线合同不证明environment graph、route、entitlement或头部跟踪。
 - 将 session 音频 decoder 的 PCM 接入一个真实 `AVAudioEngine` graph。
 - 把 `AVAudioEnvironmentNode` 放入 graph，而不是只实例化 controller。
 - 根据 route、channel layout、用户设置和 entitlement 决定 spatial/head tracking。

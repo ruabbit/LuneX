@@ -1,6 +1,54 @@
 import XCTest
 
 final class SpatialAudioRuntimeStateTests: XCTestCase {
+    func testGraphIntentAndActualRuntimeAreCodableSendableValues() throws {
+        let revision = SpatialAudioSemanticRevision(rawValue: 17)
+        let intent = SpatialAudioGraphIntent(
+            revision: revision,
+            platform: .tvOS,
+            route: SpatialAudioRouteCapabilitySnapshot(
+                revision: revision,
+                outputAvailable: true,
+                systemSpatialSupport: .supported,
+                currentOutputChannelCount: 8,
+                maximumOutputChannelCount: 8
+            ),
+            entitlement: .granted,
+            userEnablesSpatialAudio: true,
+            userEnablesHeadTracking: true
+        )
+        let actual = SpatialAudioRuntimeSnapshot(
+            revision: revision,
+            layoutSignature: StreamAudioChannelLayout.wave7Point1.signature,
+            graphMode: .environmentAmbienceBed,
+            platformStrategy: .environmentListener,
+            routeSupport: .supported,
+            presentationMode: .headTracked,
+            fallbackReason: nil
+        )
+
+        assertSendable(SpatialAudioGraphIntent.self)
+        assertSendable(SpatialAudioRuntimeSnapshot.self)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                SpatialAudioGraphIntent.self,
+                from: JSONEncoder().encode(intent)
+            ),
+            intent
+        )
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                SpatialAudioRuntimeSnapshot.self,
+                from: JSONEncoder().encode(actual)
+            ),
+            actual
+        )
+        XCTAssertTrue(actual.isConsistent(
+            with: intent,
+            layout: .wave7Point1
+        ))
+    }
+
     func testResolverPlatformPreferenceRouteAndEntitlementGrid() {
         let platforms: [SpatialAudioPlatform] = [.macOS, .iOS, .tvOS, .visionOS]
         let routeSupports: [SpatialAudioRouteSupport] = [
@@ -599,4 +647,8 @@ final class SpatialAudioRuntimeStateTests: XCTestCase {
             userEnablesHeadTracking: userEnablesHeadTracking
         )
     }
+}
+
+private func assertSendable<T: Sendable>(_ type: T.Type) {
+    _ = type
 }

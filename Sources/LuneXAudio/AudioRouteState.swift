@@ -13,6 +13,20 @@ enum SpatialAudioPlatform: String, Codable, Hashable, Sendable {
     case iOS
     case tvOS
     case visionOS
+
+    static var current: SpatialAudioPlatform {
+        #if os(macOS)
+        .macOS
+        #elseif os(iOS)
+        .iOS
+        #elseif os(tvOS)
+        .tvOS
+        #elseif os(visionOS)
+        .visionOS
+        #else
+        #error("Unsupported Apple platform")
+        #endif
+    }
 }
 
 struct SpatialAudioCapabilityContext: Codable, Equatable, Hashable, Sendable {

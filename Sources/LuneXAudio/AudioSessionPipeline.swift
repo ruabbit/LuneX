@@ -5,7 +5,6 @@ struct StreamAudioConfiguration: Codable, Equatable, Hashable, Sendable {
     var sampleRate: Double
     var channelLayout: StreamAudioChannelLayout
     var latencyPolicy: AudioLatencyPolicy
-    var spatialAudioEnabled: Bool
 
     var channelCount: Int {
         channelLayout.channelCount
@@ -14,8 +13,7 @@ struct StreamAudioConfiguration: Codable, Equatable, Hashable, Sendable {
     static let stereoLowLatency = StreamAudioConfiguration(
         sampleRate: 48_000,
         channelLayout: .stereo,
-        latencyPolicy: .lowLatency,
-        spatialAudioEnabled: false
+        latencyPolicy: .lowLatency
     )
 
     func validate() throws {
@@ -69,13 +67,17 @@ struct AudioPipelineSnapshot: Codable, Equatable, Hashable, Sendable {
     var stage: AudioPipelineStage
     var configuration: StreamAudioConfiguration?
     var route: AudioRouteSnapshot?
+    var spatialRuntime: SpatialAudioRuntimeSnapshot?
     var lastStopReason: AudioStopReason?
     var lastErrorMessage: String?
     var updatedAt: Date
 }
 
 protocol AudioEngineClient: Sendable {
-    func configure(_ configuration: StreamAudioConfiguration) throws
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot
     func start() throws
     func schedule(
         _ buffer: DecodedPCMBuffer,
@@ -94,8 +96,14 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         engine.attach(player)
     }
 
-    func configure(_ configuration: StreamAudioConfiguration) throws {
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
         try configuration.validate()
+        guard graphIntent.hasConsistentRevision else {
+            throw AudioPipelineError.invalidGraphIntent
+        }
         guard let format = AVAudioFormat(
                   commonFormat: .pcmFormatInt16,
                   sampleRate: configuration.sampleRate,
@@ -120,6 +128,21 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         engine.connect(player, to: engine.mainMixerNode, format: format)
         engine.prepare()
         self.configuration = configuration
+        let graph = SpatialAudioGraphSnapshot(
+            revision: graphIntent.revision,
+            mode: .nonspatialMixer,
+            layoutSignature: configuration.channelLayout.signature,
+            hasApplicableRenderingAlgorithm: false,
+            platformStrategy: .none,
+            listenerHeadTrackingCapable: false,
+            listenerHeadTrackingReadback: false,
+            visionExperienceReadback: nil
+        )
+        return SpatialAudioRuntimeResolver.resolve(
+            intent: graphIntent,
+            layout: configuration.channelLayout,
+            graph: graph
+        )
     }
 
     func start() throws {
@@ -256,23 +279,41 @@ actor AudioSessionPipeline {
             stage: .idle,
             configuration: nil,
             route: nil,
+            spatialRuntime: nil,
             lastStopReason: nil,
             lastErrorMessage: nil,
             updatedAt: now
         )
     }
 
-    func configure(_ configuration: StreamAudioConfiguration, now: Date = Date()) throws -> AudioPipelineSnapshot {
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent,
+        now: Date = Date()
+    ) throws -> AudioPipelineSnapshot {
         if snapshot.stage == .configured || snapshot.stage == .running || snapshot.stage == .draining {
             invalidateScheduledBuffers()
             engineClient.stop(drain: false)
         }
         do {
             try configuration.validate()
-            try engineClient.configure(configuration)
+            guard graphIntent.hasConsistentRevision else {
+                throw AudioPipelineError.invalidGraphIntent
+            }
+            let spatialRuntime = try engineClient.configure(
+                configuration,
+                graphIntent: graphIntent
+            )
+            guard spatialRuntime.isConsistent(
+                with: graphIntent,
+                layout: configuration.channelLayout
+            ) else {
+                throw AudioPipelineError.invalidSpatialRuntimeSnapshot
+            }
             snapshot.stage = .configured
             snapshot.configuration = configuration
             snapshot.route = engineClient.routeSnapshot()
+            snapshot.spatialRuntime = spatialRuntime
             snapshot.lastStopReason = nil
             snapshot.lastErrorMessage = nil
             snapshot.updatedAt = now
@@ -282,6 +323,7 @@ actor AudioSessionPipeline {
             engineClient.stop(drain: false)
             snapshot.configuration = nil
             snapshot.route = nil
+            snapshot.spatialRuntime = nil
             return fail(error, now: now)
         }
     }
@@ -304,6 +346,7 @@ actor AudioSessionPipeline {
             engineClient.stop(drain: false)
             snapshot.configuration = nil
             snapshot.route = nil
+            snapshot.spatialRuntime = nil
             return fail(error, now: now)
         }
     }
@@ -366,6 +409,7 @@ actor AudioSessionPipeline {
         snapshot.stage = .stopped
         snapshot.lastStopReason = reason
         snapshot.route = engineClient.routeSnapshot()
+        snapshot.spatialRuntime = nil
         snapshot.updatedAt = now
         return snapshot
     }
@@ -392,6 +436,8 @@ actor AudioSessionPipeline {
 enum AudioPipelineError: Error, Equatable, Sendable {
     case missingConfiguration
     case invalidConfiguration
+    case invalidGraphIntent
+    case invalidSpatialRuntimeSnapshot
     case notRunning
     case invalidPCMBuffer
     case scheduleCapacityExceeded

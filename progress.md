@@ -1768,3 +1768,10 @@
 - layout signature identifier改为闭合layout kind；新增1...64严格容量的`SpatialAudioRuntimeHistory`，验证duplicate revision去重、conflict/stale拒绝、旧值淘汰与只保存privacy-safe snapshot。该纯值类型不提前实现3.5 route monitor或5.2 diagnostics owner。
 - 最终focused`29/29`、扩大`78/78 passed / 0 skipped / 0 failed`；macOS/iOS/tvOS/visionOS generic-device Debug App warnings-as-errors build全部成功且编译器warning/error为0。测试显式移除Keychain opt-in，未选择、启动或修改simulator。
 - OpenSpec strict、`git diff --check`和generator初始/连续两次SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过。OpenSpec 1.5已勾选，权威进度`5/35`；下一项2.1扩展injectable engine client graph intent与actual spatial runtime snapshot合同。
+
+## 2026-07-30 阶段 16 任务 2.1 完成
+
+- 扩展`AudioEngineClient.configure`为纯值`configuration + SpatialAudioGraphIntent -> SpatialAudioRuntimeSnapshot`合同；pipeline保存actual snapshot并fail closed验证revision/layout/route与activation一致性，failure/start/stop清理actual状态。`SessionAudioRuntime`在start/rebuild中复用同一immutable intent，production mixer不虚报spatial active。
+- focused warnings-as-errors gate位于`/tmp/LuneX-16-2_1-focused.1G5ijI`并通过`27/27`；最终expanded gate位于`/tmp/LuneX-16-2_1-expanded.NyQDxe`并通过`68/68 passed / 0 skipped / 0 failed`。两份xcresult结构化warning/error/analyzer warning均为0，测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、iOS、tvOS、visionOS generic-device Debug App build分别位于`/tmp/LuneX-16-2_1-build-macos.J9pfNu`、`/tmp/LuneX-16-2_1-build-ios.vgZNuJ`、`/tmp/LuneX-16-2_1-build-tvos.bDeb2F`和`/tmp/LuneX-16-2_1-build-visionos.hhYFzw`；全部warnings-as-errors succeeded，结构化diagnostics为0，未启动、安装、运行或修改simulator。
+- OpenSpec strict、纯值协议与未提前实现2.2至2.5的源码边界、`git diff --check`、generator连续SHA-256 `6038b4542bfc2c3a0eacfdc0f0c4176cc5db08837ee23dc02045c02f0e35f64e`通过。OpenSpec 2.1已勾选，权威进度`6/35`；下一项2.2构造带显式Core Audio channel layout的interleaved `AVAudioFormat`并验证buffer-list channel/byte ownership。

@@ -1271,7 +1271,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         let runtime = try SessionAudioRuntime(
             pipeline: AudioSessionPipeline(engineClient: engine),
             clock: MediaClockSynchronizer(),
-            configuration: .stereoLowLatency
+            configuration: .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
         )
         _ = try await runtime.start(at: 0)
         let processor = try NativeSessionAudioProcessor(
@@ -1423,9 +1424,16 @@ private final class MediaEnvironmentAudioEngineClient: AudioEngineClient, @unche
     private var buffers: [DecodedPCMBuffer] = []
     private var stopped = false
 
-    func configure(_ configuration: StreamAudioConfiguration) throws {
+    func configure(
+        _ configuration: StreamAudioConfiguration,
+        graphIntent: SpatialAudioGraphIntent
+    ) throws -> SpatialAudioRuntimeSnapshot {
         try configuration.validate()
         withLock { stopped = false }
+        return makeNonspatialRuntime(
+            configuration: configuration,
+            graphIntent: graphIntent
+        )
     }
 
     func start() throws {
