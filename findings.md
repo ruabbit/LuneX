@@ -1306,3 +1306,9 @@
 - 1.1至6.4与6.6已完成并逐项独立提交推送；6.5没有授权Sunshine HDR、compositor EDR signaling、物理HDR/SDR参考图或测量、动态headroom、跨显示器及display reconnect证据，因此change不可archive且阶段不得标记`complete`。
 - 6.5硬件清单明确要求Sunshine版本/LuneX commit/test app/reference pattern、SDR-on-HDR、HDR-on-SDR fallback、HDR-on-HDR、同屏headroom下降/恢复、跨屏、sleep/wake或display reconnect及clean stop；证据必须脱敏并关联客户端状态与可观察compositor/display结果。
 - 阶段16及后续确定性实现可以继续推进，但空间音频、移动连续性、tvOS/visionOS编译或Release门禁都不能回填阶段15物理HDR证据。
+
+## 2026-07-29 阶段 15 离线阶段级自验
+
+- 从已推送且clean的`372ca60`与全新DerivedData重跑完整macOS suite，结果为`616 total / 615 passed / 1 explicit Keychain skip / 0 failed`，xcresult结构化warning/error/analyzer warning均为0；证据`/tmp/LuneX-15-stage-acceptance.fbXbLy`。
+- 同一自验重新确认OpenSpec strict `6/6`、权威进度`32/33`且唯一pending为6.5、generator SHA-256 `600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`、`HEAD == origin/main`和工作树clean。
+- 新的只读simulator清单与6.2快照逐字一致；四个固定identity各唯一、available且`Shutdown`，全局`Booted=0`。阶段级自验不证明live Sunshine/compositor/物理HDR，阶段15保持`in_progress`且change不可archive。

@@ -683,6 +683,22 @@ create, boot, launch, shut down, delete, install to, or otherwise manage any
 simulator. Evidence is retained at
 `/tmp/LuneX-15-6_4-simulator-audit-r2.1eiDpv`.
 
+### Stage-level offline acceptance
+
+After tasks 6.1 through 6.4 and 6.6 were committed and pushed, commit
+`372ca60` was accepted again from a clean checkout state with fresh
+DerivedData. The complete macOS suite passed
+`616 total / 615 passed / 1 explicit Keychain skip / 0 failed`; the xcresult
+contained zero structured warnings, errors, or analyzer warnings. All six
+OpenSpec changes remained strict-valid, the project generator retained SHA-256
+`600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`,
+and a new read-only simulator inventory matched the prior snapshots with all
+fixed identities `Shutdown` and global `Booted=0`. Evidence is retained at
+`/tmp/LuneX-15-stage-acceptance.fbXbLy`.
+
+This stage-level pass reconfirms deterministic offline readiness. It does not
+complete task 6.5 or change the physical-display proof boundary.
+
 ## Verification matrix
 
 ### Deterministic evidence

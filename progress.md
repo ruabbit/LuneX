@@ -1719,3 +1719,10 @@
 - 6.4已以`54d68fe Verify fixed HDR simulator identities`独立提交并推送，fetch确认`HEAD == origin/main == 54d68fe`且工作树clean后执行6.6。
 - 同步OpenSpec、`task_plan.md`、`findings.md`、`progress.md`、runtime roadmap和HDR合同；补齐6.5授权Sunshine版本、参考图、HDR/SDR显示器、动态headroom、跨屏、sleep/reconnect、clean stop及脱敏测量/截图证据清单。
 - OpenSpec 6.6标记完成，权威进度更新为`32/33 in_progress`；唯一剩余6.5没有硬件证据，不archive change、不把阶段15标记complete。6.6通过strict/generator/diff门并独立提交推送后，将在已推送HEAD执行一次阶段15离线自验，再进入阶段16 OpenSpec提案与实现。
+
+## 2026-07-29 阶段 15 离线阶段级自验
+
+- 6.6已以`372ca60 Document HDR hardware acceptance boundary`独立提交并推送；fetch确认`HEAD == origin/main == 372ca60`且工作树clean。
+- 全新DerivedData完整macOS suite从`/tmp/LuneX-15-stage-acceptance.fbXbLy/Stage15Acceptance.xcresult`通过`616 total / 615 passed / 1 Keychain skip / 0 failed`，唯一skip精确为真实Keychain opt-in，结构化diagnostics为0。
+- OpenSpec strict `6/6`、进度`32/33`且6.5唯一pending、generator SHA-256 `600e420b58fa40401b81e5a9a7360f2e71a52f63d7ae3e4c5e51c4eae02f18ab`、固定simulator只读状态门全部通过。
+- 该自验只封版阶段15离线证据，不把6.5标记完成。记录提交推送后进入阶段16空间音频OpenSpec提案与实现，并保持阶段13/14/15的live/hardware缺口不变。
