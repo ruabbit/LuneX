@@ -1398,3 +1398,13 @@
 - 旧`SpatialAudioController`及其孤立environment node已删除，production源码中只剩一个`AVAudioEnvironmentNode()` owner。2.3没有设置`isListenerHeadTrackingEnabled`、visionOS `intendedSpatialExperience`或route/session notification；visionOS在2.5前保持direct mixer。
 - 最终focused证据`/tmp/LuneX-16-2_3-focused-final.KFeHQK/Focused.xcresult`为`21/21`，expanded证据`/tmp/LuneX-16-2_3-expanded.GD6mkP/Expanded.xcresult`为`72/72 passed / 0 skipped / 0 failed`；结构化diagnostics均为0。四平台generic-device Debug App build均succeeded且结构化warning/error/analyzer warning为0。
 - OpenSpec strict、唯一owner/API边界、`git diff --check`和generator连续SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过；测试显式移除Keychain opt-in且未操作simulator。当前无法注入algorithm/connection failure，完整typed fallback属于2.4，资源故障矩阵属于2.6。
+
+## 2026-07-30 阶段 16 任务 2.4 验收
+
+- Apple AVFAudio文档再次确认`applicableRenderingAlgorithms`必须在environment成功连接destination之后读取；`outputConnectionPoints(for:outputBus:)`可读回实际拓扑，`disconnectNodeOutput(_:)`会清除指定node的全部output连接，`.ambienceBed`保留远场环绕bed语义。
+- `AVAudioEngineClient`现在通过同步injectable builder配置environment graph。production builder连接graph、读取`.auto`适用性并设置ambience-bed；typed algorithm或graph failure会先断开player/environment的部分连接，再验证并建立`player -> mainMixer` direct path。
+- `SpatialAudioGraphSnapshot`新增闭合`SpatialAudioGraphFallbackReason`，只区分rendering algorithm unavailable与graph configuration failed；resolver先验证revision/output/route snapshot，再处理用户关闭、mono/unsupported layout和route support，最后映射graph/algorithm fallback，因此unsupported route不再误报为generic graph failure。
+- production与注入测试证明用户关闭、mono、unsupported route、unsupported algorithm和partial graph failure均返回`.nonspatialMixer`、`spatialAudioActive == false`并继续PCM schedule；stop会清除direct/environment连接和fallback readback。它不证明可听输出、route notification、head tracking、entitlement或visionOS spatial experience。
+- focused gate为`/tmp/LuneX-16-2_4-focused.Ay4a8o`，通过`39/39`；expanded recovery/runtime/media gate为`/tmp/LuneX-16-2_4-expanded.YVmJGf`，通过`74/74`。两份xcresult均为`0 warning / 0 error / 0 analyzer warning`，测试显式移除真实Keychain opt-in。
+- macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build位于`/tmp/LuneX-16-2_4-build-{macos,ios,tvos,visionos}.1785346796029`；四份xcresult均`succeeded`且结构化diagnostics为0，没有选择或操作simulator。
+- repository final gate位于`/tmp/LuneX-16-2_4-repo-final.c5LkRu`：OpenSpec `9/35 ready`与strict、唯一environment owner、2.5 API未提前出现、`git diff --check`和generator SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过。

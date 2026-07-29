@@ -119,7 +119,7 @@ flowchart LR
 
 ## 阶段 16：空间音频
 
-- OpenSpec `integrate-spatial-audio-runtime`当前`8/35 in_progress`。1.1至1.5完成实际边界、canonical布局、resolver及有界隐私history；2.1以不可变`SpatialAudioGraphIntent`把revision、平台、route、entitlement和偏好传入injectable engine client并返回actual `SpatialAudioRuntimeSnapshot`。2.2由共享factory建立显式Core Audio layout的interleaved Int16格式与单一buffer ownership。2.3把唯一`AVAudioEnvironmentNode`纳入production engine owner，对eligible stereo/WAVE 5.1/WAVE 7.1连接`player -> environment -> mainMixer`，设置`.ambienceBed`，并只在`.auto`属于连接后applicable集合时选择；disabled路径仍为direct mixer，旧孤立controller已删除。下一项2.4补齐mono、route、algorithm和graph failure的typed nonspatial fallback。当前证据不证明head tracking、visionOS intended experience、route notification、entitlement或硬件可听定位。
+- OpenSpec `integrate-spatial-audio-runtime`当前`9/35 in_progress`。1.1至1.5完成实际边界、canonical布局、resolver及有界隐私history；2.1以不可变`SpatialAudioGraphIntent`把revision、平台、route、entitlement和偏好传入injectable engine client并返回actual `SpatialAudioRuntimeSnapshot`。2.2由共享factory建立显式Core Audio layout的interleaved Int16格式与单一buffer ownership。2.3把唯一`AVAudioEnvironmentNode`纳入production engine owner，对eligible stereo/WAVE 5.1/WAVE 7.1连接`player -> environment -> mainMixer`，设置`.ambienceBed`，并只在`.auto`属于连接后applicable集合时选择。2.4在algorithm或部分graph configuration失败时原子清理environment拓扑并回到direct mixer；mono、用户关闭和unsupported route同样继续nonspatial PCM，各自保留稳定typed原因且不虚报active。下一项2.5实现macOS/iOS/tvOS listener head tracking与visionOS intended spatial experience。当前证据不证明head tracking、route notification、entitlement provisioning或硬件可听定位。
 - 将 session 音频 decoder 的 PCM 接入一个真实 `AVAudioEngine` graph。
 - 把 `AVAudioEnvironmentNode` 放入 graph，而不是只实例化 controller。
 - 根据 route、channel layout、用户设置和 entitlement 决定 spatial/head tracking。

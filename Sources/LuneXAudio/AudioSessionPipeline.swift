@@ -89,6 +89,7 @@ protocol AudioEngineClient: Sendable {
 
 struct AVAudioEngineGraphReadback: Equatable, Sendable {
     let mode: SpatialAudioGraphMode
+    let fallbackReason: SpatialAudioGraphFallbackReason?
     let playerAttached: Bool
     let environmentAttached: Bool
     let playerConnectedToEnvironment: Bool
@@ -100,14 +101,88 @@ struct AVAudioEngineGraphReadback: Equatable, Sendable {
     let inputLayoutTagRawValue: UInt32?
 }
 
+enum AVAudioEnvironmentGraphBuildError: Error, Equatable, Sendable {
+    case renderingAlgorithmUnavailable
+    case configurationFailed
+}
+
+struct AVAudioEnvironmentGraphBuildResult: Equatable, Sendable {
+    let applicableRenderingAlgorithmRawValues: [Int]
+}
+
+protocol AVAudioEnvironmentGraphBuilding {
+    func configure(
+        engine: AVAudioEngine,
+        player: AVAudioPlayerNode,
+        environment: AVAudioEnvironmentNode,
+        format: AVAudioFormat
+    ) throws -> AVAudioEnvironmentGraphBuildResult
+}
+
+struct ProductionAVAudioEnvironmentGraphBuilder:
+    AVAudioEnvironmentGraphBuilding
+{
+    func configure(
+        engine: AVAudioEngine,
+        player: AVAudioPlayerNode,
+        environment: AVAudioEnvironmentNode,
+        format: AVAudioFormat
+    ) throws -> AVAudioEnvironmentGraphBuildResult {
+        engine.connect(environment, to: engine.mainMixerNode, format: nil)
+        engine.connect(player, to: environment, format: format)
+
+        let playerDestinations = engine.outputConnectionPoints(
+            for: player,
+            outputBus: 0
+        )
+        let environmentDestinations = engine.outputConnectionPoints(
+            for: environment,
+            outputBus: 0
+        )
+        guard playerDestinations.contains(where: { $0.node === environment }),
+              environmentDestinations.contains(where: {
+                  $0.node === engine.mainMixerNode
+              }) else {
+            throw AVAudioEnvironmentGraphBuildError.configurationFailed
+        }
+
+        let applicableAlgorithms = environment.applicableRenderingAlgorithms
+            .compactMap {
+                AVAudio3DMixingRenderingAlgorithm(rawValue: $0.intValue)
+            }
+        guard applicableAlgorithms.contains(.auto) else {
+            throw AVAudioEnvironmentGraphBuildError
+                .renderingAlgorithmUnavailable
+        }
+
+        player.sourceMode = .ambienceBed
+        player.renderingAlgorithm = .auto
+        guard player.sourceMode == .ambienceBed,
+              player.renderingAlgorithm == .auto else {
+            throw AVAudioEnvironmentGraphBuildError.configurationFailed
+        }
+        return AVAudioEnvironmentGraphBuildResult(
+            applicableRenderingAlgorithmRawValues: applicableAlgorithms
+                .map(\.rawValue)
+        )
+    }
+}
+
 final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private let environment = AVAudioEnvironmentNode()
+    private let environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding
     private var configuration: StreamAudioConfiguration?
     private var configuredGraphMode = SpatialAudioGraphMode.unconfigured
+    private var configuredGraphFallback: SpatialAudioGraphFallbackReason?
+    private var applicableRenderingAlgorithmRawValues: [Int] = []
 
-    init() {
+    init(
+        environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding =
+            ProductionAVAudioEnvironmentGraphBuilder()
+    ) {
+        self.environmentGraphBuilder = environmentGraphBuilder
         engine.attach(player)
         engine.attach(environment)
     }
@@ -149,22 +224,23 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
             graphIntent: graphIntent
         )
         if usesEnvironment {
-            engine.connect(environment, to: engine.mainMixerNode, format: nil)
-            engine.connect(player, to: environment, format: format)
-            let applicableAlgorithms = environment.applicableRenderingAlgorithms
-                .compactMap {
-                    AVAudio3DMixingRenderingAlgorithm(rawValue: $0.intValue)
-                }
-            guard applicableAlgorithms.contains(.auto) else {
+            do {
+                let graphResult = try environmentGraphBuilder.configure(
+                    engine: engine,
+                    player: player,
+                    environment: environment,
+                    format: format
+                )
+                applicableRenderingAlgorithmRawValues =
+                    graphResult.applicableRenderingAlgorithmRawValues
+                configuredGraphMode = .environmentAmbienceBed
+            } catch {
                 resetGraphConnections()
-                throw AudioPipelineError.invalidConfiguration
+                configuredGraphFallback = graphFallbackReason(for: error)
+                try configureDirectMixer(format: format)
             }
-            player.sourceMode = .ambienceBed
-            player.renderingAlgorithm = .auto
-            configuredGraphMode = .environmentAmbienceBed
         } else {
-            engine.connect(player, to: engine.mainMixerNode, format: format)
-            configuredGraphMode = .nonspatialMixer
+            try configureDirectMixer(format: format)
         }
         engine.prepare()
         self.configuration = configuration
@@ -172,8 +248,15 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
             revision: graphIntent.revision,
             mode: configuredGraphMode,
             layoutSignature: configuration.channelLayout.signature,
-            hasApplicableRenderingAlgorithm: usesEnvironment,
-            platformStrategy: usesEnvironment ? .environmentListener : .none,
+            hasApplicableRenderingAlgorithm:
+                configuredGraphMode == .environmentAmbienceBed
+                    && applicableRenderingAlgorithmRawValues.contains(
+                        AVAudio3DMixingRenderingAlgorithm.auto.rawValue
+                    ),
+            fallbackReason: configuredGraphFallback,
+            platformStrategy: configuredGraphMode == .environmentAmbienceBed
+                ? .environmentListener
+                : .none,
             listenerHeadTrackingCapable: false,
             listenerHeadTrackingReadback: false,
             visionExperienceReadback: nil
@@ -232,12 +315,10 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
             outputBus: 0
         )
         let usesEnvironment = configuredGraphMode == .environmentAmbienceBed
-        let applicableAlgorithms = usesEnvironment
-            ? environment.applicableRenderingAlgorithms.map(\.intValue)
-            : []
         let inputFormat = player.outputFormat(forBus: 0)
         return AVAudioEngineGraphReadback(
             mode: configuredGraphMode,
+            fallbackReason: configuredGraphFallback,
             playerAttached: engine.attachedNodes.contains(player),
             environmentAttached: engine.attachedNodes.contains(environment),
             playerConnectedToEnvironment: playerDestinations.contains {
@@ -253,7 +334,8 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
             selectedRenderingAlgorithmRawValue: usesEnvironment
                 ? player.renderingAlgorithm.rawValue
                 : nil,
-            applicableRenderingAlgorithmRawValues: applicableAlgorithms,
+            applicableRenderingAlgorithmRawValues:
+                applicableRenderingAlgorithmRawValues,
             inputLayoutTagRawValue: inputFormat.channelLayout.map {
                 UInt32($0.layoutTag)
             }
@@ -264,6 +346,34 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         engine.disconnectNodeOutput(player)
         engine.disconnectNodeOutput(environment)
         configuredGraphMode = .unconfigured
+        configuredGraphFallback = nil
+        applicableRenderingAlgorithmRawValues = []
+    }
+
+    private func configureDirectMixer(format: AVAudioFormat) throws {
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        let destinations = engine.outputConnectionPoints(
+            for: player,
+            outputBus: 0
+        )
+        guard destinations.contains(where: {
+            $0.node === engine.mainMixerNode
+        }) else {
+            resetGraphConnections()
+            throw AudioPipelineError.invalidConfiguration
+        }
+        configuredGraphMode = .nonspatialMixer
+    }
+
+    private func graphFallbackReason(
+        for error: Error
+    ) -> SpatialAudioGraphFallbackReason {
+        switch error as? AVAudioEnvironmentGraphBuildError {
+        case .renderingAlgorithmUnavailable:
+            .renderingAlgorithmUnavailable
+        case .configurationFailed, .none:
+            .configurationFailed
+        }
     }
 
     private func environmentGraphIsEligible(

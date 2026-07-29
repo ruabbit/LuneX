@@ -287,18 +287,47 @@ final class SpatialAudioRuntimeStateTests: XCTestCase {
             platform: .iOS,
             graphMode: .nonspatialMixer
         ))
+        let graphConfigurationFailure = SpatialAudioRuntimeResolver.resolve(
+            makeInput(
+                platform: .iOS,
+                graphMode: .nonspatialMixer,
+                graphFallback: .configurationFailed
+            )
+        )
         let algorithmUnavailable = SpatialAudioRuntimeResolver.resolve(makeInput(
             platform: .iOS,
-            hasApplicableRenderingAlgorithm: false
+            graphMode: .nonspatialMixer,
+            hasApplicableRenderingAlgorithm: false,
+            graphFallback: .renderingAlgorithmUnavailable
+        ))
+        let unsupportedRoute = SpatialAudioRuntimeResolver.resolve(makeInput(
+            platform: .iOS,
+            routeSupport: .unsupported,
+            graphMode: .nonspatialMixer
         ))
 
         XCTAssertEqual(mono.fallbackReason, .unsupportedLayout)
         XCTAssertEqual(mismatch.fallbackReason, .layoutMismatch)
         XCTAssertEqual(graphUnavailable.fallbackReason, .graphUnavailable)
         XCTAssertEqual(
+            graphConfigurationFailure.fallbackReason,
+            .graphUnavailable
+        )
+        XCTAssertEqual(
             algorithmUnavailable.fallbackReason,
             .renderingAlgorithmUnavailable
         )
+        XCTAssertEqual(unsupportedRoute.fallbackReason, .routeUnsupported)
+        for snapshot in [
+            mono,
+            mismatch,
+            graphUnavailable,
+            graphConfigurationFailure,
+            algorithmUnavailable,
+            unsupportedRoute
+        ] {
+            XCTAssertFalse(snapshot.spatialAudioActive)
+        }
     }
 
     func testResolverGraphLayoutStrategyAndReadbackGrid() {
@@ -338,10 +367,33 @@ final class SpatialAudioRuntimeStateTests: XCTestCase {
                 name: "algorithm",
                 input: makeInput(
                     platform: .iOS,
-                    hasApplicableRenderingAlgorithm: false
+                    graphMode: .nonspatialMixer,
+                    hasApplicableRenderingAlgorithm: false,
+                    graphFallback: .renderingAlgorithmUnavailable
                 ),
                 mode: .nonspatial,
                 fallback: .renderingAlgorithmUnavailable
+            ),
+            Case(
+                name: "configuration-failure",
+                input: makeInput(
+                    platform: .iOS,
+                    graphMode: .nonspatialMixer,
+                    graphFallback: .configurationFailed
+                ),
+                mode: .nonspatial,
+                fallback: .graphUnavailable
+            ),
+            Case(
+                name: "route-before-graph",
+                input: makeInput(
+                    platform: .iOS,
+                    routeSupport: .unsupported,
+                    graphMode: .nonspatialMixer,
+                    graphFallback: .configurationFailed
+                ),
+                mode: .nonspatial,
+                fallback: .routeUnsupported
             ),
             Case(
                 name: "listener-strategy",
@@ -607,6 +659,7 @@ final class SpatialAudioRuntimeStateTests: XCTestCase {
         strategy: SpatialAudioPlatformStrategy = .environmentListener,
         graphMode: SpatialAudioGraphMode = .environmentAmbienceBed,
         hasApplicableRenderingAlgorithm: Bool = true,
+        graphFallback: SpatialAudioGraphFallbackReason? = nil,
         listenerHeadTrackingCapable: Bool = true,
         listenerHeadTrackingReadback: Bool = true,
         visionExperienceReadback: VisionSpatialExperienceReadback? = nil,
@@ -630,6 +683,7 @@ final class SpatialAudioRuntimeStateTests: XCTestCase {
                 mode: graphMode,
                 layoutSignature: graphLayout.signature,
                 hasApplicableRenderingAlgorithm: hasApplicableRenderingAlgorithm,
+                fallbackReason: graphFallback,
                 platformStrategy: strategy,
                 listenerHeadTrackingCapable: listenerHeadTrackingCapable,
                 listenerHeadTrackingReadback: listenerHeadTrackingReadback,

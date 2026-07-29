@@ -43,15 +43,45 @@ enum VisionSpatialExperienceReadback: String, Codable, Hashable, Sendable {
     case headTracked = "head-tracked"
 }
 
+enum SpatialAudioGraphFallbackReason: String, Codable, CaseIterable, Hashable,
+    Sendable
+{
+    case renderingAlgorithmUnavailable = "rendering-algorithm-unavailable"
+    case configurationFailed = "configuration-failed"
+}
+
 struct SpatialAudioGraphSnapshot: Codable, Equatable, Hashable, Sendable {
     let revision: SpatialAudioSemanticRevision
     let mode: SpatialAudioGraphMode
     let layoutSignature: StreamAudioChannelLayoutSignature?
     let hasApplicableRenderingAlgorithm: Bool
+    let fallbackReason: SpatialAudioGraphFallbackReason?
     let platformStrategy: SpatialAudioPlatformStrategy
     let listenerHeadTrackingCapable: Bool
     let listenerHeadTrackingReadback: Bool
     let visionExperienceReadback: VisionSpatialExperienceReadback?
+
+    init(
+        revision: SpatialAudioSemanticRevision,
+        mode: SpatialAudioGraphMode,
+        layoutSignature: StreamAudioChannelLayoutSignature?,
+        hasApplicableRenderingAlgorithm: Bool,
+        fallbackReason: SpatialAudioGraphFallbackReason? = nil,
+        platformStrategy: SpatialAudioPlatformStrategy,
+        listenerHeadTrackingCapable: Bool,
+        listenerHeadTrackingReadback: Bool,
+        visionExperienceReadback: VisionSpatialExperienceReadback?
+    ) {
+        self.revision = revision
+        self.mode = mode
+        self.layoutSignature = layoutSignature
+        self.hasApplicableRenderingAlgorithm = hasApplicableRenderingAlgorithm
+        self.fallbackReason = fallbackReason
+        self.platformStrategy = platformStrategy
+        self.listenerHeadTrackingCapable = listenerHeadTrackingCapable
+        self.listenerHeadTrackingReadback = listenerHeadTrackingReadback
+        self.visionExperienceReadback = visionExperienceReadback
+    }
 }
 
 struct SpatialAudioRouteCapabilitySnapshot: Codable, Equatable, Hashable, Sendable {
@@ -295,6 +325,20 @@ enum SpatialAudioRuntimeResolver {
         guard input.layout.spatialEligibility == .ambienceBed else {
             return snapshot(mode: .nonspatial, fallback: .unsupportedLayout)
         }
+        guard routeAllowsSpatialAudio(input) else {
+            return snapshot(mode: .nonspatial, fallback: .routeUnsupported)
+        }
+        if let graphFallback = input.graph.fallbackReason {
+            switch graphFallback {
+            case .renderingAlgorithmUnavailable:
+                return snapshot(
+                    mode: .nonspatial,
+                    fallback: .renderingAlgorithmUnavailable
+                )
+            case .configurationFailed:
+                return snapshot(mode: .nonspatial, fallback: .graphUnavailable)
+            }
+        }
         guard input.graph.mode == .environmentAmbienceBed else {
             return snapshot(mode: .nonspatial, fallback: .graphUnavailable)
         }
@@ -303,9 +347,6 @@ enum SpatialAudioRuntimeResolver {
                 mode: .nonspatial,
                 fallback: .renderingAlgorithmUnavailable
             )
-        }
-        guard routeAllowsSpatialAudio(input) else {
-            return snapshot(mode: .nonspatial, fallback: .routeUnsupported)
         }
         guard platformStrategyIsCompatible(input) else {
             return snapshot(

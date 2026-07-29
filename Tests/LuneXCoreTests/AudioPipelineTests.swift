@@ -468,6 +468,7 @@ final class AudioPipelineTests: XCTestCase {
 
             let graph = client.graphReadback()
             XCTAssertEqual(graph.mode, .environmentAmbienceBed)
+            XCTAssertNil(graph.fallbackReason)
             XCTAssertTrue(graph.playerAttached)
             XCTAssertTrue(graph.environmentAttached)
             XCTAssertTrue(graph.playerConnectedToEnvironment)
@@ -527,6 +528,7 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(actual.presentationMode, .nonspatial)
         XCTAssertEqual(actual.fallbackReason, .userDisabled)
         XCTAssertEqual(graph.mode, .nonspatialMixer)
+        XCTAssertNil(graph.fallbackReason)
         XCTAssertFalse(graph.playerConnectedToEnvironment)
         XCTAssertTrue(graph.playerConnectedToMainMixer)
         XCTAssertFalse(graph.environmentConnectedToMainMixer)
@@ -534,6 +536,116 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertNil(graph.selectedRenderingAlgorithmRawValue)
         XCTAssertTrue(graph.applicableRenderingAlgorithmRawValues.isEmpty)
         client.stop(drain: false)
+    }
+
+    func testProductionClientReportsMonoAndUnsupportedRouteFallbacksExactly()
+        throws
+    {
+        let monoClient = AVAudioEngineClient()
+        let monoConfiguration = StreamAudioConfiguration(
+            sampleRate: 48_000,
+            channelLayout: .mono,
+            latencyPolicy: .lowLatency
+        )
+        let monoIntent = makeAudioGraphIntent(
+            channelCount: 1,
+            userEnablesSpatialAudio: true
+        )
+
+        let mono = try monoClient.configure(
+            monoConfiguration,
+            graphIntent: monoIntent
+        )
+
+        XCTAssertEqual(mono.graphMode, .nonspatialMixer)
+        XCTAssertEqual(mono.presentationMode, .nonspatial)
+        XCTAssertEqual(mono.fallbackReason, .unsupportedLayout)
+        XCTAssertFalse(mono.spatialAudioActive)
+        XCTAssertNil(monoClient.graphReadback().fallbackReason)
+        monoClient.stop(drain: false)
+
+        let routeClient = AVAudioEngineClient()
+        let routeIntent = makeAudioGraphIntent(
+            channelCount: 2,
+            routeSupport: .unsupported,
+            userEnablesSpatialAudio: true
+        )
+
+        let unsupportedRoute = try routeClient.configure(
+            .stereoLowLatency,
+            graphIntent: routeIntent
+        )
+
+        XCTAssertEqual(unsupportedRoute.graphMode, .nonspatialMixer)
+        XCTAssertEqual(unsupportedRoute.presentationMode, .nonspatial)
+        XCTAssertEqual(unsupportedRoute.fallbackReason, .routeUnsupported)
+        XCTAssertFalse(unsupportedRoute.spatialAudioActive)
+        XCTAssertNil(routeClient.graphReadback().fallbackReason)
+        routeClient.stop(drain: false)
+    }
+
+    func testProductionClientCleansPartialEnvironmentGraphAndContinuesPCMOnTypedFailure()
+        throws
+    {
+        let cases: [(
+            failure: InjectedEnvironmentGraphBuilder.Failure,
+            graphFallback: SpatialAudioGraphFallbackReason,
+            runtimeFallback: SpatialAudioFallbackReason
+        )] = [
+            (
+                .renderingAlgorithmUnavailable,
+                .renderingAlgorithmUnavailable,
+                .renderingAlgorithmUnavailable
+            ),
+            (
+                .configurationFailedAfterPartialConnection,
+                .configurationFailed,
+                .graphUnavailable
+            )
+        ]
+
+        for testCase in cases {
+            let client = AVAudioEngineClient(
+                environmentGraphBuilder: InjectedEnvironmentGraphBuilder(
+                    failure: testCase.failure
+                )
+            )
+            let graphIntent = makeAudioGraphIntent(
+                channelCount: 2,
+                userEnablesSpatialAudio: true
+            )
+
+            let actual = try client.configure(
+                .stereoLowLatency,
+                graphIntent: graphIntent
+            )
+            let graph = client.graphReadback()
+
+            XCTAssertEqual(actual.graphMode, .nonspatialMixer)
+            XCTAssertEqual(actual.presentationMode, .nonspatial)
+            XCTAssertEqual(actual.fallbackReason, testCase.runtimeFallback)
+            XCTAssertFalse(actual.spatialAudioActive)
+            XCTAssertEqual(graph.mode, .nonspatialMixer)
+            XCTAssertEqual(graph.fallbackReason, testCase.graphFallback)
+            XCTAssertTrue(graph.playerConnectedToMainMixer)
+            XCTAssertFalse(graph.playerConnectedToEnvironment)
+            XCTAssertFalse(graph.environmentConnectedToMainMixer)
+            XCTAssertNil(graph.sourceModeRawValue)
+            XCTAssertNil(graph.selectedRenderingAlgorithmRawValue)
+            XCTAssertTrue(graph.applicableRenderingAlgorithmRawValues.isEmpty)
+            XCTAssertNoThrow(
+                try client.schedule(
+                    makePCM(sequence: 7, timestamp: 1_920),
+                    completion: {}
+                )
+            )
+
+            client.stop(drain: false)
+            let stopped = client.graphReadback()
+            XCTAssertEqual(stopped.mode, .unconfigured)
+            XCTAssertNil(stopped.fallbackReason)
+            XCTAssertFalse(stopped.playerConnectedToMainMixer)
+        }
     }
 
     func testInvalidStreamConfigurationFailsBeforeBackendConfiguration() async throws {
@@ -785,6 +897,34 @@ final class AudioPipelineTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Timed out waiting for scheduled audio completion")
+    }
+}
+
+private struct InjectedEnvironmentGraphBuilder:
+    AVAudioEnvironmentGraphBuilding
+{
+    enum Failure {
+        case renderingAlgorithmUnavailable
+        case configurationFailedAfterPartialConnection
+    }
+
+    let failure: Failure
+
+    func configure(
+        engine: AVAudioEngine,
+        player: AVAudioPlayerNode,
+        environment: AVAudioEnvironmentNode,
+        format: AVAudioFormat
+    ) throws -> AVAudioEnvironmentGraphBuildResult {
+        engine.connect(environment, to: engine.mainMixerNode, format: nil)
+        engine.connect(player, to: environment, format: format)
+        switch failure {
+        case .renderingAlgorithmUnavailable:
+            throw AVAudioEnvironmentGraphBuildError
+                .renderingAlgorithmUnavailable
+        case .configurationFailedAfterPartialConnection:
+            throw AVAudioEnvironmentGraphBuildError.configurationFailed
+        }
     }
 }
 

@@ -1805,3 +1805,12 @@
 - macOS/iOS/tvOS/visionOS generic-device Debug warnings-as-errors build位于`/tmp/LuneX-16-2_3-build-{macos,ios,tvos,visionos}.1785346100312`；四份result bundle均succeeded且结构化diagnostics为0，未选择或操作simulator。
 - repository pre-gate位于`/tmp/LuneX-16-2_3-repo-pre.EqUwFd`：OpenSpec strict、唯一environment owner、applicable algorithm顺序、2.5/3.x API未提前出现、`git diff --check`和generator三次SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`通过。
 - OpenSpec 2.3已勾选，权威进度更新为`8/35`；下一项2.4实现mono、用户关闭、unsupported route/algorithm和graph failure的完整typed nonspatial fallback，不虚报activation。
+
+## 2026-07-30 阶段 16 任务 2.4 完成
+
+- 新增同步injectable environment graph builder和闭合graph fallback readback。eligible graph若缺`.auto`或部分配置失败，client会清除player/environment output connection，重建并验证`player -> mainMixer`，保留有效PCM configuration。
+- resolver优先级已调整：合法revision/output/route snapshot之后依次处理用户关闭、unsupported layout、unsupported route、typed graph failure、actual environment/algorithm/strategy，因此route不再被generic graph mode遮蔽。
+- focused warnings-as-errors gate`39/39`通过，证据`/tmp/LuneX-16-2_4-focused.Ay4a8o/SpatialFallback.xcresult`；expanded audio/recovery/runtime/media gate`74/74`通过，证据`/tmp/LuneX-16-2_4-expanded.YVmJGf/SpatialFallbackExpanded.xcresult`。两份结果0 skip/failed且结构化warning/error/analyzer warning为0，均显式移除真实Keychain opt-in。
+- macOS、iOS、tvOS、visionOS generic-device Debug warnings-as-errors build全部成功，证据`/tmp/LuneX-16-2_4-build-{macos,ios,tvos,visionos}.1785346796029`；四份xcresult结构化diagnostics为0，未创建、启动、安装、运行、关闭或删除simulator。
+- repository final gate为`/tmp/LuneX-16-2_4-repo-final.c5LkRu`：OpenSpec `9/35 ready`与strict、唯一environment owner、2.5 API边界、generator稳定SHA-256 `ccf808d5433b17ef02b02a915b880f1ba77e6a95ee27abb0fdcc3f638ac84e20`和`git diff --check`通过。
+- OpenSpec 2.4已勾选，权威进度更新为`9/35`；下一项2.5只实现平台正确的listener head tracking/visionOS intended spatial experience，不把属性readback、编译或模拟器当作AirPods/可听定位真机证明。
