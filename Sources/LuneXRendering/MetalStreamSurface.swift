@@ -336,23 +336,31 @@ final class StreamMetalPresenterRuntime: StreamMetalPresenterRuntiming,
 final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     typealias RuntimeFactory = (any MTLDevice, Bundle) throws
         -> any StreamMetalPresenterRuntiming
+    typealias SurfaceAdapterFactory = @MainActor (MTKView) -> any HDRSurfaceApplying
 
     private let presentationSource: StreamVideoPresentationSource
     private let runtimeFactory: RuntimeFactory
+    private let surfaceAdapterFactory: SurfaceAdapterFactory
     private let lock = NSLock()
     private var renderPolicy: RenderPolicy
     private var coordinateSnapshot: StreamCoordinateSnapshot?
     private var runtime: (any StreamMetalPresenterRuntiming)?
+    private var surfaceAdapter: (any HDRSurfaceApplying)?
+    private weak var surfaceView: MTKView?
 
     init(
         presentationSource: StreamVideoPresentationSource,
         renderState: StreamRenderState,
         runtimeFactory: @escaping RuntimeFactory = { device, bundle in
             try StreamMetalPresenterRuntime(device: device, bundle: bundle)
+        },
+        surfaceAdapterFactory: @escaping SurfaceAdapterFactory = { view in
+            AppleMetalSurfaceAdapter(view: view)
         }
     ) {
         self.presentationSource = presentationSource
         self.runtimeFactory = runtimeFactory
+        self.surfaceAdapterFactory = surfaceAdapterFactory
         renderPolicy = renderState.policy
         coordinateSnapshot = renderState.coordinateSnapshot
     }
@@ -360,12 +368,36 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     @MainActor
     func configure(_ view: MTKView) {
         guard let device = view.device else { return }
+        let adapter: any HDRSurfaceApplying
+        if surfaceView === view, let surfaceAdapter {
+            adapter = surfaceAdapter
+        } else {
+            adapter = surfaceAdapterFactory(view)
+        }
+        do {
+            let surface = try HDRSurfaceContract(
+                drawablePixelFormat: .bgra8UnormSRGB,
+                outputColorSpace: .sRGB,
+                outputGamut: .sRGB,
+                extendedRangeIntent: .disabled,
+                metadataMode: .none
+            )
+            let outcome = try adapter.apply(surface)
+            guard outcome.activeContract == surface else {
+                failSurfaceConfiguration(view)
+                return
+            }
+        } catch {
+            failSurfaceConfiguration(view)
+            return
+        }
+        surfaceAdapter = adapter
+        surfaceView = view
         let runtime = try? runtimeFactory(device, Bundle(for: StreamMetalPresenter.self))
         withLock {
             self.runtime?.invalidate()
             self.runtime = runtime
         }
-        view.colorPixelFormat = .bgra8Unorm_srgb
         view.framebufferOnly = true
         view.delegate = self
     }
@@ -439,6 +471,16 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             runtime?.invalidate()
             runtime = nil
         }
+    }
+
+    @MainActor
+    private func failSurfaceConfiguration(_ view: MTKView) {
+        withLock {
+            runtime?.invalidate()
+            runtime = nil
+        }
+        view.delegate = nil
+        view.isPaused = true
     }
 
     private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
@@ -705,9 +747,6 @@ struct MetalStreamSurface: NSViewRepresentable {
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
-        if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: false)
-        }
         context.coordinator.presenter.configure(view)
         context.coordinator.captureController.update(inputPolicy, for: view)
         context.coordinator.attachmentOwner.attach(to: view)
@@ -742,9 +781,6 @@ struct MetalStreamSurface: NSViewRepresentable {
         let schedule = StreamMetalViewScheduleResolver.resolve(state.policy)
         view.isPaused = schedule.isPaused
         view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
-        if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: false)
-        }
         return schedule
     }
 }
@@ -765,9 +801,6 @@ struct MetalStreamSurface: UIViewRepresentable {
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
-        if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: false)
-        }
         context.coordinator.configure(view)
         return view
     }
@@ -782,9 +815,6 @@ struct MetalStreamSurface: UIViewRepresentable {
                 width: snapshot.drawableSize.width,
                 height: snapshot.drawableSize.height
             )
-        }
-        if let layer = view.layer as? CAMetalLayer {
-            DisplayHeadroomReader.configure(layer, forHDRStream: false)
         }
         if schedule.requestsImmediateDraw { view.draw() }
     }

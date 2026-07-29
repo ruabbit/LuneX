@@ -1442,3 +1442,22 @@
 - simulator构建前后完整规范化清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定26.4 iPhone/iPad/Apple TV/Apple Vision Pro均available且`Shutdown`，最终全局`Booted=0`。未创建、启动、关闭或删除任何设备。
 - repository gates位于`/tmp/LuneX-15-3_6-repo.JEHVIJ`：OpenSpec strict `6/6`、fixture self-test/全树、generator生成前及三次运行SHA-256均为`6cd73abecaca22c14d60d0b378b34ac57c44e5fce60e8eef5f10dac959da368d`，reference/dependency/CoreImage/whitespace边界通过。
 - OpenSpec 3.6标记完成，权威进度`16/33`；阶段15保持`in_progress`。本项不证明4.x EDR surface/display adaptation、HDR signaling或6.5物理亮度/颜色，下一项4.1。
+
+## 2026-07-29 阶段 15 任务 4.1 启动
+
+- 恢复并核对活动目标；`main`工作树clean，`HEAD == origin/main == 867ff8f`，无残留构建或Git写进程。
+- 读取planning-with-files、OpenSpec apply skill、change全部proposal/design/spec/tasks；OpenSpec权威进度为`16/33`，开始4.1。
+- 4.1范围锁定为可注入platform surface adapter、typed supported/unsupported/application failure结果、完整surface snapshot与原子回滚；production只允许通过adapter重申当前SDR contract，不在4.3 resolver之前主动开启EDR。
+- 所有后续测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，不执行真实Keychain round-trip；不创建、启动、关闭或删除simulator。
+- 读取Xcode 26.4 QuartzCore/CoreGraphics headers并执行四SDK Swift warnings-as-errors探针：macOS、iOS、visionOS可用EDR intent/metadata，tvOS得到三项明确unavailable诊断；extended-linear Display P3与ITU-R 2020 colorspace名称四SDK均存在。
+- 首个探针因zsh不拆分`SDK target`整行而在编译前失败，已改为`while read -r sdk target`成功复验并记录到`task_plan.md`。
+- 新增`HDRSurfaceTransactionAdapter`、平台capability、typed application outcome/error及Apple `MTKView/CAMetalLayer` backend；进入EDR按format/colorspace/metadata/intent顺序提交，返回SDR先关闭intent并清metadata，mutation failure恢复完整native snapshot，rollback failure清除reported ownership。
+- production presenter已删除四处布尔式`DisplayHeadroomReader.configure`调用，首次配置通过adapter原子应用当前既有SDR contract；surface unsupported/failure会失效runtime、移除delegate并暂停view，不会继续创建presentation runtime。4.3 resolver完成前仍不主动请求EDR。
+- 首轮focused从全新DerivedData通过`22/22 passed / 0 skipped / 0 failed`，其中adapter `8/8`、presenter `14/14`；真实macOS layer覆盖SDR→float EDR→SDR的view/layer pixel format、colorspace、intent与metadata。xcresult build result为`0 warning / 0 error / 0 analyzer warning`，证据`/tmp/LuneX-15-4_1-focused.5VFZSs/HDRSurfaceAdapter.xcresult`。
+
+## 2026-07-29 阶段 15 任务 4.1 完成
+
+- 完整macOS suite从全新DerivedData通过`567 total / 566 passed / 1 skipped / 0 failed`（`/tmp/LuneX-15-4_1-full.0poC2y/LuneXCoreTests.xcresult`）；唯一skip为显式禁用的`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化结果为零warning/error/analyzer warning。
+- macOS及固定iPhone/iPad/tvOS/visionOS五平台Debug warnings-as-errors build-only全部通过并各自实际执行一次Metal compile/link，证据目录`/tmp/LuneX-15-4_1-builds.VX5kfG`。构建前后规范化simulator清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定四实例均available/`Shutdown`且全局`Booted=0`，未执行simulator生命周期命令。
+- repository gates位于`/tmp/LuneX-15-4_1-repo.DWlFHH`：OpenSpec strict `6/6`、fixture validator self-test/全树、generator运行前及连续三次SHA-256均为`ed35a1f7a1233c38e2d4e3f25784fe24199727392a5d0018811e7d68e8073b4e`，production/reference、dependency、CoreImage regression、diff/自有文件whitespace边界全部通过。
+- 自审确认typed unsupported不修改native state，成功rollback保留先前active ownership，rollback failure清除ownership，tvOS不引用unavailable API且visionOS最终build通过。OpenSpec 4.1标记完成，权威进度`17/33`；阶段15保持`in_progress`，下一项4.2。

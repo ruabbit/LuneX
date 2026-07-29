@@ -92,8 +92,9 @@ flowchart LR
 
 ## 阶段 15：HDR 和 EDR
 
-- OpenSpec `implement-native-hdr-edr-pipeline`当前`16/33`；第1、2组、3.1至3.5及3.6 presenter configuration/failure/drawable/resize/pause/replacement/resource矩阵完成，下一项4.1为injectable platform surface adapter。
-- 3.6确定性验收为focused `13/13`、完整macOS `558 total / 557 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自实际Metal compile/link、OpenSpec strict `6/6`与generator/fixture/boundary门通过。更新后新增的iOS 27/xrOS 27 simulator不被删除；构建前后完整规范化清单哈希均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定26.4四实例保持available/`Shutdown`。
+- OpenSpec `implement-native-hdr-edr-pipeline`当前`17/33`；4.1 injectable platform surface adapter已完成，下一项4.2为独立于stream HDR状态的monotonic display revision与semantic headroom update。
+- 4.1确定性验收为focused `22/22`、完整macOS `567 total / 566 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug warnings-as-errors且各自实际Metal compile/link、OpenSpec strict `6/6`与generator/fixture/boundary门通过。构建前后规范化simulator清单SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定26.4四实例保持available/`Shutdown`且全局`Booted=0`。
+- surface adapter在macOS/iOS/iPadOS按能力支持Display-P3/ITU-R 2020 float EDR，在visionOS支持Display-P3 float EDR，在tvOS返回typed unsupported；进入EDR按format/colorspace/metadata/intent提交，退出EDR先关闭intent并清metadata，失败时恢复完整snapshot。production在4.3 resolver前仍只请求SDR contract。
 - 把 `display supports EDR` 与 `stream is HDR` 拆为两个独立状态。
 - 从解码 format description 保留 bit depth、primaries、transfer function、matrix、MDCV 和 CLL。
 - 配置 10-bit Metal 输出、目标 colorspace 和 EDR metadata。

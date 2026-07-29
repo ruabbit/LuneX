@@ -31,14 +31,16 @@ still required before LuneX may claim working HDR output.
 | Presentation source | `StreamVideoPresentationSource` rejects wrong decoder generations and clears frames across pause, stop, failure, and replacement | Session/lifecycle integration tests | It stores raw `DecodedVideoFrame` only and has no render/display revision fence |
 | Actual presenter | `StreamMetalPresenter` maps decoded frames through `CVMetalVideoFrameMapper` and the explicit repository Metal renderer. SDR uses the sRGB pipeline; HDR uses the bounded HDR-to-SDR pipeline until a resolved EDR surface exists | Focused production-runtime GPU execution, shader readback, lifecycle tests, full macOS tests, and five-platform builds | It intentionally fixes the drawable to sRGB and does not yet apply a float EDR drawable, extended-linear colorspace, display-owned headroom, or HDR metadata |
 | Display lifecycle | macOS rereads the actual `NSScreen`, headroom, display name, backing pixels, and drawable on window/screen/backing/resize notifications | AppKit notification and stale-attachment tests | Headroom has no monotonic display revision separate from general lifecycle revision |
-| Surface intent | Presenter call sites force `wantsExtendedDynamicRangeContent = false` while the active surface contract is sRGB, so display capability alone cannot accidentally enable EDR | The property call and SDR fallback compile on all targets; focused tests lock the matching sRGB contract | Tasks 4.1 through 4.6 must atomically own pixel format, colorspace, extended-range intent, metadata, and actual display-headroom revision |
+| Surface intent | `StreamMetalPresenter` applies its current SDR contract through an injectable transaction adapter; the adapter owns view/layer pixel format, colorspace, EDR metadata, and extended-range intent together | Focused tests cover ordered SDR/EDR transitions, idempotency, typed unsupported, rollback, rollback failure, real macOS layer fields, and production fail-closed behavior; all five platform targets compile | Tasks 4.2 through 4.6 must add display/headroom revisions, resolve when EDR is eligible, and rebuild presentation across semantic transitions |
 | AppModel fallback | Before real platform lifecycle exists, settings synthesize headroom values when the HDR preference is enabled | Existing model tests | Synthetic settings headroom is not display evidence and must not enable production EDR output |
 
-The production truth after task 3.5 is therefore: LuneX presents both SDR and
+The production truth after task 4.1 is therefore: LuneX presents both SDR and
 HDR decoded layouts through the explicit shader and revision-owned Metal
-renderer. The current production surface remains sRGB, so HDR is deliberately
-tone-mapped to SDR headroom `1.0`; no EDR signaling or physical HDR result is
-claimed until the display/surface adaptation tasks and hardware gate pass.
+renderer. Surface fields now have one atomic, platform-capability-gated owner,
+but the current production resolver still requests only sRGB SDR, so HDR is
+deliberately tone-mapped to headroom `1.0`. No production EDR selection, HDR
+signaling, or physical HDR result is claimed until tasks 4.2 through 5.4 and the
+hardware gate pass.
 
 ## Apple SDK 26.4 API matrix
 
@@ -156,6 +158,39 @@ gates. This proves presenter lifecycle ownership and failure convergence. It
 does not prove EDR surface configuration, display/headroom revision delivery,
 HDR signaling, or physical luminance/color output; those remain in tasks 4.x
 through 6.5.
+
+## Surface adapter evidence
+
+OpenSpec task 4.1 replaces the former boolean layer helper with one injectable
+`HDRSurfaceTransactionAdapter` and a native `AppleMetalSurfaceAdapter`:
+
+- macOS and iOS/iPadOS expose intent plus HDR metadata for Display-P3 and
+  ITU-R 2020 EDR contracts; visionOS exposes the same controls for Display-P3;
+  tvOS returns a typed unsupported outcome without referencing unavailable APIs;
+- entering EDR applies the floating drawable format, extended-linear
+  colorspace, HDR10 metadata, and EDR intent in that order;
+- returning to SDR disables EDR intent, clears metadata, restores the sRGB
+  drawable, and restores the sRGB colorspace;
+- equal contracts are idempotent and do not begin a native transaction;
+- mutation failure restores the complete native snapshot and retains the prior
+  reported contract; rollback failure clears reported ownership; and
+- `CATransaction` disables implicit animation while both `MTKView` and its
+  `CAMetalLayer` receive the same Metal pixel format.
+
+The production presenter applies its existing SDR contract through this adapter
+before creating presentation runtime ownership. Unsupported output, snapshot
+failure, mutation failure, or rollback failure invalidates the runtime, removes
+the delegate, and pauses the view. Task 4.3 remains the owner of choosing an EDR
+contract; task 4.1 does not enable EDR based only on display capability.
+
+The task-level evidence is `22/22` focused tests, including real macOS
+`CAMetalLayer` SDR to EDR to SDR field checks; `567 total / 566 passed / 1
+explicit Keychain skip / 0 failed` for the complete macOS suite; five-platform
+Debug builds that each compiled and linked the Metal shader; and OpenSpec,
+fixture, generator, dependency, reference-path, Core Image regression,
+whitespace, and simulator-inventory gates. This proves transactional field
+application and compile safety, not production EDR eligibility, current
+headroom mapping, HDR display signaling, or physical luminance/color output.
 
 ## Verification matrix
 

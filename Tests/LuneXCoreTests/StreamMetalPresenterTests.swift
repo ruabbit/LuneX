@@ -449,6 +449,11 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertEqual(view.colorPixelFormat, .bgra8Unorm_srgb)
         XCTAssertTrue(view.framebufferOnly)
         XCTAssertTrue((view.delegate as AnyObject?) === presenter)
+        let layer = try XCTUnwrap(view.layer as? CAMetalLayer)
+        XCTAssertEqual(layer.pixelFormat, .bgra8Unorm_srgb)
+        XCTAssertEqual(layer.colorspace?.name, CGColorSpace.sRGB)
+        XCTAssertFalse(layer.wantsExtendedDynamicRangeContent)
+        XCTAssertNil(layer.edrMetadata)
         XCTAssertEqual(firstRuntime.snapshot().invalidationCount, 0)
 
         presenter.configure(view)
@@ -486,6 +491,37 @@ final class StreamMetalPresenterTests: XCTestCase {
 
         presenter.stop()
         XCTAssertEqual(runtime.snapshot().invalidationCount, 1)
+    }
+
+    @MainActor
+    func testSurfaceFailureInvalidatesRuntimeAndDetachesPresenter() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(frame: .zero, device: device)
+        let runtime = RecordingStreamMetalPresenterRuntime()
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        var runtimeCreationCount = 0
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState(),
+            runtimeFactory: { _, _ in
+                runtimeCreationCount += 1
+                return runtime
+            },
+            surfaceAdapterFactory: { _ in surfaceAdapter }
+        )
+
+        presenter.configure(view)
+        XCTAssertEqual(runtimeCreationCount, 1)
+        XCTAssertTrue((view.delegate as AnyObject?) === presenter)
+        XCTAssertEqual(runtime.snapshot().invalidationCount, 0)
+
+        surfaceAdapter.failure = .mutationFailed(.outputColorSpace(.sRGB))
+        presenter.configure(view)
+
+        XCTAssertEqual(runtimeCreationCount, 1)
+        XCTAssertEqual(runtime.snapshot().invalidationCount, 1)
+        XCTAssertNil(view.delegate)
+        XCTAssertTrue(view.isPaused)
     }
 
     private func makeFrame(
@@ -613,6 +649,16 @@ final class StreamMetalPresenterTests: XCTestCase {
         case targetCreationFailed
         case commandQueueCreationFailed
         case runtimeCreationFailed
+    }
+}
+
+@MainActor
+private final class RecordingPresenterSurfaceAdapter: HDRSurfaceApplying {
+    var failure: HDRSurfaceApplicationError?
+
+    func apply(_ contract: HDRSurfaceContract) throws -> HDRSurfaceApplicationOutcome {
+        if let failure { throw failure }
+        return .applied(previous: nil, current: contract)
     }
 }
 

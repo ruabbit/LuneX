@@ -1090,3 +1090,20 @@
 - 暂停/idle即使拿不到drawable也先停止presentation resources；active/throttled无drawable才等待。drawable mismatch、缺坐标和缺帧保持opaque clear但不伪造成功presentation。
 - configuration replace开始前先建立临时resource ownership，使renderer部分配置后抛错仍会stop/flush；release后清除ownership，因此presenter catch的后续stop、重复stop和invalidate均不会重复释放。
 - focused、完整suite、五平台build、fixture/OpenSpec/generator/boundary及simulator不变门共同证明3.6确定性合同；它们不证明4.x float EDR surface、current headroom回调、跨屏revision、HDR signaling或物理显示效果。
+
+## 2026-07-29 阶段 15 任务 4.1 启动
+
+- 用户在macOS更新结束后明确恢复推进；活动目标仍覆盖阶段13至20。恢复检查确认`HEAD == origin/main == 867ff8f`、工作树clean且无残留build/generator/Git写进程。
+- OpenSpec `implement-native-hdr-edr-pipeline`为`spec-driven`、状态`ready`、权威进度`16/33`。4.1仅实现可注入且可原子回滚的platform surface adapter，不提前实现4.2 display/headroom revision、4.3 eligibility resolver、4.4 transition orchestration或5.x应用接线。
+- `HDRSurfaceContract`已只允许完整SDR组合（8-bit sRGB drawable/colorspace、EDR disabled、无metadata）或完整EDR组合（16-bit float、extended-linear Display P3/ITU-R 2020、EDR enabled、HDR10 metadata）。production `MetalStreamSurface`仍固定8-bit sRGB并直接调用布尔式`DisplayHeadroomReader.configure`，该入口不能表达format/colorspace/intent的单一事务。
+- Context7的Apple文档索引没有返回目标EDR API条目；平台能力与availability改用本机Xcode 26.4 SDK interface和warnings-as-errors编译探针确定。Context7无关结果不作为4.1实现证据。
+- Xcode 26.4 SDK头文件声明`CAMetalLayer.colorspace`与`pixelFormat`通用；`wantsExtendedDynamicRangeContent`和`EDRMetadata`在macOS/iOS可用、tvOS显式unavailable。独立Swift warnings-as-errors探针进一步确认visionOS 26也能编译intent和`CAEDRMetadata.hdr10(...)`，因此visionOS能力必须来自其自身探针而不是UIKit条件继承。
+- `CAEDRMetadata`文档规定float EDR buffer的`opticalOutputScale`把component值映射为nits；现有LuneX tone mapping已冻结reference white为100 nits，所以默认HDR10 metadata的scale应为100，而不是把PQ 10,000-nit最大值直接作为scale。
+
+## 2026-07-29 阶段 15 任务 4.1 验收结论
+
+- `HDRSurfaceTransactionAdapter`以完整native snapshot包围surface mutation：进入EDR依次设置float drawable、extended-linear colorspace、HDR10 metadata和intent；返回SDR先关闭intent、清metadata，再恢复sRGB format/colorspace。相同contract不启动事务。
+- unsupported请求不修改surface；普通mutation failure恢复snapshot并保留先前active ownership，rollback failure清除reported ownership。Apple backend用禁用隐式动画的`CATransaction`并同步`MTKView.colorPixelFormat`与`CAMetalLayer.pixelFormat`。
+- 平台能力是显式的：macOS/iOS支持Display-P3与ITU-R 2020 intent+metadata，visionOS支持Display-P3，tvOS只应用SDR并对EDR返回typed unsupported；最终五平台build证明条件编译不引用tvOS unavailable API。
+- production首次configure已通过adapter应用现有SDR contract；unsupported或transaction failure会失效runtime、移除delegate并暂停view。4.3之前没有production路径请求EDR，因此4.1不能作为HDR signaling或物理亮度证据。
+- task级验收为focused `22/22`、完整macOS `567 total / 566 passed / 1 explicit Keychain skip / 0 failed`、五平台Debug Metal compile/link、simulator清单不变及repository gates全通过。下一项4.2只建立monotonic display revision与semantic headroom update，不提前实现4.3 resolver。

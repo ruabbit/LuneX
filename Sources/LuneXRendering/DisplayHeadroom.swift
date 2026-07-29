@@ -1,5 +1,4 @@
 import Foundation
-import QuartzCore
 
 #if os(macOS)
 import AppKit
@@ -41,13 +40,4 @@ enum DisplayHeadroomReader {
         DisplayHeadroom()
     }
     #endif
-
-    static func configure(_ layer: CAMetalLayer, forHDRStream isHDR: Bool) {
-        #if os(macOS) || os(iOS)
-        layer.wantsExtendedDynamicRangeContent = isHDR
-        #else
-        _ = layer
-        _ = isHDR
-        #endif
-    }
 }
