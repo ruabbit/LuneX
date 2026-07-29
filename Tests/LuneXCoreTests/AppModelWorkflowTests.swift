@@ -1,4 +1,7 @@
 @preconcurrency import CoreVideo
+@preconcurrency import Metal
+import MetalKit
+import QuartzCore
 import XCTest
 
 @MainActor
@@ -456,7 +459,7 @@ final class AppModelWorkflowTests: XCTestCase {
         await launchTask.value
     }
 
-    func testHDRPresentationGraphTracksDecodedDisplayPreferenceAndReplacementOwnership()
+    func testHDRApplicationIntegrationCoversPresentationRevisionsStaleFramesAndCleanStop()
         async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
@@ -474,7 +477,7 @@ final class AppModelWorkflowTests: XCTestCase {
         await model.loadInitialState()
         await model.refreshAppsForSelectedHost()
 
-        let drawableSize = PixelSize(width: 3_840, height: 2_160)
+        let drawableSize = PixelSize(width: 64, height: 64)
         let lifecycle = makePlatformLifecycle(
             isStreamActive: true,
             isVisible: true,
@@ -492,10 +495,49 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         model.applyPlatformLifecycle(lifecycle)
 
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
+            device: device
+        )
+        let drawableLayer = CAMetalLayer()
+        drawableLayer.device = device
+        drawableLayer.pixelFormat = .bgra8Unorm_srgb
+        drawableLayer.drawableSize = CGSize(width: 64, height: 64)
+        let drawable = try XCTUnwrap(drawableLayer.nextDrawable())
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        var presenterRuntimes: [RecordingStreamMetalPresenterRuntime] = []
+        let presenter = StreamMetalPresenter(
+            presentationSource: model.videoPresentationSource,
+            renderState: model.renderState,
+            runtimeFactory: { _, _ in
+                let runtime = RecordingStreamMetalPresenterRuntime()
+                presenterRuntimes.append(runtime)
+                return runtime
+            },
+            surfaceAdapterFactory: { _ in surfaceAdapter },
+            drawableProvider: { _ in drawable },
+            diagnosticLease: HDRPresentationDiagnosticLease(
+                claim: { model.claimHDRPresentationDiagnosticOwnership($0) },
+                publish: { ownerID, state in
+                    model.publishHDRPresentationDiagnostic(
+                        state,
+                        ownerID: ownerID
+                    )
+                },
+                release: { model.releaseHDRPresentationDiagnosticOwnership($0) }
+            )
+        )
+        presenter.configure(view)
+
         let launchTask = Task { await model.launchSelectedApp() }
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
+        model.videoPresentationSource.beginSession(
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
 
         let hdrMetadata = VideoColorMetadata.hdr10VideoRange()
         provider.yield(
@@ -510,24 +552,22 @@ final class AppModelWorkflowTests: XCTestCase {
             .closed(.inactiveSession)
         )
 
+        let hdrFrame = try makeHDRApplicationFrame(
+            generation: 10,
+            frameID: 1,
+            metadata: hdrMetadata
+        )
         let hdrLayout = HDRDecodedPixelBufferLayout(
-            pixelFormat: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
-            width: 3_840,
-            height: 2_160,
-            planes: [
-                HDRDecodedPlaneDimensions(width: 3_840, height: 2_160),
-                HDRDecodedPlaneDimensions(width: 1_920, height: 1_080)
-            ]
+            pixelBuffer: hdrFrame.pixelBuffer
         )
         let sdrMetadata = VideoColorMetadata.rec709VideoRange()
+        let sdrFrame = try makeHDRApplicationFrame(
+            generation: 11,
+            frameID: 2,
+            metadata: sdrMetadata
+        )
         let sdrLayout = HDRDecodedPixelBufferLayout(
-            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-            width: 1_920,
-            height: 1_080,
-            planes: [
-                HDRDecodedPlaneDimensions(width: 1_920, height: 1_080),
-                HDRDecodedPlaneDimensions(width: 960, height: 540)
-            ]
+            pixelBuffer: sdrFrame.pixelBuffer
         )
         mediaEnvironment.yieldVideoPresentation(
             .decoderStarted(
@@ -571,9 +611,34 @@ final class AppModelWorkflowTests: XCTestCase {
             activeEDR.identity.displayRevision,
             lifecycle.displayRevision
         )
+        model.videoPresentationSource.consume(
+            .sessionStarted(generation: 10, colorMetadata: hdrMetadata),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        model.videoPresentationSource.consume(
+            .frame(hdrFrame),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenter.snapshot().activeConfiguration,
+            activeEDR.identity
+        )
+        XCTAssertEqual(
+            surfaceAdapter.activeContract,
+            activeEDR.identity.surfaceContract
+        )
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last,
+            activeEDR.identity
+        )
         XCTAssertEqual(
             model.renderState.transform.sourceSize,
-            PixelSize(width: 3_840, height: 2_160)
+            PixelSize(width: 64, height: 64)
         )
 
         mediaEnvironment.yieldVideoPresentation(
@@ -594,6 +659,16 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil {
             model.renderState.hdrRenderResolution == .closed(.staleColorSignature)
         }
+        let presentationCountBeforeClosed = presenterRuntimes.reduce(0) {
+            $0 + $1.presentCount
+        }
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        XCTAssertNil(presenter.snapshot().activeConfiguration)
+        XCTAssertEqual(
+            presenterRuntimes.reduce(0) { $0 + $1.presentCount },
+            presentationCountBeforeClosed
+        )
         mediaEnvironment.yieldVideoPresentation(
             .decodedFrame(
                 ownership: StreamVideoPresentationOwnership(
@@ -612,6 +687,13 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil {
             model.renderState.hdrRenderResolution.configuration?.outputMode == .edr
         }
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last?.mappingMode,
+            .hdrEDR
+        )
 
         _ = lifecycle.updateSurface(
             displayID: "display-a",
@@ -635,6 +717,17 @@ final class AppModelWorkflowTests: XCTestCase {
             constrained.identity.displayRevision,
             lifecycle.displayRevision
         )
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last?.mappingMode,
+            .hdrToSDR
+        )
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.code,
+            "hdr_sdr_fallback_headroom_insufficient"
+        )
 
         _ = lifecycle.updateSurface(
             displayID: "display-a",
@@ -646,6 +739,19 @@ final class AppModelWorkflowTests: XCTestCase {
             drawableSize: drawableSize
         )
         model.applyPlatformLifecycle(lifecycle)
+        let recovered = try XCTUnwrap(
+            model.renderState.hdrRenderResolution.configuration
+        )
+        XCTAssertEqual(recovered.outputMode, .edr)
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last,
+            recovered.identity
+        )
+        XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
+
         model.settings.stream.hdrEnabled = false
         let disabled = try XCTUnwrap(
             model.renderState.hdrRenderResolution.configuration
@@ -655,6 +761,33 @@ final class AppModelWorkflowTests: XCTestCase {
             .sdrFallback(.userPreferenceDisabled)
         )
         model.settings.stream.hdrEnabled = true
+
+        let revisionBeforeDisplayMove = lifecycle.displayRevision
+        _ = lifecycle.updateSurface(
+            displayID: "display-b",
+            headroom: DisplayHeadroom(
+                potential: 4,
+                current: 2.5,
+                reference: 1
+            ),
+            drawableSize: drawableSize
+        )
+        model.applyPlatformLifecycle(lifecycle)
+        let movedEDR = try XCTUnwrap(
+            model.renderState.hdrRenderResolution.configuration
+        )
+        XCTAssertGreaterThan(
+            movedEDR.identity.displayRevision,
+            revisionBeforeDisplayMove
+        )
+        XCTAssertEqual(movedEDR.outputMode, .edr)
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last,
+            movedEDR.identity
+        )
 
         provider.yield(
             .videoColorMetadata(sdrMetadata),
@@ -707,6 +840,27 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         XCTAssertEqual(activeSDR.outputMode, .sdr)
         XCTAssertEqual(activeSDR.identity.mappingMode, .sdr)
+        model.videoPresentationSource.consume(
+            .sessionStarted(generation: 11, colorMetadata: sdrMetadata),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        model.videoPresentationSource.consume(
+            .frame(sdrFrame),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        presenter.update(renderState: model.renderState)
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last,
+            activeSDR.identity
+        )
+        XCTAssertEqual(
+            surfaceAdapter.activeContract,
+            activeSDR.identity.surfaceContract
+        )
 
         mediaEnvironment.yieldVideoPresentation(
             .decodedFrame(
@@ -745,6 +899,26 @@ final class AppModelWorkflowTests: XCTestCase {
                 .decoderGeneration,
             11
         )
+        let staleFrameDropsBefore = model.videoPresentationSource.snapshot()
+            .staleFrameDropCount
+        model.videoPresentationSource.consume(
+            .frame(hdrFrame),
+            sessionID: record.sessionID,
+            mediaGeneration: 1
+        )
+        XCTAssertEqual(
+            model.videoPresentationSource.snapshot().staleFrameDropCount,
+            staleFrameDropsBefore + 1
+        )
+        XCTAssertEqual(
+            model.videoPresentationSource.currentFrame()?.frameID,
+            sdrFrame.frameID
+        )
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            presenterRuntimes.last?.presentedConfigurations.last,
+            activeSDR.identity
+        )
         mediaEnvironment.yieldVideoPresentation(
             .cleared(
                 ownership: StreamVideoPresentationOwnership(
@@ -765,12 +939,24 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.stopStream()
         await launchTask.value
+        presenter.update(renderState: model.renderState)
+        presenter.stop()
         XCTAssertNil(model.renderState.negotiatedVideoColorMetadata)
         XCTAssertNil(model.renderState.decodedVideoPresentationContract)
         XCTAssertEqual(
             model.renderState.hdrRenderResolution,
             .closed(.inactiveSession)
         )
+        XCTAssertNil(model.videoPresentationSource.currentFrame())
+        XCTAssertNil(presenter.snapshot().activeConfiguration)
+        XCTAssertEqual(
+            surfaceAdapter.activeContract?.extendedRangeIntent,
+            .disabled
+        )
+        XCTAssertTrue(presenterRuntimes.allSatisfy {
+            $0.invalidationCount == 1
+        })
+        XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
     }
 
     func testMacPlatformSampleFlowsThroughAppModelAndFocusLossReleasesInput() async throws {
@@ -2616,6 +2802,37 @@ final class AppModelWorkflowTests: XCTestCase {
         lifecycle.drawableSize = drawableSize
         lifecycle.updateRenderPolicy()
         return lifecycle
+    }
+
+    private func makeHDRApplicationFrame(
+        generation: UInt64,
+        frameID: UInt64,
+        metadata: VideoColorMetadata
+    ) throws -> DecodedVideoFrame {
+        let bitDepth: VideoOutputBitDepth = metadata.isHDR ? .ten : .eight
+        let pixelFormat = metadata.isHDR
+            ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+            : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        var pixelBuffer: CVPixelBuffer?
+        let result = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            64,
+            64,
+            pixelFormat,
+            VideoToolboxDecompressionSessionFactory
+                .destinationAttributes(for: bitDepth) as CFDictionary,
+            &pixelBuffer
+        )
+        XCTAssertEqual(result, kCVReturnSuccess)
+        return DecodedVideoFrame(
+            generation: generation,
+            frameID: frameID,
+            pixelBuffer: try XCTUnwrap(pixelBuffer),
+            presentationTimeStamp: .invalid,
+            duration: .invalid,
+            infoFlags: [],
+            colorMetadata: metadata
+        )
     }
 
     private func makePairingModel(

@@ -1355,7 +1355,7 @@ final class StreamMetalPresenterTests: XCTestCase {
 }
 
 @MainActor
-private final class RecordingPresenterSurfaceAdapter: HDRSurfaceApplying {
+final class RecordingPresenterSurfaceAdapter: HDRSurfaceApplying {
     var failure: HDRSurfaceApplicationError?
     var unsupportedPlatform: AppleRenderingPlatform?
     private(set) var activeContract: HDRSurfaceContract?
@@ -1464,16 +1464,23 @@ private final class RecordingHDRMetalVideoRenderer: HDRMetalVideoRendering,
     }
 }
 
-private final class RecordingStreamMetalPresenterRuntime:
+final class RecordingStreamMetalPresenterRuntime:
     StreamMetalPresenterRuntiming, @unchecked Sendable {
     private let lock = NSLock()
     private var storedClearCount: UInt64 = 0
     private var storedStopCount: UInt64 = 0
     private var storedInvalidationCount: UInt64 = 0
+    private var storedPresentedConfigurations: [HDRRenderConfigurationIdentity] = []
 
     var clearCount: UInt64 { lock.withLock { storedClearCount } }
     var stopCount: UInt64 { lock.withLock { storedStopCount } }
     var invalidationCount: UInt64 { lock.withLock { storedInvalidationCount } }
+    var presentCount: UInt64 {
+        lock.withLock { UInt64(storedPresentedConfigurations.count) }
+    }
+    var presentedConfigurations: [HDRRenderConfigurationIdentity] {
+        lock.withLock { storedPresentedConfigurations }
+    }
 
     func present(
         frame: DecodedVideoFrame,
@@ -1484,6 +1491,9 @@ private final class RecordingStreamMetalPresenterRuntime:
     ) throws -> HDRMetalVideoRendererResult {
         _ = target
         _ = completion
+        lock.withLock {
+            storedPresentedConfigurations.append(plan.configuration)
+        }
         return .submitted(
             frameID: frame.frameID,
             decoderGeneration: plan.configuration.decoderGeneration,
@@ -1513,7 +1523,7 @@ private final class RecordingStreamMetalPresenterRuntime:
                 mappedFrameGeneration: nil,
                 mappedFrameID: nil,
                 isInvalidated: storedInvalidationCount > 0,
-                submittedFrameCount: 0,
+                submittedFrameCount: UInt64(storedPresentedConfigurations.count),
                 failedPresentationCount: 0,
                 stopCount: storedStopCount,
                 invalidationCount: storedInvalidationCount

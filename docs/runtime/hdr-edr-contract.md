@@ -509,6 +509,49 @@ replacement ownership; it does not claim exhaustive asynchronous GPU-fault
 telemetry, compositor EDR signaling, live Sunshine HDR, or physical display
 quality.
 
+## Task 5.4 application integration evidence
+
+The application integration gate uses one active `AppModel` session and media
+generation together with the production `StreamVideoPresentationSource`,
+`HDRRenderConfigurationResolver`, and `StreamMetalPresenter`. Its test runtime
+records only plans that have already passed the production presentation
+resolver; the existing mapper, shader readback, and renderer suites remain the
+evidence for zero-copy textures and pixel output.
+
+The gate presents HDR through EDR, closes and recovers from a mismatched color
+contract, downgrades to typed HDR-to-SDR mapping when same-display current
+headroom falls to `1.0`, recovers to EDR, moves to a higher cross-display
+revision, changes metadata and decoder ownership to SDR, rejects a late HDR
+frame, and finally stops the application session and presenter. Clean stop
+leaves no current frame or active presenter configuration, invalidates every
+owned runtime exactly once, restores the SDR surface, and clears only the
+current HDR action.
+
+The final focused gate passed `1/1`, the expanded application/display/frame/
+presenter/diagnostics matrix passed `100/100`, and the complete macOS
+warnings-as-errors suite passed
+`612 total / 611 passed / 1 explicit Keychain skip / 0 failed`. The sole skip
+remained
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`
+with `LUNEX_RUN_KEYCHAIN_TEST` removed. macOS and the fixed iPhone, iPad, tvOS,
+and visionOS destinations passed Debug warnings-as-errors builds with zero
+structured diagnostics and one AIR/metallib set per platform.
+
+The normalized simulator inventory remained byte-identical with SHA-256
+`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`;
+the fixed instances remained unique, available, and `Shutdown`, with global
+`Booted=0`. Evidence is retained at
+`/tmp/LuneX-15-5_4-application-focused-final.unFK3K`,
+`/tmp/LuneX-15-5_4-expanded.QnquMp`,
+`/tmp/LuneX-15-5_4-full.K42fer`, and
+`/tmp/LuneX-15-5_4-builds.oG7GAk`; final repository evidence is retained at
+`/tmp/LuneX-15-5_4-repo-final.qhBCAc`.
+
+This deterministic application gate does not prove Sunshine packet delivery,
+compositor EDR signaling, physical peak luminance or color accuracy,
+cross-display visual consistency, or exhaustive asynchronous GPU-fault
+telemetry.
+
 ## Verification matrix
 
 ### Deterministic evidence

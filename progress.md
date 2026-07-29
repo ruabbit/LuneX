@@ -1633,3 +1633,22 @@
 - presenter UUID lease修复replacement ownership：新surface claim后，旧surface迟到failure/draw/stop/release均不能覆盖当前AppModel HDR诊断。ownership `3/3`、扩大矩阵`84/84`、完整macOS `612 total / 611 passed / 1 Keychain skip / 0 failed`及五平台Debug Metal build通过。
 - OpenSpec 5.3标记完成，权威进度更新为`25/33`；阶段15保持`in_progress`。下一项5.4为SDR、HDR EDR、headroom downgrade/recovery、metadata、cross-display revision、stale-frame及clean-stop的application integration gate；5.5 UI和live/physical证据继续未完成。
 - 提交前完整diff自审发现普通clear failure仅发布诊断而未像first-clear/present failure一样停止runtime；已补`runtime.stop()`，并从全新路径完成expanded/full/five-platform/repository最终门禁。
+
+## 2026-07-29 阶段 15 任务 5.4 启动
+
+- 5.3已以`18db97d Publish bounded HDR diagnostics`独立提交并经Surge SOCKS5推送；fetch确认`HEAD == origin/main == 18db97d`且工作树clean。OpenSpec权威进度`25/33`，下一项精确为5.4。
+- 既有AppModel、macOS display transition、Metal frame queue与presenter测试分别覆盖合同片段，但没有单一application ownership流程同时贯穿session/media/decoder、actual presentation source、resolved surface、诊断、revision replacement与stop。
+- 5.4在既有`AppModelWorkflowTests`中扩展一个单一gate，使用真实`AppModel + StreamVideoPresentationSource + StreamMetalPresenter`和只记录提交的test runtime，串联HDR EDR、invalid metadata closed/recovery、same-display headroom downgrade/recovery、cross-display revision、SDR metadata change、old HDR frame rejection与clean stop；不增加production抽象或提前实现5.5 UI。
+- 首个全新warnings-as-errors focused gate通过`1/1 passed / 0 skipped / 0 failed`，证据`/tmp/LuneX-15-5_4-application-focused.dEqGMa/HDRApplication.xcresult`。测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain。
+- 为使CI选择器直接对应OpenSpec 5.4，最终测试名收紧为`testHDRApplicationIntegrationCoversPresentationRevisionsStaleFramesAndCleanStop()`；重命名后从全新DerivedData通过`1/1`且结构化diagnostics为0，证据`/tmp/LuneX-15-5_4-application-focused-final.unFK3K/HDRApplication.xcresult`。
+- 扩大`AppModelWorkflowTests + MacHDRDisplayTransitionTests + MetalVideoFrameDeliveryTests + StreamMetalPresenterTests + RuntimeDiagnosticsTests`矩阵通过`100/100 passed / 0 skipped / 0 failed`，结构化diagnostics为0，证据`/tmp/LuneX-15-5_4-expanded.QnquMp/HDRApplicationExpanded.xcresult`。
+- 完整macOS warnings-as-errors suite通过`612 total / 611 passed / 1 skipped / 0 failed`，唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`且结构化diagnostics为0；证据`/tmp/LuneX-15-5_4-full.K42fer/LuneXCoreTests.xcresult`。正常测试仍未再次访问真实Keychain。
+- 五平台Debug warnings-as-errors build-only位于`/tmp/LuneX-15-5_4-builds.oG7GAk`：macOS、固定iPhone/iPad/tvOS/visionOS全部成功、结构化diagnostics为0，并各生成一个AIR与metallib。simulator规范化before/after SHA-256同为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定四实例唯一、available、`Shutdown`且全局`Booted=0`。
+- 勾选前repository gates位于`/tmp/LuneX-15-5_4-repo-pre.pu7Q0g`：fixture self-test/全树、OpenSpec strict `6/6`、apply `25/33`且task 26=false、generator初始与连续三次SHA-256 `3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`、reference/package/Core Image/diff/owned-whitespace边界全部通过。
+
+## 2026-07-29 阶段 15 任务 5.4 完成
+
+- 勾选后的repository最终门禁位于`/tmp/LuneX-15-5_4-repo-final.qhBCAc`：fixture self-test/全树、OpenSpec strict `6/6`、apply `26/33`且task 26=true/task 27=false、generator初始与连续三次SHA-256均为`3240822c692a403dfd732a4ae0c283408381c2d8180abc9d7c69e2f3c589cfcf`，reference/package/Core Image/diff/owned-whitespace边界全部通过。
+- OpenSpec 5.4标记完成，权威进度更新为`26/33`；阶段15保持`in_progress`。下一项5.5为accessibility-safe native HDR status/settings presentation；6.1–6.6验证/硬件/跟踪任务保持未完成。
+- 5.4只增强test target：production graph不新增test hook或抽象，shared recording runtime只记录production presenter已经接受的configuration identity；App targets仍以原始production runtime、mapper与renderer构建。
+- 确定性gate不证明compositor实际进入EDR、live Sunshine HDR、物理峰值亮度/颜色准确性、跨显示器视觉一致性或异步GPU fault穷尽；这些边界继续由5.5、6.5及后续阶段保留。

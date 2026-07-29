@@ -32,7 +32,7 @@
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
 | 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`25/33`；5.3 scoped privacy-bounded diagnostics完成，下一项5.4 application integration gate |
+| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`26/33`；5.4 application integration gate完成，下一项5.5 native HDR status/settings UI |
 | 16. 空间音频运行接线 | pending | session audio graph、route、`isListenerHeadTrackingEnabled`、entitlement 与降级 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | pending | scenePhase、Stage Manager resize、PiP、后台 audio、移动 EDR 和真机验证 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
@@ -47,7 +47,7 @@
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
-阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`25/33`。5.3已发布固定代码/固定摘要的active SDR/EDR、typed fallback、invalid-input、unsupported-output、stale-revision与pipeline-failure诊断，按语义去重并只清当前`.hdr` action；presenter UUID lease阻止旧SwiftUI view在replacement后覆盖当前状态。扩大矩阵`84/84`、完整macOS `612 total / 611 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。下一项5.4为application integration gate；5.5 HDR status/settings UI、live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
+阶段15 OpenSpec `implement-native-hdr-edr-pipeline`权威进度`26/33`。5.4以单一application gate串联活动session/media/decoder、actual presentation source、presenter surface/runtime、diagnostics与stop，覆盖SDR、HDR EDR、same-display headroom降级/恢复、metadata change、cross-display revision、stale frame与clean stop。focused `1/1`、扩大矩阵`100/100`、完整macOS `612 total / 611 passed / 1 Keychain skip / 0 failed`、五平台Debug Metal build、simulator不变与repository gates通过。下一项5.5为accessibility-safe native HDR status/settings UI；live Sunshine HDR、compositor EDR signaling及物理亮度/颜色/跨显示器证据仍未完成。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -304,5 +304,5 @@
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
 - production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
-- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`25/33`；5.3 scoped privacy-bounded HDR diagnostics已完成并通过任务级验收，下一项5.4为application integration gate。
-- production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；5.4 application gate、5.5 status/settings UI和6.5物理显示器验收保持未完成。
+- 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`26/33`；5.4 application integration gate已完成并通过任务级验收，下一项5.5为accessibility-safe native HDR status/settings UI。
+- production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；5.4在同一应用流程验证连续revision、stale frame与clean stop。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；5.5 status/settings UI和6.5物理显示器验收保持未完成。
