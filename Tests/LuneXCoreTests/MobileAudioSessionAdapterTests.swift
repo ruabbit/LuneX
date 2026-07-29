@@ -55,6 +55,60 @@ final class MobileAudioSessionAdapterTests: XCTestCase {
         )
     }
 
+    func testPreferredChannelRequestNeverExceedsCurrentHardwareMaximum()
+        throws
+    {
+        let cases: [(
+            layout: StreamAudioChannelLayout,
+            maximum: Int,
+            expected: Int?
+        )] = [
+            (.mono, 8, 1),
+            (.stereo, 1, 1),
+            (.stereo, 2, 2),
+            (.wave5Point1, 2, 2),
+            (.wave5Point1, 6, 6),
+            (.wave7Point1, 6, 6),
+            (.wave7Point1, 8, 8),
+            (.wave7Point1, 0, nil),
+            (.wave7Point1, -1, nil)
+        ]
+
+        for testCase in cases {
+            let client = StubMobileAudioSessionSystemClient(
+                maximumOutputNumberOfChannels: testCase.maximum,
+                outputNumberOfChannels: max(testCase.maximum, 0),
+                outputNames: ["System Output"],
+                outputPorts: [
+                    MobileAudioSessionPortCapabilitySnapshot(
+                        spatialAudioEnabled: false
+                    )
+                ]
+            )
+            let adapter = MobileAudioSessionAdapter(client: client)
+            let configuration = StreamAudioConfiguration(
+                sampleRate: 48_000,
+                channelLayout: testCase.layout,
+                latencyPolicy: .lowLatency
+            )
+
+            let snapshot = try adapter.activate(for: configuration)
+
+            XCTAssertEqual(
+                snapshot.requestedOutputChannelCount,
+                testCase.expected,
+                "layout=\(testCase.layout.signature.identifier) maximum=\(testCase.maximum)"
+            )
+            XCTAssertEqual(
+                client.calls.last(where: {
+                    $0.hasPrefix("preferredChannels:")
+                }),
+                testCase.expected.map { "preferredChannels:\($0)" },
+                "layout=\(testCase.layout.signature.identifier) maximum=\(testCase.maximum)"
+            )
+        }
+    }
+
     func testStereoActivationClearsMultichannelDeclaration() throws {
         let client = StubMobileAudioSessionSystemClient(
             maximumOutputNumberOfChannels: 8,
@@ -129,6 +183,52 @@ final class MobileAudioSessionAdapterTests: XCTestCase {
 
         XCTAssertEqual(snapshot.outputNames, ["AirPods"])
         XCTAssertEqual(snapshot.systemSpatialSupport, .unsupported)
+    }
+
+    func testRouteCapabilityUsesPortFlagsAndNeverOutputNames() throws {
+        let cases: [(
+            names: [String],
+            ports: [MobileAudioSessionPortCapabilitySnapshot],
+            expected: SpatialAudioRouteSupport
+        )] = [
+            (
+                ["AirPods Pro", "Spatial Audio"],
+                [.init(spatialAudioEnabled: false)],
+                .unsupported
+            ),
+            (
+                ["Generic Output"],
+                [
+                    .init(spatialAudioEnabled: false),
+                    .init(spatialAudioEnabled: true)
+                ],
+                .supported
+            ),
+            (
+                ["AirPods Max"],
+                [],
+                .unknown
+            )
+        ]
+
+        for testCase in cases {
+            let client = StubMobileAudioSessionSystemClient(
+                maximumOutputNumberOfChannels: 8,
+                outputNumberOfChannels: 2,
+                outputNames: testCase.names,
+                outputPorts: testCase.ports
+            )
+            let adapter = MobileAudioSessionAdapter(client: client)
+
+            let snapshot = try adapter.activate(for: .stereoLowLatency)
+
+            XCTAssertEqual(snapshot.outputNames, testCase.names)
+            XCTAssertEqual(
+                snapshot.systemSpatialSupport,
+                testCase.expected,
+                "names=\(testCase.names)"
+            )
+        }
     }
 
     func testActivationFailureRollsBackDeclarationAndSession() {
@@ -209,6 +309,41 @@ final class MobileAudioSessionAdapterTests: XCTestCase {
         XCTAssertNil(stopped.requestedOutputChannelCount)
     }
 
+    func testDeactivateFailureStillClearsAdapterOwnedState() throws {
+        let client = StubMobileAudioSessionSystemClient(
+            maximumOutputNumberOfChannels: 8,
+            outputNumberOfChannels: 8,
+            outputNames: ["HDMI"],
+            outputPorts: [
+                MobileAudioSessionPortCapabilitySnapshot(
+                    spatialAudioEnabled: false
+                )
+            ],
+            failActiveFalse: true
+        )
+        let adapter = MobileAudioSessionAdapter(client: client)
+        _ = try adapter.activate(for: StreamAudioConfiguration(
+            sampleRate: 48_000,
+            channelLayout: .wave7Point1,
+            latencyPolicy: .lowLatency
+        ))
+
+        let stopped = adapter.deactivate(
+            notifyOthersOnDeactivation: true
+        )
+
+        XCTAssertEqual(
+            Array(client.calls.suffix(2)),
+            [
+                "multichannel:false",
+                "active:false:notify:true"
+            ]
+        )
+        XCTAssertFalse(stopped.isActive)
+        XCTAssertFalse(stopped.supportsMultichannelContent)
+        XCTAssertNil(stopped.requestedOutputChannelCount)
+    }
+
     func testCapabilityNotificationNameComesFromInjectedSystemClient() {
         let expected = Notification.Name(
             "test.spatial-capability.changed"
@@ -249,6 +384,7 @@ private final class StubMobileAudioSessionSystemClient:
     let spatialPlaybackCapabilitiesChangedNotificationName:
         Notification.Name?
     private let failActiveTrue: Bool
+    private let failActiveFalse: Bool
 
     init(
         maximumOutputNumberOfChannels: Int,
@@ -257,6 +393,7 @@ private final class StubMobileAudioSessionSystemClient:
         outputPorts: [MobileAudioSessionPortCapabilitySnapshot],
         supportsMultichannelContent: Bool = false,
         failActiveTrue: Bool = false,
+        failActiveFalse: Bool = false,
         notificationName: Notification.Name? = nil
     ) {
         self.maximumOutputNumberOfChannels =
@@ -267,6 +404,7 @@ private final class StubMobileAudioSessionSystemClient:
         self.supportsMultichannelContent =
             supportsMultichannelContent
         self.failActiveTrue = failActiveTrue
+        self.failActiveFalse = failActiveFalse
         self.spatialPlaybackCapabilitiesChangedNotificationName =
             notificationName
     }
@@ -303,6 +441,9 @@ private final class StubMobileAudioSessionSystemClient:
             "active:\(active):notify:\(notifyOthersOnDeactivation)"
         )
         if active, failActiveTrue {
+            throw Failure.activation
+        }
+        if !active, failActiveFalse {
             throw Failure.activation
         }
     }

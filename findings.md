@@ -1489,3 +1489,13 @@
 - macOS、iOS/iPadOS、tvOS、visionOS final generic-device Debug unsigned warnings-as-errors build结果分别位于`/tmp/LuneX-16-3_5-build-final-{macos,ios,tvos,visionos}.1785351815883/Build.xcresult`；全部`succeeded`且未选择或操作simulator。
 - OpenSpec strict、source/test membership、`git diff --check`及generator连续SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。首次Swift Optional推断失败和首次macOS错误scheme均未计验收并已在最终树完整重跑。
 - 3.5只证明平台通知适配、纯值归约、边界与生命周期；不证明4.1 runtime graph rebuild、signed provisioning、AirPods head tracking、visionOS可听空间定位、物理多声道分离或route transition可听同步。
+
+## 2026-07-30 阶段 16 任务 3.6 验收
+
+- 既有`HeadPoseEntitlementReaderTests`与`SpatialAudioRuntimeStateTests`已经覆盖literal Boolean entitlement五态及macOS/iOS/tvOS/visionOS、偏好、route和entitlement的192组合resolver网格；本项将它们与adapter/observer测试作为同一扩大门重新验收，没有新增重复production policy。
+- `MobileAudioSessionAdapterTests`新增mono/stereo/WAVE 5.1/WAVE 7.1与maximum `-1/0/1/2/6/8`矩阵，验证preferred channel从不超过当前maximum且无有效maximum时不请求；多port capability只读`spatialAudioEnabled`，即使名称为AirPods/Spatial Audio也不能授权。新增deactivate system failure仍清除adapter-owned active/multichannel/requested state。
+- `SpatialAudioRouteMonitorTests`新增真实隔离`NotificationCenter`测试：自定义route/lost/reset/spatial-capability名称映射、observed object过滤、重复start替换旧token、stop移除、deinit移除及platform source到monitor的等价通知去重均已覆盖；macOS compile branch明确验证五个移动通知名都为nil。
+- 最终focused证据`/tmp/LuneX-16-3_6-focused-final-r2.1785352528/Focused.xcresult`为`24/24 passed / 0 skipped / 0 failed`；expanded证据`/tmp/LuneX-16-3_6-expanded-final-r2.1785352395/Expanded.xcresult`为`77/77 passed / 0 skipped / 0 failed`。两份结构化warning/error/analyzer warning均为0，测试显式移除真实Keychain opt-in。
+- macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build根目录为`/tmp/LuneX-16-3_6-build-{macos,ios,tvos,visionos}.1785352431964`；四份xcresult全部`succeeded`且结构化diagnostics为0，未选择或操作simulator。
+- OpenSpec strict、覆盖静态门、`git diff --check`及generator连续SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。两次外层包装器错误均发生在xcodebuild参数展开或成功后退出码读取，并已用正确Bash包装器和新DerivedData完整重跑最终focused/expanded门。
+- 本项为离线/编译测试矩阵，不证明4.1 runtime rebuild、signed provisioning、AirPods head tracking、物理多声道channel identification或route transition可听同步。

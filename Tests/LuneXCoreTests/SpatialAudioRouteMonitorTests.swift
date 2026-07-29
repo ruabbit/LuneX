@@ -1,6 +1,109 @@
 import XCTest
 
 final class SpatialAudioRouteMonitorTests: XCTestCase {
+    func testCurrentPlatformNotificationNamesMatchCompileTimeSupport() {
+        let names = SpatialAudioPlatformNotificationNames.current
+
+        #if os(macOS)
+        XCTAssertNil(names.routeChange)
+        XCTAssertNil(names.interruption)
+        XCTAssertNil(names.mediaServicesLost)
+        XCTAssertNil(names.mediaServicesReset)
+        XCTAssertNil(names.spatialPlaybackCapabilityChange)
+        #else
+        XCTAssertNotNil(names.routeChange)
+        XCTAssertNotNil(names.interruption)
+        XCTAssertNotNil(names.mediaServicesLost)
+        XCTAssertNotNil(names.mediaServicesReset)
+        XCTAssertNotNil(names.spatialPlaybackCapabilityChange)
+        #endif
+    }
+
+    func testPlatformNotificationSourceMapsNamesAndFiltersObservedObject() {
+        let fixture = PlatformNotificationFixture()
+        let recorder = SpatialAudioRouteEventRecorder()
+        let source = fixture.makeSource()
+        source.start { recorder.append($0) }
+
+        fixture.post(.route, object: NSObject())
+        fixture.post(.route)
+        fixture.post(.lost)
+        fixture.post(.reset)
+        fixture.post(.spatialCapability)
+
+        XCTAssertEqual(
+            recorder.events,
+            [
+                .routeChanged,
+                .mediaServicesLost,
+                .mediaServicesReset,
+                .spatialPlaybackCapabilityChanged
+            ]
+        )
+        source.stop()
+    }
+
+    func testPlatformNotificationSourceReplacesAndRemovesObservers() {
+        let fixture = PlatformNotificationFixture()
+        let first = SpatialAudioRouteEventRecorder()
+        let second = SpatialAudioRouteEventRecorder()
+        let source = fixture.makeSource()
+
+        source.start { first.append($0) }
+        fixture.post(.route)
+        source.start { second.append($0) }
+        fixture.post(.route)
+        source.stop()
+        fixture.post(.route)
+
+        XCTAssertEqual(first.events, [.routeChanged])
+        XCTAssertEqual(second.events, [.routeChanged])
+    }
+
+    func testPlatformNotificationSourceDeinitRemovesObservers() throws {
+        let fixture = PlatformNotificationFixture()
+        let recorder = SpatialAudioRouteEventRecorder()
+        weak var weakSource: SpatialAudioPlatformNotificationSource?
+
+        do {
+            let source = fixture.makeSource()
+            weakSource = source
+            source.start { recorder.append($0) }
+            fixture.post(.route)
+        }
+
+        XCTAssertNil(weakSource)
+        fixture.post(.route)
+        XCTAssertEqual(recorder.events, [.routeChanged])
+    }
+
+    func testRealNotificationSourceAndMonitorDeduplicateEquivalentState()
+        async throws
+    {
+        let fixture = PlatformNotificationFixture()
+        let reader = StubSpatialAudioRouteCapabilityReader(.supported)
+        let monitor = try SpatialAudioRouteMonitor(
+            capabilityReader: reader,
+            eventSource: fixture.makeSource()
+        )
+        let stream = monitor.start()
+
+        fixture.post(.route)
+        fixture.post(.spatialCapability)
+        reader.capability = .unsupported
+        fixture.post(.spatialCapability)
+        fixture.post(.route)
+        monitor.stop()
+
+        let snapshots = await collect(stream)
+        XCTAssertEqual(snapshots.map(\.revision.rawValue), [0, 1])
+        XCTAssertEqual(
+            snapshots.last?.trigger,
+            .spatialPlaybackCapabilityChanged
+        )
+        XCTAssertEqual(snapshots.last?.state.route, .unsupported)
+    }
+
     func testStartPublishesInitialSemanticSnapshot() async throws {
         let reader = StubSpatialAudioRouteCapabilityReader(.supported)
         let source = StubSpatialAudioRouteEventSource()
@@ -217,6 +320,70 @@ final class SpatialAudioRouteMonitorTests: XCTestCase {
         let snapshots = await collect(stream)
         XCTAssertEqual(snapshots.map(\.revision.rawValue), [UInt64.max])
         XCTAssertTrue(monitor.isRevisionExhausted)
+    }
+}
+
+private final class PlatformNotificationFixture {
+    enum Event {
+        case route
+        case lost
+        case reset
+        case spatialCapability
+    }
+
+    let center = NotificationCenter()
+    let observedObject = NSObject()
+    private let route = Notification.Name("test.audio.route.changed")
+    private let interruption = Notification.Name("test.audio.interruption")
+    private let lost = Notification.Name("test.audio.services.lost")
+    private let reset = Notification.Name("test.audio.services.reset")
+    private let spatial = Notification.Name("test.audio.spatial.changed")
+
+    func makeSource() -> SpatialAudioPlatformNotificationSource {
+        SpatialAudioPlatformNotificationSource(
+            notificationCenter: center,
+            observedObject: observedObject,
+            names: SpatialAudioPlatformNotificationNames(
+                routeChange: route,
+                interruption: interruption,
+                mediaServicesLost: lost,
+                mediaServicesReset: reset,
+                spatialPlaybackCapabilityChange: spatial
+            )
+        )
+    }
+
+    func post(_ event: Event, object: AnyObject? = nil) {
+        let name: Notification.Name
+        switch event {
+        case .route:
+            name = route
+        case .lost:
+            name = lost
+        case .reset:
+            name = reset
+        case .spatialCapability:
+            name = spatial
+        }
+        center.post(
+            name: name,
+            object: object ?? observedObject
+        )
+    }
+}
+
+private final class SpatialAudioRouteEventRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [SpatialAudioRouteMonitorEvent] = []
+
+    var events: [SpatialAudioRouteMonitorEvent] {
+        lock.withLock { storage }
+    }
+
+    func append(_ event: SpatialAudioRouteMonitorEvent) {
+        lock.withLock {
+            storage.append(event)
+        }
     }
 }
 

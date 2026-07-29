@@ -1878,3 +1878,15 @@
 - 最终focused `9/9`、expanded `69/69 passed / 0 skipped / 0 failed`；macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build全部succeeded，所有xcresult的warning/error/analyzer warning均为0。
 - OpenSpec strict、source/test membership、`git diff --check`与generator稳定SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有访问真实Keychain，也没有创建、启动或操作simulator。
 - OpenSpec 3.5已勾选，权威进度更新为`16/35`；下一项3.6补齐entitlement、platform matrix、multichannel limit、capability/equivalent notification、missing route、output-name noninference、deactivate与真实observer cleanup测试。3.5不证明runtime graph rebuild、签名权限或物理空间音频。
+
+## 2026-07-30 阶段 16 任务 3.6 启动
+
+- 3.5已以`7636fd4 Observe spatial audio route revisions`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean后进入3.6。
+- 本项只补平台adapter、entitlement和真实NotificationCenter observer矩阵；不接入`SessionAudioRuntime` graph rebuild、processor/media environment、AppModel或UI。测试继续显式移除真实Keychain opt-in，且不创建或操作simulator。
+
+## 2026-07-30 阶段 16 任务 3.6 完成
+
+- 扩展mobile adapter matrix：9组layout/maximum组合、multiport capability与名称非推断、missing route、capability notification和deactivate失败后的本地state清理；扩展真实NotificationCenter source的对象过滤、start替换、stop/deinit token清理和monitor等价通知去重。
+- 最终focused `24/24`、expanded `77/77 passed / 0 skipped / 0 failed`；macOS、iOS/iPadOS、tvOS、visionOS generic-device Debug unsigned warnings-as-errors build全部succeeded，六份xcresult的warning/error/analyzer warning均为0。
+- OpenSpec strict、覆盖静态门、`git diff --check`与generator稳定SHA-256 `58624b6c963c78240dfb4226acb8ce55752768700643e1ac5a8b8ba120c68038`通过。测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未访问真实Keychain，也未创建、启动或操作simulator。
+- OpenSpec 3.6已勾选，权威进度更新为`17/35`；下一项4.1将route/spatial policy revision串行接入`SessionAudioRuntime`，处理interruption期间延后、原子rebuild及media-clock/concealment保持。3.6不证明runtime接线、签名权限或物理空间音频。
