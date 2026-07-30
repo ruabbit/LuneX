@@ -2005,3 +2005,18 @@
 - semantic event envelope校验prepared/restoration/skip内嵌generation；callback lease同时绑定generation、kind与正ordinal。测试证明kind mismatch、stale generation、重复完成和client invalidation均fail closed。
 - `playbackDelegateUnavailable`被映射为既有bounded `.playbackDelegateFailed`，不把native error或localized description带入持久状态。4.1只证明可注入边界与值合同，不证明native delegate已经接线。
 - focused `27/27`、expanded `75/75`、normal `812/811/1/0`、四平台generic build和repository gates均通过；唯一skip仍为显式real-Keychain opt-in。physical PiP/background/Stage Manager/EDR/live-host证据保持未完成。
+
+## 2026-07-30 阶段 17 任务 4.2 调查
+
+- Xcode 26.4 `CMSampleBuffer.h`明确说明ready image-buffer sample只包装一个既有`CVImageBuffer`，format description必须与pixel format、尺寸及common image-buffer attachments一致；`CMSampleBufferCreateReadyWithImageBuffer`不需要data-ready callback。
+- `CMVideoFormatDescriptionCreateForImageBuffer`从现有image-buffer common attachments构造description。adapter必须先把typed `VideoColorMetadata`的primaries、transfer、matrix、range/bit depth及可用MDCV/CLL作为`shouldPropagate` attachments补到原buffer，同时保留无关attachment。
+- 当前decoder frame已携带RTP 90 kHz PTS和配置frame-rate duration；adapter要求finite numeric PTS与positive numeric duration，并原样写入sample timing。它不以host clock、synthetic timeline或`DisplayImmediately`替代源时间。
+- generation identity由PiP media/PiP generation、decoder generation与完整color signature组成；同generation中的layout变化fail closed，交给4.3执行format/discontinuity flush。adapter只保留一个format description，内存不会随帧数增长。
+
+## 2026-07-30 阶段 17 任务 4.2 验收
+
+- production output以`CMSampleBufferGetImageBuffer(sample) === frame.pixelBuffer`在实现和测试两侧验证same-object ownership；ready image-buffer sample没有`CMBlockBuffer`，因此不存在第二份像素数据或压缩流复制。
+- sample PTS与duration精确等于decoded frame，DTS保持invalid；invalid/indefinite PTS、非正duration、超过16384的维度、错误PiP generation、decoder generation、color metadata及同adapter layout变化均typed fail closed。
+- adapter对原buffer执行additive `shouldPropagate` attachment更新，保留无关attachment；HDR测试确认Rec.2020/PQ、MDCV与CLL，SDR测试确认Rec.709 primaries/transfer/matrix，生成的format description与image buffer匹配。
+- 首个active frame contract只在CoreMedia包装成功且same-buffer ownership验证后提交；adapter最多缓存一个compatible format description，invalidate幂等释放contract和format，后续转换拒绝。
+- focused `6/6`、expanded `55/55`、normal `818/817/1/0`、四平台generic build和repository gates全部通过。本项尚无display layer、backpressure queue、native controller或真实PiP行为，这些分别属于4.3、4.4及物理验收。

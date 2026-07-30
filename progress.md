@@ -2474,3 +2474,18 @@
 - 四平台generic Debug证据根`/tmp/LuneX-17-4_1-builds.w391o4`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded且三类结构化诊断为0，每个平台各有一个AIR与metallib。复用本任务既有只读inventory `/tmp/LuneX-17-4_1-simulator.8aqwfY/devices.json`，固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，全局Booted为0。
 - 最终repository pre-gate通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `16/36` next 4.1、generator初始及连续两次稳定SHA-256 `8e897a1edbf76ad1d3ad7d68f34c07bf82dddece5d0b341c13bf4f953ab20000`和`git diff --check`。
 - OpenSpec 4.1已勾选，预期权威进度`17/36`，下一项4.2实现bounded current-generation pixel-buffer到sample-buffer adapter。本项不创建production AVKit controller/display layer，不证明签名、安装、系统PiP、后台持续时间、物理设备或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.2 启动
+
+- 4.1已以`bc35b90 Define native PiP client boundary`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`17/36 ready`，下一项精确为4.2。
+- Context7未返回可用CoreMedia条目；改以Xcode 26.4公开SDK headers、四平台warnings-as-errors Swift importer probe、现有`DecodedVideoFrame`与HDR color contract为当前API证据。
+- 4.2实现generation/decoder/color绑定的同步adapter，在同一`CVPixelBuffer`上补齐可传播color/HDR attachments，并用`CMVideoFormatDescriptionCreateForImageBuffer`和`CMSampleBufferCreateReadyWithImageBuffer`做ready浅包装；只缓存一个compatible format description，不创建decoder、layer或frame queue。
+- 首轮focused `/tmp/LuneX-17-4_2-focused.0X5aRe/Focused.xcresult`通过`6/6`且结构化诊断为0；审阅后将首个active frame contract的提交移动到CoreMedia创建和same-image-buffer ownership验证之后，确保创建失败不留下部分激活状态。
+
+## 2026-07-30 阶段 17 任务 4.2 完成
+
+- 收紧后的focused `/tmp/LuneX-17-4_2-focused-r2.ngUF6h/Focused.xcresult`通过`6/6`；expanded `/tmp/LuneX-17-4_2-expanded.xyNelV/Expanded.xcresult`覆盖adapter、PiP state、HDR decoded contract、color metadata与VideoToolbox decode并通过`55/55`，两者结构化error、warning、analyzer warning均为0。
+- 完整macOS normal `/tmp/LuneX-17-4_2-full.j3EE9l/Full.xcresult`通过`818 total / 817 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- 四平台generic Debug build分别位于`/tmp/LuneX-17-4_2-build-macos.Fn9hny`、`/tmp/LuneX-17-4_2-build-ios.e2ZPkR`、`/tmp/LuneX-17-4_2-build-tvos.XTJjxz`与`/tmp/LuneX-17-4_2-build-visionos.P8uVtw`；全部succeeded、三类结构化诊断为0且各有一个AIR和metallib。
+- repository pre-gate `/tmp/LuneX-17-4_2-repository-pre.WcWVHw`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `17/36` next 4.2、generator三次稳定SHA-256 `d318f8dcb978bbe1fe852045546c05ac7e9a1af042a9faca0b6e5dfce7056471`、membership、no-second-decoder/no-layer/no-buffer-array静态门和`git diff --check`。
+- 本项未查询或操作simulator。OpenSpec 4.2已勾选，预期权威进度`18/36`，下一项4.3实现production display-layer sink与单槽backpressure；4.2不证明系统PiP、签名/安装、后台持续时间、物理设备或live Sunshine。

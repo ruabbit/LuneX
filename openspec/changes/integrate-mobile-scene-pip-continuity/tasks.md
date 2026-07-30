@@ -26,7 +26,7 @@
 ## 4. Native Picture in Picture runtime
 
 - [x] 4.1 Define an injectable PiP controller/content-source/playback-delegate client boundary that keeps AVKit objects on the main actor and emits bounded semantic events
-- [ ] 4.2 Implement a bounded current-generation `CVPixelBuffer` to `CMSampleBuffer` adapter that preserves timing and color attachments without copying or creating another decoder
+- [x] 4.2 Implement a bounded current-generation `CVPixelBuffer` to `CMSampleBuffer` adapter that preserves timing and color attachments without copying or creating another decoder
 - [ ] 4.3 Implement the `AVSampleBufferDisplayLayer` sink with readiness backpressure, latest-compatible-frame capacity, format/discontinuity flush, failure recovery, and pixel-buffer release
 - [ ] 4.4 Implement the production `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)` adapter and actual possibility observation
 - [ ] 4.5 Implement generation-scoped prepare, request-start, confirmed-active, request-stop, confirmed-stop, failed-start, restore-interface, skip/playback, invalidation, and replacement state handling
