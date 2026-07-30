@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`4/36`；1.1 inventory、1.2 scene/window、1.3 PiP/continuity和1.4 mobile EDR值合同完成，下一项1.5为值层确定性扩展矩阵 |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`5/36`；1.x值合同与确定性矩阵完成，下一项2.1为mobile `MTKView` attachment callback边界 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`4/36`。proposal、三个capability specs、cross-module design和36项tasks已完成规划门；1.1完成inventory/API/proof boundary，1.2新增scene/window geometry合同，1.3新增generation-owned PiP/continuity状态机，1.4新增actual-display generation、bounded headroom、typed conservative-SDR fallback和privacy-safe `HDRDisplayRevision`桥接；focused/expanded/full/四目标build通过。下一项1.5补齐normalization、overflow、duplicate、policy、restoration、privacy和capacity确定性矩阵；6.6物理iPhone/iPad、PiP、Stage Manager、external display、EDR、power与live Sunshine证据保持独立pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`5/36`。proposal、三个capability specs、cross-module design和36项tasks已完成规划门；1.1完成inventory/API/proof boundary，1.2新增scene/window geometry合同，1.3新增generation-owned PiP/continuity状态机，1.4新增actual-display generation、bounded headroom、typed conservative-SDR fallback和privacy-safe `HDRDisplayRevision`桥接，1.5补齐normalization、overflow、duplicate、3,840项policy grid、state transition、restoration lease、privacy和capacity确定性矩阵；任务级focused/full/四目标build与repository gate通过。下一项2.1扩展mobile `MTKView`的injectable attachment callback边界；6.6物理iPhone/iPad、PiP、Stage Manager、external display、EDR、power与live Sunshine证据保持独立pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -361,6 +361,9 @@
 | 16.6.4最终门调查误以为generator支持`--help` | 1 | 脚本忽略参数并重生成工程；Git确认输出字节一致且无额外diff，正式门不再传帮助参数，显式比较生成前及连续两次SHA-256 |
 | 16.6.5固定identity的jq断言在`all()`内丢失inventory作用域 | 1 | 当前只读快照、三份cmp/hash和Booted=0已先通过；不重复`simctl`查询，对已保存JSON先绑定`$inventory`再逐项验证runtime/name/UUID/availability/state唯一性 |
 | 17阶段AVKit/UIKit SDK probe沿用旧Swift标签/通知及deprecated screen连接通知 | 2 | PiP改为`completion:`且controller initializer非optional，scene通知取`UIScene.*Notification`；iOS 26禁止`UIScreen.didConnect/didDisconnect`，换屏改由actual view/windowScene attachment驱动，只保留brightness/mode/trait/layout触发 |
+| 17.1.5首轮focused的coordinate boundary样本使用默认safe-area | 1 | `1 x 1` view会因默认top/bottom inset超界而正确关闭；boundary用例显式使用`.zero` safe-area，分别隔离rect端点验证 |
+| 17.1.5首轮focused把unprepared `.startRequested`归类为普通invalid transition | 1 | 保留其更精确的`.pictureInPictureUnavailable`拒绝预期；其余未准备controller事件继续断言`.invalidTransition`，全部验证snapshot/revision不变 |
+| 17.1.5仓库盘点再次对无参数解析的generator传入`--help` | 1 | 脚本按既有行为重生成工程且输出哈希未变化；正式门只无参数运行并比较初始及连续两次SHA-256，后续不再对该脚本传帮助参数 |
 
 ## 当前执行点（2026-07-30）
 

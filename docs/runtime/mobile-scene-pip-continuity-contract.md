@@ -315,6 +315,54 @@ actual `UIScreen`, observed headroom changes, reconfigured a live Metal
 surface, presented visible EDR, moved across displays, or ran on physical
 hardware.
 
+## Foundation deterministic coverage
+
+OpenSpec task 1.5 expands the three platform-neutral foundation suites without
+changing production runtime behavior. The coverage includes:
+
+- every finite geometry failure class, inclusive coordinate limits, bounded
+  endpoints, equivalent invalid-payload privacy convergence, semantic
+  duplicate suppression, recovery, and revision exhaustion;
+- the complete legal PiP controller lifecycle, precise closed rejection from
+  the unprepared state, capability/frame-sink duplicates, concurrent
+  restoration rejection, checked restoration lease ordinals, exactly-once
+  completion, capacity boundaries, and cleanup-only revision exhaustion;
+- all 3,840 combinations of platform, activity, stream ownership, actual PiP
+  lifecycle/sink state, actual permitted audio state, background
+  configuration, and user preferences with closed precedence; and
+- mobile EDR subunit normalization, invalid raw-value privacy convergence,
+  unavailable-state deduplication, display replacement, maximum revision, and
+  typed conservative-SDR exhaustion.
+
+Task 1.5 evidence:
+
+```text
+Focused foundation suites:
+/tmp/LuneX-17-1_5-focused-final.viWjAE
+51 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-1_5-full.YQ8HXp
+772 total / 771 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-1_5-builds.yraPq0
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Repository and read-only simulator gate:
+/tmp/LuneX-17-1_5-repository.gMZ1oo
+OpenSpec strict passed; generator stable; privacy and membership passed;
+fixed iPhone/iPad available and Shutdown; Booted = 0
+```
+
+All normal tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`; the only full
+suite skip is the explicit real-Keychain opt-in test. These results prove
+deterministic value contracts and compilation only. They do not prove an
+actual UIKit attachment callback, `UIWindowScene` or `UIScreen` ownership,
+Stage Manager resize, an AVKit controller or sample-buffer sink, system PiP,
+background duration, active mobile audio continuity, live Metal EDR
+reconfiguration, a signed artifact, physical hardware, or live Sunshine.
+
 ## Xcode 26.4 public API inventory
 
 The inventory was verified against Xcode 26.4 build `17E192`, Apple Swift 6.3,

@@ -1808,3 +1808,10 @@
 - 可用与fallback状态桥接现有`HDRDisplaySnapshot`/`HDRDisplayRevision`，但`displayID`固定nil；display generation变化即使headroom相同也递增revision。available state和最终snapshot initializer为file-private，避免同模块构造capability/headroom或mobile/render snapshot不一致的值。
 - final focused `10/10`、expanded `55/55`、full `756 total / 755 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug build全部零structured diagnostics，固定iPhone/iPad仍各唯一且`Shutdown`，全局`Booted=0`。
 - 当前没有UIKit reader、notification owner或Metal/AppModel接线，因此不能声称实际`UIScreen.currentEDRHeadroom`已被消费、headroom变化触发render rebuild、可见HDR/EDR、external display或真机行为；这些分别属于3.x、5.x和6.6。
+
+## 2026-07-30 阶段 17 任务 1.5 验收
+
+- 三份foundation suite新增确定性边界矩阵：scene覆盖所有finite geometry失败类、inclusive origin/endpoint、invalid payload隐私收敛、duplicate/recovery/revision exhaustion；PiP覆盖完整合法生命周期、unprepared精确拒绝、capability/sink duplicate、restoration并发/ordinal/overflow、frame-sink容量和continuity overflow；EDR覆盖subunit归一等价、invalid raw payload隐私收敛、unavailable dedup、display replacement与最大revision。
+- continuity policy以5个平台、3种scene activity、stream、PiP lifecycle、sink operational、audio active/permitted、background declaration和两项preference形成3,840项笛卡尔矩阵。期望模型独立断言unsupported platform、inactive stream、foreground、无实际合法媒体路径、缺background配置、PiP优先和audio-only的闭合顺序。
+- final focused为`51/51`，完整macOS为`772 total / 771 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug App build全部成功且结构化诊断为0。OpenSpec strict、generator稳定、membership、privacy、diff与固定simulator只读门通过；固定iPhone/iPad均为`Shutdown`且`Booted=0`。
+- 该证据只证明deterministic value-contract coverage，不证明actual UIKit attachment、`UIWindowScene`/`UIScreen` owner、Stage Manager resize、AVKit/sample-buffer PiP、system background duration、actual mobile audio continuity、live Metal EDR、signed artifact、物理iPhone/iPad、external display或live Sunshine。

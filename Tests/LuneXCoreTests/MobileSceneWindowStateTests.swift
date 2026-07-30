@@ -243,6 +243,160 @@ final class MobileSceneWindowStateTests: XCTestCase {
         )
     }
 
+    func testEquivalentInvalidGeometryClassesDoNotRetainRawPayloads()
+        throws
+    {
+        var publisher = makePublisher()
+        let nan = try publishedSnapshot(publisher.update(.attached(
+            makeAttachedSample(viewBounds: MobileSceneRect(
+                x: 0,
+                y: 0,
+                width: .nan,
+                height: 768
+            ))
+        )))
+
+        XCTAssertEqual(
+            publisher.update(.attached(makeAttachedSample(
+                viewBounds: MobileSceneRect(
+                    x: 0,
+                    y: 0,
+                    width: .infinity,
+                    height: 768
+                )
+            ))),
+            .unchanged
+        )
+        XCTAssertEqual(
+            nan.state,
+            .unavailable(activity: .active, reason: .invalidViewBounds)
+        )
+        XCTAssertFalse(String(reflecting: nan.state).lowercased().contains(
+            "nan"
+        ))
+        XCTAssertFalse(String(reflecting: nan.state).lowercased().contains(
+            "inf"
+        ))
+    }
+
+    func testGeometryValidationCoversEveryFiniteBoundaryClass() throws {
+        let invalidSamples: [
+            (MobileSceneWindowAttachedSample, MobileSceneWindowValidationError)
+        ] = [
+            (
+                makeAttachedSample(viewBounds: MobileSceneRect(
+                    x: -.infinity,
+                    y: 0,
+                    width: 1_024,
+                    height: 768
+                )),
+                .invalidViewBounds
+            ),
+            (
+                makeAttachedSample(windowBounds: MobileSceneRect(
+                    x: 0,
+                    y: .nan,
+                    width: 1_024,
+                    height: 768
+                )),
+                .invalidWindowBounds
+            ),
+            (
+                makeAttachedSample(safeAreaInsets: MobileSceneEdgeInsets(
+                    top: .nan,
+                    leading: 0,
+                    bottom: 0,
+                    trailing: 0
+                )),
+                .invalidSafeAreaInsets
+            ),
+            (
+                makeAttachedSample(safeAreaInsets: MobileSceneEdgeInsets(
+                    top: 0,
+                    leading: -1,
+                    bottom: 0,
+                    trailing: 0
+                )),
+                .invalidSafeAreaInsets
+            ),
+            (
+                makeAttachedSample(scale: 16.nextUp),
+                .invalidScale
+            ),
+            (
+                makeAttachedSample(
+                    viewBounds: MobileSceneRect(
+                        x: 0,
+                        y: 0,
+                        width: 0.01,
+                        height: 768
+                    ),
+                    scale: 1
+                ),
+                .drawableSizeOverflow
+            )
+        ]
+
+        for (index, entry) in invalidSamples.enumerated() {
+            var publisher = makePublisher()
+            let snapshot = try publishedSnapshot(
+                publisher.update(.attached(entry.0))
+            )
+            XCTAssertEqual(
+                snapshot.state,
+                .unavailable(activity: .active, reason: entry.1),
+                "case \(index)"
+            )
+        }
+    }
+
+    func testCoordinateBoundaryIsInclusiveButEndpointMustRemainBounded()
+        throws
+    {
+        var publisher = makePublisher()
+        let valid = try publishedSnapshot(publisher.update(.attached(
+            makeAttachedSample(viewBounds: MobileSceneRect(
+                x: -1_000_000,
+                y: -1_000_000,
+                width: 1,
+                height: 1
+            ), safeAreaInsets: .zero)
+        )))
+
+        XCTAssertNotNil(valid.state.geometry)
+        let invalid = try publishedSnapshot(publisher.update(.attached(
+            makeAttachedSample(viewBounds: MobileSceneRect(
+                x: 999_999.5,
+                y: 0,
+                width: 1,
+                height: 1
+            ), safeAreaInsets: .zero)
+        )))
+        XCTAssertEqual(
+            invalid.state,
+            .unavailable(activity: .active, reason: .invalidViewBounds)
+        )
+    }
+
+    func testRevisionCanReachMaximumBeforeNextChangeFailsClosed() throws {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 7)!
+        var publisher = MobileSceneWindowSnapshotPublisher(
+            surfaceGeneration: generation,
+            initialRevision: MobileSceneWindowRevision(rawValue: .max - 1)
+        )
+
+        let maximum = try publishedSnapshot(
+            publisher.update(.attached(makeAttachedSample()))
+        )
+        XCTAssertEqual(maximum.revision.rawValue, .max)
+        XCTAssertEqual(
+            publisher.update(.detached(activity: .background)),
+            .revisionExhausted
+        )
+        XCTAssertNil(publisher.snapshot)
+        XCTAssertTrue(publisher.isRevisionExhausted)
+    }
+
     private func makePublisher() -> MobileSceneWindowSnapshotPublisher {
         MobileSceneWindowSnapshotPublisher(
             surfaceGeneration: MobileSceneSurfaceGeneration(rawValue: 7)!

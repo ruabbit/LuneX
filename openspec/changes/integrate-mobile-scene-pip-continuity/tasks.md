@@ -4,7 +4,7 @@
 - [x] 1.2 Define immutable mobile attachment, scene activity, window/view geometry, safe-area, trait, scale, drawable, display, generation, and semantic-revision contracts with finite bounds and closed validation
 - [x] 1.3 Define immutable PiP capability, controller lifecycle, frame-sink, continuity-path, restoration, failure, and generation snapshots plus deterministic state reducers
 - [x] 1.4 Define mobile EDR capability/headroom normalization and display-revision contracts that extend the existing HDR display/render identity without global-screen fallback
-- [ ] 1.5 Add deterministic normalization, revision overflow, duplicate event, invalid geometry/headroom, policy-grid, state-transition, restoration lease, privacy, and finite-capacity tests
+- [x] 1.5 Add deterministic normalization, revision overflow, duplicate event, invalid geometry/headroom, policy-grid, state-transition, restoration lease, privacy, and finite-capacity tests
 
 ## 2. Actual UIKit scene and window runtime
 

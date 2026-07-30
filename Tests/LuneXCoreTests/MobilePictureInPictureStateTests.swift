@@ -332,6 +332,297 @@ final class MobilePictureInPictureStateTests: XCTestCase {
         XCTAssertNil(reducer.snapshot)
     }
 
+    func testControllerLifecycleFollowsClosedNativeTransitionSequence() throws {
+        var reducer = makeReducer()
+        let sequence: [
+            (MobilePictureInPictureEvent, MobilePictureInPictureLifecycle)
+        ] = [
+            (.prepareRequested, .preparing),
+            (
+                .prepared(
+                    capability: .possible,
+                    frameSink: readySink()
+                ),
+                .ready
+            ),
+            (.startRequested, .startRequested),
+            (.willStart, .starting),
+            (.didStart, .active),
+            (.stopRequested, .stopRequested),
+            (.willStop, .stopping),
+            (.didStop, .stopped)
+        ]
+
+        for (index, entry) in sequence.enumerated() {
+            let snapshot = try applied(reducer.apply(envelope(entry.0)))
+            XCTAssertEqual(snapshot.state.lifecycle, entry.1, "step \(index)")
+            XCTAssertEqual(snapshot.revision.rawValue, UInt64(index + 1))
+        }
+        XCTAssertFalse(
+            reducer.snapshot?.state.lifecycle.isConfirmedActive ?? true
+        )
+    }
+
+    func testInvalidControllerEventsCannotLeaveUnpreparedState() {
+        let invalidEvents: [MobilePictureInPictureEvent] = [
+            .prepared(capability: .possible, frameSink: readySink()),
+            .willStart,
+            .didStart,
+            .startFailed(.nativeStartFailed),
+            .stopRequested,
+            .willStop,
+            .didStop,
+            .restorationRequested
+        ]
+
+        for event in invalidEvents {
+            var reducer = makeReducer()
+            let before = reducer.snapshot
+
+            guard case .rejected(.invalidTransition(
+                lifecycle: .unprepared,
+                event: _
+            )) = reducer.apply(envelope(event)) else {
+                XCTFail("Expected closed rejection for \(event)")
+                continue
+            }
+            XCTAssertEqual(reducer.snapshot, before)
+            XCTAssertEqual(reducer.revision.rawValue, 0)
+        }
+
+        var reducer = makeReducer()
+        let before = reducer.snapshot
+
+        XCTAssertEqual(
+            reducer.apply(envelope(.startRequested)),
+            .rejected(.pictureInPictureUnavailable)
+        )
+        XCTAssertEqual(reducer.snapshot, before)
+        XCTAssertEqual(reducer.revision.rawValue, 0)
+    }
+
+    func testEquivalentCapabilityAndSinkEventsAreSemanticDuplicates() {
+        var reducer = makePreparedReducer()
+        let before = reducer.snapshot
+
+        XCTAssertEqual(
+            reducer.apply(envelope(.capabilityChanged(.possible))),
+            .unchanged
+        )
+        XCTAssertEqual(
+            reducer.apply(envelope(.frameSinkChanged(readySink()))),
+            .unchanged
+        )
+        XCTAssertEqual(reducer.snapshot, before)
+    }
+
+    func testRestorationRejectsConcurrentRequestAndAdvancesLeaseOrdinal()
+        throws
+    {
+        var reducer = makeActiveReducer()
+        _ = reducer.apply(envelope(.stopRequested))
+        let firstRequest = reducer.apply(envelope(.restorationRequested))
+        let firstLease = try XCTUnwrap(
+            try applied(firstRequest).state.restoration.pendingLease
+        )
+        let pendingSnapshot = reducer.snapshot
+
+        XCTAssertEqual(
+            reducer.apply(envelope(.restorationRequested)),
+            .rejected(.restorationAlreadyPending)
+        )
+        XCTAssertEqual(reducer.snapshot, pendingSnapshot)
+
+        _ = reducer.apply(envelope(.restorationCompleted(
+            lease: firstLease,
+            result: .declined
+        )))
+        let secondRequest = reducer.apply(envelope(.restorationRequested))
+        let secondLease = try XCTUnwrap(
+            try applied(secondRequest).state.restoration.pendingLease
+        )
+
+        XCTAssertEqual(firstLease.ordinal, 1)
+        XCTAssertEqual(secondLease.ordinal, 2)
+        XCTAssertEqual(secondLease.generation, firstLease.generation)
+    }
+
+    func testRestorationOrdinalOverflowFailsClosedWithoutRestoreEffect()
+        throws
+    {
+        var reducer = MobilePictureInPictureStateReducer(
+            generation: makeGeneration()!,
+            initialRestorationOrdinal: .max
+        )
+        _ = reducer.apply(envelope(.prepareRequested))
+        _ = reducer.apply(envelope(.prepared(
+            capability: .possible,
+            frameSink: readySink()
+        )))
+        _ = reducer.apply(envelope(.startRequested))
+        _ = reducer.apply(envelope(.didStart))
+        _ = reducer.apply(envelope(.stopRequested))
+
+        let outcome = reducer.apply(envelope(.restorationRequested))
+        let snapshot = try applied(outcome)
+
+        XCTAssertEqual(snapshot.state.lifecycle, .failed)
+        XCTAssertEqual(
+            snapshot.state.failure,
+            .restorationLeaseExhausted
+        )
+        XCTAssertEqual(effects(outcome), [])
+        XCTAssertNil(snapshot.state.restoration.pendingLease)
+    }
+
+    func testFrameSinkFiniteCapacityCoversEveryBoundary() {
+        XCTAssertNil(
+            MobilePictureInPictureFrameSinkSnapshot.backpressured(
+                decoderGeneration: 4,
+                pendingFrameCount: -1
+            )
+        )
+        XCTAssertEqual(
+            MobilePictureInPictureFrameSinkSnapshot.backpressured(
+                decoderGeneration: 4,
+                pendingFrameCount: 0
+            )?.pendingFrameCount,
+            0
+        )
+        XCTAssertEqual(
+            MobilePictureInPictureFrameSinkSnapshot.backpressured(
+                decoderGeneration: 4,
+                pendingFrameCount:
+                    MobilePictureInPictureFrameSinkSnapshot
+                        .maximumPendingFrameCount
+            )?.pendingFrameCount,
+            1
+        )
+        XCTAssertNil(
+            MobilePictureInPictureFrameSinkSnapshot.backpressured(
+                decoderGeneration: .max,
+                pendingFrameCount:
+                    MobilePictureInPictureFrameSinkSnapshot
+                        .maximumPendingFrameCount + 1
+            )
+        )
+    }
+
+    func testContinuityPolicyGridHasDeterministicClosedPrecedence() {
+        let platforms: [ApplePlatformFamily] = [
+            .macOS,
+            .iOS,
+            .iPadOS,
+            .tvOS,
+            .visionOS
+        ]
+        let activities: [AppSceneActivity] = [
+            .active,
+            .inactive,
+            .background
+        ]
+        let lifecycles: [MobilePictureInPictureLifecycle] = [
+            .ready,
+            .active
+        ]
+        var evaluated = 0
+
+        for platform in platforms {
+            for activity in activities {
+                for streamActive in [false, true] {
+                    for lifecycle in lifecycles {
+                        for sinkOperational in [false, true] {
+                            for audioActive in [false, true] {
+                                for audioPermitted in [false, true] {
+                                    for declared in [false, true] {
+                                        for pipEnabled in [false, true] {
+                                            for audioEnabled in [false, true] {
+                                                let input =
+                                                    MobileContinuityPathInput(
+                                                        platform: platform,
+                                                        sceneActivity: activity,
+                                                        isStreamActive:
+                                                            streamActive,
+                                                        pictureInPictureLifecycle:
+                                                            lifecycle,
+                                                        isPictureInPictureFrameSinkOperational:
+                                                            sinkOperational,
+                                                        isAudioSessionActive:
+                                                            audioActive,
+                                                        isAudioContinuityPermitted:
+                                                            audioPermitted,
+                                                        hasPlaybackBackgroundModeDeclared:
+                                                            declared,
+                                                        preferences:
+                                                            ContinuityPreferences(
+                                                                audioContinuityEnabled:
+                                                                    audioEnabled,
+                                                                pictureInPictureEnabled:
+                                                                    pipEnabled,
+                                                                reduceRenderingInBackground:
+                                                                    true
+                                                            )
+                                                    )
+                                                XCTAssertEqual(
+                                                    MobileContinuityPathResolver
+                                                        .resolve(input),
+                                                    expectedPath(for: input),
+                                                    "case \(evaluated)"
+                                                )
+                                                evaluated += 1
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        XCTAssertEqual(evaluated, 3_840)
+    }
+
+    func testContinuityRevisionOverflowClearsPublishedPath() throws {
+        let generation = makeGeneration()!
+        var reducer = MobileContinuityPathStateReducer(
+            generation: generation,
+            initialRevision: MobilePictureInPictureRevision(
+                rawValue: .max - 1
+            )
+        )
+        let background = makePathInput(
+            pictureInPictureLifecycle: .active,
+            audioActive: false,
+            configurationDeclared: true
+        )
+        let first = try publishedPath(
+            reducer.update(background, generation: generation)
+        )
+
+        XCTAssertEqual(first.revision.rawValue, .max)
+        XCTAssertEqual(
+            reducer.update(
+                MobileContinuityPathInput(
+                    platform: .iPadOS,
+                    sceneActivity: .active,
+                    isStreamActive: true,
+                    pictureInPictureLifecycle: .active,
+                    isPictureInPictureFrameSinkOperational: true,
+                    isAudioSessionActive: false,
+                    isAudioContinuityPermitted: true,
+                    hasPlaybackBackgroundModeDeclared: true,
+                    preferences: .defaults
+                ),
+                generation: generation
+            ),
+            .revisionExhausted
+        )
+        XCTAssertNil(reducer.snapshot)
+        XCTAssertTrue(reducer.isRevisionExhausted)
+    }
+
     private func makePreparedReducer()
         -> MobilePictureInPictureStateReducer
     {
@@ -417,6 +708,54 @@ final class MobilePictureInPictureStateTests: XCTestCase {
             isAudioContinuityPermitted: true,
             hasPlaybackBackgroundModeDeclared: configurationDeclared,
             preferences: .defaults
+        )
+    }
+
+    private func expectedPath(
+        for input: MobileContinuityPathInput
+    ) -> MobileContinuityPathResolution {
+        guard input.platform == .iOS || input.platform == .iPadOS else {
+            return MobileContinuityPathResolution(
+                path: .unavailable,
+                unavailableReason: .unsupportedPlatform
+            )
+        }
+        guard input.isStreamActive else {
+            return MobileContinuityPathResolution(
+                path: .inactive,
+                unavailableReason: nil
+            )
+        }
+        guard input.sceneActivity == .background else {
+            return MobileContinuityPathResolution(
+                path: .foreground,
+                unavailableReason: nil
+            )
+        }
+
+        let hasPictureInPicture =
+            input.preferences.pictureInPictureEnabled
+                && input.pictureInPictureLifecycle == .active
+                && input.isPictureInPictureFrameSinkOperational
+        let hasAudio =
+            input.preferences.audioContinuityEnabled
+                && input.isAudioSessionActive
+                && input.isAudioContinuityPermitted
+        guard hasPictureInPicture || hasAudio else {
+            return MobileContinuityPathResolution(
+                path: .unavailable,
+                unavailableReason: .noActivePermittedMediaPath
+            )
+        }
+        guard input.hasPlaybackBackgroundModeDeclared else {
+            return MobileContinuityPathResolution(
+                path: .unavailable,
+                unavailableReason: .backgroundConfigurationMissing
+            )
+        }
+        return MobileContinuityPathResolution(
+            path: hasPictureInPicture ? .pictureInPicture : .audioOnly,
+            unavailableReason: nil
         )
     }
 

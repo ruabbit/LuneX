@@ -257,6 +257,100 @@ final class MobileDisplayEDRStateTests: XCTestCase {
         )
     }
 
+    func testNormalizedEquivalentSubunitReadingsDeduplicate() throws {
+        var publisher = makePublisher()
+        let first = try publishedSnapshot(publisher.update(envelope(
+            potential: 0,
+            current: -0.0
+        )))
+
+        XCTAssertEqual(
+            publisher.update(envelope(potential: 1, current: 1)),
+            .unchanged
+        )
+        XCTAssertEqual(first.state.headroom, .conservativeSDR)
+        XCTAssertEqual(publisher.revision.rawValue, 1)
+    }
+
+    func testInvalidHeadroomClassesConvergeWithoutRawNumericLeakage()
+        throws
+    {
+        var publisher = makePublisher()
+        let first = try publishedSnapshot(publisher.update(envelope(
+            potential: .nan,
+            current: 1
+        )))
+        let description = String(reflecting: first.state).lowercased()
+
+        XCTAssertFalse(description.contains("nan"))
+        XCTAssertFalse(description.contains("infinity"))
+        XCTAssertFalse(description.contains("64."))
+        XCTAssertEqual(
+            publisher.update(envelope(
+                potential: .infinity,
+                current: 1
+            )),
+            .unchanged
+        )
+        XCTAssertEqual(
+            first.state,
+            .sdrFallback(
+                display: MobileDisplayGeneration(rawValue: 11),
+                reason: .invalidPotentialHeadroom
+            )
+        )
+    }
+
+    func testUnavailableReasonsDeduplicateAndRemainWithoutRenderFallback()
+        throws
+    {
+        var publisher = makePublisher()
+        let unavailable = try publishedSnapshot(publisher.update(
+            MobileDisplayEDREventEnvelope(
+                surfaceGeneration: surfaceGeneration,
+                sample: .unavailable(.observationFailed)
+            )
+        ))
+
+        XCTAssertNil(unavailable.renderSnapshot)
+        XCTAssertEqual(
+            publisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: surfaceGeneration,
+                sample: .unavailable(.observationFailed)
+            )),
+            .unchanged
+        )
+        let invalidated = try publishedSnapshot(publisher.update(
+            MobileDisplayEDREventEnvelope(
+                surfaceGeneration: surfaceGeneration,
+                sample: .unavailable(.invalidated)
+            )
+        ))
+        XCTAssertNil(invalidated.renderSnapshot)
+        XCTAssertEqual(invalidated.revision.rawValue, 2)
+    }
+
+    func testRevisionCanReachMaximumBeforeNextDisplayChangeCloses()
+        throws
+    {
+        var publisher = MobileDisplayEDRSnapshotPublisher(
+            surfaceGeneration: surfaceGeneration,
+            initialRevision: HDRDisplayRevision(rawValue: .max - 1)
+        )
+        let maximum = try publishedSnapshot(publisher.update(envelope(
+            displayGeneration: 11
+        )))
+
+        XCTAssertEqual(maximum.revision.rawValue, .max)
+        XCTAssertEqual(maximum.renderSnapshot?.revision.rawValue, .max)
+        XCTAssertEqual(
+            publisher.update(envelope(displayGeneration: 12)),
+            .revisionExhausted
+        )
+        XCTAssertNil(publisher.snapshot)
+        XCTAssertTrue(publisher.isRevisionExhausted)
+    }
+
     private var surfaceGeneration: MobileSceneSurfaceGeneration {
         MobileSceneSurfaceGeneration(rawValue: 7)!
     }

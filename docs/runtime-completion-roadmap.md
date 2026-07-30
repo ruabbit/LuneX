@@ -137,7 +137,7 @@ flowchart LR
 ## 阶段 17：iOS/iPadOS 连续性
 
 - `docs/runtime/mobile-scene-pip-continuity-contract.md`是actual UIKit stream view/window/screen、共享geometry/input、sample-buffer PiP、合法background continuity、mobile EDR和物理验收的权威合同。
-- OpenSpec `integrate-mobile-scene-pip-continuity`当前`4/36 in_progress`；1.1完成inventory/API/proof boundary，1.2完成mobile scene/window geometry合同，1.3完成generation-owned PiP/continuity状态机，1.4完成actual-display generation、bounded headroom、typed conservative-SDR fallback和privacy-safe `HDRDisplayRevision`桥接。下一项1.5扩展值层确定性矩阵。
+- OpenSpec `integrate-mobile-scene-pip-continuity`当前`5/36 in_progress`；1.1完成inventory/API/proof boundary，1.2完成mobile scene/window geometry合同，1.3完成generation-owned PiP/continuity状态机，1.4完成actual-display generation、bounded headroom、typed conservative-SDR fallback和privacy-safe `HDRDisplayRevision`桥接，1.5完成normalization、overflow、duplicate、3,840项policy grid、state transition、restoration lease、privacy和capacity确定性矩阵。下一项2.1扩展mobile `MTKView` attachment callback边界。
 - RootView 接入 `scenePhase`、实际 `UIWindowScene`、screen、scale 和几何变化。
 - iPad Stage Manager 与多窗口 resize 实时更新 drawable、input transform 和 decoder output policy。
 - 使用 `AVPictureInPictureController` 和有效 content source 实现真实 PiP。

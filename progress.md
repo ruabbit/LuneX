@@ -2254,3 +2254,18 @@
 - exact-source四平台generic-device Debug warnings-as-errors build `/tmp/LuneX-17-1_4-builds.yyaIVE`的macOS、iOS/iPadOS、tvOS和visionOS均`succeeded`，四份xcresult结构化error/warning/analyzer warning为0。
 - 只读盘点确认固定iPhone/iPad各唯一、available、`Shutdown`且全局`Booted=0`，没有执行任何simulator生命周期操作。OpenSpec 1.4已勾选，权威进度更新为`4/36`，下一项1.5。
 - 本项只证明actual-display generation值、bounded headroom normalization、typed conservative-SDR fallback、privacy-safe existing HDR revision bridge和四平台编译；不证明actual UIKit screen reader/observer、Metal reconfiguration、visible EDR、external display、真机或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 1.5 启动
+
+- 1.4已以`013e5e5 Define mobile EDR display state`提交并推送，确认`HEAD == origin/main`且起始工作树clean；OpenSpec为`4/36 ready`，当前任务1.5只扩展值层确定性测试，不提前接入2.x/3.x/4.x production adapter。
+- 扩展矩阵覆盖3,840项continuity policy笛卡尔组合、PiP完整合法/非法transition、semantic duplicate、restoration并发/ordinal/overflow、frame-sink容量上下界、三类revision到max再overflow、scene数值边界、EDR归一化等价类和invalid payload隐私收敛。
+- macOS 27.0更新后恢复，现场确认`HEAD == origin/main == 013e5e5`，Xcode仍为26.4、Swift为6.3；固定iOS 26.4 iPhone/iPad均available且`Shutdown`，全局无Booted设备，未操作simulator。
+- 首轮1.5 focused执行`51`项、`49`项通过、`2`项失败：coordinate boundary用例的`1 x 1` bounds同时继承默认top/bottom safe-area而按合同正确关闭；unprepared `.startRequested`按能力门返回`.pictureInPictureUnavailable`而非普通`.invalidTransition`。生产合同未显示异常；测试分别显式使用zero safe-area并按事件精确断言拒绝类别，待全新DerivedData/result bundle复验。
+- 修正后的final focused `/tmp/LuneX-17-1_5-focused-final.viWjAE/Focused.xcresult`结构化通过`51/51 passed / 0 skipped / 0 failed`，build-results的error、warning与analyzer warning均为0；测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 完整macOS gate `/tmp/LuneX-17-1_5-full.YQ8HXp/Full.xcresult`通过`772 total / 771 passed / 1 skipped / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化error、warning与analyzer warning均为0。
+
+## 2026-07-30 阶段 17 任务 1.5 完成
+
+- exact-source四平台generic-device Debug warnings-as-errors build `/tmp/LuneX-17-1_5-builds.yraPq0`的macOS、iOS/iPadOS、tvOS和visionOS均出现精确一次`BUILD SUCCEEDED`，四份xcresult的error、warning与analyzer warning均为0；只执行build action，没有启动simulator。
+- repository gate `/tmp/LuneX-17-1_5-repository.gMZ1oo`通过OpenSpec strict `1/1`、generator初始与连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、test membership、增量privacy和`git diff --check`。固定iOS 26.4 iPhone/iPad各唯一、available、`Shutdown`且全局`Booted=0`；只执行一次只读inventory。
+- OpenSpec 1.5已勾选，权威进度更新为`5/36`，下一项2.1扩展mobile `MTKView`的injectable attachment callback边界。本项不回填actual UIKit/AVKit、system PiP/background、Stage Manager、external display、mobile EDR、signed/physical/live Sunshine证明。
