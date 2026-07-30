@@ -95,6 +95,74 @@ Stage 17 must extend these contracts instead of replacing them:
 - `DiagnosticStore` continues stable code, fixed summary, scoped recovery, and
   bounded-history behavior.
 
+## Mobile scene/window value foundation
+
+OpenSpec task 1.2 adds
+`Sources/LuneXPlatform/MobileSceneWindowState.swift` as a platform-neutral,
+immutable contract. It imports Foundation only and does not connect runtime
+behavior.
+
+The contract defines:
+
+- nonzero `MobileSceneSurfaceGeneration` and `MobileDisplayGeneration` values;
+- checked `MobileSceneWindowRevision`;
+- closed orientation, size-class, and interface-style enums;
+- finite view/window rectangles and safe-area insets;
+- an attached raw sample with semantic activity, opaque display generation,
+  geometry, scale, orientation, and traits;
+- normalized `attached`, `detached`, and privacy-bounded
+  `unavailable(reason:)` states; and
+- a publisher fixed to one surface generation.
+
+The normalizer bounds rectangle origins and endpoints to `1,000,000` points,
+individual dimensions to `131,072` points, scale to `0 < scale <= 16`, and
+drawable dimensions to `1,048,576` pixels. Insets must be finite, nonnegative,
+individually bounded, and fit inside the view bounds. Drawable pixels are
+derived from view points multiplied by scale and rounded
+`toNearestOrAwayFromZero` before checked `Int` conversion.
+
+Invalid samples do not retain the prior renderable geometry. They publish one
+closed unavailable state with a stable reason:
+
+- invalid display generation;
+- invalid view bounds;
+- invalid window bounds;
+- invalid safe-area insets;
+- invalid scale; or
+- drawable-size overflow.
+
+Equivalent valid, detached, or unavailable states do not advance the revision.
+Recovery from unavailable state publishes a new revision. Revision overflow
+clears the snapshot, marks the publisher exhausted, and remains closed.
+
+The snapshot carries no UIKit object, `ObjectIdentifier`, scene/window/display
+name, host identity, endpoint, or localized error text. Later UIKit tasks must
+map actual platform objects into this contract on the main actor.
+
+Task 1.2 evidence:
+
+```text
+Focused:
+/tmp/LuneX-17-1_2-focused-final.rszp6V
+10 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-1_2-full-final.ZAkxIp
+731 total / 730 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-1_2-builds-final.D8zUzY
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Read-only simulator inventory:
+/tmp/LuneX-17-1_2-simulator.Dh14B0
+fixed iPhone/iPad present exactly once; Booted = 0
+```
+
+These results prove the shared value contract and platform compilation only.
+They do not prove UIKit attachment, Stage Manager resize, PiP, background
+continuity, mobile EDR, physical input mapping, or live Sunshine behavior.
+
 ## Xcode 26.4 public API inventory
 
 The inventory was verified against Xcode 26.4 build `17E192`, Apple Swift 6.3,

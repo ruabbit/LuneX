@@ -1785,3 +1785,7 @@
 - 首轮iOS26 strict probe发现`AVPictureInPictureSampleBufferPlaybackDelegate`为nonisolated protocol；仅给class标`@MainActor`在Swift 6.3会触发conformance isolation error，生产实现需显式`@MainActor` isolated conformance。
 - 同一probe发现`AVSampleBufferDisplayLayer`直接ready/enqueue/flush API从iOS18起deprecated；Xcode26 warnings-as-errors必须使用`layer.sampleBufferRenderer`的ready、enqueue和`flush(removingDisplayedImage:completionHandler:)`。
 - 修正后的Xcode 26.4/Swift 6.3 iOS26 strict public API probe `/tmp/LuneX-17-1_1-api.IsXyyw`零诊断通过，覆盖actual view/window/scene、trait registration、scene/screen notifications、EDR headroom、CMSampleBuffer creation、AVSampleBufferVideoRenderer和PiP content source；未操作simulator。
+- 1.2值合同采用固定surface generation的publisher，把raw attached/detached sample归一化为`attached`、`detached`或privacy-bounded `unavailable(reason)`；invalid geometry会清除可渲染状态而不是保留旧snapshot，等价invalid sample去重，恢复后产生新checked revision。
+- geometry只携带有限view/window rect、safe area、scale、由point×scale确定性取整的bounded drawable、orientation和closed trait enums；display只携带opaque generation，不携带UIKit object或screen标识。
+- 1.2最终合同把rect origin与endpoint同时限制在绝对值`1,000,000` points内，dimension上限`131,072` points、scale上限`16`、drawable上限`1,048,576` pixels；safe area必须有限、非负且不超过view bounds。
+- invalid sample发布stable unavailable reason并清除renderable geometry；同reason的不同raw invalid payload会语义去重，避免隐私泄漏和revision churn。revision overflow清snapshot并永久closed。

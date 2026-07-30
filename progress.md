@@ -2206,3 +2206,22 @@
 - 预验收`/tmp/LuneX-17-1_1-pre.NxDp6S`通过OpenSpec strict `1/1`、apply `0/36`起始状态、最终API probe零诊断读回、合同关键边界、generator稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`和产品源码/测试/配置/工具/工程零diff。
 - 1.1已勾选，权威进度更新为`1/36`。本项只新增stage17 runtime合同并同步跟踪，没有修改runtime、测试、配置、generator或工程；不证明system PiP、background duration、Stage Manager、external display、mobile EDR物理输出或live Sunshine。
 - 勾选后final gate `/tmp/LuneX-17-1_1-final.XgU7D7`通过strict `1/1`、apply `1/36`且next精确为1.2、API probe读回、generator稳定、唯一untracked为权威合同及产品源码/测试/配置/工具/工程零diff边界。
+
+## 2026-07-30 阶段 17 任务 1.2 启动
+
+- 1.1已以`12217f8 Inventory mobile continuity runtime`提交并推送，确认`HEAD == origin/main`且起始工作树clean；OpenSpec为`1/36 ready`，当前任务1.2。
+- 新增平台无关`MobileSceneWindowState`值合同、checked publisher和focused tests；raw invalid sample发布closed unavailable state，等价语义去重，revision overflow清空snapshot并永久fail closed。
+- 首个跨文件补丁因generator测试列表锚点错误整体拒绝且没有部分落盘；读取真实列表后已精确加入product/test-support/test membership。
+- focused `/tmp/LuneX-17-1_2-focused.QKl5av/Focused.xcresult`通过`10/10`且测试日志无skip；首轮结构化包装器误把当前summary的空`statistics`数组当旧对象，在expanded启动前退出。focused不重跑，改按顶层计数和build-results count字段复核后再运行expanded。
+- expanded `/tmp/LuneX-17-1_2-expanded.g6gGdq/Expanded.xcresult`结构化通过`45/45`且零诊断；完整macOS `/tmp/LuneX-17-1_2-full.jJvCLB/Full.xcresult`通过`731 total / 730 passed / 1 explicit Keychain skip / 0 failed`且零诊断。
+- 四目标首轮Debug generic builds `/tmp/LuneX-17-1_2-builds.eQfqRS`均成功；最终代码审阅随后收紧rect终点bounded validation并补回归，因此上述测试/build只保留为调查证据，不作为最终exact-source验收，使用全新目录重跑focused/full/build门。
+
+## 2026-07-30 阶段 17 任务 1.2 完成
+
+- final focused `/tmp/LuneX-17-1_2-focused-final.rszp6V/Focused.xcresult`结构化通过`10/10`；完整macOS `/tmp/LuneX-17-1_2-full-final.ZAkxIp/Full.xcresult`通过`731 total / 730 passed / 1 explicit Keychain skip / 0 failed`。两份build-results均为零error/warning/analyzer warning。
+- 唯一skip结构化精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；所有测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- final四目标Debug generic builds `/tmp/LuneX-17-1_2-builds-final.D8zUzY`的macOS、iOS/iPadOS、tvOS、visionOS均succeeded且结构化诊断为0；read-only simulator evidence `/tmp/LuneX-17-1_2-simulator.Dh14B0`确认固定iPhone/iPad各唯一且`Booted=0`，未执行任何simulator生命周期命令。
+- repository pre-gate `/tmp/LuneX-17-1_2-repo-pre.GhjEqI`通过OpenSpec strict `1/1`、apply `1/36`、generator连续稳定SHA-256 `2685f46d6032985088f50f32148cec137d18863d858149ea3511d98e062e38f5`、product/test membership、finite/privacy边界与diff检查。
+- 1.2已勾选，权威进度更新为`2/36`。本项只提供值合同，actual UIKit view/window/scene、PiP controller、background continuity和mobile EDR runtime仍未接线。
+- 勾选后repository final gate `/tmp/LuneX-17-1_2-repo-final.NSPpto`通过strict `1/1`、apply `2/36`且next精确为1.3、final focused/full/build/simulator证据读回、generator稳定、membership、合同、privacy和diff边界。
+- macOS更新结束后从交接点恢复，确认Xcode仍为`26.4 (17E192)`；fresh focused evidence `/tmp/LuneX-17-1_2-post-update-focused.NbSCKe`在macOS 27.0通过`10/10`、零skip，xcresult为`succeeded`且结构化error/warning/analyzer warning均为0。命令行设备枚举提示未进入结构化构建诊断；未访问Keychain或操作simulator。
