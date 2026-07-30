@@ -2506,3 +2506,22 @@
 - 四平台generic Debug证据根`/tmp/LuneX-17-4_3-builds.rCA9Ft`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded，error/warning/analyzer warning均为0并各有一个AIR与metallib。本项没有查询、创建、启动或修改simulator。
 - 最终repository pre-gate `/tmp/LuneX-17-4_3-repository-pre-r3.CBjSuA`从头通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `18/36`、generator初始及连续两次稳定SHA-256 `7ad20d043399d853b23b8bdcd57e82e4c4a25da79bd563e39513ab3f8b85b75d`、membership、modern renderer/no-controller/no-second-decoder/no-buffer-array静态边界、focused/expanded/full/四平台build证据读回、Keychain opt-in关闭和`git diff --check`。
 - OpenSpec 4.3已勾选，预期权威进度`19/36`，下一项4.4实现production `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)` adapter与actual possibility observation。4.3离线证据不证明系统PiP、后台持续时间、签名/安装、物理设备或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.4 启动
+
+- 4.3已以`fd3bf2e Add native PiP display layer sink`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`19/36 ready`，下一项精确为4.4。
+- Context7没有AVKit匹配库；改用Xcode 26.4公开SDK headers和四平台Swift 6.3 warnings-as-errors stdin probe锁定content source、controller delegate、sample-buffer playback delegate与possibility KVO签名，四SDK均零诊断。
+- 4.4实现可注入native controller bridge、真实AVKit content source/controller/playback delegate/KVO owner及generation-bound semantic client；restore/skip native completion各限一个并exactly-once完成。4.5 reducer编排、4.6 frame subscription和5.x continuity policy不提前实现。
+- 测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；本项不查询、创建、启动或修改simulator。
+- 首轮focused通过`10/10`；自审补充missing/removed consumer completion后第二轮通过`11/11`。将native属性收紧为lazy ownership的第三轮编译和链接成功，但3个直接创建真实controller的测试在当前Mac PiP unsupported时崩溃于Swift non-optional `AVPictureInPictureController.init(contentSource:)`，其余`8/11`通过。该bundle不计验收；production bridge改为二次support gate并以纯adapter覆盖playback转换后从全新证据重跑。
+
+## 2026-07-30 阶段 17 任务 4.4 完成
+
+- 恢复后确认macOS 27.0、Xcode/四SDK 26.4和active长期目标；没有查询或操作simulator，也没有设置`LUNEX_RUN_KEYCHAIN_TEST`。
+- Swift support gate不足以防止ObjC initializer返回nil；新增`LuneXAVKitBridge.h/.m`以nullable函数构造content source/controller，Swift factory分别映射`.platformUnsupported`与`.controllerUnavailable`。generator已支持`.m`类型和四App/test target membership。
+- focused r5仅因测试局部量未unwrap IUO而在测试编译阶段停止；r6随后由macOS 27全新编译暴露既有display-layer notification token非Sendable deinit。两份失败bundle不计验收；测试改为显式`XCTUnwrap`，renderer notification ownership改为私有RAII token owner。
+- final focused `/tmp/LuneX-17-4_4-focused-r7.9wHInC/Focused.xcresult`为`10/10`，expanded `/tmp/LuneX-17-4_4-expanded.c32aAr/Expanded.xcresult`为`54/54`，完整normal `/tmp/LuneX-17-4_4-full.Y47gn4/Full.xcresult`为`839 total / 838 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
+- 四平台generic Debug证据根`/tmp/LuneX-17-4_4-builds.Pe6FfA`；macOS、iOS/iPadOS、tvOS、visionOS全部succeeded且三类诊断为0，每个平台均实际生成AVKit bridge object、AIR和metallib。
+- repository pre-gate `/tmp/LuneX-17-4_4-repository-pre.qYzmQy`从头通过fixtures、strict `8/8`、勾选前apply `19/36`、generator连续稳定SHA-256 `d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`、membership、nullable/no-direct-Swift-initializer/no-second-decoder静态边界、全部结果读回、Keychain opt-in关闭和diff检查。
+- OpenSpec 4.4已勾选，权威进度更新为`20/36`，下一项4.5实现generation-scoped prepare/start/stop/failure/restore/playback/invalidation/replacement reducer orchestration。本项不证明系统PiP、后台持续时间、签名/安装、物理设备或live Sunshine。
+- 勾选后的repository final gate `/tmp/LuneX-17-4_4-repository-final.Ye3KA5`完整通过，OpenSpec为`20/36`且next精确为4.5；generator SHA-256仍为`d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`。

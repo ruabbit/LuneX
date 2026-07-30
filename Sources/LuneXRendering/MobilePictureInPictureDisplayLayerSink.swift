@@ -14,6 +14,31 @@ enum MobilePictureInPictureVideoRendererStatus:
 typealias MobilePictureInPictureRendererCallback =
     @MainActor @Sendable () -> Void
 
+private final class MobilePictureInPictureRendererObserverTokens:
+    @unchecked Sendable
+{
+    private let notificationCenter: NotificationCenter
+    private var observers: [NSObjectProtocol] = []
+
+    init(notificationCenter: NotificationCenter) {
+        self.notificationCenter = notificationCenter
+    }
+
+    func replace(_ observers: [NSObjectProtocol]) {
+        removeAll()
+        self.observers = observers
+    }
+
+    func removeAll() {
+        observers.forEach(notificationCenter.removeObserver)
+        observers.removeAll()
+    }
+
+    deinit {
+        removeAll()
+    }
+}
+
 @MainActor
 protocol MobilePictureInPictureDisplayLayerRendererClient: AnyObject {
     var status: MobilePictureInPictureVideoRendererStatus { get }
@@ -40,8 +65,9 @@ final class MobilePictureInPictureDisplayLayerClient:
 
     private let renderer: AVSampleBufferVideoRenderer
     private let notificationCenter: NotificationCenter
+    private let notificationTokens:
+        MobilePictureInPictureRendererObserverTokens
     private let readinessQueue: DispatchQueue
-    private var notificationTokens: [NSObjectProtocol] = []
     private var rendererStateChangeHandler:
         MobilePictureInPictureRendererCallback?
     private var readinessHandler:
@@ -62,6 +88,10 @@ final class MobilePictureInPictureDisplayLayerClient:
         self.displayLayer = displayLayer
         renderer = displayLayer.sampleBufferRenderer
         self.notificationCenter = notificationCenter
+        notificationTokens =
+            MobilePictureInPictureRendererObserverTokens(
+                notificationCenter: notificationCenter
+            )
         self.readinessQueue = readinessQueue
         installRendererNotifications()
     }
@@ -160,7 +190,7 @@ final class MobilePictureInPictureDisplayLayerClient:
             AVSampleBufferVideoRenderer
                 .requiresFlushToResumeDecodingDidChangeNotification
         ]
-        notificationTokens = names.map { name in
+        notificationTokens.replace(names.map { name in
             notificationCenter.addObserver(
                 forName: name,
                 object: renderer,
@@ -171,22 +201,16 @@ final class MobilePictureInPictureDisplayLayerClient:
                     self.rendererStateChangeHandler?()
                 }
             }
-        }
+        })
     }
 
     private func removeRendererNotifications() {
-        for token in notificationTokens {
-            notificationCenter.removeObserver(token)
-        }
         notificationTokens.removeAll()
     }
 
     deinit {
         if readinessRequestOrdinal != nil {
             renderer.stopRequestingMediaData()
-        }
-        for token in notificationTokens {
-            notificationCenter.removeObserver(token)
         }
     }
 }

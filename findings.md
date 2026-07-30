@@ -2037,3 +2037,24 @@
 - 四平台generic Debug证据根`/tmp/LuneX-17-4_3-builds.rCA9Ft`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded、三类结构化诊断为0并各有一个AIR和metallib。没有查询、创建、启动或修改simulator。
 - repository pre-gate `/tmp/LuneX-17-4_3-repository-pre-r3.CBjSuA`通过fixture、OpenSpec strict `8/8`、勾选前apply `18/36`、generator初始及连续两次稳定SHA-256 `7ad20d043399d853b23b8bdcd57e82e4c4a25da79bd563e39513ab3f8b85b75d`、membership、现代renderer API、no-controller/no-second-decoder/no-buffer-array静态边界、全部结构化证据读回和`git diff --check`。
 - 本项证明离线renderer/sink所有权、backpressure与四平台SDK兼容；不证明4.4 controller/content source、系统PiP start/stop/restore、后台持续时间、签名/安装、物理iPhone/iPad或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.4 调查
+
+- Context7没有可解析的AVKit文档库；Xcode 26.4公开headers确认sample-buffer content source initializer在四平台当前部署范围可用，content source弱持有playback delegate，controller弱持有controller delegate，因此production bridge必须强持有content source/controller并由current PiP generation owner强持有bridge。
+- `isPictureInPicturePossible`是可观察属性，但只能表示当前native possibility，不能表示active；4.4只把初值和KVO变化映射到`.possible`或`.unavailable(.notPossible)`，actual active仍只来自did-start delegate并由4.5 reducer归约。
+- playback delegate的live timeline必须返回duration为`kCMTimeInfinity`的range，无内容返回invalid range；paused和background-audio prohibition读取当前typed playback state。skip completion必须调用，否则系统UI会永久停在seeking。
+- production bridge将原生delegate、playback delegate、content source、controller和possibility observation封装在main actor；raw NSError不跨边界。可注入native bridge用于确定性测试，restore与skip各最多保留一个pending native completion，重复、overflow、replacement和invalidate均fail closed并释放completion。
+- 四SDK Swift 6.3 warnings-as-errors stdin probe确认`@MainActor` isolated controller/playback delegate conformance、content-source initializer、KVO key path、start/stop/invalidatePlaybackState及全部callback标签零诊断通过。4.4不实现4.5 reducer orchestration、4.6 decoded-frame subscription或5.x background policy。
+- XCTest进程中的`AVPictureInPictureController.isPictureInPictureSupported()`与实际构造结果不能视为同一证明：运行时曾报告支持，但Objective-C initializer仍返回nil；Swift importer把initializer暴露为non-optional，因此直接调用会在`@nonobjc init(contentSource:)` trap。production必须通过Objective-C nullable factory分别承接content source和controller构造失败，并区分`.platformUnsupported`与`.controllerUnavailable`。
+
+## 2026-07-30 阶段 17 任务 4.4 验收
+
+- 新增的Objective-C interop只包装两个AVKit initializer并以`_Nullable`返回；Swift bridge在`super.init()`后依次构造content source和controller，任一步为nil即failable init，不再触发Swift nonoptional initializer trap。generator将`.m`作为Objective-C source纳入四个App target和macOS test target。
+- production bridge强持有content source/controller，content source指向同一个display layer和playback delegate，controller delegate与possibility KVO均由bridge拥有；invalidate取消KVO、停止active PiP、清delegate/content source及typed playback state。native raw error只映射到稳定failure class。
+- playback adapter对live/unavailable time range、paused、background-audio prohibition、finite nanosecond skip和bounded render size做纯值转换。generation client把actual possibility初值/KVO变化映射为typed capability，restore/skip各最多一个pending completion，missing consumer、重复、ordinal exhaustion、handler removal、replacement和invalidate均exactly-once fail closed。
+- macOS 27全新编译额外发现4.3 display-layer client的nonisolated deinit直接读取非Sendable notification tokens；已按仓库既有模式移入私有RAII token owner，显式invalidate语义不变且deinit继续兜底注销。
+- final focused `/tmp/LuneX-17-4_4-focused-r7.9wHInC/Focused.xcresult`通过`10/10`，expanded `/tmp/LuneX-17-4_4-expanded.c32aAr/Expanded.xcresult`通过`54/54`；完整normal `/tmp/LuneX-17-4_4-full.Y47gn4/Full.xcresult`为`839 total / 838 passed / 1 explicit Keychain skip / 0 failed`。三份结果的error、warning、analyzer warning均为0，唯一skip精确为real-Keychain opt-in测试。
+- 四平台generic Debug证据根`/tmp/LuneX-17-4_4-builds.Pe6FfA`；macOS、iOS/iPadOS、tvOS和visionOS全部succeeded、三类结构化诊断为0，Objective-C bridge object、AIR与metallib均实际产出。本项未查询、创建、启动或修改simulator。
+- 勾选前repository gate `/tmp/LuneX-17-4_4-repository-pre.qYzmQy`通过fixture self-test/全树、OpenSpec strict `8/8`、apply `19/36`、generator初始及连续两次稳定SHA-256 `d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`、source/test/Objective-C membership、nullable/no-direct-Swift-initializer/no-second-decoder边界、全部证据读回、Keychain opt-in关闭与`git diff --check`。
+- 勾选后的repository final gate `/tmp/LuneX-17-4_4-repository-final.Ye3KA5`通过同一完整门禁，apply精确为`20/36`、4.4已完成且下一项4.5仍未完成，generator SHA-256保持`d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`。
+- 4.4只证明production adapter、离线delegate/callback ownership、macOS运行时fail-closed与四平台SDK构建；4.5 reducer orchestration、4.6 decoded-frame subscription、系统PiP可见行为、后台持续时间、签名/安装、物理iPhone/iPad和live Sunshine仍未证明。

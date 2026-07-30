@@ -16,12 +16,13 @@ def q(value)
 end
 
 def source_file?(path)
-  path.end_with?(".swift", ".c", ".metal")
+  path.end_with?(".swift", ".c", ".m", ".metal")
 end
 
 def file_type(path)
   return "sourcecode.swift" if path.end_with?(".swift")
   return "sourcecode.c.c" if path.end_with?(".c")
+  return "sourcecode.c.objc" if path.end_with?(".m")
   return "sourcecode.metal" if path.end_with?(".metal")
   return "text.plist.entitlements" if path.end_with?(".entitlements")
 
@@ -33,6 +34,7 @@ def third_party_enet?(path)
 end
 
 c_sources = [
+  "Sources/LuneXNetworking/CInterop/LuneXAVKitBridge.m",
   "Sources/LuneXNetworking/CInterop/LuneXENetBridge.c",
   "ThirdParty/ENet/callbacks.c",
   "ThirdParty/ENet/compress.c",
@@ -65,6 +67,7 @@ sources = [
   "Sources/LuneXPlatform/ContinuityPolicy.swift",
   "Sources/LuneXPlatform/MobileDisplayEDRState.swift",
   "Sources/LuneXPlatform/MobilePictureInPictureClient.swift",
+  "Sources/LuneXPlatform/MobilePictureInPictureAVKitClient.swift",
   "Sources/LuneXPlatform/MobilePictureInPictureState.swift",
   "Sources/LuneXPlatform/MobileSceneWindowState.swift",
   "Sources/LuneXPlatform/PlatformLifecycle.swift",
@@ -164,6 +167,7 @@ test_support_sources = [
   "Sources/LuneXPlatform/ContinuityPolicy.swift",
   "Sources/LuneXPlatform/MobileDisplayEDRState.swift",
   "Sources/LuneXPlatform/MobilePictureInPictureClient.swift",
+  "Sources/LuneXPlatform/MobilePictureInPictureAVKitClient.swift",
   "Sources/LuneXPlatform/MobilePictureInPictureState.swift",
   "Sources/LuneXPlatform/MobileSceneWindowState.swift",
   "Sources/LuneXPlatform/PlatformLifecycle.swift",
@@ -272,6 +276,7 @@ test_sources = [
   "Tests/LuneXCoreTests/MediaClockSynchronizerTests.swift",
   "Tests/LuneXCoreTests/MobileDisplayEDRStateTests.swift",
   "Tests/LuneXCoreTests/MobilePictureInPictureDisplayLayerSinkTests.swift",
+  "Tests/LuneXCoreTests/MobilePictureInPictureAVKitClientTests.swift",
   "Tests/LuneXCoreTests/MobilePictureInPictureSampleBufferAdapterTests.swift",
   "Tests/LuneXCoreTests/MobilePictureInPictureStateTests.swift",
   "Tests/LuneXCoreTests/MobileSceneWindowStateTests.swift",

@@ -1,6 +1,7 @@
 #ifndef LUNEX_BRIDGING_HEADER_H
 #define LUNEX_BRIDGING_HEADER_H
 
+#include "LuneXAVKitBridge.h"
 #include "LuneXENetBridge.h"
 
 #endif
