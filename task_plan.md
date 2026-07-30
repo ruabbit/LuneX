@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`9/36`；2.4连续geometry/resize-settled发布完成，下一项2.5绑定drawable、video mapping与touch/absolute pointer |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`10/36`；2.5已原子绑定drawable、video mapping与touch/absolute pointer，下一项2.6扩展attachment/resize/rotation/teardown矩阵 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`9/36`。1.x值合同和确定性矩阵完成；2.1至2.3完成actual mobile surface callback、current-generation attachment owner及attached-scene lifecycle通知；2.4完成actual UIKit view/window geometry、safe area、`contentScaleFactor`、iOS 26 `effectiveGeometry.interfaceOrientation`、traits、opaque display generation及可取消`resizing/settled`发布。任务级focused/expanded/full/四目标build与repository gate通过。下一项2.5绑定同一geometry revision到drawable、video mapping与touch/absolute pointer；6.6物理iPhone/iPad、PiP、Stage Manager、external display、EDR、power与live Sunshine证据保持独立pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`10/36`。1.x值合同和确定性矩阵完成；2.1至2.4完成actual mobile surface callback、current-generation attachment/lifecycle owner及连续UIKit geometry发布。2.5由current-generation binding owner把同一scene revision原子应用到actual `MTKView.drawableSize`、fit/fill video coordinate与touch/absolute hover，并在detach、invalid、stale、source/mode mismatch或drawable失败时fail closed；focused `5/5`、expanded `88/88`、完整macOS `790 total / 789 passed / 1 explicit Keychain skip`、四平台generic Debug、strict/generator/repository与固定simulator只读门通过。下一项2.6扩展attachment、multi-scene、resize、rotation、safe-area、trait、replacement、late callback、teardown、renderer与input矩阵；6.6物理iPhone/iPad、PiP、Stage Manager、external display、EDR、power与live Sunshine证据保持独立pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -79,6 +79,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 17.2.5完整suite后`xcresulttool get test-results tests`尝试移动内部`database.sqlite3`时命中同名项 | 1 | 测试本身已成功且summary/build-results可读；不重跑suite，使用同一bundle的结构化总数与原始日志精确确认唯一Keychain skip |
+| 17.2.5收紧stale render-input后focused coordinator fixture仍期待旧binding覆盖不匹配的source/mode | 1 | production正确fail closed到zero drawable；fixture首次使用匹配source/mode验证应用，replacement继续验证不匹配时归零，并从全新DerivedData/result bundle重跑 |
 | 17.1.3首轮focused编译把实例转移调用的`replacing` helper声明为`static` | 1 | 改为实例私有helper；失败发生在编译期、测试未启动，使用全新DerivedData/result bundle重跑 |
 | 17.1.2 final组合门用文本计数断言唯一Keychain test名称出现一次 | 1 | tests JSON中name/nodeIdentifier/URL会重复同一名称；改为结构化选择`result == Skipped`节点并精确断言唯一nodeIdentifier，不重跑已成功test/build |
 | 17.1.2跨平台build包装器被JavaScript模板解析Bash`${!names[@]}` | 1 | 命令在进入shell前失败且没有启动build或设备操作；改用直接`/bin/bash`执行相同数组循环 |
@@ -383,4 +385,4 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`9/36 in_progress`；2.1至2.4完成actual mobile surface callback、current-generation attachment/lifecycle owner和连续geometry发布。2.4以actual `contentScaleFactor`计算drawable、使用iOS 26 `effectiveGeometry.interfaceOrientation`，并以checked opaque display generation与可取消settle token发布`resizing/settled`。下一项2.5绑定同一revision到drawable、video mapping与touch/absolute pointer；当前证据仍不证明live Stage Manager、PiP、background、mobile EDR或真机。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`10/36 in_progress`；2.1至2.5完成actual mobile surface callback、current-generation attachment/lifecycle owner、连续geometry及drawable/video/input原子绑定。invalid、detach、stale、source/mode mismatch与drawable失败均fail closed，iOS actual surface关闭自动drawable resize，tvOS/visionOS路径不变。下一项2.6扩展组合矩阵；当前证据仍不证明live Stage Manager、PiP、background、mobile EDR或真机。

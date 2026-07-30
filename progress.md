@@ -2341,3 +2341,26 @@
 - repository pre-gate `/tmp/LuneX-17-2_4-repository-pre.OHmxni`通过generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、actual-view-only geometry API、无global fallback/deprecated orientation和`git diff --check`；OpenSpec strict `1/1`通过。
 - OpenSpec 2.4已勾选，权威进度更新为`9/36`。本项证明deterministic continuous normalized UIKit geometry和resize-settled semantics，不证明2.5 drawable/video/input绑定、live Stage Manager/rotation/external display、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.5。
 - 首个final repository包装器在JavaScript解析阶段误读Bash参数展开，命令未进入shell；改用`printenv`后的最终门`/tmp/LuneX-17-2_4-repository-final.oyMQnP`通过strict `1/1`、apply `9/36`且next精确为2.5、generator SHA、Keychain opt-in关闭、geometry/API静态边界、全部xcresult与保存的simulator证据读回和`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 2.5 启动
+
+- 2.4已以`67b90ef Track mobile scene geometry`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec为`9/36 ready`，当前任务2.5只绑定同一mobile geometry revision到drawable、video fit/fill和touch/absolute pointer，不提前实现2.6扩展矩阵或5.x AppModel/media environment。
+- 既有`StreamCoordinateSnapshot`、`StreamVideoRectangleResolver`、`InputMapper`和`TouchInputAdapter`已具备fit letterbox拒绝、fill crop映射、immutable revision和绝对输入转换；缺口是mobile actual scene snapshot没有原子驱动这些合同。
+- 新binding owner固定surface generation和surface identity，以同一次valid scene update应用actual drawable、解析source/mode coordinate snapshot并发布含scene revision的binding；detached、invalid、stale或surface apply失败清空drawable/coordinate并使touch/hover typed drop。
+- 系统更新后恢复并先等待既有测试cell，没有启动重复测试。owner focused证据`/tmp/LuneX-17-2_5-owner-focused.QL0y4t/Focused.xcresult`通过`4/4 passed / 0 skipped / 0 failed`，命令使用warnings-as-errors、禁用签名并显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- production审阅确认`MobileStreamMetalView`仍只转发scene snapshot，`updateUIView`仍从独立`renderState.coordinateSnapshot`写drawable且没有UIKit touch/hover入口；下一实现将把binding owner接入actual view和presenter/render-state，并提供generation-scoped可注入输入输出边界，网络发送仍留给5.x。
+- production接线后的focused `/tmp/LuneX-17-2_5-focused-production.7Syvin`通过`5/5`，iOS generic-device build `/tmp/LuneX-17-2_5-ios-production-build.Kws9oP`成功；审阅随后发现旧binding不得覆盖更新中的render source/mode且drawable apply失败应允许同值重试，因此这两份只保留为调查证据。
+- 收紧后的首轮focused `/tmp/LuneX-17-2_5-focused-final.xFPGX9`为`4 passed / 1 failed`；失败只因coordinator测试fixture仍期待不匹配旧binding覆盖新source/mode，production按新合同正确归零。已修正fixture，失败bundle不计验收并从全新路径重跑。
+- exact-source focused `/tmp/LuneX-17-2_5-focused-final-r2.PgFLvr/Focused.xcresult`结构化通过`5/5 passed / 0 skipped / 0 failed`；iOS generic-device `/tmp/LuneX-17-2_5-ios-final-build.PKRXqq/Build.xcresult`为`succeeded`。两份结果的error、warning与analyzer warning均为0。
+- macOS更新结束后恢复原expanded测试会话`43780`，没有启动重复命令；`/tmp/LuneX-17-2_5-expanded.I2l8Za/Expanded.xcresult`最终为`88/88 passed / 0 skipped / 0 failed / 0 expected failure`，结构化build status为`succeeded`且error、warning、analyzer warning均为0。
+- 完整macOS normal suite从全新DerivedData运行，`/tmp/LuneX-17-2_5-full.YHUnbC/Full.xcresult`为`790 total / 789 passed / 1 explicit Keychain skip / 0 failed / 0 expected failure`；唯一skip由原始日志精确确认，测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，结构化error、warning、analyzer warning均为0。
+- `xcresulttool get test-results tests`对该成功bundle触发Xcode 26.4已知的内部`database.sqlite3`同名move错误；没有重跑测试，使用同一bundle可读的summary/build-results与原始日志完成总数、唯一skip及零诊断证明。
+- 四平台generic Debug build从独立DerivedData完成，证据根`/tmp/LuneX-17-2_5-builds.fF2JX1`；macOS、iOS、tvOS、visionOS全部`succeeded`、三类结构化诊断为0，并各生成一个Metal AIR与metallib。构建没有使用simulator destination。
+- 只调用一次`simctl list devices available -j`并保存`/tmp/LuneX-17-2_5-simulator.yZPAhn/devices.json`；固定iPhone/iPad各唯一、名称在iOS 26.4中各唯一、available、`Shutdown`且全局`Booted=0`，未create、clone、boot、launch、shutdown或delete设备。
+
+## 2026-07-30 阶段 17 任务 2.5 完成
+
+- final代码审阅确认invalidation先发布nil/归零、source/mode mismatch fail closed、同值drawable apply可重试、iOS不再由旧coordinate snapshot单独写drawable，且tvOS/visionOS维持原非iOS drawable行为。
+- repository pre-gate`/tmp/LuneX-17-2_5-repository-pre.vb0AcX`通过fixture、OpenSpec strict、apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、static platform/privacy/network boundaries、focused/expanded/full/四平台build与单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+- OpenSpec 2.5已勾选，权威进度更新为`10/36`。本项证明确定性actual mobile surface geometry到drawable/video/input边界，不证明live UIKit touch、Stage Manager/rotation/external display、input transport、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.6。
+- 标记后的repository final gate`/tmp/LuneX-17-2_5-repository-final.wjEq5N`通过OpenSpec strict `1/1`、apply `10/36`且next精确为2.6、fixture、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、production/test静态边界、全部既有证据与保存的单次simulator inventory读回、Keychain opt-in关闭和`git diff --check`。

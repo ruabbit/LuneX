@@ -782,6 +782,243 @@ final class MobileStreamSceneGeometryObserver<
     }
 }
 
+struct MobileStreamGeometryBindingSnapshot: Equatable, Sendable {
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    let sceneWindowRevision: MobileSceneWindowRevision
+    let geometry: MobileSceneWindowGeometry
+    let coordinateSnapshot: StreamCoordinateSnapshot
+}
+
+enum MobileStreamGeometryBindingOutcome: Equatable, Sendable {
+    case published
+    case unchanged
+    case closed
+    case staleSurfaceGeneration
+    case staleSurface
+    case drawableApplicationFailed
+    case invalidated
+    case alreadyInvalidated
+}
+
+@MainActor
+final class MobileStreamGeometryBindingOwner<Surface: AnyObject> {
+    typealias DrawableApplier = @MainActor (Surface, PixelSize) -> Bool
+    typealias Handler = @MainActor (
+        MobileStreamGeometryBindingSnapshot?
+    ) -> Void
+
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    var currentSurface: Surface? { surface }
+    private(set) var currentBinding:
+        MobileStreamGeometryBindingSnapshot?
+
+    private weak var surface: Surface?
+    private var sourceSize: PixelSize
+    private var mode: RenderScaleMode
+    private var sceneSnapshot: MobileSceneWindowSnapshot?
+    private var coordinatePublisher = StreamCoordinateSnapshotPublisher()
+    private var appliedDrawableSize: PixelSize?
+    private var drawableApplier: DrawableApplier?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        surfaceGeneration: MobileSceneSurfaceGeneration,
+        surface: Surface,
+        sourceSize: PixelSize,
+        mode: RenderScaleMode,
+        drawableApplier: @escaping DrawableApplier,
+        handler: @escaping Handler
+    ) {
+        self.surfaceGeneration = surfaceGeneration
+        self.surface = surface
+        self.sourceSize = sourceSize
+        self.mode = mode
+        self.drawableApplier = drawableApplier
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    @discardableResult
+    func updateRenderInputs(
+        sourceSize: PixelSize,
+        mode: RenderScaleMode,
+        surface candidateSurface: Surface,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamGeometryBindingOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidateSurface else { return .staleSurface }
+        guard self.sourceSize != sourceSize || self.mode != mode else {
+            return currentBinding == nil ? resolveBinding() : .unchanged
+        }
+        self.sourceSize = sourceSize
+        self.mode = mode
+        return resolveBinding()
+    }
+
+    @discardableResult
+    func update(
+        _ snapshot: MobileSceneWindowSnapshot,
+        surface candidateSurface: Surface,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamGeometryBindingOutcome {
+        guard candidateGeneration == surfaceGeneration,
+              snapshot.surfaceGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidateSurface else { return .staleSurface }
+        guard sceneSnapshot != snapshot else {
+            return currentBinding == nil ? resolveBinding() : .unchanged
+        }
+        sceneSnapshot = snapshot
+        return resolveBinding()
+    }
+
+    func touch(_ sample: TouchSample) -> InputAdapterOutput {
+        guard sample.pressure.isFinite else {
+            return droppedInput("Mobile touch pressure is invalid")
+        }
+        guard let localPoint = drawablePoint(from: sample.localPoint),
+              let coordinateSnapshot = currentBinding?.coordinateSnapshot else {
+            return droppedInput("Mobile geometry is unavailable")
+        }
+        return TouchInputAdapter(
+            mapper: InputMapper(snapshot: coordinateSnapshot)
+        ).touch(TouchSample(
+            id: sample.id,
+            phase: sample.phase,
+            localPoint: localPoint,
+            pressure: sample.pressure
+        ))
+    }
+
+    func pointerHover(_ sample: PointerHoverSample) -> InputAdapterOutput {
+        guard let localPoint = drawablePoint(from: sample.localPoint),
+              let coordinateSnapshot = currentBinding?.coordinateSnapshot else {
+            return droppedInput("Mobile geometry is unavailable")
+        }
+        return TouchInputAdapter(
+            mapper: InputMapper(snapshot: coordinateSnapshot)
+        ).pointerHover(PointerHoverSample(
+            localPoint: localPoint,
+            buttons: sample.buttons
+        ))
+    }
+
+    @discardableResult
+    func invalidate(
+        surface candidateSurface: Surface? = nil,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamGeometryBindingOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if let candidateSurface, surface !== candidateSurface {
+            return .staleSurface
+        }
+        isInvalidated = true
+        _ = closeBinding()
+        sceneSnapshot = nil
+        surface = nil
+        drawableApplier = nil
+        handler = nil
+        return .invalidated
+    }
+
+    private func resolveBinding() -> MobileStreamGeometryBindingOutcome {
+        guard let sceneSnapshot,
+              case let .attached(_, _, geometry) = sceneSnapshot.state else {
+            return closeBinding()
+        }
+        guard let coordinateSnapshot = coordinatePublisher.update(
+            sourceSize: sourceSize,
+            drawableSize: geometry.drawableSize,
+            mode: mode
+        ) else {
+            return closeBinding()
+        }
+        guard applyDrawableSize(geometry.drawableSize) else {
+            _ = coordinatePublisher.update(
+                sourceSize: sourceSize,
+                drawableSize: .zero,
+                mode: mode
+            )
+            let hadBinding = currentBinding != nil
+            currentBinding = nil
+            if hadBinding {
+                handler?(nil)
+            }
+            return .drawableApplicationFailed
+        }
+        let next = MobileStreamGeometryBindingSnapshot(
+            surfaceGeneration: surfaceGeneration,
+            sceneWindowRevision: sceneSnapshot.revision,
+            geometry: geometry,
+            coordinateSnapshot: coordinateSnapshot
+        )
+        guard next != currentBinding else { return .unchanged }
+        currentBinding = next
+        handler?(next)
+        return .published
+    }
+
+    private func closeBinding() -> MobileStreamGeometryBindingOutcome {
+        _ = coordinatePublisher.update(
+            sourceSize: sourceSize,
+            drawableSize: .zero,
+            mode: mode
+        )
+        let hadBinding = currentBinding != nil
+        currentBinding = nil
+        let applied = applyDrawableSize(.zero)
+        if hadBinding {
+            handler?(nil)
+        }
+        return applied ? (hadBinding ? .closed : .unchanged)
+            : .drawableApplicationFailed
+    }
+
+    private func applyDrawableSize(_ size: PixelSize) -> Bool {
+        guard appliedDrawableSize != size else { return true }
+        guard let surface,
+              drawableApplier?(surface, size) == true else {
+            appliedDrawableSize = nil
+            return false
+        }
+        appliedDrawableSize = size
+        return true
+    }
+
+    private func drawablePoint(from point: RemotePoint) -> RemotePoint? {
+        guard let geometry = currentBinding?.geometry,
+              point.x.isFinite,
+              point.y.isFinite,
+              point.x >= geometry.viewBounds.x,
+              point.y >= geometry.viewBounds.y,
+              point.x <= geometry.viewBounds.x + geometry.viewBounds.width,
+              point.y <= geometry.viewBounds.y + geometry.viewBounds.height else {
+            return nil
+        }
+        let x = (point.x - geometry.viewBounds.x) * geometry.scale
+        let y = (point.y - geometry.viewBounds.y) * geometry.scale
+        guard x.isFinite, y.isFinite else { return nil }
+        return RemotePoint(x: x, y: y)
+    }
+
+    private func droppedInput(_ reason: String) -> InputAdapterOutput {
+        InputAdapterOutput(event: nil, policy: .drop(reason: reason))
+    }
+}
+
 struct StreamMetalPresentationPlan: Sendable {
     let configuration: HDRRenderConfigurationIdentity
     let uniforms: HDRMetalShaderUniforms
@@ -1680,6 +1917,77 @@ private extension RenderPolicy {
     }
 }
 
+@MainActor
+final class MobileStreamSurfaceCoordinator {
+    typealias InputOutputHandler = @MainActor (InputAdapterOutput) -> Void
+
+    let presenter: StreamMetalPresenter
+    private(set) var currentGeometryBinding:
+        MobileStreamGeometryBindingSnapshot?
+    private var renderState: StreamRenderState
+    private var inputOutputHandler: InputOutputHandler
+    private var ownsMobileGeometry = false
+
+    init(
+        presentationSource: StreamVideoPresentationSource,
+        renderState: StreamRenderState,
+        inputOutputHandler: @escaping InputOutputHandler = { _ in },
+        diagnosticHandler: @escaping StreamMetalPresenter.DiagnosticHandler = {
+            _ in
+        },
+        diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
+    ) {
+        self.renderState = renderState
+        self.inputOutputHandler = inputOutputHandler
+        presenter = StreamMetalPresenter(
+            presentationSource: presentationSource,
+            renderState: renderState,
+            diagnosticHandler: diagnosticHandler,
+            diagnosticLease: diagnosticLease
+        )
+    }
+
+    func update(
+        renderState: StreamRenderState,
+        inputOutputHandler: @escaping InputOutputHandler
+    ) {
+        self.renderState = renderState
+        self.inputOutputHandler = inputOutputHandler
+        applyCurrentGeometry()
+    }
+
+    func handleGeometryBinding(
+        _ binding: MobileStreamGeometryBindingSnapshot?
+    ) {
+        ownsMobileGeometry = true
+        currentGeometryBinding = binding
+        applyCurrentGeometry()
+    }
+
+    func handleInputOutput(_ output: InputAdapterOutput) {
+        inputOutputHandler(output)
+    }
+
+    private func applyCurrentGeometry() {
+        if let coordinateSnapshot = currentGeometryBinding?.coordinateSnapshot {
+            if renderState.transform.sourceSize == coordinateSnapshot.sourceSize,
+               renderState.transform.mode == coordinateSnapshot.mode {
+                if renderState.transform.drawableSize
+                    != coordinateSnapshot.drawableSize {
+                    renderState.transform.drawableSize =
+                        coordinateSnapshot.drawableSize
+                }
+            } else if renderState.transform.drawableSize != .zero {
+                renderState.transform.drawableSize = .zero
+            }
+        } else if ownsMobileGeometry,
+                  renderState.transform.drawableSize != .zero {
+            renderState.transform.drawableSize = .zero
+        }
+        presenter.update(renderState: renderState)
+    }
+}
+
 #if os(macOS)
 @MainActor
 final class MacStreamSurfaceAttachmentOwner {
@@ -2028,38 +2336,73 @@ final class MobileStreamMetalView: MTKView {
         UIScreen
     >
     typealias SceneWindowSnapshotHandler = SceneGeometryObserver.Handler
+    typealias GeometryBindingOwner =
+        MobileStreamGeometryBindingOwner<MobileStreamMetalView>
+    typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
+    typealias InputOutputHandler = MobileStreamSurfaceCoordinator.InputOutputHandler
 
     private var attachmentRelay:
         MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>?
     private var attachmentOwner: AttachmentOwner?
     private var sceneLifecycleObserver: SceneLifecycleObserver?
     private var sceneGeometryObserver: SceneGeometryObserver?
+    private var geometryBindingOwner: GeometryBindingOwner?
     private var sceneGeometrySettleTask: Task<Void, Never>?
     private var attachmentUpdateHandler: AttachmentUpdateHandler?
     private var sceneLifecycleUpdateHandler: SceneLifecycleUpdateHandler?
     private var sceneWindowSnapshotHandler: SceneWindowSnapshotHandler?
+    private var inputOutputHandler: InputOutputHandler?
+    private var hoverGestureRecognizer: UIHoverGestureRecognizer?
+    private var touchIDs: [ObjectIdentifier: Int] = [:]
+    private var nextTouchID = 1
+    private var isTouchIDSequenceExhausted = false
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 
     init(
         frame frameRect: CGRect = .zero,
         device: (any MTLDevice)? = nil,
+        sourceSize: PixelSize = .zero,
+        mode: RenderScaleMode = .fit,
         attachmentEventHandler: @escaping AttachmentEventHandler = { _, _ in },
         attachmentUpdateHandler: @escaping AttachmentUpdateHandler = { _ in },
         sceneLifecycleUpdateHandler:
             @escaping SceneLifecycleUpdateHandler = { _ in },
         sceneWindowSnapshotHandler:
-            @escaping SceneWindowSnapshotHandler = { _ in }
+            @escaping SceneWindowSnapshotHandler = { _ in },
+        geometryBindingUpdateHandler:
+            @escaping GeometryBindingUpdateHandler = { _ in },
+        inputOutputHandler: @escaping InputOutputHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
+        autoResizeDrawable = false
+        isMultipleTouchEnabled = true
         self.attachmentUpdateHandler = attachmentUpdateHandler
         self.sceneLifecycleUpdateHandler = sceneLifecycleUpdateHandler
         self.sceneWindowSnapshotHandler = sceneWindowSnapshotHandler
+        self.inputOutputHandler = inputOutputHandler
         attachmentRelay = MobileStreamSurfaceAttachmentRelay(
             surface: self,
             handler: attachmentEventHandler
         )
         if let surfaceGeneration = MobileStreamSurfaceGenerationSequence.next() {
+            geometryBindingOwner = GeometryBindingOwner(
+                surfaceGeneration: surfaceGeneration,
+                surface: self,
+                sourceSize: sourceSize,
+                mode: mode,
+                drawableApplier: { surface, size in
+                    surface.drawableSize = CGSize(
+                        width: size.width,
+                        height: size.height
+                    )
+                    return surface.drawableSize == CGSize(
+                        width: size.width,
+                        height: size.height
+                    )
+                },
+                handler: geometryBindingUpdateHandler
+            )
             sceneLifecycleObserver = SceneLifecycleObserver(
                 surfaceGeneration: surfaceGeneration,
                 notificationCenter: .default,
@@ -2111,7 +2454,7 @@ final class MobileStreamMetalView: MTKView {
                     )
                 },
                 handler: { [weak self] snapshot in
-                    self?.sceneWindowSnapshotHandler?(snapshot)
+                    self?.handleSceneWindowSnapshot(snapshot)
                 },
                 settleRequestHandler: { [weak self] request in
                     self?.scheduleGeometrySettle(request)
@@ -2136,6 +2479,12 @@ final class MobileStreamMetalView: MTKView {
                 }
             )
         }
+        let hoverGestureRecognizer = UIHoverGestureRecognizer(
+            target: self,
+            action: #selector(handlePointerHover(_:))
+        )
+        addGestureRecognizer(hoverGestureRecognizer)
+        self.hoverGestureRecognizer = hoverGestureRecognizer
         traitChangeRegistration = registerForTraitChanges([
             UITraitHorizontalSizeClass.self,
             UITraitVerticalSizeClass.self,
@@ -2166,6 +2515,38 @@ final class MobileStreamMetalView: MTKView {
         publishAttachmentEvent(.safeAreaInsetsDidChange)
     }
 
+    override func touchesBegan(
+        _ touches: Set<UITouch>,
+        with event: UIEvent?
+    ) {
+        super.touchesBegan(touches, with: event)
+        publishTouches(touches, phase: .began)
+    }
+
+    override func touchesMoved(
+        _ touches: Set<UITouch>,
+        with event: UIEvent?
+    ) {
+        super.touchesMoved(touches, with: event)
+        publishTouches(touches, phase: .moved)
+    }
+
+    override func touchesEnded(
+        _ touches: Set<UITouch>,
+        with event: UIEvent?
+    ) {
+        super.touchesEnded(touches, with: event)
+        publishTouches(touches, phase: .ended)
+    }
+
+    override func touchesCancelled(
+        _ touches: Set<UITouch>,
+        with event: UIEvent?
+    ) {
+        super.touchesCancelled(touches, with: event)
+        publishTouches(touches, phase: .cancelled)
+    }
+
     func updateAttachmentEventHandler(
         _ handler: @escaping AttachmentEventHandler
     ) {
@@ -2190,10 +2571,38 @@ final class MobileStreamMetalView: MTKView {
         sceneWindowSnapshotHandler = handler
     }
 
+    func updateGeometryBinding(
+        sourceSize: PixelSize,
+        mode: RenderScaleMode,
+        handler: @escaping GeometryBindingUpdateHandler,
+        inputOutputHandler: @escaping InputOutputHandler
+    ) {
+        self.inputOutputHandler = inputOutputHandler
+        guard let geometryBindingOwner else { return }
+        geometryBindingOwner.updateHandler(handler)
+        geometryBindingOwner.updateRenderInputs(
+            sourceSize: sourceSize,
+            mode: mode,
+            surface: self,
+            surfaceGeneration: geometryBindingOwner.surfaceGeneration
+        )
+    }
+
     func invalidateAttachmentCallbacks() {
         if let traitChangeRegistration {
             unregisterForTraitChanges(traitChangeRegistration)
             self.traitChangeRegistration = nil
+        }
+        if let hoverGestureRecognizer {
+            removeGestureRecognizer(hoverGestureRecognizer)
+            self.hoverGestureRecognizer = nil
+        }
+        if let geometryBindingOwner {
+            geometryBindingOwner.invalidate(
+                surface: self,
+                surfaceGeneration: geometryBindingOwner.surfaceGeneration
+            )
+            self.geometryBindingOwner = nil
         }
         if let attachmentOwner {
             attachmentOwner.invalidate(
@@ -2209,6 +2618,8 @@ final class MobileStreamMetalView: MTKView {
         attachmentUpdateHandler = nil
         sceneLifecycleUpdateHandler = nil
         sceneWindowSnapshotHandler = nil
+        inputOutputHandler = nil
+        touchIDs.removeAll(keepingCapacity: false)
         attachmentRelay?.invalidate()
         attachmentRelay = nil
     }
@@ -2278,6 +2689,109 @@ final class MobileStreamMetalView: MTKView {
             )
         }
         sceneLifecycleUpdateHandler?(update)
+    }
+
+    private func handleSceneWindowSnapshot(
+        _ snapshot: MobileSceneWindowSnapshot
+    ) {
+        if let geometryBindingOwner {
+            geometryBindingOwner.update(
+                snapshot,
+                surface: self,
+                surfaceGeneration: geometryBindingOwner.surfaceGeneration
+            )
+        }
+        sceneWindowSnapshotHandler?(snapshot)
+    }
+
+    private func publishTouches(
+        _ touches: Set<UITouch>,
+        phase: TouchPhase
+    ) {
+        let samples = touches.compactMap { touch -> TouchSample? in
+            let identity = ObjectIdentifier(touch)
+            guard let id = touchID(for: identity, phase: phase) else {
+                return nil
+            }
+            let location = touch.location(in: self)
+            let maximumForce = Double(touch.maximumPossibleForce)
+            let pressure = maximumForce > 0
+                ? Double(touch.force) / maximumForce
+                : 0
+            return TouchSample(
+                id: id,
+                phase: phase,
+                localPoint: RemotePoint(
+                    x: Double(location.x),
+                    y: Double(location.y)
+                ),
+                pressure: pressure
+            )
+        }.sorted { $0.id < $1.id }
+
+        for sample in samples {
+            publishInputOutput(
+                geometryBindingOwner?.touch(sample)
+                    ?? unavailableInputOutput()
+            )
+        }
+        if phase == .ended || phase == .cancelled {
+            for touch in touches {
+                touchIDs.removeValue(forKey: ObjectIdentifier(touch))
+            }
+        }
+    }
+
+    private func touchID(
+        for identity: ObjectIdentifier,
+        phase: TouchPhase
+    ) -> Int? {
+        if let existing = touchIDs[identity] {
+            return existing
+        }
+        guard phase == .began,
+              !isTouchIDSequenceExhausted,
+              nextTouchID > 0 else {
+            return nil
+        }
+        let assigned = nextTouchID
+        touchIDs[identity] = assigned
+        if nextTouchID == Int.max {
+            isTouchIDSequenceExhausted = true
+        } else {
+            nextTouchID += 1
+        }
+        return assigned
+    }
+
+    @objc
+    private func handlePointerHover(
+        _ recognizer: UIHoverGestureRecognizer
+    ) {
+        guard recognizer.state == .began || recognizer.state == .changed else {
+            return
+        }
+        let location = recognizer.location(in: self)
+        publishInputOutput(
+            geometryBindingOwner?.pointerHover(PointerHoverSample(
+                localPoint: RemotePoint(
+                    x: Double(location.x),
+                    y: Double(location.y)
+                ),
+                buttons: []
+            )) ?? unavailableInputOutput()
+        )
+    }
+
+    private func publishInputOutput(_ output: InputAdapterOutput) {
+        inputOutputHandler?(output)
+    }
+
+    private func unavailableInputOutput() -> InputAdapterOutput {
+        InputAdapterOutput(
+            event: nil,
+            policy: .drop(reason: "Mobile geometry is unavailable")
+        )
     }
 
     private func scheduleGeometrySettle(
@@ -2361,6 +2875,9 @@ struct MetalStreamSurface: UIViewRepresentable {
     let presentationSource: StreamVideoPresentationSource
     var diagnosticHandler: StreamMetalPresenter.DiagnosticHandler = { _ in }
     var diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
+    var inputOutputHandler: MobileStreamSurfaceCoordinator.InputOutputHandler = {
+        _ in
+    }
 #if os(iOS)
     var attachmentEventHandler: MobileStreamMetalView.AttachmentEventHandler = {
         _, _ in
@@ -2373,10 +2890,11 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamMetalView.SceneWindowSnapshotHandler = { _ in }
 #endif
 
-    func makeCoordinator() -> StreamMetalPresenter {
-        StreamMetalPresenter(
+    func makeCoordinator() -> MobileStreamSurfaceCoordinator {
+        MobileStreamSurfaceCoordinator(
             presentationSource: presentationSource,
             renderState: renderState,
+            inputOutputHandler: inputOutputHandler,
             diagnosticHandler: diagnosticHandler,
             diagnosticLease: diagnosticLease
         )
@@ -2384,13 +2902,24 @@ struct MetalStreamSurface: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MTKView {
 #if os(iOS)
+        context.coordinator.handleGeometryBinding(nil)
         let view = MobileStreamMetalView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
+            sourceSize: renderState.transform.sourceSize,
+            mode: renderState.transform.mode,
             attachmentEventHandler: attachmentEventHandler,
             attachmentUpdateHandler: attachmentUpdateHandler,
             sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler,
-            sceneWindowSnapshotHandler: sceneWindowSnapshotHandler
+            sceneWindowSnapshotHandler: sceneWindowSnapshotHandler,
+            geometryBindingUpdateHandler: { [weak coordinator = context.coordinator]
+                binding in
+                coordinator?.handleGeometryBinding(binding)
+            },
+            inputOutputHandler: { [weak coordinator = context.coordinator]
+                output in
+                coordinator?.handleInputOutput(output)
+            }
         )
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -2398,12 +2927,16 @@ struct MetalStreamSurface: UIViewRepresentable {
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
-        context.coordinator.configure(view)
+        context.coordinator.presenter.configure(view)
         return view
     }
 
     func updateUIView(_ view: MTKView, context: Context) {
 #if os(iOS)
+        context.coordinator.update(
+            renderState: renderState,
+            inputOutputHandler: inputOutputHandler
+        )
         (view as? MobileStreamMetalView)?
             .updateAttachmentEventHandler(attachmentEventHandler)
         (view as? MobileStreamMetalView)?
@@ -2412,25 +2945,46 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateSceneLifecycleUpdateHandler(sceneLifecycleUpdateHandler)
         (view as? MobileStreamMetalView)?
             .updateSceneWindowSnapshotHandler(sceneWindowSnapshotHandler)
+        (view as? MobileStreamMetalView)?
+            .updateGeometryBinding(
+                sourceSize: renderState.transform.sourceSize,
+                mode: renderState.transform.mode,
+                handler: { [weak coordinator = context.coordinator] binding in
+                    coordinator?.handleGeometryBinding(binding)
+                },
+                inputOutputHandler: {
+                    [weak coordinator = context.coordinator] output in
+                    coordinator?.handleInputOutput(output)
+                }
+            )
+#else
+        context.coordinator.update(
+            renderState: renderState,
+            inputOutputHandler: { _ in }
+        )
 #endif
-        context.coordinator.update(renderState: renderState)
         let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)
         view.isPaused = schedule.isPaused
         view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
+#if !os(iOS)
         if let snapshot = renderState.coordinateSnapshot {
             view.drawableSize = CGSize(
                 width: snapshot.drawableSize.width,
                 height: snapshot.drawableSize.height
             )
         }
+#endif
         if schedule.requestsImmediateDraw { view.draw() }
     }
 
-    static func dismantleUIView(_ view: MTKView, coordinator: StreamMetalPresenter) {
+    static func dismantleUIView(
+        _ view: MTKView,
+        coordinator: MobileStreamSurfaceCoordinator
+    ) {
 #if os(iOS)
         (view as? MobileStreamMetalView)?.invalidateAttachmentCallbacks()
 #endif
-        coordinator.stop()
+        coordinator.presenter.stop()
         view.delegate = nil
         view.isPaused = true
     }

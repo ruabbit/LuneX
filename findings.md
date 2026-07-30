@@ -1848,3 +1848,30 @@
 - final focused为`5/5`、expanded为`53/53`、full为`785 total / 784 passed / 1 explicit Keychain skip / 0 failed`。修正后的iOS API build和macOS/iOS/tvOS/visionOS generic Debug均成功，所有xcresult结构化error、warning与analyzer warning为0。
 - generator连续两次及生成前SHA-256均为`401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`；OpenSpec strict、membership、actual-view-only静态边界和`git diff --check`通过。
 - 固定iPhone/iPad只读清单仍各唯一、available、`Shutdown`且全局`Booted=0`；没有创建、克隆、启动、安装、运行、关闭或删除模拟器。当前证据不证明live Stage Manager/rotation/external display、2.5 drawable/video/input绑定、PiP/background、mobile EDR、signed/physical/live Sunshine。
+
+## 2026-07-30 阶段 17 任务 2.5 调查
+
+- `StreamVideoRectangleResolver`已统一计算fit video rect与fill source crop，`StreamCoordinateSnapshotPublisher`对source/drawable/mode做immutable semantic revision，`InputMapper`用同一resolved video拒绝letterbox并转换remote absolute coordinate。
+- `TouchInputAdapter`已从coordinate snapshot构造normalized touch与absolute hover事件，因此2.5不应复制另一套比例算法；mobile只需把UIKit view point按当前normalized geometry的bounds origin和scale转换成drawable point后复用该adapter。
+- `MetalStreamSurface.updateUIView`此前只读取`renderState.coordinateSnapshot`设置drawable；actual mobile scene snapshot仅对外回调且RootView没有接收。2.5需要在`MobileStreamMetalView`内部建立可注入、可测试、current-generation binding，并同步通知presenter使用更新后的render-state coordinate。
+- 绑定合同必须显式携带`MobileSceneWindowRevision`，同时保留`StreamCoordinateSnapshot`自己的checked revision以覆盖同一geometry下source size或fit/fill mode变化；不能把scene revision直接冒充所有coordinate semantic changes。
+- owner focused `4/4`证明valid/invalid geometry、fit/fill、touch/hover、stale generation/surface、drawable apply failure、recovery和late invalidation值边界，但尚不证明actual `MTKView`使用该owner。production接线必须在scene snapshot外部回调前先更新binding，并在关闭时同步把render-state drawable归零。
+- UIKit触控捕获只在view main actor内用`ObjectIdentifier`维护短生命周期touch identity，并向外发布closed `InputAdapterOutput`；不得持久化或跨actor传递`UITouch`、window、scene或screen对象。2.5只建立捕获/映射/抑制边界，AppModel和Moonlight input transport接线属于5.x。
+- `MobileStreamSurfaceCoordinator`不能用旧binding反向覆盖AppModel刚更新的source size或fit/fill mode；它只在binding source/mode与current render inputs精确匹配时应用drawable，否则归零并等待view owner重新解析。这样renderer与input不会在SwiftUI update间隙使用不同source/mode。
+- drawable applier可能因surface replacement或临时Metal状态返回false；owner清binding后必须允许相同scene snapshot或相同render inputs重新调用`resolveBinding()`，不能依赖另一个语义变化才能恢复。
+- production `MobileStreamMetalView`关闭`autoResizeDrawable`，同一个binding owner负责actual `drawableSize`；scene snapshot先进入binding再转发外部handler。UIKit多点触控和hover只发布映射后的`InputAdapterOutput`，detached/invalid/stale状态返回typed drop，当前阶段不直接调用AppModel网络发送。
+- 恢复后没有重跑已在运行的expanded命令；原会话最终产物`/tmp/LuneX-17-2_5-expanded.I2l8Za/Expanded.xcresult`结构化确认为`88/88 passed / 0 skipped / 0 failed / 0 expected failure`，build-results为`succeeded`且error、warning、analyzer warning均为0。
+- 完整macOS normal suite`/tmp/LuneX-17-2_5-full.YHUnbC/Full.xcresult`结构化为`790 total / 789 passed / 1 skipped / 0 failed / 0 expected failure`，唯一skip由同轮原始日志精确确认为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，build-results为`succeeded`且三类诊断均为0。
+- Xcode 26.4在读取该bundle的tests明细时再次报告内部`database.sqlite3`同名move错误；summary、build-results与原始日志均可读，故不重复已经成功的suite，也不把工具明细读取缺陷误记为测试失败。
+- exact-source四平台generic Debug build位于`/tmp/LuneX-17-2_5-builds.fF2JX1`；macOS、iOS、tvOS与visionOS均`succeeded`，四份bundle的error、warning、analyzer warning均为0，每个平台各生成一个`HDRVideoShaders.air`和一个`default.metallib`。这些是SDK/generic-device编译证据，不是simulator或物理设备运行证据。
+- 单次只读simulator inventory保存于`/tmp/LuneX-17-2_5-simulator.yZPAhn/devices.json`；固定iPhone 17 Pro与iPad Pro 13-inch (M5) UUID各唯一且在iOS 26.4 runtime中名称各唯一，均available、`Shutdown`，全局`Booted=0`。没有执行任何simulator生命周期操作。
+
+## 2026-07-30 阶段 17 任务 2.5 验收
+
+- current-generation geometry binding把同一个`MobileSceneWindowRevision`与独立checked `StreamCoordinateSnapshot`绑定到actual drawable、fit/fill video mapping和touch/absolute hover；scene revision不冒充source/mode变化产生的coordinate revision。
+- invalid、detached、stale surface/generation、source/mode mismatch与drawable application failure都会清除coordinate binding、归零render drawable并抑制绝对输入；临时drawable失败后相同scene或render inputs可重试，不依赖额外语义变化。
+- `MobileStreamMetalView`关闭`autoResizeDrawable`并在转发外部scene handler前更新binding；`updateUIView`在iOS不再从独立旧coordinate snapshot写drawable。UIKit对象与touch identity只在main actor内短生命周期持有，网络发送和AppModel接线仍属于5.x。
+- final focused为`5/5`、expanded为`88/88`、完整macOS为`790 total / 789 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug为4/4 succeeded，所有结构化error、warning、analyzer warning均为0。
+- repository pre-gate`/tmp/LuneX-17-2_5-repository-pre.vb0AcX`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `9/36`且next为2.5、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、静态平台/隐私/网络边界、全部证据读回、Keychain opt-in关闭与`git diff --check`。
+- 固定iPhone/iPad只读inventory各唯一、available、`Shutdown`且全局`Booted=0`。本项不证明live UIKit touch、Stage Manager/rotation/external display、Moonlight input delivery、PiP/background、mobile EDR、signed/physical/live Sunshine；这些门保持pending。
+- 标记后的repository final gate`/tmp/LuneX-17-2_5-repository-final.wjEq5N`通过strict `1/1`、apply `10/36`且next精确为2.6、fixture、generator连续稳定SHA-256、production/test静态边界、全部既有test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。

@@ -764,6 +764,411 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertNil(observer.currentSurface)
     }
 
+    @MainActor
+    func testMobileGeometryBindingAppliesOneRevisionToDrawableVideoAndInput()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 141)!
+        let surface = MobileGeometryBindingTestSurface()
+        var bindings: [MobileStreamGeometryBindingSnapshot?] = []
+        let owner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            mode: .fit,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { bindings.append($0) }
+        )
+        let sceneSnapshot = mobileGeometryBindingTestSnapshot(
+            generation: generation,
+            revision: 7,
+            viewBounds: MobileSceneRect(
+                x: 10,
+                y: 20,
+                width: 400,
+                height: 300
+            ),
+            scale: 2
+        )
+
+        XCTAssertEqual(
+            owner.update(
+                sceneSnapshot,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+
+        let binding = try XCTUnwrap(owner.currentBinding)
+        XCTAssertEqual(binding.sceneWindowRevision.rawValue, 7)
+        XCTAssertEqual(
+            binding.coordinateSnapshot.drawableSize,
+            PixelSize(width: 800, height: 600)
+        )
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [PixelSize(width: 800, height: 600)]
+        )
+        XCTAssertEqual(bindings, [binding])
+
+        let touch = owner.touch(TouchSample(
+            id: 3,
+            phase: .moved,
+            localPoint: RemotePoint(x: 210, y: 170),
+            pressure: 0.5
+        ))
+        XCTAssertEqual(touch.policy, .deliver)
+        XCTAssertEqual(touch.event, .touch(TouchInputEvent(
+            id: 3,
+            phase: .moved,
+            point: RemotePoint(x: 960, y: 540),
+            pressure: 0.5,
+            referenceSize: PixelSize(width: 1_920, height: 1_080)
+        )))
+        XCTAssertNil(owner.touch(TouchSample(
+            id: 4,
+            phase: .began,
+            localPoint: RemotePoint(x: 210, y: 40),
+            pressure: 1
+        )).event)
+    }
+
+    @MainActor
+    func testMobileGeometryBindingRevisesResizeAndFitFillAtomically()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 151)!
+        let surface = MobileGeometryBindingTestSurface()
+        let owner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            mode: .fit,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { _ in }
+        )
+        _ = owner.update(
+            mobileGeometryBindingTestSnapshot(
+                generation: generation,
+                revision: 1
+            ),
+            surface: surface,
+            surfaceGeneration: generation
+        )
+        let fit = try XCTUnwrap(owner.currentBinding)
+
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: PixelSize(width: 1_920, height: 1_080),
+                mode: .fill,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        let fill = try XCTUnwrap(owner.currentBinding)
+        XCTAssertEqual(fill.sceneWindowRevision, fit.sceneWindowRevision)
+        XCTAssertNotEqual(
+            fill.coordinateSnapshot.revision,
+            fit.coordinateSnapshot.revision
+        )
+        XCTAssertEqual(fill.coordinateSnapshot.mode, .fill)
+        XCTAssertEqual(surface.appliedDrawableSizes.count, 1)
+        guard case let .pointer(.absoluteMove(point, referenceSize, _)) =
+            owner.pointerHover(PointerHoverSample(
+                localPoint: RemotePoint(x: 0, y: 150),
+                buttons: []
+            )).event else {
+            return XCTFail("Expected a fill-mapped absolute pointer")
+        }
+        XCTAssertEqual(point.x, 240, accuracy: 0.000_001)
+        XCTAssertEqual(point.y, 540, accuracy: 0.000_001)
+        XCTAssertEqual(
+            referenceSize,
+            PixelSize(width: 1_920, height: 1_080)
+        )
+
+        XCTAssertEqual(
+            owner.update(
+                mobileGeometryBindingTestSnapshot(
+                    generation: generation,
+                    revision: 2,
+                    viewBounds: MobileSceneRect(
+                        x: 0,
+                        y: 0,
+                        width: 600,
+                        height: 300
+                    ),
+                    scale: 2
+                ),
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            owner.currentBinding?.coordinateSnapshot.drawableSize,
+            PixelSize(width: 1_200, height: 600)
+        )
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [
+                PixelSize(width: 800, height: 600),
+                PixelSize(width: 1_200, height: 600)
+            ]
+        )
+    }
+
+    @MainActor
+    func testMobileGeometryBindingClearsInvalidGeometryAndSuppressesInput()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 161)!
+        let surface = MobileGeometryBindingTestSurface()
+        var bindings: [MobileStreamGeometryBindingSnapshot?] = []
+        let owner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            mode: .fit,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { bindings.append($0) }
+        )
+        _ = owner.update(
+            mobileGeometryBindingTestSnapshot(
+                generation: generation,
+                revision: 1
+            ),
+            surface: surface,
+            surfaceGeneration: generation
+        )
+
+        XCTAssertEqual(
+            owner.update(
+                MobileSceneWindowSnapshot(
+                    surfaceGeneration: generation,
+                    revision: MobileSceneWindowRevision(rawValue: 2),
+                    state: .unavailable(
+                        activity: .active,
+                        reason: .invalidViewBounds
+                    )
+                ),
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .closed
+        )
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertEqual(surface.appliedDrawableSizes.last, .zero)
+        XCTAssertEqual(bindings.count, 2)
+        XCTAssertNil(bindings.last!)
+        let touch = owner.touch(TouchSample(
+            id: 1,
+            phase: .began,
+            localPoint: RemotePoint(x: 200, y: 150),
+            pressure: 1
+        ))
+        XCTAssertNil(touch.event)
+        XCTAssertEqual(
+            touch.policy,
+            .drop(reason: "Mobile geometry is unavailable")
+        )
+        XCTAssertEqual(
+            owner.pointerHover(PointerHoverSample(
+                localPoint: RemotePoint(x: 200, y: 150),
+                buttons: []
+            )).policy,
+            .drop(reason: "Mobile geometry is unavailable")
+        )
+    }
+
+    @MainActor
+    func testMobileGeometryBindingRejectsStaleFailureAndLateWork()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 171)!
+        let staleGeneration = MobileSceneSurfaceGeneration(rawValue: 172)!
+        let surface = MobileGeometryBindingTestSurface()
+        let otherSurface = MobileGeometryBindingTestSurface()
+        let owner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            mode: .fit,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return !surface.rejectDrawableApplication
+            },
+            handler: { _ in }
+        )
+        let snapshot = mobileGeometryBindingTestSnapshot(
+            generation: generation,
+            revision: 1
+        )
+
+        XCTAssertEqual(
+            owner.update(
+                snapshot,
+                surface: surface,
+                surfaceGeneration: staleGeneration
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            owner.update(
+                snapshot,
+                surface: otherSurface,
+                surfaceGeneration: generation
+            ),
+            .staleSurface
+        )
+        surface.rejectDrawableApplication = true
+        XCTAssertEqual(
+            owner.update(
+                snapshot,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .drawableApplicationFailed
+        )
+        XCTAssertNil(owner.currentBinding)
+        surface.rejectDrawableApplication = false
+        XCTAssertEqual(
+            owner.update(
+                snapshot,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertNotNil(owner.currentBinding)
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .invalidated
+        )
+        XCTAssertEqual(
+            owner.update(
+                mobileGeometryBindingTestSnapshot(
+                    generation: generation,
+                    revision: 2
+                ),
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertNil(owner.currentSurface)
+    }
+
+    @MainActor
+    func testMobileSurfaceCoordinatorSynchronizesGeometryAndInputBoundary()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 181)!
+        let sceneSnapshot = mobileGeometryBindingTestSnapshot(
+            generation: generation,
+            revision: 9,
+            viewBounds: MobileSceneRect(
+                x: 0,
+                y: 0,
+                width: 600,
+                height: 400
+            ),
+            scale: 2
+        )
+        guard case let .attached(_, _, geometry) = sceneSnapshot.state else {
+            return XCTFail("Expected attached mobile geometry")
+        }
+        let coordinates = try XCTUnwrap(StreamCoordinateSnapshot.resolve(
+            revision: 7,
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            drawableSize: geometry.drawableSize,
+            mode: .fill
+        ))
+        let binding = MobileStreamGeometryBindingSnapshot(
+            surfaceGeneration: generation,
+            sceneWindowRevision: sceneSnapshot.revision,
+            geometry: geometry,
+            coordinateSnapshot: coordinates
+        )
+        let initialState = StreamRenderState(transform: RenderTransform(
+            sourceSize: coordinates.sourceSize,
+            drawableSize: PixelSize(width: 320, height: 240),
+            mode: coordinates.mode
+        ))
+        var firstOutputs: [InputAdapterOutput] = []
+        let coordinator = MobileStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: initialState,
+            inputOutputHandler: { firstOutputs.append($0) }
+        )
+
+        coordinator.handleGeometryBinding(binding)
+
+        XCTAssertEqual(coordinator.currentGeometryBinding, binding)
+        XCTAssertEqual(
+            initialState.transform,
+            RenderTransform(
+                sourceSize: coordinates.sourceSize,
+                drawableSize: coordinates.drawableSize,
+                mode: coordinates.mode
+            )
+        )
+        XCTAssertEqual(
+            initialState.coordinateSnapshot?.resolvedVideo,
+            coordinates.resolvedVideo
+        )
+
+        let replacementState = StreamRenderState()
+        var replacementOutputs: [InputAdapterOutput] = []
+        coordinator.update(
+            renderState: replacementState,
+            inputOutputHandler: { replacementOutputs.append($0) }
+        )
+        XCTAssertEqual(replacementState.transform, RenderTransform())
+
+        replacementState.transform.sourceSize = coordinates.sourceSize
+        replacementState.transform.mode = coordinates.mode
+        coordinator.update(
+            renderState: replacementState,
+            inputOutputHandler: { replacementOutputs.append($0) }
+        )
+        XCTAssertEqual(
+            replacementState.transform,
+            RenderTransform(
+                sourceSize: coordinates.sourceSize,
+                drawableSize: coordinates.drawableSize,
+                mode: coordinates.mode
+            )
+        )
+
+        let output = InputAdapterOutput(
+            event: nil,
+            policy: .drop(reason: "bounded mobile input")
+        )
+        coordinator.handleInputOutput(output)
+        XCTAssertTrue(firstOutputs.isEmpty)
+        XCTAssertEqual(replacementOutputs, [output])
+
+        coordinator.handleGeometryBinding(nil)
+        XCTAssertNil(coordinator.currentGeometryBinding)
+        XCTAssertEqual(replacementState.transform.drawableSize, .zero)
+        XCTAssertNil(replacementState.coordinateSnapshot)
+    }
+
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
         let frame = try makeFrame(
             generation: 7,
@@ -2132,6 +2537,9 @@ private typealias MobileSceneGeometryTestObserver =
         MobileSceneGeometryTestScreen
     >
 
+private typealias MobileGeometryBindingTestOwner =
+    MobileStreamGeometryBindingOwner<MobileGeometryBindingTestSurface>
+
 private final class MobileSurfaceAttachmentTestSurface {
     var window: MobileSurfaceAttachmentTestWindow?
 
@@ -2188,6 +2596,11 @@ private final class MobileSceneGeometryTestWindow {}
 private final class MobileSceneGeometryTestScene {}
 private final class MobileSceneGeometryTestScreen {}
 
+private final class MobileGeometryBindingTestSurface {
+    var appliedDrawableSizes: [PixelSize] = []
+    var rejectDrawableApplication = false
+}
+
 @MainActor
 private func mobileSceneGeometryTestReader(
     _ surface: MobileSceneGeometryTestSurface,
@@ -2222,6 +2635,44 @@ private func mobileSceneGeometryTestReading(
             horizontalSizeClass: .regular,
             verticalSizeClass: .regular,
             interfaceStyle: .dark
+        )
+    )
+}
+
+private func mobileGeometryBindingTestSnapshot(
+    generation: MobileSceneSurfaceGeneration,
+    revision: UInt64,
+    viewBounds: MobileSceneRect = MobileSceneRect(
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 300
+    ),
+    scale: Double = 2
+) -> MobileSceneWindowSnapshot {
+    MobileSceneWindowSnapshot(
+        surfaceGeneration: generation,
+        revision: MobileSceneWindowRevision(rawValue: revision),
+        state: .attached(
+            activity: .active,
+            display: MobileDisplayGeneration(rawValue: 1)!,
+            geometry: MobileSceneWindowGeometry(
+                viewBounds: viewBounds,
+                windowBounds: viewBounds,
+                safeAreaInsets: .zero,
+                scale: scale,
+                drawableSize: PixelSize(
+                    width: Int(viewBounds.width * scale),
+                    height: Int(viewBounds.height * scale)
+                ),
+                orientation: .landscapeLeft,
+                traits: MobileSceneTraits(
+                    horizontalSizeClass: .regular,
+                    verticalSizeClass: .regular,
+                    interfaceStyle: .dark
+                ),
+                resizePhase: .settled
+            )
         )
     )
 }
