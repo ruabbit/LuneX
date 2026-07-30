@@ -1875,3 +1875,24 @@
 - repository pre-gate`/tmp/LuneX-17-2_5-repository-pre.vb0AcX`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `9/36`且next为2.5、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、静态平台/隐私/网络边界、全部证据读回、Keychain opt-in关闭与`git diff --check`。
 - 固定iPhone/iPad只读inventory各唯一、available、`Shutdown`且全局`Booted=0`。本项不证明live UIKit touch、Stage Manager/rotation/external display、Moonlight input delivery、PiP/background、mobile EDR、signed/physical/live Sunshine；这些门保持pending。
 - 标记后的repository final gate`/tmp/LuneX-17-2_5-repository-final.wjEq5N`通过strict `1/1`、apply `10/36`且next精确为2.6、fixture、generator连续稳定SHA-256、production/test静态边界、全部既有test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 2.6 调查
+
+- 现有测试已分别覆盖attachment relay/owner、wrong-scene notification过滤、scene replacement/cancellation、连续resize/settle token、display/activity/detach、invalid/stale/invalidation、fit/fill/input和coordinator source/mode fail-closed，因此2.6不重复这些基础case。
+- 缺口一是rotation、safe-area与trait连续变化尚未在同一geometry observer序列中验证各自semantic revision、resize phase、drawable和opaque display identity保持关系。
+- 缺口二是safe-area/trait等不改变source/drawable/mode的scene revision应发布新binding但复用同一个coordinate revision；rotation/size变化才应同时改变coordinate revision和drawable，避免无意义重建或遗漏scene语义。
+- 缺口三是owner与coordinator尚无组合teardown测试：invalidate必须先通过nil binding同步清renderer coordinate/drawable，随后迟到geometry work拒绝且touch/hover继续typed drop。
+- 2.6计划只扩展确定性测试夹具与组合矩阵，不修改production；actual UIKit callback可达性仍由iOS SDK warnings-as-errors build证明，live rotation/Stage Manager/touch仍保留给6.6物理门。
+- 新增的三个组合测试从`/tmp/LuneX-17-2_6-focused.VPjCwq/Focused.xcresult`一次通过`3/3 passed / 0 skipped / 0 failed / 0 expected failure`，结构化error、warning、analyzer warning均为0；没有修改production。
+- 扩展回归从既有`/tmp/LuneX-17-2_6-expanded.LujnSa/Expanded.xcresult`结构化读回为`91/91 passed / 0 skipped / 0 failed / 0 expected failure`；build status为`succeeded`，error、warning、analyzer warning均为0。恢复后没有重跑该suite。
+- 完整macOS normal suite从全新`/tmp/LuneX-17-2_6-full.sm8U4i`运行，结构化为`793 total / 792 passed / 1 skipped / 0 failed / 0 expected failure`；唯一skip由同轮原始日志精确确认为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，build status为`succeeded`且error、warning、analyzer warning均为0。
+- exact-source四平台generic Debug build证据位于`/tmp/LuneX-17-2_6-builds-r2.cWlehS`；macOS、iOS/iPadOS、tvOS和visionOS四个bundle均为`succeeded`且error、warning、analyzer warning为0，每个平台各产生一个`HDRVideoShaders.air`和`default.metallib`。构建只使用generic destination，没有选择或启动simulator。
+- 单次只读simulator inventory保存于`/tmp/LuneX-17-2_6-simulator.9X74tq/devices.json`；固定iPhone 17 Pro与iPad Pro 13-inch (M5) UUID各全局唯一、available、均为`Shutdown`，全局`Booted=0`。未创建、克隆、启动、安装、运行、关闭或删除任何simulator。
+
+## 2026-07-30 阶段 17 任务 2.6 验收
+
+- 最终审阅确认rotation序列经过production geometry observer/publisher normalizer；binding组合fixture提供的bounds、safe area、scale、drawable、orientation和traits均满足同一normalized snapshot合同，没有绕过invalid-geometry前置条件来制造通过。
+- 非坐标safe-area/trait变化发布新scene revision但复用coordinate revision和drawable；rotation/size变化才更新coordinate revision和drawable。owner invalidation先以nil binding同步清renderer drawable/coordinate并抑制输入，replacement接管后旧owner迟到work保持inert。
+- repository pre-gate`/tmp/LuneX-17-2_6-repository-pre.kYmVui`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `10/36`且next为2.6、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、production零diff、test membership/静态语义、focused/expanded/full/四平台build/单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+- 2.6只增加确定性测试和可参数化fixture，不修改production。该证据不证明live UIKit callback、rotation、Stage Manager、external display、system PiP、background duration、mobile EDR、signed/physical设备或live Sunshine。
+- 标记后的repository final gate`/tmp/LuneX-17-2_6-repository-final.6TxH5F`通过OpenSpec strict `1/1`、apply `11/36`且next精确为3.1、fixture、generator连续稳定SHA-256、production零diff、全部既有test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。

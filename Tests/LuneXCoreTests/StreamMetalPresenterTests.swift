@@ -583,6 +583,142 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testMobileSceneGeometryObserverPublishesRotationSafeAreaAndTraits()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 116)!
+        let surface = MobileSceneGeometryTestSurface()
+        let window = MobileSceneGeometryTestWindow()
+        let scene = MobileSceneGeometryTestScene()
+        let screen = MobileSceneGeometryTestScreen()
+        var snapshots: [MobileSceneWindowSnapshot] = []
+        let observer = MobileSceneGeometryTestObserver(
+            surfaceGeneration: generation,
+            surface: surface,
+            reader: mobileSceneGeometryTestReader,
+            handler: { snapshots.append($0) },
+            settleRequestHandler: { _ in }
+        )
+
+        _ = observer.updateActivity(.active, surfaceGeneration: generation)
+        _ = observer.attach(
+            surface: surface,
+            window: window,
+            scene: scene,
+            screen: screen,
+            surfaceGeneration: generation,
+            event: .didMoveToWindow
+        )
+        guard case let .attached(_, initialDisplay, _) =
+            snapshots.last?.state else {
+            return XCTFail("Expected initial attached geometry")
+        }
+
+        surface.reading = mobileSceneGeometryTestReading(
+            width: 768,
+            height: 1_024,
+            safeAreaInsets: MobileSceneEdgeInsets(
+                top: 59,
+                leading: 0,
+                bottom: 34,
+                trailing: 0
+            ),
+            orientation: .portrait,
+            traits: MobileSceneTraits(
+                horizontalSizeClass: .compact,
+                verticalSizeClass: .regular,
+                interfaceStyle: .dark
+            )
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .published
+        )
+        guard case let .attached(_, rotatedDisplay, rotatedGeometry) =
+            snapshots.last?.state else {
+            return XCTFail("Expected rotated geometry")
+        }
+        XCTAssertEqual(rotatedDisplay, initialDisplay)
+        XCTAssertEqual(rotatedGeometry.orientation, .portrait)
+        XCTAssertEqual(rotatedGeometry.resizePhase, .resizing)
+        XCTAssertEqual(
+            rotatedGeometry.drawableSize,
+            PixelSize(width: 1_536, height: 2_048)
+        )
+
+        surface.reading = mobileSceneGeometryTestReading(
+            width: 768,
+            height: 1_024,
+            safeAreaInsets: MobileSceneEdgeInsets(
+                top: 47,
+                leading: 0,
+                bottom: 21,
+                trailing: 0
+            ),
+            orientation: .portrait,
+            traits: rotatedGeometry.traits
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .safeAreaInsetsDidChange
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            snapshots.last?.state.geometry?.safeAreaInsets,
+            MobileSceneEdgeInsets(
+                top: 47,
+                leading: 0,
+                bottom: 21,
+                trailing: 0
+            )
+        )
+
+        let lightTraits = MobileSceneTraits(
+            horizontalSizeClass: .compact,
+            verticalSizeClass: .regular,
+            interfaceStyle: .light
+        )
+        surface.reading = mobileSceneGeometryTestReading(
+            width: 768,
+            height: 1_024,
+            safeAreaInsets: MobileSceneEdgeInsets(
+                top: 47,
+                leading: 0,
+                bottom: 21,
+                trailing: 0
+            ),
+            orientation: .portrait,
+            traits: lightTraits
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .registeredTraitsChanged
+            ),
+            .published
+        )
+        XCTAssertEqual(snapshots.last?.state.geometry?.traits, lightTraits)
+        XCTAssertEqual(snapshots.map(\.revision.rawValue), [1, 2, 3, 4])
+    }
+
+    @MainActor
     func testMobileSceneGeometryObserverTracksDisplayActivityAndDetach()
         throws
     {
@@ -927,6 +1063,114 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testMobileGeometryBindingSeparatesSceneAndCoordinateRevisions()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 156)!
+        let surface = MobileGeometryBindingTestSurface()
+        var bindings: [MobileStreamGeometryBindingSnapshot] = []
+        let owner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            mode: .fit,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { binding in
+                if let binding {
+                    bindings.append(binding)
+                }
+            }
+        )
+
+        _ = owner.update(
+            mobileGeometryBindingTestSnapshot(
+                generation: generation,
+                revision: 1
+            ),
+            surface: surface,
+            surfaceGeneration: generation
+        )
+        let initial = try XCTUnwrap(bindings.last)
+
+        let compactTraits = MobileSceneTraits(
+            horizontalSizeClass: .compact,
+            verticalSizeClass: .regular,
+            interfaceStyle: .light
+        )
+        _ = owner.update(
+            mobileGeometryBindingTestSnapshot(
+                generation: generation,
+                revision: 2,
+                safeAreaInsets: MobileSceneEdgeInsets(
+                    top: 24,
+                    leading: 0,
+                    bottom: 16,
+                    trailing: 0
+                ),
+                traits: compactTraits
+            ),
+            surface: surface,
+            surfaceGeneration: generation
+        )
+        let nonCoordinateChange = try XCTUnwrap(bindings.last)
+        XCTAssertEqual(nonCoordinateChange.sceneWindowRevision.rawValue, 2)
+        XCTAssertEqual(
+            nonCoordinateChange.coordinateSnapshot.revision,
+            initial.coordinateSnapshot.revision
+        )
+        XCTAssertEqual(
+            nonCoordinateChange.geometry.safeAreaInsets.top,
+            24
+        )
+        XCTAssertEqual(nonCoordinateChange.geometry.traits, compactTraits)
+        XCTAssertEqual(surface.appliedDrawableSizes.count, 1)
+
+        _ = owner.update(
+            mobileGeometryBindingTestSnapshot(
+                generation: generation,
+                revision: 3,
+                viewBounds: MobileSceneRect(
+                    x: 0,
+                    y: 0,
+                    width: 300,
+                    height: 600
+                ),
+                orientation: .portrait,
+                safeAreaInsets: MobileSceneEdgeInsets(
+                    top: 24,
+                    leading: 0,
+                    bottom: 16,
+                    trailing: 0
+                ),
+                traits: compactTraits
+            ),
+            surface: surface,
+            surfaceGeneration: generation
+        )
+        let rotation = try XCTUnwrap(bindings.last)
+        XCTAssertEqual(rotation.sceneWindowRevision.rawValue, 3)
+        XCTAssertNotEqual(
+            rotation.coordinateSnapshot.revision,
+            nonCoordinateChange.coordinateSnapshot.revision
+        )
+        XCTAssertEqual(rotation.geometry.orientation, .portrait)
+        XCTAssertEqual(
+            rotation.coordinateSnapshot.drawableSize,
+            PixelSize(width: 600, height: 1_200)
+        )
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [
+                PixelSize(width: 800, height: 600),
+                PixelSize(width: 600, height: 1_200)
+            ]
+        )
+    }
+
+    @MainActor
     func testMobileGeometryBindingClearsInvalidGeometryAndSuppressesInput()
         throws
     {
@@ -1167,6 +1411,147 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertNil(coordinator.currentGeometryBinding)
         XCTAssertEqual(replacementState.transform.drawableSize, .zero)
         XCTAssertNil(replacementState.coordinateSnapshot)
+    }
+
+    @MainActor
+    func testMobileGeometryReplacementTeardownKeepsLateWorkInert()
+        throws
+    {
+        let firstGeneration = MobileSceneSurfaceGeneration(rawValue: 186)!
+        let replacementGeneration =
+            MobileSceneSurfaceGeneration(rawValue: 187)!
+        let surface = MobileGeometryBindingTestSurface()
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            drawableSize: .zero,
+            mode: .fit
+        ))
+        let coordinator = MobileStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState
+        )
+        let firstOwner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: firstGeneration,
+            surface: surface,
+            sourceSize: renderState.transform.sourceSize,
+            mode: renderState.transform.mode,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { coordinator.handleGeometryBinding($0) }
+        )
+        let firstSnapshot = mobileGeometryBindingTestSnapshot(
+            generation: firstGeneration,
+            revision: 1
+        )
+
+        _ = firstOwner.update(
+            firstSnapshot,
+            surface: surface,
+            surfaceGeneration: firstGeneration
+        )
+        XCTAssertEqual(
+            renderState.transform.drawableSize,
+            PixelSize(width: 800, height: 600)
+        )
+        XCTAssertEqual(
+            firstOwner.touch(TouchSample(
+                id: 1,
+                phase: .began,
+                localPoint: RemotePoint(x: 200, y: 150),
+                pressure: 1
+            )).policy,
+            .deliver
+        )
+
+        XCTAssertEqual(
+            firstOwner.invalidate(
+                surface: surface,
+                surfaceGeneration: firstGeneration
+            ),
+            .invalidated
+        )
+        XCTAssertNil(coordinator.currentGeometryBinding)
+        XCTAssertEqual(renderState.transform.drawableSize, .zero)
+        XCTAssertNil(renderState.coordinateSnapshot)
+        XCTAssertEqual(
+            firstOwner.touch(TouchSample(
+                id: 1,
+                phase: .cancelled,
+                localPoint: RemotePoint(x: 200, y: 150),
+                pressure: 0
+            )).policy,
+            .drop(reason: "Mobile geometry is unavailable")
+        )
+
+        let replacementOwner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: replacementGeneration,
+            surface: surface,
+            sourceSize: renderState.transform.sourceSize,
+            mode: renderState.transform.mode,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { coordinator.handleGeometryBinding($0) }
+        )
+        _ = replacementOwner.update(
+            mobileGeometryBindingTestSnapshot(
+                generation: replacementGeneration,
+                revision: 1,
+                viewBounds: MobileSceneRect(
+                    x: 0,
+                    y: 0,
+                    width: 600,
+                    height: 400
+                )
+            ),
+            surface: surface,
+            surfaceGeneration: replacementGeneration
+        )
+        let replacementBinding = try XCTUnwrap(
+            coordinator.currentGeometryBinding
+        )
+        XCTAssertEqual(
+            renderState.transform.drawableSize,
+            PixelSize(width: 1_200, height: 800)
+        )
+
+        XCTAssertEqual(
+            firstOwner.update(
+                firstSnapshot,
+                surface: surface,
+                surfaceGeneration: firstGeneration
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            coordinator.currentGeometryBinding,
+            replacementBinding
+        )
+        XCTAssertEqual(
+            renderState.transform.drawableSize,
+            PixelSize(width: 1_200, height: 800)
+        )
+        XCTAssertEqual(
+            replacementOwner.invalidate(
+                surface: surface,
+                surfaceGeneration: replacementGeneration
+            ),
+            .invalidated
+        )
+        XCTAssertNil(coordinator.currentGeometryBinding)
+        XCTAssertEqual(renderState.transform.drawableSize, .zero)
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [
+                PixelSize(width: 800, height: 600),
+                .zero,
+                PixelSize(width: 1_200, height: 800),
+                .zero
+            ]
+        )
     }
 
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
@@ -2613,7 +2998,14 @@ private func mobileSceneGeometryTestReader(
 
 private func mobileSceneGeometryTestReading(
     width: Double = 1_024,
-    height: Double = 768
+    height: Double = 768,
+    safeAreaInsets: MobileSceneEdgeInsets = .zero,
+    orientation: MobileInterfaceOrientation = .landscapeLeft,
+    traits: MobileSceneTraits = MobileSceneTraits(
+        horizontalSizeClass: .regular,
+        verticalSizeClass: .regular,
+        interfaceStyle: .dark
+    )
 ) -> MobileStreamSceneGeometryReading {
     MobileStreamSceneGeometryReading(
         viewBounds: MobileSceneRect(
@@ -2628,14 +3020,10 @@ private func mobileSceneGeometryTestReading(
             width: width,
             height: height
         ),
-        safeAreaInsets: .zero,
+        safeAreaInsets: safeAreaInsets,
         scale: 2,
-        orientation: .landscapeLeft,
-        traits: MobileSceneTraits(
-            horizontalSizeClass: .regular,
-            verticalSizeClass: .regular,
-            interfaceStyle: .dark
-        )
+        orientation: orientation,
+        traits: traits
     )
 }
 
@@ -2648,7 +3036,14 @@ private func mobileGeometryBindingTestSnapshot(
         width: 400,
         height: 300
     ),
-    scale: Double = 2
+    scale: Double = 2,
+    orientation: MobileInterfaceOrientation = .landscapeLeft,
+    safeAreaInsets: MobileSceneEdgeInsets = .zero,
+    traits: MobileSceneTraits = MobileSceneTraits(
+        horizontalSizeClass: .regular,
+        verticalSizeClass: .regular,
+        interfaceStyle: .dark
+    )
 ) -> MobileSceneWindowSnapshot {
     MobileSceneWindowSnapshot(
         surfaceGeneration: generation,
@@ -2659,18 +3054,14 @@ private func mobileGeometryBindingTestSnapshot(
             geometry: MobileSceneWindowGeometry(
                 viewBounds: viewBounds,
                 windowBounds: viewBounds,
-                safeAreaInsets: .zero,
+                safeAreaInsets: safeAreaInsets,
                 scale: scale,
                 drawableSize: PixelSize(
                     width: Int(viewBounds.width * scale),
                     height: Int(viewBounds.height * scale)
                 ),
-                orientation: .landscapeLeft,
-                traits: MobileSceneTraits(
-                    horizontalSizeClass: .regular,
-                    verticalSizeClass: .regular,
-                    interfaceStyle: .dark
-                ),
+                orientation: orientation,
+                traits: traits,
                 resizePhase: .settled
             )
         )

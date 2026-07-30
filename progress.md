@@ -2364,3 +2364,21 @@
 - repository pre-gate`/tmp/LuneX-17-2_5-repository-pre.vb0AcX`通过fixture、OpenSpec strict、apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、static platform/privacy/network boundaries、focused/expanded/full/四平台build与单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
 - OpenSpec 2.5已勾选，权威进度更新为`10/36`。本项证明确定性actual mobile surface geometry到drawable/video/input边界，不证明live UIKit touch、Stage Manager/rotation/external display、input transport、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.6。
 - 标记后的repository final gate`/tmp/LuneX-17-2_5-repository-final.wjEq5N`通过OpenSpec strict `1/1`、apply `10/36`且next精确为2.6、fixture、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、production/test静态边界、全部既有证据与保存的单次simulator inventory读回、Keychain opt-in关闭和`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 2.6 启动
+
+- 2.5已以`79b805a Bind mobile stream geometry`独立提交并推送，确认`HEAD == origin/main`且工作树clean；OpenSpec为`10/36 ready`，当前任务2.6只补attachment/scene/geometry/binding/renderer/input确定性扩展矩阵，不提前实现3.x mobile EDR。
+- 覆盖审计确认基础attachment、multi-scene、resize/settle、invalid、replacement/late work、fit/fill与input测试已存在；待补组合缺口为rotation+safe-area+trait连续revision、非坐标scene revision与coordinate revision关系，以及binding teardown到renderer/input的原子清理。
+- 已新增三个组合测试与可参数化geometry fixture；focused`/tmp/LuneX-17-2_6-focused.VPjCwq/Focused.xcresult`一次通过`3/3 passed / 0 skipped / 0 failed / 0 expected failure`，结构化三类诊断为0，命令显式移除真实Keychain opt-in。
+- 恢复后直接读取已有expanded bundle，没有重复启动测试；`/tmp/LuneX-17-2_6-expanded.LujnSa/Expanded.xcresult`结构化为`91/91 passed / 0 skipped / 0 failed / 0 expected failure`，build status为`succeeded`且error、warning、analyzer warning均为0。
+- 完整macOS normal suite使用全新`/tmp/LuneX-17-2_6-full.sm8U4i`并显式移除`LUNEX_RUN_KEYCHAIN_TEST`，结构化通过`793 total / 792 passed / 1 skipped / 0 failed / 0 expected failure`；唯一skip精确为真实Keychain opt-in测试，build status为`succeeded`且三类结构化诊断为0。
+- 首个四平台build包装器在进入`xcodebuild`前因zsh数组使用0-based索引而以`parameter not set`退出；`/tmp/LuneX-17-2_6-builds.C8VhgY`不计验收，未构建、未访问Keychain、未操作simulator。修正为1-based索引并从全新证据路径执行。
+- 修正后的`/tmp/LuneX-17-2_6-builds-r2.cWlehS`完成macOS、iOS/iPadOS、tvOS和visionOS四个generic Debug build；4/4 `succeeded`，四份xcresult的error、warning、analyzer warning均为0，每个平台各有一个Metal AIR和metallib。全程未选择simulator destination。
+- 仅调用一次`simctl list devices available -j`并保存`/tmp/LuneX-17-2_6-simulator.9X74tq/devices.json`；固定iPhone/iPad各全局唯一、available、`Shutdown`且全局`Booted=0`，没有执行任何simulator生命周期操作。
+
+## 2026-07-30 阶段 17 任务 2.6 完成
+
+- 提交前审阅确认三个新增组合测试覆盖rotation/safe-area/trait semantic revision、scene/coordinate revision分离、replacement late-work拒绝及renderer/input原子teardown；production源码、generator和工程零diff。
+- repository pre-gate`/tmp/LuneX-17-2_6-repository-pre.kYmVui`通过fixture、OpenSpec strict、apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership/静态语义、全部test/build与保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
+- OpenSpec 2.6已勾选，预期权威进度更新为`11/36`；下一项3.1实现injectable actual-window `UIScreen` EDR reader。本项不证明live rotation/Stage Manager/external display、PiP/background、mobile EDR、signed/physical设备或live Sunshine。
+- 标记后的repository final gate`/tmp/LuneX-17-2_6-repository-final.6TxH5F`通过strict `1/1`、apply `11/36`且next精确为3.1、fixture、generator稳定、production零diff、全部既有test/build及保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
