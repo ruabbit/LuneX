@@ -2489,3 +2489,20 @@
 - 四平台generic Debug build分别位于`/tmp/LuneX-17-4_2-build-macos.Fn9hny`、`/tmp/LuneX-17-4_2-build-ios.e2ZPkR`、`/tmp/LuneX-17-4_2-build-tvos.XTJjxz`与`/tmp/LuneX-17-4_2-build-visionos.P8uVtw`；全部succeeded、三类结构化诊断为0且各有一个AIR和metallib。
 - repository pre-gate `/tmp/LuneX-17-4_2-repository-pre.WcWVHw`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `17/36` next 4.2、generator三次稳定SHA-256 `d318f8dcb978bbe1fe852045546c05ac7e9a1af042a9faca0b6e5dfce7056471`、membership、no-second-decoder/no-layer/no-buffer-array静态门和`git diff --check`。
 - 本项未查询或操作simulator。OpenSpec 4.2已勾选，预期权威进度`18/36`，下一项4.3实现production display-layer sink与单槽backpressure；4.2不证明系统PiP、签名/安装、后台持续时间、物理设备或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.3 启动
+
+- 用户在macOS更新后要求继续推进；恢复active长期目标、planning-with-files和OpenSpec apply流程，确认`HEAD == origin/main == e7648ff`、工作树clean、change为`18/36 ready`且next精确为4.3，环境仍为macOS 27.0、Xcode 26.4和Swift 6.3。
+- Context7 Apple索引没有返回相关AVFoundation条目；Xcode 26.4公开headers与四平台warnings-as-errors importer probe确认旧display-layer queue API已弃用，production保留真实`AVSampleBufferDisplayLayer`但只调用现代`sampleBufferRenderer`。
+- 已新增main-actor injectable renderer client、真实display-layer client、generation-owned单槽sink和focused测试，覆盖ready enqueue、latest pending replacement、request/stop平衡、旧callback拒绝、format/color与discontinuity flush、failure recovery、stale generation、幂等invalidate和pending pixel-buffer release；尚未完成第一次focused编译。
+- 全部测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`；本项不查询、创建、启动或修改任何simulator，也不提前实现4.4 controller/content source。
+- 首轮focused误用无test action的App scheme并在编译前退出；第二轮正确scheme进入编译后仅因两项通知使用ObjC常量名被Swift importer拒绝。两项均已记录并用现代Swift通知名修正，不计验收证据。
+- 修正后的focused先通过`10/10`；自审又补renderer在callback前恢复ready时由直接新帧停止旧request的竞态回归，并收紧discontinuity后native仍失败的phase。最终`/tmp/LuneX-17-4_3-focused-r4.bKbRRS/Focused.xcresult`通过`11/11`，结构化error、warning、analyzer warning均为0。
+- expanded `/tmp/LuneX-17-4_3-expanded.r22lC1/Expanded.xcresult`覆盖sink、sample adapter、PiP state、HDR decoded contract、color metadata与VideoToolbox decompression并通过`66/66`；结构化error、warning、analyzer warning均为0。
+- 完整macOS normal `/tmp/LuneX-17-4_3-full.xytBQ3/Full.xcresult`通过`829 total / 828 passed / 1 skipped / 0 failed`，唯一skip结构化精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，三类结构化诊断为0。首轮repository包装器误按顶层`.valid`读取当前OpenSpec JSON，实际有效性位于`.items[].valid`，因此在第一个change后退出且generator未运行；第二轮已通过fixture、8/8 strict、apply、generator与静态边界，但误用zsh特殊变量`path`覆盖`PATH`，在focused证据读回前退出。两轮均不计验收，修正为`result_path`后从全新证据目录完整重跑。
+
+## 2026-07-30 阶段 17 任务 4.3 完成
+
+- 四平台generic Debug证据根`/tmp/LuneX-17-4_3-builds.rCA9Ft`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded，error/warning/analyzer warning均为0并各有一个AIR与metallib。本项没有查询、创建、启动或修改simulator。
+- 最终repository pre-gate `/tmp/LuneX-17-4_3-repository-pre-r3.CBjSuA`从头通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `18/36`、generator初始及连续两次稳定SHA-256 `7ad20d043399d853b23b8bdcd57e82e4c4a25da79bd563e39513ab3f8b85b75d`、membership、modern renderer/no-controller/no-second-decoder/no-buffer-array静态边界、focused/expanded/full/四平台build证据读回、Keychain opt-in关闭和`git diff --check`。
+- OpenSpec 4.3已勾选，预期权威进度`19/36`，下一项4.4实现production `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)` adapter与actual possibility observation。4.3离线证据不证明系统PiP、后台持续时间、签名/安装、物理设备或live Sunshine。

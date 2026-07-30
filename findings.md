@@ -2020,3 +2020,20 @@
 - adapter对原buffer执行additive `shouldPropagate` attachment更新，保留无关attachment；HDR测试确认Rec.2020/PQ、MDCV与CLL，SDR测试确认Rec.709 primaries/transfer/matrix，生成的format description与image buffer匹配。
 - 首个active frame contract只在CoreMedia包装成功且same-buffer ownership验证后提交；adapter最多缓存一个compatible format description，invalidate幂等释放contract和format，后续转换拒绝。
 - focused `6/6`、expanded `55/55`、normal `818/817/1/0`、四平台generic build和repository gates全部通过。本项尚无display layer、backpressure queue、native controller或真实PiP行为，这些分别属于4.3、4.4及物理验收。
+
+## 2026-07-30 阶段 17 任务 4.3 调查
+
+- Xcode 26.4公开header把`AVSampleBufferDisplayLayer`自身的`status`、`error`、readiness、enqueue、flush和request/stop接口全部标记为deprecated；真实layer仍是4.4 sample-buffer content source所需对象，但4.3 production必须只通过其`sampleBufferRenderer`执行队列操作。
+- `AVSampleBufferVideoRenderer`在四平台当前部署范围均可用，并继续以非deprecated `AVQueuedSampleBufferRendering`暴露status、readiness、enqueue、flush和request/stop；四SDK warnings-as-errors Swift 6.3 probe确认导入标签为`enqueue(_:)`、`flush()`、`flush(removingDisplayedImage:completionHandler:)`、`requestMediaDataWhenReady(on:using:)`和`stopRequestingMediaData()`。
+- Apple header明确要求每次readiness request配对一次stop，否则释放renderer属于undefined behavior；failed或`requiresFlushToResumeDecoding`状态必须先flush回unknown才可继续。production client因此拥有request ordinal和通知token，sink另有generation内request lease，晚到或重复callback均不得drain replacement pending frame。
+- sink只保留一个latest compatible `MobilePictureInPictureSampleBuffer`；同PiP/decoder generation内frame contract的尺寸、像素布局或完整color signature变化先停止request、释放pending并flush displayed image，再接纳新contract。显式discontinuity、native failure、replacement与invalidate同样清除pending ownership。
+- 4.3只创建真实display layer、renderer client和frame sink；不创建`AVPictureInPictureController`、content source或playback delegate，这些仍属于4.4。
+
+## 2026-07-30 阶段 17 任务 4.3 验收
+
+- production client拥有真实`AVSampleBufferDisplayLayer`，但所有status/readiness/enqueue/flush/request/stop操作只经非deprecated `sampleBufferRenderer`；notification按renderer object过滤，invalidate/deinit均配平active readiness request并移除token。
+- generation-owned sink最多保留一个latest-compatible sample buffer；新帧替换、format/color/layout变化、discontinuity、native failure和invalidate都会释放旧pending ownership。sink与renderer client各自使用ordinal拒绝晚到或重复callback，直接恢复ready的新帧也会先停止旧request。
+- focused `/tmp/LuneX-17-4_3-focused-r4.bKbRRS/Focused.xcresult`通过`11/11`，expanded `/tmp/LuneX-17-4_3-expanded.r22lC1/Expanded.xcresult`通过`66/66`，完整normal `/tmp/LuneX-17-4_3-full.xytBQ3/Full.xcresult`通过`829 total / 828 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0，唯一skip仍是显式真实Keychain测试。
+- 四平台generic Debug证据根`/tmp/LuneX-17-4_3-builds.rCA9Ft`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded、三类结构化诊断为0并各有一个AIR和metallib。没有查询、创建、启动或修改simulator。
+- repository pre-gate `/tmp/LuneX-17-4_3-repository-pre-r3.CBjSuA`通过fixture、OpenSpec strict `8/8`、勾选前apply `18/36`、generator初始及连续两次稳定SHA-256 `7ad20d043399d853b23b8bdcd57e82e4c4a25da79bd563e39513ab3f8b85b75d`、membership、现代renderer API、no-controller/no-second-decoder/no-buffer-array静态边界、全部结构化证据读回和`git diff --check`。
+- 本项证明离线renderer/sink所有权、backpressure与四平台SDK兼容；不证明4.4 controller/content source、系统PiP start/stop/restore、后台持续时间、签名/安装、物理iPhone/iPad或live Sunshine。
