@@ -38,7 +38,7 @@ flowchart LR
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
 | 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
-| 17 | `in_progress`，OpenSpec `6/36` | scene/window、PiP/continuity、mobile EDR值合同与确定性矩阵完成；iOS `MTKView`已有可注入attachment/layout/safe-area/registered-trait callback边界和确定性relay teardown | 尚无current-generation scene/window/screen owner、实际geometry/Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
+| 17 | `in_progress`，OpenSpec `7/36` | scene/window、PiP/continuity、mobile EDR值合同与确定性矩阵完成；iOS `MTKView`已有callback边界和current-generation actual `UIWindow`/`UIWindowScene`/`UIScreen` owner | 尚无scene notification filtering、实际geometry/Stage Manager、PiP content source、合法后台保活或移动EDR运行接线 |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
 | 20 | `pending` | Release配置与sanitizer静态门禁可执行 | 尚无签名发布包、端到端延迟、功耗、热状态、弱网、内存基线与长时真机证据 |
@@ -137,7 +137,7 @@ flowchart LR
 ## 阶段 17：iOS/iPadOS 连续性
 
 - `docs/runtime/mobile-scene-pip-continuity-contract.md`是actual UIKit stream view/window/screen、共享geometry/input、sample-buffer PiP、合法background continuity、mobile EDR和物理验收的权威合同。
-- OpenSpec `integrate-mobile-scene-pip-continuity`当前`6/36 in_progress`；1.1完成inventory/API/proof boundary，1.2完成mobile scene/window geometry合同，1.3完成generation-owned PiP/continuity状态机，1.4完成actual-display generation、bounded headroom、typed conservative-SDR fallback和privacy-safe `HDRDisplayRevision`桥接，1.5完成normalization、overflow、duplicate、3,840项policy grid、state transition、restoration lease、privacy和capacity确定性矩阵，2.1完成iOS `MTKView` attachment/layout/safe-area/registered-trait callback边界及relay teardown。下一项2.2实现current-generation actual view/window/scene/screen attachment owner。
+- OpenSpec `integrate-mobile-scene-pip-continuity`当前`7/36 in_progress`；1.1至1.5完成inventory和值合同/确定性矩阵，2.1完成iOS `MTKView` callback边界，2.2完成main-actor current-generation actual view/window/scene/screen attachment owner、stale rejection和weak teardown。下一项2.3观察attached scene生命周期通知并做identity filtering/cancellation。
 - RootView 接入 `scenePhase`、实际 `UIWindowScene`、screen、scale 和几何变化。
 - iPad Stage Manager 与多窗口 resize 实时更新 drawable、input transform 和 decoder output policy。
 - 使用 `AVPictureInPictureController` 和有效 content source 实现真实 PiP。

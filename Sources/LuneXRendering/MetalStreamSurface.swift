@@ -116,6 +116,151 @@ final class MobileStreamSurfaceAttachmentRelay<Surface: AnyObject> {
     }
 }
 
+enum MobileStreamSurfaceAttachmentTransition: Equatable, Sendable {
+    case callback(MobileStreamSurfaceAttachmentEvent)
+    case invalidated
+}
+
+struct MobileStreamSurfaceResolvedAttachment<
+    Window: AnyObject,
+    Scene: AnyObject,
+    Screen: AnyObject
+> {
+    let window: Window
+    let scene: Scene
+    let screen: Screen
+}
+
+struct MobileStreamSurfaceAttachmentUpdate<
+    Surface: AnyObject,
+    Window: AnyObject,
+    Scene: AnyObject,
+    Screen: AnyObject
+> {
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    let transition: MobileStreamSurfaceAttachmentTransition
+    let surface: Surface?
+    let attachment:
+        MobileStreamSurfaceResolvedAttachment<Window, Scene, Screen>?
+}
+
+enum MobileStreamSurfaceAttachmentOwnerOutcome: Equatable, Sendable {
+    case attached
+    case detached
+    case staleSurfaceGeneration
+    case staleSurface
+    case invalidated
+    case alreadyInvalidated
+}
+
+@MainActor
+final class MobileStreamSurfaceAttachmentOwner<
+    Surface: AnyObject,
+    Window: AnyObject,
+    Scene: AnyObject,
+    Screen: AnyObject
+> {
+    typealias ResolvedAttachment =
+        MobileStreamSurfaceResolvedAttachment<Window, Scene, Screen>
+    typealias Update =
+        MobileStreamSurfaceAttachmentUpdate<Surface, Window, Scene, Screen>
+    typealias Resolver = @MainActor (Surface) -> ResolvedAttachment?
+    typealias Handler = @MainActor (Update) -> Void
+
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    var currentSurface: Surface? { surface }
+    var currentWindow: Window? { window }
+    var currentScene: Scene? { scene }
+    var currentScreen: Screen? { screen }
+
+    private weak var surface: Surface?
+    private weak var window: Window?
+    private weak var scene: Scene?
+    private weak var screen: Screen?
+    private var resolver: Resolver?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        surfaceGeneration: MobileSceneSurfaceGeneration,
+        surface: Surface,
+        resolver: @escaping Resolver,
+        handler: @escaping Handler
+    ) {
+        self.surfaceGeneration = surfaceGeneration
+        self.surface = surface
+        self.resolver = resolver
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    @discardableResult
+    func handle(
+        surface candidate: Surface,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration,
+        event: MobileStreamSurfaceAttachmentEvent
+    ) -> MobileStreamSurfaceAttachmentOwnerOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidate else { return .staleSurface }
+
+        let attachment = resolver?(candidate)
+        if let attachment {
+            window = attachment.window
+            scene = attachment.scene
+            screen = attachment.screen
+        } else {
+            window = nil
+            scene = nil
+            screen = nil
+        }
+        handler?(
+            Update(
+                surfaceGeneration: surfaceGeneration,
+                transition: .callback(event),
+                surface: candidate,
+                attachment: attachment
+            )
+        )
+        return attachment == nil ? .detached : .attached
+    }
+
+    @discardableResult
+    func invalidate(
+        surface candidate: Surface? = nil,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSurfaceAttachmentOwnerOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if let candidate, surface !== candidate { return .staleSurface }
+
+        isInvalidated = true
+        let update = Update(
+            surfaceGeneration: surfaceGeneration,
+            transition: .invalidated,
+            surface: surface,
+            attachment: nil
+        )
+        window = nil
+        scene = nil
+        screen = nil
+        surface = nil
+        resolver = nil
+        let currentHandler = handler
+        handler = nil
+        currentHandler?(update)
+        return .invalidated
+    }
+}
+
 struct StreamMetalPresentationPlan: Sendable {
     let configuration: HDRRenderConfigurationIdentity
     let uniforms: HDRMetalShaderUniforms
@@ -1312,32 +1457,80 @@ struct MetalStreamSurface: NSViewRepresentable {
 #else
 #if os(iOS)
 @MainActor
+enum MobileStreamSurfaceGenerationSequence {
+    private static var nextRawValue: UInt64 = 1
+    private static var isExhausted = false
+
+    static func next() -> MobileSceneSurfaceGeneration? {
+        guard !isExhausted,
+              let generation = MobileSceneSurfaceGeneration(
+                  rawValue: nextRawValue
+              ) else {
+            return nil
+        }
+        if nextRawValue == UInt64.max {
+            isExhausted = true
+        } else {
+            nextRawValue += 1
+        }
+        return generation
+    }
+}
+
+@MainActor
 final class MobileStreamMetalView: MTKView {
     typealias AttachmentEventHandler =
         MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>.Handler
+    typealias AttachmentOwner = MobileStreamSurfaceAttachmentOwner<
+        MobileStreamMetalView,
+        UIWindow,
+        UIWindowScene,
+        UIScreen
+    >
+    typealias AttachmentUpdateHandler = AttachmentOwner.Handler
 
     private var attachmentRelay:
         MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>?
+    private var attachmentOwner: AttachmentOwner?
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 
     init(
         frame frameRect: CGRect = .zero,
         device: (any MTLDevice)? = nil,
-        attachmentEventHandler: @escaping AttachmentEventHandler = { _, _ in }
+        attachmentEventHandler: @escaping AttachmentEventHandler = { _, _ in },
+        attachmentUpdateHandler: @escaping AttachmentUpdateHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
         attachmentRelay = MobileStreamSurfaceAttachmentRelay(
             surface: self,
             handler: attachmentEventHandler
         )
+        if let surfaceGeneration = MobileStreamSurfaceGenerationSequence.next() {
+            attachmentOwner = AttachmentOwner(
+                surfaceGeneration: surfaceGeneration,
+                surface: self,
+                resolver: { surface in
+                    guard let window = surface.window,
+                          let scene = window.windowScene else {
+                        return nil
+                    }
+                    return AttachmentOwner.ResolvedAttachment(
+                        window: window,
+                        scene: scene,
+                        screen: window.screen
+                    )
+                },
+                handler: attachmentUpdateHandler
+            )
+        }
         traitChangeRegistration = registerForTraitChanges([
             UITraitHorizontalSizeClass.self,
             UITraitVerticalSizeClass.self,
             UITraitDisplayScale.self,
             UITraitUserInterfaceStyle.self
         ]) { (view: MobileStreamMetalView, _) in
-            view.attachmentRelay?.publish(.registeredTraitsChanged)
+            view.publishAttachmentEvent(.registeredTraitsChanged)
         }
     }
 
@@ -1348,17 +1541,17 @@ final class MobileStreamMetalView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        attachmentRelay?.publish(.didMoveToWindow)
+        publishAttachmentEvent(.didMoveToWindow)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        attachmentRelay?.publish(.layoutSubviews)
+        publishAttachmentEvent(.layoutSubviews)
     }
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
-        attachmentRelay?.publish(.safeAreaInsetsDidChange)
+        publishAttachmentEvent(.safeAreaInsetsDidChange)
     }
 
     func updateAttachmentEventHandler(
@@ -1367,13 +1560,39 @@ final class MobileStreamMetalView: MTKView {
         attachmentRelay?.updateHandler(handler)
     }
 
+    func updateAttachmentUpdateHandler(
+        _ handler: @escaping AttachmentUpdateHandler
+    ) {
+        attachmentOwner?.updateHandler(handler)
+    }
+
     func invalidateAttachmentCallbacks() {
         if let traitChangeRegistration {
             unregisterForTraitChanges(traitChangeRegistration)
             self.traitChangeRegistration = nil
         }
+        if let attachmentOwner {
+            attachmentOwner.invalidate(
+                surface: self,
+                surfaceGeneration: attachmentOwner.surfaceGeneration
+            )
+            self.attachmentOwner = nil
+        }
         attachmentRelay?.invalidate()
         attachmentRelay = nil
+    }
+
+    private func publishAttachmentEvent(
+        _ event: MobileStreamSurfaceAttachmentEvent
+    ) {
+        if let attachmentOwner {
+            attachmentOwner.handle(
+                surface: self,
+                surfaceGeneration: attachmentOwner.surfaceGeneration,
+                event: event
+            )
+        }
+        attachmentRelay?.publish(event)
     }
 }
 #endif
@@ -1387,6 +1606,8 @@ struct MetalStreamSurface: UIViewRepresentable {
     var attachmentEventHandler: MobileStreamMetalView.AttachmentEventHandler = {
         _, _ in
     }
+    var attachmentUpdateHandler:
+        MobileStreamMetalView.AttachmentUpdateHandler = { _ in }
 #endif
 
     func makeCoordinator() -> StreamMetalPresenter {
@@ -1403,7 +1624,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         let view = MobileStreamMetalView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
-            attachmentEventHandler: attachmentEventHandler
+            attachmentEventHandler: attachmentEventHandler,
+            attachmentUpdateHandler: attachmentUpdateHandler
         )
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -1419,6 +1641,8 @@ struct MetalStreamSurface: UIViewRepresentable {
 #if os(iOS)
         (view as? MobileStreamMetalView)?
             .updateAttachmentEventHandler(attachmentEventHandler)
+        (view as? MobileStreamMetalView)?
+            .updateAttachmentUpdateHandler(attachmentUpdateHandler)
 #endif
         context.coordinator.update(renderState: renderState)
         let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)

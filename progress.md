@@ -2288,3 +2288,20 @@
 - 首轮repository gate `/tmp/LuneX-17-2_1-repository.Dlb0Ix`在generator前因包装器误读不存在的OpenSpec `.summary.totals.invalid`字段退出；保存JSON实际为`1/1 passed`且`.items[].valid == true`。该轮不计最终验收，按当前CLI的`.summary.totals.failed`从全新目录重跑。
 - 第二轮repository gate `/tmp/LuneX-17-2_1-repository-final.SwCvyR`已通过strict `1/1`、apply `6/36`和generator稳定，但全文件禁词检查误命中既有decoded-frame `ObjectIdentifier`；current diff新增行没有命中。该轮不计最终组合验收，静态检查收紧到新增行后从全新目录重跑。
 - 最终repository gate `/tmp/LuneX-17-2_1-repository-final-r2.DdYYLT`通过OpenSpec strict `1/1`、apply `6/36`且next精确为2.2、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、source/test membership、iOS callback/trait静态边界、更新后完整test/build/simulator证据读回、Keychain opt-in关闭、privacy与`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 2.2 启动
+
+- 2.1已以`04bbd98 Add mobile surface attachment callbacks`独立提交并推送，fetch后确认`HEAD == origin/main`且工作树clean；OpenSpec为`6/36 ready`，当前任务2.2不提前实现scene通知、geometry normalizer、drawable/input或AppModel接线。
+- 新通用main-actor attachment owner固定一个`MobileSceneSurfaceGeneration`和surface identity，弱持有surface/window/scene/screen，拒绝stale generation、错误surface及invalidation后回调；同步handler只接收current-generation actual attachment或invalidated transition。
+- iOS view resolver只沿`MobileStreamMetalView.window -> UIWindow.windowScene -> UIWindow.screen`派生attachment，不读取`UIScreen.main`、`connectedScenes`或SwiftUI `scenePhase`；per-view checked generation sequence在UInt64耗尽后fail closed。
+- focused证据`/tmp/LuneX-17-2_2-focused.tjvteD/Focused.xcresult`覆盖2.1 relay及2.2 replacement/detach、stale generation/surface、late callback、idempotent invalidation和weak ownership，通过`5/5 passed / 0 skipped / 0 failed`且结构化diagnostics为0。
+- iOS generic-device证据`/tmp/LuneX-17-2_2-ios-build.Lh2fpu/Build.xcresult`成功且结构化error、warning与analyzer warning均为0；只执行build action，没有操作simulator。
+- expanded presenter证据`/tmp/LuneX-17-2_2-expanded.5sWe4b/Expanded.xcresult`通过`31/31`且零结构化diagnostics；完整macOS `/tmp/LuneX-17-2_2-full.dOhBLh/Full.xcresult`通过`777 total / 776 passed / 1 skipped / 0 failed`且零结构化diagnostics。
+- Xcode 26.4枚举full case tree时触发`database.sqlite3 couldn't be moved`工具错误；不重复同一失败子命令。原始xcodebuild日志精确确认唯一skip为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，命令显式移除真实Keychain opt-in。
+
+## 2026-07-30 阶段 17 任务 2.2 完成
+
+- exact-source四平台证据`/tmp/LuneX-17-2_2-builds.PpGqRf`中macOS、iOS/iPadOS、tvOS和visionOS generic Debug全部成功，四份xcresult均为`succeeded`且error、warning与analyzer warning为0；只执行build action。
+- 只读simulator证据`/tmp/LuneX-17-2_2-simulator.5RvcxU`确认固定iPhone 17 Pro和iPad Pro 13-inch (M5)在iOS 26.4 runtime各唯一、available、`Shutdown`且全局`Booted=0`；只调用一次inventory，没有生命周期操作。
+- OpenSpec 2.2已勾选，权威进度更新为`7/36`。本项证明generation/surface-scoped actual attachment derivation、replacement/detach、stale/late rejection、weak teardown和跨平台编译；不证明live UIKit callback、scene notification、Stage Manager/geometry/input、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.3。
+- repository gate `/tmp/LuneX-17-2_2-repository.sgylpZ`通过OpenSpec strict `1/1`、apply `7/36`且next精确为2.3、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、actual-view-only/weak-owner静态边界、focused/expanded/full、四平台build和保存的simulator证据读回、Keychain opt-in关闭、privacy与`git diff --check`。

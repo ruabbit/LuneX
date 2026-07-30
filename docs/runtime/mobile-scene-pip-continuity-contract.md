@@ -34,7 +34,7 @@ No lower tier may be reported as a higher tier.
 
 | Concern | Current source | Current behavior | Stage 17 gap |
 |---|---|---|---|
-| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, applies render schedule, copies an existing coordinate snapshot into `drawableSize`, and publishes closed injectable iOS attachment/layout/safe-area/registered-trait callback events | No actual view/window/scene/screen attachment owner, scene identity, geometry normalization, or attached-screen publication |
+| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, applies render schedule, copies an existing coordinate snapshot into `drawableSize`, publishes closed iOS callbacks, and resolves a generation-owned actual `UIWindow`/`UIWindowScene`/`UIScreen` attachment | No scene notification observation, semantic activity, geometry normalization, or attached-screen state publication |
 | SwiftUI lifecycle | `RootView` and `UIKitLifecycleMonitor` | `RootView` does not construct or retain the mobile monitor; the monitor itself only maps a supplied `ScenePhase` to visible/focused and multiplies a supplied point size by a supplied scale | Not connected to the actual stream view, `UIWindow`, `UIWindowScene`, `UIScreen`, media generation, Stage Manager resize, or AppModel |
 | macOS lifecycle reference | `AppKitLifecycleMonitor`, `MacStreamSurfaceAttachmentOwner`, and `MacStreamInputCaptureView` | Actual window/surface ownership, occlusion/focus, backing pixels, screen EDR, stale attachment rejection, render policy, and input admission are connected | This is a behavioral reference, not reusable UIKit code |
 | Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Validated fit/fill geometry, checked revision increment, stale/invalid clear, letterbox rejection, source crop, and remote point mapping are implemented | Mobile must publish actual drawable geometry into this contract rather than create a parallel coordinate system |
@@ -418,6 +418,74 @@ All normal tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`. These results
 prove relay ownership/replacement/invalidation, iOS API compilation, and
 cross-platform build isolation. They do not prove a callback fired in a live
 UIKit window, actual scene/window/screen ownership, Stage Manager resizing,
+geometry/drawable/input publication, PiP, background continuity, mobile EDR,
+a signed artifact, physical hardware, or live Sunshine.
+
+## Current-generation actual UIKit attachment owner
+
+OpenSpec task 2.2 adds a main-actor owner fixed to one nonzero
+`MobileSceneSurfaceGeneration` and one stream-surface identity. A checked
+main-actor sequence assigns a new generation to each iOS
+`MobileStreamMetalView`; after `UInt64` exhaustion it returns no owner instead
+of wrapping to an old generation.
+
+The production resolver follows exactly this chain:
+
+```text
+MobileStreamMetalView
+  -> view.window
+    -> window.windowScene
+    -> window.screen
+```
+
+If the window or its window scene is absent, the result is detached. The owner
+does not read `UIScreen.main`, enumerate `connectedScenes`, accept a synthetic
+SwiftUI phase, or infer attachment from another view.
+
+The owner:
+
+- accepts callbacks only for its exact surface generation and surface object;
+- weakly retains the surface, window, scene, and screen;
+- synchronously emits actual UIKit objects only to a main-actor injected
+  handler;
+- replaces the handler during SwiftUI updates without changing ownership;
+- emits an invalidated transition during dismantle, clears all weak references,
+  and rejects late or repeated work; and
+- leaves notification ownership, semantic lifecycle state, normalized
+  geometry, display revisions, and actor publication to later tasks.
+
+The raw UIKit attachment update is deliberately not `Sendable`. A later adapter
+must convert it into the immutable privacy-bounded contracts before crossing an
+actor boundary, persisting state, recording diagnostics, or displaying UI.
+
+Task 2.2 evidence:
+
+```text
+Focused relay/owner tests:
+/tmp/LuneX-17-2_2-focused.tjvteD
+5 passed / 0 skipped / 0 failed
+
+Expanded presenter suite:
+/tmp/LuneX-17-2_2-expanded.5sWe4b
+31 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-2_2-full.dOhBLh
+777 total / 776 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-2_2-builds.PpGqRf
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Read-only simulator inventory:
+/tmp/LuneX-17-2_2-simulator.5RvcxU
+fixed iPhone/iPad present exactly once, available and Shutdown; Booted = 0
+```
+
+These results prove deterministic generation/surface rejection,
+replacement/detach derivation, invalidation, weak ownership, iOS public API
+compilation, and cross-platform isolation. They do not prove a callback fired
+in a live UIKit window, scene notification filtering, Stage Manager resizing,
 geometry/drawable/input publication, PiP, background continuity, mobile EDR,
 a signed artifact, physical hardware, or live Sunshine.
 

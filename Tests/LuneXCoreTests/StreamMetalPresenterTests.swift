@@ -61,6 +61,209 @@ final class StreamMetalPresenterTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testMobileSurfaceAttachmentOwnerDerivesReplacementAndDetach() {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 41)!
+        let surface = MobileSurfaceAttachmentTestSurface()
+        let firstScene = MobileSurfaceAttachmentTestScene(name: "first-scene")
+        let firstScreen = MobileSurfaceAttachmentTestScreen(name: "first-screen")
+        let firstWindow = MobileSurfaceAttachmentTestWindow(
+            name: "first-window",
+            scene: firstScene,
+            screen: firstScreen
+        )
+        let replacementScene = MobileSurfaceAttachmentTestScene(
+            name: "replacement-scene"
+        )
+        let replacementScreen = MobileSurfaceAttachmentTestScreen(
+            name: "replacement-screen"
+        )
+        let replacementWindow = MobileSurfaceAttachmentTestWindow(
+            name: "replacement-window",
+            scene: replacementScene,
+            screen: replacementScreen
+        )
+        var transitions: [MobileStreamSurfaceAttachmentTransition] = []
+        var windowNames: [String?] = []
+        let owner = MobileSurfaceAttachmentTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            resolver: mobileSurfaceAttachmentTestResolver,
+            handler: { update in
+                XCTAssertTrue(update.surface === surface)
+                transitions.append(update.transition)
+                windowNames.append(update.attachment?.window.name)
+            }
+        )
+
+        surface.window = firstWindow
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                event: .didMoveToWindow
+            ),
+            .attached
+        )
+        XCTAssertTrue(owner.currentWindow === firstWindow)
+        XCTAssertTrue(owner.currentScene === firstScene)
+        XCTAssertTrue(owner.currentScreen === firstScreen)
+
+        surface.window = replacementWindow
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .attached
+        )
+        XCTAssertTrue(owner.currentWindow === replacementWindow)
+        XCTAssertTrue(owner.currentScene === replacementScene)
+        XCTAssertTrue(owner.currentScreen === replacementScreen)
+
+        surface.window = nil
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                event: .didMoveToWindow
+            ),
+            .detached
+        )
+        XCTAssertNil(owner.currentWindow)
+        XCTAssertNil(owner.currentScene)
+        XCTAssertNil(owner.currentScreen)
+        XCTAssertEqual(
+            transitions,
+            [
+                .callback(.didMoveToWindow),
+                .callback(.layoutSubviews),
+                .callback(.didMoveToWindow)
+            ]
+        )
+        XCTAssertEqual(
+            windowNames,
+            ["first-window", "replacement-window", nil]
+        )
+    }
+
+    @MainActor
+    func testMobileSurfaceAttachmentOwnerRejectsStaleAndLateCallbacks() {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 51)!
+        let staleGeneration = MobileSceneSurfaceGeneration(rawValue: 52)!
+        let surface = MobileSurfaceAttachmentTestSurface()
+        let otherSurface = MobileSurfaceAttachmentTestSurface()
+        var transitions: [MobileStreamSurfaceAttachmentTransition] = []
+        let owner = MobileSurfaceAttachmentTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            resolver: mobileSurfaceAttachmentTestResolver,
+            handler: { update in transitions.append(update.transition) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: staleGeneration,
+                event: .layoutSubviews
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            owner.handle(
+                surface: otherSurface,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .staleSurface
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: otherSurface,
+                surfaceGeneration: generation
+            ),
+            .staleSurface
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .invalidated
+        )
+        owner.updateHandler { _ in
+            XCTFail("An invalidated owner must not accept a replacement handler")
+        }
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                event: .safeAreaInsetsDidChange
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(transitions, [.invalidated])
+        XCTAssertNil(owner.currentSurface)
+    }
+
+    @MainActor
+    func testMobileSurfaceAttachmentOwnerRetainsNoPlatformObjects() {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 61)!
+        var scene: MobileSurfaceAttachmentTestScene? =
+            MobileSurfaceAttachmentTestScene(name: "scene")
+        var screen: MobileSurfaceAttachmentTestScreen? =
+            MobileSurfaceAttachmentTestScreen(name: "screen")
+        var window: MobileSurfaceAttachmentTestWindow? =
+            MobileSurfaceAttachmentTestWindow(
+                name: "window",
+                scene: scene!,
+                screen: screen!
+            )
+        var surface: MobileSurfaceAttachmentTestSurface? =
+            MobileSurfaceAttachmentTestSurface(window: window)
+        weak let weakScene = scene
+        weak let weakScreen = screen
+        weak let weakWindow = window
+        weak let weakSurface = surface
+        let owner = MobileSurfaceAttachmentTestOwner(
+            surfaceGeneration: generation,
+            surface: surface!,
+            resolver: mobileSurfaceAttachmentTestResolver,
+            handler: { _ in }
+        )
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface!,
+                surfaceGeneration: generation,
+                event: .didMoveToWindow
+            ),
+            .attached
+        )
+        surface?.window = nil
+        surface = nil
+        window = nil
+        scene = nil
+        screen = nil
+
+        XCTAssertNil(weakSurface)
+        XCTAssertNil(weakWindow)
+        XCTAssertNil(weakScene)
+        XCTAssertNil(weakScreen)
+        XCTAssertNil(owner.currentSurface)
+        XCTAssertNil(owner.currentWindow)
+        XCTAssertNil(owner.currentScene)
+        XCTAssertNil(owner.currentScreen)
+    }
+
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
         let frame = try makeFrame(
             generation: 7,
@@ -1410,7 +1613,65 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 }
 
-private final class MobileSurfaceAttachmentTestSurface {}
+private typealias MobileSurfaceAttachmentTestOwner =
+    MobileStreamSurfaceAttachmentOwner<
+        MobileSurfaceAttachmentTestSurface,
+        MobileSurfaceAttachmentTestWindow,
+        MobileSurfaceAttachmentTestScene,
+        MobileSurfaceAttachmentTestScreen
+    >
+
+private final class MobileSurfaceAttachmentTestSurface {
+    var window: MobileSurfaceAttachmentTestWindow?
+
+    init(window: MobileSurfaceAttachmentTestWindow? = nil) {
+        self.window = window
+    }
+}
+
+private final class MobileSurfaceAttachmentTestWindow {
+    let name: String
+    let scene: MobileSurfaceAttachmentTestScene
+    let screen: MobileSurfaceAttachmentTestScreen
+
+    init(
+        name: String,
+        scene: MobileSurfaceAttachmentTestScene,
+        screen: MobileSurfaceAttachmentTestScreen
+    ) {
+        self.name = name
+        self.scene = scene
+        self.screen = screen
+    }
+}
+
+private final class MobileSurfaceAttachmentTestScene {
+    let name: String
+
+    init(name: String) {
+        self.name = name
+    }
+}
+
+private final class MobileSurfaceAttachmentTestScreen {
+    let name: String
+
+    init(name: String) {
+        self.name = name
+    }
+}
+
+@MainActor
+private func mobileSurfaceAttachmentTestResolver(
+    _ surface: MobileSurfaceAttachmentTestSurface
+) -> MobileSurfaceAttachmentTestOwner.ResolvedAttachment? {
+    guard let window = surface.window else { return nil }
+    return MobileSurfaceAttachmentTestOwner.ResolvedAttachment(
+        window: window,
+        scene: window.scene,
+        screen: window.screen
+    )
+}
 
 @MainActor
 final class RecordingPresenterSurfaceAdapter: HDRSurfaceApplying {

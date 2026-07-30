@@ -1823,3 +1823,11 @@
 - focused relay为`2/2`，expanded presenter suite为`28/28`；更新后完整macOS为`774 total / 773 passed / 1 explicit Keychain skip / 0 failed`，四平台generic Debug均成功且结构化diagnostics为0。
 - 固定iOS 26.4 iPhone/iPad只读盘点各唯一、available、`Shutdown`，全局`Booted=0`。本项未创建、克隆、启动、关闭、安装或运行模拟器，也未再次访问真实Keychain。
 - 该证据证明injectable callback boundary、relay replacement/invalidation/weak ownership、iOS public API compilation和跨平台隔离；不证明live UIKit callback实际触发、`UIWindowScene`/`UIWindow`/`UIScreen` owner、scene identity filtering、Stage Manager/geometry publication、drawable/input mapping、PiP/background、mobile EDR、signed/physical/live Sunshine。
+
+## 2026-07-30 阶段 17 任务 2.2 验收
+
+- 通用`MobileStreamSurfaceAttachmentOwner`固定nonzero surface generation与surface object identity，弱持有surface/window/scene/screen；stale generation、错误surface、late callback和重复invalidation都不能重新发布或重建所有权。
+- iOS `MobileStreamMetalView`为每个view分配checked单调generation，并只通过`view.window -> window.windowScene -> window.screen`派生actual attachment；window或scene缺失时同步发布detached，不使用global screen、scene枚举或synthetic SwiftUI phase。
+- actual UIKit对象只在main-actor非Sendable update内同步交给injectable handler；dismantle发布invalidated并清理owner。2.2不注册scene通知、不规范化geometry、不跨actor发布对象，也不接入AppModel。
+- focused为`5/5`、expanded presenter为`31/31`、full为`777 total / 776 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug均成功且结构化diagnostics为0。固定iPhone/iPad只读盘点仍各唯一、available、`Shutdown`且全局`Booted=0`。
+- 当前证据证明deterministic generation/surface rejection、replacement/detach derivation、invalidation、weak ownership和SDK编译；不证明live UIKit callback、scene notification filtering、Stage Manager、geometry/drawable/input、PiP/background、mobile EDR、signed/physical/live Sunshine。

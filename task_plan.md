@@ -368,6 +368,7 @@
 | 17.2.1更新后组合验收包装器在zsh中使用Bash数组索引 | 1 | 完整macOS测试已独立成功，四平台build均未启动；保留该测试xcresult，build改用显式Bash和全新证据目录运行 |
 | 17.2.1首轮repository gate误断言OpenSpec `.summary.totals.invalid` | 1 | 当前CLI schema使用`.summary.totals.failed`且`.items[].valid`真实为true；该轮在generator前退出，按真实schema从全新目录完整重跑 |
 | 17.2.1第二轮repository gate对整个Metal surface文件禁用`ObjectIdentifier` | 1 | 命中仅为既有decoded-frame identity，current diff新增代码零命中；禁词检查收紧到新增行并从全新目录完整重跑 |
+| 17.2.2完整xcresult case枚举触发Xcode数据库move冲突 | 1 | summary/build-results已成功证明`777/776/1/0`及零诊断；不重复失败子命令，改从原始xcodebuild日志精确确认唯一Keychain skip |
 
 ## 当前执行点（2026-07-30）
 
@@ -377,4 +378,4 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`6/36 in_progress`；2.1已完成iOS-only `MTKView` attachment callback边界、relay lifetime/teardown测试、更新后完整macOS与四平台generic Debug自验。下一项2.2实现main-actor current-generation actual view/window/scene/screen attachment owner；当前证据不证明live UIKit callback、Stage Manager、PiP、background、mobile EDR或真机。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`7/36 in_progress`；2.1完成iOS-only `MTKView` callback边界，2.2完成main-actor current-generation actual view/window/scene/screen owner、stale rejection、weak teardown及完整macOS/四平台generic Debug自验。下一项2.3实现attached scene通知identity filtering/cancellation；当前证据不证明live UIKit callback、Stage Manager、PiP、background、mobile EDR或真机。
