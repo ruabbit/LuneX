@@ -92,6 +92,7 @@
 				A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */,
 				8557773DAB04C6CEEF7128A6 /* ContinuityPolicy.swift */,
 				DF5BB9D89897ED6C7FBCCE3E /* MobileDisplayEDRState.swift */,
+				8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */,
 				CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */,
 				BDE0A3AB9C255FF12CC956A3 /* MobileSceneWindowState.swift */,
 				F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */,
@@ -180,6 +181,7 @@
 			); name = Sources; sourceTree = "<group>"; };
 		152AC345C5EF5763DEB5CA9F /* ControlChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB2DBC865FA6773F94F74AC /* ControlChannel.swift */; };
 		155D2E312C5B3E04C5844CE5 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7F3BA9FD46B52A82C6F343 /* AppSettings.swift */; };
+		15976C3C8FFEA8221F3792C7 /* MobilePictureInPictureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */; };
 		15B8E7597BC64E3F76BBA1A6 /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
 		15D9DE883859E7793E9E6EDC /* RuntimeProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4EBE3955C463936A71B8B9 /* RuntimeProviders.swift */; };
 		15E2868CAA5C0D8D2AAE920C /* AudioPacketJitterBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C6B6FFA15778F50114093FC /* AudioPacketJitterBuffer.swift */; };
@@ -252,6 +254,7 @@
 				455F622EFDDBC7F130913018 /* X509CertificateDER.swift in Sources */,
 				77AFAE14D6E388173018CC4B /* ContinuityPolicy.swift in Sources */,
 				08D516D71EBFA7954B43B7D7 /* MobileDisplayEDRState.swift in Sources */,
+				3304A7362F5BF5EBBF1B9BCB /* MobilePictureInPictureClient.swift in Sources */,
 				5FED7803500C7F9AEE2572F3 /* MobilePictureInPictureState.swift in Sources */,
 				AC11DA9BF2DB2BB224E67AE1 /* MobileSceneWindowState.swift in Sources */,
 				A3C464852F3EC9D4F2E283F6 /* PlatformLifecycle.swift in Sources */,
@@ -379,6 +382,7 @@
 		325318E14EE44697C492D741 /* SessionResourceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620591FA7092BCEE22B47B90 /* SessionResourceTracker.swift */; };
 		32CE222BD6A648D8BB0834BD /* ServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E349041994EA416B05890A /* ServerInfo.swift */; };
 		32FD909C5E7642EE14FD9AEC /* HDRRenderContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXRendering/HDRRenderContract.swift"; sourceTree = "<group>"; };
+		3304A7362F5BF5EBBF1B9BCB /* MobilePictureInPictureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */; };
 		332C2BEFBE3F27FD006ECD9B /* protocol.c in Sources */ = {isa = PBXBuildFile; fileRef = FCF248FE8535CFD51D28ECFF /* protocol.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		334095613F4A4AD8A3C2D50E /* AudioRouteState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF039666FCCB2021028835D /* AudioRouteState.swift */; };
 		334A976ACB2845489B227C37 /* RemoteInputWireCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0440A153CC09DAFCFA271E /* RemoteInputWireCodec.swift */; };
@@ -571,6 +575,7 @@
 				99A072169B54FDD65A4C42C0 /* X509CertificateDER.swift in Sources */,
 				06BACFE0B8BDEBFAAE8A21D6 /* ContinuityPolicy.swift in Sources */,
 				52677FBA67471E5063B39A45 /* MobileDisplayEDRState.swift in Sources */,
+				883DB03E9175D9152AF8CE5F /* MobilePictureInPictureClient.swift in Sources */,
 				EAD0489F9C2FD4A98598E2B5 /* MobilePictureInPictureState.swift in Sources */,
 				08EC1DB289C4C20DC29173B0 /* MobileSceneWindowState.swift in Sources */,
 				B545480E72B7EDD648FA8DB7 /* PlatformLifecycle.swift in Sources */,
@@ -720,6 +725,7 @@
 				C96D67AAC86412351BF3557B /* X509CertificateDER.swift in Sources */,
 				E48CBE2A7F00F84548F195DC /* ContinuityPolicy.swift in Sources */,
 				F59BB2CB3A42DE05EA6A1CEE /* MobileDisplayEDRState.swift in Sources */,
+				BABECCB30A4B840D88B3DE6A /* MobilePictureInPictureClient.swift in Sources */,
 				718DF9FDF998F2F59C77DE01 /* MobilePictureInPictureState.swift in Sources */,
 				25F258550B1C5C08B43297E6 /* MobileSceneWindowState.swift in Sources */,
 				E7C68A141C49CAC87CF1B9AF /* PlatformLifecycle.swift in Sources */,
@@ -999,6 +1005,8 @@
 		80C81871F05B2A45B06F5945 /* AudioPacketJitterBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C6B6FFA15778F50114093FC /* AudioPacketJitterBuffer.swift */; };
 		81828B91AB3300483CF27B1D /* AudioRuntimeRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1A7ED20A6C63D1DBDE4BA2 /* AudioRuntimeRecovery.swift */; };
 		8191C455B45B13E661203835 /* AudioPacketJitterBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C6B6FFA15778F50114093FC /* AudioPacketJitterBuffer.swift */; };
+		824D573ABFC0F1100A6D151A /* MobilePictureInPictureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */; };
+		8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPlatform/MobilePictureInPictureClient.swift"; sourceTree = "<group>"; };
 		82820A094B73B5239F4F5C6F /* HostEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/HostEndpoint.swift"; sourceTree = "<group>"; };
 		82BEADFFDB29D8DE37D2FBC9 /* SpatialAudioRuntimeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/SpatialAudioRuntimeState.swift"; sourceTree = "<group>"; };
 		831F14496421DEFFAB0BA5C2 /* NativeSessionAudioProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */; };
@@ -1037,6 +1045,7 @@
 				D6551233E55ED59D09389862 /* X509CertificateDER.swift in Sources */,
 				CB28E6EF9E7A89FF16EB069C /* ContinuityPolicy.swift in Sources */,
 				2A0AE1A5F5D4E617C45383A8 /* MobileDisplayEDRState.swift in Sources */,
+				824D573ABFC0F1100A6D151A /* MobilePictureInPictureClient.swift in Sources */,
 				D11D02DFF2F3E74611A3BF34 /* MobilePictureInPictureState.swift in Sources */,
 				1DFD803C7743CBBEB2D45178 /* MobileSceneWindowState.swift in Sources */,
 				95C9DE49F2BED263901FCC3C /* PlatformLifecycle.swift in Sources */,
@@ -1125,6 +1134,7 @@
 			); runOnlyForDeploymentPostprocessing = 0; };
 		87617E2E33694E4FDE29C6CF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A52A473DF63B8343293FC7A /* AppModel.swift */; };
 		8781CF2F8F4CAC27204792D1 /* StreamCoordinateSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533C6BF0CE0FC77B5AF48465 /* StreamCoordinateSnapshot.swift */; };
+		883DB03E9175D9152AF8CE5F /* MobilePictureInPictureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */; };
 		89BCE89D72EB27190D730DB2 /* ControlChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB2DBC865FA6773F94F74AC /* ControlChannel.swift */; };
 		8ABEB85CF6F368EA331363F9 /* MetalVideoFrameDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23EDB4BFB4ABA1B790E136DC /* MetalVideoFrameDelivery.swift */; };
 		8AEE264397F38B797EA26753 /* HDRRenderContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FD909C5E7642EE14FD9AEC /* HDRRenderContract.swift */; };
@@ -1449,6 +1459,7 @@
 				A98BAC7E720E34687CF77B2E /* Assets.xcassets in Resources */
 			); runOnlyForDeploymentPostprocessing = 0; };
 		BAAA8579B871B6D444EB8588 /* NetworkChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ADFE46A1EFC63457BC1BEB9 /* NetworkChannelTests.swift */; };
+		BABECCB30A4B840D88B3DE6A /* MobilePictureInPictureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8277EF0A3DDA56C5255C8420 /* MobilePictureInPictureClient.swift */; };
 		BB032AAFAA314E2C8916AEAD /* VideoPacketAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034D057B26B7D00AA2AD265F /* VideoPacketAssembly.swift */; };
 		BB0DA9203FA1514429C0504D /* RTSPSessionDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07F4D4E61BC812205275C2A /* RTSPSessionDescription.swift */; };
 		BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/PairingCrypto.swift"; sourceTree = "<group>"; };
@@ -1721,6 +1732,7 @@
 				707EFFCEE10F9D10FAF49DB5 /* X509CertificateDER.swift in Sources */,
 				F386E16A415C41DA99D71C67 /* ContinuityPolicy.swift in Sources */,
 				AE469A2E523AE7271B60355C /* MobileDisplayEDRState.swift in Sources */,
+				15976C3C8FFEA8221F3792C7 /* MobilePictureInPictureClient.swift in Sources */,
 				2D7C757FC8D0EC34C1E1EDFC /* MobilePictureInPictureState.swift in Sources */,
 				A91605F926510A2462027B6D /* MobileSceneWindowState.swift in Sources */,
 				09930649637843C32301218C /* PlatformLifecycle.swift in Sources */,

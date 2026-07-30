@@ -382,6 +382,9 @@
 | 17.3.5首轮presenter竞态夹具假设离屏MTKView transition内draw同步调用delegate | 1 | 三个observer回归通过且production零诊断；每次配置后显式执行mandatory clear与present两次draw，从全新DerivedData/result bundle重跑 |
 | 17.3.5首轮repository pre-gate读取旧OpenSpec摘要字段`.summary.invalid` | 1 | fixture与8/8 strict-valid已通过但包装器在generator前主动退出；按当前`.summary.totals.failed`和`.items[].valid` schema从全新目录完整重跑 |
 | 17.3.5跟踪补丁假设`findings.md`中调查小节措辞与交接摘要一致 | 1 | `apply_patch`整体拒绝且无文件变化；读取各文件真实尾部后按独立上下文拆分补丁 |
+| 17.4.1对既有Swift文件运行默认`swift-format lint --strict` | 1 | 默认2-space格式与仓库既有4-space风格冲突并产生大量纯格式诊断；不批量改写，继续以warnings-as-errors编译、`git diff --check`和局部审阅作为门禁 |
+| 17.4.1收紧补丁复用已变化的callback断言上下文 | 1 | `apply_patch`整体拒绝且无文件变化；用`rg -C`读取真实位置后拆分source/plan/test补丁 |
+| 17.4.1首个AVKit Swift 6.3 probe让整个`@MainActor`类直接conform nonisolated ObjC protocols | 1 | 编译器以conformance-isolation拒绝；按诊断在继承列表使用`@MainActor AVPictureInPictureControllerDelegate`与`@MainActor AVPictureInPictureSampleBufferPlaybackDelegate`，四SDK warnings-as-errors均通过 |
 
 ## 当前执行点（2026-07-30）
 
@@ -391,4 +394,4 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`16/36 in_progress`；2.1至2.6完成actual mobile surface lifecycle/geometry/drawable/video/input绑定，3.1至3.5完成actual-window mobile EDR读取、attached-screen观察、renderer接线、原子fallback/exhaustion/teardown及扩展竞态/资源回归。下一项4.1定义main-actor injectable PiP client boundary；当前generic build和离线测试仍不证明live Stage Manager、PiP、background、visible mobile EDR、signed/physical设备或live Sunshine。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`17/36 in_progress`；2.1至2.6完成actual mobile surface lifecycle/geometry/drawable/video/input绑定，3.1至3.5完成actual-window mobile EDR读取、attached-screen观察、renderer接线、原子fallback/exhaustion/teardown及扩展竞态/资源回归，4.1完成generation-scoped main-actor injectable PiP client边界。下一项4.2实现不复制、不另建decoder的current-generation `CVPixelBuffer`到`CMSampleBuffer` adapter；当前generic build和离线测试仍不证明live Stage Manager、系统PiP、background、visible mobile EDR、signed/physical设备或live Sunshine。

@@ -2458,3 +2458,19 @@
 - 本任务唯一一次`simctl list devices available -j`保存于`/tmp/LuneX-17-3_5-simulator.eONo7q/devices.json`；固定iOS 26.4 iPhone/iPad按runtime/name/UUID各唯一、available、Shutdown，全局Booted为0。iOS 27.0同名系统设备也为Shutdown；未执行create/clone/boot/install/launch/shutdown/delete。
 - 首轮repository包装器在OpenSpec原始JSON已证明8/8 valid后误读旧`.summary.invalid`字段并于generator前退出，不计验收。corrected `/tmp/LuneX-17-3_5-repository-pre-r2.ETDMp3`从头通过fixture、strict、勾选前apply `15/36` next 3.5、generator三次稳定SHA-256、工程零diff和`git diff --check`。
 - OpenSpec 3.5已勾选，预期权威进度`16/36`，下一项4.1定义injectable main-actor PiP controller/content-source/playback-delegate client boundary。本项不证明signed/physical/system-PiP/background/visible-EDR/live-Sunshine行为。
+
+## 2026-07-30 阶段 17 任务 4.1 启动
+
+- 3.5已以`dedfad0 Expand mobile EDR regression coverage`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`16/36 ready`，下一项精确为4.1。
+- 审计现有PiP值合同、OpenSpec设计/spec和Xcode 26.4 AVKit headers；Context7 Apple索引没有返回相关AVKit条目，因此本机公开SDK header和Swift importer probe作为当前API证据。
+- 4.1限定为platform-neutral semantic values与`@MainActor` injectable client boundary，显式覆盖controller/content-source/playback-delegate ownership、playback state、capability/lifecycle event、render size、skip/restoration callback lease与completion；不提前创建AVKit对象、sample buffer或display layer。
+- 首轮focused `/tmp/LuneX-17-4_1-focused.qn2xIj/Focused.xcresult`通过`26/26`；审阅后删除无用途component-name enum，补playback-delegate failure映射与stale callback completion，收紧后的`/tmp/LuneX-17-4_1-focused-r2.g2gYJ4/Focused.xcresult`通过`27/27`。
+- 首个iOS AVKit probe因直接main-actor class conformance被Swift 6.3拒绝；改为协议级`@MainActor` isolated conformance后，macOS/iOS/tvOS/visionOS 26.4四SDK typecheck全部通过，锁定content-source initializer、playback delegate labels、skip/restoration completion和possibility/invalidate API。
+
+## 2026-07-30 阶段 17 任务 4.1 完成
+
+- 系统更新后恢复核验仍为Xcode 26.4、Swift 6.3与四平台26.4 SDK；`HEAD == origin/main == dedfad0`，没有工具链漂移。未重新查询、创建、启动或修改simulator，也未访问真实Keychain。
+- 收紧后的focused `/tmp/LuneX-17-4_1-focused-r2.g2gYJ4/Focused.xcresult`通过`27/27`，expanded `/tmp/LuneX-17-4_1-expanded.0KNwFG/Expanded.xcresult`通过`75/75`；完整normal `/tmp/LuneX-17-4_1-full.bNF3gZ/Full.xcresult`为`812 total / 811 passed / 1 explicit Keychain skip / 0 failed`，三者结构化error、warning、analyzer warning均为0。
+- 四平台generic Debug证据根`/tmp/LuneX-17-4_1-builds.w391o4`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded且三类结构化诊断为0，每个平台各有一个AIR与metallib。复用本任务既有只读inventory `/tmp/LuneX-17-4_1-simulator.8aqwfY/devices.json`，固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，全局Booted为0。
+- 最终repository pre-gate通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `16/36` next 4.1、generator初始及连续两次稳定SHA-256 `8e897a1edbf76ad1d3ad7d68f34c07bf82dddece5d0b341c13bf4f953ab20000`和`git diff --check`。
+- OpenSpec 4.1已勾选，预期权威进度`17/36`，下一项4.2实现bounded current-generation pixel-buffer到sample-buffer adapter。本项不创建production AVKit controller/display layer，不证明签名、安装、系统PiP、后台持续时间、物理设备或live Sunshine。

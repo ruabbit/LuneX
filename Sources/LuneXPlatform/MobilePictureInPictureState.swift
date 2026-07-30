@@ -40,6 +40,7 @@ enum MobilePictureInPictureUnavailableReason:
     case platformUnsupported = "platform-unsupported"
     case contentSourceUnavailable = "content-source-unavailable"
     case controllerUnavailable = "controller-unavailable"
+    case playbackDelegateUnavailable = "playback-delegate-unavailable"
     case notPossible = "not-possible"
     case invalidated
 }
@@ -720,6 +721,8 @@ struct MobilePictureInPictureStateReducer: Sendable {
         switch reason {
         case .contentSourceUnavailable:
             return .contentSourceUnavailable
+        case .playbackDelegateUnavailable:
+            return .playbackDelegateFailed
         case .controllerUnavailable, .notPossible, .invalidated,
              .platformUnsupported:
             return .controllerUnavailable

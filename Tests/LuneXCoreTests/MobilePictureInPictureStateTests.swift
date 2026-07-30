@@ -1,6 +1,239 @@
 import XCTest
 
 final class MobilePictureInPictureStateTests: XCTestCase {
+    func testClientPreparationSnapshotRequiresClosedComponentState() {
+        let generation = makeGeneration()!
+
+        XCTAssertNil(MobilePictureInPictureClientPreparationSnapshot(
+            generation: generation,
+            components: .ready,
+            capability: .unknown
+        ))
+        XCTAssertNil(MobilePictureInPictureClientPreparationSnapshot(
+            generation: generation,
+            components: .unprepared,
+            capability: .possible
+        ))
+        XCTAssertNil(MobilePictureInPictureClientPreparationSnapshot(
+            generation: generation,
+            components: .invalidated,
+            capability: .unavailable(.notPossible)
+        ))
+        XCTAssertEqual(
+            MobilePictureInPictureClientPreparationSnapshot(
+                generation: generation,
+                components: .ready,
+                capability: .unavailable(.notPossible)
+            )?.components,
+            .ready
+        )
+        XCTAssertEqual(
+            MobilePictureInPictureClientPreparationSnapshot(
+                generation: generation,
+                components: .invalidated,
+                capability: .unavailable(.invalidated)
+            )?.capability,
+            .unavailable(.invalidated)
+        )
+    }
+
+    func testClientSemanticValuesAreFiniteAndGenerationScoped() throws {
+        let generation = makeGeneration()!
+        let stale = makeGeneration(media: 9, pictureInPicture: 2)!
+        let maximumSize = try XCTUnwrap(
+            MobilePictureInPictureRenderSize(
+                width: MobilePictureInPictureRenderSize.maximumDimension,
+                height: MobilePictureInPictureRenderSize.maximumDimension
+            )
+        )
+        XCTAssertEqual(maximumSize.width, 16_384)
+        XCTAssertNil(MobilePictureInPictureRenderSize(width: 0, height: 1))
+        XCTAssertNil(MobilePictureInPictureRenderSize(
+            width: MobilePictureInPictureRenderSize.maximumDimension + 1,
+            height: 1
+        ))
+
+        XCTAssertNotNil(MobilePictureInPictureSkipInterval(
+            nanoseconds:
+                MobilePictureInPictureSkipInterval
+                    .maximumMagnitudeNanoseconds
+        ))
+        XCTAssertNotNil(MobilePictureInPictureSkipInterval(
+            nanoseconds:
+                -MobilePictureInPictureSkipInterval
+                    .maximumMagnitudeNanoseconds
+        ))
+        XCTAssertNil(MobilePictureInPictureSkipInterval(nanoseconds: 0))
+        XCTAssertNil(MobilePictureInPictureSkipInterval(
+            nanoseconds:
+                MobilePictureInPictureSkipInterval
+                    .maximumMagnitudeNanoseconds + 1
+        ))
+        XCTAssertNil(MobilePictureInPictureSkipInterval(
+            nanoseconds: .min
+        ))
+
+        XCTAssertNil(MobilePictureInPicturePlaybackState(
+            timeline: .unavailable,
+            isPaused: false,
+            backgroundAudioPolicy: .prohibited
+        ))
+        XCTAssertNotNil(MobilePictureInPicturePlaybackState(
+            timeline: .live,
+            isPaused: false,
+            backgroundAudioPolicy: .permitted
+        ))
+
+        let restoration = try XCTUnwrap(
+            MobilePictureInPictureClientCallbackLease(
+                generation: generation,
+                kind: .restoreInterface,
+                ordinal: 1
+            )
+        )
+        XCTAssertNil(MobilePictureInPictureClientCallbackLease(
+            generation: generation,
+            kind: .skip,
+            ordinal: 0
+        ))
+        XCTAssertNotNil(MobilePictureInPictureClientEventEnvelope(
+            generation: generation,
+            event: .restoreInterfaceRequested(restoration)
+        ))
+        XCTAssertNil(MobilePictureInPictureClientEventEnvelope(
+            generation: stale,
+            event: .restoreInterfaceRequested(restoration)
+        ))
+    }
+
+    @MainActor
+    func testInjectableClientEmitsBoundedEventsAndCompletesCallbacksOnce()
+        throws
+    {
+        let generation = makeGeneration()!
+        let client = RecordingMobilePictureInPictureControllerClient(
+            generation: generation
+        )
+        let consumer = RecordingMobilePictureInPictureClientConsumer(
+            client: client
+        )
+
+        consumer.install()
+        client.prepare()
+        client.requestStart()
+        client.requestStop()
+        client.updatePlaybackState(try XCTUnwrap(
+            MobilePictureInPicturePlaybackState(
+                timeline: .live,
+                isPaused: false,
+                backgroundAudioPolicy: .permitted
+            )
+        ))
+        client.invalidatePlaybackState()
+
+        let restoration = try XCTUnwrap(
+            MobilePictureInPictureClientCallbackLease(
+                generation: generation,
+                kind: .restoreInterface,
+                ordinal: 1
+            )
+        )
+        let skip = try XCTUnwrap(
+            MobilePictureInPictureClientCallbackLease(
+                generation: generation,
+                kind: .skip,
+                ordinal: 2
+            )
+        )
+        client.emit(.restoreInterfaceRequested(restoration))
+        client.emit(.skipRequested(
+            interval: try XCTUnwrap(
+                MobilePictureInPictureSkipInterval(
+                    nanoseconds: 15_000_000_000
+                )
+            ),
+            completion: skip
+        ))
+
+        XCTAssertEqual(
+            client.completeCallback(
+                restoration,
+                with: .restoreInterface(restored: true)
+            ),
+            .completed
+        )
+        XCTAssertEqual(
+            client.completeCallback(
+                restoration,
+                with: .restoreInterface(restored: false)
+            ),
+            .alreadyCompleted
+        )
+        XCTAssertEqual(
+            client.completeCallback(
+                skip,
+                with: .restoreInterface(restored: false)
+            ),
+            .kindMismatch
+        )
+        XCTAssertEqual(
+            client.completeCallback(skip, with: .skip),
+            .completed
+        )
+        let stale = try XCTUnwrap(
+            MobilePictureInPictureClientCallbackLease(
+                generation: makeGeneration(
+                    media: 9,
+                    pictureInPicture: 2
+                )!,
+                kind: .skip,
+                ordinal: 3
+            )
+        )
+        XCTAssertEqual(
+            client.completeCallback(stale, with: .skip),
+            .staleGeneration
+        )
+
+        XCTAssertEqual(
+            client.commands,
+            [
+                .prepare,
+                .start,
+                .stop,
+                .playbackState,
+                .invalidatePlaybackState
+            ]
+        )
+        XCTAssertEqual(
+            consumer.events.map(\.generation),
+            Array(repeating: generation, count: 3)
+        )
+        XCTAssertEqual(
+            consumer.events.map(\.event),
+            [
+                .prepared(try XCTUnwrap(client.preparationSnapshot)),
+                .restoreInterfaceRequested(restoration),
+                .skipRequested(
+                    interval: try XCTUnwrap(
+                        MobilePictureInPictureSkipInterval(
+                            nanoseconds: 15_000_000_000
+                        )
+                    ),
+                    completion: skip
+                )
+            ]
+        )
+
+        client.invalidate()
+        XCTAssertEqual(
+            client.completeCallback(skip, with: .skip),
+            .invalidated
+        )
+        XCTAssertEqual(consumer.events.last?.event, .invalidated)
+        consumer.uninstall()
+    }
+
     func testGenerationRejectsZeroComponents() {
         XCTAssertNil(makeGeneration(media: 0, pictureInPicture: 1))
         XCTAssertNil(makeGeneration(media: 1, pictureInPicture: 0))
@@ -56,6 +289,19 @@ final class MobilePictureInPictureStateTests: XCTestCase {
             detached.apply(envelope(.startRequested)),
             .rejected(.frameSinkUnavailable)
         )
+    }
+
+    func testPlaybackDelegatePreparationFailureMapsTypedClass() throws {
+        var reducer = makeReducer()
+        _ = reducer.apply(envelope(.prepareRequested))
+
+        let snapshot = try applied(reducer.apply(envelope(.prepared(
+            capability: .unavailable(.playbackDelegateUnavailable),
+            frameSink: readySink()
+        ))))
+
+        XCTAssertEqual(snapshot.state.lifecycle, .unavailable)
+        XCTAssertEqual(snapshot.state.failure, .playbackDelegateFailed)
     }
 
     func testStaleGenerationCannotMutateCurrentSnapshot() {
@@ -803,5 +1049,127 @@ final class MobilePictureInPictureStateTests: XCTestCase {
     private enum TestFailure: Error {
         case expectedAppliedOutcome
         case expectedPublishedPath
+    }
+}
+
+@MainActor
+private final class RecordingMobilePictureInPictureClientConsumer {
+    private let client: any MobilePictureInPictureControllerClient
+    private(set) var events: [
+        MobilePictureInPictureClientEventEnvelope
+    ] = []
+
+    init(client: any MobilePictureInPictureControllerClient) {
+        self.client = client
+    }
+
+    func install() {
+        client.setEventHandler { [weak self] event in
+            self?.events.append(event)
+        }
+    }
+
+    func uninstall() {
+        client.setEventHandler(nil)
+    }
+}
+
+@MainActor
+private final class RecordingMobilePictureInPictureControllerClient:
+    MobilePictureInPictureControllerClient
+{
+    enum Command: Equatable {
+        case prepare
+        case start
+        case stop
+        case playbackState
+        case invalidatePlaybackState
+    }
+
+    let generation: MobilePictureInPictureGeneration
+    private(set) var preparationSnapshot:
+        MobilePictureInPictureClientPreparationSnapshot?
+    private(set) var commands: [Command] = []
+
+    private var handler: MobilePictureInPictureClientEventHandler?
+    private var completedLeases:
+        Set<MobilePictureInPictureClientCallbackLease> = []
+    private var isInvalidated = false
+
+    init(generation: MobilePictureInPictureGeneration) {
+        self.generation = generation
+    }
+
+    func setEventHandler(
+        _ handler: MobilePictureInPictureClientEventHandler?
+    ) {
+        self.handler = handler
+    }
+
+    func prepare() {
+        commands.append(.prepare)
+        preparationSnapshot =
+            MobilePictureInPictureClientPreparationSnapshot(
+                generation: generation,
+                components: .ready,
+                capability: .possible
+            )
+        emit(.prepared(preparationSnapshot!))
+    }
+
+    func requestStart() {
+        commands.append(.start)
+    }
+
+    func requestStop() {
+        commands.append(.stop)
+    }
+
+    func updatePlaybackState(
+        _ state: MobilePictureInPicturePlaybackState
+    ) {
+        _ = state
+        commands.append(.playbackState)
+    }
+
+    func invalidatePlaybackState() {
+        commands.append(.invalidatePlaybackState)
+    }
+
+    func completeCallback(
+        _ lease: MobilePictureInPictureClientCallbackLease,
+        with completion: MobilePictureInPictureClientCallbackCompletion
+    ) -> MobilePictureInPictureClientCallbackOutcome {
+        guard !isInvalidated else { return .invalidated }
+        guard lease.generation == generation else {
+            return .staleGeneration
+        }
+        guard lease.kind == completion.kind else {
+            return .kindMismatch
+        }
+        guard completedLeases.insert(lease).inserted else {
+            return .alreadyCompleted
+        }
+        return .completed
+    }
+
+    func invalidate() {
+        guard !isInvalidated else { return }
+        isInvalidated = true
+        emit(.invalidated)
+        handler = nil
+        preparationSnapshot = nil
+        completedLeases.removeAll(keepingCapacity: false)
+    }
+
+    func emit(_ event: MobilePictureInPictureClientEvent) {
+        guard !isInvalidated || event == .invalidated,
+              let envelope = MobilePictureInPictureClientEventEnvelope(
+                generation: generation,
+                event: event
+              ) else {
+            return
+        }
+        handler?(envelope)
     }
 }

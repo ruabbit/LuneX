@@ -1988,3 +1988,20 @@
 - 四平台generic Debug证据根`/tmp/LuneX-17-3_5-builds.BtDVeh`，macOS、iOS/iPadOS、tvOS、visionOS均succeeded且三类结构化诊断为0，每个平台各有一个AIR与metallib。唯一一次只读simulator inventory为`/tmp/LuneX-17-3_5-simulator.eONo7q/devices.json`，固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，全局Booted为0；iOS 27.0同名系统设备也为Shutdown且未修改。
 - corrected repository pre-gate `/tmp/LuneX-17-3_5-repository-pre-r2.ETDMp3`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `15/36` next 3.5、generator初始及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、工程零diff与whitespace检查。
 - 本项证明离线合同、macOS测试、generic SDK构建与只读设备身份；不证明签名/安装、系统PiP、后台持续时间、Stage Manager、外接显示器、visible EDR、物理设备、功耗/热状态或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.1 调查
+
+- 现有`MobilePictureInPictureState`已经定义generation、capability、controller lifecycle、frame sink、restoration lease、reducer与continuity policy，但没有可注入的runtime client；AVKit对象、native delegate callback和completion ownership尚未接入。
+- Xcode 26.4 SDK确认sample-buffer playback delegate同步提供play/pause、time range、paused state和render-size回调；skip callback的completion必须调用，否则系统播放UI会永久停在seeking。controller delegate另有start/stop/failure和UI restoration completion。
+- 4.1将定义`@MainActor`、generation-scoped controller/content-source/playback-delegate client protocol，以及只含有限值的semantic event。AVKit controller/content source/layer/delegate、raw NSError和native completion closure不得跨出client。
+- restoration与skip使用带generation、kind和有限ordinal的callback lease；client通过显式completion方法收敛native closure，使replacement/stale/duplicate completion可在后续owner中fail closed。实时Moonlight timeline使用typed live/unavailable状态，不在共享合同中泄漏CoreMedia类型。
+- 本项只建立可注入边界、有限snapshot/event和纯值验证；4.2负责CVPixelBuffer到CMSampleBuffer，4.3负责display-layer sink，4.4才实现production AVPictureInPictureController adapter。
+- Swift 6.3 importer把两个AVKit ObjC delegate protocol视为nonisolated；`@MainActor final class ...: Protocol`会触发conformance-isolation错误。正确的production形态是继承列表显式写`@MainActor Protocol` isolated conformance，已在macOS/iOS/tvOS/visionOS 26.4 SDK warnings-as-errors probe中通过，无需`@unchecked Sendable`或`nonisolated`访问native对象。
+
+## 2026-07-30 阶段 17 任务 4.1 验收
+
+- 新增的共享client合同只导入`Foundation`，没有暴露`AVKit`、`CoreMedia`、`CVPixelBuffer`、`CMSampleBuffer`、`NSError`、native completion closure、`NSObject`或其他平台对象。AVKit所有权仍明确留给4.4 production adapter。
+- preparation snapshot只接受闭合component/capability组合；render size限制为正值且单维不超过16384，skip interval限制为非零且绝对值不超过24小时，live/unavailable playback timeline与background-audio policy均为typed value。
+- semantic event envelope校验prepared/restoration/skip内嵌generation；callback lease同时绑定generation、kind与正ordinal。测试证明kind mismatch、stale generation、重复完成和client invalidation均fail closed。
+- `playbackDelegateUnavailable`被映射为既有bounded `.playbackDelegateFailed`，不把native error或localized description带入持久状态。4.1只证明可注入边界与值合同，不证明native delegate已经接线。
+- focused `27/27`、expanded `75/75`、normal `812/811/1/0`、四平台generic build和repository gates均通过；唯一skip仍为显式real-Keychain opt-in。physical PiP/background/Stage Manager/EDR/live-host证据保持未完成。
