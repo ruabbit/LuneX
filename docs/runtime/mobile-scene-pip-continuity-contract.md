@@ -56,8 +56,12 @@ No lower tier may be reported as a higher tier.
 - `LuneX-iOS` targets device families `1,2`, deployment target 26.0, and both
   `iphoneos` and `iphonesimulator`.
 - iPhone and iPad orientation declarations are generated.
-- `INFOPLIST_KEY_UIBackgroundModes` currently contains `audio` for iOS, tvOS,
-  and visionOS.
+- `Configuration/Info/LuneX-iOS.plist` supplies the iOS/iPadOS
+  `UIBackgroundModes` string array with the single `audio` value. The generated
+  project references that source plist in both iOS configurations.
+- macOS, tvOS, and visionOS do not receive a stage 17 background-mode
+  declaration. Their product-specific background requirements remain owned by
+  their later platform stages.
 - The iOS entitlement file currently requests the stage 16 head-pose
   entitlement. It does not grant PiP or prove background execution.
 - AVKit is available through SDK autolinking, but no source currently imports
@@ -66,10 +70,11 @@ No lower tier may be reported as a higher tier.
   test-support membership arrays where their contracts are compiled into
   `LuneXCoreTests`.
 
-The existing `audio` background declaration is configuration intent only. Stage
-17 must separately verify the generated built plist, signed artifact, actual
-audio-session activation, actual PiP callback state, and physical background
-behavior.
+The `audio` background declaration is configuration intent only. Stage 17
+separately verifies the source plist, generated project, unsigned built plist,
+signed artifact acceptance, actual audio-session activation, actual PiP
+callback state, and physical background behavior. No lower tier substitutes
+for a later tier.
 
 ## Reusable runtime contracts
 
@@ -856,6 +861,61 @@ adapters, `NativeSessionMediaEnvironment`, and `AppModel`. System PiP,
 background duration, signed configuration, physical iPhone/iPad behavior,
 Stage Manager, external display, visible EDR, power, and live Sunshine remain
 unproved.
+
+### Generated iOS/iPadOS playback background configuration
+
+OpenSpec task 5.3 replaces the ineffective single-value
+`INFOPLIST_KEY_UIBackgroundModes` settings with one iOS-specific source plist.
+Apple defines `UIBackgroundModes` as an array of strings. The source and both
+unsigned iPhoneOS Debug/Release products contain exactly:
+
+```text
+UIBackgroundModes = ["audio"]
+UIDeviceFamily = [1, 2]
+CFBundleSupportedPlatforms = ["iPhoneOS"]
+```
+
+The same device binary therefore carries the declaration for iPhone and iPad.
+No location, VoIP, fetch, processing, notification, accessory, Bluetooth, or
+other background mode is present. Xcode continues to generate and merge the
+remaining bundle, version, platform, launch-screen, device-family, and
+orientation keys. The generator records the plist as `text.plist.xml`, adds it
+to the Configuration group, and references it only from `LuneX-iOS`.
+
+The obsolete settings on tvOS and visionOS were removed because their actual
+stage 16 products did not contain the key. Stage 17 does not silently broaden
+their configuration; stage 18 must make and verify any platform-specific
+background decision against those built products.
+
+Task 5.3 evidence:
+
+```text
+iPhoneOS configuration probe:
+/tmp/LuneX-17-5_3-config-probe.j3rZDL
+source and Debug built UIBackgroundModes = ["audio"]
+
+Unsigned build/configuration matrix:
+/tmp/LuneX-17-5_3-build-matrix.LUMoL0
+iPhoneOS Debug/Release and macOS/tvOS/visionOS Debug succeeded
+validation-r3 proves exact iPhone/iPad plist and absence on other targets
+all builds have zero structured diagnostics and AIR/metallib products
+
+Full macOS:
+/tmp/LuneX-17-5_3-full.iJCZfF/Full.xcresult
+881 total / 880 passed / 1 explicit Keychain skip / 0 failed
+
+Repository pre-gate:
+/tmp/LuneX-17-5_3-repository-pre-r2.cCRbWz
+fixtures, OpenSpec strict 8/8, pre-check 25/36 next 5.3, generator stability,
+source/project/built configuration, build evidence, full result, and diff pass
+```
+
+All five application products in the matrix intentionally disabled code
+signing. This proves source configuration, generated project ownership, and
+unsigned built-plist content only. It does not prove that a provisioning
+profile accepts the configuration. The declaration also does not prove an
+active `.playback` audio session, system PiP, background execution or duration,
+interruption recovery, physical-device behavior, or live Sunshine continuity.
 
 ## Target ownership model
 

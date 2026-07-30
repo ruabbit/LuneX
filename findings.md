@@ -2144,3 +2144,25 @@
 - repository pre-gate `/tmp/LuneX-17-5_2-repository-pre.bOvRUF`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `24/36 next 5.2`、generator三次稳定SHA-256 `e82012e5c6afa4b9ad169d908d17017366917b4da7887b65d64c413cc178c03a`、source/test membership、UIKit/AVKit object boundary、production/reference boundary和`git diff --check`。
 - 勾选后的repository final gate `/tmp/LuneX-17-5_2-repository-final-r2.FpX1K6`从全新目录完整通过同一门禁；OpenSpec精确为`25/36`、5.2 done、next 5.3，generator SHA-256不变，并串行读回focused `22/22`、expanded `154/154`、full `881/880/1/0`和四平台build证据。
 - 5.2只证明可注入的serialized纯值/action owner与四平台SDK编译；它没有把UIKit/AVKit平台对象接入`NativeSessionMediaEnvironment`或`AppModel`，该产品接线属于5.4。system PiP、background duration、signed configuration、物理iPhone/iPad、Stage Manager、external display、visible EDR、power和live Sunshine仍未证明。
+
+## 2026-07-30 阶段 17 任务 5.3 调查
+
+- 生成器和`xcodebuild -showBuildSettings -json`均显示iOS、tvOS、visionOS target存在`INFOPLIST_KEY_UIBackgroundModes = audio`，但5.2实际iPhoneOS built product以及阶段16 tvOS/visionOS built products的`Info.plist`都没有`UIBackgroundModes`；build-setting文本不是生成配置证据。
+- Apple当前`UIBackgroundModes`文档把该键定义为string array，`audio`代表Audio/AirPlay/Picture in Picture；Xcode 26.4官方模板也通过源`Info.plist`写入显式array，而不是上述单值build setting。Apple background execution文档说明模式只声明所需服务且应谨慎使用，不授予任意后台执行。
+- Apple `AVAudioSession.Category.playback`文档要求要在锁屏/后台继续播放时同时声明`audio`；真实行为仍取决于playback category、session activation、系统路由/中断和物理设备。5.3只修复并验证iOS/iPadOS配置，不证明签名接受、system PiP、后台持续时间或live stream。
+- 5.3将用iOS专用源plist表达唯一`audio`值并让generator显式引用；删除iOS/tvOS/visionOS三个未进入built product的伪设置。tvOS/visionOS后台能力留给阶段18按各自产品工作流和built artifact单独决定，避免阶段17扩大平台声明。
+
+## 2026-07-30 阶段 17 任务 5.3 验收
+
+- `Configuration/Info/LuneX-iOS.plist`是唯一移动后台配置源，`UIBackgroundModes`精确为`[\"audio\"]`；generator把它作为`text.plist.xml`加入Configuration group并只由iOS Debug/Release通过`INFOPLIST_FILE`引用，旧`INFOPLIST_KEY_UIBackgroundModes`已为0处。
+- `/tmp/LuneX-17-5_3-build-matrix.LUMoL0/validation-r3`证明unsigned iPhoneOS Debug/Release built plist精确为`[\"audio\"]`且`UIDeviceFamily == [1,2]`；macOS/tvOS/visionOS Debug built plist没有该键。五个build均零结构化诊断并有AIR/metallib。
+- 完整macOS normal `/tmp/LuneX-17-5_3-full.iJCZfF/Full.xcresult`通过`881 total / 880 passed / 1 explicit Keychain skip / 0 failed`，三类结构化诊断为0，普通测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- repository pre-gate `/tmp/LuneX-17-5_3-repository-pre-r2.cCRbWz`通过fixtures、OpenSpec strict `8/8`、勾选前apply `25/36 next 5.3`、generator三次稳定SHA-256 `388c77a4a7db43c724f3cfd7b27cfc3dddb9d6294cd8c53a02796f7a2e959a95`、source/project/built配置、五构建、full结果、唯一Keychain skip和diff检查。
+- 5.3只证明source/project/unsigned built-plist配置；没有签名或安装，不能证明provisioning接受、实际`.playback` session active、system PiP、后台持续时间、中断恢复、物理设备或live Sunshine。没有创建、克隆、启动或修改simulator。
+
+## 2026-07-30 阶段 17 任务 5.3 系统更新后再认证
+
+- 当前主机为macOS 27.0，Xcode 26.4、macOS/iPhoneOS SDK 26.4；项目生成器连续两次重建后SHA-256仍为`388c77a4a7db43c724f3cfd7b27cfc3dddb9d6294cd8c53a02796f7a2e959a95`，fixture、OpenSpec strict和diff检查通过。
+- `/tmp/LuneX-17-5_3-resume-macos.FuAdPk/Full.xcresult`通过`881 total / 880 passed / 1 explicit Keychain skip / 0 failed`，结构化error、warning、analyzer warning均为0；执行环境显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- iOS Debug `/tmp/LuneX-17-5_3-resume-ios.WLlh6B/Debug.xcresult`与Release `/tmp/LuneX-17-5_3-resume-ios-release.ba93Px/Release.xcresult`均为generic device unsigned成功、三类结构化诊断为0；两份built plist均精确为`UIBackgroundModes == ["audio"]`、`CFBundleSupportedPlatforms == ["iPhoneOS"]`、`UIDeviceFamily == [1,2]`。
+- 首个iOS组合脚本因查找旧产物名`LuneX.app`而在成功Debug build后退出；真实产物为`LuneX-iOS.app`。该问题仅属于验收脚本路径假设，未修改production；Debug产物只读复核后只补跑未开始的Release。

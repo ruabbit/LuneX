@@ -25,6 +25,7 @@ def file_type(path)
   return "sourcecode.c.objc" if path.end_with?(".m")
   return "sourcecode.metal" if path.end_with?(".metal")
   return "text.plist.entitlements" if path.end_with?(".entitlements")
+  return "text.plist.xml" if path.end_with?(".plist")
 
   "folder.assetcatalog"
 end
@@ -336,6 +337,7 @@ resources = [
 ]
 
 configuration_files = [
+  "Configuration/Info/LuneX-iOS.plist",
   "Configuration/Entitlements/LuneX-macOS.entitlements",
   "Configuration/Entitlements/LuneX-iOS.entitlements",
   "Configuration/Entitlements/LuneX-tvOS.entitlements"
@@ -366,7 +368,7 @@ targets = [
     extra: {
       "CODE_SIGN_ENTITLEMENTS" => "Configuration/Entitlements/LuneX-iOS.entitlements",
       "TARGETED_DEVICE_FAMILY" => "1,2",
-      "INFOPLIST_KEY_UIBackgroundModes" => "audio",
+      "INFOPLIST_FILE" => "Configuration/Info/LuneX-iOS.plist",
       "INFOPLIST_KEY_UILaunchScreen_Generation" => "YES",
       "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone" => "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
       "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" => "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
@@ -382,8 +384,7 @@ targets = [
     bundle: "dev.lunex.client.tvos",
     extra: {
       "CODE_SIGN_ENTITLEMENTS" => "Configuration/Entitlements/LuneX-tvOS.entitlements",
-      "TARGETED_DEVICE_FAMILY" => "3",
-      "INFOPLIST_KEY_UIBackgroundModes" => "audio"
+      "TARGETED_DEVICE_FAMILY" => "3"
     }
   },
   {
@@ -395,8 +396,7 @@ targets = [
     deployment: "26.0",
     bundle: "dev.lunex.client.visionos",
     extra: {
-      "TARGETED_DEVICE_FAMILY" => "7",
-      "INFOPLIST_KEY_UIBackgroundModes" => "audio"
+      "TARGETED_DEVICE_FAMILY" => "7"
     }
   }
 ]

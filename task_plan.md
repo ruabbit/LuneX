@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`25/36`；5.2 serialized mobile media owner已完成，下一项5.3生成并验证窄化playback background-mode配置 |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`26/36`；5.3 iPhone/iPad `audio` built-plist配置已完成，下一项5.4接入media environment/AppModel |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`25/36`。1.x值合同和确定性矩阵、2.x actual UIKit scene/window/geometry/drawable/video/input ownership、3.x actual-window mobile EDR观察与renderer接线、4.x generation-scoped sample-buffer PiP runtime及跨层回归、5.1 actual-state continuity policy和5.2 serialized mobile media generation owner均已完成。5.2以generation/revision-scoped纯值plan和FIFO operation gate统一foreground、confirmed PiP、audio-only、no-path pause、explicit stop、replacement、失败回滚与exactly-once foreground resample；focused `22/22`、expanded `154/154`、完整macOS `881 total / 880 passed / 1 explicit Keychain skip`、四平台generic Debug和repository pre-gate均通过。该owner尚未接入`NativeSessionMediaEnvironment`或`AppModel`，接线属于5.4。下一项5.3生成并验证窄化的iOS/iPadOS playback background-mode配置；配置、签名接受和runtime行为保持独立证据，6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine保持pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`26/36`。1.x值合同、2.x actual UIKit scene/window/geometry/drawable/video/input ownership、3.x actual-window mobile EDR、4.x generation-scoped sample-buffer PiP runtime和5.1至5.3均已完成。5.3新增iOS专用source plist并修复旧单值build setting未进入built product的问题；unsigned iPhoneOS Debug/Release实际plist精确为`UIBackgroundModes == [audio]`、`UIDeviceFamily == [1,2]`，macOS/tvOS/visionOS没有被阶段17声明。五构建零诊断、完整macOS `881/880/1/0`和repository pre-gate通过，但不证明provisioning接受或runtime background行为。下一项5.4接入scene/geometry/PiP/continuity/mobile EDR和bounded diagnostics到`NativeSessionMediaEnvironment`/`AppModel`并在stop/failure/replacement清理actual state；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine保持pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -115,6 +115,9 @@
 | 17.5.2首轮focused并发测试Task捕获非Sendable `XCTestCase self` | 1 | 在Task创建前构造不可变Sendable input，保留真实FIFO并发覆盖并以全新证据目录重跑通过 |
 | 17.5.2误并行读取同一个full xcresult再次触发临时`database.sqlite3`冲突 | 1 | bundle和测试未损坏；不重跑测试，严格串行读取summary、build-results与tests明细并确认881/880/1/0及唯一Keychain skip |
 | 17.5.2首轮repository final gate在zsh函数中使用局部变量`path` | 1 | fixture/OpenSpec/generator/静态边界后、xcresult读回前因覆盖`PATH`退出；该轮不计验收，改用显式Bash和`result_path`从全新目录完整重跑 |
+| 17.5.3五构建矩阵统一假设app根目录存在`Info.plist` | 1 | 五个平台构建、结构化诊断和Metal产物均已成功；macOS plist实际位于`Contents/Info.plist`，保留完成产物并用bundle内结构化搜索重新执行全矩阵plist/签名断言 |
+| 17.5.3配置矩阵r2用`rg -c ... || true`统计零匹配 | 1 | 验证在任何built plist读回前因空字符串整数比较退出；改用始终输出数字的`grep -Ec`，继续只读同一批完整build产物 |
+| 17.5.3首轮repository pre-gate把iOS plist生成器出现数断言为1 | 1 | 正确结构为Configuration membership和iOS `INFOPLIST_FILE`各1处；门在build证据读回前退出，修正为2并从全新目录完整重跑 |
 | 16.3.6首轮expanded包装器由zsh给退出码变量命名为只读`status`，在xcodebuild完成后报错 | 1 | xcresult已独立确认77/77通过且无残留进程；为消除包装器歧义，改用显式Bash和变量`rc`在新隔离目录完整重跑最终扩大门 |
 | 16.3.6首轮focused包装器把字面量`$(inherited)`放在双引号中，Bash执行了不存在的`inherited`命令 | 1 | 该轮虽以双重`-warnings-as-errors`通过24/24但不作为最终证据；后续命令移除有歧义的override，只使用显式warnings-as-errors build settings并从全新DerivedData重跑 |
 | 16.3.5首轮编译对`event.refreshesRouteCapability ? value : nil`的`nil`缺少显式Optional上下文，Swift无法推断 | 1 | 改为带显式类型的`let refreshedRoute: SpatialAudioRouteCapabilityState?`，随后用全新DerivedData完整重跑聚焦与扩大测试 |
@@ -404,6 +407,7 @@
 | 17.4.5系统更新后四平台结果汇总在zsh中使用只读变量`status` | 1 | 四个build会话和产物均已完成；该包装器退出不计完整验收，改用显式Bash与`build_status`从四份既有xcresult完整重读 |
 | 17.4.5首轮repository pre-gate把pbxproj双重文本出现数当成target数 | 1 | fixtures/OpenSpec/generator已通过但在结果读回前退出；membership改由generator清单、四平台实际Swift file list和focused已执行测试联合证明，从全新证据目录重跑 |
 | 17.4.5封版组合补丁假设`findings.md`存在交接摘要中的尾句 | 1 | `apply_patch`整体拒绝且4.5尚未勾选；拆分OpenSpec/plan/roadmap与findings/progress补丁，按各文件当前真实上下文更新 |
+| 17.5.3系统更新后iOS再认证脚本查找旧产物名`LuneX.app` | 1 | Debug build和xcresult实际已成功；从真实`LuneX-iOS.app`只读验证plist与零结构化诊断，仅从全新目录补跑尚未开始的Release，不重复Debug |
 
 ## 当前执行点（2026-07-30）
 
@@ -413,4 +417,5 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`25/36 in_progress`；2.x actual mobile surface lifecycle/geometry/drawable/video/input、3.x actual-window mobile EDR、4.x generation-scoped sample-buffer PiP runtime、5.1 actual-state policy和5.2 serialized owner均已完成。下一项5.3生成并验证窄化的iOS/iPadOS playback background-mode配置；5.4才接入media environment/AppModel，当前generic build和离线测试仍不证明live Stage Manager、系统PiP、background duration、visible mobile EDR、signed/physical设备或live Sunshine。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`26/36 in_progress`；2.x actual mobile lifecycle/geometry/input、3.x mobile EDR、4.x sample-buffer PiP和5.1至5.3均已完成。下一项5.4接入media environment/AppModel与bounded diagnostics；5.3 unsigned built plist仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
+- macOS 27.0更新后已重新认证5.3：Xcode 26.4/macOS SDK 26.4下macOS全量`881/880/1/0`且唯一skip为禁用的真实Keychain用例，iOS Debug/Release generic build与built plist读回均通过；没有启动或修改simulator。
