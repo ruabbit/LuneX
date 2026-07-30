@@ -1916,3 +1916,25 @@
 - repository pre-gate`/tmp/LuneX-17-3_1-repository-pre.C7DYgz`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `11/36`且next精确为3.1、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、source/test membership、iOS-only API与无global fallback静态边界、focused/expanded/full/iOS API/四平台build/保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
 - OpenSpec 3.1已勾选，权威进度更新为`12/36`，下一项3.2。本项证明injectable value reader、finite normalization、API编译和离线回归；不证明live UIKit ownership/notification、screen move、renderer reconfiguration、simulator HDR、signed/physical visible EDR或live Sunshine。
 - 标记后的repository final gate`/tmp/LuneX-17-3_1-repository-final.lNttpg`通过OpenSpec strict `1/1`、apply `12/36`且next精确为3.2、fixture、generator稳定、3.1/3.2/3.3任务边界、全部既有test/build及保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 3.2 调查
+
+- 3.1已以`6b4bfcd Add mobile EDR window reader`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`12/36 ready`，下一项精确为3.2。
+- iOS 26.4 `UIScreen.h`确认`UIScreenModeDidChangeNotification`和`UIScreenBrightnessDidChangeNotification`的notification object均为发生变化的`UIScreen`；Swift名分别为`UIScreen.modeDidChangeNotification`与`UIScreen.brightnessDidChangeNotification`。deprecated global `didConnect`/`didDisconnect`不应使用。
+- 现有`MobileStreamSurfaceAttachmentOwner`、scene lifecycle observer和geometry observer已经提供surface generation、actual window/screen、weak platform ownership、notification token cancellation、observation UUID和queued-late rejection模式。3.2将复用这些边界，不枚举global scene/screen。
+- EDR observer接收geometry observer已经分配的`MobileDisplayGeneration`，避免独立screen序列与geometry display identity漂移；attachment/layout/registered trait和foreground activity触发显式重采样，mode/brightness token只注册到当前actual screen。observer发布既有`MobileDisplayEDRSnapshot`到view-level handler，3.3才连接`HDRDisplaySnapshot`、render configuration和Metal surface。
+- 首轮focused`/tmp/LuneX-17-3_2-focused.nMdQFy/Focused.xcresult`在测试执行前被warnings-as-errors拒绝；唯一诊断为两个只读释放探针使用`weak var`而从未重新赋值，production源码没有编译诊断。按既有测试模式改为`weak let`，失败bundle不计验收并从全新路径重跑。
+- 修正后的focused`/tmp/LuneX-17-3_2-focused-r2.HTIEu7/Focused.xcresult`通过`3/3 passed / 0 skipped / 0 failed / 0 expected failure`，结构化build status为`succeeded`且error、warning、analyzer warning均为0；覆盖actual-screen mode/brightness过滤、重复重采样去重、foreground/trait、screen replacement、旧token cancellation、stale generation、queued-late rejection和weak teardown。
+- 系统更新后恢复既有iOS generic-device build会话，没有启动重复build；`/tmp/LuneX-17-3_2-ios-build.d4qkeu/Build.xcresult`最终为`succeeded`且结构化error、warning、analyzer warning均为0，生成`HDRVideoShaders.air`与`default.metallib`。
+- production复审发现SwiftUI update曾把EDR observer初始化时的`[weak self]` handler替换为外部闭包，使弱所有权转发边界不再由类型结构保证。已删除observer handler replacement API及production调用；observer现在终身只弱调用view，view属性承接最新SwiftUI handler，invalidate仍清空handler。
+- 收紧后的focused`/tmp/LuneX-17-3_2-focused-r3.a8uyGB/Focused.xcresult`通过`3/3 passed / 0 skipped / 0 failed`；最终iOS generic-device build`/tmp/LuneX-17-3_2-ios-build-r2.kXMKCn/Build.xcresult`成功并生成Metal AIR/metallib；两份结构化error、warning、analyzer warning均为0。
+- expanded`/tmp/LuneX-17-3_2-expanded.V2g6f5/Expanded.xcresult`通过`91/91`；完整macOS normal suite`/tmp/LuneX-17-3_2-full.RI9uPU/Full.xcresult`通过`801 total / 800 passed / 1 skipped / 0 failed`，唯一skip精确为真实Keychain opt-in测试，全部测试命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`且结构化三类诊断为0。
+
+## 2026-07-30 阶段 17 任务 3.2 验收
+
+- exact-source四平台generic Debug证据由`/tmp/LuneX-17-3_2-builds.qHhDGU`的macOS/tvOS/visionOS与`/tmp/LuneX-17-3_2-ios-build-r2.kXMKCn`的iOS组成；4/4 `succeeded`、四份xcresult结构化error/warning/analyzer warning均为0，每个平台各生成一个Metal AIR及metallib，没有选择simulator destination。
+- 本任务唯一一次只读simulator inventory保存于`/tmp/LuneX-17-3_2-simulator.ViyoJi/devices.json`。系统/Xcode更新新增iOS 27.0同名默认设备，使旧的“跨所有runtime名称唯一”包装断言返回false；保存的同一JSON复核固定iOS 26.4 iPhone/iPad UUID仍各唯一、available、`Shutdown`，iOS 27.0同名实例也为`Shutdown`且全局`Booted=0`。没有执行任何设备生命周期或删除操作。
+- final代码审阅确认attachment先由geometry observer发布同一display generation，再由EDR observer读取；screen resolver不一致时立即取消旧token并发布detached；replacement、detach、revision exhaustion和invalidate均使旧observation UUID/queued work失效。SwiftUI handler更新只替换view属性，observer终身经`[weak self]`转发；production不存在global screen fallback或deprecated screen-connect通知。
+- repository pre-gate`/tmp/LuneX-17-3_2-repository-pre.1H5uQd`通过fixture、OpenSpec strict `1/1`、apply `12/36`且next为3.2、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、actual-screen/API/weak ownership/3.3未提前接线静态边界、全部test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+- OpenSpec 3.2已勾选，权威进度应更新为`13/36`，下一项3.3。本项证明deterministic observer生命周期、iOS SDK编译和actual-view production接线；不证明headroom已驱动renderer重配、visible HDR/EDR、simulator HDR、signed/physical设备或live Sunshine。
+- 标记后的repository final gate`/tmp/LuneX-17-3_2-repository-final.YFE34c`通过OpenSpec strict `1/1`、apply `13/36`且next精确为3.3、fixture、generator稳定SHA-256、actual-screen/weak ownership/3.3未提前接线边界、全部test/build与保存的单次simulator证据读回、Keychain opt-in关闭、预期七文件状态及`git diff --check`。

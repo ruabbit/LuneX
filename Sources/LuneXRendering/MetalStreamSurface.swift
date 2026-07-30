@@ -2336,6 +2336,9 @@ final class MobileStreamMetalView: MTKView {
         UIScreen
     >
     typealias SceneWindowSnapshotHandler = SceneGeometryObserver.Handler
+    typealias DisplayEDRObserver =
+        MobileDisplayEDRObserver<UIWindow, UIScreen>
+    typealias DisplayEDRSnapshotHandler = DisplayEDRObserver.Handler
     typealias GeometryBindingOwner =
         MobileStreamGeometryBindingOwner<MobileStreamMetalView>
     typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
@@ -2346,11 +2349,13 @@ final class MobileStreamMetalView: MTKView {
     private var attachmentOwner: AttachmentOwner?
     private var sceneLifecycleObserver: SceneLifecycleObserver?
     private var sceneGeometryObserver: SceneGeometryObserver?
+    private var displayEDRObserver: DisplayEDRObserver?
     private var geometryBindingOwner: GeometryBindingOwner?
     private var sceneGeometrySettleTask: Task<Void, Never>?
     private var attachmentUpdateHandler: AttachmentUpdateHandler?
     private var sceneLifecycleUpdateHandler: SceneLifecycleUpdateHandler?
     private var sceneWindowSnapshotHandler: SceneWindowSnapshotHandler?
+    private var displayEDRSnapshotHandler: DisplayEDRSnapshotHandler?
     private var inputOutputHandler: InputOutputHandler?
     private var hoverGestureRecognizer: UIHoverGestureRecognizer?
     private var touchIDs: [ObjectIdentifier: Int] = [:]
@@ -2370,6 +2375,8 @@ final class MobileStreamMetalView: MTKView {
             @escaping SceneLifecycleUpdateHandler = { _ in },
         sceneWindowSnapshotHandler:
             @escaping SceneWindowSnapshotHandler = { _ in },
+        displayEDRSnapshotHandler:
+            @escaping DisplayEDRSnapshotHandler = { _ in },
         geometryBindingUpdateHandler:
             @escaping GeometryBindingUpdateHandler = { _ in },
         inputOutputHandler: @escaping InputOutputHandler = { _ in }
@@ -2380,6 +2387,7 @@ final class MobileStreamMetalView: MTKView {
         self.attachmentUpdateHandler = attachmentUpdateHandler
         self.sceneLifecycleUpdateHandler = sceneLifecycleUpdateHandler
         self.sceneWindowSnapshotHandler = sceneWindowSnapshotHandler
+        self.displayEDRSnapshotHandler = displayEDRSnapshotHandler
         self.inputOutputHandler = inputOutputHandler
         attachmentRelay = MobileStreamSurfaceAttachmentRelay(
             surface: self,
@@ -2458,6 +2466,23 @@ final class MobileStreamMetalView: MTKView {
                 },
                 settleRequestHandler: { [weak self] request in
                     self?.scheduleGeometrySettle(request)
+                }
+            )
+            let displayEDRReader =
+                MobileDisplayEDRWindowReader<UIWindow, UIScreen>.actualWindow
+            displayEDRObserver = DisplayEDRObserver(
+                surfaceGeneration: surfaceGeneration,
+                notificationCenter: .default,
+                names: .current,
+                screenResolver: { $0.screen },
+                reader: { window, displayGeneration in
+                    displayEDRReader.read(
+                        window: window,
+                        displayGeneration: displayGeneration
+                    )
+                },
+                handler: { [weak self] snapshot in
+                    self?.displayEDRSnapshotHandler?(snapshot)
                 }
             )
             attachmentOwner = AttachmentOwner(
@@ -2571,6 +2596,12 @@ final class MobileStreamMetalView: MTKView {
         sceneWindowSnapshotHandler = handler
     }
 
+    func updateDisplayEDRSnapshotHandler(
+        _ handler: @escaping DisplayEDRSnapshotHandler
+    ) {
+        displayEDRSnapshotHandler = handler
+    }
+
     func updateGeometryBinding(
         sourceSize: PixelSize,
         mode: RenderScaleMode,
@@ -2615,9 +2646,11 @@ final class MobileStreamMetalView: MTKView {
         sceneGeometrySettleTask = nil
         sceneLifecycleObserver = nil
         sceneGeometryObserver = nil
+        displayEDRObserver = nil
         attachmentUpdateHandler = nil
         sceneLifecycleUpdateHandler = nil
         sceneWindowSnapshotHandler = nil
+        displayEDRSnapshotHandler = nil
         inputOutputHandler = nil
         touchIDs.removeAll(keepingCapacity: false)
         attachmentRelay?.invalidate()
@@ -2656,8 +2689,18 @@ final class MobileStreamMetalView: MTKView {
                     surfaceGeneration: update.surfaceGeneration,
                     event: event
                 )
+                displayEDRObserver?.attach(
+                    window: attachment.window,
+                    screen: attachment.screen,
+                    displayGeneration: currentDisplayGeneration(),
+                    surfaceGeneration: update.surfaceGeneration,
+                    reason: displayEDRResampleReason(for: event)
+                )
             } else {
                 sceneLifecycleObserver?.detach(
+                    surfaceGeneration: update.surfaceGeneration
+                )
+                displayEDRObserver?.detach(
                     surfaceGeneration: update.surfaceGeneration
                 )
                 if let surface = update.surface {
@@ -2675,6 +2718,9 @@ final class MobileStreamMetalView: MTKView {
                 surface: update.surface,
                 surfaceGeneration: update.surfaceGeneration
             )
+            displayEDRObserver?.invalidate(
+                surfaceGeneration: update.surfaceGeneration
+            )
         }
         attachmentUpdateHandler?(update)
     }
@@ -2687,8 +2733,35 @@ final class MobileStreamMetalView: MTKView {
                 activity,
                 surfaceGeneration: update.surfaceGeneration
             )
+            if activity != .background {
+                displayEDRObserver?.resample(
+                    .foreground,
+                    surfaceGeneration: update.surfaceGeneration
+                )
+            }
         }
         sceneLifecycleUpdateHandler?(update)
+    }
+
+    private func currentDisplayGeneration() -> MobileDisplayGeneration? {
+        guard let snapshot = sceneGeometryObserver?.currentSnapshot,
+              case let .attached(_, display, _) = snapshot.state else {
+            return nil
+        }
+        return display
+    }
+
+    private func displayEDRResampleReason(
+        for event: MobileStreamSurfaceAttachmentEvent
+    ) -> MobileDisplayEDRResampleReason {
+        switch event {
+        case .didMoveToWindow:
+            return .attachment
+        case .layoutSubviews, .safeAreaInsetsDidChange:
+            return .layout
+        case .registeredTraitsChanged:
+            return .traits
+        }
     }
 
     private func handleSceneWindowSnapshot(
@@ -2888,6 +2961,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamMetalView.SceneLifecycleUpdateHandler = { _ in }
     var sceneWindowSnapshotHandler:
         MobileStreamMetalView.SceneWindowSnapshotHandler = { _ in }
+    var displayEDRSnapshotHandler:
+        MobileStreamMetalView.DisplayEDRSnapshotHandler = { _ in }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -2912,6 +2987,7 @@ struct MetalStreamSurface: UIViewRepresentable {
             attachmentUpdateHandler: attachmentUpdateHandler,
             sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler,
             sceneWindowSnapshotHandler: sceneWindowSnapshotHandler,
+            displayEDRSnapshotHandler: displayEDRSnapshotHandler,
             geometryBindingUpdateHandler: { [weak coordinator = context.coordinator]
                 binding in
                 coordinator?.handleGeometryBinding(binding)
@@ -2945,6 +3021,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateSceneLifecycleUpdateHandler(sceneLifecycleUpdateHandler)
         (view as? MobileStreamMetalView)?
             .updateSceneWindowSnapshotHandler(sceneWindowSnapshotHandler)
+        (view as? MobileStreamMetalView)?
+            .updateDisplayEDRSnapshotHandler(displayEDRSnapshotHandler)
         (view as? MobileStreamMetalView)?
             .updateGeometryBinding(
                 sourceSize: renderState.transform.sourceSize,

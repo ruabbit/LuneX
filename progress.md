@@ -2397,3 +2397,23 @@
 - repository pre-gate`/tmp/LuneX-17-3_1-repository-pre.C7DYgz`通过fixture、OpenSpec strict、apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership/API/static boundaries、全部test/build和保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
 - OpenSpec 3.1已勾选，权威进度更新为`12/36`，下一项3.2实现attached-screen mode/brightness通知及foreground、trait、attachment重采样与replacement/cancellation/stale rejection。本项不证明live UIKit/visible EDR、renderer接线、signed/physical设备或live Sunshine。
 - 标记后的repository final gate`/tmp/LuneX-17-3_1-repository-final.lNttpg`通过strict `1/1`、apply `12/36`且next精确为3.2、fixture、generator稳定、任务/静态边界、全部既有test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 3.2 启动
+
+- 3.1已以`6b4bfcd Add mobile EDR window reader`提交并推送，确认`HEAD == origin/main`且工作树clean；当前3.2只实现attached-screen mode/brightness观察、foreground/trait/attachment重采样与replacement/cancellation/stale rejection，不提前完成3.3 renderer接线。
+- SDK header确认mode/brightness notification object为发生变化的`UIScreen`；实现将只向actual attached screen注册token，复用geometry display generation和既有weak/generation/observation UUID模式，不使用deprecated global screen connect/disconnect或global fallback。
+- 首轮focused`/tmp/LuneX-17-3_2-focused.nMdQFy`在测试执行前因两个未重新赋值的`weak var`释放探针被warnings-as-errors拒绝；production无诊断。测试改用既有`weak let`模式，旧bundle不计验收。
+- 修正后的focused`/tmp/LuneX-17-3_2-focused-r2.HTIEu7/Focused.xcresult`通过`3/3`且结构化三类诊断为0；覆盖通知过滤/去重、foreground/trait/replacement、旧token cancellation及stale/queued-late/weak teardown。
+- 系统更新后接回原iOS generic-device build会话`42126`，未启动重复命令；`/tmp/LuneX-17-3_2-ios-build.d4qkeu/Build.xcresult`成功、结构化三类诊断为0，并生成Metal AIR/metallib。
+- production审阅移除了EDR observer handler replacement入口，确保observer构造时的`[weak self]`转发不会在SwiftUI update时被外部闭包替换；将从全新证据目录重跑focused和iOS generic build后再进入expanded门。
+- 收紧后focused`/tmp/LuneX-17-3_2-focused-r3.a8uyGB/Focused.xcresult`通过`3/3`，最终iOS generic build`/tmp/LuneX-17-3_2-ios-build-r2.kXMKCn/Build.xcresult`成功并生成Metal AIR/metallib；两份结构化三类诊断均为0。
+- expanded`/tmp/LuneX-17-3_2-expanded.V2g6f5/Expanded.xcresult`通过`91/91`；完整normal suite`/tmp/LuneX-17-3_2-full.RI9uPU/Full.xcresult`通过`801 total / 800 passed / 1 explicit Keychain skip / 0 failed`，结构化三类诊断为0且真实Keychain opt-in显式移除。
+- 四平台generic Debug最终4/4成功且零结构化诊断，每个平台均生成Metal AIR/metallib；macOS/tvOS/visionOS证据根`/tmp/LuneX-17-3_2-builds.qHhDGU`，iOS使用最终源码证据`/tmp/LuneX-17-3_2-ios-build-r2.kXMKCn`。
+- 本任务唯一一次只读simulator inventory为`/tmp/LuneX-17-3_2-simulator.ViyoJi/devices.json`；iOS 27.0 runtime新增同名默认设备导致旧跨runtime名称唯一断言为false，但固定iOS 26.4 UUID仍各唯一、available、`Shutdown`，所有同名实例均Shutdown且全局`Booted=0`。没有进行任何simulator生命周期或删除操作。
+- repository pre-gate`/tmp/LuneX-17-3_2-repository-pre.1H5uQd`通过fixture、strict/apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership/静态边界、全部证据读回、Keychain opt-in关闭与diff检查。
+
+## 2026-07-30 阶段 17 任务 3.2 完成
+
+- OpenSpec 3.2已勾选，权威进度预期为`13/36`，下一项3.3连接mobile display revision到既有HDR/render identity、Metal surface和current-generation stale-frame检查。
+- 本项完成actual attached screen mode/brightness通知、attachment/layout/trait/foreground重采样、geometry display generation复用、replacement/cancellation/stale/queued-late拒绝及weak handler ownership；renderer reconfiguration、visible HDR/EDR、signed/physical设备和live Sunshine仍明确pending。
+- 标记后的repository final gate`/tmp/LuneX-17-3_2-repository-final.YFE34c`通过strict/apply `13/36` next 3.3、fixture、generator稳定、静态边界、全部证据读回、Keychain opt-in关闭、预期七文件状态与diff检查。
