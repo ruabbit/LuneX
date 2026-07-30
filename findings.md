@@ -2058,3 +2058,22 @@
 - 勾选前repository gate `/tmp/LuneX-17-4_4-repository-pre.qYzmQy`通过fixture self-test/全树、OpenSpec strict `8/8`、apply `19/36`、generator初始及连续两次稳定SHA-256 `d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`、source/test/Objective-C membership、nullable/no-direct-Swift-initializer/no-second-decoder边界、全部证据读回、Keychain opt-in关闭与`git diff --check`。
 - 勾选后的repository final gate `/tmp/LuneX-17-4_4-repository-final.Ye3KA5`通过同一完整门禁，apply精确为`20/36`、4.4已完成且下一项4.5仍未完成，generator SHA-256保持`d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`。
 - 4.4只证明production adapter、离线delegate/callback ownership、macOS运行时fail-closed与四平台SDK构建；4.5 reducer orchestration、4.6 decoded-frame subscription、系统PiP可见行为、后台持续时间、签名/安装、物理iPhone/iPad和live Sunshine仍未证明。
+
+## 2026-07-30 阶段 17 任务 4.5 审计
+
+- 现有`MobilePictureInPictureStateReducer`已经定义prepare/start/stop/failure/restore与frame-sink cleanup effects，但4.4之前没有main-actor owner执行effect或把native client event串行归约回同一PiP generation。
+- coordinator终止路径不能通过`completeRestoration`再次进入已经revision-exhausted的reducer；终止必须先进入不可重入状态、解绑client handler，再直接清空runtime-to-native restoration映射和pending skip lease。
+- `MobilePictureInPictureControllerClient.preparationSnapshot`是复用已准备client时唯一可靠状态。coordinator若只调用`prepare()`并等待事件，已准备client会因client端幂等no-op永久停在`preparing`，因此4.5必须在request snapshot发布后消费已有snapshot。
+- reducer effect可能同步调用native client，而native bridge也可能同步回调。请求snapshot必须在执行`requestNativeStart`/`requestNativeStop`前发布；终止cleanup调用外部completion时必须拒绝同步重入client event。
+- 4.5只负责controller/reducer/frame-sink lifecycle orchestration和playback/restore/skip callback ownership；decoded-frame订阅、foreground Metal pause/throttle和continuity policy仍分别属于4.6与5.x。
+
+## 2026-07-30 阶段 17 任务 4.5 验收
+
+- 新增`@MainActor`、generation-scoped lifecycle coordinator，强制client、frame sink和coordinator使用同一PiP generation，并执行既有reducer的native start/stop、restore completion、frame-sink flush/release effects。active只接受native `.didStart`确认，request-start本身不冒充actual active。
+- coordinator将prepared/capability/start/failure/stop/restore/set-playing/skip/render-size/invalidation事件映射回闭合状态机。同步native callback前先发布request snapshot；已完成prepare的client通过现有preparation snapshot恢复，不依赖幂等`prepare()`重放事件。
+- playback state按语义去重后同时更新native delegate并invalidate playback state。runtime restoration lease映射到native callback lease，restore和skip对missing/removed consumer、replacement、invalidation与晚到completion均exactly-once fail closed。
+- revision exhaustion、显式invalidate和unexpected client invalidation先设置`isTerminating`、解绑client/consumer handler，再直接drain native callback lease；terminal cleanup不再重入restoration reducer，client与frame sink teardown保持幂等。
+- final focused `/tmp/LuneX-17-4_5-focused-r3.uPLtnD/Focused.xcresult`通过`13/13`，expanded `/tmp/LuneX-17-4_5-expanded.NZQNho/Expanded.xcresult`通过`67/67`；完整normal `/tmp/LuneX-17-4_5-full.YvZo7X/Full.xcresult`为`852 total / 851 passed / 1 explicit Keychain skip / 0 failed`，三类结构化诊断均为0。
+- 四平台generic Debug证据根`/tmp/LuneX-17-4_5-builds-r2.NY1KmM`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded、三类诊断为0、各有AIR/metallib且coordinator进入实际Swift file list。本项没有查询、创建、启动或修改simulator。
+- repository pre-gate `/tmp/LuneX-17-4_5-repository-pre-r3.yEmyKt`通过fixtures、OpenSpec strict `8/8`、勾选前apply `20/36 next 4.5`、generator连续稳定SHA-256 `08c464fa6d9996a861e05cca034278cc8bacb2d1b67003c5f27ff481d6953b97`、membership、terminal direct-drain/no-4.6/no-second-decoder静态边界、全部结果读回、Keychain opt-in关闭和`git diff --check`。
+- 本项证明离线状态机编排、callback/resource ownership和四平台generic SDK兼容；不证明decoded-frame subscription、system PiP、后台持续时间、签名/安装、物理iPhone/iPad、Stage Manager、visible EDR或live Sunshine。

@@ -545,3 +545,17 @@ final class MobilePictureInPictureDisplayLayerSink {
         }
     }
 }
+
+extension MobilePictureInPictureDisplayLayerSink:
+    MobilePictureInPictureLifecycleFrameSink
+{
+    func currentFrameSinkSnapshot()
+        -> MobilePictureInPictureFrameSinkSnapshot
+    {
+        snapshot().frameSink
+    }
+
+    func flushForPictureInPictureLifecycle() -> Bool {
+        signalDiscontinuity(generation: generation)
+    }
+}

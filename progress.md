@@ -2525,3 +2525,19 @@
 - repository pre-gate `/tmp/LuneX-17-4_4-repository-pre.qYzmQy`从头通过fixtures、strict `8/8`、勾选前apply `19/36`、generator连续稳定SHA-256 `d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`、membership、nullable/no-direct-Swift-initializer/no-second-decoder静态边界、全部结果读回、Keychain opt-in关闭和diff检查。
 - OpenSpec 4.4已勾选，权威进度更新为`20/36`，下一项4.5实现generation-scoped prepare/start/stop/failure/restore/playback/invalidation/replacement reducer orchestration。本项不证明系统PiP、后台持续时间、签名/安装、物理设备或live Sunshine。
 - 勾选后的repository final gate `/tmp/LuneX-17-4_4-repository-final.Ye3KA5`完整通过，OpenSpec为`20/36`且next精确为4.5；generator SHA-256仍为`d81fbc8118b460da6467e2276def7c682603f322f23f89f0277f32fa33ed4499`。
+
+## 2026-07-30 阶段 17 任务 4.5 启动
+
+- macOS更新完成后恢复active长期目标、planning-with-files与OpenSpec apply流程；确认`HEAD == origin/main == 8b433d2`，change为`20/36 ready`且next精确为4.5。测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，本项不查询、创建、启动或修改simulator。
+- 恢复到3处交接中的未提交修改后，完成reducer/client/sink审计；新增main-actor lifecycle coordinator和display-layer sink conformance，接通prepare/start/stop/failure/capability/frame-sink/restore/playback/skip/render-size/invalidation/replacement effect与event路径。
+- 修正terminal cleanup潜在reducer重入：引入terminating gate，终止先解绑consumer/client handler，再直接drain native callback lease；revision exhaustion不再通过restoration reducer完成pending callback。
+- 补充已准备client snapshot恢复，避免幂等client `prepare()`不重放事件时卡在`preparing`。新增独立4.5测试矩阵并加入generator；尚未重新生成工程或完成第一次focused编译。
+- 首轮focused `/tmp/LuneX-17-4_5-focused-r1.tHpdXD/Focused.xcresult`完整编译并执行`12`项，`11/12`通过；唯一失败是测试把`prepare()`返回的`.preparing` request snapshot与同步prepared回调后的current `.ready` snapshot混为同一断言。production顺序和其余11项均通过，测试已拆分两个时间点并准备从全新证据目录重跑。
+- 修正后focused `/tmp/LuneX-17-4_5-focused-r2.G7TAOn/Focused.xcresult`通过`12/12`。通过后自审进一步收紧terminating窗口不接受consumer handler重入，并新增unexpected client invalidation不反向重复invalidate client、只释放一次sink且晚到callback inert的回归；需从全新证据目录重跑形成最终focused。
+- 最终focused `/tmp/LuneX-17-4_5-focused-r3.uPLtnD/Focused.xcresult`通过`13/13`，expanded `/tmp/LuneX-17-4_5-expanded.NZQNho/Expanded.xcresult`通过`67/67`；两者error、warning、analyzer warning均为0。
+- 完整macOS normal `/tmp/LuneX-17-4_5-full.YvZo7X/Full.xcresult`通过`852 total / 851 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；三类诊断为0且Keychain opt-in未设置。
+- 四平台generic Debug首个包装器在执行任何build前因zsh 1-based数组与0-based下标冲突退出；未查询或操作设备，改用显式`/bin/bash`重跑。
+- 系统更新前启动的显式Bash四平台generic Debug会话已在恢复后正常退出，四个平台均存在AIR、metallib和完整xcresult，coordinator也进入相应Swift file list。首轮恢复后结构化汇总误用zsh只读变量`status`而在第一份结果后退出；构建本身未失败，该包装器不计完整验收，改以Bash和`build_status`从四份结果重读。
+- 修正后的四平台结构化读回全部通过。首轮repository pre-gate随后通过fixture、OpenSpec `8/8`、apply `20/36 next 4.5`与生成器三次稳定哈希，但把PBXBuildFile声明和Sources phase引用的双重文本出现数误当成target数而退出；改用generator清单、四平台实际Swift file list和focused测试执行联合证明membership，并从全新证据目录重跑。
+- 最终repository pre-gate `/tmp/LuneX-17-4_5-repository-pre-r3.yEmyKt`从头通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `20/36 next 4.5`、generator三次稳定SHA-256 `08c464fa6d9996a861e05cca034278cc8bacb2d1b67003c5f27ff481d6953b97`、generator/四平台file-list/focused-test membership、terminal direct-drain/no-4.6/no-second-decoder静态边界、focused/expanded/full/四平台build证据读回、唯一Keychain skip、Keychain opt-in关闭和`git diff --check`。
+- OpenSpec 4.5已勾选，预期权威进度`21/36`，下一项4.6订阅既有decoded-frame presentation source并协调foreground Metal pause/throttle/resume，不创建第二decoder。4.5没有查询或操作simulator，也不证明system PiP、后台持续时间、签名/安装、物理设备、Stage Manager、visible EDR或live Sunshine。
