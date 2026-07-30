@@ -1,5 +1,9 @@
 import Foundation
 
+#if os(iOS)
+import UIKit
+#endif
+
 enum MobileDisplayEDRUnavailableReason:
     String,
     Codable,
@@ -68,6 +72,11 @@ struct MobileDisplayEDRReading: Equatable, Sendable {
     let currentHeadroom: Double
 }
 
+struct MobileDisplayEDRHeadroomReading: Equatable, Sendable {
+    let potential: Double
+    let current: Double
+}
+
 enum MobileDisplayEDRSample: Equatable, Sendable {
     case unknown
     case detached
@@ -134,6 +143,71 @@ enum MobileDisplayEDRState: Equatable, Hashable, Sendable {
     }
 }
 
+@MainActor
+struct MobileDisplayEDRWindowReader<Window: AnyObject, Screen: AnyObject> {
+    typealias ScreenResolver = @MainActor (Window) -> Screen?
+    typealias HeadroomReader = @MainActor (
+        Screen
+    ) throws -> MobileDisplayEDRHeadroomReading
+
+    private let screenResolver: ScreenResolver
+    private let headroomReader: HeadroomReader
+
+    init(
+        screenResolver: @escaping ScreenResolver,
+        headroomReader: @escaping HeadroomReader
+    ) {
+        self.screenResolver = screenResolver
+        self.headroomReader = headroomReader
+    }
+
+    func read(
+        window: Window?,
+        displayGeneration: MobileDisplayGeneration?
+    ) -> MobileDisplayEDRState {
+        guard let window,
+              let screen = screenResolver(window) else {
+            return .detached
+        }
+        guard let displayGeneration else {
+            return .sdrFallback(
+                display: nil,
+                reason: .invalidDisplayGeneration
+            )
+        }
+
+        do {
+            let headroom = try headroomReader(screen)
+            return MobileDisplayEDRStateNormalizer.normalize(.attached(
+                MobileDisplayEDRReading(
+                    displayGeneration: displayGeneration.rawValue,
+                    potentialHeadroom: headroom.potential,
+                    currentHeadroom: headroom.current
+                )
+            ))
+        } catch {
+            return .unavailable(.observationFailed)
+        }
+    }
+}
+
+#if os(iOS)
+extension MobileDisplayEDRWindowReader
+where Window == UIWindow, Screen == UIScreen {
+    static var actualWindow: Self {
+        Self(
+            screenResolver: { $0.screen },
+            headroomReader: {
+                MobileDisplayEDRHeadroomReading(
+                    potential: Double($0.potentialEDRHeadroom),
+                    current: Double($0.currentEDRHeadroom)
+                )
+            }
+        )
+    }
+}
+#endif
+
 struct MobileDisplayEDREventEnvelope: Equatable, Sendable {
     let surfaceGeneration: MobileSceneSurfaceGeneration
     let sample: MobileDisplayEDRSample
@@ -166,7 +240,8 @@ enum MobileDisplayEDRPublicationOutcome: Equatable, Sendable {
 }
 
 struct MobileDisplayEDRSnapshotPublisher: Sendable {
-    static let maximumHeadroom = HDRLuminanceMapping.maximumCurrentHeadroom
+    static let maximumHeadroom =
+        MobileDisplayEDRStateNormalizer.maximumHeadroom
 
     let surfaceGeneration: MobileSceneSurfaceGeneration
     private(set) var revision: HDRDisplayRevision
@@ -192,7 +267,9 @@ struct MobileDisplayEDRSnapshotPublisher: Sendable {
         }
         guard !isRevisionExhausted else { return .revisionExhausted }
 
-        let nextState = Self.normalize(envelope.sample)
+        let nextState = MobileDisplayEDRStateNormalizer.normalize(
+            envelope.sample
+        )
         guard nextState != state else { return .unchanged }
 
         let nextRevision = revision.rawValue.addingReportingOverflow(1)
@@ -218,7 +295,24 @@ struct MobileDisplayEDRSnapshotPublisher: Sendable {
         return .published(nextSnapshot)
     }
 
-    private static func normalize(
+    private static func makeRenderSnapshot(
+        state: MobileDisplayEDRState,
+        revision: HDRDisplayRevision
+    ) -> HDRDisplaySnapshot? {
+        guard let headroom = state.headroom else { return nil }
+        return HDRDisplaySnapshot(
+            revision: revision,
+            displayID: nil,
+            headroom: headroom.displayHeadroom
+        )
+    }
+}
+
+private enum MobileDisplayEDRStateNormalizer {
+    static let maximumHeadroom =
+        HDRLuminanceMapping.maximumCurrentHeadroom
+
+    static func normalize(
         _ sample: MobileDisplayEDRSample
     ) -> MobileDisplayEDRState {
         switch sample {
@@ -297,17 +391,5 @@ struct MobileDisplayEDRSnapshotPublisher: Sendable {
             throw invalidReason
         }
         return max(1, value)
-    }
-
-    private static func makeRenderSnapshot(
-        state: MobileDisplayEDRState,
-        revision: HDRDisplayRevision
-    ) -> HDRDisplaySnapshot? {
-        guard let headroom = state.headroom else { return nil }
-        return HDRDisplaySnapshot(
-            revision: revision,
-            displayID: nil,
-            headroom: headroom.displayHeadroom
-        )
     }
 }

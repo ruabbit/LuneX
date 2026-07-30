@@ -1896,3 +1896,23 @@
 - repository pre-gate`/tmp/LuneX-17-2_6-repository-pre.kYmVui`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `10/36`且next为2.6、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、production零diff、test membership/静态语义、focused/expanded/full/四平台build/单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
 - 2.6只增加确定性测试和可参数化fixture，不修改production。该证据不证明live UIKit callback、rotation、Stage Manager、external display、system PiP、background duration、mobile EDR、signed/physical设备或live Sunshine。
 - 标记后的repository final gate`/tmp/LuneX-17-2_6-repository-final.6TxH5F`通过OpenSpec strict `1/1`、apply `11/36`且next精确为3.1、fixture、generator连续稳定SHA-256、production零diff、全部既有test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 3.1 调查
+
+- iOS 26.4 UIKit公开`UIScreen.currentEDRHeadroom`和`potentialEDRHeadroom`，二者均从iOS 16可用；warnings-as-errors SDK probe确认Swift属性名可直接读取。SDK说明current会随显示配置及EDR内容变化，potential是当前配置下最大能力。
+- 3.1只实现无observer的actual-window reader；通知、screen replacement、foreground resample与generation owner属于3.2。reader应由调用方传入actual window和opaque display generation，不能访问`UIScreen.main`或枚举scene。
+- reader将复用既有`MobileDisplayEDRState`及唯一finite/bounded normalizer，直接返回typed detached/SDR/EDR/invalid/unavailable状态；invalid结果不保存NaN、Infinity、超限值或UIKit对象。泛型window/screen与headroom closures提供确定性注入，iOS specialization只使用`window.screen`。
+- 首轮3.1 focused证据`/tmp/LuneX-17-3_1-focused.aHM9Xf/Focused.xcresult`通过`5/5 passed / 0 skipped / 0 failed / 0 expected failure`，build status为`succeeded`且error、warning、analyzer warning均为0；覆盖actual resolved screen、detached、normalized SDR、EDR、invalid raw/missing generation和typed read failure。
+- iOS generic-device证据`/tmp/LuneX-17-3_1-ios-build.4fDQV2/Build.xcresult`为`succeeded`，结构化error、warning和analyzer warning均为0，并生成`HDRVideoShaders.air`及`default.metallib`；只执行generic build，没有选择或操作simulator。该证据只证明Xcode 26.4 iOS SDK下actual-window `UIScreen` EDR API和平台隔离可编译，不证明运行时screen ownership、通知、显示迁移或物理EDR效果。
+- expanded证据`/tmp/LuneX-17-3_1-expanded.qYKgQZ/Expanded.xcresult`通过`88/88 passed / 0 skipped / 0 failed / 0 expected failure`，结构化build status为`succeeded`且error、warning和analyzer warning均为0；范围覆盖mobile EDR state、scene/window合同、Metal presenter和HDR luminance mapping。
+- 完整macOS normal suite证据`/tmp/LuneX-17-3_1-full.uwx1Jb/Full.xcresult`通过`798 total / 797 passed / 1 skipped / 0 failed / 0 expected failure`，结构化build status为`succeeded`且error、warning和analyzer warning均为0；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- exact-source四平台generic Debug证据根为`/tmp/LuneX-17-3_1-builds.yyPAS7`；macOS、iOS/iPadOS、tvOS和visionOS四份xcresult全部`succeeded`且各自error、warning和analyzer warning均为0，每个平台各生成一个`HDRVideoShaders.air`及`default.metallib`。全部使用generic Any Device destination，没有选择或操作simulator。
+- 本任务唯一一次只读simulator inventory保存于`/tmp/LuneX-17-3_1-simulator.9645Ji/devices.json`；固定iPhone 17 Pro `23A27088-C19F-4F77-A455-4E50E393167E`与iPad Pro 13-inch (M5) `409A5908-8C39-4797-A41C-04503A05FA3D`在iOS 26.4 runtime中各全局唯一、available、`Shutdown`且全局`Booted=0`。没有执行create、clone、boot、launch、shutdown或delete。
+
+## 2026-07-30 阶段 17 任务 3.1 验收
+
+- final代码审阅确认production specialization仅从调用方提供的actual `UIWindow`解析`window.screen`并读取该screen的potential/current EDR headroom；没有`UIScreen.main`、`connectedScenes`、全局screens或screen connect/disconnect fallback。reader无observer和持久平台对象，通知、replacement与generation owner明确留给3.2。
+- missing display generation在headroom closure前fail closed；throw映射为typed`.unavailable(.observationFailed)`；NaN、Infinity、负数、超上界及current大于potential均通过唯一shared normalizer变为typed SDR fallback且不保留raw值，subunit输入规范为支持的SDR而不虚报EDR。publisher行为保持共享normalizer且`makeRenderSnapshot`仍由publisher拥有。
+- repository pre-gate`/tmp/LuneX-17-3_1-repository-pre.C7DYgz`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `11/36`且next精确为3.1、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、source/test membership、iOS-only API与无global fallback静态边界、focused/expanded/full/iOS API/四平台build/保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+- OpenSpec 3.1已勾选，权威进度更新为`12/36`，下一项3.2。本项证明injectable value reader、finite normalization、API编译和离线回归；不证明live UIKit ownership/notification、screen move、renderer reconfiguration、simulator HDR、signed/physical visible EDR或live Sunshine。
+- 标记后的repository final gate`/tmp/LuneX-17-3_1-repository-final.lNttpg`通过OpenSpec strict `1/1`、apply `12/36`且next精确为3.2、fixture、generator稳定、3.1/3.2/3.3任务边界、全部既有test/build及保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。

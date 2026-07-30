@@ -2382,3 +2382,18 @@
 - repository pre-gate`/tmp/LuneX-17-2_6-repository-pre.kYmVui`通过fixture、OpenSpec strict、apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership/静态语义、全部test/build与保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
 - OpenSpec 2.6已勾选，预期权威进度更新为`11/36`；下一项3.1实现injectable actual-window `UIScreen` EDR reader。本项不证明live rotation/Stage Manager/external display、PiP/background、mobile EDR、signed/physical设备或live Sunshine。
 - 标记后的repository final gate`/tmp/LuneX-17-2_6-repository-final.6TxH5F`通过strict `1/1`、apply `11/36`且next精确为3.1、fixture、generator稳定、production零diff、全部既有test/build及保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 3.1 启动
+
+- 2.6已以`07b61de Expand mobile geometry regression coverage`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`11/36 ready`，下一项精确为3.1。
+- 读取OpenSpec/运行合同、现有mobile EDR值合同、UIKit SDK header和warnings-as-errors API probe；本项将新增无observer的injectable actual-window reader与typed状态测试，不提前实现3.2通知owner或3.3 renderer接线。
+- 新增泛型main-actor window/screen reader、iOS actual-window specialization并抽取唯一state normalizer；focused`/tmp/LuneX-17-3_1-focused.aHM9Xf/Focused.xcresult`一次通过`5/5`且结构化三类诊断为0，命令显式移除真实Keychain opt-in。
+- iOS generic-device build`/tmp/LuneX-17-3_1-ios-build.4fDQV2/Build.xcresult`成功，结构化error、warning和analyzer warning为0，并产出Metal AIR/metallib；命令没有使用simulator destination，也没有操作任何simulator。
+- expanded回归`/tmp/LuneX-17-3_1-expanded.qYKgQZ/Expanded.xcresult`通过`88/88 passed / 0 skipped / 0 failed / 0 expected failure`，build status成功且结构化三类诊断为0；真实Keychain opt-in保持移除。
+- 完整macOS normal suite`/tmp/LuneX-17-3_1-full.uwx1Jb/Full.xcresult`通过`798 total / 797 passed / 1 explicit Keychain skip / 0 failed / 0 expected failure`，build status成功且结构化三类诊断为0；唯一skip由原始日志精确确认，测试命令显式移除真实Keychain opt-in。
+- 四平台generic Debug build证据根`/tmp/LuneX-17-3_1-builds.yyPAS7`完成macOS、iOS/iPadOS、tvOS和visionOS `4/4 succeeded`；四份xcresult结构化三类诊断均为0，各自产出Metal AIR/metallib，且没有使用simulator destination。
+- 只调用一次`simctl list devices available -j`并保存`/tmp/LuneX-17-3_1-simulator.9645Ji/devices.json`；固定iPhone/iPad各全局唯一、available、`Shutdown`且全局`Booted=0`，没有执行任何simulator生命周期操作。
+- final审阅确认actual-window specialization无global screen fallback，missing generation在读取前关闭，throw与所有invalid headroom分类均typed且不保留raw值，shared normalizer没有改变publisher render snapshot行为。
+- repository pre-gate`/tmp/LuneX-17-3_1-repository-pre.C7DYgz`通过fixture、OpenSpec strict、apply、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership/API/static boundaries、全部test/build和保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
+- OpenSpec 3.1已勾选，权威进度更新为`12/36`，下一项3.2实现attached-screen mode/brightness通知及foreground、trait、attachment重采样与replacement/cancellation/stale rejection。本项不证明live UIKit/visible EDR、renderer接线、signed/physical设备或live Sunshine。
+- 标记后的repository final gate`/tmp/LuneX-17-3_1-repository-final.lNttpg`通过strict `1/1`、apply `12/36`且next精确为3.2、fixture、generator稳定、任务/静态边界、全部既有test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。

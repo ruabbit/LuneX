@@ -17,7 +17,7 @@
 
 ## 3. Mobile display and EDR runtime
 
-- [ ] 3.1 Implement an injectable actual-window `UIScreen` EDR reader with finite bounded potential/current headroom and typed detached, SDR, EDR, and invalid states
+- [x] 3.1 Implement an injectable actual-window `UIScreen` EDR reader with finite bounded potential/current headroom and typed detached, SDR, EDR, and invalid states
 - [ ] 3.2 Observe attached-screen mode and brightness changes plus foreground, trait, and view/window attachment resampling without deprecated global screen-connect notifications
 - [ ] 3.3 Connect mobile display revisions to the existing `HDRDisplaySnapshot`, render configuration identity, `MetalStreamSurface`, and current-generation stale-frame checks
 - [ ] 3.4 Implement atomic EDR-to-SDR fallback, screen-move reconfiguration, duplicate suppression, revision exhaustion, and idempotent observer teardown

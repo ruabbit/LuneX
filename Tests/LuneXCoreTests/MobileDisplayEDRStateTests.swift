@@ -1,6 +1,200 @@
 import XCTest
 
 final class MobileDisplayEDRStateTests: XCTestCase {
+    @MainActor
+    func testWindowReaderUsesResolvedActualScreenForEDRState() throws {
+        let attachedScreen = MobileDisplayEDRTestScreen(
+            potential: 4,
+            current: 2.5
+        )
+        let unrelatedScreen = MobileDisplayEDRTestScreen(
+            potential: 8,
+            current: 7
+        )
+        let window = MobileDisplayEDRTestWindow(screen: attachedScreen)
+        var resolvedWindows: [MobileDisplayEDRTestWindow] = []
+        var readScreens: [MobileDisplayEDRTestScreen] = []
+        let reader = MobileDisplayEDRWindowReader<
+            MobileDisplayEDRTestWindow,
+            MobileDisplayEDRTestScreen
+        >(
+            screenResolver: {
+                resolvedWindows.append($0)
+                return $0.screen
+            },
+            headroomReader: {
+                readScreens.append($0)
+                return $0.headroom
+            }
+        )
+
+        let state = reader.read(
+            window: window,
+            displayGeneration: MobileDisplayGeneration(rawValue: 19)
+        )
+
+        XCTAssertTrue(resolvedWindows.first === window)
+        XCTAssertTrue(readScreens.first === attachedScreen)
+        XCTAssertFalse(readScreens.contains { $0 === unrelatedScreen })
+        XCTAssertEqual(state.display?.rawValue, 19)
+        XCTAssertEqual(state.capability, .edrCapable)
+        XCTAssertEqual(state.headroom?.potential, 4)
+        XCTAssertEqual(state.headroom?.current, 2.5)
+    }
+
+    @MainActor
+    func testWindowReaderPublishesDetachedWithoutActualScreen() {
+        let window = MobileDisplayEDRTestWindow(screen: nil)
+        var headroomReadCount = 0
+        let reader = MobileDisplayEDRWindowReader<
+            MobileDisplayEDRTestWindow,
+            MobileDisplayEDRTestScreen
+        >(
+            screenResolver: { $0.screen },
+            headroomReader: {
+                headroomReadCount += 1
+                return $0.headroom
+            }
+        )
+        let generation = MobileDisplayGeneration(rawValue: 20)
+
+        XCTAssertEqual(
+            reader.read(window: nil, displayGeneration: generation),
+            .detached
+        )
+        XCTAssertEqual(
+            reader.read(window: window, displayGeneration: generation),
+            .detached
+        )
+        XCTAssertEqual(headroomReadCount, 0)
+    }
+
+    @MainActor
+    func testWindowReaderNormalizesSupportedSDRWithoutEDRClaim() {
+        let screen = MobileDisplayEDRTestScreen(
+            potential: 0.75,
+            current: 0
+        )
+        let reader = mobileDisplayEDRTestReader()
+
+        let state = reader.read(
+            window: MobileDisplayEDRTestWindow(screen: screen),
+            displayGeneration: MobileDisplayGeneration(rawValue: 21)
+        )
+
+        XCTAssertEqual(state.capability, .sdr)
+        XCTAssertEqual(state.headroom, .conservativeSDR)
+        XCTAssertFalse(state.usesConservativeSDRFallback)
+    }
+
+    @MainActor
+    func testWindowReaderFailsInvalidHeadroomClosedWithoutRawValues() {
+        let maximum = MobileDisplayEDRSnapshotPublisher.maximumHeadroom
+        let cases: [
+            (
+                MobileDisplayEDRHeadroomReading,
+                MobileDisplayEDRValidationError
+            )
+        ] = [
+            (
+                MobileDisplayEDRHeadroomReading(
+                    potential: .nan,
+                    current: 1
+                ),
+                .invalidPotentialHeadroom
+            ),
+            (
+                MobileDisplayEDRHeadroomReading(
+                    potential: -0.01,
+                    current: 1
+                ),
+                .invalidPotentialHeadroom
+            ),
+            (
+                MobileDisplayEDRHeadroomReading(
+                    potential: maximum + 1,
+                    current: 1
+                ),
+                .invalidPotentialHeadroom
+            ),
+            (
+                MobileDisplayEDRHeadroomReading(
+                    potential: 4,
+                    current: .infinity
+                ),
+                .invalidCurrentHeadroom
+            ),
+            (
+                MobileDisplayEDRHeadroomReading(
+                    potential: 2,
+                    current: 3
+                ),
+                .currentHeadroomExceedsPotential
+            )
+        ]
+
+        for (index, entry) in cases.enumerated() {
+            let screen = MobileDisplayEDRTestScreen(headroom: entry.0)
+            let state = mobileDisplayEDRTestReader().read(
+                window: MobileDisplayEDRTestWindow(screen: screen),
+                displayGeneration: MobileDisplayGeneration(rawValue: 22)
+            )
+
+            XCTAssertEqual(
+                state,
+                .sdrFallback(
+                    display: MobileDisplayGeneration(rawValue: 22),
+                    reason: entry.1
+                ),
+                "case \(index)"
+            )
+            XCTAssertEqual(state.headroom, .conservativeSDR)
+            let description = String(reflecting: state).lowercased()
+            XCTAssertFalse(description.contains("nan"), "case \(index)")
+            XCTAssertFalse(
+                description.contains("infinity"),
+                "case \(index)"
+            )
+        }
+    }
+
+    @MainActor
+    func testWindowReaderRejectsMissingGenerationBeforeReadAndTypesFailure() {
+        let screen = MobileDisplayEDRTestScreen(potential: 4, current: 2)
+        let window = MobileDisplayEDRTestWindow(screen: screen)
+        var headroomReadCount = 0
+        let reader = MobileDisplayEDRWindowReader<
+            MobileDisplayEDRTestWindow,
+            MobileDisplayEDRTestScreen
+        >(
+            screenResolver: { $0.screen },
+            headroomReader: {
+                headroomReadCount += 1
+                if headroomReadCount == 1 {
+                    throw MobileDisplayEDRTestError.readFailed
+                }
+                return $0.headroom
+            }
+        )
+
+        XCTAssertEqual(
+            reader.read(window: window, displayGeneration: nil),
+            .sdrFallback(
+                display: nil,
+                reason: .invalidDisplayGeneration
+            )
+        )
+        XCTAssertEqual(headroomReadCount, 0)
+        XCTAssertEqual(
+            reader.read(
+                window: window,
+                displayGeneration: MobileDisplayGeneration(rawValue: 23)
+            ),
+            .unavailable(.observationFailed)
+        )
+        XCTAssertEqual(headroomReadCount, 1)
+    }
+
     func testSDRReadingNormalizesSubunitHeadroom() throws {
         var publisher = makePublisher()
 
@@ -395,4 +589,42 @@ final class MobileDisplayEDRStateTests: XCTestCase {
     private enum TestFailure: Error {
         case expectedPublishedSnapshot
     }
+}
+
+@MainActor
+private func mobileDisplayEDRTestReader() -> MobileDisplayEDRWindowReader<
+    MobileDisplayEDRTestWindow,
+    MobileDisplayEDRTestScreen
+> {
+    MobileDisplayEDRWindowReader(
+        screenResolver: { $0.screen },
+        headroomReader: { $0.headroom }
+    )
+}
+
+private final class MobileDisplayEDRTestWindow {
+    var screen: MobileDisplayEDRTestScreen?
+
+    init(screen: MobileDisplayEDRTestScreen?) {
+        self.screen = screen
+    }
+}
+
+private final class MobileDisplayEDRTestScreen {
+    var headroom: MobileDisplayEDRHeadroomReading
+
+    init(headroom: MobileDisplayEDRHeadroomReading) {
+        self.headroom = headroom
+    }
+
+    convenience init(potential: Double, current: Double) {
+        self.init(headroom: MobileDisplayEDRHeadroomReading(
+            potential: potential,
+            current: current
+        ))
+    }
+}
+
+private enum MobileDisplayEDRTestError: Error {
+    case readFailed
 }
