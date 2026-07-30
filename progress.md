@@ -2225,3 +2225,18 @@
 - 1.2已勾选，权威进度更新为`2/36`。本项只提供值合同，actual UIKit view/window/scene、PiP controller、background continuity和mobile EDR runtime仍未接线。
 - 勾选后repository final gate `/tmp/LuneX-17-1_2-repo-final.NSPpto`通过strict `1/1`、apply `2/36`且next精确为1.3、final focused/full/build/simulator证据读回、generator稳定、membership、合同、privacy和diff边界。
 - macOS更新结束后从交接点恢复，确认Xcode仍为`26.4 (17E192)`；fresh focused evidence `/tmp/LuneX-17-1_2-post-update-focused.NbSCKe`在macOS 27.0通过`10/10`、零skip，xcresult为`succeeded`且结构化error/warning/analyzer warning均为0。命令行设备枚举提示未进入结构化构建诊断；未访问Keychain或操作simulator。
+
+## 2026-07-30 阶段 17 任务 1.3 启动
+
+- 1.2已以`c486c20 Define mobile scene window state`提交并推送，确认`HEAD == origin/main`且起始工作树clean；OpenSpec为`2/36 ready`，当前任务1.3。
+- 新增平台无关PiP generation/capability/lifecycle/failure/frame-sink/restoration snapshot、effectful deterministic reducer和actual-state continuity-path resolver/reducer；native active只能来自`didStart`，request/configuration不能伪造active。
+- frame sink snapshot只允许nonzero decoder generation且pending frame容量最多1；restoration使用current PiP generation和checked ordinal lease，completion effect只由匹配的pending lease产生，invalidate会fail closed完成pending lease并flush/release sink。
+- 首轮focused `/tmp/LuneX-17-1_3-focused.DIFdOM`在编译期失败：实例转移调用的`replacing` helper误声明为`static`，9处调用被Swift 6.3拒绝；测试未启动。已改为实例私有helper，后续使用全新证据目录重跑。
+
+## 2026-07-30 阶段 17 任务 1.3 完成
+
+- 修复编译后focused r2通过`13/13`；状态机审阅再修复starting期间capability/sink变化、continuity对current sink operational的要求和revision overflow丢弃原始operational effect三处边界，final focused `/tmp/LuneX-17-1_3-focused-r3.3Mbkb9`通过`15/15`且零结构化诊断。
+- expanded `/tmp/LuneX-17-1_3-expanded.z64xdg`覆盖PiP、scene/window和旧continuity兼容性并通过`32/32`。完整macOS `/tmp/LuneX-17-1_3-full.nw8ngg`通过`746 total / 745 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；所有测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- exact-source四平台generic-device Debug warnings-as-errors build `/tmp/LuneX-17-1_3-builds.Acgnna`的macOS、iOS/iPadOS、tvOS和visionOS均`succeeded`，四份xcresult结构化error/warning/analyzer warning均为0。
+- 只读simulator盘点确认固定iPhone 17 Pro `23A27088-C19F-4F77-A455-4E50E393167E`和iPad Pro 13-inch (M5) `409A5908-8C39-4797-A41C-04503A05FA3D`各唯一、available、`Shutdown`，全局`Booted=0`；未执行create、clone、boot、install、launch、run、shutdown或delete。
+- OpenSpec 1.3已勾选，权威进度更新为`3/36`。本项只证明Foundation PiP/continuity值合同、deterministic reducer、generation/revision/cleanup语义和四平台编译；不证明actual AVKit/frame sink、system PiP、background duration、signed配置、Stage Manager、mobile EDR、真机或live Sunshine。下一项为1.4 mobile EDR值合同。

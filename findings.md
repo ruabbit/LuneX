@@ -1789,3 +1789,13 @@
 - geometry只携带有限view/window rect、safe area、scale、由point×scale确定性取整的bounded drawable、orientation和closed trait enums；display只携带opaque generation，不携带UIKit object或screen标识。
 - 1.2最终合同把rect origin与endpoint同时限制在绝对值`1,000,000` points内，dimension上限`131,072` points、scale上限`16`、drawable上限`1,048,576` pixels；safe area必须有限、非负且不超过view bounds。
 - invalid sample发布stable unavailable reason并清除renderable geometry；同reason的不同raw invalid payload会语义去重，避免隐私泄漏和revision churn。revision overflow清snapshot并永久closed。
+
+## 2026-07-30 阶段 17 任务 1.3 验收
+
+- 新`MobilePictureInPictureState`合同只依赖Foundation：generation同时绑定nonzero media与PiP generation；capability、controller lifecycle、stable failure、frame sink、restoration lease、semantic snapshot和continuity path都是closed immutable值。
+- PiP reducer只接收current generation。用户start/configuration只产生request/ready状态，只有native `didStart`可发布active；starting期间possibility或sink暂时变化不会让同generation的native confirmation变stale，active期间capability loss也不会伪造系统stop事件。
+- frame sink明确最多保留1个pending frame并要求nonzero decoder generation。continuity的PiP路径同时要求confirmed active lifecycle和operational current sink；audio-only路径要求actual active且permitted audio。background declaration只是必要配置，不是实际活跃证明。
+- restoration lease用checked ordinal和PiP generation绑定，匹配completion精确一次；duplicate/stale lease不修改状态。invalidation会对pending restoration完成false并flush/release sink。revision overflow清snapshot、永久fail closed，而且丢弃导致overflow事件原本的start/restore effect，只保留cleanup。
+- final focused为`15/15`，expanded为`32/32`，full为`746 total / 745 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug build全部零structured diagnostics。固定iPhone/iPad只读盘点各唯一且`Shutdown`，全局`Booted=0`。
+- 本项没有创建`AVPictureInPictureController`、sample-buffer renderer或decoded-frame subscription，也没有接入actual audio activation/AppModel。第二个native restoration请求在已有pending lease时会被reducer拒绝；4.5生产adapter必须仍对该次native completion handler精确调用一次并返回false，不能因为rejection丢失callback。
+- 离线状态机、macOS测试和generic-device编译不证明system PiP、后台时长、signed background config、Stage Manager/external display、移动EDR、功耗/热状态、物理iPhone/iPad或live Sunshine；6.6继续pending。

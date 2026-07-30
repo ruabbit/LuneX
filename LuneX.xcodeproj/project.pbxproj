@@ -65,6 +65,7 @@
 		11A4535FFD8F894FE33AFD56 /* PairingCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3DD6BB0E819770518AEDF7 /* PairingCrypto.swift */; };
 		1223460B7A9B00C560A84BEC /* VideoFormatDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCEB47FA125148AC58BAE31 /* VideoFormatDescription.swift */; };
 		12376ABA851EB8D2854DA842 /* VideoCodecSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39657BF8E5A5BB7530B4EDDE /* VideoCodecSelection.swift */; };
+		12423F4CD4F838A8D73B031C /* MobilePictureInPictureStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05544B844046D1B92D6A6DE /* MobilePictureInPictureStateTests.swift */; };
 		126FD558568594FBB4A49421 /* HDRSurfaceAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71813C7DF48FB463427D3EAC /* HDRSurfaceAdapter.swift */; };
 		13450D22D4C73E2DC264A069 /* RTSPBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/RTSPBootstrap.swift"; sourceTree = "<group>"; };
 		1386EF0470C16F24BBE8D778 /* HDRRenderContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HDRRenderContractTests.swift"; sourceTree = "<group>"; };
@@ -89,6 +90,7 @@
 				F6B08151BEDFF41608DB8852 /* SessionState.swift */,
 				A6FB708A1FC6B0BD6780B440 /* X509CertificateDER.swift */,
 				8557773DAB04C6CEEF7128A6 /* ContinuityPolicy.swift */,
+				CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */,
 				BDE0A3AB9C255FF12CC956A3 /* MobileSceneWindowState.swift */,
 				F15909A82EFCA49A5EF857B8 /* PlatformLifecycle.swift */,
 				533C6BF0CE0FC77B5AF48465 /* StreamCoordinateSnapshot.swift */,
@@ -247,6 +249,7 @@
 				CC23BDB54A1C393ABD5E01F9 /* SessionState.swift in Sources */,
 				455F622EFDDBC7F130913018 /* X509CertificateDER.swift in Sources */,
 				77AFAE14D6E388173018CC4B /* ContinuityPolicy.swift in Sources */,
+				5FED7803500C7F9AEE2572F3 /* MobilePictureInPictureState.swift in Sources */,
 				AC11DA9BF2DB2BB224E67AE1 /* MobileSceneWindowState.swift in Sources */,
 				A3C464852F3EC9D4F2E283F6 /* PlatformLifecycle.swift in Sources */,
 				86AE033AC4A073DBF507A156 /* StreamCoordinateSnapshot.swift in Sources */,
@@ -352,6 +355,7 @@
 		2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/NativeSessionAudioProcessor.swift"; sourceTree = "<group>"; };
 		2D0A723D4D2A55FC6AD152A8 /* ContinuityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ContinuityPolicyTests.swift"; sourceTree = "<group>"; };
 		2D50C225AD4EBC483A40DF9A /* HDRRenderConfigurationResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1F04BD4939CFE0FFAC7BE0 /* HDRRenderConfigurationResolver.swift */; };
+		2D7C757FC8D0EC34C1E1EDFC /* MobilePictureInPictureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */; };
 		2D819214AB5EE75575AFC198 /* MediaClockSynchronizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB90277F995A5405549A7E56 /* MediaClockSynchronizer.swift */; };
 		2E56FD49DB7FAF5DC60F3026 /* ApplicationInputSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ApplicationInputSink.swift"; sourceTree = "<group>"; };
 		2E5949C2E8B8D6BAFC78187F /* PairingPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD8DB1FC579838127AC329D /* PairingPersistence.swift */; };
@@ -561,6 +565,7 @@
 				F353164B5988943E97D33BF4 /* SessionState.swift in Sources */,
 				99A072169B54FDD65A4C42C0 /* X509CertificateDER.swift in Sources */,
 				06BACFE0B8BDEBFAAE8A21D6 /* ContinuityPolicy.swift in Sources */,
+				EAD0489F9C2FD4A98598E2B5 /* MobilePictureInPictureState.swift in Sources */,
 				08EC1DB289C4C20DC29173B0 /* MobileSceneWindowState.swift in Sources */,
 				B545480E72B7EDD648FA8DB7 /* PlatformLifecycle.swift in Sources */,
 				04101490F88E53406A07877E /* StreamCoordinateSnapshot.swift in Sources */,
@@ -679,6 +684,7 @@
 		5F1E61576A2ABADA8D414265 /* VideoDecodePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/VideoDecodePipeline.swift"; sourceTree = "<group>"; };
 		5F30E763D9AE5D2A7C3216A5 /* ClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B249D70217EBBA15751AAF /* ClientIdentity.swift */; };
 		5FB3B5F46FA829F94852FCCA /* LuneXENetBridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "Sources/LuneXNetworking/CInterop/LuneXENetBridge.c"; sourceTree = "<group>"; };
+		5FED7803500C7F9AEE2572F3 /* MobilePictureInPictureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */; };
 		60B0BC7E6D2A38A166826089 /* KeychainClientIdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6427B28229BB89A8E2F6B014 /* KeychainClientIdentityStore.swift */; };
 		60BAD77B4AF9F8BFEB556D28 /* NetworkChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */; };
 		612236FE3E89C6FAA0BD67C3 /* HDRDecodedVideoContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17C5210160DA201868DD8DA /* HDRDecodedVideoContract.swift */; };
@@ -707,6 +713,7 @@
 				EAE72094F979FE7E7416961F /* SessionState.swift in Sources */,
 				C96D67AAC86412351BF3557B /* X509CertificateDER.swift in Sources */,
 				E48CBE2A7F00F84548F195DC /* ContinuityPolicy.swift in Sources */,
+				718DF9FDF998F2F59C77DE01 /* MobilePictureInPictureState.swift in Sources */,
 				25F258550B1C5C08B43297E6 /* MobileSceneWindowState.swift in Sources */,
 				E7C68A141C49CAC87CF1B9AF /* PlatformLifecycle.swift in Sources */,
 				6FA92D23F2CDADAB252B3FD8 /* StreamCoordinateSnapshot.swift in Sources */,
@@ -816,6 +823,7 @@
 				C36B7EDACE203F2FA7D24DBF /* MacSessionInputCoordinatorTests.swift in Sources */,
 				7CCAB43B2EACD71201FE1AA8 /* MetalVideoFrameDeliveryTests.swift in Sources */,
 				90F976152B2E278F303C0FCB /* MediaClockSynchronizerTests.swift in Sources */,
+				12423F4CD4F838A8D73B031C /* MobilePictureInPictureStateTests.swift in Sources */,
 				31D2B7A0A9F91A27943BAE08 /* MobileSceneWindowStateTests.swift in Sources */,
 				BAAA8579B871B6D444EB8588 /* NetworkChannelTests.swift in Sources */,
 				FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */,
@@ -934,6 +942,7 @@
 		70FBA8531186D5D51C8A7C21 /* VideoDecompressionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4AFD13BCF45C8B5F76A060 /* VideoDecompressionSession.swift */; };
 		71813C7DF48FB463427D3EAC /* HDRSurfaceAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXRendering/HDRSurfaceAdapter.swift"; sourceTree = "<group>"; };
 		71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MetalVideoFrameDeliveryTests.swift"; sourceTree = "<group>"; };
+		718DF9FDF998F2F59C77DE01 /* MobilePictureInPictureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */; };
 		71CE4D991A06CC10478CCC2E /* HDRVideoShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 04AAF62081DEF9C05A4DED8E /* HDRVideoShaders.metal */; };
 		721E3D1731C5D5DB6AAE4662 /* HDRMetalVideoRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95D31708C2BCDA06F43A325 /* HDRMetalVideoRendererTests.swift */; };
 		725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/SessionMediaEnvironment.swift"; sourceTree = "<group>"; };
@@ -1019,6 +1028,7 @@
 				0B15ADEDB630B72B33FFF9EE /* SessionState.swift in Sources */,
 				D6551233E55ED59D09389862 /* X509CertificateDER.swift in Sources */,
 				CB28E6EF9E7A89FF16EB069C /* ContinuityPolicy.swift in Sources */,
+				D11D02DFF2F3E74611A3BF34 /* MobilePictureInPictureState.swift in Sources */,
 				1DFD803C7743CBBEB2D45178 /* MobileSceneWindowState.swift in Sources */,
 				95C9DE49F2BED263901FCC3C /* PlatformLifecycle.swift in Sources */,
 				8781CF2F8F4CAC27204792D1 /* StreamCoordinateSnapshot.swift in Sources */,
@@ -1238,6 +1248,7 @@
 		9FDCED4F38E2E40016BB139E /* SessionMediaEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D47D3DCA465DAFBB81111 /* SessionMediaEnvironment.swift */; };
 		9FE44EAA7EA80BFDD7EB12D3 /* PairingStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/PairingStateMachineTests.swift"; sourceTree = "<group>"; };
 		A02A99B2E84D53C7B2CEA407 /* HDRRenderConfigurationResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1F04BD4939CFE0FFAC7BE0 /* HDRRenderConfigurationResolver.swift */; };
+		A05544B844046D1B92D6A6DE /* MobilePictureInPictureStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/MobilePictureInPictureStateTests.swift"; sourceTree = "<group>"; };
 		A072F16E9D9A535C3550A89F /* NativeSessionAudioProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/NativeSessionAudioProcessorTests.swift"; sourceTree = "<group>"; };
 		A09317A2A71A45E2B151B4CE /* RemoteInputRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD732E9A5B217991D7367131 /* RemoteInputRuntime.swift */; };
 		A0937472EE5878FA82CB0F7E /* Tests */ = {isa = PBXGroup; children = (
@@ -1267,6 +1278,7 @@
 				C050244F381FB8AECBFBE492 /* MacSessionInputCoordinatorTests.swift */,
 				71862375885BA6E6306B70DB /* MetalVideoFrameDeliveryTests.swift */,
 				756C2F7D0E424A7D7F302393 /* MediaClockSynchronizerTests.swift */,
+				A05544B844046D1B92D6A6DE /* MobilePictureInPictureStateTests.swift */,
 				BBD79979C75F5F2C3FB0EC3A /* MobileSceneWindowStateTests.swift */,
 				6ADFE46A1EFC63457BC1BEB9 /* NetworkChannelTests.swift */,
 				E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */,
@@ -1495,6 +1507,7 @@
 		CDFA23860CD9A9E3EA5F02D9 /* SpatialAudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/SpatialAudioRouteMonitor.swift"; sourceTree = "<group>"; };
 		CE11836E191C009C99D43BE3 /* HDRLuminanceMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5C5B513BABDD7E45B57AD8 /* HDRLuminanceMappingTests.swift */; };
 		CE1B0D513047E17F9D39A6FB /* HDRColorReferenceMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0754FE63278CBE79901B79 /* HDRColorReferenceMath.swift */; };
+		CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXPlatform/MobilePictureInPictureState.swift"; sourceTree = "<group>"; };
 		CE6F3A814654B7BCB905BFFA /* callbacks.c in Sources */ = {isa = PBXBuildFile; fileRef = B315A2E144291C0C6E464F3E /* callbacks.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		CE88BFE04611C31B65054415 /* NativeSessionAudioProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */; };
 		CE8946AD4A5181D6D93508FC /* ClientIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/ClientIdentityManager.swift"; sourceTree = "<group>"; };
@@ -1538,6 +1551,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
 			}; name = Debug; };
 		D0BC380E1BD3EC5E17FA857C /* AudioToolboxOpusDecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F821FB80CF8F9AE0A3442DD /* AudioToolboxOpusDecoderTests.swift */; };
+		D11D02DFF2F3E74611A3BF34 /* MobilePictureInPictureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */; };
 		D13D385B7C5D3B25E331207B /* SessionResourceTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/SessionResourceTrackerTests.swift"; sourceTree = "<group>"; };
 		D20DEA241DD214988F8D7029 /* PinnedHTTPSClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8016DE0A738B73CA67BC9E8 /* PinnedHTTPSClient.swift */; };
 		D224FF1D49EB85448DD647F0 /* MacAudioOutputCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E692A18B656016D95E1D2FD /* MacAudioOutputCapability.swift */; };
@@ -1617,6 +1631,7 @@
 		E925F1199A69DDBC841BF9D4 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E264A3CED5E104C8FC807B /* Pairing.swift */; };
 		EA21698CC24024638F462655 /* NetworkChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B015E63FB293F1A0E1F46844 /* NetworkChannels.swift */; };
 		EA48BCED98C3AD80ED754905 /* AudioSessionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280BF630B563071BFE6CBFF6 /* AudioSessionPipeline.swift */; };
+		EAD0489F9C2FD4A98598E2B5 /* MobilePictureInPictureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE40F68A35B1589D6094D0FD /* MobilePictureInPictureState.swift */; };
 		EAD8446434F86B653BCDDB95 /* StreamNegotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */; };
 		EAE72094F979FE7E7416961F /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B08151BEDFF41608DB8852 /* SessionState.swift */; };
 		EB2C2B7C298D21BAF9374DD9 /* HDRLuminanceMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951C4385277771C53E668B07 /* HDRLuminanceMapping.swift */; };
@@ -1691,6 +1706,7 @@
 				FC75DAD852DDC7F8B3803C94 /* SessionState.swift in Sources */,
 				707EFFCEE10F9D10FAF49DB5 /* X509CertificateDER.swift in Sources */,
 				F386E16A415C41DA99D71C67 /* ContinuityPolicy.swift in Sources */,
+				2D7C757FC8D0EC34C1E1EDFC /* MobilePictureInPictureState.swift in Sources */,
 				A91605F926510A2462027B6D /* MobileSceneWindowState.swift in Sources */,
 				09930649637843C32301218C /* PlatformLifecycle.swift in Sources */,
 				7B5004DB977C81EDEBC6D312 /* StreamCoordinateSnapshot.swift in Sources */,

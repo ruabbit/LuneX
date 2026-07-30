@@ -163,6 +163,90 @@ These results prove the shared value contract and platform compilation only.
 They do not prove UIKit attachment, Stage Manager resize, PiP, background
 continuity, mobile EDR, physical input mapping, or live Sunshine behavior.
 
+## PiP and continuity value foundation
+
+OpenSpec task 1.3 adds
+`Sources/LuneXPlatform/MobilePictureInPictureState.swift` as a
+platform-neutral, immutable state contract. It imports Foundation only and
+does not create an AVKit controller, sample-buffer layer, frame subscription,
+audio session, or background runtime.
+
+The contract defines:
+
+- a nonzero media/PiP generation pair and checked semantic revision;
+- closed `unknown`, `unavailable(reason:)`, and `possible` capability states;
+- controller lifecycle from unprepared through preparing, ready,
+  request/start/active, request/stop/stopped, failed, and invalidated;
+- stable capability, controller, frame-sink, playback, and restoration failure
+  classes without raw AVKit error text;
+- a frame-sink snapshot that accepts only a nonzero decoder generation and at
+  most one pending frame;
+- a generation-bound, checked-ordinal restoration lease with pending,
+  completed, and invalidated states;
+- typed native start/stop, restoration completion, flush, and release effects;
+  and
+- actual `inactive`, `foreground`, `pictureInPicture`, `audioOnly`, or
+  `unavailable` continuity paths.
+
+The PiP reducer accepts only the configured generation. A start request can
+emit a native-start effect, but lifecycle becomes active only after the native
+`didStart` event. Controller capability or content-source configuration never
+invents active state. Capability or sink changes during native startup do not
+invalidate a later current-generation `didStart`; once active, a capability
+loss records truthful availability without inventing a native-stop callback.
+
+Restoration completion is produced only for the matching pending lease.
+Duplicate or stale completion cannot mutate the current snapshot. Invalidation
+completes a pending restoration as false, flushes and releases the sink, and
+makes later events inert. Revision overflow clears the snapshot, permanently
+fails closed, and emits cleanup effects only; a start or restore effect from
+the event that exhausted the revision is not allowed to escape.
+
+The continuity resolver requires an active stream and background scene before
+considering media continuity. PiP continuity requires all of:
+
+- an enabled PiP preference;
+- native-confirmed active PiP lifecycle;
+- an operational current frame sink; and
+- the playback background declaration.
+
+Audio-only continuity requires an enabled preference, an actually active audio
+session, explicit continuity permission, and the same background declaration.
+PiP has priority when both actual paths are active. Capability, configuration,
+or preference presence alone does not produce continuity. Equivalent
+resolutions are deduplicated, stale generations are ignored, and revision
+overflow clears the published path.
+
+Task 1.3 evidence:
+
+```text
+Focused:
+/tmp/LuneX-17-1_3-focused-r3.3Mbkb9
+15 passed / 0 skipped / 0 failed
+
+Expanded:
+/tmp/LuneX-17-1_3-expanded.z64xdg
+32 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-1_3-full.nw8ngg
+746 total / 745 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-1_3-builds.Acgnna
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Read-only simulator inventory:
+fixed iPhone/iPad present exactly once, available and Shutdown; Booted = 0
+```
+
+These results prove the Foundation value/state contracts, deterministic
+reducers, generation/revision behavior, exact test coverage, and four-platform
+compilation. They do not prove an `AVPictureInPictureController`,
+`AVSampleBufferDisplayLayer`, system PiP, legal background duration, active
+mobile audio continuity, signed configuration, Stage Manager, mobile EDR,
+physical hardware, or live Sunshine behavior.
+
 ## Xcode 26.4 public API inventory
 
 The inventory was verified against Xcode 26.4 build `17E192`, Apple Swift 6.3,
