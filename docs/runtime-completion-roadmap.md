@@ -137,7 +137,7 @@ flowchart LR
 ## 阶段 17：iOS/iPadOS 连续性
 
 - `docs/runtime/mobile-scene-pip-continuity-contract.md`是actual UIKit stream view/window/screen、共享geometry/input、sample-buffer PiP、合法background continuity、mobile EDR和物理验收的权威合同。
-- OpenSpec `integrate-mobile-scene-pip-continuity`当前`22/36 in_progress`；1.x合同、2.x actual UIKit scene/window/geometry/input、3.x actual-window mobile EDR以及4.1至4.6的sample-buffer PiP client/sink/native adapter/lifecycle和decoded-frame presentation orchestration均已完成。PiP通过最多8个generation-filtered订阅和单槽main-actor mailbox复用唯一presentation source及同一`CVPixelBuffer`，不创建第二decoder；foreground Metal只在native confirmed-active后pause/throttle并在terminal状态恢复最新baseline。下一项4.7补齐跨controller/frame/resource的综合测试矩阵。
+- OpenSpec `integrate-mobile-scene-pip-continuity`当前`23/36 in_progress`；1.x合同、2.x actual UIKit scene/window/geometry/input、3.x actual-window mobile EDR和4.x sample-buffer PiP runtime均已完成。PiP通过最多8个generation-filtered订阅和单槽main-actor mailbox复用唯一presentation source及同一`CVPixelBuffer`，不创建第二decoder；4.7综合矩阵证明start failure、restore/skip/playback、backpressure/rejection、replacement、teardown和retain-release穿过presentation ownership仍保持generation-scoped与exactly-once。下一项5.1收紧actual PiP/audio continuity policy。
 - RootView 接入 `scenePhase`、实际 `UIWindowScene`、screen、scale 和几何变化。
 - iPad Stage Manager 与多窗口 resize 实时更新 drawable、input transform 和 decoder output policy。
 - 使用 `AVPictureInPictureController` 和有效 content source 实现真实 PiP。

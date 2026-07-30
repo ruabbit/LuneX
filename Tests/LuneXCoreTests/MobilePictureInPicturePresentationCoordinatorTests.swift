@@ -287,6 +287,273 @@ final class MobilePictureInPicturePresentationCoordinatorTests:
         _ = runtime.invalidate()
     }
 
+    @MainActor
+    func testStartFailureNeverSuppressesForegroundPresentation()
+        throws
+    {
+        let context = try makeContext(startEvents: [.willStart])
+        var policies: [RenderPolicy] = []
+        let runtime = try makeRuntime(
+            context,
+            foregroundBaseline: .active,
+            foregroundPolicyHandler: { policies.append($0) }
+        )
+        _ = runtime.prepare()
+        _ = runtime.requestStart()
+        context.client.emit(.startFailed(.nativeStartFailed))
+
+        XCTAssertEqual(
+            runtime.lifecycleCoordinator.snapshot?.state.lifecycle,
+            .failed
+        )
+        XCTAssertFalse(runtime.snapshot().isConfirmedActive)
+        XCTAssertEqual(runtime.snapshot().foregroundPolicy, .active)
+        XCTAssertEqual(policies, [.active])
+        XCTAssertEqual(context.sink.discontinuityCount, 1)
+        _ = runtime.invalidate()
+    }
+
+    @MainActor
+    func testPlaybackRestoreAndSkipTraversePresentationOwnershipExactlyOnce()
+        throws
+    {
+        let context = try makeContext(startEvents: [.willStart])
+        let runtime = try makeRuntime(context)
+        var events: [MobilePictureInPictureLifecycleCoordinatorEvent] = []
+        runtime.setLifecycleEventHandler { events.append($0) }
+        _ = runtime.prepare()
+        _ = runtime.requestStart()
+        context.client.emit(.didStart)
+
+        let playback = try XCTUnwrap(
+            MobilePictureInPicturePlaybackState(
+                timeline: .live,
+                isPaused: false,
+                backgroundAudioPolicy: .permitted
+            )
+        )
+        XCTAssertTrue(runtime.updatePlaybackState(playback))
+        XCTAssertFalse(runtime.updatePlaybackState(playback))
+
+        let nativeRestorationLease = try callbackLease(
+            generation: context.generation,
+            kind: .restoreInterface,
+            ordinal: 11
+        )
+        context.client.emit(
+            .restoreInterfaceRequested(nativeRestorationLease)
+        )
+        let runtimeRestorationLease = try XCTUnwrap(
+            events.compactMap {
+                (event)
+                    -> MobilePictureInPictureRestorationLease? in
+                guard case let .restoreInterfaceRequested(lease) = event else {
+                    return nil
+                }
+                return lease
+            }.last
+        )
+        guard case .applied = runtime.completeRestoration(
+            runtimeRestorationLease,
+            result: .restored
+        ) else {
+            return XCTFail("Expected restoration completion")
+        }
+        XCTAssertEqual(
+            runtime.completeRestoration(
+                runtimeRestorationLease,
+                result: .declined
+            ),
+            .rejected(.staleRestorationLease)
+        )
+
+        let interval = try XCTUnwrap(
+            MobilePictureInPictureSkipInterval(
+                nanoseconds: 2_000_000_000
+            )
+        )
+        let nativeSkipLease = try callbackLease(
+            generation: context.generation,
+            kind: .skip,
+            ordinal: 12
+        )
+        let renderSize = try XCTUnwrap(
+            MobilePictureInPictureRenderSize(
+                width: 1_920,
+                height: 1_080
+            )
+        )
+        context.client.emit(.setPlaying(false))
+        context.client.emit(.skipRequested(
+            interval: interval,
+            completion: nativeSkipLease
+        ))
+        context.client.emit(.renderSizeChanged(renderSize))
+
+        XCTAssertTrue(events.contains(.setPlayingRequested(false)))
+        XCTAssertTrue(events.contains(.skipRequested(
+            interval: interval,
+            completion: nativeSkipLease
+        )))
+        XCTAssertTrue(events.contains(.renderSizeChanged(renderSize)))
+        XCTAssertEqual(runtime.completeSkip(nativeSkipLease), .completed)
+        XCTAssertEqual(
+            runtime.completeSkip(nativeSkipLease),
+            .alreadyCompleted
+        )
+        XCTAssertEqual(
+            context.client.commands,
+            [
+                .start,
+                .playback(playback),
+                .invalidatePlaybackState
+            ]
+        )
+        XCTAssertEqual(
+            context.client.completions,
+            [
+                .init(
+                    lease: nativeRestorationLease,
+                    completion: .restoreInterface(restored: true)
+                ),
+                .init(
+                    lease: nativeSkipLease,
+                    completion: .skip
+                )
+            ]
+        )
+        _ = runtime.invalidate()
+    }
+
+    @MainActor
+    func testBackpressureAndRejectionOutcomesRemainBounded()
+        async throws
+    {
+        let context = try makeContext()
+        let runtime = try makeRuntime(context)
+        context.sink.submissionOutcome = .retainedLatestPending
+        _ = context.source.consume(
+            .frame(try makeFrame(
+                generation: context.decoderGeneration,
+                frameID: 1
+            )),
+            sessionID: context.sessionID,
+            mediaGeneration: context.generation.mediaGeneration
+        )
+        try await waitUntil {
+            runtime.snapshot().submittedFrameCount == 1
+        }
+
+        context.sink.submissionOutcome = .replacedPending
+        _ = context.source.consume(
+            .frame(try makeFrame(
+                generation: context.decoderGeneration,
+                frameID: 2
+            )),
+            sessionID: context.sessionID,
+            mediaGeneration: context.generation.mediaGeneration
+        )
+        try await waitUntil {
+            runtime.snapshot().submittedFrameCount == 2
+        }
+
+        context.sink.submissionOutcome = .rejected(.rendererFailed)
+        _ = context.source.consume(
+            .frame(try makeFrame(
+                generation: context.decoderGeneration,
+                frameID: 3
+            )),
+            sessionID: context.sessionID,
+            mediaGeneration: context.generation.mediaGeneration
+        )
+        try await waitUntil {
+            runtime.snapshot().rejectedFrameCount == 1
+        }
+
+        XCTAssertEqual(runtime.snapshot().submittedFrameCount, 2)
+        XCTAssertEqual(
+            context.sink.samples.map(\.identity.frameID),
+            [1, 2]
+        )
+        XCTAssertEqual(context.source.currentFrame()?.frameID, 3)
+        _ = runtime.invalidate()
+    }
+
+    @MainActor
+    func testReplacementReleasesPendingFrameAndRejectsStaleCallback()
+        async throws
+    {
+        let source = StreamVideoPresentationSource()
+        let sessionID = UUID()
+        let oldContext = try makeContext(
+            source: source,
+            sessionID: sessionID,
+            mediaGeneration: 3,
+            pictureInPictureGeneration: 5,
+            decoderGeneration: 9
+        )
+        var oldRuntime:
+            MobilePictureInPicturePresentationCoordinator? =
+                try makeRuntime(oldContext)
+        weak let releasedRuntime = oldRuntime
+        let staleHandler = try XCTUnwrap(
+            oldContext.client.currentHandler
+        )
+        weak var releasedPixelBuffer: CVPixelBuffer?
+        autoreleasepool {
+            let frame = try! makeFrame(
+                generation: oldContext.decoderGeneration,
+                frameID: 1
+            )
+            releasedPixelBuffer = frame.pixelBuffer
+            _ = source.consume(
+                .frame(frame),
+                sessionID: sessionID,
+                mediaGeneration: oldContext.generation.mediaGeneration
+            )
+        }
+        _ = oldRuntime?.invalidate()
+        oldRuntime = nil
+
+        let newContext = try makeContext(
+            source: source,
+            sessionID: sessionID,
+            mediaGeneration: 4,
+            pictureInPictureGeneration: 6,
+            decoderGeneration: 10
+        )
+        let newRuntime = try makeRuntime(newContext)
+        staleHandler(try XCTUnwrap(
+            MobilePictureInPictureClientEventEnvelope(
+                generation: oldContext.generation,
+                event: .didStart
+            )
+        ))
+        _ = source.consume(
+            .frame(try makeFrame(
+                generation: newContext.decoderGeneration,
+                frameID: 2
+            )),
+            sessionID: sessionID,
+            mediaGeneration: newContext.generation.mediaGeneration
+        )
+        try await waitUntil {
+            newRuntime.snapshot().submittedFrameCount == 1
+        }
+        await Task.yield()
+
+        XCTAssertNil(releasedRuntime)
+        XCTAssertNil(releasedPixelBuffer)
+        XCTAssertEqual(oldContext.sink.submissionCount, 0)
+        XCTAssertEqual(newContext.sink.samples.map(\.identity.frameID), [2])
+        XCTAssertFalse(newRuntime.snapshot().isConfirmedActive)
+        XCTAssertEqual(
+            source.snapshot().activeSubscriptionCount,
+            1
+        )
+        _ = newRuntime.invalidate()
+    }
+
     func testSourceSubscriptionCapacityCancellationAndRevisionExhaustion()
         throws
     {
@@ -432,17 +699,20 @@ final class MobilePictureInPicturePresentationCoordinatorTests:
 
     @MainActor
     private func makeContext(
-        startEvents: [MobilePictureInPictureClientEvent] = []
+        startEvents: [MobilePictureInPictureClientEvent] = [],
+        source: StreamVideoPresentationSource =
+            StreamVideoPresentationSource(),
+        sessionID: UUID = UUID(),
+        mediaGeneration: UInt64 = 3,
+        pictureInPictureGeneration: UInt64 = 5,
+        decoderGeneration: UInt64 = 9
     ) throws -> PresentationTestContext {
-        let source = StreamVideoPresentationSource()
-        let sessionID = UUID()
         let generation = try XCTUnwrap(
             MobilePictureInPictureGeneration(
-                mediaGeneration: 3,
-                pictureInPictureGeneration: 5
+                mediaGeneration: mediaGeneration,
+                pictureInPictureGeneration: pictureInPictureGeneration
             )
         )
-        let decoderGeneration: UInt64 = 9
         _ = source.beginSession(
             sessionID: sessionID,
             mediaGeneration: generation.mediaGeneration
@@ -533,6 +803,18 @@ final class MobilePictureInPicturePresentationCoordinatorTests:
         )
     }
 
+    private func callbackLease(
+        generation: MobilePictureInPictureGeneration,
+        kind: MobilePictureInPictureClientCallbackKind,
+        ordinal: UInt64
+    ) throws -> MobilePictureInPictureClientCallbackLease {
+        try XCTUnwrap(MobilePictureInPictureClientCallbackLease(
+            generation: generation,
+            kind: kind,
+            ordinal: ordinal
+        ))
+    }
+
     @MainActor
     private func waitUntil(
         _ condition: @MainActor () -> Bool
@@ -612,6 +894,9 @@ private final class RecordingPresentationFrameSink:
         guard !isInvalidated else {
             return .rejected(.invalidated)
         }
+        if case .rejected = submissionOutcome {
+            return submissionOutcome
+        }
         samples.append(sampleBuffer)
         return submissionOutcome
     }
@@ -635,6 +920,7 @@ private final class RecordingPresentationFrameSink:
     func invalidate() {
         guard !isInvalidated else { return }
         isInvalidated = true
+        samples.removeAll(keepingCapacity: false)
         invalidateCount += 1
     }
 }
@@ -643,11 +929,26 @@ private final class RecordingPresentationFrameSink:
 private final class RecordingPresentationControllerClient:
     MobilePictureInPictureControllerClient
 {
+    enum Command: Equatable {
+        case start
+        case stop
+        case playback(MobilePictureInPicturePlaybackState)
+        case invalidatePlaybackState
+    }
+
+    struct Completion: Equatable {
+        let lease: MobilePictureInPictureClientCallbackLease
+        let completion: MobilePictureInPictureClientCallbackCompletion
+    }
+
     let generation: MobilePictureInPictureGeneration
     private(set) var preparationSnapshot:
         MobilePictureInPictureClientPreparationSnapshot?
+    private(set) var commands: [Command] = []
+    private(set) var completions: [Completion] = []
     private(set) var invalidateCount = 0
-    private var handler: MobilePictureInPictureClientEventHandler?
+    private(set) var currentHandler:
+        MobilePictureInPictureClientEventHandler?
     private var completedLeases:
         Set<MobilePictureInPictureClientCallbackLease> = []
     private let startEvents: [MobilePictureInPictureClientEvent]
@@ -670,26 +971,31 @@ private final class RecordingPresentationControllerClient:
     func setEventHandler(
         _ handler: MobilePictureInPictureClientEventHandler?
     ) {
-        self.handler = handler
+        currentHandler = handler
     }
 
     func prepare() {}
 
     func requestStart() {
+        commands.append(.start)
         for event in startEvents {
             emit(event)
         }
     }
 
-    func requestStop() {}
+    func requestStop() {
+        commands.append(.stop)
+    }
 
     func updatePlaybackState(
         _ state: MobilePictureInPicturePlaybackState
     ) {
-        _ = state
+        commands.append(.playback(state))
     }
 
-    func invalidatePlaybackState() {}
+    func invalidatePlaybackState() {
+        commands.append(.invalidatePlaybackState)
+    }
 
     func completeCallback(
         _ lease: MobilePictureInPictureClientCallbackLease,
@@ -702,16 +1008,21 @@ private final class RecordingPresentationControllerClient:
         guard lease.kind == completion.kind else {
             return .kindMismatch
         }
-        return completedLeases.insert(lease).inserted
-            ? .completed
-            : .alreadyCompleted
+        guard completedLeases.insert(lease).inserted else {
+            return .alreadyCompleted
+        }
+        completions.append(.init(
+            lease: lease,
+            completion: completion
+        ))
+        return .completed
     }
 
     func invalidate() {
         guard !isInvalidated else { return }
         isInvalidated = true
         invalidateCount += 1
-        handler = nil
+        currentHandler = nil
         preparationSnapshot = nil
     }
 
@@ -723,6 +1034,6 @@ private final class RecordingPresentationControllerClient:
               ) else {
             return
         }
-        handler?(envelope)
+        currentHandler?(envelope)
     }
 }

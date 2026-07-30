@@ -2096,3 +2096,17 @@
 - focused `/tmp/LuneX-17-4_6-focused-r4.DFk4f6/Focused.xcresult`通过`10/10`，expanded `/tmp/LuneX-17-4_6-expanded.ulAjxJ/Expanded.xcresult`通过`158/158`，完整normal `/tmp/LuneX-17-4_6-full.dCC4dx/Full.xcresult`为`862 total / 861 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
 - 四平台generic Debug根`/tmp/LuneX-17-4_6-builds.Fgk0XV`全部succeeded且各有AIR/metallib；repository pre-gate `/tmp/LuneX-17-4_6-repository-pre-r2.NqdHlK`通过fixtures、strict `8/8`、apply `21/36 next 4.6`、generator三次稳定、membership、single-decoder/bounded/same-buffer边界、全部证据读回、Keychain opt-in关闭和diff检查。
 - 本项证明离线decoded-frame共享、bounded ownership、foreground policy orchestration与四平台generic SDK兼容；不证明AppModel/`NativeSessionMediaEnvironment` 5.x接线、system PiP、后台持续时间、签名/安装、物理iPhone/iPad、Stage Manager、visible EDR、功耗或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.7 审计
+
+- 4.1至4.6已有分层测试覆盖reducer event order、native possible/unavailable、start/failure/stop、AVKit restore/skip completion、playback adapter、display-layer backpressure、stale readiness、pending pixel-buffer release和lifecycle replacement。
+- 新4.6 presentation coordinator尚缺跨层证明：start failure不能压制foreground；restore/skip/playback必须穿过presentation owner并exactly-once回到native lease；sink backpressure/rejection必须映射到bounded counters；replacement必须同时取消pending mailbox、释放pixel buffer/coordinator并拒绝旧client handler。
+- 4.7只补上述综合回归，不修改production reducer/client/sink/coordinator；5.x serialized media/application ownership和物理system PiP仍不在本项范围。
+
+## 2026-07-30 阶段 17 任务 4.7 验收
+
+- presentation综合矩阵新增4项并保持既有10项通过：native start failure不改变foreground baseline；playback/restore/skip/render-size穿过presentation owner，restore和skip native lease各只完成一次；sink retained-latest/replaced-pending计入submitted而rejection只计入rejected且不被test sink持有。
+- replacement回归在旧delivery尚未drain时invalidate：source subscription和mailbox取消、sink sample释放、旧pixel buffer与coordinator弱引用归零；捕获的旧client handler随后发送`.didStart`不能压制foreground或改变replacement，只有新generation frame进入新sink。
+- focused `/tmp/LuneX-17-4_7-focused-r2.FhZpRb/Focused.xcresult`为`14/14`，expanded `/tmp/LuneX-17-4_7-expanded.w61I5u/Expanded.xcresult`为`162/162`，完整normal `/tmp/LuneX-17-4_7-full.106eJz/Full.xcresult`为`866 total / 865 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
+- 四平台generic Debug根`/tmp/LuneX-17-4_7-builds.LTHC6L`全部succeeded且各有AIR/metallib；repository pre-gate `/tmp/LuneX-17-4_7-repository-pre-r2.WcRUw4`通过fixtures、strict `8/8`、勾选前apply `22/36 next 4.7`、generator稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、production零diff、全部证据读回、唯一Keychain skip和diff检查。
+- 本项只证明离线PiP跨层event/resource regression matrix和四平台generic SDK编译；5.x application/media continuity接线、system PiP、后台持续时间、签名/安装、物理iPhone/iPad、Stage Manager、external display、visible EDR、功耗和live Sunshine仍未证明。

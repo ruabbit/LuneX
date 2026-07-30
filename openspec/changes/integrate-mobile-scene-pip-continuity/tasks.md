@@ -31,7 +31,7 @@
 - [x] 4.4 Implement the production `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)` adapter and actual possibility observation
 - [x] 4.5 Implement generation-scoped prepare, request-start, confirmed-active, request-stop, confirmed-stop, failed-start, restore-interface, skip/playback, invalidation, and replacement state handling
 - [x] 4.6 Subscribe PiP to the existing decoded-frame presentation source and coordinate foreground Metal pause/throttle/resume without duplicating decode work
-- [ ] 4.7 Add controller event-order, possible/unavailable, start/failure/stop, exactly-once restore, skip completion, playback delegate, backpressure, stale frame/callback, replacement, teardown, and retain-release tests
+- [x] 4.7 Add controller event-order, possible/unavailable, start/failure/stop, exactly-once restore, skip completion, playback delegate, backpressure, stale frame/callback, replacement, teardown, and retain-release tests
 
 ## 5. Background continuity and application integration
 

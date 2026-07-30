@@ -713,6 +713,29 @@ and stop, failure or invalidation restores the latest baseline. Task 4.6 does
 not yet connect this coordinator to the serialized application media owner or
 claim legal background continuation; those remain 5.x responsibilities.
 
+### PiP cross-layer regression ownership
+
+OpenSpec task 4.7 adds integration regressions without changing the production
+PiP runtime. The presentation-level suite now proves:
+
+- a native start failure never suppresses foreground Metal;
+- playback state, interface restoration, skip, and render-size callbacks cross
+  the presentation owner and complete each native callback lease exactly once;
+- retained-latest, replaced-pending, and rejected sink outcomes map to bounded
+  submitted/rejected counters without retaining a rejected sample;
+- invalidation cancels the source subscription and pending mailbox delivery,
+  clears retained samples, releases the old pixel buffer and coordinator, and
+  leaves a captured old client handler inert after replacement; and
+- the replacement generation alone receives the next decoded frame and cannot
+  be marked active by a stale callback.
+
+The focused suite passed `14/14`; the expanded PiP/media/Metal matrix passed
+`162/162`; the complete macOS suite passed `866 total / 865 passed / 1 explicit
+Keychain skip / 0 failed`; and the four generic Debug platform builds succeeded
+with zero structured diagnostics. These are contract, test, and build proof.
+They do not prove system PiP presentation, background duration, signing,
+installation, physical-device behavior, or live Sunshine operation.
+
 ## Target ownership model
 
 Stage 17 will use the following ownership chain:

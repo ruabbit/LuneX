@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`22/36`；4.6已完成single-decoder decoded-frame/PiP presentation integration，下一项4.7补齐controller/frame/resource综合矩阵 |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`23/36`；4.x sample-buffer PiP runtime及综合回归已完成，下一项5.1收紧actual PiP/audio continuity policy |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`22/36`。1.x值合同和确定性矩阵、2.1至2.6 actual UIKit scene/window/geometry/drawable/video/input ownership、3.1至3.5 actual-window mobile EDR观察与renderer接线均已完成。4.1至4.5完成generation-scoped client、同pixel-buffer sample adapter、单槽display-layer sink、production AVKit adapter与lifecycle orchestration；4.6在唯一`StreamVideoPresentationSource`上加入最多8个generation-filtered可取消订阅，并以单槽main-actor mailbox把同一`CVPixelBuffer`交给PiP。foreground Metal只在native `.didStart`后pause/throttle，stop/failure/invalidation恢复最新baseline；两类revision exhaustion均terminal clear并释放订阅。4.6验收为focused `10/10`、expanded `158/158`、完整macOS `862 total / 861 passed / 1 explicit Keychain skip`、四平台generic Debug与8/8 strict/generator/repository门通过。下一项4.7补齐controller event、possible/unavailable、start/failure/stop、restore/skip/playback、backpressure、stale callback、replacement、teardown与retain-release综合矩阵；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine证据保持独立pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`23/36`。1.x值合同和确定性矩阵、2.1至2.6 actual UIKit scene/window/geometry/drawable/video/input ownership、3.1至3.5 actual-window mobile EDR观察与renderer接线均已完成。4.1至4.6完成generation-scoped client、同pixel-buffer sample adapter、单槽display-layer sink、production AVKit adapter、lifecycle orchestration和唯一decoded-frame source共享；4.7补齐presentation owner跨层矩阵，验证start failure不压制foreground、restore/skip/playback exactly-once回到native lease、backpressure/rejection计数，以及replacement释放pending frame/coordinator并隔离stale handler。4.7验收为focused `14/14`、expanded `162/162`、完整macOS `866 total / 865 passed / 1 explicit Keychain skip`、四平台generic Debug与8/8 strict/generator/repository门通过。下一项5.1收紧continuity policy，只允许actual current-generation PiP或permitted active audio维持合法路径；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine证据保持独立pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -79,6 +79,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 17.4.7首轮repository pre-gate用`rg -c ... || true`断言零decoder匹配时得到空输出 | 1 | 前置fixtures/strict/apply/generator已通过但组合门不计验收；改用始终输出整数的`grep -Ec`并从全新目录完整重跑 |
+| 17.4.7首轮focused草案在`compactMap` Optional lease推断和只读`weak var`上被Swift 6.3 warnings-as-errors拒绝 | 1 | 显式标注`MobilePictureInPictureRestorationLease?` closure返回类型，并把释放观察改为`weak let`；production未报错，使用全新DerivedData/result bundle重跑 |
 | 17.4.6首轮focused测试helper使用不存在的`VideoTransferFunction.smpte2084` | 1 | 改用仓库合法`.smpteST2084PQ`并从全新DerivedData/result bundle重跑 |
 | 17.4.6第二轮focused的4个`withLock` Optional closure无法从`nil`推断返回类型 | 1 | 显式标注`StreamVideoPresentationEvent?`，不改变锁或状态语义，并从全新证据重跑 |
 | 17.4.6首轮repository pre-gate把production source在App/test-support两个generator清单中的合法出现次数误写为1 | 1 | 核对清单与四平台Swift file list后改为精确2，使用全新目录完整重跑 |
