@@ -1359,6 +1359,7 @@ final class StreamMetalPresenterTests: XCTestCase {
             renderState: initialState,
             inputOutputHandler: { firstOutputs.append($0) }
         )
+        coordinator.activateSurfaceGeneration(generation)
 
         coordinator.handleGeometryBinding(binding)
 
@@ -1430,6 +1431,7 @@ final class StreamMetalPresenterTests: XCTestCase {
             presentationSource: StreamVideoPresentationSource(),
             renderState: renderState
         )
+        coordinator.activateSurfaceGeneration(firstGeneration)
         let firstOwner = MobileGeometryBindingTestOwner(
             surfaceGeneration: firstGeneration,
             surface: surface,
@@ -1485,6 +1487,7 @@ final class StreamMetalPresenterTests: XCTestCase {
             .drop(reason: "Mobile geometry is unavailable")
         )
 
+        coordinator.activateSurfaceGeneration(replacementGeneration)
         let replacementOwner = MobileGeometryBindingTestOwner(
             surfaceGeneration: replacementGeneration,
             surface: surface,
@@ -1551,6 +1554,175 @@ final class StreamMetalPresenterTests: XCTestCase {
                 PixelSize(width: 1_200, height: 800),
                 .zero
             ]
+        )
+    }
+
+    @MainActor
+    func testMobileDisplayRevisionBindsOnlyCurrentSurfaceToHDRResolution()
+        throws
+    {
+        let currentGeneration = MobileSceneSurfaceGeneration(rawValue: 188)!
+        let staleGeneration = MobileSceneSurfaceGeneration(rawValue: 189)!
+        let metadata = VideoColorMetadata.hdr10VideoRange()
+        let frame = try makeFrame(
+            generation: 81,
+            frameID: 1,
+            metadata: metadata
+        )
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 64, height: 64),
+            drawableSize: PixelSize(width: 128, height: 96),
+            mode: .fit
+        ))
+        renderState.negotiatedVideoColorMetadata = metadata
+        renderState.decodedVideoPresentationContract =
+            StreamVideoDecodedPresentationContract(
+                decoderGeneration: frame.generation,
+                colorMetadata: metadata,
+                decodedLayout: HDRDecodedPixelBufferLayout(
+                    pixelBuffer: frame.pixelBuffer
+                )
+            )
+        let coordinator = MobileStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState,
+            userAllowsHDR: true,
+            platformCapabilities:
+                HDRPlatformOutputCapabilityAdapter.resolve(for: .iOS)
+                    .capabilities
+        )
+        coordinator.activateSurfaceGeneration(currentGeneration)
+        let surface = MobileGeometryBindingTestSurface()
+        let geometryOwner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: currentGeneration,
+            surface: surface,
+            sourceSize: renderState.transform.sourceSize,
+            mode: renderState.transform.mode,
+            drawableApplier: { surface, size in
+                surface.appliedDrawableSizes.append(size)
+                return true
+            },
+            handler: { coordinator.handleGeometryBinding($0) }
+        )
+        XCTAssertEqual(
+            geometryOwner.update(
+                mobileGeometryBindingTestSnapshot(
+                    generation: currentGeneration,
+                    revision: 1,
+                    viewBounds: MobileSceneRect(
+                        x: 0,
+                        y: 0,
+                        width: 64,
+                        height: 48
+                    )
+                ),
+                surface: surface,
+                surfaceGeneration: currentGeneration
+            ),
+            .published
+        )
+        var currentPublisher = MobileDisplayEDRSnapshotPublisher(
+            surfaceGeneration: currentGeneration
+        )
+
+        let first = try publishedMobileDisplaySnapshot(
+            currentPublisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: currentGeneration,
+                sample: .attached(MobileDisplayEDRReading(
+                    displayGeneration: 1,
+                    potentialHeadroom: 4,
+                    currentHeadroom: 2
+                ))
+            ))
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDRSnapshot(first),
+            .applied
+        )
+        let activeEDR = try XCTUnwrap(
+            renderState.hdrRenderResolution.configuration
+        )
+        XCTAssertEqual(coordinator.currentDisplayEDRSnapshot, first)
+        XCTAssertEqual(renderState.displaySnapshot, first.renderSnapshot)
+        XCTAssertEqual(renderState.headroom.current, 2)
+        XCTAssertEqual(activeEDR.identity.displayRevision, first.revision)
+        XCTAssertEqual(activeEDR.identity.mappingMode, .hdrEDR)
+        XCTAssertEqual(activeEDR.outputMode, .edr)
+        XCTAssertEqual(
+            coordinator.handleDisplayEDRSnapshot(first),
+            .unchanged
+        )
+
+        var stalePublisher = MobileDisplayEDRSnapshotPublisher(
+            surfaceGeneration: staleGeneration
+        )
+        let stale = try publishedMobileDisplaySnapshot(
+            stalePublisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: staleGeneration,
+                sample: .attached(MobileDisplayEDRReading(
+                    displayGeneration: 2,
+                    potentialHeadroom: 8,
+                    currentHeadroom: 7
+                ))
+            ))
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDRSnapshot(stale),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            renderState.hdrRenderResolution.configuration?.identity,
+            activeEDR.identity
+        )
+
+        let constrained = try publishedMobileDisplaySnapshot(
+            currentPublisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: currentGeneration,
+                sample: .attached(MobileDisplayEDRReading(
+                    displayGeneration: 1,
+                    potentialHeadroom: 4,
+                    currentHeadroom: 1
+                ))
+            ))
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDRSnapshot(constrained),
+            .applied
+        )
+        let fallback = try XCTUnwrap(
+            renderState.hdrRenderResolution.configuration
+        )
+        XCTAssertEqual(
+            fallback.identity.displayRevision,
+            constrained.revision
+        )
+        XCTAssertEqual(fallback.identity.mappingMode, .hdrToSDR)
+        XCTAssertEqual(
+            fallback.outputMode,
+            .sdrFallback(.currentHeadroomInsufficient)
+        )
+        XCTAssertNotEqual(fallback.identity, activeEDR.identity)
+
+        coordinator.update(
+            renderState: renderState,
+            inputOutputHandler: { _ in },
+            userAllowsHDR: false
+        )
+        XCTAssertEqual(
+            renderState.hdrRenderResolution.configuration?.outputMode,
+            .sdrFallback(.userPreferenceDisabled)
+        )
+        XCTAssertEqual(
+            renderState.hdrRenderResolution.configuration?.identity
+                .displayRevision,
+            constrained.revision
+        )
+        XCTAssertEqual(
+            geometryOwner.invalidate(
+                surface: surface,
+                surfaceGeneration: currentGeneration
+            ),
+            .invalidated
         )
     }
 
@@ -2924,6 +3096,19 @@ private typealias MobileSceneGeometryTestObserver =
 
 private typealias MobileGeometryBindingTestOwner =
     MobileStreamGeometryBindingOwner<MobileGeometryBindingTestSurface>
+
+private enum MobileDisplaySnapshotTestError: Error {
+    case expectedPublishedSnapshot
+}
+
+private func publishedMobileDisplaySnapshot(
+    _ outcome: MobileDisplayEDRPublicationOutcome
+) throws -> MobileDisplayEDRSnapshot {
+    guard case let .published(snapshot) = outcome else {
+        throw MobileDisplaySnapshotTestError.expectedPublishedSnapshot
+    }
+    return snapshot
+}
 
 private final class MobileSurfaceAttachmentTestSurface {
     var window: MobileSurfaceAttachmentTestWindow?

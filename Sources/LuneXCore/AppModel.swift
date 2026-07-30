@@ -1827,23 +1827,15 @@ final class AppModel: ApplicationInputSink {
             )))
             return
         }
-        guard let negotiated = renderState.negotiatedVideoColorMetadata else {
-            applyHDRRenderResolution(.closed(.invalidSourceContract))
-            return
-        }
-        guard negotiated == decoded.colorMetadata else {
-            applyHDRRenderResolution(.closed(.staleColorSignature))
-            return
-        }
         let drawableSize = renderState.coordinateSnapshot?.drawableSize
         let drawableAvailable = drawableSize.map {
             $0.width > 0 && $0.height > 0
         } ?? false
-        applyHDRRenderResolution(HDRRenderConfigurationResolver.resolve(
-            HDRRenderConfigurationResolverInput(
-                decodedLayout: decoded.decodedLayout,
-                colorMetadata: decoded.colorMetadata,
-                decoderGeneration: decoded.decoderGeneration,
+        applyHDRRenderResolution(StreamHDRRenderResolutionResolver.resolve(
+            StreamHDRRenderResolutionResolverInput(
+                decodedPresentationContract: decoded,
+                negotiatedVideoColorMetadata:
+                    renderState.negotiatedVideoColorMetadata,
                 userAllowsHDR: settings.stream.hdrEnabled,
                 platformCapabilities:
                     HDRPlatformOutputCapabilityAdapter.current.capabilities,

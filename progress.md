@@ -2417,3 +2417,20 @@
 - OpenSpec 3.2已勾选，权威进度预期为`13/36`，下一项3.3连接mobile display revision到既有HDR/render identity、Metal surface和current-generation stale-frame检查。
 - 本项完成actual attached screen mode/brightness通知、attachment/layout/trait/foreground重采样、geometry display generation复用、replacement/cancellation/stale/queued-late拒绝及weak handler ownership；renderer reconfiguration、visible HDR/EDR、signed/physical设备和live Sunshine仍明确pending。
 - 标记后的repository final gate`/tmp/LuneX-17-3_2-repository-final.YFE34c`通过strict/apply `13/36` next 3.3、fixture、generator稳定、静态边界、全部证据读回、Keychain opt-in关闭、预期七文件状态与diff检查。
+
+## 2026-07-30 阶段 17 任务 3.3 启动
+
+- 用户确认系统更新结束并要求继续推进；恢复active目标、planning-with-files与OpenSpec apply流程，确认`HEAD == origin/main == 397690c`、工作树clean、`integrate-mobile-scene-pip-continuity`为`13/36 ready`且next精确为3.3。
+- 当前环境为macOS 27.0、Xcode 26.4 `17E192`和Swift 6.3；固定iOS 26.4 simulator UUID继续沿用，iOS 27.0自动生成的同名Shutdown设备不删除。3.3只会在验收末尾做一次新的只读inventory，不创建、clone、boot、launch、shutdown或delete设备。
+- 只读审计确认mobile EDR snapshot、HDR display/render identity、presenter原子transition与decoder generation/color/frame-contract检查均已存在；实现将抽取共享纯HDR解析器，把actual mobile surface generation和display revision接入coordinator、render state与presenter，并补current/stale generation及EDR-to-SDR identity回归。
+- 首轮focused的三个既有测试通过，新display binding测试因fixture未发布geometry而正确得到drawable-unavailable；补充同generation geometry后不放宽production，最终focused `/tmp/LuneX-17-3_3-focused-r3.J4yoI9`通过`4/4`且零结构化诊断。
+- iOS generic App build `/tmp/LuneX-17-3_3-ios-build-r3.IABs6c` succeeded，完整产出arm64 App executable、debug dylib、Swift module与metallib；只使用generic device destination。
+- expanded `/tmp/LuneX-17-3_3-expanded.wSwME7`通过`92/92`；完整normal `/tmp/LuneX-17-3_3-full.BKJTBg`通过`802 total / 801 passed / 1 explicit Keychain skip / 0 failed`，三类结构化诊断为0且Keychain opt-in显式移除。
+- macOS、iOS/iPadOS、tvOS与visionOS generic Debug build 4/4 succeeded、零结构化诊断且各有AIR/metallib；没有选择或操作simulator。
+- 唯一一次只读simulator inventory `/tmp/LuneX-17-3_3-simulator.Vdmok1/devices.json`确认固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，所有同名27.0设备也Shutdown且全局Booted为0。
+- repository pre-gate `/tmp/LuneX-17-3_3-repository-pre.hZ88T2`通过fixtures、strict/apply、generator双次稳定、静态边界、全部证据读回、Keychain opt-in关闭及diff检查。
+
+## 2026-07-30 阶段 17 任务 3.3 完成
+
+- OpenSpec 3.3已勾选，权威进度更新为`14/36`；下一项3.4为原子EDR/SDR fallback、screen move、重复抑制、revision exhaustion与observer幂等teardown。
+- 当前证明边界为离线合同、实际四平台编译、macOS测试和只读simulator inventory；物理iPhone/iPad、visible EDR、external display、功耗、签名与live Sunshine仍未证明。

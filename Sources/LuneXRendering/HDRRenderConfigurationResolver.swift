@@ -88,6 +88,16 @@ struct HDRRenderConfigurationResolverInput: Sendable {
     let drawableState: HDRDrawableState
 }
 
+struct StreamHDRRenderResolutionResolverInput: Sendable {
+    let decodedPresentationContract: StreamVideoDecodedPresentationContract?
+    let negotiatedVideoColorMetadata: VideoColorMetadata?
+    let userAllowsHDR: Bool
+    let platformCapabilities: HDRPlatformOutputCapabilities
+    let displaySnapshot: HDRDisplaySnapshot?
+    let isDisplayRevisionExhausted: Bool
+    let drawableState: HDRDrawableState
+}
+
 enum HDRRenderConfigurationResolution: Hashable, Sendable {
     case resolved(HDRResolvedRenderConfiguration)
     case closed(HDRRenderResolutionError)
@@ -100,6 +110,35 @@ enum HDRRenderConfigurationResolution: Hashable, Sendable {
     var error: HDRRenderResolutionError? {
         guard case let .closed(error) = self else { return nil }
         return error
+    }
+}
+
+enum StreamHDRRenderResolutionResolver {
+    static func resolve(
+        _ input: StreamHDRRenderResolutionResolverInput
+    ) -> HDRRenderConfigurationResolution {
+        guard let decoded = input.decodedPresentationContract else {
+            return .closed(.inactiveSession)
+        }
+        guard let negotiated = input.negotiatedVideoColorMetadata else {
+            return .closed(.invalidSourceContract)
+        }
+        guard negotiated == decoded.colorMetadata else {
+            return .closed(.staleColorSignature)
+        }
+        return HDRRenderConfigurationResolver.resolve(
+            HDRRenderConfigurationResolverInput(
+                decodedLayout: decoded.decodedLayout,
+                colorMetadata: decoded.colorMetadata,
+                decoderGeneration: decoded.decoderGeneration,
+                userAllowsHDR: input.userAllowsHDR,
+                platformCapabilities: input.platformCapabilities,
+                displaySnapshot: input.displaySnapshot,
+                isDisplayRevisionExhausted:
+                    input.isDisplayRevisionExhausted,
+                drawableState: input.drawableState
+            )
+        )
     }
 }
 

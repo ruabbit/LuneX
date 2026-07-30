@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`13/36`；3.2已完成attached-screen EDR通知与重采样owner，下一项3.3连接display revision、render identity与Metal surface |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`14/36`；3.3已连接current-generation mobile display revision、HDR render identity与Metal surface，下一项3.4完成原子fallback与screen-move/teardown状态机 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`13/36`。1.x值合同和确定性矩阵完成；2.1至2.6完成actual mobile surface callback、current-generation attachment/lifecycle owner、连续UIKit geometry发布、drawable/video/input原子绑定及扩展组合矩阵。3.1新增injectable main-actor actual-window `UIScreen` EDR reader；3.2新增只观察actual attached screen的mode/brightness token，并在attachment/layout/trait/foreground重采样，复用geometry display generation，以weak owner、observation UUID和token cancellation拒绝replacement/teardown后的迟到工作。最终focused `3/3`、expanded `91/91`、完整macOS `801 total / 800 passed / 1 explicit Keychain skip`、四平台generic Debug、strict/generator/repository与固定iOS 26.4 simulator只读门通过。下一项3.3连接mobile display revision到`HDRDisplaySnapshot`、render identity、`MetalStreamSurface`及stale-frame检查；6.6物理iPhone/iPad、PiP、Stage Manager、external display、visible EDR、power与live Sunshine证据保持独立pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`14/36`。1.x值合同和确定性矩阵完成；2.1至2.6完成actual mobile surface callback、current-generation attachment/lifecycle owner、连续UIKit geometry发布、drawable/video/input原子绑定及扩展组合矩阵。3.1至3.2完成actual-window EDR读取与attached-screen通知owner；3.3抽取AppModel/mobile surface共享的纯HDR解析器，以actual surface generation拒绝旧display snapshot，将`HDRDisplayRevision`、headroom与用户HDR偏好接入`StreamRenderState`、既有render identity和presenter，并在plan解析后再次核对presentation revision/configuration以丢弃重配中的旧帧。最终focused `4/4`、expanded `92/92`、完整macOS `802 total / 801 passed / 1 explicit Keychain skip`、四平台generic Debug、strict/generator/repository与固定iOS 26.4 simulator只读门通过。下一项3.4实现EDR到SDR原子fallback、screen move、重复抑制、revision exhaustion与幂等observer teardown；6.6物理iPhone/iPad、PiP、Stage Manager、external display、visible EDR、power与live Sunshine证据保持独立pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -79,6 +79,7 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 17.3.3首轮focused的新display binding fixture未发布geometry，drawable保持不可用并正确fail closed | 1 | 补充同一surface generation的geometry binding后从全新DerivedData/result bundle重跑；production逻辑不放宽，最终focused为`4/4` |
 | 17.2.5完整suite后`xcresulttool get test-results tests`尝试移动内部`database.sqlite3`时命中同名项 | 1 | 测试本身已成功且summary/build-results可读；不重跑suite，使用同一bundle的结构化总数与原始日志精确确认唯一Keychain skip |
 | 17.2.5收紧stale render-input后focused coordinator fixture仍期待旧binding覆盖不匹配的source/mode | 1 | production正确fail closed到zero drawable；fixture首次使用匹配source/mode验证应用，replacement继续验证不匹配时归零，并从全新DerivedData/result bundle重跑 |
 | 17.1.3首轮focused编译把实例转移调用的`replacing` helper声明为`static` | 1 | 改为实例私有helper；失败发生在编译期、测试未启动，使用全新DerivedData/result bundle重跑 |

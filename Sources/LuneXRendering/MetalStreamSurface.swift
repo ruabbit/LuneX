@@ -1677,6 +1677,12 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                     coordinateSnapshot: coordinateSnapshot
                 )
             }
+            guard withLock({
+                presentationRevision == snapshot.5
+                    && activeResolvedConfiguration == snapshot.3
+            }) else {
+                return
+            }
             _ = try runtime.present(
                 frame: frame,
                 plan: plan,
@@ -1917,20 +1923,37 @@ private extension RenderPolicy {
     }
 }
 
+enum MobileStreamDisplayBindingOutcome: Equatable, Sendable {
+    case applied
+    case unchanged
+    case inactiveSurfaceGeneration
+    case staleSurfaceGeneration
+}
+
 @MainActor
 final class MobileStreamSurfaceCoordinator {
     typealias InputOutputHandler = @MainActor (InputAdapterOutput) -> Void
 
     let presenter: StreamMetalPresenter
+    private(set) var currentSurfaceGeneration:
+        MobileSceneSurfaceGeneration?
     private(set) var currentGeometryBinding:
         MobileStreamGeometryBindingSnapshot?
+    private(set) var currentDisplayEDRSnapshot:
+        MobileDisplayEDRSnapshot?
     private var renderState: StreamRenderState
     private var inputOutputHandler: InputOutputHandler
+    private var userAllowsHDR: Bool
+    private let platformCapabilities: HDRPlatformOutputCapabilities
     private var ownsMobileGeometry = false
+    private var ownsMobileDisplay = false
 
     init(
         presentationSource: StreamVideoPresentationSource,
         renderState: StreamRenderState,
+        userAllowsHDR: Bool = true,
+        platformCapabilities: HDRPlatformOutputCapabilities =
+            HDRPlatformOutputCapabilityAdapter.current.capabilities,
         inputOutputHandler: @escaping InputOutputHandler = { _ in },
         diagnosticHandler: @escaping StreamMetalPresenter.DiagnosticHandler = {
             _ in
@@ -1938,6 +1961,8 @@ final class MobileStreamSurfaceCoordinator {
         diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
     ) {
         self.renderState = renderState
+        self.userAllowsHDR = userAllowsHDR
+        self.platformCapabilities = platformCapabilities
         self.inputOutputHandler = inputOutputHandler
         presenter = StreamMetalPresenter(
             presentationSource: presentationSource,
@@ -1949,26 +1974,81 @@ final class MobileStreamSurfaceCoordinator {
 
     func update(
         renderState: StreamRenderState,
-        inputOutputHandler: @escaping InputOutputHandler
+        inputOutputHandler: @escaping InputOutputHandler,
+        userAllowsHDR: Bool? = nil
     ) {
         self.renderState = renderState
         self.inputOutputHandler = inputOutputHandler
-        applyCurrentGeometry()
+        if let userAllowsHDR {
+            self.userAllowsHDR = userAllowsHDR
+        }
+        applyCurrentState()
+    }
+
+    func activateSurfaceGeneration(
+        _ surfaceGeneration: MobileSceneSurfaceGeneration
+    ) {
+        guard currentSurfaceGeneration != surfaceGeneration else { return }
+        currentSurfaceGeneration = surfaceGeneration
+        currentGeometryBinding = nil
+        currentDisplayEDRSnapshot = nil
+        ownsMobileGeometry = true
+        ownsMobileDisplay = true
+        applyCurrentState()
+    }
+
+    func deactivateSurfaceGeneration(
+        _ surfaceGeneration: MobileSceneSurfaceGeneration
+    ) {
+        guard currentSurfaceGeneration == surfaceGeneration else { return }
+        currentGeometryBinding = nil
+        currentDisplayEDRSnapshot = nil
+        ownsMobileGeometry = true
+        ownsMobileDisplay = true
+        applyCurrentState()
+        currentSurfaceGeneration = nil
+        ownsMobileGeometry = false
+        ownsMobileDisplay = false
     }
 
     func handleGeometryBinding(
         _ binding: MobileStreamGeometryBindingSnapshot?
     ) {
+        if let binding {
+            guard let currentSurfaceGeneration else { return }
+            guard binding.surfaceGeneration == currentSurfaceGeneration else {
+                return
+            }
+        }
         ownsMobileGeometry = true
         currentGeometryBinding = binding
-        applyCurrentGeometry()
+        applyCurrentState()
+    }
+
+    @discardableResult
+    func handleDisplayEDRSnapshot(
+        _ snapshot: MobileDisplayEDRSnapshot
+    ) -> MobileStreamDisplayBindingOutcome {
+        guard let currentSurfaceGeneration else {
+            return .inactiveSurfaceGeneration
+        }
+        guard snapshot.surfaceGeneration == currentSurfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard currentDisplayEDRSnapshot != snapshot else {
+            return .unchanged
+        }
+        ownsMobileDisplay = true
+        currentDisplayEDRSnapshot = snapshot
+        applyCurrentState()
+        return .applied
     }
 
     func handleInputOutput(_ output: InputAdapterOutput) {
         inputOutputHandler(output)
     }
 
-    private func applyCurrentGeometry() {
+    private func applyCurrentState() {
         if let coordinateSnapshot = currentGeometryBinding?.coordinateSnapshot {
             if renderState.transform.sourceSize == coordinateSnapshot.sourceSize,
                renderState.transform.mode == coordinateSnapshot.mode {
@@ -1983,6 +2063,37 @@ final class MobileStreamSurfaceCoordinator {
         } else if ownsMobileGeometry,
                   renderState.transform.drawableSize != .zero {
             renderState.transform.drawableSize = .zero
+        }
+        if ownsMobileDisplay {
+            renderState.displaySnapshot =
+                currentDisplayEDRSnapshot?.renderSnapshot
+            renderState.headroom =
+                currentDisplayEDRSnapshot?.renderSnapshot?.headroom
+                ?? DisplayHeadroom()
+            renderState.isDisplayRevisionExhausted = false
+            let drawableSize = renderState.coordinateSnapshot?.drawableSize
+            let drawableAvailable = drawableSize.map {
+                $0.width > 0 && $0.height > 0
+            } ?? false
+            renderState.hdrRenderResolution =
+                StreamHDRRenderResolutionResolver.resolve(
+                    StreamHDRRenderResolutionResolverInput(
+                        decodedPresentationContract:
+                            renderState.decodedVideoPresentationContract,
+                        negotiatedVideoColorMetadata:
+                            renderState.negotiatedVideoColorMetadata,
+                        userAllowsHDR: userAllowsHDR,
+                        platformCapabilities: platformCapabilities,
+                        displaySnapshot: renderState.displaySnapshot,
+                        isDisplayRevisionExhausted:
+                            renderState.isDisplayRevisionExhausted,
+                        drawableState: HDRDrawableState(
+                            isAvailable: drawableAvailable,
+                            appliedSurfaceContract:
+                                presenter.snapshot().appliedSurfaceContract
+                        )
+                    )
+                )
         }
         presenter.update(renderState: renderState)
     }
@@ -2343,6 +2454,10 @@ final class MobileStreamMetalView: MTKView {
         MobileStreamGeometryBindingOwner<MobileStreamMetalView>
     typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
     typealias InputOutputHandler = MobileStreamSurfaceCoordinator.InputOutputHandler
+
+    var surfaceGeneration: MobileSceneSurfaceGeneration? {
+        geometryBindingOwner?.surfaceGeneration
+    }
 
     private var attachmentRelay:
         MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>?
@@ -2946,6 +3061,7 @@ final class MobileStreamMetalView: MTKView {
 struct MetalStreamSurface: UIViewRepresentable {
     let renderState: StreamRenderState
     let presentationSource: StreamVideoPresentationSource
+    var userAllowsHDR = true
     var diagnosticHandler: StreamMetalPresenter.DiagnosticHandler = { _ in }
     var diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
     var inputOutputHandler: MobileStreamSurfaceCoordinator.InputOutputHandler = {
@@ -2969,6 +3085,7 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamSurfaceCoordinator(
             presentationSource: presentationSource,
             renderState: renderState,
+            userAllowsHDR: userAllowsHDR,
             inputOutputHandler: inputOutputHandler,
             diagnosticHandler: diagnosticHandler,
             diagnosticLease: diagnosticLease
@@ -2978,6 +3095,8 @@ struct MetalStreamSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> MTKView {
 #if os(iOS)
         context.coordinator.handleGeometryBinding(nil)
+        let externalDisplayEDRSnapshotHandler =
+            displayEDRSnapshotHandler
         let view = MobileStreamMetalView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
@@ -2987,7 +3106,11 @@ struct MetalStreamSurface: UIViewRepresentable {
             attachmentUpdateHandler: attachmentUpdateHandler,
             sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler,
             sceneWindowSnapshotHandler: sceneWindowSnapshotHandler,
-            displayEDRSnapshotHandler: displayEDRSnapshotHandler,
+            displayEDRSnapshotHandler: {
+                [weak coordinator = context.coordinator] snapshot in
+                coordinator?.handleDisplayEDRSnapshot(snapshot)
+                externalDisplayEDRSnapshotHandler(snapshot)
+            },
             geometryBindingUpdateHandler: { [weak coordinator = context.coordinator]
                 binding in
                 coordinator?.handleGeometryBinding(binding)
@@ -2997,6 +3120,9 @@ struct MetalStreamSurface: UIViewRepresentable {
                 coordinator?.handleInputOutput(output)
             }
         )
+        if let surfaceGeneration = view.surfaceGeneration {
+            context.coordinator.activateSurfaceGeneration(surfaceGeneration)
+        }
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
 #endif
@@ -3011,7 +3137,8 @@ struct MetalStreamSurface: UIViewRepresentable {
 #if os(iOS)
         context.coordinator.update(
             renderState: renderState,
-            inputOutputHandler: inputOutputHandler
+            inputOutputHandler: inputOutputHandler,
+            userAllowsHDR: userAllowsHDR
         )
         (view as? MobileStreamMetalView)?
             .updateAttachmentEventHandler(attachmentEventHandler)
@@ -3022,7 +3149,11 @@ struct MetalStreamSurface: UIViewRepresentable {
         (view as? MobileStreamMetalView)?
             .updateSceneWindowSnapshotHandler(sceneWindowSnapshotHandler)
         (view as? MobileStreamMetalView)?
-            .updateDisplayEDRSnapshotHandler(displayEDRSnapshotHandler)
+            .updateDisplayEDRSnapshotHandler({
+                [weak coordinator = context.coordinator] snapshot in
+                coordinator?.handleDisplayEDRSnapshot(snapshot)
+                displayEDRSnapshotHandler(snapshot)
+            })
         (view as? MobileStreamMetalView)?
             .updateGeometryBinding(
                 sourceSize: renderState.transform.sourceSize,
@@ -3060,7 +3191,12 @@ struct MetalStreamSurface: UIViewRepresentable {
         coordinator: MobileStreamSurfaceCoordinator
     ) {
 #if os(iOS)
-        (view as? MobileStreamMetalView)?.invalidateAttachmentCallbacks()
+        if let mobileView = view as? MobileStreamMetalView {
+            if let surfaceGeneration = mobileView.surfaceGeneration {
+                coordinator.deactivateSurfaceGeneration(surfaceGeneration)
+            }
+            mobileView.invalidateAttachmentCallbacks()
+        }
 #endif
         coordinator.presenter.stop()
         view.delegate = nil

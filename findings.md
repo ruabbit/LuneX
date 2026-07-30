@@ -1938,3 +1938,23 @@
 - repository pre-gate`/tmp/LuneX-17-3_2-repository-pre.1H5uQd`通过fixture、OpenSpec strict `1/1`、apply `12/36`且next为3.2、generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、actual-screen/API/weak ownership/3.3未提前接线静态边界、全部test/build与保存的单次simulator证据读回、Keychain opt-in关闭及`git diff --check`。
 - OpenSpec 3.2已勾选，权威进度应更新为`13/36`，下一项3.3。本项证明deterministic observer生命周期、iOS SDK编译和actual-view production接线；不证明headroom已驱动renderer重配、visible HDR/EDR、simulator HDR、signed/physical设备或live Sunshine。
 - 标记后的repository final gate`/tmp/LuneX-17-3_2-repository-final.YFE34c`通过OpenSpec strict `1/1`、apply `13/36`且next精确为3.3、fixture、generator稳定SHA-256、actual-screen/weak ownership/3.3未提前接线边界、全部test/build与保存的单次simulator证据读回、Keychain opt-in关闭、预期七文件状态及`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 3.3 调查
+
+- 系统更新后恢复时确认`HEAD == origin/main == 397690c`且工作树clean；macOS 27.0、Xcode 26.4 `17E192`、Swift 6.3与iOS/tvOS/visionOS 26.4 runtime仍可用。OpenSpec为`13/36 ready`，下一项精确为3.3。
+- 3.2的`MobileDisplayEDRSnapshot`已经同时携带`surfaceGeneration`、monotonic `HDRDisplayRevision`、typed mobile state和既有`HDRDisplaySnapshot`；当前缺口是`MobileStreamSurfaceCoordinator`只消费geometry，view-level EDR handler没有进入`StreamRenderState`或presenter。
+- 既有`HDRRenderConfigurationIdentity`已包含`displayRevision`，`StreamMetalPresenter.transition`会在identity变化时暂停view、清drawable、invalidate旧runtime、应用新surface contract并创建replacement runtime；decoded frame路径已经校验decoder generation、color signature和validated frame contract。因此3.3应复用这些边界，不新增第二套renderer或tone-mapping规则。
+- `AppModel.refreshHDRRenderResolution()`同时包含session/media ownership前置门和纯render输入解析。3.3将抽取共享的纯解析边界，由AppModel在原有会话门之后调用，mobile coordinator则在current surface generation有效时用相同decoded contract、negotiated metadata、HDR preference、platform capability、display snapshot和drawable state解析。
+- coordinator需要显式激活actual `MobileStreamMetalView`的surface generation，并拒绝旧generation的display snapshot；geometry、display、HDR preference或render-state replacement均通过一次原子状态应用后调用现有presenter。SwiftUI handler继续只更新view属性，observer内部仍终身经`[weak self]`转发，内部coordinator闭包也弱持有coordinator。
+- 3.3只建立current-generation display-to-render连接与stale replacement边界。detached/invalid/revision-exhausted的完整原子fallback、screen move去重和幂等teardown强化仍属于3.4；完整mobile state/diagnostics/media-environment路由仍属于5.4。
+
+## 2026-07-30 阶段 17 任务 3.3 验收
+
+- 实现抽取`StreamHDRRenderResolutionResolver`，AppModel继续保留session/media/decoder generation前置门，mobile coordinator则用同一decoded contract、negotiated color、平台能力、actual display snapshot、drawable state和用户HDR偏好解析；没有新增第二套tone mapping或renderer。
+- `MobileStreamSurfaceCoordinator`显式拥有actual `MobileStreamMetalView` generation，只接受同generation的geometry/display revision；display snapshot更新`StreamRenderState.displaySnapshot/headroom/hdrRenderResolution`并沿用包含display revision的既有render identity。SwiftUI内部闭包弱持有coordinator，外部EDR handler仍收到原始有界snapshot。
+- presenter在frame plan解析后再次核对`presentationRevision`与`activeResolvedConfiguration`，因此display/coordinate/surface重配期间生成的旧plan不会提交到replacement runtime。首轮focused只有新fixture因未发布geometry而得到正确的drawable-unavailable结果；补同generation geometry后production不变，最终`/tmp/LuneX-17-3_3-focused-r3.J4yoI9/Focused.xcresult`通过`4/4`且零结构化诊断。
+- expanded `/tmp/LuneX-17-3_3-expanded.wSwME7/Expanded.xcresult`通过`92/92`；完整normal `/tmp/LuneX-17-3_3-full.BKJTBg/Full.xcresult`通过`802 total / 801 passed / 1 explicit Keychain skip / 0 failed`。唯一skip仍为真实Keychain opt-in测试，全部命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- macOS、iOS/iPadOS、tvOS和visionOS generic Debug build分别位于`/tmp/LuneX-17-3_3-build-macos.3N1RsY`、`/tmp/LuneX-17-3_3-ios-build-r3.IABs6c`、`/tmp/LuneX-17-3_3-build-tvos.nyZZhp`和`/tmp/LuneX-17-3_3-build-visionos.yEnNOI`；4/4 succeeded、结构化三类诊断为0且各有AIR/metallib。
+- 本任务唯一一次只读simulator清单为`/tmp/LuneX-17-3_3-simulator.Vdmok1/devices.json`；固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，iOS 27.0同名默认设备也均Shutdown，全局Booted为0。没有执行create、clone、boot、launch、install、shutdown或delete。
+- repository pre-gate `/tmp/LuneX-17-3_3-repository-pre.hZ88T2`通过fixtures、OpenSpec strict、全部xcresult与simulator证据读回、静态所有权边界、`git diff --check`及generator双次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`。
+- 本项证明离线current-generation display-to-render接线、iOS SDK编译与确定性旧帧拒绝；不证明3.4完整fallback/screen-move/teardown、simulator可见HDR、signed/physical mobile EDR、外接显示器亮度映射、功耗或live Sunshine。

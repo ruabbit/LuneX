@@ -662,6 +662,7 @@ private struct StreamWorkspaceView: View {
             MetalStreamSurface(
                 renderState: appModel.renderState,
                 presentationSource: appModel.videoPresentationSource,
+                userAllowsHDR: appModel.settings.stream.hdrEnabled,
                 diagnosticLease: hdrPresentationDiagnosticLease
             )
                 .ignoresSafeArea()
