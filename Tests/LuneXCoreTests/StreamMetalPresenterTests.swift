@@ -264,6 +264,173 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertNil(owner.currentScreen)
     }
 
+    @MainActor
+    func testMobileSceneLifecycleObserverFiltersAndDeduplicatesSceneEvents() async {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 71)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileSceneLifecycleTestNotificationNames()
+        let scene = MobileSceneLifecycleTestScene(activity: .active)
+        let otherScene = MobileSceneLifecycleTestScene(activity: .background)
+        var observations: [MobileStreamSceneLifecycleObservation] = []
+        let observer = MobileSceneLifecycleTestObserver(
+            surfaceGeneration: generation,
+            notificationCenter: notificationCenter,
+            names: names,
+            activityReader: { $0.activity },
+            handler: { observations.append($0.observation) }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                to: scene,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        notificationCenter.post(name: names.didActivate, object: scene)
+        notificationCenter.post(name: names.willDeactivate, object: otherScene)
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(observations, [.attached(.active)])
+
+        notificationCenter.post(name: names.willDeactivate, object: scene)
+        notificationCenter.post(name: names.willEnterForeground, object: scene)
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(
+            observations,
+            [.attached(.active), .attached(.inactive)]
+        )
+
+        notificationCenter.post(name: names.didEnterBackground, object: scene)
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(
+            observations,
+            [
+                .attached(.active),
+                .attached(.inactive),
+                .attached(.background)
+            ]
+        )
+    }
+
+    @MainActor
+    func testMobileSceneLifecycleObserverReplacesAndCancelsScene() async {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 81)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileSceneLifecycleTestNotificationNames()
+        let firstScene = MobileSceneLifecycleTestScene(activity: .active)
+        let replacementScene = MobileSceneLifecycleTestScene(activity: .active)
+        var observations: [MobileStreamSceneLifecycleObservation] = []
+        let observer = MobileSceneLifecycleTestObserver(
+            surfaceGeneration: generation,
+            notificationCenter: notificationCenter,
+            names: names,
+            activityReader: { $0.activity },
+            handler: { observations.append($0.observation) }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                to: firstScene,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            observer.attach(
+                to: replacementScene,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        notificationCenter.post(
+            name: names.didEnterBackground,
+            object: firstScene
+        )
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(
+            observations,
+            [.attached(.active), .attached(.active)]
+        )
+
+        notificationCenter.post(
+            name: names.didEnterBackground,
+            object: replacementScene
+        )
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(observations.last, .attached(.background))
+        XCTAssertEqual(
+            observer.detach(surfaceGeneration: generation),
+            .published
+        )
+        notificationCenter.post(
+            name: names.didActivate,
+            object: replacementScene
+        )
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(observations.last, .detached)
+        XCTAssertNil(observer.currentScene)
+    }
+
+    @MainActor
+    func testMobileSceneLifecycleObserverRejectsStaleAndLateEvents() async {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 91)!
+        let staleGeneration = MobileSceneSurfaceGeneration(rawValue: 92)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileSceneLifecycleTestNotificationNames()
+        let scene = MobileSceneLifecycleTestScene(activity: .inactive)
+        var observations: [MobileStreamSceneLifecycleObservation] = []
+        let observer = MobileSceneLifecycleTestObserver(
+            surfaceGeneration: generation,
+            notificationCenter: notificationCenter,
+            names: names,
+            activityReader: { $0.activity },
+            handler: { observations.append($0.observation) }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                to: scene,
+                surfaceGeneration: staleGeneration
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            observer.attach(
+                to: scene,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        notificationCenter.post(name: names.didActivate, object: scene)
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: staleGeneration),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: generation),
+            .invalidated
+        )
+        observer.updateHandler { _ in
+            XCTFail("An invalidated observer must reject handler replacement")
+        }
+        await drainMobileSceneLifecycleNotificationTasks()
+        XCTAssertEqual(
+            observations,
+            [.attached(.inactive), .invalidated]
+        )
+        XCTAssertEqual(
+            observer.attach(
+                to: scene,
+                surfaceGeneration: generation
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: generation),
+            .alreadyInvalidated
+        )
+    }
+
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
         let frame = try makeFrame(
             generation: 7,
@@ -1621,6 +1788,9 @@ private typealias MobileSurfaceAttachmentTestOwner =
         MobileSurfaceAttachmentTestScreen
     >
 
+private typealias MobileSceneLifecycleTestObserver =
+    MobileStreamSceneLifecycleObserver<MobileSceneLifecycleTestScene>
+
 private final class MobileSurfaceAttachmentTestSurface {
     var window: MobileSurfaceAttachmentTestWindow?
 
@@ -1659,6 +1829,37 @@ private final class MobileSurfaceAttachmentTestScreen {
     init(name: String) {
         self.name = name
     }
+}
+
+private final class MobileSceneLifecycleTestScene: NSObject {
+    var activity: AppSceneActivity
+
+    init(activity: AppSceneActivity) {
+        self.activity = activity
+    }
+}
+
+private func mobileSceneLifecycleTestNotificationNames()
+    -> MobileStreamSceneLifecycleNotificationNames
+{
+    MobileStreamSceneLifecycleNotificationNames(
+        didActivate: Notification.Name("test.mobile.scene.did-activate"),
+        willDeactivate: Notification.Name(
+            "test.mobile.scene.will-deactivate"
+        ),
+        didEnterBackground: Notification.Name(
+            "test.mobile.scene.did-enter-background"
+        ),
+        willEnterForeground: Notification.Name(
+            "test.mobile.scene.will-enter-foreground"
+        )
+    )
+}
+
+@MainActor
+private func drainMobileSceneLifecycleNotificationTasks() async {
+    await Task.yield()
+    await Task.yield()
 }
 
 @MainActor

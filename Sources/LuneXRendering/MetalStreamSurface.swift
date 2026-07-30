@@ -261,6 +261,225 @@ final class MobileStreamSurfaceAttachmentOwner<
     }
 }
 
+struct MobileStreamSceneLifecycleNotificationNames: Equatable, Sendable {
+    let didActivate: Notification.Name
+    let willDeactivate: Notification.Name
+    let didEnterBackground: Notification.Name
+    let willEnterForeground: Notification.Name
+}
+
+enum MobileStreamSceneLifecycleObservation: Equatable, Sendable {
+    case attached(AppSceneActivity)
+    case detached
+    case invalidated
+}
+
+struct MobileStreamSceneLifecycleUpdate: Equatable, Sendable {
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    let observation: MobileStreamSceneLifecycleObservation
+}
+
+enum MobileStreamSceneLifecycleObserverOutcome: Equatable, Sendable {
+    case published
+    case unchanged
+    case staleSurfaceGeneration
+    case invalidated
+    case alreadyInvalidated
+}
+
+private final class MobileStreamSceneLifecycleObserverTokens:
+    @unchecked Sendable
+{
+    private let notificationCenter: NotificationCenter
+    private var observers: [NSObjectProtocol] = []
+
+    init(notificationCenter: NotificationCenter) {
+        self.notificationCenter = notificationCenter
+    }
+
+    func replace(_ observers: [NSObjectProtocol]) {
+        removeAll()
+        self.observers = observers
+    }
+
+    func removeAll() {
+        observers.forEach(notificationCenter.removeObserver)
+        observers.removeAll()
+    }
+
+    deinit {
+        removeAll()
+    }
+}
+
+@MainActor
+final class MobileStreamSceneLifecycleObserver<Scene: AnyObject> {
+    typealias ActivityReader = @MainActor (Scene) -> AppSceneActivity
+    typealias Handler = @MainActor (MobileStreamSceneLifecycleUpdate) -> Void
+
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    var currentScene: Scene? { scene }
+    private(set) var currentObservation:
+        MobileStreamSceneLifecycleObservation?
+
+    private let notificationCenter: NotificationCenter
+    private let observerTokens: MobileStreamSceneLifecycleObserverTokens
+    private let names: MobileStreamSceneLifecycleNotificationNames
+    private let activityReader: ActivityReader
+    private weak var scene: Scene?
+    private var observationID: UUID?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        surfaceGeneration: MobileSceneSurfaceGeneration,
+        notificationCenter: NotificationCenter,
+        names: MobileStreamSceneLifecycleNotificationNames,
+        activityReader: @escaping ActivityReader,
+        handler: @escaping Handler
+    ) {
+        self.surfaceGeneration = surfaceGeneration
+        self.notificationCenter = notificationCenter
+        observerTokens = MobileStreamSceneLifecycleObserverTokens(
+            notificationCenter: notificationCenter
+        )
+        self.names = names
+        self.activityReader = activityReader
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    @discardableResult
+    func attach(
+        to candidate: Scene,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSceneLifecycleObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if scene === candidate {
+            return publish(.attached(activityReader(candidate)))
+        }
+
+        stopObserving()
+        scene = candidate
+        currentObservation = nil
+        let nextObservationID = UUID()
+        observationID = nextObservationID
+        observerTokens.replace([
+            observe(
+                name: names.didActivate,
+                object: candidate,
+                observationID: nextObservationID,
+                activity: .active
+            ),
+            observe(
+                name: names.willDeactivate,
+                object: candidate,
+                observationID: nextObservationID,
+                activity: .inactive
+            ),
+            observe(
+                name: names.didEnterBackground,
+                object: candidate,
+                observationID: nextObservationID,
+                activity: .background
+            ),
+            observe(
+                name: names.willEnterForeground,
+                object: candidate,
+                observationID: nextObservationID,
+                activity: .inactive
+            )
+        ])
+        return publish(.attached(activityReader(candidate)))
+    }
+
+    @discardableResult
+    func detach(
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSceneLifecycleObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        stopObserving()
+        return publish(.detached)
+    }
+
+    @discardableResult
+    func invalidate(
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSceneLifecycleObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        isInvalidated = true
+        stopObserving()
+        let outcome = publish(.invalidated)
+        handler = nil
+        return outcome == .published ? .invalidated : outcome
+    }
+
+    private func observe(
+        name: Notification.Name,
+        object: Scene,
+        observationID: UUID,
+        activity: AppSceneActivity
+    ) -> NSObjectProtocol {
+        notificationCenter.addObserver(
+            forName: name,
+            object: object,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.receive(
+                    observationID: observationID,
+                    activity: activity
+                )
+            }
+        }
+    }
+
+    private func receive(
+        observationID candidateObservationID: UUID,
+        activity: AppSceneActivity
+    ) {
+        guard !isInvalidated,
+              observationID == candidateObservationID,
+              scene != nil else {
+            return
+        }
+        _ = publish(.attached(activity))
+    }
+
+    private func stopObserving() {
+        observerTokens.removeAll()
+        observationID = nil
+        scene = nil
+    }
+
+    private func publish(
+        _ observation: MobileStreamSceneLifecycleObservation
+    ) -> MobileStreamSceneLifecycleObserverOutcome {
+        guard observation != currentObservation else { return .unchanged }
+        currentObservation = observation
+        handler?(
+            MobileStreamSceneLifecycleUpdate(
+                surfaceGeneration: surfaceGeneration,
+                observation: observation
+            )
+        )
+        return .published
+    }
+}
+
 struct StreamMetalPresentationPlan: Sendable {
     let configuration: HDRRenderConfigurationIdentity
     let uniforms: HDRMetalShaderUniforms
@@ -1456,6 +1675,15 @@ struct MetalStreamSurface: NSViewRepresentable {
 }
 #else
 #if os(iOS)
+extension MobileStreamSceneLifecycleNotificationNames {
+    static let current = MobileStreamSceneLifecycleNotificationNames(
+        didActivate: UIScene.didActivateNotification,
+        willDeactivate: UIScene.willDeactivateNotification,
+        didEnterBackground: UIScene.didEnterBackgroundNotification,
+        willEnterForeground: UIScene.willEnterForegroundNotification
+    )
+}
+
 @MainActor
 enum MobileStreamSurfaceGenerationSequence {
     private static var nextRawValue: UInt64 = 1
@@ -1488,10 +1716,15 @@ final class MobileStreamMetalView: MTKView {
         UIScreen
     >
     typealias AttachmentUpdateHandler = AttachmentOwner.Handler
+    typealias SceneLifecycleObserver =
+        MobileStreamSceneLifecycleObserver<UIWindowScene>
+    typealias SceneLifecycleUpdateHandler = SceneLifecycleObserver.Handler
 
     private var attachmentRelay:
         MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>?
     private var attachmentOwner: AttachmentOwner?
+    private var sceneLifecycleObserver: SceneLifecycleObserver?
+    private var attachmentUpdateHandler: AttachmentUpdateHandler?
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 
@@ -1499,14 +1732,35 @@ final class MobileStreamMetalView: MTKView {
         frame frameRect: CGRect = .zero,
         device: (any MTLDevice)? = nil,
         attachmentEventHandler: @escaping AttachmentEventHandler = { _, _ in },
-        attachmentUpdateHandler: @escaping AttachmentUpdateHandler = { _ in }
+        attachmentUpdateHandler: @escaping AttachmentUpdateHandler = { _ in },
+        sceneLifecycleUpdateHandler:
+            @escaping SceneLifecycleUpdateHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
+        self.attachmentUpdateHandler = attachmentUpdateHandler
         attachmentRelay = MobileStreamSurfaceAttachmentRelay(
             surface: self,
             handler: attachmentEventHandler
         )
         if let surfaceGeneration = MobileStreamSurfaceGenerationSequence.next() {
+            sceneLifecycleObserver = SceneLifecycleObserver(
+                surfaceGeneration: surfaceGeneration,
+                notificationCenter: .default,
+                names: .current,
+                activityReader: { scene in
+                    switch scene.activationState {
+                    case .foregroundActive:
+                        return .active
+                    case .foregroundInactive:
+                        return .inactive
+                    case .background, .unattached:
+                        return .background
+                    @unknown default:
+                        return .background
+                    }
+                },
+                handler: sceneLifecycleUpdateHandler
+            )
             attachmentOwner = AttachmentOwner(
                 surfaceGeneration: surfaceGeneration,
                 surface: self,
@@ -1521,7 +1775,9 @@ final class MobileStreamMetalView: MTKView {
                         screen: window.screen
                     )
                 },
-                handler: attachmentUpdateHandler
+                handler: { [weak self] update in
+                    self?.handleAttachmentUpdate(update)
+                }
             )
         }
         traitChangeRegistration = registerForTraitChanges([
@@ -1563,7 +1819,13 @@ final class MobileStreamMetalView: MTKView {
     func updateAttachmentUpdateHandler(
         _ handler: @escaping AttachmentUpdateHandler
     ) {
-        attachmentOwner?.updateHandler(handler)
+        attachmentUpdateHandler = handler
+    }
+
+    func updateSceneLifecycleUpdateHandler(
+        _ handler: @escaping SceneLifecycleUpdateHandler
+    ) {
+        sceneLifecycleObserver?.updateHandler(handler)
     }
 
     func invalidateAttachmentCallbacks() {
@@ -1578,6 +1840,8 @@ final class MobileStreamMetalView: MTKView {
             )
             self.attachmentOwner = nil
         }
+        sceneLifecycleObserver = nil
+        attachmentUpdateHandler = nil
         attachmentRelay?.invalidate()
         attachmentRelay = nil
     }
@@ -1594,6 +1858,29 @@ final class MobileStreamMetalView: MTKView {
         }
         attachmentRelay?.publish(event)
     }
+
+    private func handleAttachmentUpdate(
+        _ update: AttachmentOwner.Update
+    ) {
+        switch update.transition {
+        case .callback:
+            if let scene = update.attachment?.scene {
+                sceneLifecycleObserver?.attach(
+                    to: scene,
+                    surfaceGeneration: update.surfaceGeneration
+                )
+            } else {
+                sceneLifecycleObserver?.detach(
+                    surfaceGeneration: update.surfaceGeneration
+                )
+            }
+        case .invalidated:
+            sceneLifecycleObserver?.invalidate(
+                surfaceGeneration: update.surfaceGeneration
+            )
+        }
+        attachmentUpdateHandler?(update)
+    }
 }
 #endif
 
@@ -1608,6 +1895,8 @@ struct MetalStreamSurface: UIViewRepresentable {
     }
     var attachmentUpdateHandler:
         MobileStreamMetalView.AttachmentUpdateHandler = { _ in }
+    var sceneLifecycleUpdateHandler:
+        MobileStreamMetalView.SceneLifecycleUpdateHandler = { _ in }
 #endif
 
     func makeCoordinator() -> StreamMetalPresenter {
@@ -1625,7 +1914,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
             attachmentEventHandler: attachmentEventHandler,
-            attachmentUpdateHandler: attachmentUpdateHandler
+            attachmentUpdateHandler: attachmentUpdateHandler,
+            sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler
         )
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -1643,6 +1933,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateAttachmentEventHandler(attachmentEventHandler)
         (view as? MobileStreamMetalView)?
             .updateAttachmentUpdateHandler(attachmentUpdateHandler)
+        (view as? MobileStreamMetalView)?
+            .updateSceneLifecycleUpdateHandler(sceneLifecycleUpdateHandler)
 #endif
         context.coordinator.update(renderState: renderState)
         let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)

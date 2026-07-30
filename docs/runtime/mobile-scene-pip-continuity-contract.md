@@ -34,7 +34,7 @@ No lower tier may be reported as a higher tier.
 
 | Concern | Current source | Current behavior | Stage 17 gap |
 |---|---|---|---|
-| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, applies render schedule, copies an existing coordinate snapshot into `drawableSize`, publishes closed iOS callbacks, and resolves a generation-owned actual `UIWindow`/`UIWindowScene`/`UIScreen` attachment | No scene notification observation, semantic activity, geometry normalization, or attached-screen state publication |
+| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, applies render schedule, copies an existing coordinate snapshot into `drawableSize`, publishes closed iOS callbacks, resolves a generation-owned actual `UIWindow`/`UIWindowScene`/`UIScreen` attachment, and observes semantic lifecycle notifications only for that scene | No geometry normalization, drawable/input binding, attached-screen EDR state, continuity policy, or AppModel publication |
 | SwiftUI lifecycle | `RootView` and `UIKitLifecycleMonitor` | `RootView` does not construct or retain the mobile monitor; the monitor itself only maps a supplied `ScenePhase` to visible/focused and multiplies a supplied point size by a supplied scale | Not connected to the actual stream view, `UIWindow`, `UIWindowScene`, `UIScreen`, media generation, Stage Manager resize, or AppModel |
 | macOS lifecycle reference | `AppKitLifecycleMonitor`, `MacStreamSurfaceAttachmentOwner`, and `MacStreamInputCaptureView` | Actual window/surface ownership, occlusion/focus, backing pixels, screen EDR, stale attachment rejection, render policy, and input admission are connected | This is a behavioral reference, not reusable UIKit code |
 | Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Validated fit/fill geometry, checked revision increment, stale/invalid clear, letterbox rejection, source crop, and remote point mapping are implemented | Mobile must publish actual drawable geometry into this contract rather than create a parallel coordinate system |
@@ -488,6 +488,79 @@ compilation, and cross-platform isolation. They do not prove a callback fired
 in a live UIKit window, scene notification filtering, Stage Manager resizing,
 geometry/drawable/input publication, PiP, background continuity, mobile EDR,
 a signed artifact, physical hardware, or live Sunshine.
+
+## Attached-scene lifecycle observer
+
+OpenSpec task 2.3 adds a main-actor lifecycle observer fixed to the same
+nonzero `MobileSceneSurfaceGeneration` as the actual attachment owner. The iOS
+view attaches it only to `view.window?.windowScene`; detached attachment
+updates stop observation instead of selecting another application scene.
+
+The observer maps current UIKit state and notifications into a closed semantic
+stream:
+
+- initial `foregroundActive` becomes `active`;
+- initial `foregroundInactive` becomes `inactive`;
+- initial `background` or `unattached` becomes conservative `background`;
+- `didActivate` becomes `active`;
+- `willDeactivate` and `willEnterForeground` become `inactive`; and
+- `didEnterBackground` becomes `background`.
+
+Each attachment receives a private UUID token in addition to its surface
+generation. NotificationCenter registers all four tokens with the actual scene
+as the object filter. Replacement, detach, and invalidation remove every token
+before clearing the weak scene reference. A queued main-actor delivery must
+still match the current UUID, current generation-owned observer, a live scene,
+and noninvalidated state before publication. Equivalent activity repeats are
+deduplicated; replacing the scene publishes its initial state even when the
+semantic activity matches the prior scene.
+
+The platform-neutral update carries only the surface generation and
+`attached(activity)`, `detached`, or `invalidated`. It does not carry or persist
+the scene, notification, object identity, raw activation state, or description.
+The observer and actual UIKit handler remain main-actor isolated. A narrow
+private token store performs idempotent explicit removal and deinit fallback
+without weakening Swift 6 concurrency checking for the rest of the file.
+
+Task 2.3 evidence:
+
+```text
+Focused lifecycle tests:
+/tmp/LuneX-17-2_3-focused-r2.MJ6961
+3 passed / 0 skipped / 0 failed
+
+iOS generic-device API build:
+/tmp/LuneX-17-2_3-ios-build.ULp392
+succeeded with zero structured diagnostics
+
+Expanded presenter suite:
+/tmp/LuneX-17-2_3-expanded.vyNEJV
+34 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-2_3-full.sYEcAe
+780 total / 779 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-2_3-build-macOS.UJWiu0
+/tmp/LuneX-17-2_3-build-iOS.OGkriA
+/tmp/LuneX-17-2_3-build-tvOS.zRSzBF
+/tmp/LuneX-17-2_3-build-visionOS.NkirqG
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Read-only simulator inventory:
+/tmp/LuneX-17-2_3-simulator.P2aGEm
+fixed iPhone/iPad present exactly once, available and Shutdown; Booted = 0
+```
+
+All normal tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`. These results
+prove deterministic scene filtering, semantic deduplication, replacement,
+detach/invalidation cancellation, queued-late rejection, iOS public API
+compilation, and cross-platform isolation. They do not prove notifications
+fired in a live UIKit window, foreground restoration resampled all state,
+Stage Manager geometry, drawable/input mapping, PiP, legal background
+continuity, mobile EDR, signed configuration, physical hardware, or live
+Sunshine.
 
 ## Xcode 26.4 public API inventory
 

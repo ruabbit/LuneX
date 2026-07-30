@@ -1831,3 +1831,11 @@
 - actual UIKit对象只在main-actor非Sendable update内同步交给injectable handler；dismantle发布invalidated并清理owner。2.2不注册scene通知、不规范化geometry、不跨actor发布对象，也不接入AppModel。
 - focused为`5/5`、expanded presenter为`31/31`、full为`777 total / 776 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug均成功且结构化diagnostics为0。固定iPhone/iPad只读盘点仍各唯一、available、`Shutdown`且全局`Booted=0`。
 - 当前证据证明deterministic generation/surface rejection、replacement/detach derivation、invalidation、weak ownership和SDK编译；不证明live UIKit callback、scene notification filtering、Stage Manager、geometry/drawable/input、PiP/background、mobile EDR、signed/physical/live Sunshine。
+
+## 2026-07-30 阶段 17 任务 2.3 验收
+
+- `MobileStreamSceneLifecycleObserver`固定到attachment owner的nonzero surface generation，每次actual scene attachment另建private UUID；NotificationCenter四个token全部以该scene对象过滤，queued delivery仍需通过UUID、live weak scene和noninvalidated检查。
+- 初始`UIWindowScene.activationState`与四个通知归一为closed `active`、`inactive`或`background`；同scene重复activity去重，scene replacement即使初始activity相同也发布新的attachment语义。detached和invalidated是显式状态，不使用`UIApplication.connectedScenes`、`UIScreen.main`或SwiftUI `scenePhase`。
+- replacement、detach和invalidation先幂等移除token再清scene；窄作用域`@unchecked Sendable` token store只解决Swift 6.3 nonisolated deinit对Objective-C token的清理边界，正常修改仍只发生在main actor，没有使用`@preconcurrency`压制诊断。
+- focused为`3/3`、expanded presenter为`34/34`、full为`780 total / 779 passed / 1 explicit Keychain skip / 0 failed`；iOS API build及四平台generic Debug全部成功且结构化diagnostics为0。唯一skip精确为真实Keychain opt-in测试，本项没有再次访问Keychain。
+- 固定iPhone/iPad只读inventory各唯一、available、`Shutdown`且全局`Booted=0`；只调用一次list，没有模拟器生命周期操作。当前证据证明确定性filter/dedup/cancel/stale rejection与SDK编译，不证明live UIKit通知、foreground全状态重采样、Stage Manager geometry、PiP/background、mobile EDR、signed/physical/live Sunshine。

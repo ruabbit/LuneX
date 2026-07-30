@@ -2305,3 +2305,20 @@
 - 只读simulator证据`/tmp/LuneX-17-2_2-simulator.5RvcxU`确认固定iPhone 17 Pro和iPad Pro 13-inch (M5)在iOS 26.4 runtime各唯一、available、`Shutdown`且全局`Booted=0`；只调用一次inventory，没有生命周期操作。
 - OpenSpec 2.2已勾选，权威进度更新为`7/36`。本项证明generation/surface-scoped actual attachment derivation、replacement/detach、stale/late rejection、weak teardown和跨平台编译；不证明live UIKit callback、scene notification、Stage Manager/geometry/input、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.3。
 - repository gate `/tmp/LuneX-17-2_2-repository.sgylpZ`通过OpenSpec strict `1/1`、apply `7/36`且next精确为2.3、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、actual-view-only/weak-owner静态边界、focused/expanded/full、四平台build和保存的simulator证据读回、Keychain opt-in关闭、privacy与`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 2.3 启动
+
+- 2.2已以`717f09f Add mobile scene attachment owner`独立提交并推送，fetch后确认`HEAD == origin/main`且工作树clean；OpenSpec为`7/36 ready`，当前任务2.3只闭合attached scene生命周期通知，不提前实现geometry/drawable/input。
+- 新main-actor observer设计以surface generation和per-attachment UUID过滤回调；NotificationCenter token只订阅actual attached scene对象，replacement/detach/invalidate移除全部token，排队迟到任务再以observation UUID和current scene拒绝。
+- 四个semantic映射为didActivate=`active`、willDeactivate=`inactive`、didEnterBackground=`background`、willEnterForeground=`inactive`；同scene相同activity去重，新scene即使初始activity相同也发布一次replacement初始状态。
+- 首个production/tests/tracking组合补丁因hunk边界格式错误被`apply_patch`整体拒绝，工作树没有部分源码或测试改动；已拆为三个精确补丁继续。
+- 首轮focused证据`/tmp/LuneX-17-2_3-focused.JhJVq9`在测试启动前失败，唯一production编译错误为`MetalStreamSurface.swift:324:9 cannot access property 'observers' with a non-Sendable type '[any NSObjectProtocol]' from nonisolated deinit`；该bundle不计验收，也不复用其DerivedData/result bundle。
+- 修复保持显式资源释放：增加窄作用域、幂等的NotificationCenter token store，让main-actor observer在replacement/detach/invalidate主动清理，token store自身deinit仅作Objective-C observer兜底；不使用`@preconcurrency import Foundation`掩盖Swift 6.3诊断。
+- 修复后的focused证据`/tmp/LuneX-17-2_3-focused-r2.MJ6961/Focused.xcresult`通过`3/3 passed / 0 skipped / 0 failed`，结构化error、warning与analyzer warning均为0；覆盖wrong-scene过滤/activity去重、scene replacement/old-token cancellation/detach和stale generation/queued-late/invalidation。
+- iOS generic-device证据`/tmp/LuneX-17-2_3-ios-build.ULp392/Build.xcresult`成功且结构化diagnostics为0，确认Xcode 26.4 iOS SDK下四个`UIScene`通知、`activationState`读取和actual attachment接线均通过warnings-as-errors；只执行build action，没有操作simulator。
+- expanded presenter证据`/tmp/LuneX-17-2_3-expanded.vyNEJV/Expanded.xcresult`通过`34/34`且零结构化diagnostics；完整macOS证据`/tmp/LuneX-17-2_3-full.sYEcAe/Full.xcresult`通过`780 total / 779 passed / 1 skipped / 0 failed`且零结构化diagnostics。
+- 完整测试唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；全部命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- exact-source四平台generic Debug分别保存于`/tmp/LuneX-17-2_3-build-macOS.UJWiu0`、`/tmp/LuneX-17-2_3-build-iOS.OGkriA`、`/tmp/LuneX-17-2_3-build-tvOS.zRSzBF`和`/tmp/LuneX-17-2_3-build-visionOS.NkirqG`；全部成功且四份xcresult的error、warning与analyzer warning均为0。
+- 只读simulator证据`/tmp/LuneX-17-2_3-simulator.P2aGEm`确认固定iPhone 17 Pro和iPad Pro 13-inch (M5)在iOS 26.4 runtime中各唯一、UUID全局各唯一、available、`Shutdown`且全局`Booted=0`；只调用一次inventory，没有生命周期操作。
+- OpenSpec 2.3已勾选，权威进度更新为`8/36`。本项证明actual attached-scene通知的generation/identity过滤、semantic dedup、replacement/detach/invalidation cancellation、queued-late拒绝与跨平台编译；不证明live UIKit通知、foreground全状态重采样、Stage Manager/geometry/input、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.4。
+- repository final gate `/tmp/LuneX-17-2_3-repository.B3wKMT`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `8/36`且next精确为2.4、generator连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、source/test membership、scene notification/generation/token cancellation静态边界、无global scene/screen fallback与无raw description隐私边界、focused/iOS API/expanded/full/四平台build及保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
