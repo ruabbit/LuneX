@@ -47,36 +47,219 @@ final class ContinuityPolicyTests: XCTestCase {
         XCTAssertEqual(state.unavailableReason, "Head tracking is unavailable on this platform SDK")
     }
 
-    func testMobileContinuityUsesPictureInPictureWhenSupported() {
-        let action = MobileContinuityPolicyResolver.resolve(MobileContinuityContext(
-            platform: .iPadOS,
-            sceneActivity: .background,
-            isStreamActive: true,
-            preferences: .defaults,
-            capabilities: PlatformContinuityCapabilities(
-                supportsAudioBackgroundMode: true,
-                supportsPictureInPicture: true,
-                hasAudioBackgroundModeDeclared: true
-            )
-        ))
+    func testMobileContinuityRejectsCapabilityAndConfigurationPresenceAlone()
+        throws
+    {
+        let context = makeMobileContinuityContext(
+            activeGeneration: try generation()
+        )
 
-        XCTAssertEqual(action, .continueWithAudioAndPictureInPicture)
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(context),
+            .suspendForegroundRendering(
+                reason: "No supported mobile continuity path is active"
+            )
+        )
     }
 
-    func testMobileContinuitySuspendsWhenNoSupportedPathIsActive() {
-        let action = MobileContinuityPolicyResolver.resolve(MobileContinuityContext(
-            platform: .iOS,
-            sceneActivity: .background,
-            isStreamActive: true,
-            preferences: .defaults,
-            capabilities: PlatformContinuityCapabilities(
-                supportsAudioBackgroundMode: true,
-                supportsPictureInPicture: false,
-                hasAudioBackgroundModeDeclared: false
+    func testMobileContinuityRequiresCurrentConfirmedPictureInPicture()
+        throws
+    {
+        let current = try generation()
+        let stale = try generation(media: 2, pictureInPicture: 4)
+        let startRequested = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actualState(
+                generation: current,
+                pictureInPictureLifecycle: .startRequested,
+                sinkOperational: true
             )
-        ))
+        )
+        let staleActive = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actualState(
+                generation: stale,
+                pictureInPictureLifecycle: .active,
+                sinkOperational: true
+            )
+        )
+        let failedSink = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actualState(
+                generation: current,
+                pictureInPictureLifecycle: .active,
+                sinkOperational: false
+            )
+        )
+        let active = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actualState(
+                generation: current,
+                pictureInPictureLifecycle: .active,
+                sinkOperational: true
+            )
+        )
 
-        XCTAssertEqual(action, .suspendForegroundRendering(reason: "No supported mobile continuity path is active"))
+        let unavailable = MobileContinuityAction
+            .suspendForegroundRendering(
+                reason: "No supported mobile continuity path is active"
+            )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(startRequested),
+            unavailable
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(staleActive),
+            unavailable
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(failedSink),
+            unavailable
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(active),
+            .continueWithAudioAndPictureInPicture
+        )
+    }
+
+    func testMobileContinuityRequiresCurrentActivePermittedAudio()
+        throws
+    {
+        let current = try generation()
+        let activePermitted = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actualState(
+                generation: current,
+                audioActive: true,
+                audioPermitted: true
+            )
+        )
+        let activeDenied = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actualState(
+                generation: current,
+                audioActive: true,
+                audioPermitted: false
+            )
+        )
+
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(activePermitted),
+            .continueAudioOnly
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(activeDenied),
+            .suspendForegroundRendering(
+                reason: "No supported mobile continuity path is active"
+            )
+        )
+    }
+
+    func testMobileContinuityRequiresGenerationAndCapabilityEligibility()
+        throws
+    {
+        let current = try generation()
+        let actual = actualState(
+            generation: current,
+            pictureInPictureLifecycle: .active,
+            sinkOperational: true,
+            audioActive: true,
+            audioPermitted: true
+        )
+        let missingGeneration = makeMobileContinuityContext(
+            activeGeneration: nil,
+            actualMediaState: actual
+        )
+        var unsupportedCapabilities = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actual
+        )
+        unsupportedCapabilities.capabilities.supportsAudioBackgroundMode = false
+        unsupportedCapabilities.capabilities.supportsPictureInPicture = false
+
+        let unavailable = MobileContinuityAction
+            .suspendForegroundRendering(
+                reason: "No supported mobile continuity path is active"
+            )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(missingGeneration),
+            unavailable
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(unsupportedCapabilities),
+            unavailable
+        )
+    }
+
+    func testMobileContinuityFailsClosedWhenEligibilityDisappears()
+        throws
+    {
+        let current = try generation()
+        let actual = actualState(
+            generation: current,
+            pictureInPictureLifecycle: .active,
+            sinkOperational: true,
+            audioActive: true,
+            audioPermitted: true
+        )
+        var missingDeclaration = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actual
+        )
+        missingDeclaration.capabilities.hasAudioBackgroundModeDeclared = false
+        var disabledPreferences = makeMobileContinuityContext(
+            activeGeneration: current,
+            actualMediaState: actual
+        )
+        disabledPreferences.preferences.pictureInPictureEnabled = false
+        disabledPreferences.preferences.audioContinuityEnabled = false
+        disabledPreferences.preferences.reduceRenderingInBackground = false
+
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(missingDeclaration),
+            .suspendForegroundRendering(
+                reason: "Playback background mode is not declared"
+            )
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(disabledPreferences),
+            .pauseStream(
+                reason: "No supported mobile continuity path is active"
+            )
+        )
+    }
+
+    func testMobileContinuityReturnsForegroundOrUnsupportedPlatform()
+        throws
+    {
+        let current = try generation()
+        let foreground = makeMobileContinuityContext(
+            sceneActivity: .active,
+            activeGeneration: current
+        )
+        let inactive = makeMobileContinuityContext(
+            isStreamActive: false,
+            activeGeneration: nil
+        )
+        let unsupported = makeMobileContinuityContext(
+            platform: .visionOS,
+            activeGeneration: current
+        )
+
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(foreground),
+            .foreground
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(inactive),
+            .foreground
+        )
+        XCTAssertEqual(
+            MobileContinuityPolicyResolver.resolve(unsupported),
+            .warn(
+                reason: "Mobile background continuity is unavailable on this platform"
+            )
+        )
     }
 
     func testPictureInPictureSizeUpdatesDoNotChangeActiveState() async {
@@ -112,5 +295,54 @@ final class ContinuityPolicyTests: XCTestCase {
         ))
 
         XCTAssertEqual(action, .pauseRendering(reason: "Stream window is occluded or minimized"))
+    }
+
+    private func generation(
+        media: UInt64 = 3,
+        pictureInPicture: UInt64 = 5
+    ) throws -> MobilePictureInPictureGeneration {
+        try XCTUnwrap(MobilePictureInPictureGeneration(
+            mediaGeneration: media,
+            pictureInPictureGeneration: pictureInPicture
+        ))
+    }
+
+    private func actualState(
+        generation: MobilePictureInPictureGeneration,
+        pictureInPictureLifecycle:
+            MobilePictureInPictureLifecycle = .unprepared,
+        sinkOperational: Bool = false,
+        audioActive: Bool = false,
+        audioPermitted: Bool = false
+    ) -> MobileContinuityActualMediaState {
+        MobileContinuityActualMediaState(
+            generation: generation,
+            pictureInPictureLifecycle: pictureInPictureLifecycle,
+            isPictureInPictureFrameSinkOperational: sinkOperational,
+            isAudioSessionActive: audioActive,
+            isAudioContinuityPermitted: audioPermitted
+        )
+    }
+
+    private func makeMobileContinuityContext(
+        platform: ApplePlatformFamily = .iPadOS,
+        sceneActivity: AppSceneActivity = .background,
+        isStreamActive: Bool = true,
+        activeGeneration: MobilePictureInPictureGeneration?,
+        actualMediaState: MobileContinuityActualMediaState? = nil
+    ) -> MobileContinuityContext {
+        MobileContinuityContext(
+            platform: platform,
+            sceneActivity: sceneActivity,
+            isStreamActive: isStreamActive,
+            preferences: .defaults,
+            capabilities: PlatformContinuityCapabilities(
+                supportsAudioBackgroundMode: true,
+                supportsPictureInPicture: true,
+                hasAudioBackgroundModeDeclared: true
+            ),
+            activeGeneration: activeGeneration,
+            actualMediaState: actualMediaState
+        )
     }
 }

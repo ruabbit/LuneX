@@ -42,7 +42,7 @@ No lower tier may be reported as a higher tier.
 | Renderer | `StreamMetalPresenter`, `HDRMetalVideoRenderer`, and `CVMetalVideoFrameMapper` | One decoded frame is mapped and rendered under a validated HDR render configuration and coordinate snapshot | Mobile view/display lifecycle does not currently produce the actual revision and headroom inputs |
 | Current decoded frame | `StreamVideoPresentationSource` | Owns current session/media/decoder generations, the latest `DecodedVideoFrame`, semantic presentation events, stale-frame counts, clear/replacement behavior, and at most eight generation-filtered cancellable delivery subscriptions | PiP delivery is now bounded and shares the same frame; application media-generation ownership and legal background continuity remain in 5.x |
 | Decoded frame payload | `DecodedVideoFrame` | Carries decoder generation, frame ID, `CVPixelBuffer`, PTS, duration, decode flags, color metadata, and HDR render binding | PiP must convert this existing image buffer and timing into a sample buffer while preserving generation and color ownership |
-| Continuity policy | `MobileContinuityPolicyResolver` | Chooses foreground, audio+PiP, audio-only, suspend, or pause from platform, scene, preferences, capability flags, and background-mode declaration | Capability/configuration presence can currently select continuation without actual current-generation audio or native PiP state |
+| Continuity policy | `MobileContinuityPolicyResolver` and `MobileContinuityPathResolver` | Chooses foreground, audio+PiP, audio-only, suspend, or pause only from generation-matched actual PiP/audio state after capability, preference, and background-declaration eligibility gates | The actual policy is not yet driven by one serialized application media-generation owner |
 | PiP state | `PictureInPictureStateCoordinator` | Stores only `isActive`, render size, and update time | No native controller, content source, playback delegate, possible/start/stop/failure/restore state, sample layer, frame sink, generation, or teardown |
 | Audio session | `MobileAudioSessionAdapter` and `AVAudioEngineClient` | Configures `.playback`/`.moviePlayback`, multichannel intent, sample rate, buffer duration, output channels, activation, deactivation, route state, and spatial capability | `MobileAudioSessionRuntimeSnapshot.isActive` remains inside the audio adapter/pipeline and is not carried by `SessionAudioRuntimeEvent`; continuity cannot yet prove an actual active permitted audio path |
 | Media ownership | `NativeSessionMediaEnvironment` | Owns session/media generation, video/audio/input processors and consumer tasks; forwards readiness, video presentation, audio runtime, and feedback | No scene/PiP/mobile-display runtime resource, event, application method, or teardown slot |
@@ -735,6 +735,59 @@ Keychain skip / 0 failed`; and the four generic Debug platform builds succeeded
 with zero structured diagnostics. These are contract, test, and build proof.
 They do not prove system PiP presentation, background duration, signing,
 installation, physical-device behavior, or live Sunshine operation.
+
+### Actual current-generation continuity policy
+
+OpenSpec task 5.1 removes the capability-only application policy path.
+`MobileContinuityContext` now carries an active PiP/media generation and an
+optional `MobileContinuityActualMediaState` with native PiP lifecycle, frame
+sink operation, audio-session activity, and explicit audio-continuity
+permission.
+
+Actual evidence is accepted only when its full generation equals the active
+generation. Missing or stale generation, requested/starting/stopping PiP,
+nonoperational PiP sink, inactive or denied audio, missing platform
+capability, disabled preference, and missing playback declaration all fail
+closed. Capability and generated configuration remain eligibility gates; they
+cannot synthesize activity.
+
+The application action resolver delegates to the existing
+`MobileContinuityPathResolver`, preserving one precedence contract:
+
+- inactive or foreground state remains foreground;
+- confirmed active PiP with an operational sink takes priority;
+- active and permitted audio selects audio-only continuity;
+- missing declaration or actual path suspends foreground rendering when the
+  reduction preference is enabled, otherwise it pauses the stream; and
+- unsupported platforms return the bounded unsupported warning.
+
+Task 5.1 evidence:
+
+```text
+Focused policy/PiP reducer:
+/tmp/LuneX-17-5_1-focused-r2.OR9fN0/Focused.xcresult
+38 passed / 0 skipped / 0 failed
+
+Expanded policy/PiP/audio/media ownership:
+/tmp/LuneX-17-5_1-expanded.WrwNk8/Expanded.xcresult
+104 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-5_1-full.3SUqwE/Full.xcresult
+870 total / 869 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-5_1-builds.bPoD3X
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+and one AIR plus one metallib per platform
+```
+
+These results prove the offline action-policy contract and platform
+compilation only. Task 5.2 must still make one serialized mobile media owner
+publish and apply the actual scene, audio, PiP, renderer, decoder/control, and
+restoration state. System PiP, background duration, signed configuration,
+physical iPhone/iPad behavior, Stage Manager, visible EDR, power, and live
+Sunshine remain unproved.
 
 ## Target ownership model
 

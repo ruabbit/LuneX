@@ -2110,3 +2110,18 @@
 - focused `/tmp/LuneX-17-4_7-focused-r2.FhZpRb/Focused.xcresult`为`14/14`，expanded `/tmp/LuneX-17-4_7-expanded.w61I5u/Expanded.xcresult`为`162/162`，完整normal `/tmp/LuneX-17-4_7-full.106eJz/Full.xcresult`为`866 total / 865 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
 - 四平台generic Debug根`/tmp/LuneX-17-4_7-builds.LTHC6L`全部succeeded且各有AIR/metallib；repository pre-gate `/tmp/LuneX-17-4_7-repository-pre-r2.WcRUw4`通过fixtures、strict `8/8`、勾选前apply `22/36 next 4.7`、generator稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、production零diff、全部证据读回、唯一Keychain skip和diff检查。
 - 本项只证明离线PiP跨层event/resource regression matrix和四平台generic SDK编译；5.x application/media continuity接线、system PiP、后台持续时间、签名/安装、物理iPhone/iPad、Stage Manager、external display、visible EDR、功耗和live Sunshine仍未证明。
+
+## 2026-07-30 阶段 17 任务 5.1 调查
+
+- 仓库存在两层continuity policy：`MobileContinuityPathResolver`已要求native-confirmed PiP、operational sink、active/permitted audio和background declaration，但旧`MobileContinuityPolicyResolver`仍只看capability、preference与Info.plist declaration，并可在没有actual media state时错误选择continue。
+- 5.1保留旧resolver作为后续5.2 application action入口，但让它消费一个generation-bound `MobileContinuityActualMediaState`并复用现有path resolver；capability/configuration只作为资格门，不能产生active proof。
+- actual state只有在observed generation精确匹配active media/PiP generation时有效；missing/stale、start-requested、failed sink、inactive/denied audio、disabled preference或missing declaration都fail closed。
+- `task_plan.md`底部当前执行点在4.7提交后仍残留`21/36`，与顶部及OpenSpec权威`23/36`不一致；5.1同步时一并修正，不重写已推送历史。
+
+## 2026-07-30 阶段 17 任务 5.1 验收
+
+- `MobileContinuityContext`现在携带active PiP/media generation与generation-bound `MobileContinuityActualMediaState`；只有完整generation相等的native PiP lifecycle、sink operation、audio active和audio permission可进入既有`MobileContinuityPathResolver`。
+- capability与generated background declaration只作为eligibility gate。missing/stale generation、capability-only、configuration-only、start-requested、failed sink、inactive/denied audio、disabled preference与missing declaration均fail closed；confirmed PiP优先于audio-only。
+- focused `/tmp/LuneX-17-5_1-focused-r2.OR9fN0/Focused.xcresult`通过`38/38`，expanded `/tmp/LuneX-17-5_1-expanded.WrwNk8/Expanded.xcresult`通过`104/104`，完整normal `/tmp/LuneX-17-5_1-full.3SUqwE/Full.xcresult`为`870 total / 869 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
+- 四平台generic Debug根`/tmp/LuneX-17-5_1-builds.bPoD3X`全部succeeded、三类诊断为0且各有AIR/metallib；repository pre-gate `/tmp/LuneX-17-5_1-repository-pre.rCT2kx`通过fixtures、strict `8/8`、勾选前apply `23/36 next 5.1`、generator稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、静态边界和全部证据读回。
+- 本项只证明offline action policy与四平台generic SDK编译。5.2 serialized application owner、system PiP、后台持续时间、signed configuration、物理iPhone/iPad、Stage Manager、external display、visible EDR、功耗和live Sunshine仍未证明。

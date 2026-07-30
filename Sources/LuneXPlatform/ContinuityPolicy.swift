@@ -32,6 +32,19 @@ struct PlatformContinuityCapabilities: Codable, Equatable, Hashable, Sendable {
     var hasAudioBackgroundModeDeclared: Bool
 }
 
+struct MobileContinuityActualMediaState:
+    Codable,
+    Equatable,
+    Hashable,
+    Sendable
+{
+    let generation: MobilePictureInPictureGeneration
+    let pictureInPictureLifecycle: MobilePictureInPictureLifecycle
+    let isPictureInPictureFrameSinkOperational: Bool
+    let isAudioSessionActive: Bool
+    let isAudioContinuityPermitted: Bool
+}
+
 enum MobileContinuityAction: Equatable, Sendable {
     case foreground
     case continueWithAudioAndPictureInPicture
@@ -47,6 +60,8 @@ struct MobileContinuityContext: Codable, Equatable, Hashable, Sendable {
     var isStreamActive: Bool
     var preferences: ContinuityPreferences
     var capabilities: PlatformContinuityCapabilities
+    var activeGeneration: MobilePictureInPictureGeneration?
+    var actualMediaState: MobileContinuityActualMediaState?
 }
 
 enum MobileContinuityPolicyResolver {
@@ -55,26 +70,81 @@ enum MobileContinuityPolicyResolver {
             return .warn(reason: "macOS uses window visibility policy, not mobile background continuity")
         }
 
-        guard context.isStreamActive else { return .foreground }
-        guard context.sceneActivity == .background else { return .foreground }
-
-        if context.preferences.pictureInPictureEnabled,
-           context.capabilities.supportsPictureInPicture,
-           context.capabilities.hasAudioBackgroundModeDeclared {
+        let resolution = MobileContinuityPathResolver.resolve(
+            pathInput(for: context)
+        )
+        switch resolution.path {
+        case .inactive, .foreground:
+            return .foreground
+        case .pictureInPicture:
             return .continueWithAudioAndPictureInPicture
-        }
-
-        if context.preferences.audioContinuityEnabled,
-           context.capabilities.supportsAudioBackgroundMode,
-           context.capabilities.hasAudioBackgroundModeDeclared {
+        case .audioOnly:
             return .continueAudioOnly
+        case .unavailable:
+            switch resolution.unavailableReason {
+            case .unsupportedPlatform:
+                return .warn(
+                    reason: "Mobile background continuity is unavailable on this platform"
+                )
+            case .backgroundConfigurationMissing:
+                return fallback(
+                    preferences: context.preferences,
+                    reason: "Playback background mode is not declared"
+                )
+            case .noActivePermittedMediaPath, .none:
+                return fallback(
+                    preferences: context.preferences,
+                    reason: "No supported mobile continuity path is active"
+                )
+            }
+        }
+    }
+
+    private static func pathInput(
+        for context: MobileContinuityContext
+    ) -> MobileContinuityPathInput {
+        let actualState: MobileContinuityActualMediaState?
+        if let activeGeneration = context.activeGeneration,
+           let candidate = context.actualMediaState,
+           candidate.generation == activeGeneration {
+            actualState = candidate
+        } else {
+            actualState = nil
         }
 
-        if context.preferences.reduceRenderingInBackground {
-            return .suspendForegroundRendering(reason: "No supported mobile continuity path is active")
-        }
+        let supportsPictureInPicture =
+            context.capabilities.supportsPictureInPicture
+        let supportsAudio =
+            context.capabilities.supportsAudioBackgroundMode
+        return MobileContinuityPathInput(
+            platform: context.platform,
+            sceneActivity: context.sceneActivity,
+            isStreamActive: context.isStreamActive,
+            pictureInPictureLifecycle: supportsPictureInPicture
+                ? (actualState?.pictureInPictureLifecycle ?? .unprepared)
+                : .unavailable,
+            isPictureInPictureFrameSinkOperational:
+                supportsPictureInPicture
+                    && (actualState?
+                        .isPictureInPictureFrameSinkOperational ?? false),
+            isAudioSessionActive: supportsAudio
+                && (actualState?.isAudioSessionActive ?? false),
+            isAudioContinuityPermitted: supportsAudio
+                && (actualState?.isAudioContinuityPermitted ?? false),
+            hasPlaybackBackgroundModeDeclared:
+                context.capabilities.hasAudioBackgroundModeDeclared,
+            preferences: context.preferences
+        )
+    }
 
-        return .pauseStream(reason: "Mobile background execution is unsupported without audio or Picture in Picture continuity")
+    private static func fallback(
+        preferences: ContinuityPreferences,
+        reason: String
+    ) -> MobileContinuityAction {
+        if preferences.reduceRenderingInBackground {
+            return .suspendForegroundRendering(reason: reason)
+        }
+        return .pauseStream(reason: reason)
     }
 }
 

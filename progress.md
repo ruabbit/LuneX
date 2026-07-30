@@ -2573,3 +2573,19 @@
 - 最终repository pre-gate `/tmp/LuneX-17-4_7-repository-pre-r2.WcRUw4`从头通过fixtures、OpenSpec strict `8/8`、勾选前apply `22/36 next 4.7`、generator三次稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、production/project零diff、test membership与四项新增综合回归、no-second-decoder/resource-release静态边界、focused/expanded/full/四平台证据读回、唯一Keychain skip、Keychain opt-in关闭和`git diff --check`。
 - OpenSpec 4.7已勾选，预期权威进度`23/36`、next 5.1；合同、路线图和三份planning文件已同步。4.7不证明application/media continuity接线、system PiP、后台持续时间、签名/安装、物理设备或live Sunshine。
 - 勾选后的repository final gate `/tmp/LuneX-17-4_7-repository-final.RZBqSu`完整通过同一门禁；OpenSpec精确为`23/36`、4.7 done、next 5.1，generator SHA-256仍为`e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`。
+
+## 2026-07-30 阶段 17 任务 5.1 启动
+
+- 4.7已以`51ec62d Complete native PiP regression matrix`独立提交并推送；fetch确认`HEAD == origin/main == 51ec62d02a640e83c68460e8eee37d13ea369bd6`且工作树clean。OpenSpec为`23/36 ready`，next精确为5.1。
+- 审计发现旧`MobileContinuityPolicyResolver`仍会把capability/configuration presence当作active path，而4.1的`MobileContinuityPathResolver`已具备actual-state真值规则。5.1将旧action入口改为generation-bound actual state并复用path resolver，不提前实现5.2 serialized media owner。
+- 普通测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；本项不查询、创建、启动或修改simulator，generic build不替代system PiP/background/physical证明。
+
+## 2026-07-30 阶段 17 任务 5.1 完成
+
+- 实现generation-bound `MobileContinuityActualMediaState`并让旧application action resolver复用既有actual-path resolver；只接受generation相等的native-confirmed active PiP+operational sink或active/permitted audio，capability/configuration presence不能产生active proof。
+- 首轮focused `/tmp/LuneX-17-5_1-focused.fBgrS6/Focused.xcresult`通过`37/37`；自审补充missing generation与unsupported capability组合回归后，最终focused `/tmp/LuneX-17-5_1-focused-r2.OR9fN0/Focused.xcresult`通过`38/38`。expanded `/tmp/LuneX-17-5_1-expanded.WrwNk8/Expanded.xcresult`通过`104/104`，三份结果结构化诊断均为0。
+- 完整macOS normal `/tmp/LuneX-17-5_1-full.3SUqwE/Full.xcresult`为`870 total / 869 passed / 1 skipped / 0 failed`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`且未再次访问真实Keychain。
+- 并行读取同一full xcresult的summary/build/tests明细触发一次Xcode临时`database.sqlite3`冲突；测试和bundle未失败，改为串行读取后确认唯一skip。该工具层失败已记录，后续同一bundle不再并发访问。
+- 四平台generic Debug根`/tmp/LuneX-17-5_1-builds.bPoD3X`；macOS、iOS/iPadOS、tvOS、visionOS全部succeeded，error/warning/analyzer warning均为0并各有一个AIR与metallib。本项未查询、创建、启动或修改simulator。
+- repository pre-gate `/tmp/LuneX-17-5_1-repository-pre.rCT2kx`从头通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `23/36 next 5.1`、generator三次稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、source/test membership、actual-state静态边界、全部结果读回、唯一Keychain skip、Keychain opt-in关闭和`git diff --check`。
+- OpenSpec 5.1已勾选，预期权威进度`24/36`、next 5.2；合同、路线图和三份planning文件已同步。5.1不证明serialized application owner、system PiP、后台持续时间、签名/安装、物理设备或live Sunshine。
