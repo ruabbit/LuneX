@@ -2193,3 +2193,16 @@
 - 起草`integrate-mobile-scene-pip-continuity`三个capability specs、cross-module design和36项tasks；下一步执行OpenSpec strict、artifact status、generator稳定性和diff边界，自验通过后独立commit/push，再进入apply 1.1。
 - 首轮artifact status已为4/4 done，但strict发现4个requirement把`SHALL`换行到描述第二行，validator只检查首行而拒绝；该轮不计验收，生成器哈希仍稳定且没有产品源码漂移。已把四个首行改为显式规范词，准备从新证据目录完整复验。
 - 最终规划产物门`/tmp/LuneX-17-openspec-final.FWT2cM`通过4/4 artifacts done、OpenSpec strict `1/1`、apply `0/36`、三个spec目录、生成器连续两次稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`、`git diff --check`与产品源码/测试/配置/工具/工程零diff边界。下一步独立提交推送artifact后直接进入1.1。
+
+## 2026-07-30 阶段 17 任务 1.1 调查
+
+- 规划提交`44a6ab5 Specify mobile scene and PiP continuity`已推送，`HEAD == origin/main`且起始工作树clean；OpenSpec为`0/36 ready`，当前任务1.1只做inventory/API/proof boundary，不改变runtime。
+- 盘点UIKit surface、coordinate/input、decoded presentation、mobile audio session、media environment、AppModel/UI、generator、既有HDR合同和roadmap，确认可复用所有权与实际缺口。
+- 首轮strict API probe因Swift 6 conformance isolation和iOS18弃用的display-layer直接queue API失败，不计验收；改用显式`@MainActor` isolated conformance与`AVSampleBufferVideoRenderer`后，最终probe `/tmp/LuneX-17-1_1-api.IsXyyw`在iOS26 simulator SDK、warnings-as-errors下零诊断通过，且未操作simulator。
+- 新增`docs/runtime/mobile-scene-pip-continuity-contract.md`，固定现状矩阵、generator配置、Xcode 26.4 API、target ownership、geometry/input、PiP/background policy、确定性/固定simulator/物理验收边界；roadmap阶段17更新为in_progress。
+
+## 2026-07-30 阶段 17 任务 1.1 完成
+
+- 预验收`/tmp/LuneX-17-1_1-pre.NxDp6S`通过OpenSpec strict `1/1`、apply `0/36`起始状态、最终API probe零诊断读回、合同关键边界、generator稳定SHA-256 `e2032fc8188e7e194396531f72c57f836d7a04029ad85fb783296ab71b8ac242`和产品源码/测试/配置/工具/工程零diff。
+- 1.1已勾选，权威进度更新为`1/36`。本项只新增stage17 runtime合同并同步跟踪，没有修改runtime、测试、配置、generator或工程；不证明system PiP、background duration、Stage Manager、external display、mobile EDR物理输出或live Sunshine。
+- 勾选后final gate `/tmp/LuneX-17-1_1-final.XgU7D7`通过strict `1/1`、apply `1/36`且next精确为1.2、API probe读回、generator稳定、唯一untracked为权威合同及产品源码/测试/配置/工具/工程零diff边界。

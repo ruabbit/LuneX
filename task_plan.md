@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`：proposal/specs/design/tasks已起草，提交前strict/generator/diff门通过后直接进入apply 1.1 |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`1/36`；1.1 inventory/API/proof boundary完成，下一项1.2为mobile scene/window geometry值合同 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`。proposal、三个capability specs、cross-module design和36项tasks已起草，固定actual UIKit stream view/window/screen ownership、复用当前decoder的sample-buffer PiP、generation-scoped background continuity与mobile EDR revision。下一步先完成artifact strict、generator稳定和diff边界并独立提交推送，随后直接进入apply 1.1；6.6物理iPhone/iPad、PiP、Stage Manager、external display、EDR、power与live Sunshine证据保持独立pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`1/36`。proposal、三个capability specs、cross-module design和36项tasks已完成规划门；1.1完成actual UIKit/geometry/input/decoded frame/audio/AVKit/EDR/generator inventory、Xcode 26.4 strict public API probe和五层proof boundary，未改变runtime行为。下一项1.2定义mobile scene/window geometry值合同；6.6物理iPhone/iPad、PiP、Stage Manager、external display、EDR、power与live Sunshine证据保持独立pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -79,6 +79,7 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 17.1.1首轮iOS26 strict API probe使用class级`@MainActor` delegate和deprecated display-layer queue API | 1 | PiP delegate改用显式`@MainActor` isolated conformance；frame sink改用`AVSampleBufferDisplayLayer.sampleBufferRenderer`的ready/enqueue/flush API，最终warnings-as-errors probe零诊断通过 |
 | 17阶段首轮OpenSpec strict把四个换行到第二行的`SHALL`描述判为无规范词 | 1 | 将scene ownership、geometry、PiP lifecycle和display ownership描述首行改为显式`SHALL`，用全新证据目录重跑完整artifact门 |
 | 16.6.3 analyzer最终TSV期望值在含单引号description后把分隔符写成字面量反斜杠`t` | 1 | Debug/Release analyzer与xcresult均已成功且plist完整；不重跑分析，用字段化`printf`从同一bundle重建expected并复核8项精确相等 |
 | 16.6.3首轮repository包装器把每个entitlement路径在pbxproj中的file reference与Debug/Release settings误断言为2处 | 1 | 实际生成器稳定且每个平台精确为3处；修正为file reference加两配置的3处，从全新证据目录重跑完整repository/API gate |

@@ -1780,3 +1780,8 @@
 - OpenSpec固定三条所有权：actual UIKit stream view/window/screen是scene、geometry和EDR唯一来源；PiP复用当前`DecodedVideoFrame.pixelBuffer`且不得创建第二decoder；所有scene/PiP/EDR回调按session/media/surface generation过滤，迟到回调只能清理不能发布。
 - PiP只有native delegate确认start后才能报告active；background mode声明、controller存在和用户preference都不能伪造实际连续性。scene进入后台时若没有current-generation active PiP或permitted active audio，runtime必须暂停前台渲染并pause/stop unsupported work。
 - 阶段17 artifact拆为36项：5项值合同、6项actual UIKit scene/window、5项mobile EDR、7项native PiP、6项background/AppModel/UI、7项验证与验收；6.6真机任务在没有授权硬件证据前保持pending。
+- 1.1 inventory确认`StreamCoordinateSnapshotPublisher`/`InputMapper`应直接复用；`StreamVideoPresentationSource`已有current session/media/decoder generation和latest `DecodedVideoFrame`，但只有同步`currentFrame()`，后续PiP必须补bounded consumer而不能绕过或创建第二decoder。
+- `MobileAudioSessionAdapter`内部已经真实跟踪`MobileAudioSessionRuntimeSnapshot.isActive`，但`SessionAudioRuntimeEvent`没有携带该字段；现有continuity policy只有capability/config声明，后续必须把current-generation actual audio activation接入后才能允许audio-only background continuity。
+- 首轮iOS26 strict probe发现`AVPictureInPictureSampleBufferPlaybackDelegate`为nonisolated protocol；仅给class标`@MainActor`在Swift 6.3会触发conformance isolation error，生产实现需显式`@MainActor` isolated conformance。
+- 同一probe发现`AVSampleBufferDisplayLayer`直接ready/enqueue/flush API从iOS18起deprecated；Xcode26 warnings-as-errors必须使用`layer.sampleBufferRenderer`的ready、enqueue和`flush(removingDisplayedImage:completionHandler:)`。
+- 修正后的Xcode 26.4/Swift 6.3 iOS26 strict public API probe `/tmp/LuneX-17-1_1-api.IsXyyw`零诊断通过，覆盖actual view/window/scene、trait registration、scene/screen notifications、EDR headroom、CMSampleBuffer creation、AVSampleBufferVideoRenderer和PiP content source；未操作simulator。
