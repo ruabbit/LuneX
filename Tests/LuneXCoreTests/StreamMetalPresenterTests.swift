@@ -1881,6 +1881,116 @@ final class StreamMetalPresenterTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testDisplayMoveDuringDrawDropsPlanFromPriorRevision() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
+            device: device
+        )
+        let drawableLayer = CAMetalLayer()
+        drawableLayer.device = device
+        drawableLayer.pixelFormat = .bgra8Unorm_srgb
+        drawableLayer.drawableSize = CGSize(width: 64, height: 64)
+        let drawable = try XCTUnwrap(drawableLayer.nextDrawable())
+        let source = StreamVideoPresentationSource()
+        let sessionID = UUID()
+        source.beginSession(sessionID: sessionID, mediaGeneration: 1)
+        let metadata = VideoColorMetadata.hdr10VideoRange()
+        let frame = try makeFrame(
+            generation: 83,
+            frameID: 1,
+            metadata: metadata
+        )
+        source.consume(
+            .sessionStarted(
+                generation: frame.generation,
+                colorMetadata: metadata
+            ),
+            sessionID: sessionID,
+            mediaGeneration: 1
+        )
+        source.consume(
+            .frame(frame),
+            sessionID: sessionID,
+            mediaGeneration: 1
+        )
+
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 64, height: 64),
+            drawableSize: PixelSize(width: 64, height: 64),
+            mode: .fit
+        ))
+        renderState.policy = .active
+        let first = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 70,
+            currentHeadroom: 2
+        )
+        let replacement = try makeResolvedConfiguration(
+            for: frame,
+            displayRevision: 71,
+            currentHeadroom: 3
+        )
+        let initialRuntime = RecordingStreamMetalPresenterRuntime()
+        let firstRuntime = RecordingStreamMetalPresenterRuntime()
+        let replacementRuntime = RecordingStreamMetalPresenterRuntime()
+        var runtimes = [
+            initialRuntime,
+            firstRuntime,
+            replacementRuntime
+        ]
+        let surfaceAdapter = RecordingPresenterSurfaceAdapter()
+        var shouldMoveDisplay = false
+        var presenter: StreamMetalPresenter!
+        presenter = StreamMetalPresenter(
+            presentationSource: source,
+            renderState: renderState,
+            runtimeFactory: { _, _ in runtimes.removeFirst() },
+            surfaceAdapterFactory: { _ in surfaceAdapter },
+            drawableProvider: { _ in
+                if shouldMoveDisplay {
+                    shouldMoveDisplay = false
+                    renderState.hdrRenderResolution = .resolved(replacement)
+                    presenter.update(renderState: renderState)
+                }
+                return drawable
+            }
+        )
+        presenter.configure(view)
+        XCTAssertEqual(
+            presenter.transition(.resolved(first), on: view),
+            .applied(previous: nil, current: first.identity)
+        )
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(firstRuntime.presentedConfigurations, [first.identity])
+
+        shouldMoveDisplay = true
+        presenter.draw(in: view)
+
+        XCTAssertEqual(firstRuntime.presentedConfigurations, [first.identity])
+        XCTAssertEqual(firstRuntime.invalidationCount, 1)
+        XCTAssertTrue(replacementRuntime.presentedConfigurations.isEmpty)
+        XCTAssertEqual(
+            presenter.snapshot().activeConfiguration,
+            replacement.identity
+        )
+
+        presenter.draw(in: view)
+        presenter.draw(in: view)
+        XCTAssertEqual(
+            replacementRuntime.presentedConfigurations,
+            [replacement.identity]
+        )
+        XCTAssertEqual(
+            replacementRuntime.presentedConfigurations.first?.displayRevision,
+            HDRDisplayRevision(rawValue: 71)
+        )
+        presenter.stop()
+        XCTAssertEqual(replacementRuntime.invalidationCount, 1)
+    }
+
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
         let frame = try makeFrame(
             generation: 7,

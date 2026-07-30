@@ -2443,3 +2443,18 @@
 - macOS、iOS/iPadOS、tvOS和visionOS四平台generic Debug build均succeeded、结构化三类诊断为0并产出AIR/metallib；保存的唯一simulator inventory确认固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown且全局Booted为0，没有执行任何设备生命周期操作。
 - 正确repository pre-gate通过fixture、OpenSpec strict/apply、generator初始及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、证据读回、静态fallback边界、Keychain opt-in关闭及diff检查。首次错误scheme与误传`.` fixture root均记录为非验收错误并用正确参数重跑。
 - OpenSpec 3.4已勾选，预期权威进度`15/36`；下一项3.5补window-screen ownership、normalization、notification filtering、screen move、foreground restore、render-mode transition、stale frame和resource release扩展测试。generic build不替代签名、安装、真机、visible EDR或live Sunshine证据。
+
+## 2026-07-30 阶段 17 任务 3.5 启动
+
+- 3.4已以`33197b6 Close mobile EDR revision exhaustion`独立提交并推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`15/36 ready`，下一项精确为3.5。
+- 审计现有覆盖后，3.5将只补window-screen mismatch/foreground restore、queued old-screen notification/equal-headroom move、observer deinit resource release和draw中display reconfiguration stale-plan拒绝四项组合回归，不提前修改4.x PiP生产路径。
+- 首轮focused `/tmp/LuneX-17-3_5-focused.bcArqI/Focused.xcresult`为`3 passed / 1 failed`；三个observer测试通过，presenter测试仅因离屏`MTKView`的transition内`draw()`不立即调用delegate，夹具少了一次mandatory clear后的draw。production零error/warning；失败bundle不计验收，显式拆分clear/present后从全新目录重跑。
+
+## 2026-07-30 阶段 17 任务 3.5 完成
+
+- 修正后的focused `/tmp/LuneX-17-3_5-focused-r2.c0eyOE/Focused.xcresult`通过`4/4`；恢复后只接续原expanded会话，`/tmp/LuneX-17-3_5-expanded.xAgACx/Expanded.xcresult`通过`75/75`。两份结果均为零结构化诊断。
+- 完整macOS normal suite `/tmp/LuneX-17-3_5-full.mmlk41/Full.xcresult`通过`808 total / 807 passed / 1 skipped / 0 failed`，唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，未再次访问真实Keychain。
+- 四平台generic Debug build证据根`/tmp/LuneX-17-3_5-builds.BtDVeh`；macOS、iOS/iPadOS、tvOS和visionOS全部succeeded，error/warning/analyzer warning均为0，各有一个AIR与metallib。构建没有选择simulator destination。
+- 本任务唯一一次`simctl list devices available -j`保存于`/tmp/LuneX-17-3_5-simulator.eONo7q/devices.json`；固定iOS 26.4 iPhone/iPad按runtime/name/UUID各唯一、available、Shutdown，全局Booted为0。iOS 27.0同名系统设备也为Shutdown；未执行create/clone/boot/install/launch/shutdown/delete。
+- 首轮repository包装器在OpenSpec原始JSON已证明8/8 valid后误读旧`.summary.invalid`字段并于generator前退出，不计验收。corrected `/tmp/LuneX-17-3_5-repository-pre-r2.ETDMp3`从头通过fixture、strict、勾选前apply `15/36` next 3.5、generator三次稳定SHA-256、工程零diff和`git diff --check`。
+- OpenSpec 3.5已勾选，预期权威进度`16/36`，下一项4.1定义injectable main-actor PiP controller/content-source/playback-delegate client boundary。本项不证明signed/physical/system-PiP/background/visible-EDR/live-Sunshine行为。

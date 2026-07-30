@@ -21,7 +21,7 @@
 - [x] 3.2 Observe attached-screen mode and brightness changes plus foreground, trait, and view/window attachment resampling without deprecated global screen-connect notifications
 - [x] 3.3 Connect mobile display revisions to the existing `HDRDisplaySnapshot`, render configuration identity, `MetalStreamSurface`, and current-generation stale-frame checks
 - [x] 3.4 Implement atomic EDR-to-SDR fallback, screen-move reconfiguration, duplicate suppression, revision exhaustion, and idempotent observer teardown
-- [ ] 3.5 Add window-screen ownership, headroom normalization, notification filtering, screen move, foreground restore, render-mode transition, stale frame, and resource-release tests
+- [x] 3.5 Add window-screen ownership, headroom normalization, notification filtering, screen move, foreground restore, render-mode transition, stale frame, and resource-release tests
 
 ## 4. Native Picture in Picture runtime
 

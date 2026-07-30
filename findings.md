@@ -1970,3 +1970,21 @@
 - repository pre-gate重新按默认fixture根通过fixture self-test/scan、8/8 OpenSpec strict、apply `14/36`、generator初始与连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、全部结构化证据读回、静态fallback边界、Keychain opt-in关闭及`git diff --check`。
 - 两次非验收错误均未改变证明结论：首次iOS build误用不存在的`LuneX` scheme并在编译前退出；首次repository pre-gate误把`.`作为fixture root并扫描整个仓库，且在OpenSpec/generator前退出。两者均使用正确参数和全新证据重新验证。
 - 本项证明离线状态机、iOS SDK接线、四平台generic编译和确定性resource release；不证明签名、安装、simulator运行、物理iPhone/iPad、visible EDR、外接显示器、功耗或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 3.5 调查
+
+- 既有3.1至3.4测试已经分别覆盖actual-window reader、有限headroom normalization、attached-screen notification object过滤、基础screen replacement/foreground resample、EDR-to-SDR-to-EDR render identity、revision exhaustion和显式invalidate释放。
+- 待补的组合缺口为：window实际screen与候选screen不一致时立即detached且不注册错误通知，随后foreground重新附着actual screen；换屏前已排队的旧screen通知不能读取replacement ownership，equal-headroom换屏仍必须推进display revision；observer不显式invalidate直接deinit仍取消notification token且不保留window/screen。
+- presenter已有display identity、runtime replacement和stale decoder测试，但缺少在`draw`取得presentation snapshot后、调用runtime `present`前发生display reconfiguration的直接竞态回归。测试将通过injectable drawable provider在该窗口触发新display revision，要求旧runtime不提交旧plan，再由replacement runtime提交新identity。
+- 3.5只增加上述确定性测试，不修改production contract、renderer或UIKit observer，也不提前实现4.x PiP。
+
+## 2026-07-30 阶段 17 任务 3.5 验收
+
+- window/screen mismatch回归证明observer立即发布detached、不读取headroom、不注册错误screen；actual screen重新附着后foreground重采样恢复当前headroom。
+- queued old-screen通知在screen replacement后由observation UUID拒绝；相同headroom的replacement仍因display generation变化推进revision，replacement同值通知去重，后续foreground变化正确发布新headroom。
+- 未显式invalidate的observer deinit会移除notification token；后续通知不再读取，observer/window/screen均不被残留资源保留。
+- presenter竞态回归在一次draw取得旧presentation snapshot后注入display revision 71，旧revision 70 runtime零新增提交，replacement runtime只提交revision 71 identity，stop最终释放当前runtime。
+- focused `/tmp/LuneX-17-3_5-focused-r2.c0eyOE/Focused.xcresult`为`4/4`，expanded `/tmp/LuneX-17-3_5-expanded.xAgACx/Expanded.xcresult`为`75/75`，完整normal `/tmp/LuneX-17-3_5-full.mmlk41/Full.xcresult`为`808 total / 807 passed / 1 explicit Keychain skip / 0 failed`；三者结构化error、warning、analyzer warning均为0。
+- 四平台generic Debug证据根`/tmp/LuneX-17-3_5-builds.BtDVeh`，macOS、iOS/iPadOS、tvOS、visionOS均succeeded且三类结构化诊断为0，每个平台各有一个AIR与metallib。唯一一次只读simulator inventory为`/tmp/LuneX-17-3_5-simulator.eONo7q/devices.json`，固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，全局Booted为0；iOS 27.0同名系统设备也为Shutdown且未修改。
+- corrected repository pre-gate `/tmp/LuneX-17-3_5-repository-pre-r2.ETDMp3`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `15/36` next 3.5、generator初始及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、工程零diff与whitespace检查。
+- 本项证明离线合同、macOS测试、generic SDK构建与只读设备身份；不证明签名/安装、系统PiP、后台持续时间、Stage Manager、外接显示器、visible EDR、物理设备、功耗/热状态或live Sunshine。

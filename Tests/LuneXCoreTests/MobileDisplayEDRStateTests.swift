@@ -533,6 +533,272 @@ final class MobileDisplayEDRStateTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testScreenObserverRejectsWindowScreenMismatchAndRestoresForeground()
+        async
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 29)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileDisplayEDRTestNotificationNames()
+        let attachedScreen = MobileDisplayEDRTestScreen(
+            potential: 4,
+            current: 2
+        )
+        let unrelatedScreen = MobileDisplayEDRTestScreen(
+            potential: 8,
+            current: 7
+        )
+        let window = MobileDisplayEDRTestWindow(screen: attachedScreen)
+        var readCount = 0
+        var events: [MobileDisplayEDRObserverEvent] = []
+        let reader = mobileDisplayEDRTestReader()
+        let observer = MobileDisplayEDRTestObserver(
+            surfaceGeneration: generation,
+            notificationCenter: notificationCenter,
+            names: names,
+            screenResolver: { $0.screen },
+            reader: { window, displayGeneration in
+                readCount += 1
+                return reader.read(
+                    window: window,
+                    displayGeneration: displayGeneration
+                )
+            },
+            handler: { events.append($0) }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                window: window,
+                screen: unrelatedScreen,
+                displayGeneration: MobileDisplayGeneration(rawValue: 37),
+                surfaceGeneration: generation,
+                reason: .attachment
+            ),
+            .published
+        )
+        XCTAssertNil(observer.currentWindow)
+        XCTAssertNil(observer.currentScreen)
+        XCTAssertEqual(readCount, 0)
+        XCTAssertEqual(
+            observer.currentSnapshot?.state,
+            .detached
+        )
+
+        notificationCenter.post(
+            name: names.brightnessDidChange,
+            object: unrelatedScreen
+        )
+        await drainMobileDisplayEDRNotificationTasks()
+        XCTAssertEqual(readCount, 0)
+
+        XCTAssertEqual(
+            observer.attach(
+                window: window,
+                screen: attachedScreen,
+                displayGeneration: MobileDisplayGeneration(rawValue: 38),
+                surfaceGeneration: generation,
+                reason: .foreground
+            ),
+            .published
+        )
+        attachedScreen.headroom = MobileDisplayEDRHeadroomReading(
+            potential: 4,
+            current: 3
+        )
+        XCTAssertEqual(
+            observer.resample(
+                .foreground,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertTrue(observer.currentWindow === window)
+        XCTAssertTrue(observer.currentScreen === attachedScreen)
+        XCTAssertEqual(readCount, 2)
+        XCTAssertEqual(
+            events.compactMap { event -> UInt64? in
+                guard case let .snapshot(snapshot) = event else { return nil }
+                return snapshot.state.display?.rawValue
+            },
+            [38, 38]
+        )
+        XCTAssertEqual(
+            observer.currentSnapshot?.state.headroom?.current,
+            3
+        )
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: generation),
+            .invalidated
+        )
+    }
+
+    @MainActor
+    func testScreenMoveDropsQueuedOldNotificationAndRestoresNewHeadroom()
+        async
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 30)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileDisplayEDRTestNotificationNames()
+        let firstScreen = MobileDisplayEDRTestScreen(
+            potential: 4,
+            current: 2
+        )
+        let replacementScreen = MobileDisplayEDRTestScreen(
+            potential: 4,
+            current: 2
+        )
+        let window = MobileDisplayEDRTestWindow(screen: firstScreen)
+        var readCount = 0
+        var snapshots: [MobileDisplayEDRSnapshot] = []
+        let reader = mobileDisplayEDRTestReader()
+        let observer = MobileDisplayEDRTestObserver(
+            surfaceGeneration: generation,
+            notificationCenter: notificationCenter,
+            names: names,
+            screenResolver: { $0.screen },
+            reader: { window, displayGeneration in
+                readCount += 1
+                return reader.read(
+                    window: window,
+                    displayGeneration: displayGeneration
+                )
+            },
+            handler: { event in
+                if case let .snapshot(snapshot) = event {
+                    snapshots.append(snapshot)
+                }
+            }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                window: window,
+                screen: firstScreen,
+                displayGeneration: MobileDisplayGeneration(rawValue: 39),
+                surfaceGeneration: generation,
+                reason: .attachment
+            ),
+            .published
+        )
+        firstScreen.headroom = MobileDisplayEDRHeadroomReading(
+            potential: 4,
+            current: 3
+        )
+        notificationCenter.post(
+            name: names.modeDidChange,
+            object: firstScreen
+        )
+
+        window.screen = replacementScreen
+        XCTAssertEqual(
+            observer.attach(
+                window: window,
+                screen: replacementScreen,
+                displayGeneration: MobileDisplayGeneration(rawValue: 40),
+                surfaceGeneration: generation,
+                reason: .attachment
+            ),
+            .published
+        )
+        notificationCenter.post(
+            name: names.brightnessDidChange,
+            object: replacementScreen
+        )
+        await drainMobileDisplayEDRNotificationTasks()
+
+        XCTAssertEqual(readCount, 3)
+        XCTAssertEqual(snapshots.map(\.revision.rawValue), [1, 2])
+        XCTAssertEqual(
+            snapshots.map { $0.state.display?.rawValue },
+            [39, 40]
+        )
+        XCTAssertEqual(
+            snapshots.last?.state.headroom?.current,
+            2
+        )
+
+        replacementScreen.headroom = MobileDisplayEDRHeadroomReading(
+            potential: 4,
+            current: 3
+        )
+        XCTAssertEqual(
+            observer.resample(
+                .foreground,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertEqual(readCount, 4)
+        XCTAssertEqual(snapshots.map(\.revision.rawValue), [1, 2, 3])
+        XCTAssertEqual(
+            snapshots.last?.state.headroom?.current,
+            3
+        )
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: generation),
+            .invalidated
+        )
+    }
+
+    @MainActor
+    func testScreenObserverDeinitCancelsNotificationsAndReleasesResources()
+        async
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 31)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileDisplayEDRTestNotificationNames()
+        var screen: MobileDisplayEDRTestScreen? =
+            MobileDisplayEDRTestScreen(potential: 4, current: 2)
+        var window: MobileDisplayEDRTestWindow? =
+            MobileDisplayEDRTestWindow(screen: screen)
+        weak let weakScreen = screen
+        weak let weakWindow = window
+        var readCount = 0
+        let reader = mobileDisplayEDRTestReader()
+        var observer: MobileDisplayEDRTestObserver? =
+            MobileDisplayEDRTestObserver(
+                surfaceGeneration: generation,
+                notificationCenter: notificationCenter,
+                names: names,
+                screenResolver: { $0.screen },
+                reader: { window, displayGeneration in
+                    readCount += 1
+                    return reader.read(
+                        window: window,
+                        displayGeneration: displayGeneration
+                    )
+                },
+                handler: { _ in }
+            )
+        weak let weakObserver = observer
+
+        XCTAssertEqual(
+            observer?.attach(
+                window: window!,
+                screen: screen!,
+                displayGeneration: MobileDisplayGeneration(rawValue: 41),
+                surfaceGeneration: generation,
+                reason: .attachment
+            ),
+            .published
+        )
+        observer = nil
+        XCTAssertNil(weakObserver)
+
+        notificationCenter.post(
+            name: names.brightnessDidChange,
+            object: screen
+        )
+        await drainMobileDisplayEDRNotificationTasks()
+        XCTAssertEqual(readCount, 1)
+
+        window = nil
+        screen = nil
+        XCTAssertNil(weakWindow)
+        XCTAssertNil(weakScreen)
+    }
+
     func testSDRReadingNormalizesSubunitHeadroom() throws {
         var publisher = makePublisher()
 
