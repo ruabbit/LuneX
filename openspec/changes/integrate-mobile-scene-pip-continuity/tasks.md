@@ -36,7 +36,7 @@
 ## 5. Background continuity and application integration
 
 - [x] 5.1 Refine mobile continuity policy to require actual current-generation PiP or permitted active audio state instead of capability/configuration presence alone
-- [ ] 5.2 Integrate scene, audio, PiP, foreground renderer, decoder/control continuation, pause/stop, and foreground restoration through one serialized mobile media generation owner
+- [x] 5.2 Integrate scene, audio, PiP, foreground renderer, decoder/control continuation, pause/stop, and foreground restoration through one serialized mobile media generation owner
 - [ ] 5.3 Generate and verify the narrow iOS/iPadOS playback background-mode configuration while keeping configuration, signed acceptance, and runtime behavior as separate evidence
 - [ ] 5.4 Route current scene/geometry/PiP/continuity/mobile-EDR state and bounded diagnostics through `NativeSessionMediaEnvironment` and `AppModel`, clearing actual state on stop/failure/replacement
 - [ ] 5.5 Add accessible native PiP commands, actual scene/PiP/background/HDR status, continuity settings, compact/wide layouts, localization-safe copy, and preference migration

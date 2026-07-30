@@ -2125,3 +2125,22 @@
 - focused `/tmp/LuneX-17-5_1-focused-r2.OR9fN0/Focused.xcresult`通过`38/38`，expanded `/tmp/LuneX-17-5_1-expanded.WrwNk8/Expanded.xcresult`通过`104/104`，完整normal `/tmp/LuneX-17-5_1-full.3SUqwE/Full.xcresult`为`870 total / 869 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
 - 四平台generic Debug根`/tmp/LuneX-17-5_1-builds.bPoD3X`全部succeeded、三类诊断为0且各有AIR/metallib；repository pre-gate `/tmp/LuneX-17-5_1-repository-pre.rCT2kx`通过fixtures、strict `8/8`、勾选前apply `23/36 next 5.1`、generator稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、静态边界和全部证据读回。
 - 本项只证明offline action policy与四平台generic SDK编译。5.2 serialized application owner、system PiP、后台持续时间、signed configuration、物理iPhone/iPad、Stage Manager、external display、visible EDR、功耗和live Sunshine仍未证明。
+
+## 2026-07-30 阶段 17 任务 5.2 调查
+
+- `NativeSessionMediaEnvironment`已经是session/media generation的actor owner，并串行持有video/audio/input processor、receiver consumer、lifecycle application与teardown；它目前没有mobile scene/PiP/presentation resource或continuity application接口。
+- actual UIKit scene/window/screen和AVKit controller/presentation coordinator必须留在main actor，不能作为非隔离platform object直接塞入media environment actor；5.2需要一个值事件/命令边界，而不是把UIKit/AVKit对象跨actor转移。
+- `SessionMediaEnvironmentEvent.audioRuntime`当前只携带`SessionAudioRuntimeEvent`的空间音频graph/policy状态；`MobileAudioSessionRuntimeSnapshot.isActive`仍停留在mobile audio adapter内部，因此5.2必须建立可注入的actual audio continuity evidence，不能从audio readiness或desired preference推断active。
+- 通用`SessionLifecycleDirectiveResolver`把`isVisible == false`固定归约为停止解码、清空presentation和关闭input；confirmed PiP背景路径必须继续decoder/control/PiP frame delivery，因此不能直接把现有不可见directive用于移动后台连续性。
+- 5.2采用独立的纯值`MobileMediaGenerationPlan`与serialized actor owner：输入只含generation/revision、scene、actual audio/PiP evidence、capability/preference与foreground baseline，输出foreground/video/audio/control/stream动作；UIKit/AVKit对象继续由后续main-actor adapter持有。
+- actor本身可重入，不能仅依赖actor隔离声称动作串行；owner必须使用FIFO operation gate覆盖外部异步action application，并在完成后重新校验generation/revision。replacement、stop、失败回滚和late callback全部走同一gate。
+- 5.2首轮focused编译错误仅来自并发测试Task捕获`XCTestCase self`的Swift 6 sending检查；输入本身为Sendable纯值，因此在Task创建前构造input即可保留真实并发覆盖，不需要降低并发检查或修改production isolation。
+- `MobileMediaGenerationOwner`最终focused证明：confirmed PiP只暂停foreground并继续decoder/audio/control；audio-only drain video但继续audio/control；最后合法路径消失立即pause audio/control并停止decode；foreground恢复只触发一次resample；重复/同计划revision不重复动作；FIFO并发、失败回滚、replacement、stop和旧generation callback均闭合。
+
+## 2026-07-30 阶段 17 任务 5.2 验收
+
+- focused `/tmp/LuneX-17-5_2-focused-final.uVo4ul/Focused.xcresult`通过`22/22`，expanded `/tmp/LuneX-17-5_2-expanded.nNWvVN/Expanded.xcresult`通过`154/154`；完整macOS normal `/tmp/LuneX-17-5_2-full.d6TUCM/Full.xcresult`为`881 total / 880 passed / 1 explicit Keychain skip / 0 failed`，三类结构化诊断均为0。
+- 四平台generic Debug根`/tmp/LuneX-17-5_2-builds.XeS4Cp`全部succeeded、三类结构化诊断为0且各有AIR/metallib。普通测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain；本项没有查询、创建、启动或修改simulator。
+- repository pre-gate `/tmp/LuneX-17-5_2-repository-pre.bOvRUF`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `24/36 next 5.2`、generator三次稳定SHA-256 `e82012e5c6afa4b9ad169d908d17017366917b4da7887b65d64c413cc178c03a`、source/test membership、UIKit/AVKit object boundary、production/reference boundary和`git diff --check`。
+- 勾选后的repository final gate `/tmp/LuneX-17-5_2-repository-final-r2.FpX1K6`从全新目录完整通过同一门禁；OpenSpec精确为`25/36`、5.2 done、next 5.3，generator SHA-256不变，并串行读回focused `22/22`、expanded `154/154`、full `881/880/1/0`和四平台build证据。
+- 5.2只证明可注入的serialized纯值/action owner与四平台SDK编译；它没有把UIKit/AVKit平台对象接入`NativeSessionMediaEnvironment`或`AppModel`，该产品接线属于5.4。system PiP、background duration、signed configuration、物理iPhone/iPad、Stage Manager、external display、visible EDR、power和live Sunshine仍未证明。

@@ -2589,3 +2589,23 @@
 - 四平台generic Debug根`/tmp/LuneX-17-5_1-builds.bPoD3X`；macOS、iOS/iPadOS、tvOS、visionOS全部succeeded，error/warning/analyzer warning均为0并各有一个AIR与metallib。本项未查询、创建、启动或修改simulator。
 - repository pre-gate `/tmp/LuneX-17-5_1-repository-pre.rCT2kx`从头通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `23/36 next 5.1`、generator三次稳定SHA-256 `e968c9a18cb1df83a6ec3be7c3eaf565c5ba571845ef45d79eddf01c895b4787`、source/test membership、actual-state静态边界、全部结果读回、唯一Keychain skip、Keychain opt-in关闭和`git diff --check`。
 - OpenSpec 5.1已勾选，预期权威进度`24/36`、next 5.2；合同、路线图和三份planning文件已同步。5.1不证明serialized application owner、system PiP、后台持续时间、签名/安装、物理设备或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 5.2 启动
+
+- 5.1已以`e2ce869 Require actual mobile continuity state`独立提交并推送；fetch确认`HEAD == origin/main == e2ce8692371a26d3ea6fa5edb6a5ea5a41428e0b`且工作树clean。OpenSpec为`24/36 ready`，next精确为5.2。
+- 开始审计serialized mobile media generation owner；确认media environment已有actor serialization，但UIKit/AVKit runtime必须保留main-actor ownership，audio runtime event尚不携带actual mobile session active状态。
+- 普通测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；5.2不查询、创建、启动或修改simulator，不以generic build冒充system PiP/background行为。
+- macOS更新后恢复执行并运行planning session catchup；Git仍仅有5.2调查跟踪文件修改，OpenSpec仍为`24/36 next 5.2`，长期阶段13至20目标保持active。
+- 5.2实现合同确定为generation/revision scoped纯值plan + FIFO serialized action owner：PiP继续decoder/control且抑制foreground Metal，audio-only停止视频解码但保留audio/control，无合法路径typed pause，显式stop typed teardown，foreground转换触发一次resample/restoration。
+- generator已更新production/test membership且`git diff --check`通过。首轮focused `/tmp/LuneX-17-5_2-focused-r1.6rJoKl/Focused.xcresult`在测试源码编译阶段停止、0项执行：Swift 6.3拒绝两个并发`Task`捕获非Sendable `XCTestCase self`；production无诊断。测试改为Task创建前构造不可变Sendable input，并将从全新证据目录重跑。
+- 修正后focused r2 `/tmp/LuneX-17-5_2-focused-r2.Mp27RZ/Focused.xcresult`通过`21/21`且结构化三类诊断为0。自审后补“PiP -> audio-only -> last legal path lost”即时pause和higher-revision重复stop无副作用回归；最终focused `/tmp/LuneX-17-5_2-focused-final.uVo4ul/Focused.xcresult`通过`22/22`，下一步执行scene/PiP/audio/lifecycle/media environment扩大门禁。
+- expanded `/tmp/LuneX-17-5_2-expanded.nNWvVN/Expanded.xcresult`通过`154/154 passed / 0 skipped / 0 failed`，覆盖owner、continuity、PiP state/lifecycle/presentation、mobile scene、mobile audio adapter、native audio processor、通用lifecycle和media environment；focused/expanded结构化error、warning、analyzer warning均为0。
+- 完整macOS normal `/tmp/LuneX-17-5_2-full.d6TUCM/Full.xcresult`成功，串行结构化复核为`881 total / 880 passed / 1 skipped / 0 failed`，唯一skip精确为显式真实Keychain round-trip，三类结构化诊断为0。首次结果读回误并行访问同一bundle触发临时`database.sqlite3`竞争；未重跑测试，改为串行读取并确认bundle完整。
+- 四平台generic Debug根`/tmp/LuneX-17-5_2-builds.XeS4Cp`全部succeeded；macOS、iOS/iPadOS、tvOS、visionOS的error/warning/analyzer warning均为0且各有至少一个AIR与metallib。构建只使用generic destination，没有查询、创建、启动或修改simulator。
+
+## 2026-07-30 阶段 17 任务 5.2 完成
+
+- repository pre-gate `/tmp/LuneX-17-5_2-repository-pre.bOvRUF`通过fixture self-test/全树、OpenSpec strict `8/8`、勾选前apply `24/36 next 5.2`、generator三次稳定SHA-256 `e82012e5c6afa4b9ad169d908d17017366917b4da7887b65d64c413cc178c03a`、source/test membership、UIKit/AVKit object boundary、production/reference boundary和`git diff --check`。
+- 合同、路线图、OpenSpec task和三份planning文件已同步；OpenSpec 5.2勾选后预期权威进度`25/36`、next 5.3。5.4才把serialized owner接入`NativeSessionMediaEnvironment`和`AppModel`，本项不证明system PiP、background duration、signed configuration、物理设备、Stage Manager、external display、visible EDR、power或live Sunshine。
+- 首轮repository final gate `/tmp/LuneX-17-5_2-repository-final.Gr8Ik2`在fixture/OpenSpec/generator/静态边界通过后、xcresult读回前退出：zsh函数局部变量`path`覆盖`PATH`，使`xcrun`不可见。该轮不计验收；没有运行测试、访问Keychain或操作simulator，后续使用显式Bash和`result_path`从全新目录完整重跑。
+- 显式Bash最终门 `/tmp/LuneX-17-5_2-repository-final-r2.FpX1K6`完整通过：fixture self/tree、OpenSpec strict `8/8`、apply `25/36`且5.2 done/next 5.3、generator三次稳定、membership/platform-object/reference/diff、focused `22/22`、expanded `154/154`、full `881/880/1/0`唯一Keychain skip、四平台generic Debug零诊断及AIR/metallib均成立。

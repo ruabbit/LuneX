@@ -70,9 +70,7 @@ enum MobileContinuityPolicyResolver {
             return .warn(reason: "macOS uses window visibility policy, not mobile background continuity")
         }
 
-        let resolution = MobileContinuityPathResolver.resolve(
-            pathInput(for: context)
-        )
+        let resolution = pathResolution(for: context)
         switch resolution.path {
         case .inactive, .foreground:
             return .foreground
@@ -98,6 +96,12 @@ enum MobileContinuityPolicyResolver {
                 )
             }
         }
+    }
+
+    static func pathResolution(
+        for context: MobileContinuityContext
+    ) -> MobileContinuityPathResolution {
+        MobileContinuityPathResolver.resolve(pathInput(for: context))
     }
 
     private static func pathInput(

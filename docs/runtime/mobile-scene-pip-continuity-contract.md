@@ -783,11 +783,79 @@ and one AIR plus one metallib per platform
 ```
 
 These results prove the offline action-policy contract and platform
-compilation only. Task 5.2 must still make one serialized mobile media owner
-publish and apply the actual scene, audio, PiP, renderer, decoder/control, and
-restoration state. System PiP, background duration, signed configuration,
-physical iPhone/iPad behavior, Stage Manager, visible EDR, power, and live
-Sunshine remain unproved.
+compilation only. They do not prove system PiP, background duration, signed
+configuration, physical iPhone/iPad behavior, Stage Manager, visible EDR,
+power, or live Sunshine.
+
+### Serialized mobile media generation owner
+
+OpenSpec task 5.2 adds `MobileMediaGenerationOwner`, a platform-neutral actor
+that turns one generation/revision-scoped continuity input into one typed media
+plan. Its input contains Sendable values only: media/PiP/session ownership,
+semantic revision, actual scene and generation-matched PiP/audio state,
+capability/preference/background eligibility, and the foreground render
+baseline. UIKit, AVKit, Metal view, and audio-session objects remain outside
+the actor on their platform owners.
+
+The plan applies one closed set of foreground, video, audio, control, and
+stream directives:
+
+- foreground keeps the current render baseline and all media paths running;
+- native-confirmed PiP suspends foreground Metal while decoder-to-PiP frame
+  delivery, audio, control, and the stream continue;
+- active and permitted audio-only continuity suspends foreground rendering and
+  drains video transport without decoding while audio and control continue;
+- losing the final legal background path suspends foreground rendering, drains
+  video without decoding, and issues typed audio, control, and stream pause;
+- explicit stop issues typed video/audio/control teardown and a stopped stream;
+  and
+- returning from a background path restores the latest foreground baseline and
+  requests one `restoreAndResample`; later foreground revisions do not repeat
+  restoration.
+
+Actor isolation alone does not serialize reentrant asynchronous clients. The
+owner therefore uses a FIFO operation gate around external action application.
+After each awaited application it revalidates the reserved ownership and
+revision before committing state. Duplicate inputs and higher-revision
+semantically identical plans update state without repeating actions.
+Replacement, stop, failed action rollback/retry, stale revision, stale
+generation, and late completion all pass through the same owner and fail
+closed.
+
+Task 5.2 evidence:
+
+```text
+Focused owner/policy:
+/tmp/LuneX-17-5_2-focused-final.uVo4ul/Focused.xcresult
+22 passed / 0 skipped / 0 failed
+
+Expanded scene/PiP/audio/lifecycle/media ownership:
+/tmp/LuneX-17-5_2-expanded.nNWvVN/Expanded.xcresult
+154 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-5_2-full.d6TUCM/Full.xcresult
+881 total / 880 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-5_2-builds.XeS4Cp
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+and one AIR plus one metallib per platform
+
+Repository pre-gate:
+/tmp/LuneX-17-5_2-repository-pre.bOvRUF
+fixtures, OpenSpec strict 8/8, pre-check 24/36 next 5.2, generator stability,
+membership, platform-object isolation, reference boundary, and diff check pass
+```
+
+All ordinary tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`; the only skip
+is the opt-in real-Keychain round trip. No simulator was queried, created,
+booted, or modified. These results prove the injectable serialized value/action
+owner and four-platform compilation. Task 5.4 must still connect platform
+adapters, `NativeSessionMediaEnvironment`, and `AppModel`. System PiP,
+background duration, signed configuration, physical iPhone/iPad behavior,
+Stage Manager, external display, visible EDR, power, and live Sunshine remain
+unproved.
 
 ## Target ownership model
 
