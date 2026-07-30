@@ -547,7 +547,7 @@ final class MobilePictureInPictureDisplayLayerSink {
 }
 
 extension MobilePictureInPictureDisplayLayerSink:
-    MobilePictureInPictureLifecycleFrameSink
+    MobilePictureInPictureFramePresentationSink
 {
     func currentFrameSinkSnapshot()
         -> MobilePictureInPictureFrameSinkSnapshot

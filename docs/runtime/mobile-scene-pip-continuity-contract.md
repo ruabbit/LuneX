@@ -40,7 +40,7 @@ No lower tier may be reported as a higher tier.
 | Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Validated fit/fill geometry, checked revision increment, stale/invalid clear, letterbox rejection, source crop, and remote point mapping are implemented | Mobile must publish actual drawable geometry into this contract rather than create a parallel coordinate system |
 | Touch and hover mapping | `TouchInputAdapter` | Consumes `InputMapper`, drops samples outside the drawable video region, and carries source reference size | The app does not currently feed actual UIKit touch/hover samples or current mobile geometry into it |
 | Renderer | `StreamMetalPresenter`, `HDRMetalVideoRenderer`, and `CVMetalVideoFrameMapper` | One decoded frame is mapped and rendered under a validated HDR render configuration and coordinate snapshot | Mobile view/display lifecycle does not currently produce the actual revision and headroom inputs |
-| Current decoded frame | `StreamVideoPresentationSource` | Owns current session/media/decoder generations, the latest `DecodedVideoFrame`, semantic presentation events, stale-frame counts, and clear/replacement behavior | Exposes synchronous `currentFrame()` only; PiP needs a bounded current-generation consumer/event boundary without a second decoder |
+| Current decoded frame | `StreamVideoPresentationSource` | Owns current session/media/decoder generations, the latest `DecodedVideoFrame`, semantic presentation events, stale-frame counts, clear/replacement behavior, and at most eight generation-filtered cancellable delivery subscriptions | PiP delivery is now bounded and shares the same frame; application media-generation ownership and legal background continuity remain in 5.x |
 | Decoded frame payload | `DecodedVideoFrame` | Carries decoder generation, frame ID, `CVPixelBuffer`, PTS, duration, decode flags, color metadata, and HDR render binding | PiP must convert this existing image buffer and timing into a sample buffer while preserving generation and color ownership |
 | Continuity policy | `MobileContinuityPolicyResolver` | Chooses foreground, audio+PiP, audio-only, suspend, or pause from platform, scene, preferences, capability flags, and background-mode declaration | Capability/configuration presence can currently select continuation without actual current-generation audio or native PiP state |
 | PiP state | `PictureInPictureStateCoordinator` | Stores only `isActive`, render size, and update time | No native controller, content source, playback delegate, possible/start/stop/failure/restore state, sample layer, frame sink, generation, or teardown |
@@ -677,6 +677,41 @@ The successful strict public API probe is stored outside the repository at:
 
 The probe typechecked with zero diagnostics and did not create, boot, install
 to, launch, or otherwise operate a simulator.
+
+### Shared decoded-frame delivery and foreground coordination
+
+OpenSpec task 4.6 keeps `StreamVideoPresentationSource` as the only decoder
+presentation authority. Foreground Metal continues to read `currentFrame()`;
+PiP subscribes to the same source and receives the same `DecodedVideoFrame` and
+`CVPixelBuffer`. The subscription path does not instantiate VideoToolbox,
+allocate a replacement pixel buffer, or own a decoder.
+
+The source enforces:
+
+- at most eight cancellable subscribers;
+- session and media-generation filtering before callback capture;
+- a checked delivery revision independent from the lower-frequency semantic
+  presentation revision;
+- latest-frame replay for a matching newly attached consumer;
+- callback invocation only after releasing the source lock; and
+- terminal clear plus subscriber release when either revision space is
+  exhausted.
+
+`MobilePictureInPicturePresentationCoordinator` validates the session, media,
+PiP and decoder generations plus strictly increasing delivery revision and
+frame ID. It converts through the existing sample-buffer adapter and submits to
+the existing single-slot display-layer sink. A separate single-slot mailbox
+retains only the latest pending source delivery and schedules at most one
+main-actor drain, so decode-rate callbacks cannot create an unbounded task or
+frame queue.
+
+Foreground presentation suppression is driven only by the reducer snapshot
+that follows native `.didStart`. A start request and `.willStart` leave the
+current Metal policy unchanged. While PiP is confirmed active, the documented
+policy is either paused or throttled; lifecycle baseline changes are retained,
+and stop, failure or invalidation restores the latest baseline. Task 4.6 does
+not yet connect this coordinator to the serialized application media owner or
+claim legal background continuation; those remain 5.x responsibilities.
 
 ## Target ownership model
 

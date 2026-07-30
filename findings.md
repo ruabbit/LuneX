@@ -2077,3 +2077,22 @@
 - 四平台generic Debug证据根`/tmp/LuneX-17-4_5-builds-r2.NY1KmM`；macOS、iOS/iPadOS、tvOS、visionOS均succeeded、三类诊断为0、各有AIR/metallib且coordinator进入实际Swift file list。本项没有查询、创建、启动或修改simulator。
 - repository pre-gate `/tmp/LuneX-17-4_5-repository-pre-r3.yEmyKt`通过fixtures、OpenSpec strict `8/8`、勾选前apply `20/36 next 4.5`、generator连续稳定SHA-256 `08c464fa6d9996a861e05cca034278cc8bacb2d1b67003c5f27ff481d6953b97`、membership、terminal direct-drain/no-4.6/no-second-decoder静态边界、全部结果读回、Keychain opt-in关闭和`git diff --check`。
 - 本项证明离线状态机编排、callback/resource ownership和四平台generic SDK兼容；不证明decoded-frame subscription、system PiP、后台持续时间、签名/安装、物理iPhone/iPad、Stage Manager、visible EDR或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 4.6 调查
+
+- 既有`StreamVideoPresentationSource`是decoder与foreground Metal之间的唯一presentation source：decoder写入同一个`DecodedVideoFrame`，Metal在draw时读取`currentFrame()`。它目前只有latest-frame polling和不携带pixel buffer的semantic event，没有PiP可取消订阅边界。
+- 4.6不应修改`VideoDecodePipeline`或创建第二`VideoDecompressionSession`。正确路径是在既有source上增加generation-filtered delivery subscription，使PiP拿到与Metal完全相同的`DecodedVideoFrame/CVPixelBuffer`，再复用4.2 adapter与4.3单槽sink。
+- source callback不能在内部锁下调用，也不能为每帧无界创建main-actor任务。PiP owner需要一个单槽mailbox：source同步发布、mailbox只保留最新pending delivery并最多调度一个main-actor drain；clear/replacement等较新状态自然覆盖旧帧。
+- semantic presentation revision只在decoder contract变化时推进，不能排序每一帧。订阅delivery需要独立单调revision；subscriber以session/media generation过滤，PiP owner再以delivery revision、decoder generation和frame ID拒绝晚到或重复帧。
+- foreground Metal只能在native `.didStart`确认后暂停或节流；request/will-start不构成actual active。active期间baseline lifecycle policy仍可更新，did-stop/start-failure/invalidation后必须恢复最新baseline，而不是恢复启动前的旧值。
+- 4.6建立可注入的frame/policy orchestration边界；5.2才把它与scene/audio/control continuation统一接入serialized mobile media generation owner，6.6仍负责system PiP和物理设备证明。
+
+## 2026-07-30 阶段 17 任务 4.6 验收
+
+- `StreamVideoPresentationSource`现在同时保留foreground Metal的同步latest-frame读取和最多8个generation-filtered可取消delivery订阅。每帧delivery使用独立checked revision，matching新订阅可replay latest frame；callback只在source锁外调用。
+- presentation或delivery revision耗尽均永久fail closed：可用的terminal revision发布clear、清除decoder/frame ownership并释放subscriber；后续订阅拒绝，不回绕。直接回归在callback内重入`source.snapshot()`，证明发布不持锁。
+- `MobilePictureInPicturePresentationCoordinator`不持有decoder，只校验session/media/PiP/decoder generation、delivery revision和frame ID，再经既有4.2 adapter把同一个`CVPixelBuffer`交给4.3 sink。单槽mailbox最多保留一个pending delivery并最多调度一个main-actor drain，20帧burst确定性合并为最后一帧。
+- foreground Metal只在native `.didStart`归约为actual active后进入paused或throttled；request/will-start不压制。active期间更新的baseline在did-stop、failure或invalidation后恢复，replacement和teardown会取消subscription、清mailbox/adapter并保持late delivery inert。
+- focused `/tmp/LuneX-17-4_6-focused-r4.DFk4f6/Focused.xcresult`通过`10/10`，expanded `/tmp/LuneX-17-4_6-expanded.ulAjxJ/Expanded.xcresult`通过`158/158`，完整normal `/tmp/LuneX-17-4_6-full.dCC4dx/Full.xcresult`为`862 total / 861 passed / 1 explicit Keychain skip / 0 failed`；三类结构化诊断均为0。
+- 四平台generic Debug根`/tmp/LuneX-17-4_6-builds.Fgk0XV`全部succeeded且各有AIR/metallib；repository pre-gate `/tmp/LuneX-17-4_6-repository-pre-r2.NqdHlK`通过fixtures、strict `8/8`、apply `21/36 next 4.6`、generator三次稳定、membership、single-decoder/bounded/same-buffer边界、全部证据读回、Keychain opt-in关闭和diff检查。
+- 本项证明离线decoded-frame共享、bounded ownership、foreground policy orchestration与四平台generic SDK兼容；不证明AppModel/`NativeSessionMediaEnvironment` 5.x接线、system PiP、后台持续时间、签名/安装、物理iPhone/iPad、Stage Manager、visible EDR、功耗或live Sunshine。
