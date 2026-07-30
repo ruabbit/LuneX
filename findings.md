@@ -1799,3 +1799,12 @@
 - final focused为`15/15`，expanded为`32/32`，full为`746 total / 745 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug build全部零structured diagnostics。固定iPhone/iPad只读盘点各唯一且`Shutdown`，全局`Booted=0`。
 - 本项没有创建`AVPictureInPictureController`、sample-buffer renderer或decoded-frame subscription，也没有接入actual audio activation/AppModel。第二个native restoration请求在已有pending lease时会被reducer拒绝；4.5生产adapter必须仍对该次native completion handler精确调用一次并返回false，不能因为rejection丢失callback。
 - 离线状态机、macOS测试和generic-device编译不证明system PiP、后台时长、signed background config、Stage Manager/external display、移动EDR、功耗/热状态、物理iPhone/iPad或live Sunshine；6.6继续pending。
+
+## 2026-07-30 阶段 17 任务 1.4 验收
+
+- `MobileDisplayEDRSnapshotPublisher`固定到1.2的nonzero surface generation，并把attached reading中的display generation、potential/current headroom归一到immutable state；stale surface generation不归一、不递增revision、不修改snapshot。
+- bounded headroom与既有`HDRLuminanceMapping.maximumCurrentHeadroom == 64.0`共享上限。有限`0...64`归一到`1...64`，current不得超过potential；potential表示能力，current表示实际render bound，两者不混为一个active EDR布尔值。
+- invalid display generation、potential/current非有限/负值/超限和current超过potential分别映射stable typed conservative-SDR fallback。fallback不保存无效原始数值，等价invalid payload语义去重；未知、detached和unavailable不产生render snapshot。
+- 可用与fallback状态桥接现有`HDRDisplaySnapshot`/`HDRDisplayRevision`，但`displayID`固定nil；display generation变化即使headroom相同也递增revision。available state和最终snapshot initializer为file-private，避免同模块构造capability/headroom或mobile/render snapshot不一致的值。
+- final focused `10/10`、expanded `55/55`、full `756 total / 755 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug build全部零structured diagnostics，固定iPhone/iPad仍各唯一且`Shutdown`，全局`Booted=0`。
+- 当前没有UIKit reader、notification owner或Metal/AppModel接线，因此不能声称实际`UIScreen.currentEDRHeadroom`已被消费、headroom变化触发render rebuild、可见HDR/EDR、external display或真机行为；这些分别属于3.x、5.x和6.6。

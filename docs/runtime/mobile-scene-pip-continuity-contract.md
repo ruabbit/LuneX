@@ -247,6 +247,74 @@ compilation. They do not prove an `AVPictureInPictureController`,
 mobile audio continuity, signed configuration, Stage Manager, mobile EDR,
 physical hardware, or live Sunshine behavior.
 
+## Mobile EDR value foundation
+
+OpenSpec task 1.4 adds
+`Sources/LuneXPlatform/MobileDisplayEDRState.swift`. It is a platform-neutral
+value boundary that accepts readings already derived from the actual attached
+window screen. It does not import UIKit, select a screen, observe
+notifications, mutate a Metal surface, or claim physical EDR output.
+
+The publisher is fixed to one nonzero `MobileSceneSurfaceGeneration`. Each
+attached reading carries the 1.2 `MobileDisplayGeneration` raw value plus
+potential and current headroom. A stale surface generation is rejected without
+normalization, revision change, or snapshot mutation. Changing the display
+generation publishes a new revision even when headroom is unchanged.
+
+Headroom normalization shares
+`HDRLuminanceMapping.maximumCurrentHeadroom == 64.0`:
+
+- values must be finite and in `0...64`;
+- subunit values normalize conservatively to `1.0`;
+- current headroom must not exceed potential headroom after normalization; and
+- potential above one means EDR-capable, while current headroom remains a
+  separate actual render bound.
+
+Invalid display generation, potential headroom, current headroom, or
+current-greater-than-potential produces a typed conservative-SDR fallback.
+The fallback retains at most a valid opaque display generation and a closed
+reason; it never retains NaN, infinity, an out-of-range number, object
+description, hardware name, or global-screen value. Equivalent invalid
+payloads reduce to one semantic state and do not churn revisions.
+
+Available and conservative-fallback states derive an existing
+`HDRDisplaySnapshot` with the exact mobile `HDRDisplayRevision`,
+`DisplayHeadroom`, and `displayID: nil`. Unknown, detached, and unavailable
+states publish no render snapshot. This allows the later production adapter to
+use the established HDR render identity while keeping actual screen identity
+inside the main-actor owner. Revision overflow clears both mobile and render
+snapshots and remains closed.
+
+Task 1.4 evidence:
+
+```text
+Focused:
+/tmp/LuneX-17-1_4-focused-final.Y6tFJ8
+10 passed / 0 skipped / 0 failed
+
+Expanded mobile/display/HDR matrix:
+/tmp/LuneX-17-1_4-expanded.7sN4P7
+55 passed / 0 skipped / 0 failed
+
+Full macOS:
+/tmp/LuneX-17-1_4-full.SQ2yAU
+756 total / 755 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug targets:
+/tmp/LuneX-17-1_4-builds.yyaIVE
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Read-only simulator inventory:
+fixed iPhone/iPad present exactly once, available and Shutdown; Booted = 0
+```
+
+These results prove normalization, semantic revision, privacy-safe render
+snapshot bridging, generation rejection, fail-closed overflow, and
+four-platform compilation. They do not prove that a UIKit adapter read an
+actual `UIScreen`, observed headroom changes, reconfigured a live Metal
+surface, presented visible EDR, moved across displays, or ran on physical
+hardware.
+
 ## Xcode 26.4 public API inventory
 
 The inventory was verified against Xcode 26.4 build `17E192`, Apple Swift 6.3,

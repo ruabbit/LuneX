@@ -2240,3 +2240,17 @@
 - exact-source四平台generic-device Debug warnings-as-errors build `/tmp/LuneX-17-1_3-builds.Acgnna`的macOS、iOS/iPadOS、tvOS和visionOS均`succeeded`，四份xcresult结构化error/warning/analyzer warning均为0。
 - 只读simulator盘点确认固定iPhone 17 Pro `23A27088-C19F-4F77-A455-4E50E393167E`和iPad Pro 13-inch (M5) `409A5908-8C39-4797-A41C-04503A05FA3D`各唯一、available、`Shutdown`，全局`Booted=0`；未执行create、clone、boot、install、launch、run、shutdown或delete。
 - OpenSpec 1.3已勾选，权威进度更新为`3/36`。本项只证明Foundation PiP/continuity值合同、deterministic reducer、generation/revision/cleanup语义和四平台编译；不证明actual AVKit/frame sink、system PiP、background duration、signed配置、Stage Manager、mobile EDR、真机或live Sunshine。下一项为1.4 mobile EDR值合同。
+
+## 2026-07-30 阶段 17 任务 1.4 启动
+
+- 1.3已以`91697e7 Define mobile Picture in Picture state`提交并推送，fetch后确认`HEAD == origin/main`且起始工作树clean；OpenSpec为`3/36 ready`，当前任务1.4。
+- 新mobile EDR值层复用1.2的surface/display generation、既有`HDRDisplayRevision`和`HDRDisplaySnapshot`；不保存screen/object/marketing identity，render snapshot的`displayID`固定为nil。
+- headroom normalization复用HDR luminance pipeline的`64.0`上限：有限`0...64`归一为`1...64`，current不得超过potential；无效值只发布typed conservative-SDR fallback，不保留原始无界数值或借用global screen。
+
+## 2026-07-30 阶段 17 任务 1.4 完成
+
+- 首轮focused `/tmp/LuneX-17-1_4-focused.mw3FZQ`通过`10/10`；提交前审阅把available state与最终snapshot initializer收紧为file-private，补负值和超过`64.0`边界，final focused `/tmp/LuneX-17-1_4-focused-final.Y6tFJ8`再次通过`10/10`且零结构化诊断。
+- expanded `/tmp/LuneX-17-1_4-expanded.7sN4P7`覆盖mobile EDR、scene/window、lifecycle display revision、HDR luminance mapping和render resolver并通过`55/55`。完整macOS `/tmp/LuneX-17-1_4-full.SQ2yAU`通过`756 total / 755 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确为真实Keychain opt-in；所有测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- exact-source四平台generic-device Debug warnings-as-errors build `/tmp/LuneX-17-1_4-builds.yyaIVE`的macOS、iOS/iPadOS、tvOS和visionOS均`succeeded`，四份xcresult结构化error/warning/analyzer warning为0。
+- 只读盘点确认固定iPhone/iPad各唯一、available、`Shutdown`且全局`Booted=0`，没有执行任何simulator生命周期操作。OpenSpec 1.4已勾选，权威进度更新为`4/36`，下一项1.5。
+- 本项只证明actual-display generation值、bounded headroom normalization、typed conservative-SDR fallback、privacy-safe existing HDR revision bridge和四平台编译；不证明actual UIKit screen reader/observer、Metal reconfiguration、visible EDR、external display、真机或live Sunshine。
