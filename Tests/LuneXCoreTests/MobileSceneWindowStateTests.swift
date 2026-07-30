@@ -18,6 +18,7 @@ final class MobileSceneWindowStateTests: XCTestCase {
         XCTAssertEqual(geometry.safeAreaInsets.top, 24)
         XCTAssertEqual(geometry.orientation, .landscapeLeft)
         XCTAssertEqual(geometry.traits.horizontalSizeClass, .regular)
+        XCTAssertEqual(geometry.resizePhase, .settled)
     }
 
     func testEquivalentSampleDoesNotAdvanceRevision() throws {
@@ -47,6 +48,35 @@ final class MobileSceneWindowStateTests: XCTestCase {
         XCTAssertEqual(inactive.revision.rawValue, 2)
         XCTAssertEqual(inactive.state.activity, .inactive)
         XCTAssertEqual(active.state.geometry, inactive.state.geometry)
+    }
+
+    func testResizePhasePublishesOnceAndPreservesGeometry() throws {
+        var publisher = makePublisher()
+        let resizing = try publishedSnapshot(
+            publisher.update(.attached(makeAttachedSample(
+                resizePhase: .resizing
+            )))
+        )
+        let settled = try publishedSnapshot(
+            publisher.update(.attached(makeAttachedSample(
+                resizePhase: .settled
+            )))
+        )
+
+        XCTAssertEqual(resizing.revision.rawValue, 1)
+        XCTAssertEqual(resizing.state.geometry?.resizePhase, .resizing)
+        XCTAssertEqual(settled.revision.rawValue, 2)
+        XCTAssertEqual(settled.state.geometry?.resizePhase, .settled)
+        XCTAssertEqual(
+            resizing.state.geometry?.drawableSize,
+            settled.state.geometry?.drawableSize
+        )
+        XCTAssertEqual(
+            publisher.update(.attached(makeAttachedSample(
+                resizePhase: .settled
+            ))),
+            .unchanged
+        )
     }
 
     func testDetachClearsGeometryAndPreservesImmutablePriorSnapshot() throws {
@@ -424,7 +454,8 @@ final class MobileSceneWindowStateTests: XCTestCase {
             bottom: 20,
             trailing: 0
         ),
-        scale: Double = 2
+        scale: Double = 2,
+        resizePhase: MobileSceneResizePhase = .settled
     ) -> MobileSceneWindowAttachedSample {
         MobileSceneWindowAttachedSample(
             activity: activity,
@@ -438,7 +469,8 @@ final class MobileSceneWindowStateTests: XCTestCase {
                 horizontalSizeClass: .regular,
                 verticalSizeClass: .regular,
                 interfaceStyle: .dark
-            )
+            ),
+            resizePhase: resizePhase
         )
     }
 

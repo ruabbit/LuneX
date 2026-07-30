@@ -480,6 +480,308 @@ final class MobileStreamSceneLifecycleObserver<Scene: AnyObject> {
     }
 }
 
+struct MobileStreamSceneGeometryReading: Equatable, Sendable {
+    let viewBounds: MobileSceneRect
+    let windowBounds: MobileSceneRect
+    let safeAreaInsets: MobileSceneEdgeInsets
+    let scale: Double
+    let orientation: MobileInterfaceOrientation
+    let traits: MobileSceneTraits
+}
+
+struct MobileStreamSceneGeometrySettleRequest: Equatable, Sendable {
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    let id: UUID
+}
+
+enum MobileStreamSceneGeometryObserverOutcome: Equatable, Sendable {
+    case published
+    case unchanged
+    case staleSurfaceGeneration
+    case staleSurface
+    case staleSettleRequest
+    case revisionExhausted
+    case invalidated
+    case alreadyInvalidated
+}
+
+@MainActor
+final class MobileStreamSceneGeometryObserver<
+    Surface: AnyObject,
+    Window: AnyObject,
+    Scene: AnyObject,
+    Screen: AnyObject
+> {
+    typealias Reader = @MainActor (
+        Surface,
+        Window,
+        Scene,
+        Screen
+    ) -> MobileStreamSceneGeometryReading
+    typealias Handler = @MainActor (MobileSceneWindowSnapshot) -> Void
+    typealias SettleRequestHandler = @MainActor (
+        MobileStreamSceneGeometrySettleRequest?
+    ) -> Void
+
+    let surfaceGeneration: MobileSceneSurfaceGeneration
+    var currentSurface: Surface? { surface }
+    var currentWindow: Window? { window }
+    var currentScene: Scene? { scene }
+    var currentScreen: Screen? { screen }
+    var currentSnapshot: MobileSceneWindowSnapshot? { publisher.snapshot }
+    private(set) var currentSettleRequest:
+        MobileStreamSceneGeometrySettleRequest?
+
+    private weak var surface: Surface?
+    private weak var window: Window?
+    private weak var scene: Scene?
+    private weak var screen: Screen?
+    private var publisher: MobileSceneWindowSnapshotPublisher
+    private var activity: AppSceneActivity = .background
+    private var resizePhase: MobileSceneResizePhase = .settled
+    private var displayGenerationRawValue: UInt64 = 0
+    private var isDisplayGenerationExhausted = false
+    private var hasReceivedAttachment = false
+    private var reader: Reader?
+    private var handler: Handler?
+    private var settleRequestHandler: SettleRequestHandler?
+    private var isInvalidated = false
+
+    init(
+        surfaceGeneration: MobileSceneSurfaceGeneration,
+        surface: Surface,
+        reader: @escaping Reader,
+        handler: @escaping Handler,
+        settleRequestHandler: @escaping SettleRequestHandler
+    ) {
+        self.surfaceGeneration = surfaceGeneration
+        self.surface = surface
+        publisher = MobileSceneWindowSnapshotPublisher(
+            surfaceGeneration: surfaceGeneration
+        )
+        self.reader = reader
+        self.handler = handler
+        self.settleRequestHandler = settleRequestHandler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    func updateSettleRequestHandler(
+        _ handler: @escaping SettleRequestHandler
+    ) {
+        guard !isInvalidated else { return }
+        settleRequestHandler = handler
+    }
+
+    @discardableResult
+    func attach(
+        surface candidateSurface: Surface,
+        window candidateWindow: Window,
+        scene candidateScene: Scene,
+        screen candidateScreen: Screen,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration,
+        event: MobileStreamSurfaceAttachmentEvent
+    ) -> MobileStreamSceneGeometryObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidateSurface else { return .staleSurface }
+
+        if screen !== candidateScreen {
+            advanceDisplayGeneration()
+        }
+        window = candidateWindow
+        scene = candidateScene
+        screen = candidateScreen
+        hasReceivedAttachment = true
+
+        switch event {
+        case .didMoveToWindow:
+            resizePhase = .settled
+            cancelSettleRequest()
+        case .layoutSubviews,
+             .safeAreaInsetsDidChange,
+             .registeredTraitsChanged:
+            resizePhase = .resizing
+            renewSettleRequest()
+        }
+        return publishAttached()
+    }
+
+    @discardableResult
+    func updateActivity(
+        _ activity: AppSceneActivity,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSceneGeometryObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        self.activity = activity
+        guard hasReceivedAttachment else { return .unchanged }
+        guard window != nil, scene != nil, screen != nil else {
+            return publish(.detached(activity: activity))
+        }
+        return publishAttached()
+    }
+
+    @discardableResult
+    func settle(
+        _ request: MobileStreamSceneGeometrySettleRequest
+    ) -> MobileStreamSceneGeometryObserverOutcome {
+        guard request.surfaceGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard request == currentSettleRequest else {
+            return .staleSettleRequest
+        }
+        currentSettleRequest = nil
+        resizePhase = .settled
+        return publishAttached()
+    }
+
+    @discardableResult
+    func detach(
+        surface candidateSurface: Surface,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSceneGeometryObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidateSurface else { return .staleSurface }
+        stopAttachment()
+        hasReceivedAttachment = true
+        return publish(.detached(activity: activity))
+    }
+
+    @discardableResult
+    func invalidate(
+        surface candidateSurface: Surface? = nil,
+        surfaceGeneration candidateGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamSceneGeometryObserverOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if let candidateSurface, surface !== candidateSurface {
+            return .staleSurface
+        }
+
+        isInvalidated = true
+        stopAttachment()
+        surface = nil
+        reader = nil
+        let outcome = publish(.detached(activity: activity))
+        handler = nil
+        settleRequestHandler = nil
+        return outcome == .revisionExhausted ? outcome : .invalidated
+    }
+
+    private func publishAttached()
+        -> MobileStreamSceneGeometryObserverOutcome
+    {
+        guard !isDisplayGenerationExhausted,
+              displayGenerationRawValue > 0,
+              let surface,
+              let window,
+              let scene,
+              let screen,
+              let reading = reader?(surface, window, scene, screen) else {
+            return publish(.attached(MobileSceneWindowAttachedSample(
+                activity: activity,
+                displayGeneration: 0,
+                viewBounds: MobileSceneRect(
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0
+                ),
+                windowBounds: MobileSceneRect(
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0
+                ),
+                safeAreaInsets: .zero,
+                scale: 0,
+                orientation: .unknown,
+                traits: MobileSceneTraits(
+                    horizontalSizeClass: .unspecified,
+                    verticalSizeClass: .unspecified,
+                    interfaceStyle: .unspecified
+                ),
+                resizePhase: resizePhase
+            )))
+        }
+        return publish(.attached(MobileSceneWindowAttachedSample(
+            activity: activity,
+            displayGeneration: displayGenerationRawValue,
+            viewBounds: reading.viewBounds,
+            windowBounds: reading.windowBounds,
+            safeAreaInsets: reading.safeAreaInsets,
+            scale: reading.scale,
+            orientation: reading.orientation,
+            traits: reading.traits,
+            resizePhase: resizePhase
+        )))
+    }
+
+    private func publish(
+        _ sample: MobileSceneWindowSample
+    ) -> MobileStreamSceneGeometryObserverOutcome {
+        switch publisher.update(sample) {
+        case .unchanged:
+            return .unchanged
+        case let .published(snapshot):
+            handler?(snapshot)
+            return .published
+        case .revisionExhausted:
+            cancelSettleRequest()
+            return .revisionExhausted
+        }
+    }
+
+    private func advanceDisplayGeneration() {
+        guard !isDisplayGenerationExhausted else { return }
+        let next = displayGenerationRawValue.addingReportingOverflow(1)
+        if next.overflow || next.partialValue == 0 {
+            isDisplayGenerationExhausted = true
+            displayGenerationRawValue = 0
+        } else {
+            displayGenerationRawValue = next.partialValue
+        }
+    }
+
+    private func renewSettleRequest() {
+        let request = MobileStreamSceneGeometrySettleRequest(
+            surfaceGeneration: surfaceGeneration,
+            id: UUID()
+        )
+        currentSettleRequest = request
+        settleRequestHandler?(request)
+    }
+
+    private func cancelSettleRequest() {
+        guard currentSettleRequest != nil else { return }
+        currentSettleRequest = nil
+        settleRequestHandler?(nil)
+    }
+
+    private func stopAttachment() {
+        cancelSettleRequest()
+        resizePhase = .settled
+        window = nil
+        scene = nil
+        screen = nil
+    }
+}
+
 struct StreamMetalPresentationPlan: Sendable {
     let configuration: HDRRenderConfigurationIdentity
     let uniforms: HDRMetalShaderUniforms
@@ -1719,12 +2021,23 @@ final class MobileStreamMetalView: MTKView {
     typealias SceneLifecycleObserver =
         MobileStreamSceneLifecycleObserver<UIWindowScene>
     typealias SceneLifecycleUpdateHandler = SceneLifecycleObserver.Handler
+    typealias SceneGeometryObserver = MobileStreamSceneGeometryObserver<
+        MobileStreamMetalView,
+        UIWindow,
+        UIWindowScene,
+        UIScreen
+    >
+    typealias SceneWindowSnapshotHandler = SceneGeometryObserver.Handler
 
     private var attachmentRelay:
         MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>?
     private var attachmentOwner: AttachmentOwner?
     private var sceneLifecycleObserver: SceneLifecycleObserver?
+    private var sceneGeometryObserver: SceneGeometryObserver?
+    private var sceneGeometrySettleTask: Task<Void, Never>?
     private var attachmentUpdateHandler: AttachmentUpdateHandler?
+    private var sceneLifecycleUpdateHandler: SceneLifecycleUpdateHandler?
+    private var sceneWindowSnapshotHandler: SceneWindowSnapshotHandler?
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 
@@ -1734,10 +2047,14 @@ final class MobileStreamMetalView: MTKView {
         attachmentEventHandler: @escaping AttachmentEventHandler = { _, _ in },
         attachmentUpdateHandler: @escaping AttachmentUpdateHandler = { _ in },
         sceneLifecycleUpdateHandler:
-            @escaping SceneLifecycleUpdateHandler = { _ in }
+            @escaping SceneLifecycleUpdateHandler = { _ in },
+        sceneWindowSnapshotHandler:
+            @escaping SceneWindowSnapshotHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
         self.attachmentUpdateHandler = attachmentUpdateHandler
+        self.sceneLifecycleUpdateHandler = sceneLifecycleUpdateHandler
+        self.sceneWindowSnapshotHandler = sceneWindowSnapshotHandler
         attachmentRelay = MobileStreamSurfaceAttachmentRelay(
             surface: self,
             handler: attachmentEventHandler
@@ -1759,7 +2076,46 @@ final class MobileStreamMetalView: MTKView {
                         return .background
                     }
                 },
-                handler: sceneLifecycleUpdateHandler
+                handler: { [weak self] update in
+                    self?.handleSceneLifecycleUpdate(update)
+                }
+            )
+            sceneGeometryObserver = SceneGeometryObserver(
+                surfaceGeneration: surfaceGeneration,
+                surface: self,
+                reader: { surface, window, scene, _ in
+                    MobileStreamSceneGeometryReading(
+                        viewBounds: Self.sceneRect(surface.bounds),
+                        windowBounds: Self.sceneRect(window.bounds),
+                        safeAreaInsets: MobileSceneEdgeInsets(
+                            top: Double(surface.safeAreaInsets.top),
+                            leading: Double(surface.safeAreaInsets.left),
+                            bottom: Double(surface.safeAreaInsets.bottom),
+                            trailing: Double(surface.safeAreaInsets.right)
+                        ),
+                        scale: Double(surface.contentScaleFactor),
+                        orientation: Self.orientation(
+                            scene.effectiveGeometry.interfaceOrientation
+                        ),
+                        traits: MobileSceneTraits(
+                            horizontalSizeClass: Self.sizeClass(
+                                surface.traitCollection.horizontalSizeClass
+                            ),
+                            verticalSizeClass: Self.sizeClass(
+                                surface.traitCollection.verticalSizeClass
+                            ),
+                            interfaceStyle: Self.interfaceStyle(
+                                surface.traitCollection.userInterfaceStyle
+                            )
+                        )
+                    )
+                },
+                handler: { [weak self] snapshot in
+                    self?.sceneWindowSnapshotHandler?(snapshot)
+                },
+                settleRequestHandler: { [weak self] request in
+                    self?.scheduleGeometrySettle(request)
+                }
             )
             attachmentOwner = AttachmentOwner(
                 surfaceGeneration: surfaceGeneration,
@@ -1825,7 +2181,13 @@ final class MobileStreamMetalView: MTKView {
     func updateSceneLifecycleUpdateHandler(
         _ handler: @escaping SceneLifecycleUpdateHandler
     ) {
-        sceneLifecycleObserver?.updateHandler(handler)
+        sceneLifecycleUpdateHandler = handler
+    }
+
+    func updateSceneWindowSnapshotHandler(
+        _ handler: @escaping SceneWindowSnapshotHandler
+    ) {
+        sceneWindowSnapshotHandler = handler
     }
 
     func invalidateAttachmentCallbacks() {
@@ -1840,8 +2202,13 @@ final class MobileStreamMetalView: MTKView {
             )
             self.attachmentOwner = nil
         }
+        sceneGeometrySettleTask?.cancel()
+        sceneGeometrySettleTask = nil
         sceneLifecycleObserver = nil
+        sceneGeometryObserver = nil
         attachmentUpdateHandler = nil
+        sceneLifecycleUpdateHandler = nil
+        sceneWindowSnapshotHandler = nil
         attachmentRelay?.invalidate()
         attachmentRelay = nil
     }
@@ -1863,23 +2230,128 @@ final class MobileStreamMetalView: MTKView {
         _ update: AttachmentOwner.Update
     ) {
         switch update.transition {
-        case .callback:
-            if let scene = update.attachment?.scene {
+        case let .callback(event):
+            if let surface = update.surface,
+               let attachment = update.attachment {
                 sceneLifecycleObserver?.attach(
-                    to: scene,
+                    to: attachment.scene,
                     surfaceGeneration: update.surfaceGeneration
+                )
+                sceneGeometryObserver?.attach(
+                    surface: surface,
+                    window: attachment.window,
+                    scene: attachment.scene,
+                    screen: attachment.screen,
+                    surfaceGeneration: update.surfaceGeneration,
+                    event: event
                 )
             } else {
                 sceneLifecycleObserver?.detach(
                     surfaceGeneration: update.surfaceGeneration
                 )
+                if let surface = update.surface {
+                    sceneGeometryObserver?.detach(
+                        surface: surface,
+                        surfaceGeneration: update.surfaceGeneration
+                    )
+                }
             }
         case .invalidated:
             sceneLifecycleObserver?.invalidate(
                 surfaceGeneration: update.surfaceGeneration
             )
+            sceneGeometryObserver?.invalidate(
+                surface: update.surface,
+                surfaceGeneration: update.surfaceGeneration
+            )
         }
         attachmentUpdateHandler?(update)
+    }
+
+    private func handleSceneLifecycleUpdate(
+        _ update: MobileStreamSceneLifecycleUpdate
+    ) {
+        if case let .attached(activity) = update.observation {
+            sceneGeometryObserver?.updateActivity(
+                activity,
+                surfaceGeneration: update.surfaceGeneration
+            )
+        }
+        sceneLifecycleUpdateHandler?(update)
+    }
+
+    private func scheduleGeometrySettle(
+        _ request: MobileStreamSceneGeometrySettleRequest?
+    ) {
+        sceneGeometrySettleTask?.cancel()
+        sceneGeometrySettleTask = nil
+        guard let request else { return }
+        sceneGeometrySettleTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(120))
+            } catch {
+                return
+            }
+            self?.sceneGeometryObserver?.settle(request)
+        }
+    }
+
+    private static func sceneRect(_ rect: CGRect) -> MobileSceneRect {
+        MobileSceneRect(
+            x: Double(rect.origin.x),
+            y: Double(rect.origin.y),
+            width: Double(rect.size.width),
+            height: Double(rect.size.height)
+        )
+    }
+
+    private static func orientation(
+        _ orientation: UIInterfaceOrientation
+    ) -> MobileInterfaceOrientation {
+        switch orientation {
+        case .portrait:
+            return .portrait
+        case .portraitUpsideDown:
+            return .portraitUpsideDown
+        case .landscapeLeft:
+            return .landscapeLeft
+        case .landscapeRight:
+            return .landscapeRight
+        case .unknown:
+            return .unknown
+        @unknown default:
+            return .unknown
+        }
+    }
+
+    private static func sizeClass(
+        _ sizeClass: UIUserInterfaceSizeClass
+    ) -> MobileSceneSizeClass {
+        switch sizeClass {
+        case .compact:
+            return .compact
+        case .regular:
+            return .regular
+        case .unspecified:
+            return .unspecified
+        @unknown default:
+            return .unspecified
+        }
+    }
+
+    private static func interfaceStyle(
+        _ style: UIUserInterfaceStyle
+    ) -> MobileInterfaceStyle {
+        switch style {
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        case .unspecified:
+            return .unspecified
+        @unknown default:
+            return .unspecified
+        }
     }
 }
 #endif
@@ -1897,6 +2369,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamMetalView.AttachmentUpdateHandler = { _ in }
     var sceneLifecycleUpdateHandler:
         MobileStreamMetalView.SceneLifecycleUpdateHandler = { _ in }
+    var sceneWindowSnapshotHandler:
+        MobileStreamMetalView.SceneWindowSnapshotHandler = { _ in }
 #endif
 
     func makeCoordinator() -> StreamMetalPresenter {
@@ -1915,7 +2389,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             device: MTLCreateSystemDefaultDevice(),
             attachmentEventHandler: attachmentEventHandler,
             attachmentUpdateHandler: attachmentUpdateHandler,
-            sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler
+            sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler,
+            sceneWindowSnapshotHandler: sceneWindowSnapshotHandler
         )
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -1935,6 +2410,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateAttachmentUpdateHandler(attachmentUpdateHandler)
         (view as? MobileStreamMetalView)?
             .updateSceneLifecycleUpdateHandler(sceneLifecycleUpdateHandler)
+        (view as? MobileStreamMetalView)?
+            .updateSceneWindowSnapshotHandler(sceneWindowSnapshotHandler)
 #endif
         context.coordinator.update(renderState: renderState)
         let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)

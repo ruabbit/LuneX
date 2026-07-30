@@ -431,6 +431,339 @@ final class StreamMetalPresenterTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testMobileSceneGeometryObserverPublishesContinuousResizeAndSettle()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 101)!
+        let surface = MobileSceneGeometryTestSurface()
+        let window = MobileSceneGeometryTestWindow()
+        let scene = MobileSceneGeometryTestScene()
+        let screen = MobileSceneGeometryTestScreen()
+        var snapshots: [MobileSceneWindowSnapshot] = []
+        var settleRequests: [MobileStreamSceneGeometrySettleRequest] = []
+        let observer = MobileSceneGeometryTestObserver(
+            surfaceGeneration: generation,
+            surface: surface,
+            reader: mobileSceneGeometryTestReader,
+            handler: { snapshots.append($0) },
+            settleRequestHandler: { request in
+                if let request {
+                    settleRequests.append(request)
+                }
+            }
+        )
+
+        XCTAssertEqual(
+            observer.updateActivity(
+                .active,
+                surfaceGeneration: generation
+            ),
+            .unchanged
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .didMoveToWindow
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            snapshots.last?.state.geometry?.resizePhase,
+            .settled
+        )
+
+        surface.reading = mobileSceneGeometryTestReading(width: 900)
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .published
+        )
+        surface.reading = mobileSceneGeometryTestReading(width: 880)
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .published
+        )
+        XCTAssertEqual(settleRequests.count, 2)
+        XCTAssertEqual(
+            snapshots.last?.state.geometry?.drawableSize,
+            PixelSize(width: 1_760, height: 1_536)
+        )
+        XCTAssertEqual(
+            snapshots.last?.state.geometry?.resizePhase,
+            .resizing
+        )
+        XCTAssertEqual(observer.settle(settleRequests[0]), .staleSettleRequest)
+        XCTAssertEqual(observer.settle(settleRequests[1]), .published)
+        XCTAssertEqual(
+            snapshots.last?.state.geometry?.resizePhase,
+            .settled
+        )
+        XCTAssertEqual(snapshots.map(\.revision.rawValue), [1, 2, 3, 4])
+    }
+
+    @MainActor
+    func testMobileSceneGeometryObserverDeduplicatesButRenewsSettleToken()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 111)!
+        let surface = MobileSceneGeometryTestSurface()
+        let window = MobileSceneGeometryTestWindow()
+        let scene = MobileSceneGeometryTestScene()
+        let screen = MobileSceneGeometryTestScreen()
+        var snapshots: [MobileSceneWindowSnapshot] = []
+        var settleRequests: [MobileStreamSceneGeometrySettleRequest] = []
+        let observer = MobileSceneGeometryTestObserver(
+            surfaceGeneration: generation,
+            surface: surface,
+            reader: mobileSceneGeometryTestReader,
+            handler: { snapshots.append($0) },
+            settleRequestHandler: { request in
+                if let request {
+                    settleRequests.append(request)
+                }
+            }
+        )
+
+        _ = observer.updateActivity(.active, surfaceGeneration: generation)
+        _ = observer.attach(
+            surface: surface,
+            window: window,
+            scene: scene,
+            screen: screen,
+            surfaceGeneration: generation,
+            event: .didMoveToWindow
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .safeAreaInsetsDidChange
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .registeredTraitsChanged
+            ),
+            .unchanged
+        )
+
+        XCTAssertEqual(snapshots.count, 2)
+        XCTAssertEqual(settleRequests.count, 2)
+        XCTAssertNotEqual(settleRequests[0], settleRequests[1])
+        XCTAssertEqual(observer.settle(settleRequests[0]), .staleSettleRequest)
+        XCTAssertEqual(observer.settle(settleRequests[1]), .published)
+        XCTAssertEqual(snapshots.map(\.revision.rawValue), [1, 2, 3])
+    }
+
+    @MainActor
+    func testMobileSceneGeometryObserverTracksDisplayActivityAndDetach()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 121)!
+        let surface = MobileSceneGeometryTestSurface()
+        let window = MobileSceneGeometryTestWindow()
+        let scene = MobileSceneGeometryTestScene()
+        let firstScreen = MobileSceneGeometryTestScreen()
+        let replacementScreen = MobileSceneGeometryTestScreen()
+        var snapshots: [MobileSceneWindowSnapshot] = []
+        var lastSettleRequest: MobileStreamSceneGeometrySettleRequest?
+        let observer = MobileSceneGeometryTestObserver(
+            surfaceGeneration: generation,
+            surface: surface,
+            reader: mobileSceneGeometryTestReader,
+            handler: { snapshots.append($0) },
+            settleRequestHandler: { lastSettleRequest = $0 }
+        )
+
+        _ = observer.updateActivity(.active, surfaceGeneration: generation)
+        _ = observer.attach(
+            surface: surface,
+            window: window,
+            scene: scene,
+            screen: firstScreen,
+            surfaceGeneration: generation,
+            event: .didMoveToWindow
+        )
+        guard case let .attached(_, firstDisplay, _) = snapshots.last?.state else {
+            return XCTFail("Expected the first attached display")
+        }
+        XCTAssertEqual(firstDisplay.rawValue, 1)
+
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: replacementScreen,
+                surfaceGeneration: generation,
+                event: .didMoveToWindow
+            ),
+            .published
+        )
+        guard case let .attached(_, replacementDisplay, _) =
+            snapshots.last?.state else {
+            return XCTFail("Expected the replacement attached display")
+        }
+        XCTAssertEqual(replacementDisplay.rawValue, 2)
+        XCTAssertEqual(
+            observer.updateActivity(
+                .background,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertEqual(snapshots.last?.state.activity, .background)
+
+        _ = observer.attach(
+            surface: surface,
+            window: window,
+            scene: scene,
+            screen: replacementScreen,
+            surfaceGeneration: generation,
+            event: .layoutSubviews
+        )
+        let staleSettleRequest = try XCTUnwrap(lastSettleRequest)
+        XCTAssertEqual(
+            observer.detach(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            snapshots.last?.state,
+            .detached(activity: .background)
+        )
+        XCTAssertNil(observer.currentWindow)
+        XCTAssertNil(observer.currentScene)
+        XCTAssertNil(observer.currentScreen)
+        XCTAssertEqual(
+            observer.settle(staleSettleRequest),
+            .staleSettleRequest
+        )
+    }
+
+    @MainActor
+    func testMobileSceneGeometryObserverFailsClosedAndRejectsStaleWork()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 131)!
+        let staleGeneration = MobileSceneSurfaceGeneration(rawValue: 132)!
+        let surface = MobileSceneGeometryTestSurface()
+        let otherSurface = MobileSceneGeometryTestSurface()
+        let window = MobileSceneGeometryTestWindow()
+        let scene = MobileSceneGeometryTestScene()
+        let screen = MobileSceneGeometryTestScreen()
+        var snapshots: [MobileSceneWindowSnapshot] = []
+        var settleRequest: MobileStreamSceneGeometrySettleRequest?
+        let observer = MobileSceneGeometryTestObserver(
+            surfaceGeneration: generation,
+            surface: surface,
+            reader: mobileSceneGeometryTestReader,
+            handler: { snapshots.append($0) },
+            settleRequestHandler: { settleRequest = $0 }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: staleGeneration,
+                event: .layoutSubviews
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            observer.attach(
+                surface: otherSurface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .staleSurface
+        )
+        surface.reading = mobileSceneGeometryTestReading(width: 0)
+        XCTAssertEqual(
+            observer.attach(
+                surface: surface,
+                window: window,
+                scene: scene,
+                screen: screen,
+                surfaceGeneration: generation,
+                event: .layoutSubviews
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            snapshots.last?.state,
+            .unavailable(
+                activity: .background,
+                reason: .invalidViewBounds
+            )
+        )
+        let pendingSettleRequest = try XCTUnwrap(settleRequest)
+        XCTAssertEqual(
+            observer.invalidate(
+                surface: surface,
+                surfaceGeneration: staleGeneration
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            observer.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .invalidated
+        )
+        observer.updateHandler { _ in
+            XCTFail("Invalidated geometry observer must reject a new handler")
+        }
+        XCTAssertEqual(
+            observer.settle(pendingSettleRequest),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            observer.detach(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertNil(observer.currentSurface)
+    }
+
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
         let frame = try makeFrame(
             generation: 7,
@@ -1791,6 +2124,14 @@ private typealias MobileSurfaceAttachmentTestOwner =
 private typealias MobileSceneLifecycleTestObserver =
     MobileStreamSceneLifecycleObserver<MobileSceneLifecycleTestScene>
 
+private typealias MobileSceneGeometryTestObserver =
+    MobileStreamSceneGeometryObserver<
+        MobileSceneGeometryTestSurface,
+        MobileSceneGeometryTestWindow,
+        MobileSceneGeometryTestScene,
+        MobileSceneGeometryTestScreen
+    >
+
 private final class MobileSurfaceAttachmentTestSurface {
     var window: MobileSurfaceAttachmentTestWindow?
 
@@ -1837,6 +2178,52 @@ private final class MobileSceneLifecycleTestScene: NSObject {
     init(activity: AppSceneActivity) {
         self.activity = activity
     }
+}
+
+private final class MobileSceneGeometryTestSurface {
+    var reading = mobileSceneGeometryTestReading()
+}
+
+private final class MobileSceneGeometryTestWindow {}
+private final class MobileSceneGeometryTestScene {}
+private final class MobileSceneGeometryTestScreen {}
+
+@MainActor
+private func mobileSceneGeometryTestReader(
+    _ surface: MobileSceneGeometryTestSurface,
+    _: MobileSceneGeometryTestWindow,
+    _: MobileSceneGeometryTestScene,
+    _: MobileSceneGeometryTestScreen
+) -> MobileStreamSceneGeometryReading {
+    surface.reading
+}
+
+private func mobileSceneGeometryTestReading(
+    width: Double = 1_024,
+    height: Double = 768
+) -> MobileStreamSceneGeometryReading {
+    MobileStreamSceneGeometryReading(
+        viewBounds: MobileSceneRect(
+            x: 0,
+            y: 0,
+            width: width,
+            height: height
+        ),
+        windowBounds: MobileSceneRect(
+            x: 0,
+            y: 0,
+            width: width,
+            height: height
+        ),
+        safeAreaInsets: .zero,
+        scale: 2,
+        orientation: .landscapeLeft,
+        traits: MobileSceneTraits(
+            horizontalSizeClass: .regular,
+            verticalSizeClass: .regular,
+            interfaceStyle: .dark
+        )
+    )
 }
 
 private func mobileSceneLifecycleTestNotificationNames()

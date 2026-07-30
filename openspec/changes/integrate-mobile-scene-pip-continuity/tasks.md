@@ -11,7 +11,7 @@
 - [x] 2.1 Extend the mobile `MTKView` surface with an injectable attachment callback boundary for `didMoveToWindow`, layout, safe-area, and registered trait changes
 - [x] 2.2 Implement a main-actor current-generation scene/window attachment owner that derives `UIWindowScene`, `UIWindow`, and `UIScreen` only from the actual stream view
 - [x] 2.3 Observe the attached scene's activate, deactivate, foreground, and background notifications with scene identity filtering, deduplication, cancellation, and stale-generation rejection
-- [ ] 2.4 Continuously publish normalized iPhone/iPad view/window geometry, scale, safe area, orientation, traits, drawable size, and resize-settled semantics
+- [x] 2.4 Continuously publish normalized iPhone/iPad view/window geometry, scale, safe area, orientation, traits, drawable size, and resize-settled semantics
 - [ ] 2.5 Bind the same mobile geometry revision to `MTKView.drawableSize`, video fit/fill mapping, and touch/absolute-pointer input suppression or conversion
 - [ ] 2.6 Add attachment, multi-scene filtering, resize sequence, rotation, safe-area, trait, invalid geometry, replacement, late callback, teardown, renderer, and input mapping tests
 

@@ -2322,3 +2322,22 @@
 - 只读simulator证据`/tmp/LuneX-17-2_3-simulator.P2aGEm`确认固定iPhone 17 Pro和iPad Pro 13-inch (M5)在iOS 26.4 runtime中各唯一、UUID全局各唯一、available、`Shutdown`且全局`Booted=0`；只调用一次inventory，没有生命周期操作。
 - OpenSpec 2.3已勾选，权威进度更新为`8/36`。本项证明actual attached-scene通知的generation/identity过滤、semantic dedup、replacement/detach/invalidation cancellation、queued-late拒绝与跨平台编译；不证明live UIKit通知、foreground全状态重采样、Stage Manager/geometry/input、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.4。
 - repository final gate `/tmp/LuneX-17-2_3-repository.B3wKMT`通过fixture self-test/全树、OpenSpec strict `1/1`、apply `8/36`且next精确为2.4、generator连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、source/test membership、scene notification/generation/token cancellation静态边界、无global scene/screen fallback与无raw description隐私边界、focused/iOS API/expanded/full/四平台build及保存的单次simulator证据读回、Keychain opt-in关闭和`git diff --check`。
+
+## 2026-07-30 阶段 17 任务 2.4 启动
+
+- 2.3已以`2a87a0c Observe attached mobile scene lifecycle`独立提交并推送，fetch后确认`HEAD == origin/main`且工作树clean；OpenSpec为`8/36 ready`，当前任务2.4只连续发布normalized actual geometry和resize phase，不提前实现2.5 drawable/video/input绑定或5.x AppModel接线。
+- 既有`MobileSceneWindowSnapshotPublisher`已具备finite bounds、safe-area/scale/drawable校验、semantic dedup和revision exhaustion；2.4在同一合同中补closed `resizing/settled`状态，由actual UIKit adapter提供view/window bounds、safe area、actual view scale、orientation和traits。
+- runtime owner继续固定surface generation、弱持有actual UIKit对象，并按screen identity分配checked opaque display generation；layout/safe-area/trait callback立即发布resizing，静默期请求由可取消token确认后发布settled，replacement/detach/invalidate使旧token失效。
+- Apple UIKit当前文档明确`UIView.contentScaleFactor`映射view逻辑points到实际device pixels，而`UIScreen.nativeScale`描述物理屏幕native比例；production reader因此以actual stream view的`contentScaleFactor`计算drawable，screen对象只用于attachment identity/display generation，避免缩放显示或window move时使用错误物理比例。
+- 首轮focused `/tmp/LuneX-17-2_4-focused.tZztss`通过`5/5`且零结构化diagnostics；首轮iOS generic build `/tmp/LuneX-17-2_4-ios-build.ewC62N`在`MetalStreamSurface.swift`编译时被warnings-as-errors拒绝，精确诊断为`UIWindowScene.interfaceOrientation`自iOS 26 deprecated，测试未受影响且该build不计验收。
+- Apple UIKit当前文档和Xcode 26.4诊断均要求从`UIWindowScene.effectiveGeometry.interfaceOrientation`读取当前方向；production reader改用该iOS 26 API，并从全新DerivedData/result bundle重跑。
+
+## 2026-07-30 阶段 17 任务 2.4 完成
+
+- 修正后的focused证据`/tmp/LuneX-17-2_4-focused-r2.SIRAdy/Focused.xcresult`通过`5/5 passed / 0 skipped / 0 failed`；iOS generic-device证据`/tmp/LuneX-17-2_4-ios-build-r2.iq6n8h/Build.xcresult`成功，二者结构化error、warning与analyzer warning均为0，deprecated orientation诊断已消失。
+- expanded证据`/tmp/LuneX-17-2_4-expanded.jL6h9h/Expanded.xcresult`通过`53/53`；完整macOS证据`/tmp/LuneX-17-2_4-full.mHEzYQ/Full.xcresult`通过`785 total / 784 passed / 1 skipped / 0 failed`。唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；所有命令显式移除真实Keychain opt-in。
+- exact-source四平台generic Debug证据为`/tmp/LuneX-17-2_4-build-macOS.hQfvSE`、`/tmp/LuneX-17-2_4-build-iOS.CT6QGd`、`/tmp/LuneX-17-2_4-build-tvOS.jVhWYw`和`/tmp/LuneX-17-2_4-build-visionOS.rHcj0k`；4/4成功且xcresult结构化diagnostics为0。
+- 首个只读simulator jq包装器因布尔链改变输入而错误退出；`simctl`只调用一次，随后从同一`/tmp/LuneX-17-2_4-simulator.bOWTZD/devices.json`用显式`.devices as $devices`复核固定iPhone/iPad各唯一、available、`Shutdown`且全局`Booted=0`，没有生命周期操作。
+- repository pre-gate `/tmp/LuneX-17-2_4-repository-pre.OHmxni`通过generator生成前及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、membership、actual-view-only geometry API、无global fallback/deprecated orientation和`git diff --check`；OpenSpec strict `1/1`通过。
+- OpenSpec 2.4已勾选，权威进度更新为`9/36`。本项证明deterministic continuous normalized UIKit geometry和resize-settled semantics，不证明2.5 drawable/video/input绑定、live Stage Manager/rotation/external display、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.5。
+- 首个final repository包装器在JavaScript解析阶段误读Bash参数展开，命令未进入shell；改用`printenv`后的最终门`/tmp/LuneX-17-2_4-repository-final.oyMQnP`通过strict `1/1`、apply `9/36`且next精确为2.5、generator SHA、Keychain opt-in关闭、geometry/API静态边界、全部xcresult与保存的simulator证据读回和`git diff --check`。

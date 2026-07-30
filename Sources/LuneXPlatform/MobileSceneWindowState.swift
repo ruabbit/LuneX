@@ -42,6 +42,11 @@ enum MobileInterfaceStyle: String, Codable, Equatable, Hashable, Sendable {
     case dark
 }
 
+enum MobileSceneResizePhase: String, Codable, Equatable, Hashable, Sendable {
+    case resizing
+    case settled
+}
+
 struct MobileSceneTraits: Codable, Equatable, Hashable, Sendable {
     let horizontalSizeClass: MobileSceneSizeClass
     let verticalSizeClass: MobileSceneSizeClass
@@ -78,6 +83,29 @@ struct MobileSceneWindowAttachedSample: Equatable, Sendable {
     let scale: Double
     let orientation: MobileInterfaceOrientation
     let traits: MobileSceneTraits
+    let resizePhase: MobileSceneResizePhase
+
+    init(
+        activity: AppSceneActivity,
+        displayGeneration: UInt64,
+        viewBounds: MobileSceneRect,
+        windowBounds: MobileSceneRect,
+        safeAreaInsets: MobileSceneEdgeInsets,
+        scale: Double,
+        orientation: MobileInterfaceOrientation,
+        traits: MobileSceneTraits,
+        resizePhase: MobileSceneResizePhase = .settled
+    ) {
+        self.activity = activity
+        self.displayGeneration = displayGeneration
+        self.viewBounds = viewBounds
+        self.windowBounds = windowBounds
+        self.safeAreaInsets = safeAreaInsets
+        self.scale = scale
+        self.orientation = orientation
+        self.traits = traits
+        self.resizePhase = resizePhase
+    }
 }
 
 enum MobileSceneWindowSample: Equatable, Sendable {
@@ -109,6 +137,7 @@ struct MobileSceneWindowGeometry: Codable, Equatable, Hashable, Sendable {
     let drawableSize: PixelSize
     let orientation: MobileInterfaceOrientation
     let traits: MobileSceneTraits
+    let resizePhase: MobileSceneResizePhase
 }
 
 enum MobileSceneWindowState: Codable, Equatable, Hashable, Sendable {
@@ -289,7 +318,8 @@ struct MobileSceneWindowSnapshotPublisher: Sendable {
                 height: Int(roundedHeight)
             ),
             orientation: sample.orientation,
-            traits: sample.traits
+            traits: sample.traits,
+            resizePhase: sample.resizePhase
         )
     }
 

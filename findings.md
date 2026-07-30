@@ -1839,3 +1839,12 @@
 - replacement、detach和invalidation先幂等移除token再清scene；窄作用域`@unchecked Sendable` token store只解决Swift 6.3 nonisolated deinit对Objective-C token的清理边界，正常修改仍只发生在main actor，没有使用`@preconcurrency`压制诊断。
 - focused为`3/3`、expanded presenter为`34/34`、full为`780 total / 779 passed / 1 explicit Keychain skip / 0 failed`；iOS API build及四平台generic Debug全部成功且结构化diagnostics为0。唯一skip精确为真实Keychain opt-in测试，本项没有再次访问Keychain。
 - 固定iPhone/iPad只读inventory各唯一、available、`Shutdown`且全局`Booted=0`；只调用一次list，没有模拟器生命周期操作。当前证据证明确定性filter/dedup/cancel/stale rejection与SDK编译，不证明live UIKit通知、foreground全状态重采样、Stage Manager geometry、PiP/background、mobile EDR、signed/physical/live Sunshine。
+
+## 2026-07-30 阶段 17 任务 2.4 验收
+
+- `MobileStreamSceneGeometryObserver`固定surface generation与surface identity，弱持有actual view/window/scene/screen。screen identity变化分配checked opaque display generation；detach、replacement和invalidate使旧settle token失效，revision耗尽后fail closed。
+- actual UIKit reader从stream view的bounds、safe area、`contentScaleFactor`和traits以及window bounds、iOS 26 `UIWindowScene.effectiveGeometry.interfaceOrientation`连续构造同一normalized snapshot。它不读取`UIScreen.main`、`connectedScenes`、`nativeScale`或deprecated `UIWindowScene.interfaceOrientation`。
+- layout、safe-area和registered trait callback立即发布`.resizing`并更新120 ms可取消settle request；duplicate geometry仍续订settle token但不增加semantic revision，只有current token可发布`.settled`。
+- final focused为`5/5`、expanded为`53/53`、full为`785 total / 784 passed / 1 explicit Keychain skip / 0 failed`。修正后的iOS API build和macOS/iOS/tvOS/visionOS generic Debug均成功，所有xcresult结构化error、warning与analyzer warning为0。
+- generator连续两次及生成前SHA-256均为`401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`；OpenSpec strict、membership、actual-view-only静态边界和`git diff --check`通过。
+- 固定iPhone/iPad只读清单仍各唯一、available、`Shutdown`且全局`Booted=0`；没有创建、克隆、启动、安装、运行、关闭或删除模拟器。当前证据不证明live Stage Manager/rotation/external display、2.5 drawable/video/input绑定、PiP/background、mobile EDR、signed/physical/live Sunshine。
