@@ -1703,6 +1703,30 @@ final class StreamMetalPresenterTests: XCTestCase {
         )
         XCTAssertNotEqual(fallback.identity, activeEDR.identity)
 
+        let replacement = try publishedMobileDisplaySnapshot(
+            currentPublisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: currentGeneration,
+                sample: .attached(MobileDisplayEDRReading(
+                    displayGeneration: 2,
+                    potentialHeadroom: 4,
+                    currentHeadroom: 2
+                ))
+            ))
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDREvent(.snapshot(replacement)),
+            .applied
+        )
+        let replacementEDR = try XCTUnwrap(
+            renderState.hdrRenderResolution.configuration
+        )
+        XCTAssertEqual(
+            replacementEDR.identity.displayRevision,
+            replacement.revision
+        )
+        XCTAssertEqual(replacementEDR.identity.mappingMode, .hdrEDR)
+        XCTAssertNotEqual(replacementEDR.identity, fallback.identity)
+
         coordinator.update(
             renderState: renderState,
             inputOutputHandler: { _ in },
@@ -1715,12 +1739,143 @@ final class StreamMetalPresenterTests: XCTestCase {
         XCTAssertEqual(
             renderState.hdrRenderResolution.configuration?.identity
                 .displayRevision,
-            constrained.revision
+            replacement.revision
         )
         XCTAssertEqual(
             geometryOwner.invalidate(
                 surface: surface,
                 surfaceGeneration: currentGeneration
+            ),
+            .invalidated
+        )
+    }
+
+    @MainActor
+    func testMobileDisplayRevisionExhaustionClosesUntilSurfaceReplacement()
+        throws
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 190)!
+        let replacementGeneration =
+            MobileSceneSurfaceGeneration(rawValue: 191)!
+        let staleGeneration = MobileSceneSurfaceGeneration(rawValue: 192)!
+        let metadata = VideoColorMetadata.hdr10VideoRange()
+        let frame = try makeFrame(
+            generation: 82,
+            frameID: 1,
+            metadata: metadata
+        )
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 64, height: 64),
+            drawableSize: PixelSize(width: 128, height: 96),
+            mode: .fit
+        ))
+        renderState.negotiatedVideoColorMetadata = metadata
+        renderState.decodedVideoPresentationContract =
+            StreamVideoDecodedPresentationContract(
+                decoderGeneration: frame.generation,
+                colorMetadata: metadata,
+                decodedLayout: HDRDecodedPixelBufferLayout(
+                    pixelBuffer: frame.pixelBuffer
+                )
+            )
+        let coordinator = MobileStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState,
+            userAllowsHDR: true,
+            platformCapabilities:
+                HDRPlatformOutputCapabilityAdapter.resolve(for: .iOS)
+                    .capabilities
+        )
+        coordinator.activateSurfaceGeneration(generation)
+        let surface = MobileGeometryBindingTestSurface()
+        let geometryOwner = MobileGeometryBindingTestOwner(
+            surfaceGeneration: generation,
+            surface: surface,
+            sourceSize: renderState.transform.sourceSize,
+            mode: renderState.transform.mode,
+            drawableApplier: { _, _ in true },
+            handler: { coordinator.handleGeometryBinding($0) }
+        )
+        XCTAssertEqual(
+            geometryOwner.update(
+                mobileGeometryBindingTestSnapshot(
+                    generation: generation,
+                    revision: 1,
+                    viewBounds: MobileSceneRect(
+                        x: 0,
+                        y: 0,
+                        width: 64,
+                        height: 48
+                    )
+                ),
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        var publisher = MobileDisplayEDRSnapshotPublisher(
+            surfaceGeneration: generation
+        )
+        let active = try publishedMobileDisplaySnapshot(
+            publisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: generation,
+                sample: .attached(MobileDisplayEDRReading(
+                    displayGeneration: 1,
+                    potentialHeadroom: 4,
+                    currentHeadroom: 2
+                ))
+            ))
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDREvent(.snapshot(active)),
+            .applied
+        )
+        XCTAssertNotNil(renderState.hdrRenderResolution.configuration)
+
+        XCTAssertEqual(
+            coordinator.handleDisplayEDREvent(.revisionExhausted(
+                surfaceGeneration: staleGeneration
+            )),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDREvent(.revisionExhausted(
+                surfaceGeneration: generation
+            )),
+            .revisionExhausted
+        )
+        XCTAssertNil(coordinator.currentDisplayEDRSnapshot)
+        XCTAssertTrue(coordinator.isDisplayRevisionExhausted)
+        XCTAssertNil(renderState.displaySnapshot)
+        XCTAssertEqual(renderState.headroom, DisplayHeadroom())
+        XCTAssertTrue(renderState.isDisplayRevisionExhausted)
+        XCTAssertEqual(
+            renderState.hdrRenderResolution,
+            .closed(.displayRevisionExhausted)
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDREvent(.snapshot(active)),
+            .revisionExhausted
+        )
+        XCTAssertEqual(
+            coordinator.handleDisplayEDREvent(.revisionExhausted(
+                surfaceGeneration: generation
+            )),
+            .unchanged
+        )
+
+        coordinator.activateSurfaceGeneration(replacementGeneration)
+        XCTAssertFalse(coordinator.isDisplayRevisionExhausted)
+        XCTAssertFalse(renderState.isDisplayRevisionExhausted)
+        XCTAssertNil(renderState.displaySnapshot)
+        XCTAssertEqual(
+            renderState.hdrRenderResolution,
+            .closed(.invalidDisplayRevision)
+        )
+        XCTAssertEqual(
+            geometryOwner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
             ),
             .invalidated
         )

@@ -1958,3 +1958,15 @@
 - 本任务唯一一次只读simulator清单为`/tmp/LuneX-17-3_3-simulator.Vdmok1/devices.json`；固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，iOS 27.0同名默认设备也均Shutdown，全局Booted为0。没有执行create、clone、boot、launch、install、shutdown或delete。
 - repository pre-gate `/tmp/LuneX-17-3_3-repository-pre.hZ88T2`通过fixtures、OpenSpec strict、全部xcresult与simulator证据读回、静态所有权边界、`git diff --check`及generator双次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`。
 - 本项证明离线current-generation display-to-render接线、iOS SDK编译与确定性旧帧拒绝；不证明3.4完整fallback/screen-move/teardown、simulator可见HDR、signed/physical mobile EDR、外接显示器亮度映射、功耗或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 3.4 验收
+
+- `MobileDisplayEDRObserver`输出改为`MobileDisplayEDRObserverEvent`，正常路径发布`.snapshot`；revision overflow后先清除publisher snapshot、notification token、window/screen/display-generation ownership，再且仅发布一次`.revisionExhausted(surfaceGeneration:)`。后续attach/resample/detach不再读screen或短暂重建token，重复invalidate安全释放reader与handler。
+- `MobileStreamSurfaceCoordinator`持有current-generation exhaustion终态；收到当前generation exhaustion时原子清除display snapshot/headroom，把render resolution关闭为`.displayRevisionExhausted`并经既有presenter transition清drawable、invalidate旧EDR runtime、恢复SDR surface和推进presentation revision。同generation晚到snapshot和重复exhaustion均不能重开renderer，只有replacement surface generation重置终态。
+- iOS SwiftUI/MTKView接线统一改为typed display event handler，内部coordinator与可选外部handler收到同一有界事件；源码不存在旧`displayEDRSnapshotHandler`名称、`UIScreen.main`或`connectedScenes` fallback。
+- focused `/tmp/LuneX-17-3_4-focused-r2.YYqyMg/Focused.xcresult`为`71/71`；expanded `/tmp/LuneX-17-3_4-expanded.zblOHb/Expanded.xcresult`为`83/83`；完整normal `/tmp/LuneX-17-3_4-full.WDSNFL/Full.xcresult`为`804 total / 803 passed / 1 explicit Keychain skip / 0 failed`。唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，所有测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 四平台generic Debug build分别位于`/tmp/LuneX-17-3_4-build-macOS.lkzkyc`、`/tmp/LuneX-17-3_4-ios-build-r2.r0iCrn`、`/tmp/LuneX-17-3_4-build-tvOS.hONy1N`和`/tmp/LuneX-17-3_4-build-visionOS.O2KFDi`；4/4 succeeded、error/warning/analyzer warning均为0且各自产出Metal AIR/metallib。iOS同时产出App executable与debug dylib。
+- 唯一一次只读simulator inventory保存于`/tmp/LuneX-17-3_4-simulator.ykxx49/devices.json`；固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown，iOS 27.0同名系统设备也为Shutdown且全局Booted为0。没有执行create、clone、boot、install、launch、shutdown或delete。
+- repository pre-gate重新按默认fixture根通过fixture self-test/scan、8/8 OpenSpec strict、apply `14/36`、generator初始与连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、全部结构化证据读回、静态fallback边界、Keychain opt-in关闭及`git diff --check`。
+- 两次非验收错误均未改变证明结论：首次iOS build误用不存在的`LuneX` scheme并在编译前退出；首次repository pre-gate误把`.`作为fixture root并扫描整个仓库，且在OpenSpec/generator前退出。两者均使用正确参数和全新证据重新验证。
+- 本项证明离线状态机、iOS SDK接线、四平台generic编译和确定性resource release；不证明签名、安装、simulator运行、物理iPhone/iPad、visible EDR、外接显示器、功耗或live Sunshine。

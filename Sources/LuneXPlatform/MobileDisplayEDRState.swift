@@ -231,6 +231,22 @@ enum MobileDisplayEDRObserverOutcome: Equatable, Sendable {
     case alreadyInvalidated
 }
 
+enum MobileDisplayEDRObserverEvent: Equatable, Sendable {
+    case snapshot(MobileDisplayEDRSnapshot)
+    case revisionExhausted(
+        surfaceGeneration: MobileSceneSurfaceGeneration
+    )
+
+    var surfaceGeneration: MobileSceneSurfaceGeneration {
+        switch self {
+        case let .snapshot(snapshot):
+            snapshot.surfaceGeneration
+        case let .revisionExhausted(surfaceGeneration):
+            surfaceGeneration
+        }
+    }
+}
+
 private final class MobileDisplayEDRObserverTokens: @unchecked Sendable {
     private let notificationCenter: NotificationCenter
     private var observers: [NSObjectProtocol] = []
@@ -261,7 +277,7 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
         Window?,
         MobileDisplayGeneration?
     ) -> MobileDisplayEDRState
-    typealias Handler = @MainActor (MobileDisplayEDRSnapshot) -> Void
+    typealias Handler = @MainActor (MobileDisplayEDRObserverEvent) -> Void
 
     let surfaceGeneration: MobileSceneSurfaceGeneration
     var currentWindow: Window? { window }
@@ -280,9 +296,11 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
     private var handler: Handler?
     private var publisher: MobileDisplayEDRSnapshotPublisher
     private var isInvalidated = false
+    private var didPublishRevisionExhaustion = false
 
     init(
         surfaceGeneration: MobileSceneSurfaceGeneration,
+        initialRevision: HDRDisplayRevision = HDRDisplayRevision(rawValue: 0),
         notificationCenter: NotificationCenter,
         names: MobileDisplayEDRNotificationNames,
         screenResolver: @escaping ScreenResolver,
@@ -299,7 +317,8 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
         self.reader = reader
         self.handler = handler
         publisher = MobileDisplayEDRSnapshotPublisher(
-            surfaceGeneration: surfaceGeneration
+            surfaceGeneration: surfaceGeneration,
+            initialRevision: initialRevision
         )
     }
 
@@ -317,6 +336,9 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
             return .staleSurfaceGeneration
         }
         guard !isInvalidated else { return .alreadyInvalidated }
+        guard !publisher.isRevisionExhausted else {
+            return .revisionExhausted
+        }
         guard screenResolver(candidateWindow) === candidateScreen else {
             stopObserving()
             return publish(.detached)
@@ -357,6 +379,9 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
             return .staleSurfaceGeneration
         }
         guard !isInvalidated else { return .alreadyInvalidated }
+        guard !publisher.isRevisionExhausted else {
+            return .revisionExhausted
+        }
         guard let window,
               let screen,
               screenResolver(window) === screen else {
@@ -380,6 +405,9 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
             return .staleSurfaceGeneration
         }
         guard !isInvalidated else { return .alreadyInvalidated }
+        guard !publisher.isRevisionExhausted else {
+            return .revisionExhausted
+        }
         stopObserving()
         return publish(.detached)
     }
@@ -452,12 +480,18 @@ final class MobileDisplayEDRObserver<Window: AnyObject, Screen: AnyObject> {
         case .unchanged:
             return .unchanged
         case let .published(snapshot):
-            handler?(snapshot)
+            handler?(.snapshot(snapshot))
             return .published
         case .staleSurfaceGeneration:
             return .staleSurfaceGeneration
         case .revisionExhausted:
             stopObserving()
+            if !didPublishRevisionExhaustion {
+                didPublishRevisionExhaustion = true
+                handler?(.revisionExhausted(
+                    surfaceGeneration: surfaceGeneration
+                ))
+            }
             return .revisionExhausted
         }
     }

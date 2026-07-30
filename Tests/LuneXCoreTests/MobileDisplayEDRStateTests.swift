@@ -227,7 +227,11 @@ final class MobileDisplayEDRStateTests: XCTestCase {
             names: names,
             screenResolver: { $0.screen },
             reader: { reader.read(window: $0, displayGeneration: $1) },
-            handler: { snapshots.append($0) }
+            handler: { event in
+                if case let .snapshot(snapshot) = event {
+                    snapshots.append(snapshot)
+                }
+            }
         )
 
         XCTAssertEqual(
@@ -288,7 +292,11 @@ final class MobileDisplayEDRStateTests: XCTestCase {
             names: names,
             screenResolver: { $0.screen },
             reader: { reader.read(window: $0, displayGeneration: $1) },
-            handler: { snapshots.append($0) }
+            handler: { event in
+                if case let .snapshot(snapshot) = event {
+                    snapshots.append(snapshot)
+                }
+            }
         )
 
         _ = observer.attach(
@@ -376,7 +384,11 @@ final class MobileDisplayEDRStateTests: XCTestCase {
             names: names,
             screenResolver: { $0.screen },
             reader: { reader.read(window: $0, displayGeneration: $1) },
-            handler: { snapshots.append($0) }
+            handler: { event in
+                if case let .snapshot(snapshot) = event {
+                    snapshots.append(snapshot)
+                }
+            }
         )
 
         XCTAssertEqual(
@@ -428,6 +440,95 @@ final class MobileDisplayEDRStateTests: XCTestCase {
         )
         XCTAssertEqual(
             observer.detach(surfaceGeneration: generation),
+            .alreadyInvalidated
+        )
+    }
+
+    @MainActor
+    func testScreenObserverReportsRevisionExhaustionOnceAndReleasesOwnership()
+        async
+    {
+        let generation = MobileSceneSurfaceGeneration(rawValue: 28)!
+        let notificationCenter = NotificationCenter()
+        let names = mobileDisplayEDRTestNotificationNames()
+        var screen: MobileDisplayEDRTestScreen? =
+            MobileDisplayEDRTestScreen(potential: 4, current: 2)
+        var window: MobileDisplayEDRTestWindow? =
+            MobileDisplayEDRTestWindow(screen: screen)
+        weak let weakScreen = screen
+        weak let weakWindow = window
+        var readCount = 0
+        var events: [MobileDisplayEDRObserverEvent] = []
+        let reader = mobileDisplayEDRTestReader()
+        let observer = MobileDisplayEDRTestObserver(
+            surfaceGeneration: generation,
+            initialRevision: HDRDisplayRevision(rawValue: .max),
+            notificationCenter: notificationCenter,
+            names: names,
+            screenResolver: { $0.screen },
+            reader: { window, displayGeneration in
+                readCount += 1
+                return reader.read(
+                    window: window,
+                    displayGeneration: displayGeneration
+                )
+            },
+            handler: { events.append($0) }
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                window: window!,
+                screen: screen!,
+                displayGeneration: MobileDisplayGeneration(rawValue: 35),
+                surfaceGeneration: generation,
+                reason: .attachment
+            ),
+            .revisionExhausted
+        )
+        XCTAssertNil(observer.currentSnapshot)
+        XCTAssertNil(observer.currentWindow)
+        XCTAssertNil(observer.currentScreen)
+        XCTAssertEqual(
+            events,
+            [.revisionExhausted(surfaceGeneration: generation)]
+        )
+
+        notificationCenter.post(
+            name: names.brightnessDidChange,
+            object: screen
+        )
+        await drainMobileDisplayEDRNotificationTasks()
+        XCTAssertEqual(readCount, 1)
+        XCTAssertEqual(
+            observer.detach(surfaceGeneration: generation),
+            .revisionExhausted
+        )
+        XCTAssertEqual(
+            observer.attach(
+                window: window!,
+                screen: screen!,
+                displayGeneration: MobileDisplayGeneration(rawValue: 36),
+                surfaceGeneration: generation,
+                reason: .attachment
+            ),
+            .revisionExhausted
+        )
+        XCTAssertEqual(readCount, 1)
+        XCTAssertNil(observer.currentWindow)
+        XCTAssertNil(observer.currentScreen)
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: generation),
+            .revisionExhausted
+        )
+        XCTAssertEqual(events.count, 1)
+
+        window = nil
+        screen = nil
+        XCTAssertNil(weakWindow)
+        XCTAssertNil(weakScreen)
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: generation),
             .alreadyInvalidated
         )
     }

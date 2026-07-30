@@ -2434,3 +2434,12 @@
 
 - OpenSpec 3.3已勾选，权威进度更新为`14/36`；下一项3.4为原子EDR/SDR fallback、screen move、重复抑制、revision exhaustion与observer幂等teardown。
 - 当前证明边界为离线合同、实际四平台编译、macOS测试和只读simulator inventory；物理iPhone/iPad、visible EDR、external display、功耗、签名与live Sunshine仍未证明。
+
+## 2026-07-30 阶段 17 任务 3.4 完成
+
+- 系统更新后恢复active目标、planning-with-files与OpenSpec上下文，确认`HEAD == origin/main == a6d4928`且工作树只有3.4的四个预期源码/测试改动；Keychain opt-in未设置。
+- 实现typed mobile display event、一次性revision exhaustion、observer token/window/screen幂等释放和coordinator原子EDR-to-SDR关闭；同generation晚到snapshot不能恢复，replacement surface generation才重置。
+- 最终focused `/tmp/LuneX-17-3_4-focused-r2.YYqyMg/Focused.xcresult`通过`71/71`，expanded `/tmp/LuneX-17-3_4-expanded.zblOHb/Expanded.xcresult`通过`83/83`，full `/tmp/LuneX-17-3_4-full.WDSNFL/Full.xcresult`通过`804 total / 803 passed / 1 explicit Keychain skip / 0 failed`。
+- macOS、iOS/iPadOS、tvOS和visionOS四平台generic Debug build均succeeded、结构化三类诊断为0并产出AIR/metallib；保存的唯一simulator inventory确认固定iOS 26.4 iPhone/iPad各唯一、available、Shutdown且全局Booted为0，没有执行任何设备生命周期操作。
+- 正确repository pre-gate通过fixture、OpenSpec strict/apply、generator初始及连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、证据读回、静态fallback边界、Keychain opt-in关闭及diff检查。首次错误scheme与误传`.` fixture root均记录为非验收错误并用正确参数重跑。
+- OpenSpec 3.4已勾选，预期权威进度`15/36`；下一项3.5补window-screen ownership、normalization、notification filtering、screen move、foreground restore、render-mode transition、stale frame和resource release扩展测试。generic build不替代签名、安装、真机、visible EDR或live Sunshine证据。

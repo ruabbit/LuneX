@@ -1928,6 +1928,7 @@ enum MobileStreamDisplayBindingOutcome: Equatable, Sendable {
     case unchanged
     case inactiveSurfaceGeneration
     case staleSurfaceGeneration
+    case revisionExhausted
 }
 
 @MainActor
@@ -1941,6 +1942,7 @@ final class MobileStreamSurfaceCoordinator {
         MobileStreamGeometryBindingSnapshot?
     private(set) var currentDisplayEDRSnapshot:
         MobileDisplayEDRSnapshot?
+    private(set) var isDisplayRevisionExhausted = false
     private var renderState: StreamRenderState
     private var inputOutputHandler: InputOutputHandler
     private var userAllowsHDR: Bool
@@ -1992,6 +1994,7 @@ final class MobileStreamSurfaceCoordinator {
         currentSurfaceGeneration = surfaceGeneration
         currentGeometryBinding = nil
         currentDisplayEDRSnapshot = nil
+        isDisplayRevisionExhausted = false
         ownsMobileGeometry = true
         ownsMobileDisplay = true
         applyCurrentState()
@@ -2003,6 +2006,7 @@ final class MobileStreamSurfaceCoordinator {
         guard currentSurfaceGeneration == surfaceGeneration else { return }
         currentGeometryBinding = nil
         currentDisplayEDRSnapshot = nil
+        isDisplayRevisionExhausted = false
         ownsMobileGeometry = true
         ownsMobileDisplay = true
         applyCurrentState()
@@ -2026,6 +2030,20 @@ final class MobileStreamSurfaceCoordinator {
     }
 
     @discardableResult
+    func handleDisplayEDREvent(
+        _ event: MobileDisplayEDRObserverEvent
+    ) -> MobileStreamDisplayBindingOutcome {
+        switch event {
+        case let .snapshot(snapshot):
+            return handleDisplayEDRSnapshot(snapshot)
+        case let .revisionExhausted(surfaceGeneration):
+            return handleDisplayEDRRevisionExhaustion(
+                surfaceGeneration: surfaceGeneration
+            )
+        }
+    }
+
+    @discardableResult
     func handleDisplayEDRSnapshot(
         _ snapshot: MobileDisplayEDRSnapshot
     ) -> MobileStreamDisplayBindingOutcome {
@@ -2035,6 +2053,9 @@ final class MobileStreamSurfaceCoordinator {
         guard snapshot.surfaceGeneration == currentSurfaceGeneration else {
             return .staleSurfaceGeneration
         }
+        guard !isDisplayRevisionExhausted else {
+            return .revisionExhausted
+        }
         guard currentDisplayEDRSnapshot != snapshot else {
             return .unchanged
         }
@@ -2042,6 +2063,25 @@ final class MobileStreamSurfaceCoordinator {
         currentDisplayEDRSnapshot = snapshot
         applyCurrentState()
         return .applied
+    }
+
+    @discardableResult
+    private func handleDisplayEDRRevisionExhaustion(
+        surfaceGeneration: MobileSceneSurfaceGeneration
+    ) -> MobileStreamDisplayBindingOutcome {
+        guard let currentSurfaceGeneration else {
+            return .inactiveSurfaceGeneration
+        }
+        guard surfaceGeneration == currentSurfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isDisplayRevisionExhausted else { return .unchanged }
+
+        ownsMobileDisplay = true
+        currentDisplayEDRSnapshot = nil
+        isDisplayRevisionExhausted = true
+        applyCurrentState()
+        return .revisionExhausted
     }
 
     func handleInputOutput(_ output: InputAdapterOutput) {
@@ -2070,7 +2110,8 @@ final class MobileStreamSurfaceCoordinator {
             renderState.headroom =
                 currentDisplayEDRSnapshot?.renderSnapshot?.headroom
                 ?? DisplayHeadroom()
-            renderState.isDisplayRevisionExhausted = false
+            renderState.isDisplayRevisionExhausted =
+                isDisplayRevisionExhausted
             let drawableSize = renderState.coordinateSnapshot?.drawableSize
             let drawableAvailable = drawableSize.map {
                 $0.width > 0 && $0.height > 0
@@ -2449,7 +2490,7 @@ final class MobileStreamMetalView: MTKView {
     typealias SceneWindowSnapshotHandler = SceneGeometryObserver.Handler
     typealias DisplayEDRObserver =
         MobileDisplayEDRObserver<UIWindow, UIScreen>
-    typealias DisplayEDRSnapshotHandler = DisplayEDRObserver.Handler
+    typealias DisplayEDREventHandler = DisplayEDRObserver.Handler
     typealias GeometryBindingOwner =
         MobileStreamGeometryBindingOwner<MobileStreamMetalView>
     typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
@@ -2470,7 +2511,7 @@ final class MobileStreamMetalView: MTKView {
     private var attachmentUpdateHandler: AttachmentUpdateHandler?
     private var sceneLifecycleUpdateHandler: SceneLifecycleUpdateHandler?
     private var sceneWindowSnapshotHandler: SceneWindowSnapshotHandler?
-    private var displayEDRSnapshotHandler: DisplayEDRSnapshotHandler?
+    private var displayEDREventHandler: DisplayEDREventHandler?
     private var inputOutputHandler: InputOutputHandler?
     private var hoverGestureRecognizer: UIHoverGestureRecognizer?
     private var touchIDs: [ObjectIdentifier: Int] = [:]
@@ -2490,8 +2531,8 @@ final class MobileStreamMetalView: MTKView {
             @escaping SceneLifecycleUpdateHandler = { _ in },
         sceneWindowSnapshotHandler:
             @escaping SceneWindowSnapshotHandler = { _ in },
-        displayEDRSnapshotHandler:
-            @escaping DisplayEDRSnapshotHandler = { _ in },
+        displayEDREventHandler:
+            @escaping DisplayEDREventHandler = { _ in },
         geometryBindingUpdateHandler:
             @escaping GeometryBindingUpdateHandler = { _ in },
         inputOutputHandler: @escaping InputOutputHandler = { _ in }
@@ -2502,7 +2543,7 @@ final class MobileStreamMetalView: MTKView {
         self.attachmentUpdateHandler = attachmentUpdateHandler
         self.sceneLifecycleUpdateHandler = sceneLifecycleUpdateHandler
         self.sceneWindowSnapshotHandler = sceneWindowSnapshotHandler
-        self.displayEDRSnapshotHandler = displayEDRSnapshotHandler
+        self.displayEDREventHandler = displayEDREventHandler
         self.inputOutputHandler = inputOutputHandler
         attachmentRelay = MobileStreamSurfaceAttachmentRelay(
             surface: self,
@@ -2596,8 +2637,8 @@ final class MobileStreamMetalView: MTKView {
                         displayGeneration: displayGeneration
                     )
                 },
-                handler: { [weak self] snapshot in
-                    self?.displayEDRSnapshotHandler?(snapshot)
+                handler: { [weak self] event in
+                    self?.displayEDREventHandler?(event)
                 }
             )
             attachmentOwner = AttachmentOwner(
@@ -2711,10 +2752,10 @@ final class MobileStreamMetalView: MTKView {
         sceneWindowSnapshotHandler = handler
     }
 
-    func updateDisplayEDRSnapshotHandler(
-        _ handler: @escaping DisplayEDRSnapshotHandler
+    func updateDisplayEDREventHandler(
+        _ handler: @escaping DisplayEDREventHandler
     ) {
-        displayEDRSnapshotHandler = handler
+        displayEDREventHandler = handler
     }
 
     func updateGeometryBinding(
@@ -2765,7 +2806,7 @@ final class MobileStreamMetalView: MTKView {
         attachmentUpdateHandler = nil
         sceneLifecycleUpdateHandler = nil
         sceneWindowSnapshotHandler = nil
-        displayEDRSnapshotHandler = nil
+        displayEDREventHandler = nil
         inputOutputHandler = nil
         touchIDs.removeAll(keepingCapacity: false)
         attachmentRelay?.invalidate()
@@ -3077,8 +3118,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamMetalView.SceneLifecycleUpdateHandler = { _ in }
     var sceneWindowSnapshotHandler:
         MobileStreamMetalView.SceneWindowSnapshotHandler = { _ in }
-    var displayEDRSnapshotHandler:
-        MobileStreamMetalView.DisplayEDRSnapshotHandler = { _ in }
+    var displayEDREventHandler:
+        MobileStreamMetalView.DisplayEDREventHandler = { _ in }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -3095,8 +3136,8 @@ struct MetalStreamSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> MTKView {
 #if os(iOS)
         context.coordinator.handleGeometryBinding(nil)
-        let externalDisplayEDRSnapshotHandler =
-            displayEDRSnapshotHandler
+        let externalDisplayEDREventHandler =
+            displayEDREventHandler
         let view = MobileStreamMetalView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
@@ -3106,10 +3147,10 @@ struct MetalStreamSurface: UIViewRepresentable {
             attachmentUpdateHandler: attachmentUpdateHandler,
             sceneLifecycleUpdateHandler: sceneLifecycleUpdateHandler,
             sceneWindowSnapshotHandler: sceneWindowSnapshotHandler,
-            displayEDRSnapshotHandler: {
-                [weak coordinator = context.coordinator] snapshot in
-                coordinator?.handleDisplayEDRSnapshot(snapshot)
-                externalDisplayEDRSnapshotHandler(snapshot)
+            displayEDREventHandler: {
+                [weak coordinator = context.coordinator] event in
+                coordinator?.handleDisplayEDREvent(event)
+                externalDisplayEDREventHandler(event)
             },
             geometryBindingUpdateHandler: { [weak coordinator = context.coordinator]
                 binding in
@@ -3149,10 +3190,10 @@ struct MetalStreamSurface: UIViewRepresentable {
         (view as? MobileStreamMetalView)?
             .updateSceneWindowSnapshotHandler(sceneWindowSnapshotHandler)
         (view as? MobileStreamMetalView)?
-            .updateDisplayEDRSnapshotHandler({
-                [weak coordinator = context.coordinator] snapshot in
-                coordinator?.handleDisplayEDRSnapshot(snapshot)
-                displayEDRSnapshotHandler(snapshot)
+            .updateDisplayEDREventHandler({
+                [weak coordinator = context.coordinator] event in
+                coordinator?.handleDisplayEDREvent(event)
+                displayEDREventHandler(event)
             })
         (view as? MobileStreamMetalView)?
             .updateGeometryBinding(
