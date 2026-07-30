@@ -2269,3 +2269,22 @@
 - exact-source四平台generic-device Debug warnings-as-errors build `/tmp/LuneX-17-1_5-builds.yraPq0`的macOS、iOS/iPadOS、tvOS和visionOS均出现精确一次`BUILD SUCCEEDED`，四份xcresult的error、warning与analyzer warning均为0；只执行build action，没有启动simulator。
 - repository gate `/tmp/LuneX-17-1_5-repository.gMZ1oo`通过OpenSpec strict `1/1`、generator初始与连续两次稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、test membership、增量privacy和`git diff --check`。固定iOS 26.4 iPhone/iPad各唯一、available、`Shutdown`且全局`Booted=0`；只执行一次只读inventory。
 - OpenSpec 1.5已勾选，权威进度更新为`5/36`，下一项2.1扩展mobile `MTKView`的injectable attachment callback边界。本项不回填actual UIKit/AVKit、system PiP/background、Stage Manager、external display、mobile EDR、signed/physical/live Sunshine证明。
+
+## 2026-07-30 阶段 17 任务 2.1 启动
+
+- 1.5已以`f055e5a Expand mobile continuity contract tests`独立提交并推送，fetch后确认`HEAD == origin/main`且工作树clean；OpenSpec为`5/36 ready`，当前任务2.1只扩展iOS/iPadOS `MTKView` callback边界，不提前实现2.2 scene/window owner。
+- Xcode 26.4 public SDK与Context7 Apple文档确认`registerForTraitChanges(_:handler:)`返回`any UITraitChangeRegistration`并可显式`unregisterForTraitChanges(_:)`；部署目标26.0无需兼容分支。实现使用弱surface、可替换/失效的main-actor relay，封闭事件只包含`didMoveToWindow`、layout、safe-area和registered traits，不携带UIKit对象身份或raw payload。
+- 首轮focused `/tmp/LuneX-17-2_1-focused.2gQgFg`在测试执行前被warnings-as-errors拒绝：局部弱观察引用`weak var weakSurface`从未赋值修改。production源码没有编译错误；按Swift 6.3诊断改为`weak let`，该bundle不计验收并从全新路径重跑。
+- 修正后focused `/tmp/LuneX-17-2_1-focused-r2.eXTz63/Focused.xcresult`结构化通过`2/2 passed / 0 skipped / 0 failed`且diagnostics为0；iOS generic-device App build `/tmp/LuneX-17-2_1-ios-build.Q09W8q/Build.xcresult`成功且结构化error、warning与analyzer warning均为0，没有操作simulator。
+- 更新后完整macOS证据`/tmp/LuneX-17-2_1-post-update.4S4rH3/full/Full.xcresult`在macOS 27.0通过`774 total / 773 passed / 1 skipped / 0 failed`，结构化error、warning与analyzer warning均为0；命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
+- 同一组合包装器在完整测试后因zsh数组索引触发`bad substitution`，四平台build均未启动；该错误只影响包装脚本，后续build使用显式Bash和全新证据目录，不把失败包装器视为四平台验收。
+
+## 2026-07-30 阶段 17 任务 2.1 完成
+
+- 显式Bash重跑的四平台证据`/tmp/LuneX-17-2_1-builds-post-update.UWtmEU`中macOS、iOS/iPadOS、tvOS和visionOS generic Debug全部成功；四份xcresult均为`succeeded`且error、warning与analyzer warning为0。
+- 完整macOS唯一skip结构化精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；正常测试与build均显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- 只读simulator证据`/tmp/LuneX-17-2_1-simulator-post-update.rUDTIT`确认固定iPhone 17 Pro与iPad Pro 13-inch (M5)在iOS 26.4 runtime各唯一、available、`Shutdown`且全局`Booted=0`；只执行一次inventory，没有任何生命周期操作。
+- OpenSpec 2.1已勾选，权威进度更新为`6/36`。本项只证明injectable callback boundary、relay lifetime/teardown、iOS API编译和跨平台隔离；不证明live UIKit callback、actual scene/window/screen owner、Stage Manager/geometry/input、PiP/background、mobile EDR、signed/physical/live Sunshine。下一项2.2。
+- 首轮repository gate `/tmp/LuneX-17-2_1-repository.Dlb0Ix`在generator前因包装器误读不存在的OpenSpec `.summary.totals.invalid`字段退出；保存JSON实际为`1/1 passed`且`.items[].valid == true`。该轮不计最终验收，按当前CLI的`.summary.totals.failed`从全新目录重跑。
+- 第二轮repository gate `/tmp/LuneX-17-2_1-repository-final.SwCvyR`已通过strict `1/1`、apply `6/36`和generator稳定，但全文件禁词检查误命中既有decoded-frame `ObjectIdentifier`；current diff新增行没有命中。该轮不计最终组合验收，静态检查收紧到新增行后从全新目录重跑。
+- 最终repository gate `/tmp/LuneX-17-2_1-repository-final-r2.DdYYLT`通过OpenSpec strict `1/1`、apply `6/36`且next精确为2.2、generator连续稳定SHA-256 `401bbe515bb4ece1a7af350d45eb923a3fa50ca35201a1ad5613d1efce99ccf3`、source/test membership、iOS callback/trait静态边界、更新后完整test/build/simulator证据读回、Keychain opt-in关闭、privacy与`git diff --check`。

@@ -34,7 +34,7 @@ No lower tier may be reported as a higher tier.
 
 | Concern | Current source | Current behavior | Stage 17 gap |
 |---|---|---|---|
-| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Creates a plain `MTKView`, installs `StreamMetalPresenter`, applies render schedule, and copies an existing coordinate snapshot into `drawableSize` | No actual view/window attachment owner, layout callback, safe-area callback, registered trait callback, scene identity, or attached-screen publication |
+| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, applies render schedule, copies an existing coordinate snapshot into `drawableSize`, and publishes closed injectable iOS attachment/layout/safe-area/registered-trait callback events | No actual view/window/scene/screen attachment owner, scene identity, geometry normalization, or attached-screen publication |
 | SwiftUI lifecycle | `RootView` and `UIKitLifecycleMonitor` | `RootView` does not construct or retain the mobile monitor; the monitor itself only maps a supplied `ScenePhase` to visible/focused and multiplies a supplied point size by a supplied scale | Not connected to the actual stream view, `UIWindow`, `UIWindowScene`, `UIScreen`, media generation, Stage Manager resize, or AppModel |
 | macOS lifecycle reference | `AppKitLifecycleMonitor`, `MacStreamSurfaceAttachmentOwner`, and `MacStreamInputCaptureView` | Actual window/surface ownership, occlusion/focus, backing pixels, screen EDR, stale attachment rejection, render policy, and input admission are connected | This is a behavioral reference, not reusable UIKit code |
 | Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Validated fit/fill geometry, checked revision increment, stale/invalid clear, letterbox rejection, source crop, and remote point mapping are implemented | Mobile must publish actual drawable geometry into this contract rather than create a parallel coordinate system |
@@ -362,6 +362,64 @@ actual UIKit attachment callback, `UIWindowScene` or `UIScreen` ownership,
 Stage Manager resize, an AVKit controller or sample-buffer sink, system PiP,
 background duration, active mobile audio continuity, live Metal EDR
 reconfiguration, a signed artifact, physical hardware, or live Sunshine.
+
+## Mobile surface attachment callback boundary
+
+OpenSpec task 2.1 replaces the plain iOS `MTKView` with the iOS-only
+`MobileStreamMetalView`. tvOS and visionOS continue to construct the prior
+plain `MTKView`, so this task does not change their runtime behavior.
+
+The view publishes only four closed semantic events:
+
+- `didMoveToWindow`;
+- `layoutSubviews`;
+- `safeAreaInsetsDidChange`; and
+- `registeredTraitsChanged`.
+
+The registered trait set is horizontal size class, vertical size class, display
+scale, and interface style. The main-actor relay weakly owns the surface,
+allows SwiftUI updates to replace the handler, and permanently rejects handler
+replacement or event delivery after invalidation. Events carry the actual view
+only to the injected main-actor handler; they do not publish a raw window,
+scene, screen, trait collection, geometry, object identity, or notification
+payload into shared state.
+
+`MetalStreamSurface.makeUIView` installs the callback, `updateUIView` replaces
+the handler, and `dismantleUIView` unregisters the trait token before
+invalidating the relay and stopping the presenter. Task 2.2 must consume this
+boundary through a current-generation owner; task 2.1 deliberately does not
+derive or retain `UIWindow`, `UIWindowScene`, or `UIScreen`.
+
+Task 2.1 evidence:
+
+```text
+Focused relay tests:
+/tmp/LuneX-17-2_1-focused-r2.eXTz63
+2 passed / 0 skipped / 0 failed
+
+Expanded presenter suite:
+/tmp/LuneX-17-2_1-expanded.ozkc9S
+28 passed / 0 skipped / 0 failed
+
+Post-update full macOS:
+/tmp/LuneX-17-2_1-post-update.4S4rH3
+774 total / 773 passed / 1 explicit Keychain skip / 0 failed
+
+Post-update four generic Debug targets:
+/tmp/LuneX-17-2_1-builds-post-update.UWtmEU
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+
+Post-update read-only simulator inventory:
+/tmp/LuneX-17-2_1-simulator-post-update.rUDTIT
+fixed iPhone/iPad present exactly once, available and Shutdown; Booted = 0
+```
+
+All normal tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`. These results
+prove relay ownership/replacement/invalidation, iOS API compilation, and
+cross-platform build isolation. They do not prove a callback fired in a live
+UIKit window, actual scene/window/screen ownership, Stage Manager resizing,
+geometry/drawable/input publication, PiP, background continuity, mobile EDR,
+a signed artifact, physical hardware, or live Sunshine.
 
 ## Xcode 26.4 public API inventory
 

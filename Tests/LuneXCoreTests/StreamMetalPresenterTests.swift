@@ -5,6 +5,62 @@ import MetalKit
 import XCTest
 
 final class StreamMetalPresenterTests: XCTestCase {
+    @MainActor
+    func testMobileSurfaceAttachmentRelayReplacesAndInvalidatesHandler() {
+        let surface = MobileSurfaceAttachmentTestSurface()
+        var firstEvents: [MobileStreamSurfaceAttachmentEvent] = []
+        var replacementEvents: [MobileStreamSurfaceAttachmentEvent] = []
+        let relay = MobileStreamSurfaceAttachmentRelay(
+            surface: surface,
+            handler: { candidate, event in
+                XCTAssertTrue(candidate === surface)
+                firstEvents.append(event)
+            }
+        )
+
+        relay.publish(.didMoveToWindow)
+        relay.updateHandler { candidate, event in
+            XCTAssertTrue(candidate === surface)
+            replacementEvents.append(event)
+        }
+        relay.publish(.layoutSubviews)
+        relay.invalidate()
+        relay.updateHandler { _, event in
+            replacementEvents.append(event)
+        }
+        relay.publish(.safeAreaInsetsDidChange)
+
+        XCTAssertEqual(firstEvents, [.didMoveToWindow])
+        XCTAssertEqual(replacementEvents, [.layoutSubviews])
+    }
+
+    @MainActor
+    func testMobileSurfaceAttachmentRelayDoesNotRetainSurface() {
+        var surface: MobileSurfaceAttachmentTestSurface? =
+            MobileSurfaceAttachmentTestSurface()
+        weak let weakSurface = surface
+        var events: [MobileStreamSurfaceAttachmentEvent] = []
+        let relay = MobileStreamSurfaceAttachmentRelay(
+            surface: surface!,
+            handler: { _, event in events.append(event) }
+        )
+
+        surface = nil
+        relay.publish(.didMoveToWindow)
+
+        XCTAssertNil(weakSurface)
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertEqual(
+            MobileStreamSurfaceAttachmentEvent.allCases,
+            [
+                .didMoveToWindow,
+                .layoutSubviews,
+                .safeAreaInsetsDidChange,
+                .registeredTraitsChanged
+            ]
+        )
+    }
+
     func testSDRFrameResolvesExplicitSRGBMetalPresentation() throws {
         let frame = try makeFrame(
             generation: 7,
@@ -1353,6 +1409,8 @@ final class StreamMetalPresenterTests: XCTestCase {
         case configurationResolutionFailed
     }
 }
+
+private final class MobileSurfaceAttachmentTestSurface {}
 
 @MainActor
 final class RecordingPresenterSurfaceAdapter: HDRSurfaceApplying {

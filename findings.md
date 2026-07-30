@@ -1815,3 +1815,11 @@
 - continuity policy以5个平台、3种scene activity、stream、PiP lifecycle、sink operational、audio active/permitted、background declaration和两项preference形成3,840项笛卡尔矩阵。期望模型独立断言unsupported platform、inactive stream、foreground、无实际合法媒体路径、缺background配置、PiP优先和audio-only的闭合顺序。
 - final focused为`51/51`，完整macOS为`772 total / 771 passed / 1 explicit Keychain skip / 0 failed`；四平台generic Debug App build全部成功且结构化诊断为0。OpenSpec strict、generator稳定、membership、privacy、diff与固定simulator只读门通过；固定iPhone/iPad均为`Shutdown`且`Booted=0`。
 - 该证据只证明deterministic value-contract coverage，不证明actual UIKit attachment、`UIWindowScene`/`UIScreen` owner、Stage Manager resize、AVKit/sample-buffer PiP、system background duration、actual mobile audio continuity、live Metal EDR、signed artifact、物理iPhone/iPad、external display或live Sunshine。
+
+## 2026-07-30 阶段 17 任务 2.1 验收
+
+- iOS-only `MobileStreamMetalView`现在把`didMoveToWindow`、`layoutSubviews`、`safeAreaInsetsDidChange`和registered trait change收敛为四个closed事件；trait registration只覆盖horizontal/vertical size class、display scale和interface style，不使用deprecated `traitCollectionDidChange(_:)`。
+- `MobileStreamSurfaceAttachmentRelay`固定在main actor、弱持有surface、允许SwiftUI update替换handler，并在invalidate后永久拒绝handler恢复或事件发布。`dismantleUIView`先注销trait token再使relay失效；tvOS/visionOS仍使用普通`MTKView`。
+- focused relay为`2/2`，expanded presenter suite为`28/28`；更新后完整macOS为`774 total / 773 passed / 1 explicit Keychain skip / 0 failed`，四平台generic Debug均成功且结构化diagnostics为0。
+- 固定iOS 26.4 iPhone/iPad只读盘点各唯一、available、`Shutdown`，全局`Booted=0`。本项未创建、克隆、启动、关闭、安装或运行模拟器，也未再次访问真实Keychain。
+- 该证据证明injectable callback boundary、relay replacement/invalidation/weak ownership、iOS public API compilation和跨平台隔离；不证明live UIKit callback实际触发、`UIWindowScene`/`UIWindow`/`UIScreen` owner、scene identity filtering、Stage Manager/geometry publication、drawable/input mapping、PiP/background、mobile EDR、signed/physical/live Sunshine。

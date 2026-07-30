@@ -72,6 +72,50 @@ enum StreamMetalViewScheduleResolver {
     }
 }
 
+enum MobileStreamSurfaceAttachmentEvent: CaseIterable, Equatable, Sendable {
+    case didMoveToWindow
+    case layoutSubviews
+    case safeAreaInsetsDidChange
+    case registeredTraitsChanged
+}
+
+@MainActor
+final class MobileStreamSurfaceAttachmentRelay<Surface: AnyObject> {
+    typealias Handler = @MainActor (
+        Surface,
+        MobileStreamSurfaceAttachmentEvent
+    ) -> Void
+
+    private weak var surface: Surface?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        surface: Surface,
+        handler: @escaping Handler
+    ) {
+        self.surface = surface
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    func publish(_ event: MobileStreamSurfaceAttachmentEvent) {
+        guard !isInvalidated, let surface else { return }
+        handler?(surface, event)
+    }
+
+    func invalidate() {
+        guard !isInvalidated else { return }
+        isInvalidated = true
+        handler = nil
+        surface = nil
+    }
+}
+
 struct StreamMetalPresentationPlan: Sendable {
     let configuration: HDRRenderConfigurationIdentity
     let uniforms: HDRMetalShaderUniforms
@@ -1266,11 +1310,84 @@ struct MetalStreamSurface: NSViewRepresentable {
     }
 }
 #else
+#if os(iOS)
+@MainActor
+final class MobileStreamMetalView: MTKView {
+    typealias AttachmentEventHandler =
+        MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>.Handler
+
+    private var attachmentRelay:
+        MobileStreamSurfaceAttachmentRelay<MobileStreamMetalView>?
+    private var traitChangeRegistration:
+        (any UITraitChangeRegistration)?
+
+    init(
+        frame frameRect: CGRect = .zero,
+        device: (any MTLDevice)? = nil,
+        attachmentEventHandler: @escaping AttachmentEventHandler = { _, _ in }
+    ) {
+        super.init(frame: frameRect, device: device)
+        attachmentRelay = MobileStreamSurfaceAttachmentRelay(
+            surface: self,
+            handler: attachmentEventHandler
+        )
+        traitChangeRegistration = registerForTraitChanges([
+            UITraitHorizontalSizeClass.self,
+            UITraitVerticalSizeClass.self,
+            UITraitDisplayScale.self,
+            UITraitUserInterfaceStyle.self
+        ]) { (view: MobileStreamMetalView, _) in
+            view.attachmentRelay?.publish(.registeredTraitsChanged)
+        }
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("MobileStreamMetalView must be created programmatically")
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        attachmentRelay?.publish(.didMoveToWindow)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        attachmentRelay?.publish(.layoutSubviews)
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        attachmentRelay?.publish(.safeAreaInsetsDidChange)
+    }
+
+    func updateAttachmentEventHandler(
+        _ handler: @escaping AttachmentEventHandler
+    ) {
+        attachmentRelay?.updateHandler(handler)
+    }
+
+    func invalidateAttachmentCallbacks() {
+        if let traitChangeRegistration {
+            unregisterForTraitChanges(traitChangeRegistration)
+            self.traitChangeRegistration = nil
+        }
+        attachmentRelay?.invalidate()
+        attachmentRelay = nil
+    }
+}
+#endif
+
 struct MetalStreamSurface: UIViewRepresentable {
     let renderState: StreamRenderState
     let presentationSource: StreamVideoPresentationSource
     var diagnosticHandler: StreamMetalPresenter.DiagnosticHandler = { _ in }
     var diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged
+#if os(iOS)
+    var attachmentEventHandler: MobileStreamMetalView.AttachmentEventHandler = {
+        _, _ in
+    }
+#endif
 
     func makeCoordinator() -> StreamMetalPresenter {
         StreamMetalPresenter(
@@ -1282,7 +1399,15 @@ struct MetalStreamSurface: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> MTKView {
+#if os(iOS)
+        let view = MobileStreamMetalView(
+            frame: .zero,
+            device: MTLCreateSystemDefaultDevice(),
+            attachmentEventHandler: attachmentEventHandler
+        )
+#else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
+#endif
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
@@ -1291,6 +1416,10 @@ struct MetalStreamSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ view: MTKView, context: Context) {
+#if os(iOS)
+        (view as? MobileStreamMetalView)?
+            .updateAttachmentEventHandler(attachmentEventHandler)
+#endif
         context.coordinator.update(renderState: renderState)
         let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)
         view.isPaused = schedule.isPaused
@@ -1305,6 +1434,9 @@ struct MetalStreamSurface: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: StreamMetalPresenter) {
+#if os(iOS)
+        (view as? MobileStreamMetalView)?.invalidateAttachmentCallbacks()
+#endif
         coordinator.stop()
         view.delegate = nil
         view.isPaused = true

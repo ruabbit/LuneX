@@ -364,6 +364,10 @@
 | 17.1.5首轮focused的coordinate boundary样本使用默认safe-area | 1 | `1 x 1` view会因默认top/bottom inset超界而正确关闭；boundary用例显式使用`.zero` safe-area，分别隔离rect端点验证 |
 | 17.1.5首轮focused把unprepared `.startRequested`归类为普通invalid transition | 1 | 保留其更精确的`.pictureInPictureUnavailable`拒绝预期；其余未准备controller事件继续断言`.invalidTransition`，全部验证snapshot/revision不变 |
 | 17.1.5仓库盘点再次对无参数解析的generator传入`--help` | 1 | 脚本按既有行为重生成工程且输出哈希未变化；正式门只无参数运行并比较初始及连续两次SHA-256，后续不再对该脚本传帮助参数 |
+| 17.2.1首轮focused的局部弱观察引用声明为`weak var` | 1 | Swift 6.3 warnings-as-errors判定局部变量从未赋值修改；按诊断改为`weak let`，production无编译错误，使用全新DerivedData/result bundle重跑 |
+| 17.2.1更新后组合验收包装器在zsh中使用Bash数组索引 | 1 | 完整macOS测试已独立成功，四平台build均未启动；保留该测试xcresult，build改用显式Bash和全新证据目录运行 |
+| 17.2.1首轮repository gate误断言OpenSpec `.summary.totals.invalid` | 1 | 当前CLI schema使用`.summary.totals.failed`且`.items[].valid`真实为true；该轮在generator前退出，按真实schema从全新目录完整重跑 |
+| 17.2.1第二轮repository gate对整个Metal surface文件禁用`ObjectIdentifier` | 1 | 命中仅为既有decoded-frame identity，current diff新增代码零命中；禁词检查收紧到新增行并从全新目录完整重跑 |
 
 ## 当前执行点（2026-07-30）
 
@@ -373,3 +377,4 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`6/36 in_progress`；2.1已完成iOS-only `MTKView` attachment callback边界、relay lifetime/teardown测试、更新后完整macOS与四平台generic Debug自验。下一项2.2实现main-actor current-generation actual view/window/scene/screen attachment owner；当前证据不证明live UIKit callback、Stage Manager、PiP、background、mobile EDR或真机。
