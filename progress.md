@@ -2799,3 +2799,11 @@
 - 复用并只读验收6.2的固定iPhone/iPad Debug/Release四份build：全部`succeeded/0/0/0`、destination匹配固定UUID、各有AIR/metallib，built plist为`iphonesimulator`、family `[1,2]`和单一`audio`。没有重复build。
 - 工程没有UI-test product target或XCUIApplication harness；因此没有启动、安装或launch-only伪UI门。本项未执行任何simulator生命周期变更，也未访问真实Keychain。OpenSpec 6.5已勾选，预期权威进度`34/36`、next 6.6；下一步运行勾选后的final-state gate并独立提交推送。
 - 勾选后final-state `/tmp/LuneX-17-6_5-final-state-r2.GDMtqY`通过fixture、OpenSpec strict `8/8`、apply精确`34/36 next 6.6`、generator稳定、pre/post/current inventory、固定identity、四build/Metal/plist、UI target absent/no launch、simulator mutation none、Keychain opt-in未设置、无LuneX残留进程和diff检查。首轮final-state只因把中文UI边界误断言为英文固定短语退出；全部实质门已先通过且未重复simulator查询/build/test。
+
+## 2026-08-06 阶段 17 任务 6.5 提交与 6.7 封版
+
+- 6.5提交为`4ebfbc7 Verify mobile continuity simulator inventory`并成功推送；fetch后`HEAD == origin/main == 4ebfbc7f6e58f1ac6a66cd1412d0e3a4aa2d97b7`，工作树clean。OpenSpec为`34/36 ready`，pending 6.6和6.7。
+- 6.6缺少授权signed physical iPhone/iPad、provisioning、system PiP/background duration、Stage Manager/external display、visible EDR、空间音频、live Sunshine和power/thermal证据，保持unchecked；不以simulator/offline结果替代。
+- 6.7同步mobile continuity合同、runtime roadmap、OpenSpec与三份planning文件，修正simulator tier为identity/state/build及“有真实target才执行UI path”，新增五级proof matrix、6.6 receipt隐私/场景要求、唯一pending与不可archive边界。
+- 6.7勾选后预期OpenSpec为`35/36 in_progress`且唯一pending 6.6。下一步执行strict/generator/docs/retained evidence final-state门、独立提交推送，再在已推送HEAD执行阶段17 fresh normal离线自验；测试继续移除真实Keychain opt-in且不操作simulator。
+- 勾选后final-state `/tmp/LuneX-17-6_7-final-state-r2.3enrxA`通过fixture、strict `8/8`、apply精确`35/36 only 6.6 pending`、generator、normal `909/908/1 exact Keychain/0`、十build、analyzer归属、ASan/TSan/resource、fixed simulator、五级proof docs、Keychain opt-in、LuneX进程和diff检查。首轮读取不存在的skip清单虽未令包装器失败但不计干净最终证据；r2从保留`tests.json`精确验证唯一Skipped节点且未重复test/build/simulator。

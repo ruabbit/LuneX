@@ -38,7 +38,7 @@ flowchart LR
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
 | 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
-| 17 | `in_progress`，OpenSpec `34/36` | actual UIKit scene/window/geometry/input、actual-window mobile EDR、sample-buffer PiP runtime、actual-state continuity policy、serialized mobile media owner、media environment/AppModel application与bounded diagnostics、stop/failure/replacement清理、iPhone/iPad单值`audio`配置、5.5–5.6 UI/回归、6.1 normal、6.2十配置build、6.3 repository/API/analyzer、6.4 sanitizer/resource和6.5 fixed-simulator门均已完成 | 6.6 signed/physical PiP/background/Stage Manager/EDR/live Sunshine与6.7跟踪封版尚未完成；固定ENet保留4项已归属analyzer finding |
+| 17 | `in_progress`，OpenSpec `35/36` | actual UIKit scene/window/geometry/input、actual-window mobile EDR、sample-buffer PiP runtime、actual-state continuity policy、serialized mobile media owner、media environment/AppModel application与bounded diagnostics、stop/failure/replacement清理、iPhone/iPad单值`audio`配置、UI/回归、normal/build/repository/analyzer/sanitizer/resource/fixed-simulator，以及6.7合同/证明边界封版均已完成 | 唯一剩余6.6 signed/physical PiP/background/Stage Manager/EDR/live Sunshine验收；固定ENet保留4项已归属analyzer finding |
 | 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
 | 20 | `pending` | Release配置与sanitizer静态门禁可执行 | 尚无签名发布包、端到端延迟、功耗、热状态、弱网、内存基线与长时真机证据 |
@@ -137,13 +137,20 @@ flowchart LR
 ## 阶段 17：iOS/iPadOS 连续性
 
 - `docs/runtime/mobile-scene-pip-continuity-contract.md`是actual UIKit stream view/window/screen、共享geometry/input、sample-buffer PiP、合法background continuity、mobile EDR和物理验收的权威合同。
-- OpenSpec `integrate-mobile-scene-pip-continuity`当前`34/36 in_progress`；1.x至5.6及6.1–6.5均已完成。完整normal与完整ASan/TSan均为`909/908/1/0`且唯一skip是显式真实Keychain用例；6.2十配置build、6.3 repository/API/analyzer和6.4 resource门通过。6.5只读证据`/tmp/LuneX-17-6_5-simulator-audit.wNPE0P`确认6.2前/后/当前清单SHA-256同为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`，固定iPhone/iPad 26.4 identity各唯一、available、`Shutdown`且全局`Booted=0`；四份固定build成功且零结构化诊断。项目没有UI-test target，因此未启动、安装或运行simulator。下一项6.6为signed physical acceptance；这些证据仍不证明system PiP、background duration、Stage Manager、visible EDR或live Sunshine。
+- OpenSpec `integrate-mobile-scene-pip-continuity`当前`35/36 in_progress`；1.x至5.6、6.1–6.5及6.7均已完成。完整normal与完整ASan/TSan均为`909/908/1/0`且唯一skip是显式真实Keychain用例；十配置build、repository/API/analyzer、resource和fixed-simulator门通过。6.7已同步权威合同、路线图、OpenSpec与三份规划，并固定contract/static、build、simulator、signed artifact、physical/live五级证明边界。唯一剩余6.6为signed physical acceptance；当前证据仍不证明system PiP、background duration、Stage Manager、visible EDR或live Sunshine。
 - RootView 接入 `scenePhase`、实际 `UIWindowScene`、screen、scale 和几何变化。
 - iPad Stage Manager 与多窗口 resize 实时更新 drawable、input transform 和 decoder output policy。
 - 使用 `AVPictureInPictureController` 和有效 content source 实现真实 PiP。
 - 后台只在 audio/PiP 合法路径下保活；无合法路径时明确暂停或断开。
 - 从实际 `UIScreen.currentEDRHeadroom` 更新移动 render state。
 - 真机验证锁屏、来电/音频中断、前后台、PiP、外接屏和窗口恢复。
+
+### 阶段 17 当前验收边界
+
+- 已完成合同/静态、unsigned build、deterministic normal/analyzer/sanitizer/resource与fixed simulator identity/build层；这些层级不能提升为signed artifact或physical/live证明。
+- 6.6必须关联LuneX commit、OS/Xcode、device class、签名配置类别、脱敏Sunshine版本、场景、预期/实际、bounded runtime state和clean teardown；不得记录endpoint、secret、profile UUID、证书、设备序列号、raw scene/display identity或媒体payload。
+- 授权iPhone/iPad矩阵必须覆盖system PiP possible/start/active/stop/restore/failure、前后台/锁屏/中断/route或media reset、audio-only/PiP合法连续性及最后路径丢失、iPad Stage Manager resize/rotation、external-display drawable/input、SDR/HDR-to-SDR/mobile EDR、空间音频共存、live Sunshine、CPU/GPU/memory/power/thermal与无残留teardown。
+- 当前没有6.6 signed physical receipt，change不可archive、阶段不可标记`complete`。阶段18–20可以继续，但其编译、simulator或离线测试不得回填6.6。
 
 ## 阶段 18：tvOS/visionOS 运行适配
 

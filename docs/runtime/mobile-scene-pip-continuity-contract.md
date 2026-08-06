@@ -17,8 +17,9 @@ Stage 17 uses five separate proof tiers:
    availability, privacy bounds, and deterministic reducers.
 2. **Build proof**: the generated project compiles with warnings as errors for
    the required platform and configuration.
-3. **Simulator proof**: a fixed existing simulator executes the explicitly
-   selected UI or lifecycle path. This does not prove physical media policy.
+3. **Simulator proof**: fixed identity, state, and build compatibility, plus an
+   explicitly selected UI or lifecycle path only when a real simulator test
+   target exists. This does not prove physical media policy.
 4. **Signed artifact proof**: the built application contains the intended
    background configuration and provisioning accepts it.
 5. **Physical and live proof**: the system presents PiP, applies real
@@ -1360,3 +1361,23 @@ device class, signed configuration class, sanitized Sunshine version, scenario,
 expected result, observed result, bounded runtime state, and teardown result.
 It must not contain host endpoints, secrets, profile UUIDs, certificates,
 device serial numbers, raw scene/display identities, or media payloads.
+
+## Stage 17 closure status
+
+OpenSpec tasks 1.1 through 6.5 and 6.7 are complete. Task 6.6 is the only
+remaining task and stays unchecked until an authorized signed physical receipt
+meets the acceptance matrix above. The change remains `in_progress` at 35/36
+and must not be archived or described as feature-complete before that receipt.
+
+| Proof tier | Current stage 17 evidence | Explicitly not proven |
+|---|---|---|
+| Contract/static | Immutable contracts, production ownership, deterministic tests, privacy/API and repository gates | Apple runtime acceptance or live host behavior |
+| Build | Ten unsigned Debug/Release Apple-platform builds, generated plist, Metal artifacts, analyzer results | Signing, installation, provisioning, or store acceptance |
+| Simulator | Fixed 26.4 identity/state and retained iPhone/iPad builds; no UI target or launch | System PiP, background duration, Stage Manager, visible EDR, physical input/audio |
+| Signed artifact | Pending task 6.6 | Background entitlement/configuration acceptance on a device |
+| Physical/live | Pending task 6.6 | PiP, background, resize/rotation/external display, HDR, spatial audio, Sunshine, power/thermal, teardown |
+
+Stages 18 through 20 may proceed using the completed deterministic foundation,
+but their tests cannot backfill task 6.6. The rollback before physical
+acceptance remains foreground-only rendering with typed suspend/pause/stop and
+truthful unavailable/fallback UI; it is not an unsupported keepalive path.

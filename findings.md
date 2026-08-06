@@ -2284,3 +2284,10 @@
 - iOS 26.4固定iPhone 17 Pro与iPad Pro 13-inch (M5)的`runtime + name + UUID`各出现一次，两个UUID全局各出现一次、均available和`Shutdown`，51个available simulator中`Booted=0`。iOS 27.0各有一个系统同名默认identity；它们属于不同runtime，均`Shutdown`，不是固定26.4 UUID重复。
 - 只读复核6.2的固定iPhone/iPad Debug/Release四份xcresult均为`succeeded / 0 errors / 0 warnings / 0 analyzer warnings`且destination精确匹配固定UUID和iOS 26.4；每份各有AIR/metallib，built plist仍为`iphonesimulator`、`UIDeviceFamily [1,2]`和单一`UIBackgroundModes [audio]`，没有重复构建。
 - 工程静态扫描没有UI-test product type、`XCUIApplication`或`XCUITest` harness，因此没有可诚实执行的simulator UI target；本项没有create、clone、boot、bootstatus、install、launch、run、shutdown或delete设备，也不把launch-only或simulator观察冒充system PiP/Stage Manager/EDR证明。勾选后权威进度应为`34/36`、next 6.6。
+
+## 2026-08-06 阶段 17 任务 6.7 封版边界
+
+- 权威合同的simulator tier已修正为固定identity/state/build compatibility，并只在真实simulator test target存在时执行明确UI/lifecycle path；本工程没有UI-test target，所以6.5没有launch-only伪门。
+- 合同与路线图统一五级证据：contract/static、unsigned build、simulator、signed artifact、physical/live。当前仅前三层有证据；6.6缺少后两层，不能archive change或把阶段17标记complete。
+- 6.6 receipt必须覆盖签名配置、system PiP与恢复/失败、背景audio/PiP及最后合法路径丢失、锁屏/中断/reset、Stage Manager/rotation/external display/input、visible HDR/EDR、空间音频共存、live Sunshine、CPU/GPU/memory/power/thermal和clean teardown，并排除endpoint、secret、profile/certificate/device/raw identity与媒体payload。
+- 阶段18–20可以使用阶段17确定性foundation继续推进，但其build、simulator或离线验证不能回填6.6。6.7勾选后权威进度应为`35/36`，唯一pending为6.6。
