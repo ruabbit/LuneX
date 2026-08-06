@@ -167,6 +167,62 @@ final class AppModel: ApplicationInputSink {
         SpatialAudioPresentationStatus(audioRuntimeState)
     }
 
+    var mobileExperiencePresentationStatus: MobileExperiencePresentationStatus {
+        MobileExperiencePresentationStatusResolver.resolve(
+            hasActiveSession: activeStreamSessionID != nil
+                && activeMediaSessionID == activeStreamSessionID
+                && activeMediaGeneration != nil,
+            scene: mobileSceneWindowSnapshot?.state,
+            pictureInPicture: mobilePictureInPictureSnapshot?.state,
+            continuityPath: mobileRuntimeState?.continuityPath,
+            streamDirective: mobileRuntimeState?.media.plan.stream,
+            displayEDR: mobileDisplayEDRSnapshot?.state,
+            hdrPresentation: hdrPresentationStatus,
+            preferences: settings.continuity
+        )
+    }
+
+    @discardableResult
+    func performMobilePictureInPictureCommand(
+        _ command: MobilePictureInPictureCommand
+    ) -> MobilePictureInPictureCommandResult {
+#if os(iOS)
+        let availability = mobileExperiencePresentationStatus
+            .pictureInPictureCommand
+        switch (command, availability) {
+        case (.start, .start), (.stop, .stop):
+            break
+        case (.start, _), (.stop, _):
+            return .unavailable
+        }
+        guard let coordinator = mobilePictureInPictureCoordinator,
+              let snapshot = mobilePictureInPictureSnapshot,
+              coordinator.generation == snapshot.generation,
+              snapshot.generation.mediaGeneration == activeMediaGeneration else {
+            return .unavailable
+        }
+        let outcome = switch command {
+        case .start: coordinator.requestStart()
+        case .stop: coordinator.requestStop()
+        }
+        switch outcome {
+        case .unchanged:
+            return .unchanged
+        case .applied:
+            return .accepted
+        case .rejected:
+            return .rejected
+        case .revisionExhausted:
+            return .revisionExhausted
+        case .invalidated:
+            return .unavailable
+        }
+#else
+        _ = command
+        return .unsupportedPlatform
+#endif
+    }
+
     let videoPresentationSource: StreamVideoPresentationSource
 
     private let hostLibraryManager: HostLibraryManager

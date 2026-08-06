@@ -40,10 +40,10 @@ extension AppSettings {
             AudioPreferences.self,
             forKey: .audio
         ) ?? .defaults
-        continuity = try container.decode(
+        continuity = try container.decodeIfPresent(
             ContinuityPreferences.self,
             forKey: .continuity
-        )
+        ) ?? .defaults
         diagnosticsEnabled = try container.decode(
             Bool.self,
             forKey: .diagnosticsEnabled

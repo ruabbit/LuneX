@@ -35,7 +35,7 @@ No lower tier may be reported as a higher tier.
 | Concern | Current source | Current behavior | Stage 17 gap |
 |---|---|---|---|
 | Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, owns generation-scoped actual `UIWindow`/`UIWindowScene`/`UIScreen` attachment, publishes normalized geometry/drawable/input and attached-screen EDR revisions, and emits bounded lifecycle callbacks | Physical Stage Manager, external-display, visible EDR, and touch behavior remain unproved |
-| SwiftUI lifecycle | `RootView` and the mobile surface callbacks | Routes actual surface attachment, scene lifecycle, normalized window snapshot, and display EDR events into the current `AppModel` media generation; synthetic `ScenePhase` is not the mobile ownership source | Accessible runtime status and physical multiwindow/background restoration remain in 5.5/6.x |
+| SwiftUI lifecycle | `RootView` and the mobile surface callbacks | Routes actual surface attachment, scene lifecycle, normalized window snapshot, and display EDR events into the current `AppModel` media generation; synthetic `ScenePhase` is not the mobile ownership source | The full 5.6 UI/runtime transition matrix and physical multiwindow/background restoration remain pending |
 | macOS lifecycle reference | `AppKitLifecycleMonitor`, `MacStreamSurfaceAttachmentOwner`, and `MacStreamInputCaptureView` | Actual window/surface ownership, occlusion/focus, backing pixels, screen EDR, stale attachment rejection, render policy, and input admission are connected | This is a behavioral reference, not reusable UIKit code |
 | Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Mobile normalized geometry publishes the same revision used by `MTKView.drawableSize`, fit/fill rendering, touch/absolute mapping, invalid-geometry suppression, and remote reference size | Physical rotation, Stage Manager, and external-display mapping remain unproved |
 | Touch and hover mapping | `TouchInputAdapter` | Consumes current-generation `InputMapper`, rejects invalid or letterboxed samples, and carries the actual source reference size | Physical touch, pencil, hover, and external pointer acceptance remains pending |
@@ -43,11 +43,11 @@ No lower tier may be reported as a higher tier.
 | Current decoded frame | `StreamVideoPresentationSource` | Owns current session/media/decoder generations and feeds foreground Metal plus one bounded generation-filtered PiP subscription without another decoder | System PiP presentation remains unproved on hardware |
 | Decoded frame payload | `DecodedVideoFrame` and `MobilePictureInPictureSampleBufferAdapter` | Preserves the existing pixel buffer, timing, and color attachments while creating a bounded PiP sample-buffer view | Physical color/timing behavior remains unproved |
 | Continuity policy | `MobileContinuityPolicyResolver`, `MobileContinuityPathResolver`, and `MobileMediaGenerationOwner` | One serialized generation/revision owner resolves and applies foreground, PiP, audio-only, suspend, pause, or stop from actual current PiP/audio state and configuration eligibility | Background duration and system policy acceptance remain physical proof |
-| PiP state | Native PiP lifecycle and presentation coordinators | Owns content source, playback delegate, possibility/start/stop/failure/restore state, sample layer/sink, generation replacement, and bounded callbacks on the main actor | Accessible user commands/status are 5.5; system presentation is 6.6 |
+| PiP state | Native PiP lifecycle and presentation coordinators plus the `AppModel` command bridge | Owns content source, playback delegate, possibility/start/stop/failure/restore state, sample layer/sink, generation replacement, bounded callbacks, and generation-checked native start/stop requests | System presentation remains physical task 6.6 proof |
 | Audio session | `MobileAudioSessionAdapter`, `AVAudioEngineClient`, and `NativeSessionAudioProcessor` | Carries actual mobile activation readback into `SessionAudioRuntimeEvent`, composes mobile policy pause/resume with interruption/media-services recovery, and feeds continuity state | Audible background continuity and route behavior remain physical proof |
 | Media ownership | `NativeSessionMediaEnvironment` | Owns one mobile media owner/action client per media generation, serializes application reservations, publishes actual runtime events/snapshots, gates input/control, and includes mobile stop in shared teardown | Full 5.6 policy-loss/resource matrix and 6.x runtime acceptance remain pending |
-| App state | `AppModel` | Owns current mobile scene/geometry, attached-screen EDR, PiP, actual audio activity, continuity result, bounded diagnostics, revision application, and stop/failure/replacement clearing | Accessible 5.5 status/commands and physical behavior remain pending |
-| Native UI | `StreamWorkspaceView` and `SettingsView` | Shows the Metal surface, actual HDR/spatial status, continuity preference toggles, and native navigation | No actual PiP command, mobile lifecycle/resize status, actual background path, or actual mobile EDR status |
+| App state | `AppModel` and `MobileExperiencePresentationStatusResolver` | Owns current mobile scene/geometry, attached-screen EDR, PiP, actual audio activity, continuity result, bounded diagnostics, revision application, stop/failure/replacement clearing, typed actual-state projection, and generation-checked PiP commands | The 5.6 transition/ownership expansion and physical behavior remain pending |
+| Native UI | `StreamWorkspaceView` and `SettingsView` | Shows accessible native PiP start/stop progress, actual scene/PiP/background/mobile-EDR status, spatial-audio status, and separate continuity preference controls with compact/wide fallbacks | Deterministic 5.6 UI/accessibility/localization expansion and physical system behavior remain pending |
 
 ### Generator and configuration
 
@@ -1001,6 +1001,77 @@ resource matrix (5.6), signed background acceptance, system PiP, background
 duration, Stage Manager, rotation, external display, visible mobile EDR,
 spatial-audio hardware behavior, power/thermal behavior, physical input, or
 live Sunshine interoperability (6.x).
+
+### Native actual-state UI and PiP commands
+
+OpenSpec task 5.5 adds one platform-neutral presentation projection instead of
+another PiP or continuity state machine. `MobileExperiencePresentationStatus`
+derives scene, native PiP, continuity, and mobile-display states from the
+current values already owned by `AppModel`. Active-session truth requires the
+matching stream/media ownership still held during teardown; an enabled
+preference never creates an actual active state.
+
+The display projection distinguishes no session, unknown, detached, SDR,
+EDR-capable, EDR-active, HDR-to-SDR fallback, invalid headroom, and
+reconfiguration. EDR-active requires both an attached EDR-capable mobile
+display and actual renderer status `.edr`. Numeric headroom shown to the user
+is bounded to the runtime contract range `1...64`.
+
+On iOS, `AppModel.performMobilePictureInPictureCommand` accepts a start or stop
+only when the projected command is available and the coordinator, PiP snapshot,
+and active media generation still match. It forwards to the existing
+generation-owned coordinator and maps only its bounded outcome. Other platforms
+return a typed unsupported result; no second `AVPictureInPictureController` or
+decoder is created.
+
+The stream overlay uses native `pip.enter`/`pip.exit` icon commands, a fixed
+pending-stop progress control, tooltips, and explicit accessibility labels and
+values. Settings separates three preference toggles from actual runtime rows.
+Compact or accessibility text sizes use a vertical layout; wider layouts use a
+two-column form and `ViewThatFits` falls back before content can overflow. Copy
+uses static localizable resources and `Text` numeric interpolation.
+
+`AppSettings` now migrates a missing `continuity` object to defaults, while
+`ContinuityPreferences` migrates each missing field independently and preserves
+every stored Boolean that was present. Malformed present values continue to
+fail decoding rather than being silently accepted.
+
+Task 5.5 evidence:
+
+```text
+Focused value, command availability, and migration gate:
+/tmp/LuneX-17-5_5-focused.xrpILI/Focused.xcresult
+9 passed / 0 skipped / 0 failed
+
+Expanded AppModel/PiP/continuity/display/persistence gate:
+/tmp/LuneX-17-5_5-expanded.4eDReh/Expanded.xcresult
+220 total / 219 passed / 1 explicit Keychain skip / 0 failed
+
+Fresh complete macOS normal:
+/tmp/LuneX-17-5_5-full.AFYgqg/Full.xcresult
+906 total / 905 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug application builds:
+/tmp/LuneX-17-5_5-build-macOS.GXj1up/Build.xcresult
+/tmp/LuneX-17-5_5-build-iOS.MteT4o/Build.xcresult
+/tmp/LuneX-17-5_5-build-tvOS.oCtGE5/Build.xcresult
+/tmp/LuneX-17-5_5-build-visionOS.DzOKpU/Build.xcresult
+All succeeded with zero errors, warnings, or analyzer warnings
+
+Repository gate before task marking:
+/tmp/LuneX-17-5_5-repository-pre-r3.CQDfTT
+fixtures, OpenSpec strict 8/8, generator/compiler membership, UI contract,
+privacy/API/reference/dependency/license/plist/result and diff gates pass
+```
+
+All ordinary tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`; file/in-memory
+fallback remained active. No simulator inventory or lifecycle operation was
+performed. These results prove implementation, deterministic values, migration,
+SDK compilation, and static accessible/localizable UI structure. They do not
+prove the complete 5.6 transition matrix, system PiP presentation, signed
+background acceptance, background duration, Stage Manager, rotation, external
+display, visible EDR/HDR, physical input/spatial audio, power/thermal behavior,
+or live Sunshine interoperability.
 
 ## Target ownership model
 

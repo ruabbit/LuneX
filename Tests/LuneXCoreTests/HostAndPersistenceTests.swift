@@ -149,6 +149,55 @@ final class HostAndPersistenceTests: XCTestCase {
         )
     }
 
+    func testJSONSettingsRepositoryMigratesMissingAndPartialContinuityPreferences()
+        async throws
+    {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileURL = directory.appendingPathComponent("settings.json")
+        let repository = JSONFileAppSettingsRepository(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let currentData = try JSONEncoder().encode(AppSettings.defaults)
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: currentData) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "continuity")
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try JSONSerialization.data(
+            withJSONObject: legacyObject,
+            options: [.prettyPrinted, .sortedKeys]
+        ).write(to: fileURL, options: [.atomic])
+
+        var migrated = try await repository.loadSettings()
+        XCTAssertEqual(migrated.continuity, .defaults)
+
+        legacyObject["continuity"] = ["audioContinuityEnabled": false]
+        try JSONSerialization.data(
+            withJSONObject: legacyObject,
+            options: [.prettyPrinted, .sortedKeys]
+        ).write(to: fileURL, options: [.atomic])
+        migrated = try await repository.loadSettings()
+        XCTAssertEqual(
+            migrated.continuity,
+            ContinuityPreferences(
+                audioContinuityEnabled: false,
+                pictureInPictureEnabled: true,
+                reduceRenderingInBackground: true
+            )
+        )
+
+        try await repository.saveSettings(migrated)
+        let persistedData = try Data(contentsOf: fileURL)
+        XCTAssertTrue(persistedData.contains(Data(#""continuity""#.utf8)))
+        XCTAssertTrue(
+            persistedData.contains(Data(#""pictureInPictureEnabled""#.utf8))
+        )
+    }
+
     func testAudioPreferencesConvertToAndFromSessionPreferences() {
         let sessionPreferences = SessionSpatialAudioPreferences(
             spatialAudioEnabled: false,

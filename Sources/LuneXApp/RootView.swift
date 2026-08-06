@@ -729,6 +729,9 @@ private struct StreamStatusOverlay: View {
             HStack(spacing: 10) {
                 Label(appModel.session.phase.label, systemImage: appModel.session.isStreaming ? "dot.radiowaves.left.and.right" : "moon")
                     .font(.headline)
+                #if os(iOS)
+                MobilePictureInPictureCommandButton()
+                #endif
                 Button {
                     Task {
                         await appModel.stopStream()
@@ -762,9 +765,26 @@ private struct StreamStatusOverlay: View {
 
     @ViewBuilder
     private var statusPills: some View {
-        let hdrContent = appModel.hdrPresentationStatus.content
         let spatialContent = appModel.spatialAudioPresentationStatus.content
 
+        #if os(iOS)
+        let mobileStatus = appModel.mobileExperiencePresentationStatus
+        MobileActualStatusPill(
+            content: mobileSceneStatusContent(mobileStatus.scene)
+        )
+        MobileActualStatusPill(
+            content: mobilePictureInPictureStatusContent(
+                mobileStatus.pictureInPicture
+            )
+        )
+        MobileActualStatusPill(
+            content: mobileContinuityStatusContent(mobileStatus.continuity)
+        )
+        MobileActualStatusPill(
+            content: mobileDisplayStatusContent(mobileStatus.display)
+        )
+        #else
+        let hdrContent = appModel.hdrPresentationStatus.content
         StatusPill(
             label: appModel.settings.input.preferRelativeMouseMode
                 ? "Relative mouse"
@@ -778,6 +798,7 @@ private struct StreamStatusOverlay: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("HDR presentation")
         .accessibilityValue(hdrContent.accessibilityValue)
+        #endif
         StatusPill(
             label: spatialContent.overlayLabel,
             systemImage: spatialContent.systemImage
@@ -896,9 +917,7 @@ private struct SettingsView: View {
             }
 
             Section("Continuity") {
-                Toggle("Audio continuity", isOn: $appModel.settings.continuity.audioContinuityEnabled)
-                Toggle("Picture in Picture", isOn: $appModel.settings.continuity.pictureInPictureEnabled)
-                Toggle("Reduce rendering in background", isOn: $appModel.settings.continuity.reduceRenderingInBackground)
+                continuitySettingsContent
             }
 
             Section {
@@ -965,6 +984,59 @@ private struct SettingsView: View {
                 Label("Head tracking", systemImage: "person.wave.2")
             }
             .disabled(!appModel.settings.audio.spatialAudioEnabled)
+        }
+    }
+
+    @ViewBuilder
+    private var continuitySettingsContent: some View {
+        if horizontalSizeClass == .compact || dynamicTypeSize.isAccessibilitySize {
+            compactContinuitySettings
+        } else {
+            ViewThatFits(in: .horizontal) {
+                wideContinuitySettings
+                compactContinuitySettings
+            }
+        }
+    }
+
+    private var compactContinuitySettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            continuityPreferenceControls
+            Divider()
+            MobileActualStatusRows(
+                status: appModel.mobileExperiencePresentationStatus
+            )
+        }
+    }
+
+    private var wideContinuitySettings: some View {
+        HStack(alignment: .top, spacing: 20) {
+            continuityPreferenceControls
+                .frame(minWidth: 220, maxWidth: .infinity, alignment: .leading)
+            Divider()
+            MobileActualStatusRows(
+                status: appModel.mobileExperiencePresentationStatus
+            )
+            .frame(minWidth: 300, maxWidth: .infinity, alignment: .leading)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var continuityPreferenceControls: some View {
+        @Bindable var appModel = appModel
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: $appModel.settings.continuity.audioContinuityEnabled) {
+                Label("Audio continuity", systemImage: "speaker.wave.2")
+            }
+            Toggle(isOn: $appModel.settings.continuity.pictureInPictureEnabled) {
+                Label("Picture in Picture", systemImage: "pip")
+            }
+            Toggle(
+                isOn: $appModel.settings.continuity.reduceRenderingInBackground
+            ) {
+                Label("Reduce background rendering", systemImage: "gauge.with.dots.needle.33percent")
+            }
         }
     }
 
@@ -1055,6 +1127,435 @@ private struct SpatialAudioPresentationStatusRow: View {
     }
 }
 
+private struct MobilePictureInPictureCommandButton: View {
+    @Environment(AppModel.self) private var appModel
+
+    @ViewBuilder
+    var body: some View {
+        let status = appModel.mobileExperiencePresentationStatus
+        switch status.pictureInPictureCommand {
+        case .hidden:
+            EmptyView()
+        case .start:
+            commandButton(
+                command: .start,
+                systemImage: "pip.enter",
+                label: "Start Picture in Picture",
+                value: mobilePictureInPictureStatusContent(
+                    status.pictureInPicture
+                ).accessibilityValue
+            )
+        case .stop:
+            commandButton(
+                command: .stop,
+                systemImage: "pip.exit",
+                label: "Stop Picture in Picture",
+                value: mobilePictureInPictureStatusContent(
+                    status.pictureInPicture
+                ).accessibilityValue
+            )
+        case .stopPending:
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 32, height: 32)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Picture in Picture command")
+                .accessibilityValue("Stopping")
+        }
+    }
+
+    private func commandButton(
+        command: MobilePictureInPictureCommand,
+        systemImage: String,
+        label: LocalizedStringResource,
+        value: Text
+    ) -> some View {
+        Button {
+            _ = appModel.performMobilePictureInPictureCommand(command)
+        } label: {
+            Image(systemName: systemImage)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.bordered)
+        .frame(width: 36, height: 32)
+        .help(label)
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(value)
+    }
+}
+
+private struct MobileActualStatusRows: View {
+    let status: MobileExperiencePresentationStatus
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MobileActualStatusRow(content: mobileSceneStatusContent(status.scene))
+            MobileActualStatusRow(
+                content: mobilePictureInPictureStatusContent(
+                    status.pictureInPicture
+                )
+            )
+            MobileActualStatusRow(
+                content: mobileContinuityStatusContent(status.continuity)
+            )
+            MobileActualStatusRow(content: mobileDisplayStatusContent(status.display))
+        }
+    }
+}
+
+private struct MobileActualStatusRow: View {
+    let content: MobileActualStatusContent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(content.title)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Label {
+                    content.value
+                } icon: {
+                    Image(systemName: content.systemImage)
+                }
+            }
+            content.detail
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(content.title))
+        .accessibilityValue(content.accessibilityValue)
+    }
+}
+
+private struct MobileActualStatusPill: View {
+    let content: MobileActualStatusContent
+
+    var body: some View {
+        StatusPill(label: content.value, systemImage: content.systemImage)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(content.title))
+            .accessibilityValue(content.accessibilityValue)
+    }
+}
+
+private struct MobileActualStatusContent {
+    let title: LocalizedStringResource
+    let value: Text
+    let detail: Text
+    let systemImage: String
+    let accessibilityValue: Text
+}
+
+private func mobileSceneStatusContent(
+    _ status: MobileScenePresentationStatus
+) -> MobileActualStatusContent {
+    switch status {
+    case .noSession:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("No session"),
+            detail: Text("No active stream scene is attached."),
+            systemImage: "rectangle.slash",
+            accessibilityValue: Text("No active stream scene")
+        )
+    case .unknown:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Waiting"),
+            detail: Text("Waiting for the current stream window."),
+            systemImage: "hourglass",
+            accessibilityValue: Text("Waiting for the current stream window")
+        )
+    case .active:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Active"),
+            detail: Text("The stream scene is active in the foreground."),
+            systemImage: "rectangle.inset.filled",
+            accessibilityValue: Text("Active in the foreground")
+        )
+    case .inactive:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Inactive"),
+            detail: Text("The stream scene is visible but inactive."),
+            systemImage: "rectangle.dashed",
+            accessibilityValue: Text("Visible but inactive")
+        )
+    case .background:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Background"),
+            detail: Text("The stream scene is in the background."),
+            systemImage: "rectangle.stack",
+            accessibilityValue: Text("In the background")
+        )
+    case .detached:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Detached"),
+            detail: Text("The stream surface is not attached to a window."),
+            systemImage: "rectangle.slash",
+            accessibilityValue: Text("Stream surface detached")
+        )
+    case .resizing:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Resizing"),
+            detail: Text("Window geometry is updating."),
+            systemImage: "arrow.up.left.and.arrow.down.right",
+            accessibilityValue: Text("Window geometry is updating")
+        )
+    case .invalidGeometry:
+        MobileActualStatusContent(
+            title: "Scene",
+            value: Text("Unavailable"),
+            detail: Text("Current window geometry is unavailable."),
+            systemImage: "exclamationmark.triangle",
+            accessibilityValue: Text("Current window geometry is unavailable")
+        )
+    }
+}
+
+private func mobilePictureInPictureStatusContent(
+    _ status: MobilePictureInPicturePresentationStatus
+) -> MobileActualStatusContent {
+    switch status {
+    case .noSession:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("No session"),
+            detail: Text("Picture in Picture is not running."),
+            systemImage: "pip",
+            accessibilityValue: Text("No active stream")
+        )
+    case .disabled:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Disabled"),
+            detail: Text("Picture in Picture is disabled in settings."),
+            systemImage: "pip.remove",
+            accessibilityValue: Text("Disabled in settings")
+        )
+    case .unavailable:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Unavailable"),
+            detail: Text("Native Picture in Picture is not currently available."),
+            systemImage: "pip.remove",
+            accessibilityValue: Text("Native Picture in Picture unavailable")
+        )
+    case .preparing:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Preparing"),
+            detail: Text("Preparing the native Picture in Picture controller."),
+            systemImage: "hourglass",
+            accessibilityValue: Text("Preparing")
+        )
+    case .ready:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Ready"),
+            detail: Text("Native Picture in Picture can be started."),
+            systemImage: "pip.enter",
+            accessibilityValue: Text("Ready to start")
+        )
+    case .starting:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Starting"),
+            detail: Text("Waiting for native Picture in Picture confirmation."),
+            systemImage: "pip.enter",
+            accessibilityValue: Text("Start requested, waiting for confirmation")
+        )
+    case .active:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Active"),
+            detail: Text("Native Picture in Picture is active."),
+            systemImage: "pip.fill",
+            accessibilityValue: Text("Native Picture in Picture active")
+        )
+    case .stopping:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Stopping"),
+            detail: Text("Waiting for Picture in Picture to stop."),
+            systemImage: "pip.exit",
+            accessibilityValue: Text("Stop requested, waiting for confirmation")
+        )
+    case .stopped:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Stopped"),
+            detail: Text("Picture in Picture is stopped and can be started again."),
+            systemImage: "pip",
+            accessibilityValue: Text("Stopped and ready to start again")
+        )
+    case .failed:
+        MobileActualStatusContent(
+            title: "Picture in Picture",
+            value: Text("Failed"),
+            detail: Text("Native Picture in Picture could not start or continue."),
+            systemImage: "exclamationmark.triangle",
+            accessibilityValue: Text("Native Picture in Picture failed")
+        )
+    }
+}
+
+private func mobileContinuityStatusContent(
+    _ status: MobileContinuityPresentationStatus
+) -> MobileActualStatusContent {
+    switch status {
+    case .noSession:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("No session"),
+            detail: Text("No stream is using a background media path."),
+            systemImage: "pause.circle",
+            accessibilityValue: Text("No active stream")
+        )
+    case .unavailable:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Waiting"),
+            detail: Text("Waiting for actual media continuity state."),
+            systemImage: "hourglass",
+            accessibilityValue: Text("Waiting for actual media continuity state")
+        )
+    case .foreground:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Foreground"),
+            detail: Text("Video and audio are running in the foreground."),
+            systemImage: "play.rectangle",
+            accessibilityValue: Text("Foreground video and audio")
+        )
+    case .pictureInPicture:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Picture in Picture"),
+            detail: Text("The confirmed Picture in Picture path is continuing the stream."),
+            systemImage: "pip.fill",
+            accessibilityValue: Text("Confirmed Picture in Picture continuity")
+        )
+    case .audioOnly:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Audio only"),
+            detail: Text("The active audio session is continuing without video presentation."),
+            systemImage: "speaker.wave.2.fill",
+            accessibilityValue: Text("Active audio-only continuity")
+        )
+    case .suspended:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Suspended"),
+            detail: Text("No permitted background media path is active."),
+            systemImage: "pause.circle",
+            accessibilityValue: Text("Suspended because no permitted background media path is active")
+        )
+    case .paused:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Stream paused"),
+            detail: Text("The stream is paused because continuity policy was not satisfied."),
+            systemImage: "pause.fill",
+            accessibilityValue: Text("Stream paused by continuity policy")
+        )
+    case .stopped:
+        MobileActualStatusContent(
+            title: "Background continuity",
+            value: Text("Stopped"),
+            detail: Text("The mobile media generation is stopped."),
+            systemImage: "stop.fill",
+            accessibilityValue: Text("Mobile media generation stopped")
+        )
+    }
+}
+
+private func mobileDisplayStatusContent(
+    _ status: MobileDisplayPresentationStatus
+) -> MobileActualStatusContent {
+    switch status {
+    case .noSession:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("No session"),
+            detail: Text("No active mobile video presentation."),
+            systemImage: "sun.max",
+            accessibilityValue: Text("No active mobile video presentation")
+        )
+    case .unknown:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("Unknown"),
+            detail: Text("Actual display headroom is not available yet."),
+            systemImage: "questionmark.circle",
+            accessibilityValue: Text("Actual display headroom unknown")
+        )
+    case .detached:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("Detached"),
+            detail: Text("The stream surface is not attached to a display."),
+            systemImage: "rectangle.slash",
+            accessibilityValue: Text("Stream surface detached from the display")
+        )
+    case .sdr:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("SDR"),
+            detail: Text("The attached display currently reports standard dynamic range."),
+            systemImage: "sun.min",
+            accessibilityValue: Text("Actual output is standard dynamic range")
+        )
+    case let .edrCapable(potential, current):
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("EDR capable"),
+            detail: Text("Current headroom is \(current, format: .number.precision(.fractionLength(1))) times; potential headroom is \(potential, format: .number.precision(.fractionLength(1))) times."),
+            systemImage: "sun.max",
+            accessibilityValue: Text("EDR capable. Current headroom \(current, format: .number.precision(.fractionLength(1))) times. Potential headroom \(potential, format: .number.precision(.fractionLength(1))) times.")
+        )
+    case let .edrActive(current):
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("EDR active"),
+            detail: Text("The current renderer is presenting EDR at \(current, format: .number.precision(.fractionLength(1))) times headroom."),
+            systemImage: "sun.max.fill",
+            accessibilityValue: Text("EDR active at \(current, format: .number.precision(.fractionLength(1))) times headroom.")
+        )
+    case .sdrFallback:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("SDR fallback"),
+            detail: Text("Actual display conditions require standard dynamic range."),
+            systemImage: "exclamationmark.triangle",
+            accessibilityValue: Text("HDR to SDR fallback is active")
+        )
+    case .invalidHeadroom:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("Invalid headroom"),
+            detail: Text("The display headroom reading was invalid and is not used as HDR proof."),
+            systemImage: "exclamationmark.triangle",
+            accessibilityValue: Text("Invalid display headroom; HDR is not claimed")
+        )
+    case .reconfiguring:
+        MobileActualStatusContent(
+            title: "Mobile HDR output",
+            value: Text("Reconfiguring"),
+            detail: Text("Waiting for video that matches the current mobile display revision."),
+            systemImage: "arrow.triangle.2.circlepath",
+            accessibilityValue: Text("Reconfiguring for the current mobile display")
+        )
+    }
+}
+
 private struct NumberSettingRow: View {
     let title: String
     @Binding var value: Int
@@ -1120,6 +1621,11 @@ private struct StatusPill: View {
 
     init(label: LocalizedStringResource, systemImage: String) {
         self.label = Text(label)
+        self.systemImage = systemImage
+    }
+
+    init(label: Text, systemImage: String) {
+        self.label = label
         self.systemImage = systemImage
     }
 

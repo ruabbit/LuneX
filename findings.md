@@ -2215,3 +2215,31 @@
 - `mobile-scene-pip-continuity-contract.md`的baseline inventory和5.2结尾仍写着media environment/AppModel未接线，这是5.4实现前的历史状态；封版必须更新为当前actual state/application/diagnostic/clear-state事实，同时明确5.5 UI与6.x system/physical/live证据仍未完成。
 - 5.4合同已更新为当前事实：shared runtime只持有Sendable语义值，RootView/AppModel负责actual platform state，environment在await前预留并在成功后发布，action client以分步进度接线video/audio/control/input，stop/failure/replacement共享完整teardown；5.5/5.6/6.x证明边界继续保留。
 - final-state r3确认权威状态为`27/36 next 5.5`，5.4实现、测试、build、repository和文档证据闭环；后续提交不得混入5.5 UI代码。
+## 2026-08-06 阶段 17 任务 5.5 初始边界
+
+- OpenSpec 权威进度为 `27/36 ready`，next 精确为 5.5；5.4 已在远端基线 `77cac48` 完成，5.5 不重做 runtime ownership。
+- `mobile-display-edr` 要求 stream status、Settings 和 diagnostics 区分 detached、unknown、SDR、EDR-capable、EDR-active、HDR-to-SDR fallback、invalid-headroom 与 reconfiguring；用户偏好不得被显示成 actual HDR proof，headroom accessibility value 必须有界。
+- `mobile-pip-background-continuity` 与 5.5 task 要求 native accessible PiP commands、actual PiP/background continuity state、continuity settings、compact/wide layouts、localization-safe copy 和 preference migration；system PiP presentation、signed background acceptance 与 background duration 仍属于 6.6 物理证据。
+- 继续保留测试约束：普通测试不启用真实 Keychain opt-in，当前阶段不查询、创建、启动、关闭或修改 simulator。
+- `AppSettings` 已持有 `ContinuityPreferences`，但当前 decoder 对 `continuity` 使用必需字段解码；缺失旧字段会整体加载失败，因此 5.5 需要把缺失 continuity 迁移到 `.defaults`，同时保留显式旧值。
+- `AppModel` 已私有持有 `MobilePictureInPicturePresentationCoordinator` 并根据偏好 prepare/invalidate，但尚无供 SwiftUI 调用的 generation-safe start/stop command surface。
+- `RootView.swift` 已有 `StreamWorkspaceView`、`StreamStatusOverlay` 与 `SettingsView`，并已使用 `ViewThatFits`/`horizontalSizeClass`；现有 UI 只有偏好 toggles 和既有 HDR/空间音频状态，尚未显示 actual mobile scene/PiP/continuity/EDR，也没有 PiP command。
+- `StreamStatusOverlay` 当前已用 `ViewThatFits(in: .horizontal)` 在水平 pills 与纵向 fallback 间切换，适合扩展为 mobile compact/wide 状态而不创建新的浮动面板；现有 disconnect 是 text+icon command，PiP 更适合 icon-only native button配 tooltip/accessibility label/value。
+- `SettingsView` 的 Continuity section 当前直接绑定三个 toggles，没有 actual runtime status；需要把 preference controls 与 actual-state row 分离，避免开启偏好被理解为 PiP 或后台正在运行。
+- 5.5 状态/文案应由平台中立的纯值 projection 提供，便于 localization-safe、accessibility 和 5.6 deterministic tests；SwiftUI 只负责布局，`AppModel` 负责 generation-safe PiP command 转发。
+- `AppModel` 的 actual mobile state 已包含 `mobileRuntimeState`、scene/window、mobile EDR、PiP snapshot 与 audio-session active readback；`clearMobileRuntime()` 在 stop/failure/replacement 清空它们，因此 UI 必须直接投影这些 optional actual values，不缓存陈旧状态。
+- PiP runtime 只在 iOS 编译并由 `mobilePictureInPictureCoordinator` 私有持有；command API 应在非 iOS 返回 unsupported/no-op 的 typed result，保持 macOS/tvOS/visionOS source membership 可编译。
+- 现有 `HostAndPersistenceTests` 已证明 audio 缺字段/partial field migration 模式；continuity migration 可使用 `decodeIfPresent(... ) ?? .defaults` 并扩展同一 repository test，避免额外 schema/version 文件。
+- PiP coordinator 暴露同步 main-actor `requestStart()`/`requestStop()`，返回 bounded `unchanged/applied/rejected/revisionExhausted/invalidated`；reducer 只允许 ready/stopped 启动，允许 start-requested/starting/active 停止，pending stop 不重复接受。
+- 5.5 采用共享 `MobileExperiencePresentationStatus` resolver：输入仅为 session streaming、actual runtime/scene/PiP/display snapshots、actual HDR presentation 与 continuity preferences；输出为 typed scene/PiP/continuity/display status 和 PiP command availability。UI 不读取 generation/object identity，也不自行推断 runtime truth。
+- EDR actual status 将区分 inactive、unknown、detached、SDR、EDR-capable、EDR-active、SDR fallback、invalid headroom 与 reconfiguring；EDR-active 只有 actual mobile display 为 EDR-capable 且当前 renderer status 为 `.edr` 时成立。
+- `StreamingSessionState.isStreaming` 包含 `.suspending` 但不包含 `.stopping`；actual-state UI 改用 AppModel 仍持有匹配 stream/media generation 作为 active-session truth，避免 teardown 完成前短暂把仍存在的 actual stop/PiP 状态误报成 no session。
+
+## 2026-08-06 阶段 17 任务 5.5 验收结论
+
+- `MobileExperiencePresentationStatusResolver`只投影AppModel current-generation actual values；EDR active同时要求attached EDR-capable state与renderer `.edr`，PiP/continuity偏好不产生actual active状态，headroom展示限制在`1...64`。
+- iOS PiP命令只转发现有generation-owned coordinator；command availability、snapshot/coordinator generation和active media generation都必须匹配。非iOS返回typed unsupported，不新增controller、decoder或状态机。
+- stream overlay与Settings已区分偏好和actual状态，使用native icon commands、pending progress、tooltip、accessibility label/value、Dynamic Type compact布局和`ViewThatFits` wide fallback；数值文案使用可本地化`Text`插值。
+- continuity整体缺失迁移为defaults，部分字段逐项补default并保留已有布尔值；malformed present type仍失败而不是静默吞掉。
+- 正式证据为focused`9/9`、expanded`220/219/1/0`、fresh full`906/905/1/0`、四generic Debug均`succeeded/0/0/0`及repository pre-gate`/tmp/LuneX-17-5_5-repository-pre-r3.CQDfTT`。唯一skip为显式真实Keychain测试，opt-in未设置；没有查询或操作simulator。
+- 这些证据不证明system PiP、signed background acceptance、background duration、Stage Manager/rotation/external display、visible mobile EDR、物理输入/空间音频、power/thermal或live Sunshine；5.6只扩展确定性跨层/UI回归，6.6继续保留物理证明。

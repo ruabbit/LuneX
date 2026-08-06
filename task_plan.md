@@ -34,7 +34,7 @@
 | 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`26/36`；5.3 iPhone/iPad `audio` built-plist配置已完成，下一项5.4接入media environment/AppModel |
+| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`28/36`；5.5 actual-state/PiP command/continuity UI已完成，下一项5.6扩展回归 |
 | 18. tvOS/visionOS 运行适配 | pending | remote/focus、媒体输出、平台 HDR、空间音频和窗口/input 模型 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`已进入`in_progress`，权威进度`26/36`。1.x值合同、2.x actual UIKit scene/window/geometry/drawable/video/input ownership、3.x actual-window mobile EDR、4.x generation-scoped sample-buffer PiP runtime和5.1至5.3均已完成。5.3新增iOS专用source plist并修复旧单值build setting未进入built product的问题；unsigned iPhoneOS Debug/Release实际plist精确为`UIBackgroundModes == [audio]`、`UIDeviceFamily == [1,2]`，macOS/tvOS/visionOS没有被阶段17声明。五构建零诊断、完整macOS `881/880/1/0`和repository pre-gate通过，但不证明provisioning接受或runtime background行为。下一项5.4接入scene/geometry/PiP/continuity/mobile EDR和bounded diagnostics到`NativeSessionMediaEnvironment`/`AppModel`并在stop/failure/replacement清理actual state；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine保持pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`28/36`。1.x至5.5已完成：actual UIKit scene/window/geometry/input、attached-screen mobile EDR、generation-scoped sample-buffer PiP、serialized legal continuity、media/AppModel application，以及typed actual-state/PiP commands/continuity Settings、compact/wide/accessibility/localization-safe UI和向后兼容迁移均已接线。5.5门为focused `9/9`、expanded `220/219/1/0`、fresh full `906/905/1/0`、四generic Debug零结构化诊断和repository pre-gate通过；普通测试未访问真实Keychain且没有操作simulator。下一项5.6补齐policy-loss、audio-only、active-PiP、foreground restore、replacement、diagnostic ownership、UI/accessibility/localization/migration与clean-stop扩展回归；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine保持pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -419,6 +419,12 @@
 | 17.5.4 action最终repository gate以`set -u`直接展开未定义Keychain变量 | 1 | `/tmp/LuneX-17-5_4-action-repository-final.tepjpV`在全部实质检查后因`LUNEX_RUN_KEYCHAIN_TEST: unbound variable`退出且不计验收；改用`env`精确检查变量是否存在，从全新证据目录重跑完整门 |
 | 17.5.4勾选后final-state包装器包含未转义Markdown反引号 | 2 | 两次均在shell启动前报`SyntaxError: Unexpected number`，第二次遗漏了三条结果匹配中的反引号；未创建证据目录且仓库无额外变化。第三次彻底移除模板中的全部反引号再启动最终门 |
 | 17.5.4记录第二次final-state错误时补丁含空hunk | 1 | `apply_patch`校验拒绝且未修改文件；移除无内容的hunk并重新应用精确两文件补丁 |
+| 17.5.5首轮fixture tree门把root误传为仓库根 | 1 | validator按设计命中未跟踪build、docs与references；改用默认`Tests/Fixtures/Moonlight`根，源码与fixture未修改 |
+| 17.5.5 corrected reference隔离正则匹配合法Moonlight-qt导入工具 | 1 | 三处均在用户要求保留的本地数据导入工具且不进production graph；只禁止实际`references/`路径进入Sources/工程/generator |
+| 17.5.5 repository r2函数局部`path`覆盖zsh PATH | 1 | 已完成的实质门不计最终验收；改用显式Bash和`result_path`，从新目录完整重跑且不重复build/test |
+| 17.5.5续接只读门禁编排局部变量覆盖工具命名空间 | 1 | JavaScript在任何shell命令执行前以`ReferenceError`退出且仓库未改；变量改名后继续，不重复该编排 |
+| 17.5.5勾选后final-state文档断言再次包含Markdown反引号 | 1 | fixture、OpenSpec与generator已通过后静态断言无输出退出，未运行或重复test/build；改为不含反引号的固定语义匹配，从全新目录重跑完整门 |
+| 17.5.5 final-state r2命令所有权断言使用不存在的字段名 | 1 | 实现实际使用`mobilePictureInPictureCoordinator`且generation检查完整；修正只读断言，先逐项预检剩余静态/plist门再完整重跑 |
 
 ## 当前执行点（2026-07-30）
 
@@ -428,8 +434,21 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`26/36 in_progress`；2.x actual mobile lifecycle/geometry/input、3.x mobile EDR、4.x sample-buffer PiP和5.1至5.3均已完成。下一项5.4接入media environment/AppModel与bounded diagnostics；5.3 unsigned built plist仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`28/36 in_progress`；1.x至5.5的actual mobile runtime、media/AppModel ownership、native PiP commands、actual status、continuity UI与migration已完成。下一项5.6扩展跨层/UI回归；unsigned generic build仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
 - macOS 27.0更新后已重新认证5.3：Xcode 26.4/macOS SDK 26.4下macOS全量`881/880/1/0`且唯一skip为禁用的真实Keychain用例，iOS Debug/Release generic build与built plist读回均通过；没有启动或修改simulator。
 - 阶段17任务5.4已于2026-08-06恢复并进入`in_progress`：先建立current session/media generation的scene/geometry/EDR/PiP/audio纯值application与serialized continuity action边界，再接入AppModel和iOS actual surface回调；stop/failure/replacement必须清空actual current state，UIKit/AVKit对象不得跨actor。5.5 UI与6.6物理证明保持在后续任务。
 - macOS 27.0更新结束后再次恢复5.4；当前第一门为串行结构化读回`/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult`。只有expanded、fresh full macOS、generic platform builds及repository gates全部通过后才允许勾选5.4并提交。
 - 阶段17任务5.4已完成实现与阶段内自验并勾选：focused `18/18`、expanded `301/301`、fresh full `898/897/1/0`唯一显式Keychain skip、四generic Debug和repository gate均通过。权威进度应为`27/36`、next 5.5；最终状态门、提交与推送完成前仍不进入5.5实现。
+## 2026-08-06 阶段 17 任务 5.5 启动
+
+- **状态：** `in_progress`
+- **基线：** 5.4 已以 `77cac48 Integrate mobile runtime application state` 提交并推送，`HEAD == origin/main`，工作树 clean。
+- **范围：** accessible native PiP start/stop commands、actual scene/PiP/background/HDR status、continuity settings、compact/wide SwiftUI layouts、localization-safe copy 和 preference migration。
+- **验收：** 先运行设置迁移、UI value/command/accessibility focused tests，再运行扩大 UI/AppModel/PiP/continuity 回归、完整 normal suite、四平台 generic build 与 repository/OpenSpec 门；普通测试继续显式移除 `LUNEX_RUN_KEYCHAIN_TEST`，不查询或操作 simulator。
+
+## 2026-08-06 阶段 17 任务 5.5 完成
+
+- **状态：** `complete`
+- **实现：** typed actual-state projection、current-generation PiP command bridge、stream/Settings actual scene/PiP/continuity/mobile-EDR状态、compact/wide和accessibility/localization-safe UI、missing/partial continuity migration。
+- **自验：** focused `9/9`、expanded `220/219/1/0`、fresh full `906/905/1/0`、四generic Debug零结构化诊断、repository pre-gate `/tmp/LuneX-17-5_5-repository-pre-r3.CQDfTT`全部通过。
+- **证明边界：** 未操作simulator、未访问真实Keychain；system PiP、signed background、background duration、Stage Manager、external display、visible EDR、物理输入/空间音频、power/thermal与live Sunshine仍未证明。下一项5.6。

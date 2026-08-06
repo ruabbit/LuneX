@@ -26,6 +26,30 @@ struct ContinuityPreferences: Codable, Equatable, Hashable, Sendable {
     )
 }
 
+extension ContinuityPreferences {
+    private enum CodingKeys: String, CodingKey {
+        case audioContinuityEnabled
+        case pictureInPictureEnabled
+        case reduceRenderingInBackground
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        audioContinuityEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .audioContinuityEnabled
+        ) ?? Self.defaults.audioContinuityEnabled
+        pictureInPictureEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .pictureInPictureEnabled
+        ) ?? Self.defaults.pictureInPictureEnabled
+        reduceRenderingInBackground = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .reduceRenderingInBackground
+        ) ?? Self.defaults.reduceRenderingInBackground
+    }
+}
+
 struct PlatformContinuityCapabilities: Codable, Equatable, Hashable, Sendable {
     var supportsAudioBackgroundMode: Bool
     var supportsPictureInPicture: Bool
