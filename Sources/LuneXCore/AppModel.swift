@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 import OSLog
+#if os(iOS)
+import AVKit
+import UIKit
+#endif
 
 enum AppNavigationSelection: Hashable {
     case library
@@ -131,6 +135,12 @@ final class AppModel: ApplicationInputSink {
                 updateRenderPreferences()
                 refreshHDRRenderResolution()
             }
+#if os(iOS)
+            if settings.continuity != oldValue.continuity {
+                refreshMobilePictureInPictureConfiguration()
+                queueMobileRuntimeApplication()
+            }
+#endif
         }
     }
     var session = StreamingSessionState()
@@ -146,6 +156,12 @@ final class AppModel: ApplicationInputSink {
     private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
     private(set) var hdrPresentationStatus = HDRPresentationStatus.inactive
     private(set) var audioRuntimeState: SessionMediaAudioRuntimeState?
+    private(set) var mobileRuntimeState: SessionMobileRuntimeState?
+    private(set) var mobileSceneWindowSnapshot: MobileSceneWindowSnapshot?
+    private(set) var mobileDisplayEDRSnapshot: MobileDisplayEDRSnapshot?
+    private(set) var mobilePictureInPictureSnapshot:
+        MobilePictureInPictureSnapshot?
+    private(set) var mobileAudioSessionActive: Bool?
 
     var spatialAudioPresentationStatus: SpatialAudioPresentationStatus {
         SpatialAudioPresentationStatus(audioRuntimeState)
@@ -195,6 +211,28 @@ final class AppModel: ApplicationInputSink {
         MacSessionInputCoordinator(sink: self)
     @ObservationIgnored private var activeMacInputGeneration: MacSessionInputGeneration?
     @ObservationIgnored private var isMacInputGenerationFailed = false
+    @ObservationIgnored private var mobileSurfaceGeneration:
+        MobileSceneSurfaceGeneration?
+    @ObservationIgnored private var mobileSceneActivity: AppSceneActivity = .inactive
+    @ObservationIgnored private var mobileRuntimeRevision: UInt64 = 0
+    @ObservationIgnored private var appliedMobileRuntimeRevision: UInt64 = 0
+    @ObservationIgnored private var failedMobileRuntimeRevision: UInt64 = 0
+    @ObservationIgnored private var isMobileRuntimeRevisionExhausted = false
+    @ObservationIgnored private var latestMobileRuntimeApplication:
+        SessionMobileRuntimeApplication?
+    @ObservationIgnored private var mobileRuntimeApplicationTask:
+        Task<Void, Never>?
+    @ObservationIgnored private var mobileRuntimeApplicationOperationID: UUID?
+    @ObservationIgnored private var mobilePictureInPictureGenerationOrdinal:
+        UInt64 = 0
+    @ObservationIgnored private var highestMobilePictureInPictureDecoderGeneration:
+        UInt64 = 0
+    @ObservationIgnored private var isMobilePictureInPictureGenerationExhausted = false
+    @ObservationIgnored private var lastMobileDiagnosticCodes: [String: String] = [:]
+#if os(iOS)
+    @ObservationIgnored private var mobilePictureInPictureCoordinator:
+        MobilePictureInPicturePresentationCoordinator?
+#endif
 #if os(macOS)
     @ObservationIgnored private var lastMacLifecycleDiagnosticState: MacLifecycleDiagnosticState?
     @ObservationIgnored private var lastMacInputDiagnosticState: MacInputDiagnosticState?
@@ -340,6 +378,150 @@ final class AppModel: ApplicationInputSink {
         refreshMacInputSurfacePolicy()
         scheduleLifecycleApplication()
     }
+
+#if os(iOS)
+    func receiveMobileSurfaceAttachment(
+        surfaceGeneration: MobileSceneSurfaceGeneration,
+        isAttached: Bool
+    ) {
+        guard !isMobileRuntimeRevisionExhausted,
+              activeMediaSessionID == activeStreamSessionID,
+              activeMediaGeneration != nil,
+              acceptMobileSurfaceGeneration(surfaceGeneration) else {
+            publishMobileDiagnostic(
+                domain: "continuity",
+                ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+            )
+            return
+        }
+        if !isAttached {
+            mobileSceneWindowSnapshot = nil
+            mobileDisplayEDRSnapshot = nil
+        }
+        publishMobileDiagnostic(
+            domain: "scene",
+            ApplicationDiagnosticFactory.mobileSceneState(
+                isAttached ? .inactive : .detached
+            )
+        )
+        queueMobileRuntimeApplication()
+    }
+
+    func receiveMobileSceneLifecycle(
+        _ update: MobileStreamSceneLifecycleUpdate
+    ) {
+        guard !isMobileRuntimeRevisionExhausted,
+              activeMediaSessionID == activeStreamSessionID,
+              activeMediaGeneration != nil,
+              acceptMobileSurfaceGeneration(update.surfaceGeneration) else {
+            publishMobileDiagnostic(
+                domain: "continuity",
+                ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+            )
+            return
+        }
+        switch update.observation {
+        case let .attached(activity):
+            mobileSceneActivity = activity
+            publishMobileSceneActivityDiagnostic(activity)
+        case .detached, .invalidated:
+            mobileSceneActivity = .inactive
+            mobileSceneWindowSnapshot = nil
+            mobileDisplayEDRSnapshot = nil
+            publishMobileDiagnostic(
+                domain: "scene",
+                ApplicationDiagnosticFactory.mobileSceneState(.detached)
+            )
+        }
+        queueMobileRuntimeApplication()
+    }
+
+    func receiveMobileSceneWindowSnapshot(
+        _ snapshot: MobileSceneWindowSnapshot
+    ) {
+        guard !isMobileRuntimeRevisionExhausted,
+              activeMediaSessionID == activeStreamSessionID,
+              activeMediaGeneration != nil,
+              acceptMobileSurfaceGeneration(snapshot.surfaceGeneration) else {
+            publishMobileDiagnostic(
+                domain: "continuity",
+                ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+            )
+            return
+        }
+        if let current = mobileSceneWindowSnapshot,
+           current.surfaceGeneration == snapshot.surfaceGeneration,
+           snapshot.revision.rawValue <= current.revision.rawValue {
+            if snapshot != current {
+                publishMobileDiagnostic(
+                    domain: "continuity",
+                    ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+                )
+            }
+            return
+        }
+        mobileSceneWindowSnapshot = snapshot
+        mobileSceneActivity = snapshot.state.activity
+        switch snapshot.state {
+        case .detached:
+            publishMobileDiagnostic(
+                domain: "scene",
+                ApplicationDiagnosticFactory.mobileSceneState(.detached)
+            )
+        case let .attached(_, _, geometry):
+            publishMobileDiagnostic(
+                domain: "scene",
+                ApplicationDiagnosticFactory.mobileSceneState(
+                    geometry.resizePhase == .resizing ? .resizing : .settled
+                )
+            )
+        case .unavailable:
+            publishMobileDiagnostic(
+                domain: "scene",
+                ApplicationDiagnosticFactory.mobileSceneState(.invalidGeometry)
+            )
+        }
+        queueMobileRuntimeApplication()
+    }
+
+    func receiveMobileDisplayEDREvent(
+        _ event: MobileDisplayEDRObserverEvent
+    ) {
+        guard !isMobileRuntimeRevisionExhausted,
+              activeMediaSessionID == activeStreamSessionID,
+              activeMediaGeneration != nil,
+              acceptMobileSurfaceGeneration(event.surfaceGeneration) else {
+            publishMobileDiagnostic(
+                domain: "continuity",
+                ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+            )
+            return
+        }
+        switch event {
+        case let .snapshot(snapshot):
+            if let current = mobileDisplayEDRSnapshot,
+               current.surfaceGeneration == snapshot.surfaceGeneration,
+               snapshot.revision.rawValue <= current.revision.rawValue {
+                if snapshot != current {
+                    publishMobileDiagnostic(
+                        domain: "continuity",
+                        ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+                    )
+                }
+                return
+            }
+            mobileDisplayEDRSnapshot = snapshot
+            publishMobileDisplayDiagnostic(snapshot.state)
+        case .revisionExhausted:
+            mobileDisplayEDRSnapshot = nil
+            publishMobileDiagnostic(
+                domain: "display",
+                ApplicationDiagnosticFactory.mobileDisplayState(.fallback)
+            )
+        }
+        queueMobileRuntimeApplication()
+    }
+#endif
 
     func publishHDRPresentationDiagnostic(
         _ state: HDRPresentationDiagnosticState
@@ -1187,6 +1369,9 @@ final class AppModel: ApplicationInputSink {
         clearActiveAudioRuntime()
         activeMediaSessionID = sessionID
         activeMediaGeneration = environmentSnapshot.generation
+#if os(iOS)
+        beginMobileRuntime(mediaGeneration: environmentSnapshot.generation)
+#endif
         if let audioRuntime = environmentSnapshot.audioRuntime {
             applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
         }
@@ -1276,6 +1461,8 @@ final class AppModel: ApplicationInputSink {
             )
         case let .audioRuntime(audioRuntime):
             applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
+        case let .mobileRuntime(mobileRuntime):
+            applyMobileRuntimeState(mobileRuntime, sessionID: sessionID)
         }
     }
 
@@ -1329,6 +1516,9 @@ final class AppModel: ApplicationInputSink {
             }
         }
         audioRuntimeState = state
+        mobileAudioSessionActive = isMobileRuntimeRevisionExhausted
+            ? nil
+            : state.runtime.mobileAudioSessionActive
         let diagnosticState = SpatialAudioDiagnosticState(runtime: state.runtime)
         if diagnosticState.clearsCurrentAudioAction {
             diagnostics.clearActionableEvents(in: [.audio])
@@ -1338,11 +1528,15 @@ final class AppModel: ApplicationInputSink {
                 diagnosticState
             )
         )
+#if os(iOS)
+        queueMobileRuntimeApplication()
+#endif
     }
 
     private func clearActiveAudioRuntime() {
         guard audioRuntimeState != nil else { return }
         audioRuntimeState = nil
+        mobileAudioSessionActive = nil
         diagnostics.record(
             ApplicationDiagnosticFactory.spatialAudioState(.inactive)
         )
@@ -1364,6 +1558,7 @@ final class AppModel: ApplicationInputSink {
         guard activeStreamSessionID == sessionID else { return }
         await terminateMacInputGeneration(reason: .inputChannelFailure)
         invalidateLifecycleApplicationPump()
+        clearMobileRuntime()
         mediaConsumerTask = nil
         activeMediaSessionID = nil
         activeMediaGeneration = nil
@@ -1385,6 +1580,7 @@ final class AppModel: ApplicationInputSink {
     ) async {
         await terminateMacInputGeneration(reason: inputReason)
         invalidateLifecycleApplicationPump()
+        clearMobileRuntime()
         mediaConsumerTask?.cancel()
         mediaConsumerTask = nil
         if let mediaGeneration = activeMediaGeneration {
@@ -1600,6 +1796,7 @@ final class AppModel: ApplicationInputSink {
         }
 
         invalidateLifecycleApplicationPump()
+        clearMobileRuntime()
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
         let sessionError = SessionError(
             subsystem: diagnostic.subsystem,
@@ -1657,6 +1854,569 @@ final class AppModel: ApplicationInputSink {
         publishMacInputDiagnosticState()
 #endif
     }
+
+    private func applyMobileRuntimeState(
+        _ state: SessionMobileRuntimeState,
+        sessionID: UUID
+    ) {
+        let application = state.application
+        guard !isMobileRuntimeRevisionExhausted,
+              activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              application.sessionID == sessionID,
+              application.mediaGeneration == activeMediaGeneration else {
+            return
+        }
+        if let current = mobileRuntimeState {
+            guard application.revision.rawValue
+                    > current.application.revision.rawValue else {
+                return
+            }
+        }
+        if let latest = latestMobileRuntimeApplication,
+           application.revision.rawValue < latest.revision.rawValue {
+            return
+        }
+        mobileRuntimeState = state
+        mobileSceneWindowSnapshot = application.sceneWindow
+        mobileDisplayEDRSnapshot = application.displayEDR
+        mobilePictureInPictureSnapshot = application.pictureInPicture
+        mobileAudioSessionActive = application.isAudioSessionActive
+
+        switch state.media.plan.foreground {
+        case let .baseline(policy), let .restoreAndResample(policy):
+            renderState.policy = policy
+        case let .suspended(reason):
+            renderState.policy = .paused(reason: reason.rawValue)
+        case .idle:
+            renderState.policy = .idle
+        }
+
+        let diagnosticState: MobileContinuityDiagnosticState
+        switch state.media.plan.stream {
+        case .stopped:
+            diagnosticState = .stopped
+            if session.isStreaming {
+                session.phase = .stopping
+            }
+        case let .paused(reason):
+            diagnosticState = .suspended
+            if session.isStreaming {
+                session.phase = .suspending(reason: reason.rawValue)
+            }
+        case .running:
+            if session.isStreaming {
+                session.phase = .streaming
+            }
+            switch state.continuityPath {
+            case .foreground:
+                diagnosticState = .foreground
+            case .pictureInPicture:
+                diagnosticState = .pictureInPicture
+            case .audioOnly:
+                diagnosticState = .audioOnly
+            case .inactive:
+                diagnosticState = .stopped
+            case .unavailable:
+                diagnosticState = .suspended
+            }
+        }
+        publishMobileDiagnostic(
+            domain: "continuity",
+            ApplicationDiagnosticFactory.mobileContinuityState(
+                diagnosticState
+            )
+        )
+    }
+
+    private func clearMobileRuntime() {
+        mobileRuntimeApplicationTask?.cancel()
+        mobileRuntimeApplicationTask = nil
+        mobileRuntimeApplicationOperationID = nil
+        latestMobileRuntimeApplication = nil
+        appliedMobileRuntimeRevision = 0
+        failedMobileRuntimeRevision = 0
+        mobileRuntimeRevision = 0
+        isMobileRuntimeRevisionExhausted = false
+#if os(iOS)
+        invalidateMobilePictureInPicture(queueUpdate: false)
+#endif
+        mobileRuntimeState = nil
+        mobileSceneWindowSnapshot = nil
+        mobileDisplayEDRSnapshot = nil
+        mobilePictureInPictureSnapshot = nil
+        mobileAudioSessionActive = nil
+        mobileSurfaceGeneration = nil
+        mobileSceneActivity = .inactive
+        mobilePictureInPictureGenerationOrdinal = 0
+        highestMobilePictureInPictureDecoderGeneration = 0
+        isMobilePictureInPictureGenerationExhausted = false
+        lastMobileDiagnosticCodes.removeAll(keepingCapacity: false)
+    }
+
+    private func publishMobileDiagnostic(
+        domain: String,
+        _ diagnostic: ApplicationDiagnostic
+    ) {
+        guard lastMobileDiagnosticCodes[domain] != diagnostic.code else {
+            return
+        }
+        lastMobileDiagnosticCodes[domain] = diagnostic.code
+        diagnostics.record(diagnostic)
+    }
+
+#if os(iOS)
+    private func beginMobileRuntime(mediaGeneration: UInt64) {
+        mobileRuntimeState = nil
+        mobileSceneWindowSnapshot = nil
+        mobileDisplayEDRSnapshot = nil
+        mobilePictureInPictureSnapshot = nil
+        mobileAudioSessionActive = nil
+        mobileSurfaceGeneration = nil
+        mobileSceneActivity = .inactive
+        mobileRuntimeRevision = 0
+        appliedMobileRuntimeRevision = 0
+        failedMobileRuntimeRevision = 0
+        isMobileRuntimeRevisionExhausted = false
+        latestMobileRuntimeApplication = nil
+        mobilePictureInPictureGenerationOrdinal = mediaGeneration > 0 ? 1 : 0
+        highestMobilePictureInPictureDecoderGeneration = 0
+        isMobilePictureInPictureGenerationExhausted = false
+        lastMobileDiagnosticCodes.removeAll(keepingCapacity: false)
+        queueMobileRuntimeApplication()
+    }
+
+    private func acceptMobileSurfaceGeneration(
+        _ generation: MobileSceneSurfaceGeneration
+    ) -> Bool {
+        guard let current = mobileSurfaceGeneration else {
+            mobileSurfaceGeneration = generation
+            return true
+        }
+        if generation == current { return true }
+        guard generation.rawValue > current.rawValue else { return false }
+        mobileSurfaceGeneration = generation
+        mobileSceneWindowSnapshot = nil
+        mobileDisplayEDRSnapshot = nil
+        return true
+    }
+
+    private func queueMobileRuntimeApplication() {
+        guard !isMobileRuntimeRevisionExhausted else { return }
+        guard let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration,
+              mobilePictureInPictureGenerationOrdinal > 0,
+              let generation = MobilePictureInPictureGeneration(
+                mediaGeneration: mediaGeneration,
+                pictureInPictureGeneration:
+                    mobilePictureInPictureGenerationOrdinal
+              ) else {
+            return
+        }
+        let nextRevision = mobileRuntimeRevision.addingReportingOverflow(1)
+        guard !nextRevision.overflow,
+              let revision = SessionMobileRuntimeRevision(
+                rawValue: nextRevision.partialValue
+              ) else {
+            handleMobileRuntimeRevisionExhaustion(sessionID: sessionID)
+            return
+        }
+        mobileRuntimeRevision = nextRevision.partialValue
+        let sceneWindow = mobileSceneWindowSnapshot.flatMap {
+            $0.surfaceGeneration == mobileSurfaceGeneration ? $0 : nil
+        }
+        let displayEDR = mobileDisplayEDRSnapshot.flatMap {
+            $0.surfaceGeneration == mobileSurfaceGeneration ? $0 : nil
+        }
+        let pictureInPicture = mobilePictureInPictureSnapshot.flatMap {
+            $0.generation == generation ? $0 : nil
+        }
+        let runtime = audioRuntimeState?.runtime
+        latestMobileRuntimeApplication = SessionMobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            revision: revision,
+            generation: generation,
+            platform: UIDevice.current.userInterfaceIdiom == .pad
+                ? .iPadOS
+                : .iOS,
+            sceneActivity: mobileSceneActivity,
+            surfaceGeneration: mobileSurfaceGeneration,
+            sceneWindow: sceneWindow,
+            displayEDR: displayEDR,
+            pictureInPicture: pictureInPicture,
+            isAudioSessionActive: runtime?.mobileAudioSessionActive,
+            isAudioContinuityPermitted:
+                runtime?.mobileAudioSessionActive == true
+                    && runtime?.stage == .running,
+            preferences: settings.continuity,
+            capabilities: mobileContinuityCapabilities,
+            foregroundBaseline: hasPlatformLifecycle
+                ? latestLifecycleDirective.renderPolicy
+                : .active
+        )
+        scheduleMobileRuntimeApplication()
+    }
+
+    private func handleMobileRuntimeRevisionExhaustion(sessionID: UUID) {
+        guard !isMobileRuntimeRevisionExhausted else { return }
+        isMobileRuntimeRevisionExhausted = true
+        mobileRuntimeApplicationTask?.cancel()
+        mobileRuntimeApplicationTask = nil
+        mobileRuntimeApplicationOperationID = nil
+        latestMobileRuntimeApplication = nil
+        mobileRuntimeState = nil
+        mobileSceneWindowSnapshot = nil
+        mobileDisplayEDRSnapshot = nil
+        mobilePictureInPictureSnapshot = nil
+        mobileAudioSessionActive = nil
+        mobileSurfaceGeneration = nil
+        mobileSceneActivity = .inactive
+        invalidateMobilePictureInPicture(queueUpdate: false)
+        renderState.policy = .paused(reason: "mobile-runtime-revision-exhausted")
+        publishMobileDiagnostic(
+            domain: "continuity",
+            ApplicationDiagnosticFactory.mobileContinuityState(
+                .revisionExhausted
+            )
+        )
+        Task { [weak self] in
+            guard let self,
+                  self.activeStreamSessionID == sessionID else { return }
+            await self.stopStream()
+        }
+    }
+
+    private var mobileContinuityCapabilities:
+        PlatformContinuityCapabilities
+    {
+        let declaredModes = Bundle.main.object(
+            forInfoDictionaryKey: "UIBackgroundModes"
+        ) as? [String]
+        return PlatformContinuityCapabilities(
+            supportsAudioBackgroundMode: true,
+            supportsPictureInPicture:
+                AVPictureInPictureController
+                    .isPictureInPictureSupported(),
+            hasAudioBackgroundModeDeclared:
+                declaredModes?.contains("audio") == true
+        )
+    }
+
+    private func scheduleMobileRuntimeApplication() {
+        guard mobileRuntimeApplicationTask == nil else { return }
+        let operationID = UUID()
+        mobileRuntimeApplicationOperationID = operationID
+        mobileRuntimeApplicationTask = Task { [weak self] in
+            guard let self else { return }
+            await self.drainMobileRuntimeApplications(
+                operationID: operationID
+            )
+        }
+    }
+
+    private func drainMobileRuntimeApplications(operationID: UUID) async {
+        while !Task.isCancelled,
+              mobileRuntimeApplicationOperationID == operationID,
+              let application = latestMobileRuntimeApplication,
+              application.revision.rawValue
+                > max(
+                    appliedMobileRuntimeRevision,
+                    failedMobileRuntimeRevision
+                ) {
+            do {
+                try await sessionMediaEnvironment.applyMobileRuntime(
+                    application
+                )
+            } catch {
+                guard !Task.isCancelled,
+                      mobileRuntimeApplicationOperationID == operationID,
+                      activeStreamSessionID == application.sessionID,
+                      activeMediaSessionID == application.sessionID,
+                      activeMediaGeneration == application.mediaGeneration else {
+                    break
+                }
+                if error as? SessionMediaEnvironmentError
+                    == .staleMobileRuntimeApplication,
+                   (latestMobileRuntimeApplication?.revision.rawValue ?? 0)
+                    > application.revision.rawValue {
+                    continue
+                }
+                publishMobileDiagnostic(
+                    domain: "continuity",
+                    ApplicationDiagnosticFactory.mobileContinuityState(
+                        .applicationFailed
+                    )
+                )
+                renderState.policy = .paused(
+                    reason: "mobile-runtime-application-failed"
+                )
+                if session.isStreaming {
+                    session.phase = .suspending(
+                        reason: "mobile-runtime-application-failed"
+                    )
+                }
+                failedMobileRuntimeRevision = max(
+                    failedMobileRuntimeRevision,
+                    application.revision.rawValue
+                )
+                break
+            }
+            guard !Task.isCancelled,
+                  mobileRuntimeApplicationOperationID == operationID,
+                  activeStreamSessionID == application.sessionID,
+                  activeMediaSessionID == application.sessionID,
+                  activeMediaGeneration == application.mediaGeneration else {
+                break
+            }
+            appliedMobileRuntimeRevision = application.revision.rawValue
+        }
+        guard mobileRuntimeApplicationOperationID == operationID else { return }
+        mobileRuntimeApplicationTask = nil
+        mobileRuntimeApplicationOperationID = nil
+        if let application = latestMobileRuntimeApplication,
+           application.revision.rawValue
+            > max(appliedMobileRuntimeRevision, failedMobileRuntimeRevision) {
+            scheduleMobileRuntimeApplication()
+        }
+    }
+
+    private func refreshMobilePictureInPictureConfiguration() {
+        guard settings.continuity.pictureInPictureEnabled,
+              let decoderGeneration = activeVideoDecoderGeneration else {
+            invalidateMobilePictureInPicture()
+            return
+        }
+        prepareMobilePictureInPicture(
+            decoderGeneration: decoderGeneration
+        )
+    }
+
+    private func prepareMobilePictureInPicture(
+        decoderGeneration: UInt64
+    ) {
+        guard !isMobilePictureInPictureGenerationExhausted,
+              settings.continuity.pictureInPictureEnabled,
+              let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration,
+              decoderGeneration > 0 else {
+            return
+        }
+        if mobilePictureInPictureCoordinator?.decoderGeneration
+            == decoderGeneration {
+            return
+        }
+        invalidateMobilePictureInPicture(queueUpdate: false)
+        if highestMobilePictureInPictureDecoderGeneration > 0 {
+            let next = mobilePictureInPictureGenerationOrdinal
+                .addingReportingOverflow(1)
+            guard !next.overflow else {
+                isMobilePictureInPictureGenerationExhausted = true
+                publishMobileDiagnostic(
+                    domain: "pip",
+                    ApplicationDiagnosticFactory
+                        .mobilePictureInPictureState(.failed)
+                )
+                queueMobileRuntimeApplication()
+                return
+            }
+            mobilePictureInPictureGenerationOrdinal = next.partialValue
+        }
+        highestMobilePictureInPictureDecoderGeneration = max(
+            highestMobilePictureInPictureDecoderGeneration,
+            decoderGeneration
+        )
+        guard let generation = MobilePictureInPictureGeneration(
+            mediaGeneration: mediaGeneration,
+            pictureInPictureGeneration:
+                mobilePictureInPictureGenerationOrdinal
+        ) else { return }
+
+        do {
+            let displayClient = MobilePictureInPictureDisplayLayerClient()
+            let frameSink = try MobilePictureInPictureDisplayLayerSink(
+                generation: generation,
+                decoderGeneration: decoderGeneration,
+                client: displayClient
+            )
+            let controller = MobilePictureInPictureAVKitControllerClient(
+                generation: generation,
+                displayLayer: displayClient.displayLayer
+            )
+            let coordinator = try MobilePictureInPicturePresentationCoordinator(
+                sessionID: sessionID,
+                generation: generation,
+                decoderGeneration: decoderGeneration,
+                source: videoPresentationSource,
+                client: controller,
+                frameSink: frameSink,
+                foregroundBaseline: hasPlatformLifecycle
+                    ? latestLifecycleDirective.renderPolicy
+                    : .active
+            )
+            coordinator.setLifecycleEventHandler { [weak self, weak coordinator]
+                event in
+                guard let self, let coordinator else { return }
+                self.consumeMobilePictureInPictureEvent(
+                    event,
+                    coordinator: coordinator
+                )
+            }
+            if let playback = MobilePictureInPicturePlaybackState(
+                timeline: .live,
+                isPaused: false,
+                backgroundAudioPolicy:
+                    settings.continuity.audioContinuityEnabled
+                        ? .permitted
+                        : .prohibited
+            ) {
+                _ = coordinator.updatePlaybackState(playback)
+            }
+            mobilePictureInPictureCoordinator = coordinator
+            _ = coordinator.prepare()
+        } catch {
+            publishMobileDiagnostic(
+                domain: "pip",
+                ApplicationDiagnosticFactory
+                    .mobilePictureInPictureState(.failed)
+            )
+            mobilePictureInPictureSnapshot = nil
+            queueMobileRuntimeApplication()
+        }
+    }
+
+    private func consumeMobilePictureInPictureEvent(
+        _ event: MobilePictureInPictureLifecycleCoordinatorEvent,
+        coordinator: MobilePictureInPicturePresentationCoordinator
+    ) {
+        guard mobilePictureInPictureCoordinator === coordinator else {
+            publishMobileDiagnostic(
+                domain: "continuity",
+                ApplicationDiagnosticFactory.mobileContinuityState(.stale)
+            )
+            return
+        }
+        switch event {
+        case let .snapshot(snapshot):
+            guard snapshot.generation.mediaGeneration
+                    == activeMediaGeneration else { return }
+            if let current = mobilePictureInPictureSnapshot,
+               current.generation == snapshot.generation,
+               snapshot.revision.rawValue <= current.revision.rawValue {
+                return
+            }
+            mobilePictureInPictureSnapshot = snapshot
+            publishMobilePictureInPictureDiagnostic(
+                snapshot.state.lifecycle
+            )
+            queueMobileRuntimeApplication()
+        case let .restoreInterfaceRequested(lease):
+            _ = coordinator.completeRestoration(
+                lease,
+                result: .declined
+            )
+        case let .skipRequested(_, completion):
+            _ = coordinator.completeSkip(completion)
+        case .revisionExhausted:
+            publishMobileDiagnostic(
+                domain: "pip",
+                ApplicationDiagnosticFactory
+                    .mobilePictureInPictureState(.failed)
+            )
+            invalidateMobilePictureInPicture()
+        case .setPlayingRequested, .renderSizeChanged, .rejected:
+            break
+        }
+    }
+
+    private func invalidateMobilePictureInPicture(
+        queueUpdate: Bool = true
+    ) {
+        guard let coordinator = mobilePictureInPictureCoordinator else {
+            mobilePictureInPictureSnapshot = nil
+            return
+        }
+        mobilePictureInPictureCoordinator = nil
+        coordinator.setLifecycleEventHandler(nil)
+        _ = coordinator.invalidate()
+        mobilePictureInPictureSnapshot = nil
+        if queueUpdate {
+            queueMobileRuntimeApplication()
+        }
+    }
+
+    private func publishMobileSceneActivityDiagnostic(
+        _ activity: AppSceneActivity
+    ) {
+        let state: MobileSceneDiagnosticState
+        switch activity {
+        case .active: state = .active
+        case .inactive: state = .inactive
+        case .background: state = .background
+        }
+        publishMobileDiagnostic(
+            domain: "scene",
+            ApplicationDiagnosticFactory.mobileSceneState(state)
+        )
+    }
+
+    private func publishMobileDisplayDiagnostic(
+        _ state: MobileDisplayEDRState
+    ) {
+        let diagnosticState: MobileDisplayDiagnosticState
+        switch state {
+        case .detached:
+            diagnosticState = .detached
+        case let .available(available):
+            diagnosticState = available.capability == .edrCapable
+                ? .edr
+                : .sdr
+        case .sdrFallback:
+            diagnosticState = .fallback
+        case .unknown, .unavailable:
+            diagnosticState = .unavailable
+        }
+        publishMobileDiagnostic(
+            domain: "display",
+            ApplicationDiagnosticFactory.mobileDisplayState(
+                diagnosticState
+            )
+        )
+    }
+
+    private func publishMobilePictureInPictureDiagnostic(
+        _ lifecycle: MobilePictureInPictureLifecycle
+    ) {
+        let state: MobilePictureInPictureDiagnosticState
+        switch lifecycle {
+        case .unprepared, .preparing:
+            state = .preparing
+        case .ready:
+            state = .possible
+        case .unavailable:
+            state = .unavailable
+        case .startRequested, .starting:
+            state = .starting
+        case .active:
+            state = .active
+        case .stopRequested, .stopping:
+            state = .stopping
+        case .stopped:
+            state = .stopped
+        case .failed:
+            state = .failed
+        case .invalidated:
+            state = .invalidated
+        }
+        publishMobileDiagnostic(
+            domain: "pip",
+            ApplicationDiagnosticFactory
+                .mobilePictureInPictureState(state)
+        )
+    }
+#endif
 
     private func clearStreamActionPresentation() {
         diagnostics.clearStreamActionableEvents()
@@ -1763,6 +2523,11 @@ final class AppModel: ApplicationInputSink {
             activeVideoDecoderGeneration = contract.decoderGeneration
             highestVideoDecoderGeneration = contract.decoderGeneration
             renderState.decodedVideoPresentationContract = nil
+#if os(iOS)
+            prepareMobilePictureInPicture(
+                decoderGeneration: contract.decoderGeneration
+            )
+#endif
 
         case let .decodedFrame(_, contract):
             guard contract.decoderGeneration >= highestVideoDecoderGeneration else {
@@ -1771,6 +2536,11 @@ final class AppModel: ApplicationInputSink {
             if contract.decoderGeneration > highestVideoDecoderGeneration {
                 activeVideoDecoderGeneration = contract.decoderGeneration
                 highestVideoDecoderGeneration = contract.decoderGeneration
+#if os(iOS)
+                prepareMobilePictureInPicture(
+                    decoderGeneration: contract.decoderGeneration
+                )
+#endif
             }
             guard contract.decoderGeneration == activeVideoDecoderGeneration else {
                 return
@@ -1792,6 +2562,9 @@ final class AppModel: ApplicationInputSink {
             activeVideoPresentationRevision = ownership.revision
             activeVideoDecoderGeneration = nil
             renderState.decodedVideoPresentationContract = nil
+#if os(iOS)
+            invalidateMobilePictureInPicture()
+#endif
         }
         refreshHDRRenderResolution()
     }

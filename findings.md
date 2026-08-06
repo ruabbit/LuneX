@@ -2166,3 +2166,52 @@
 - `/tmp/LuneX-17-5_3-resume-macos.FuAdPk/Full.xcresult`通过`881 total / 880 passed / 1 explicit Keychain skip / 0 failed`，结构化error、warning、analyzer warning均为0；执行环境显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - iOS Debug `/tmp/LuneX-17-5_3-resume-ios.WLlh6B/Debug.xcresult`与Release `/tmp/LuneX-17-5_3-resume-ios-release.ba93Px/Release.xcresult`均为generic device unsigned成功、三类结构化诊断为0；两份built plist均精确为`UIBackgroundModes == ["audio"]`、`CFBundleSupportedPlatforms == ["iPhoneOS"]`、`UIDeviceFamily == [1,2]`。
 - 首个iOS组合脚本因查找旧产物名`LuneX.app`而在成功Debug build后退出；真实产物为`LuneX-iOS.app`。该问题仅属于验收脚本路径假设，未修改production；Debug产物只读复核后只补跑未开始的Release。
+
+## 2026-08-06 阶段 17 任务 5.4 恢复调查
+
+- `MetalStreamSurface`的actual UIKit attachment、scene/window geometry和mobile EDR callback已经存在，但`StreamWorkspaceView`没有把这些回调交给`AppModel`；因此renderer本地状态会更新，application/media ownership和diagnostics仍看不到actual scene/display真值。
+- production PiP client、display-layer sink、presentation coordinator和shared decoded-frame subscription均已实现，但当前产品代码没有为活动session/media/decoder generation实例化它们；不能把4.x组件测试描述为应用已接线。
+- 5.4采用一条generation-scoped纯值边界：UIKit/AVKit对象继续只由`@MainActor` owner持有，`AppModel`把current scene/geometry/EDR/PiP/audio actual snapshot封装为递增revision application，`NativeSessionMediaEnvironment`验证session/media generation并通过既有`MobileMediaGenerationOwner`串行归约continuity plan。
+- mobile continuity动作必须与通用window lifecycle分离：confirmed PiP背景允许decoder继续向shared presentation source交付，audio-only或无合法路径让video processor drain；foreground恢复重新启用decoder并resample。PiP request/capability、Info.plist声明或audio readiness都不能伪造actual active。
+- actual audio continuity证据必须来自production mobile audio-session readback，而不是`SessionAudioRuntimeStage.running`、channel readiness或用户偏好；在macOS/tvOS/visionOS不可用时保持nil/false并不得产生iOS active claim。
+- `AppModel`在stop、media failure、replacement和decoder replacement时必须先使旧mobile generation失效，再清scene/EDR/PiP/audio/continuity current status；旧surface或AVKit callback随后只能成为stale rejection，不能恢复已清状态。
+- 5.4只完成application/media ownership和bounded diagnostics接线；accessible PiP命令、status/settings布局与迁移属于5.5，完整policy-loss/UI/resource矩阵属于5.6，system PiP/background duration/Stage Manager/external display/visible EDR/physical hardware/live Sunshine仍属于6.6。
+- 恢复后focused证据`/tmp/LuneX-17-5_4-focused-resume-1/Focused.xcresult`通过`9/9`，结构化error、warning、analyzer warning均为0；覆盖current/stale generation、PiP/audio/paused/foreground action、重复pending application、replacement污染防护、media failure清理、video lifecycle合并、audio graph与隐私有界diagnostics。该证据是macOS可注入行为测试，不是system PiP或物理iOS后台行为证明。
+- expanded并行执行揭示stop重入缺陷：在`NativeSessionMediaEnvironment.stop()`清除active前等待mobile owner时，event continuation取消会重入第二个stop，两个调用可同时认领同一generation，导致调用方读到旧teardown report且真实resource cleanup仍在另一调用中。teardown operation现在先原子登记并包含mobile owner stop与tracker teardown；active随后同步清空并结束stream，因此并发stop和replacement start都等待同一个完整operation。
+
+## 2026-08-06 阶段 17 任务 5.4 确定性回归自锁诊断
+
+- 系统更新前启动的`/tmp/LuneX-17-5_4-stop-race-regression-1/Regression.xcresult`在恢复后持续265秒，`sample`显示XCTest同步等待异步case；该执行被主动中断，只作为失败诊断，不计验收。
+- production teardown先等待tracker任务最多1秒再逆序停止resource。新测试的第二个阻塞点在`videoProcessor.stop()`，因此不保证在200次无延时`Task.yield()`内出现。
+- 旧`waitUntil`命中上限后只记录`XCTFail`并继续；测试随即对尚未登记的resource continuation做空恢复，稍后真实resource stop建立continuation后再无人恢复，造成永久挂起。
+- 回归编排改用真实连续时钟上限，并让等待结果可由`guard`处理；失败路径同时禁用未来阻塞并恢复当前continuation，再等待stop task收敛，避免失败测试污染后续XCTest进程。
+- r2在0.941秒内正常结束且build errors/warnings/analyzer warnings均为0，自锁问题已关闭；唯一`XCTAssertNil`是夹具未消费apply产生的`.mobileRuntime`队列事件，不能归因于production teardown或stream未结束。
+- r3 `/tmp/LuneX-17-5_4-stop-race-regression-3/Regression.xcresult`通过`1/1`，结构化error、warning、analyzer warning均为0；两个并发stop在mobile action和resource stop两个挂起窗口内都未提前完成，恢复后返回相同clean report，mobile stop与resource teardown均只执行一次。
+- 最终focused `/tmp/LuneX-17-5_4-focused-final-1/Focused.xcresult`把原9项与并发stop回归合并后通过`10/10`，结构化三类诊断均为0；保留的expanded测试树精确恢复为16个suite、293项，新增回归后下一轮预期294项。
+- expanded第三轮 `/tmp/LuneX-17-5_4-expanded-resume-3/Expanded.xcresult`通过`294/294`，零skip/failure/expected failure且三类结构化诊断为0；原先两轮唯一失败的native application spatial replacement/clean-stop在同一并行矩阵中已通过。
+- iOS generic Debug `/tmp/LuneX-17-5_4-ios-final-1/Build.xcresult`在iPhoneOS 26.4上unsigned warnings-as-errors成功，结构化三类诊断为0，built plist仍精确为单一`audio` background mode且AIR/metallib存在；只证明SDK编译与配置产物。
+- 完整macOS normal `/tmp/LuneX-17-5_4-full-final-1/Full.xcresult`通过`890 total / 889 passed / 1 skipped / 0 failed`且三类结构化诊断为0；测试树确认唯一skip精确为显式真实Keychain round-trip。
+- generic Debug跨平台矩阵由macOS/tvOS/visionOS `/tmp/LuneX-17-5_4-builds-final-1`与iOS `/tmp/LuneX-17-5_4-ios-final-1`组成；四项均`succeeded`、结构化三类诊断为0且各有AIR/metallib。iOS built plist精确单一`audio`，tvOS/visionOS无`UIBackgroundModes`。
+- clean-room边界必须把未跟踪、未进入工程的`references/`上游快照与production依赖口径分开；`references/moonlight-ios`自带`Package.resolved`不构成LuneX SwiftPM依赖，关键证明是reference tree零Git tracking、production/project/generator零`references/`路径以及排除reference后的自有树无锁文件。
+
+## 2026-08-06 阶段 17 任务 5.4 production action 自审
+
+- 新focused证据`/tmp/LuneX-17-5_4-focused-audit-1/Focused.xcresult`结构化读回为`10 passed / 0 skipped / 0 failed`，build error、warning、analyzer warning均为0。
+- 自审确认`MobileMediaGenerationPlan`虽生成foreground/video/audio/control/stream五类指令，但`SessionMobileMediaActionClient`此前只调用`videoProcessor.applyMobileVideo`；audio pause/stop和control pause/stop没有production effect，不能据此完成5.4。
+- Moonlight当前`SessionControlProvider`没有主机端pause协议；正确边界是保持control接收以观察终止/重连，同时让control directive约束本地IDR请求与远程输入准入。audio policy pause必须独立记录并与系统interruption组合，不能把前台恢复直接等同于系统interruption结束。
+- 系统更新后续审发现跨actor action失败会留下前置effect：原client无步骤记忆，video/audio重复stop与audio先提交application会让同revision重试无法收敛；修复采用generation-scoped分步action actor、provider内部成功后提交以及故障注入回归。
+- `sendInput`原来只检查已发布mobile snapshot，pending pause reservation到发布之间仍可能接受新输入；准入必须同时检查当前reservation解析出的control directive。
+- unified video lifecycle/mobile reconcile在await恢复期间丢失了原有current-application校验，且同application的`needsResumeRecovery`路径被revision guard误拒绝；必须绑定两类application快照并允许同revision恢复重试。
+- 正式18项focused首次运行唯一失败位于并发stop回归的`input.release == 1`旧断言。完整action接线后，mobile stop action会在控制停流前立即释放一次输入，resource tracker随后在关闭input provider前执行一次幂等兜底释放；两个并发stop仍共享同一mobile stop和resource teardown operation，因此正确证明口径是精确2次（每个所有权层一次），不是把兜底删除或误判为重复teardown。
+- 16-suite expanded首轮唯一失败的consumer-cancellation测试在隔离运行0.007秒通过；expanded中4.127秒恰好对应两个2秒轮询窗口耗尽。旧测试只观察environment active task计数，未同步证明新建consumer Task已进入stream迭代，重负载下可能在consumer真正消费前取消。测试应以consumer实际接收首个事件为同步点，并在超时guard中主动取消/stop，避免失败路径残留运行时；这不需要修改production取消语义。
+- macOS更新结束后的当前工具链为macOS 27.0 build 26A5388g与Xcode 26.4 build 17E192；升级会使后续build/test成为新的环境证据，但不能改变5.4的任务边界或把升级前未结构化读取的结果视为已确认。
+- expanded r2的`xcodebuild`已经退出，但输出尾部不足以证明完整通过；同一xcresult必须串行读取test summary与build results，避免已知的`database.sqlite3`竞争。
+- 串行读取确认expanded r2为`301/301`且三类build诊断为0；consumer进入stream迭代的同步修复在完整16-suite并行负载下成立，不再只依赖隔离单项证据。
+- fresh full normal suite增加到898项并仅跳过显式opt-in真实Keychain测试；这确认文件/内存fallback路径覆盖的普通测试在当前补丁与macOS 27.0环境下收敛，但不构成再次真实Keychain访问。
+- 5.4 action接线后的全部app target仍能在26.4 SDK warnings-as-errors下编译；iOS/iPadOS共用同一iPhoneOS产物，其`UIDeviceFamily [1,2]`是双设备族配置证明，不是两个simulator或物理设备运行证明。
+- repository门必须与被验收的源码时点一致；较早通过的`repository-pre-3`虽可复用检查定义，不能替代action接线后的新generator hash、membership、privacy、dependency和结果读回。
+- 在`set -u`门禁脚本中，直接执行`test -z "$LUNEX_RUN_KEYCHAIN_TEST"`会把“变量正确未设置”误变成shell错误；应检查`env`中是否存在精确变量名，既不读取Keychain，也不把unset当失败。
+- corrected r2确认当前action接线后的repository边界完整成立，generator hash仍为`e3e17f904f3c8d0fc9827e26a731f0c9de6a3f5b4339e8215608b2ac1d70f853`；可进入合同/路线图/OpenSpec 5.4同步，但checkbox更新后仍需再做最终状态门。
+- `mobile-scene-pip-continuity-contract.md`的baseline inventory和5.2结尾仍写着media environment/AppModel未接线，这是5.4实现前的历史状态；封版必须更新为当前actual state/application/diagnostic/clear-state事实，同时明确5.5 UI与6.x system/physical/live证据仍未完成。
+- 5.4合同已更新为当前事实：shared runtime只持有Sendable语义值，RootView/AppModel负责actual platform state，environment在await前预留并在成功后发布，action client以分步进度接线video/audio/control/input，stop/failure/replacement共享完整teardown；5.5/5.6/6.x证明边界继续保留。
+- final-state r3确认权威状态为`27/36 next 5.5`，5.4实现、测试、build、repository和文档证据闭环；后续提交不得混入5.5 UI代码。

@@ -2,6 +2,98 @@ import Foundation
 import XCTest
 
 final class RTSPBootstrapTests: XCTestCase {
+    func testProductionControlProviderAppliesGenerationScopedMobileGate()
+        async throws {
+        let sessionID = UUID()
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "mobile-control",
+            rawValues: [:]
+        )
+        let control = BootstrapStubControlChannel(events: [])
+        let provider = MoonlightSessionControlProvider(
+            launchClient: BootstrapSleepingLaunchClient(
+                response: launchResponse
+            ),
+            connection: BootstrapStubRTSPConnection(responses: []),
+            controlChannel: control
+        )
+        let stream = await provider.start(
+            sessionID: sessionID,
+            request: makeRequest()
+        )
+        let firstGeneration = try XCTUnwrap(
+            MobilePictureInPictureGeneration(
+                mediaGeneration: 1,
+                pictureInPictureGeneration: 9
+            )
+        )
+        let paused = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: firstGeneration,
+            revision: try XCTUnwrap(
+                MobileMediaGenerationRevision(rawValue: 8)
+            ),
+            directive: .pauseSession
+        )
+
+        try await provider.applyMobileControl(paused)
+        try await provider.applyMobileControl(paused)
+        do {
+            try await provider.requestIDR(sessionID: sessionID)
+            XCTFail("Paused mobile control must reject IDR requests.")
+        } catch {
+            XCTAssertEqual(error as? ControlChannelError, .invalidState)
+        }
+
+        let replacementGeneration = try XCTUnwrap(
+            MobilePictureInPictureGeneration(
+                mediaGeneration: 2,
+                pictureInPictureGeneration: 1
+            )
+        )
+        let resumed = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: 2,
+            generation: replacementGeneration,
+            revision: try XCTUnwrap(
+                MobileMediaGenerationRevision(rawValue: 1)
+            ),
+            directive: .continueSession
+        )
+        try await provider.applyMobileControl(resumed)
+        try await provider.requestIDR(sessionID: sessionID)
+
+        let stale = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: firstGeneration,
+            revision: try XCTUnwrap(
+                MobileMediaGenerationRevision(rawValue: 99)
+            ),
+            directive: .continueSession
+        )
+        do {
+            try await provider.applyMobileControl(stale)
+            XCTFail("A prior media generation must remain stale.")
+        } catch {
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleMobileRuntimeApplication
+            )
+        }
+
+        let current = await provider.currentMobileControlApplication(
+            sessionID: sessionID
+        )
+        let idrCount = await control.requestIDRCount()
+        XCTAssertEqual(current, resumed)
+        XCTAssertEqual(idrCount, 1)
+        await provider.stop(sessionID: sessionID)
+        _ = stream
+    }
+
     func testSessionEndpointParsesPlaintextAndEncryptedURLs() throws {
         let plaintext = try RTSPSessionEndpoint.parse("rtsp://moon.local/session")
         let encrypted = try RTSPSessionEndpoint.parse("rtspenc://192.0.2.10:49000/session")
@@ -531,6 +623,7 @@ private actor BootstrapStubControlChannel: MoonlightControlChannelManaging {
     private var events: [MoonlightControlEvent]
     private var connectCall: BootstrapControlConnect?
     private var stops = 0
+    private var idrRequests = 0
 
     init(events: [MoonlightControlEvent]) {
         self.events = events
@@ -553,7 +646,9 @@ private actor BootstrapStubControlChannel: MoonlightControlChannelManaging {
         return events.removeFirst()
     }
 
-    func requestIDR() async throws {}
+    func requestIDR() async throws {
+        idrRequests += 1
+    }
 
     func stop() async {
         stops += 1
@@ -565,6 +660,36 @@ private actor BootstrapStubControlChannel: MoonlightControlChannelManaging {
 
     func stopCount() -> Int {
         stops
+    }
+
+    func requestIDRCount() -> Int {
+        idrRequests
+    }
+}
+
+private struct BootstrapSleepingLaunchClient: StreamLaunchClient {
+    let response: StreamLaunchResponse
+
+    func launch(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        _ = request
+        _ = parameters
+        try await Task.sleep(for: .seconds(30))
+        return response
+    }
+
+    func resume(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        try await launch(request, parameters: parameters)
+    }
+
+    func stop(host: MoonlightHost, clientUniqueID: String) async throws {
+        _ = host
+        _ = clientUniqueID
     }
 }
 

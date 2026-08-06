@@ -195,7 +195,18 @@ protocol SessionControlProvider: Sendable {
     ) async -> AsyncThrowingStream<SessionControlEvent, Error>
 
     func requestIDR(sessionID: UUID) async throws
+    func applyMobileControl(
+        _ application: SessionMobileControlApplication
+    ) async throws
     func stop(sessionID: UUID) async
+}
+
+extension SessionControlProvider {
+    func applyMobileControl(
+        _ application: SessionMobileControlApplication
+    ) async throws {
+        _ = application
+    }
 }
 
 struct ReceivedVideoPacket: Equatable, Sendable {

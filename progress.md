@@ -2633,3 +2633,63 @@
 - macOS全量 `/tmp/LuneX-17-5_3-resume-macos.FuAdPk/Full.xcresult`通过`881/880/1/0`，唯一skip仍为显式真实Keychain round-trip且三类结构化诊断为0；本轮显式移除`LUNEX_RUN_KEYCHAIN_TEST`。
 - iOS Debug `/tmp/LuneX-17-5_3-resume-ios.WLlh6B/Debug.xcresult`和Release `/tmp/LuneX-17-5_3-resume-ios-release.ba93Px/Release.xcresult`均在generic device上unsigned成功、三类结构化诊断为0，built plist精确读回`["audio"]`、`["iPhoneOS"]`和`[1,2]`。
 - 首轮iOS包装器因沿用旧产物名`LuneX.app`在成功Debug build后退出；确认真实产物`LuneX-iOS.app`后只读复核Debug并仅补跑未开始的Release。没有查询、创建、启动或修改simulator。
+
+## 2026-08-06 阶段 17 任务 5.4 启动
+
+- 从active goal、planning-with-files、OpenSpec apply和Git恢复；`HEAD == origin/main == b6a157e`、工作树起始clean，OpenSpec权威进度`26/36 ready`且next精确为5.4。
+- 系统更新后的5.3再认证已完成；当前任务限定为scene/geometry/PiP/continuity/mobile EDR和bounded diagnostics接入`NativeSessionMediaEnvironment`/`AppModel`，不提前实现5.5 UI。
+- 验收顺序为generation/replacement/stop/failure focused tests、扩大media/AppModel/PiP/scene/EDR/audio矩阵、完整macOS normal、五平台generic warnings-as-errors build、fixture/OpenSpec/generator/source/privacy/diff门禁；普通测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，本项不创建、克隆、boot、launch或修改simulator。
+- 系统更新后恢复的focused `/tmp/LuneX-17-5_4-focused-resume-1/Focused.xcresult`通过`9 passed / 0 skipped / 0 failed`，结构化error、warning、analyzer warning均为0；敏感的duplicate pending effect与late completion/replacement回归均未挂起。测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有访问真实Keychain或操作simulator。
+- 首轮expanded `/tmp/LuneX-17-5_4-expanded-resume-1/Expanded.xcresult`为`293 total / 292 passed / 1 failed`，唯一失败是既有spatial application integration在并行负载下耗尽注入的1秒teardown grace，remote-input尾部resource未执行，因此该轮不计验收；结构化build diagnostics仍为0。隔离证据`/tmp/LuneX-17-5_4-failure-isolation-1/Isolation.xcresult`在0.018秒通过该项，局部将测试grace改为5秒后从全新目录重跑expanded。
+- 第二轮expanded `/tmp/LuneX-17-5_4-expanded-resume-2/Expanded.xcresult`提高grace后仍为`292/1`且相同cleanup计数失败，推翻单纯超时判断。根因确认为environment stop在active清理前await mobile owner导致consumer-cancellation actor重入；production改为原子共享包含mobile stop的teardown operation，测试grace恢复原值，下一轮从全新证据目录验证。
+- 确定性并发stop回归`/tmp/LuneX-17-5_4-stop-race-regression-1/Regression.xcresult`在系统更新后恢复运行但持续265秒未结束，线程样本确认XCTest等待异步case；主动中断后结果为`TEST INTERRUPTED`，不计验收。根因不是新的Xcode环境，而是测试第二阻塞点位于tracker最多1秒grace之后，200次纯yield等待提前失败且空恢复导致永久自锁。
+- 测试编排已改为ContinuousClock两秒等待并返回成功状态；两个等待点使用guard，失败时`releaseAllBlocks()`禁用未来阻塞、恢复既有continuation并等待stop收敛。下一步从全新DerivedData/result bundle只重跑该确定性回归，先确认production共享完整teardown operation。
+- 回归r2 `/tmp/LuneX-17-5_4-stop-race-regression-2/Regression.xcresult`在0.941秒正常退出，未再挂起；结构化结果`0 passed / 1 failed`且build三类诊断为0。唯一失败是stop后iterator先读到apply时未消费的`.mobileRuntime`事件；夹具已改为stop前读取并验证该队列事件，r2不计验收。
+- 确定性回归r3 `/tmp/LuneX-17-5_4-stop-race-regression-3/Regression.xcresult`通过`1/1`且三类结构化诊断为0；证明并发stop共享包含mobile owner stop与resource tracker teardown的同一完整operation。下一步将原9项focused与该回归合并为最终10项门禁。
+- 最终focused `/tmp/LuneX-17-5_4-focused-final-1/Focused.xcresult`通过`10 passed / 0 skipped / 0 failed`且结构化error、warning、analyzer warning均为0；普通测试显式移除`LUNEX_RUN_KEYCHAIN_TEST`。下一步从全新目录第三次运行expanded 16-suite矩阵，预期因新增回归从293增至294项。
+- expanded第三轮 `/tmp/LuneX-17-5_4-expanded-resume-3/Expanded.xcresult`通过`294 passed / 0 skipped / 0 failed`且三类结构化诊断为0；原clean-stop并行失败已由共享完整teardown operation修复并在负载矩阵中验证。下一步重跑iOS generic Debug，再执行完整macOS normal suite。
+- iOS generic Debug `/tmp/LuneX-17-5_4-ios-final-1/Build.xcresult`unsigned成功，结构化error、warning、analyzer warning均为0，built plist为`UIBackgroundModes == ["audio"]`且AIR/metallib存在；未查询或操作simulator。下一步运行完整macOS normal suite。
+- 完整macOS normal `/tmp/LuneX-17-5_4-full-final-1/Full.xcresult`通过`890 total / 889 passed / 1 skipped / 0 failed`且结构化三类诊断为0；唯一skip由测试树精确确认为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。普通测试显式移除opt-in，未再次访问真实Keychain。
+- macOS/tvOS/visionOS generic Debug在`/tmp/LuneX-17-5_4-builds-final-1`均已成功，iOS证据位于`/tmp/LuneX-17-5_4-ios-final-1`；首轮只读组合汇总因zsh只读变量`status`退出，构建不重跑，改名后从既有结果串行读回。
+- 修正后的只读汇总确认macOS、iOS/iPadOS、tvOS、visionOS四项均`succeeded / 0 errors / 0 warnings / 0 analyzer warnings / AIR>=1 / metallib>=1`；iOS plist为唯一`audio` background mode，tvOS/visionOS无该键。未查询、创建、启动或修改simulator。
+- repository gate r1在fixture与OpenSpec strict `8/8`后因嵌套shell引用把jq `.state`拼成`..state`而退出，generator尚未执行且工作区无额外变化；该轮不计验收，从新目录使用直接jq表达式完整重跑。
+- repository gate r2通过fixtures、strict、generator四次同哈希、membership与privacy后，依赖扫描误纳入`references/moonlight-ios`快照自带的`Package.resolved`而退出；reference tree未跟踪且不进production工程。扫描改为排除整个reference tree，从全新目录完整重跑。
+
+## 2026-08-06 阶段 17 任务 5.4 action 接线修复进行中
+
+- 补读`/tmp/LuneX-17-5_4-focused-audit-1/Focused.xcresult`：`10/10`通过，三类结构化诊断为0。
+- 新增generation-scoped mobile audio/control application；media environment action client开始完整下发video/audio/control，暂停或停止时释放远程输入，并使当前paused/stopped control plan拒绝新输入。
+- native audio processor开始实现独立mobile policy pause/resume，与系统interruption状态组合；control provider开始按revision保存实际directive并在pause/stop时拒绝IDR。已补environment action矩阵与audio interruption组合回归，尚待首次编译验收。
+
+## 2026-08-06 阶段 17 任务 5.4 系统更新后继续
+
+- 长期goal保持active，`HEAD == origin/main == b6a157e`，OpenSpec仍为`26/36 ready`且next为5.4；本轮继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，不访问真实Keychain，也不查询或操作simulator。
+- 串行结构化读回补充action回归`/tmp/LuneX-17-5_4-action-focused.A311ae/Focused.xcresult`：`4 passed / 0 skipped / 0 failed`，error、warning、analyzer warning均为0。
+- 串行结构化读回iOS generic Debug`/tmp/LuneX-17-5_4-action-ios.gm4YyX/Build.xcresult`：`succeeded`且三类诊断为0；built plist唯一`UIBackgroundModes == [audio]`、`UIDeviceFamily == [1,2]`，AIR与metallib存在。该证据只证明补丁在iPhoneOS 26.4 SDK下编译，不替代完整5.4重验收。
+- action续审修复generation-scoped分步续跑、pending pause输入拒绝、audio成功后提交、video同application恢复重试与AppModel suspended/foreground phase往返；generator重建与`git diff --check`通过。
+- 新focused`/tmp/LuneX-17-5_4-action-audit-focused-1/Focused.xcresult`结构化通过`6 passed / 0 skipped / 0 failed`且三类诊断为0，覆盖production control generation/IDR gate、pending input、故障续跑、AppModel phase及两种audio/system interruption组合。下一步补video恢复失败与audio media-services组合后形成正式focused集合。
+- 系统更新后取回正式focused `/tmp/LuneX-17-5_4-action-focused-final/Focused.xcresult`最终状态：`18 total / 17 passed / 1 failed / 0 skipped`，build error、warning、analyzer warning均为0；唯一失败精确位于`SessionMediaEnvironmentTests.swift:478`，旧断言期望`input.release`一次但实际为两次。
+- 失败不是并发stop重新拆分teardown：完整action接线后mobile `.stop` action立即释放一次输入，resource tracker在关闭input provider前再执行一次幂等兜底释放；测试已改为精确验证两个所有权层各一次。该失败bundle不计验收，下一步从全新DerivedData/result bundle重跑单项回归，再重跑正式18项focused。
+- 修正后的单项回归`/tmp/LuneX-17-5_4-stop-race-action-r4.laAXrY/Regression.xcresult`结构化通过`1 passed / 0 skipped / 0 failed`，build error、warning、analyzer warning均为0，执行0.011秒正常收敛；证明两个并发stop仍共享同一个mobile stop与完整resource teardown，同时输入即时释放和teardown兜底各精确执行一次。下一步重跑正式18项focused。
+- 正式focused r2 `/tmp/LuneX-17-5_4-action-focused-final-r2.wUolwc/Focused.xcresult`结构化通过`18 passed / 0 skipped / 0 failed`，build error、warning、analyzer warning均为0；覆盖generation/replacement/failure/stop、pending input、分步故障续跑、production control gate、audio interruption/media-services组合、video IDR恢复、AppModel phase和有界diagnostics。下一步运行16-suite expanded矩阵，实际项数以新结果树为准。
+- 16-suite expanded r1 `/tmp/LuneX-17-5_4-action-expanded-final.RmuiJw/Expanded.xcresult`为`301 total / 300 passed / 1 failed / 0 skipped`，build三类结构化诊断为0；唯一失败是consumer-cancellation测试连续耗尽两个2秒`waitUntil`，该bundle不计验收。
+- 失败项隔离`/tmp/LuneX-17-5_4-consumer-cancel-isolation.DGNCUP/Isolation.xcresult`在0.007秒通过。测试已改为等待consumer实际消费首个stream事件，而不是仅观察environment task计数；该项使用有界5秒并行负载窗口，两个超时guard都会取消consumer并显式stop，避免失败残留。下一步从全新目录重跑该项，再重跑完整expanded。
+- 修正后consumer-cancellation回归`/tmp/LuneX-17-5_4-consumer-cancel-regression-r2.FG9clf/Regression.xcresult`结构化通过`1/1`，三类build诊断为0，执行0.008秒；下一步从全新目录重跑完整301项expanded矩阵。
+
+## 2026-08-06 阶段 17 任务 5.4 更新后恢复
+
+- 用户结束macOS更新后恢复执行；当前环境重新读回为macOS 27.0 build 26A5388g、Xcode 26.4 build 17E192，active goal保持不变，`HEAD == origin/main == b6a157e`，未提交5.4代码与untracked `Sources/LuneXCore/SessionMobileRuntime.swift`完整保留。
+- planning catchup确认上轮唯一未同步执行点是expanded r2的结构化读回；OpenSpec apply仍为`26/36 ready`、next精确为5.4。普通测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`，不访问真实Keychain，不查询或操作simulator。
+- 待串行读回结果为`/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult`；在读取summary与build diagnostics前不把该轮记为通过，也不勾选5.4。
+- expanded r2已串行结构化读回：`301 total / 301 passed / 0 skipped / 0 failed`，build status succeeded，error、warning、analyzer warning均为0；证据明确运行于更新后的macOS 27.0。本门完成，下一步运行fresh完整macOS normal suite。
+- fresh完整macOS normal `/tmp/LuneX-17-5_4-action-full-final.BwDZJ2/Full.xcresult`通过`898 total / 897 passed / 1 skipped / 0 failed`；唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化error、warning、analyzer warning均为0。命令显式移除`LUNEX_RUN_KEYCHAIN_TEST`，没有再次访问真实Keychain。
+- Xcode启动时输出空build-number `DVTDeviceOperation`与multiple matching macOS architecture文本warning，但xcresult的实际build warning count为0，warnings-as-errors测试成功；将其保留为Xcode工具层消息，不误计为源码诊断。
+- generic Debug app矩阵`/tmp/LuneX-17-5_4-action-builds-final.15Ul1N`完整退出成功：macOS、iOS/iPadOS、tvOS、visionOS四个独立xcresult均`succeeded`且error、warning、analyzer warning为0；每个平台均有精确1个AIR、1个metallib和1个app产物。
+- iOS built plist精确读回`UIBackgroundModes == ["audio"]`、`UIDeviceFamily == [1,2]`；macOS/tvOS/visionOS均无`UIBackgroundModes`。全矩阵使用generic placeholder destination、`CODE_SIGNING_ALLOWED=NO`且未查询、启动或修改simulator；该证据不证明签名接受、system PiP或后台持续时间。
+- 只读恢复旧`repository-pre-3`确认其曾在较早5.4工作树通过，但该门早于后续audio/control/video action接线，不能复用为当前最终证据。已从当前rollout恢复其精确fixture/OpenSpec/generator/membership/privacy/reference/plist/result/diff口径，将从新目录重跑并加入当前证据路径、ENet license和自有树无package dependency断言。
+- action最终repository gate首轮`/tmp/LuneX-17-5_4-action-repository-final.tepjpV`在fixtures、OpenSpec、generator、membership、privacy/reference/license/dependency/plist、全部test/build结果和artifact读回均通过后，因Bash `set -u`直接展开未定义`LUNEX_RUN_KEYCHAIN_TEST`而退出；该轮不计验收。变量检查改为精确扫描`env`，从全新目录完整重跑。
+- corrected repository gate r2 `/tmp/LuneX-17-5_4-action-repository-final-r2.Qziu2H`从头完整通过：fixtures、OpenSpec strict `8/8`与apply `26/36 next 5.4`、generator初始及连续三次稳定SHA-256 `e3e17f904f3c8d0fc9827e26a731f0c9de6a3f5b4339e8215608b2ac1d70f853`、四平台source/test membership、platform-object/privacy/forbidden-API边界、reference/package/license/plist、focused `18/18`、expanded `301/301`、full `898/897/1/0`、四平台build和Metal artifact读回、Keychain opt-in未设置及`git diff --check`。
+- 合同inventory、5.4 application/media-environment集成章节、阶段路线图、OpenSpec task及三份planning状态已同步；5.4现已勾选，预期权威进度`27/36`、next 5.5。下一步运行勾选后的最终状态/repository/diff门，再独立提交并推送；5.5代码尚未开始。
+- 首个勾选后final-state包装器因JavaScript模板内含未转义Markdown反引号，在shell启动前以`SyntaxError: Unexpected number`退出；没有创建证据目录或修改仓库。文档匹配改为无反引号固定文本后从新目录重跑。
+- 第二次final-state包装器仍遗漏三条结果匹配中的Markdown反引号并在shell前同错退出；仓库仍无额外变化。记录该错误的首个补丁又因空hunk被整体拒绝，修正补丁后下一轮移除模板中的全部反引号，不再做局部替换。
+- 勾选后final-state r3 `/tmp/LuneX-17-5_4-action-final-state-r3.qd2ejg`完整通过：OpenSpec strict `8/8`、apply精确`27/36 next 5.5`且5.4 done、generator初始及连续三次稳定SHA-256 `e3e17f904f3c8d0fc9827e26a731f0c9de6a3f5b4339e8215608b2ac1d70f853`、合同/路线图无旧5.4 gap、privacy/API/reference/dependency/license/plist、focused `18/18`、expanded `301/301`、full `898/897/1/0`和四平台build/Metal证据均通过。5.4可独立提交推送，5.5尚未开始。

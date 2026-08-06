@@ -74,6 +74,7 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
     ) -> Void
     private var assembler: NormalizedVideoAccessUnitAssembler
     private var lifecycleApplication: SessionLifecycleApplication?
+    private var mobileVideoApplication: SessionMobileVideoApplication?
     private var isDrainingTransport = false
     private var needsResumeRecovery = false
     private var isStopped = false
@@ -151,15 +152,57 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
         }
         lifecycleApplication = application
 
+        try await reconcileVideoProcessing()
+    }
+
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws {
+        guard !isStopped else { throw VideoDecodePipelineError.stopped }
+        guard application.sessionID == sessionID,
+              application.mediaGeneration == mediaGeneration,
+              application.generation.mediaGeneration == mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+        }
+        if let current = mobileVideoApplication {
+            if application == current {
+                if !needsResumeRecovery { return }
+            } else if application.revision.rawValue
+                <= current.revision.rawValue {
+                throw SessionMediaEnvironmentError
+                    .staleMobileRuntimeApplication
+            }
+        }
+        mobileVideoApplication = application
+        if application.directive == .stop {
+            await stop()
+            return
+        }
+        try await reconcileVideoProcessing()
+    }
+
+    private func reconcileVideoProcessing() async throws {
+        let expectedLifecycleApplication = lifecycleApplication
+        let expectedMobileApplication = mobileVideoApplication
         let shouldDrain: Bool
-        switch application.directive.videoProcessing {
-        case .submitDecodedVideo:
+        switch mobileVideoApplication?.directive {
+        case .continuePictureInPictureDelivery:
             shouldDrain = false
-        case .inactive, .drainTransportWithoutDecoding:
+        case .drainTransportWithoutDecoding:
             shouldDrain = true
+        case .stop:
+            shouldDrain = true
+        case .continueForegroundPresentation, .none:
+            switch lifecycleApplication?.directive.videoProcessing {
+            case .submitDecodedVideo, .none:
+                shouldDrain = false
+            case .inactive, .drainTransportWithoutDecoding:
+                shouldDrain = true
+            }
         }
 
         if shouldDrain {
+            guard !isDrainingTransport || needsResumeRecovery else { return }
             isDrainingTransport = true
             needsResumeRecovery = false
             assembler.reset()
@@ -186,10 +229,18 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
         do {
             try await pipeline.resumeAfterLifecyclePause()
         } catch {
-            guard lifecycleApplication == application else { return }
+            guard !isStopped,
+                  lifecycleApplication == expectedLifecycleApplication,
+                  mobileVideoApplication == expectedMobileApplication else {
+                return
+            }
             throw error
         }
-        guard lifecycleApplication == application, !isStopped else { return }
+        guard !isStopped,
+              lifecycleApplication == expectedLifecycleApplication,
+              mobileVideoApplication == expectedMobileApplication else {
+            return
+        }
         needsResumeRecovery = false
     }
 

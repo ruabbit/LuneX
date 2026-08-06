@@ -194,6 +194,175 @@ final class NativeSessionAudioProcessorTests: XCTestCase {
         await harness.collection.value
     }
 
+    func testMobilePolicyPauseComposesWithSystemInterruptionBeforeResume()
+        async throws
+    {
+        let sessionID = UUID()
+        let harness = try await makeHarness(
+            sessionID: sessionID,
+            capability: routeCapability(support: .supported),
+            entitlement: .granted
+        )
+        defer { harness.collection.cancel() }
+        try await waitForEventCount(1, recorder: harness.events)
+        let generation = try XCTUnwrap(MobilePictureInPictureGeneration(
+            mediaGeneration: 1,
+            pictureInPictureGeneration: 1
+        ))
+
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try XCTUnwrap(MobileMediaGenerationRevision(rawValue: 1)),
+            directive: .continuePlayback
+        ))
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try XCTUnwrap(MobileMediaGenerationRevision(rawValue: 2)),
+            directive: .pause
+        ))
+        try await waitForEventCount(2, recorder: harness.events)
+        var events = await harness.events.snapshot()
+        XCTAssertEqual(events.last?.cause, .mobilePolicyPaused)
+        XCTAssertEqual(events.last?.stage, .interrupted)
+
+        harness.source.emit(.interruptionBegan)
+        try await waitForEventCount(3, recorder: harness.events)
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try XCTUnwrap(MobileMediaGenerationRevision(rawValue: 3)),
+            directive: .continuePlayback
+        ))
+        try await Task.sleep(for: .milliseconds(50))
+        events = await harness.events.snapshot()
+        XCTAssertEqual(events.count, 3)
+        XCTAssertEqual(events.last?.cause, .interruptionBegan)
+        XCTAssertEqual(events.last?.stage, .interrupted)
+        XCTAssertEqual(harness.engine.graphIntents().count, 1)
+
+        harness.source.emit(.interruptionEnded(shouldResume: true))
+        try await waitForEventCount(4, recorder: harness.events)
+        events = await harness.events.snapshot()
+        XCTAssertEqual(events.last?.cause, .interruptionEnded)
+        XCTAssertEqual(events.last?.stage, .running)
+        XCTAssertEqual(events.last?.lastAction, .interruptionResumed)
+        XCTAssertEqual(harness.engine.graphIntents().count, 2)
+
+        await harness.processor.stop()
+        await harness.collection.value
+    }
+
+    func testSystemInterruptionResumeDenialBlocksMobilePolicyResume()
+        async throws
+    {
+        let sessionID = UUID()
+        let harness = try await makeHarness(
+            sessionID: sessionID,
+            capability: routeCapability(support: .supported),
+            entitlement: .granted
+        )
+        defer { harness.collection.cancel() }
+        try await waitForEventCount(1, recorder: harness.events)
+        let generation = try XCTUnwrap(MobilePictureInPictureGeneration(
+            mediaGeneration: 1,
+            pictureInPictureGeneration: 1
+        ))
+        let revision: (UInt64) throws -> MobileMediaGenerationRevision = {
+            try XCTUnwrap(MobileMediaGenerationRevision(rawValue: $0))
+        }
+
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try revision(1),
+            directive: .pause
+        ))
+        harness.source.emit(.interruptionBegan)
+        try await waitForEventCount(3, recorder: harness.events)
+        harness.source.emit(.interruptionEnded(shouldResume: false))
+        try await waitForEventCount(4, recorder: harness.events)
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try revision(2),
+            directive: .continuePlayback
+        ))
+        try await Task.sleep(for: .milliseconds(50))
+
+        let events = await harness.events.snapshot()
+        XCTAssertEqual(events.count, 4)
+        XCTAssertEqual(events.last?.cause, .interruptionEnded)
+        XCTAssertEqual(events.last?.stage, .interrupted)
+        XCTAssertEqual(
+            events.last?.lastAction,
+            .interruptionResumeDeferred
+        )
+        XCTAssertEqual(harness.engine.graphIntents().count, 1)
+
+        await harness.processor.stop()
+        await harness.collection.value
+    }
+
+    func testMediaServicesResetDoesNotOverrideMobilePolicyPause()
+        async throws {
+        let sessionID = UUID()
+        let harness = try await makeHarness(
+            sessionID: sessionID,
+            capability: routeCapability(support: .supported),
+            entitlement: .granted
+        )
+        defer { harness.collection.cancel() }
+        try await waitForEventCount(1, recorder: harness.events)
+        let generation = try XCTUnwrap(MobilePictureInPictureGeneration(
+            mediaGeneration: 1,
+            pictureInPictureGeneration: 1
+        ))
+        let revision: (UInt64) throws -> MobileMediaGenerationRevision = {
+            try XCTUnwrap(MobileMediaGenerationRevision(rawValue: $0))
+        }
+
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try revision(1),
+            directive: .pause
+        ))
+        try await waitForEventCount(2, recorder: harness.events)
+        harness.source.emit(.mediaServicesLost)
+        try await waitForEventCount(3, recorder: harness.events)
+        harness.source.emit(.mediaServicesReset)
+        try await waitForEventCount(4, recorder: harness.events)
+
+        var events = await harness.events.snapshot()
+        XCTAssertEqual(events.last?.cause, .mediaServicesReset)
+        XCTAssertEqual(events.last?.stage, .interrupted)
+        XCTAssertEqual(harness.engine.graphIntents().count, 1)
+
+        try await harness.processor.applyMobileAudio(SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: 1,
+            generation: generation,
+            revision: try revision(2),
+            directive: .continuePlayback
+        ))
+        try await waitForEventCount(5, recorder: harness.events)
+        events = await harness.events.snapshot()
+        XCTAssertEqual(events.last?.cause, .mobilePolicyResumed)
+        XCTAssertEqual(events.last?.stage, .running)
+        XCTAssertEqual(harness.engine.graphIntents().count, 2)
+
+        await harness.processor.stop()
+        await harness.collection.value
+    }
+
     func testEquivalentRouteAndPreferenceStateDoesNotRebuildOrPublish()
         async throws
     {

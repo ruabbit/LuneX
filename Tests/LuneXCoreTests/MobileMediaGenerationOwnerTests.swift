@@ -1,6 +1,41 @@
 import XCTest
 
 final class MobileMediaGenerationOwnerTests: XCTestCase {
+    func testMobileControlApplicationOrdersGenerationBeforeRevision() throws {
+        let sessionID = UUID()
+        let current = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: 3,
+            generation: try XCTUnwrap(MobilePictureInPictureGeneration(
+                mediaGeneration: 3,
+                pictureInPictureGeneration: 9
+            )),
+            revision: try XCTUnwrap(MobileMediaGenerationRevision(rawValue: 50)),
+            directive: .pauseSession
+        )
+        let replacement = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: 4,
+            generation: try XCTUnwrap(MobilePictureInPictureGeneration(
+                mediaGeneration: 4,
+                pictureInPictureGeneration: 1
+            )),
+            revision: try XCTUnwrap(MobileMediaGenerationRevision(rawValue: 1)),
+            directive: .continueSession
+        )
+        let stale = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: 3,
+            generation: current.generation,
+            revision: try XCTUnwrap(MobileMediaGenerationRevision(rawValue: 49)),
+            directive: .continueSession
+        )
+
+        XCTAssertTrue(replacement.isNewer(than: current))
+        XCTAssertFalse(current.isNewer(than: replacement))
+        XCTAssertFalse(stale.isNewer(than: current))
+    }
+
     func testForegroundActivationKeepsAllMediaPathsRunning() async throws {
         let client = RecordingMobileMediaGenerationActionClient()
         let owner = MobileMediaGenerationOwner(actionClient: client)

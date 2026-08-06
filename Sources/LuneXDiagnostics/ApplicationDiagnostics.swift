@@ -121,6 +121,47 @@ enum MacInputDiagnosticState: Hashable, Sendable {
     case relativeReady
 }
 
+enum MobileSceneDiagnosticState: Hashable, Sendable {
+    case detached
+    case active
+    case inactive
+    case background
+    case resizing
+    case settled
+    case invalidGeometry
+}
+
+enum MobileDisplayDiagnosticState: Hashable, Sendable {
+    case detached
+    case sdr
+    case edr
+    case fallback
+    case unavailable
+}
+
+enum MobilePictureInPictureDiagnosticState: Hashable, Sendable {
+    case preparing
+    case possible
+    case unavailable
+    case starting
+    case active
+    case stopping
+    case stopped
+    case failed
+    case invalidated
+}
+
+enum MobileContinuityDiagnosticState: Hashable, Sendable {
+    case foreground
+    case pictureInPicture
+    case audioOnly
+    case suspended
+    case stopped
+    case stale
+    case applicationFailed
+    case revisionExhausted
+}
+
 enum SpatialAudioDiagnosticFallback: CaseIterable, Hashable, Sendable {
     case userDisabled
     case outputUnavailable
@@ -306,6 +347,162 @@ enum ApplicationDiagnosticFactory {
         return ApplicationDiagnostic(
             category: .input,
             severity: .info,
+            code: code,
+            summary: summary,
+            action: nil
+        )
+    }
+
+    static func mobileSceneState(
+        _ state: MobileSceneDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let code: String
+        let summary: String
+        switch state {
+        case .detached:
+            code = "mobile_scene_detached"
+            summary = "The mobile stream surface is detached."
+        case .active:
+            code = "mobile_scene_active"
+            summary = "The mobile stream scene is active."
+        case .inactive:
+            code = "mobile_scene_inactive"
+            summary = "The mobile stream scene is inactive."
+        case .background:
+            code = "mobile_scene_background"
+            summary = "The mobile stream scene is in the background."
+        case .resizing:
+            code = "mobile_scene_resizing"
+            summary = "The mobile stream window is resizing."
+        case .settled:
+            code = "mobile_scene_settled"
+            summary = "The mobile stream window geometry is settled."
+        case .invalidGeometry:
+            code = "mobile_scene_invalid_geometry"
+            summary = "The mobile stream window geometry is invalid."
+        }
+        return ApplicationDiagnostic(
+            category: .application,
+            severity: state == .invalidGeometry ? .warning : .info,
+            code: code,
+            summary: summary,
+            action: nil
+        )
+    }
+
+    static func mobileDisplayState(
+        _ state: MobileDisplayDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let code: String
+        let summary: String
+        switch state {
+        case .detached:
+            code = "mobile_edr_detached"
+            summary = "The mobile stream display is detached."
+        case .sdr:
+            code = "mobile_edr_sdr"
+            summary = "The mobile stream display is using the SDR path."
+        case .edr:
+            code = "mobile_edr_active"
+            summary = "The mobile stream display is using the EDR path."
+        case .fallback:
+            code = "mobile_edr_fallback"
+            summary = "The mobile stream display is using conservative SDR fallback."
+        case .unavailable:
+            code = "mobile_edr_unavailable"
+            summary = "Mobile display EDR state is unavailable."
+        }
+        return ApplicationDiagnostic(
+            category: .hdr,
+            severity: state == .fallback || state == .unavailable
+                ? .warning
+                : .info,
+            code: code,
+            summary: summary,
+            action: nil
+        )
+    }
+
+    static func mobilePictureInPictureState(
+        _ state: MobilePictureInPictureDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let code: String
+        let summary: String
+        switch state {
+        case .preparing:
+            code = "mobile_pip_preparing"
+            summary = "Picture in Picture is preparing."
+        case .possible:
+            code = "mobile_pip_possible"
+            summary = "Picture in Picture is available."
+        case .unavailable:
+            code = "mobile_pip_unavailable"
+            summary = "Picture in Picture is unavailable."
+        case .starting:
+            code = "mobile_pip_starting"
+            summary = "Picture in Picture is starting."
+        case .active:
+            code = "mobile_pip_active"
+            summary = "Picture in Picture is active."
+        case .stopping:
+            code = "mobile_pip_stopping"
+            summary = "Picture in Picture is stopping."
+        case .stopped:
+            code = "mobile_pip_stopped"
+            summary = "Picture in Picture is stopped."
+        case .failed:
+            code = "mobile_pip_failed"
+            summary = "Picture in Picture failed."
+        case .invalidated:
+            code = "mobile_pip_invalidated"
+            summary = "Picture in Picture was invalidated."
+        }
+        return ApplicationDiagnostic(
+            category: .decoder,
+            severity: state == .failed ? .warning : .info,
+            code: code,
+            summary: summary,
+            action: nil
+        )
+    }
+
+    static func mobileContinuityState(
+        _ state: MobileContinuityDiagnosticState
+    ) -> ApplicationDiagnostic {
+        let code: String
+        let summary: String
+        switch state {
+        case .foreground:
+            code = "mobile_continuity_foreground"
+            summary = "Mobile media is using foreground presentation."
+        case .pictureInPicture:
+            code = "mobile_continuity_pip"
+            summary = "Mobile media is continuing through Picture in Picture."
+        case .audioOnly:
+            code = "mobile_continuity_audio_only"
+            summary = "Mobile media is continuing through active audio only."
+        case .suspended:
+            code = "mobile_continuity_suspended"
+            summary = "Mobile video decoding is suspended because no permitted background media path is active."
+        case .stopped:
+            code = "mobile_continuity_stopped"
+            summary = "The mobile media runtime is stopped."
+        case .stale:
+            code = "mobile_continuity_stale"
+            summary = "A stale mobile media runtime update was rejected."
+        case .applicationFailed:
+            code = "mobile_continuity_application_failed"
+            summary = "The mobile media runtime could not apply its current policy."
+        case .revisionExhausted:
+            code = "mobile_continuity_revision_exhausted"
+            summary = "The mobile media runtime revision was exhausted and the stream is stopping."
+        }
+        return ApplicationDiagnostic(
+            category: .application,
+            severity: state == .stale || state == .applicationFailed
+                || state == .revisionExhausted
+                ? .warning
+                : .info,
             code: code,
             summary: summary,
             action: nil
@@ -616,6 +813,10 @@ enum ApplicationDiagnosticFactory {
                 return inputFailure(code: "application_input_stale")
             case .staleAudioApplication:
                 return audioFailure(code: "application_audio_stale")
+            case .staleMobileRuntimeApplication:
+                return transportFailure(code: "mobile_runtime_stale")
+            case .invalidMobileRuntimeApplication:
+                return transportFailure(code: "mobile_runtime_invalid")
             }
         }
         if error is VideoDecoderError || error is VideoDecodePipelineError ||

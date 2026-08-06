@@ -408,6 +408,17 @@
 | 17.4.5首轮repository pre-gate把pbxproj双重文本出现数当成target数 | 1 | fixtures/OpenSpec/generator已通过但在结果读回前退出；membership改由generator清单、四平台实际Swift file list和focused已执行测试联合证明，从全新证据目录重跑 |
 | 17.4.5封版组合补丁假设`findings.md`存在交接摘要中的尾句 | 1 | `apply_patch`整体拒绝且4.5尚未勾选；拆分OpenSpec/plan/roadmap与findings/progress补丁，按各文件当前真实上下文更新 |
 | 17.5.3系统更新后iOS再认证脚本查找旧产物名`LuneX.app` | 1 | Debug build和xcresult实际已成功；从真实`LuneX-iOS.app`只读验证plist与零结构化诊断，仅从全新目录补跑尚未开始的Release，不重复Debug |
+| 17.5.4前两轮expanded中spatial application integration尾部清理失败 | 2 | 两轮均为`292 passed / 1 failed`且不计验收；隔离重跑通过但提高测试grace后并行矩阵仍失败，排除单纯超时。根因是environment `stop()`在清active前await mobile owner造成actor重入，consumer cancellation与显式stop可同时认领同一generation；改为原子登记共享的mobile-stop+tracker teardown operation后再结束stream，测试grace恢复1秒 |
+| 17.5.4确定性并发stop回归在系统更新后永久挂起 | 1 | `/tmp/LuneX-17-5_4-stop-race-regression-1/Regression.xcresult`经265秒手动中断；线程样本确认XCTest等待异步case。测试第二阻塞点位于tracker最多1秒grace之后，而旧helper只做200次`Task.yield()`，超时仅`XCTFail`后继续并提前空恢复；改为ContinuousClock两秒等待、Bool guard及失败时release-all收敛，原production修复不撤销 |
+| 17.5.4首次tracking组合补丁假设不存在的error行措辞 | 1 | `apply_patch`整体拒绝且code/planning均未写入；先独立落盘test修复，再读取三份planning真实尾部并用精确上下文更新 |
+| 17.5.4确定性并发stop回归r2停止后读取到queued mobile event | 1 | `/tmp/LuneX-17-5_4-stop-race-regression-2/Regression.xcresult`为`0 passed / 1 failed`、零结构化诊断且0.941秒正常退出，证明防自锁修复生效；夹具在apply后未消费`.mobileRuntime`事件，停止后首个iterator值自然非nil。启动stop前显式读取并验证该事件，从全新目录重跑 |
+| 17.5.4恢复原focused selector时预期文本日志不存在 | 1 | 只读`rg`返回ENOENT且无工作区变化；改由保留的`Focused.xcresult`测试树精确枚举9项identifier，不猜测名称、不重复旧测试 |
+| 17.5.4跨平台build结果汇总复用zsh只读变量`status` | 1 | macOS/tvOS/visionOS三个build均已独立成功且结果JSON已生成；只读汇总在打印前退出，不计组合验收。变量改为`build_status`后只读既有xcresult/产物，不重复构建 |
+| 17.5.4首轮repository gate的嵌套shell引用把jq `.state`拼成`..state` | 1 | fixture与OpenSpec strict已通过，但在generator前退出且无代码/工程变化；不复用部分门，改用直接jq表达式并从全新证据目录完整重跑 |
+| 17.5.4第二轮repository gate把reference快照的`Package.resolved`计为production依赖 | 1 | fixtures/OpenSpec/generator/privacy已通过，但`references/moonlight-ios`未跟踪上游快照合法自带SwiftPM锁文件；reference tree不进Git/工程且production无路径引用。依赖门排除整个`references/`后检查自有树，从全新目录重跑 |
+| 17.5.4 action最终repository gate以`set -u`直接展开未定义Keychain变量 | 1 | `/tmp/LuneX-17-5_4-action-repository-final.tepjpV`在全部实质检查后因`LUNEX_RUN_KEYCHAIN_TEST: unbound variable`退出且不计验收；改用`env`精确检查变量是否存在，从全新证据目录重跑完整门 |
+| 17.5.4勾选后final-state包装器包含未转义Markdown反引号 | 2 | 两次均在shell启动前报`SyntaxError: Unexpected number`，第二次遗漏了三条结果匹配中的反引号；未创建证据目录且仓库无额外变化。第三次彻底移除模板中的全部反引号再启动最终门 |
+| 17.5.4记录第二次final-state错误时补丁含空hunk | 1 | `apply_patch`校验拒绝且未修改文件；移除无内容的hunk并重新应用精确两文件补丁 |
 
 ## 当前执行点（2026-07-30）
 
@@ -419,3 +430,6 @@
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
 - 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`26/36 in_progress`；2.x actual mobile lifecycle/geometry/input、3.x mobile EDR、4.x sample-buffer PiP和5.1至5.3均已完成。下一项5.4接入media environment/AppModel与bounded diagnostics；5.3 unsigned built plist仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
 - macOS 27.0更新后已重新认证5.3：Xcode 26.4/macOS SDK 26.4下macOS全量`881/880/1/0`且唯一skip为禁用的真实Keychain用例，iOS Debug/Release generic build与built plist读回均通过；没有启动或修改simulator。
+- 阶段17任务5.4已于2026-08-06恢复并进入`in_progress`：先建立current session/media generation的scene/geometry/EDR/PiP/audio纯值application与serialized continuity action边界，再接入AppModel和iOS actual surface回调；stop/failure/replacement必须清空actual current state，UIKit/AVKit对象不得跨actor。5.5 UI与6.6物理证明保持在后续任务。
+- macOS 27.0更新结束后再次恢复5.4；当前第一门为串行结构化读回`/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult`。只有expanded、fresh full macOS、generic platform builds及repository gates全部通过后才允许勾选5.4并提交。
+- 阶段17任务5.4已完成实现与阶段内自验并勾选：focused `18/18`、expanded `301/301`、fresh full `898/897/1/0`唯一显式Keychain skip、四generic Debug和repository gate均通过。权威进度应为`27/36`、next 5.5；最终状态门、提交与推送完成前仍不进入5.5实现。

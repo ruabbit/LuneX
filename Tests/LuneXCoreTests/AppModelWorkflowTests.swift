@@ -2098,6 +2098,71 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testAppModelReflectsMobileSuspensionAndForegroundRestoration()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 40,
+                    key: Data(repeating: 0x40, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let suspended = try makeMobileRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            revision: 1,
+            sceneActivity: .background
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            suspended,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.mobileRuntimeState == suspended }
+        XCTAssertEqual(
+            model.session.phase,
+            .suspending(reason: "no-active-permitted-media-path")
+        )
+        XCTAssertTrue(model.session.isStreaming)
+        XCTAssertEqual(
+            model.renderState.policy,
+            .paused(reason: "no-active-permitted-media-path")
+        )
+
+        let restored = try makeMobileRuntimeState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            revision: 2,
+            sceneActivity: .active,
+            foregroundRestorationCount: 1
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            restored,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.mobileRuntimeState == restored }
+        XCTAssertEqual(model.session.phase, .streaming)
+        XCTAssertEqual(model.renderState.policy, .active)
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertNil(model.mobileRuntimeState)
+        XCTAssertEqual(model.session.phase, .disconnected)
+    }
+
     func testAppModelBindsSpatialPreferencesAndCurrentAudioRuntime() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
@@ -3417,6 +3482,59 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func makeMobileRuntimeState(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        revision: UInt64,
+        sceneActivity: AppSceneActivity,
+        foregroundRestorationCount: UInt64 = 0
+    ) throws -> SessionMobileRuntimeState {
+        let generation = try XCTUnwrap(MobilePictureInPictureGeneration(
+            mediaGeneration: mediaGeneration,
+            pictureInPictureGeneration: 1
+        ))
+        let application = SessionMobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            revision: try XCTUnwrap(SessionMobileRuntimeRevision(
+                rawValue: revision
+            )),
+            generation: generation,
+            platform: .iOS,
+            sceneActivity: sceneActivity,
+            surfaceGeneration: nil,
+            sceneWindow: nil,
+            displayEDR: nil,
+            pictureInPicture: nil,
+            isAudioSessionActive: nil,
+            isAudioContinuityPermitted: false,
+            preferences: .defaults,
+            capabilities: PlatformContinuityCapabilities(
+                supportsAudioBackgroundMode: true,
+                supportsPictureInPicture: true,
+                hasAudioBackgroundModeDeclared: true
+            ),
+            foregroundBaseline: .active
+        )
+        let input = application.generationInput
+        let plan = MobileMediaGenerationPlanResolver.resolve(
+            input.continuityContext,
+            foregroundBaseline: input.foregroundBaseline,
+            restoringForeground: foregroundRestorationCount > 0
+        )
+        return SessionMobileRuntimeState(
+            application: application,
+            media: MobileMediaGenerationSnapshot(
+                ownership: input.ownership,
+                revision: input.revision,
+                phase: plan.stream == .stopped ? .stopped : .active,
+                input: input,
+                plan: plan,
+                foregroundRestorationCount: foregroundRestorationCount
+            )
+        )
+    }
+
     private func makeHDRApplicationFrame(
         generation: UInt64,
         frameID: UInt64,
@@ -3940,6 +4058,12 @@ private final class ApplicationIntegrationVideoProcessor:
     }
 
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
+    }
+
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws {
         _ = application
     }
 
@@ -4773,6 +4897,13 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         sessionID: UUID
     ) {
         continuation(for: sessionID)?.yield(.audioRuntime(state))
+    }
+
+    func yieldMobileRuntime(
+        _ state: SessionMobileRuntimeState,
+        sessionID: UUID
+    ) {
+        continuation(for: sessionID)?.yield(.mobileRuntime(state))
     }
 
     func finish(sessionID: UUID, throwing error: Error) {

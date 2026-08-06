@@ -34,19 +34,19 @@ No lower tier may be reported as a higher tier.
 
 | Concern | Current source | Current behavior | Stage 17 gap |
 |---|---|---|---|
-| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, applies render schedule, copies an existing coordinate snapshot into `drawableSize`, publishes closed iOS callbacks, resolves a generation-owned actual `UIWindow`/`UIWindowScene`/`UIScreen` attachment, and observes semantic lifecycle notifications only for that scene | No geometry normalization, drawable/input binding, attached-screen EDR state, continuity policy, or AppModel publication |
-| SwiftUI lifecycle | `RootView` and `UIKitLifecycleMonitor` | `RootView` does not construct or retain the mobile monitor; the monitor itself only maps a supplied `ScenePhase` to visible/focused and multiplies a supplied point size by a supplied scale | Not connected to the actual stream view, `UIWindow`, `UIWindowScene`, `UIScreen`, media generation, Stage Manager resize, or AppModel |
+| Mobile stream surface | `MetalStreamSurface` mobile `UIViewRepresentable` and iOS-only `MobileStreamMetalView` in `Sources/LuneXRendering/MetalStreamSurface.swift` | Installs `StreamMetalPresenter`, owns generation-scoped actual `UIWindow`/`UIWindowScene`/`UIScreen` attachment, publishes normalized geometry/drawable/input and attached-screen EDR revisions, and emits bounded lifecycle callbacks | Physical Stage Manager, external-display, visible EDR, and touch behavior remain unproved |
+| SwiftUI lifecycle | `RootView` and the mobile surface callbacks | Routes actual surface attachment, scene lifecycle, normalized window snapshot, and display EDR events into the current `AppModel` media generation; synthetic `ScenePhase` is not the mobile ownership source | Accessible runtime status and physical multiwindow/background restoration remain in 5.5/6.x |
 | macOS lifecycle reference | `AppKitLifecycleMonitor`, `MacStreamSurfaceAttachmentOwner`, and `MacStreamInputCaptureView` | Actual window/surface ownership, occlusion/focus, backing pixels, screen EDR, stale attachment rejection, render policy, and input admission are connected | This is a behavioral reference, not reusable UIKit code |
-| Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Validated fit/fill geometry, checked revision increment, stale/invalid clear, letterbox rejection, source crop, and remote point mapping are implemented | Mobile must publish actual drawable geometry into this contract rather than create a parallel coordinate system |
-| Touch and hover mapping | `TouchInputAdapter` | Consumes `InputMapper`, drops samples outside the drawable video region, and carries source reference size | The app does not currently feed actual UIKit touch/hover samples or current mobile geometry into it |
-| Renderer | `StreamMetalPresenter`, `HDRMetalVideoRenderer`, and `CVMetalVideoFrameMapper` | One decoded frame is mapped and rendered under a validated HDR render configuration and coordinate snapshot | Mobile view/display lifecycle does not currently produce the actual revision and headroom inputs |
-| Current decoded frame | `StreamVideoPresentationSource` | Owns current session/media/decoder generations, the latest `DecodedVideoFrame`, semantic presentation events, stale-frame counts, clear/replacement behavior, and at most eight generation-filtered cancellable delivery subscriptions | PiP delivery is now bounded and shares the same frame; application media-generation ownership and legal background continuity remain in 5.x |
-| Decoded frame payload | `DecodedVideoFrame` | Carries decoder generation, frame ID, `CVPixelBuffer`, PTS, duration, decode flags, color metadata, and HDR render binding | PiP must convert this existing image buffer and timing into a sample buffer while preserving generation and color ownership |
-| Continuity policy | `MobileContinuityPolicyResolver` and `MobileContinuityPathResolver` | Chooses foreground, audio+PiP, audio-only, suspend, or pause only from generation-matched actual PiP/audio state after capability, preference, and background-declaration eligibility gates | The actual policy is not yet driven by one serialized application media-generation owner |
-| PiP state | `PictureInPictureStateCoordinator` | Stores only `isActive`, render size, and update time | No native controller, content source, playback delegate, possible/start/stop/failure/restore state, sample layer, frame sink, generation, or teardown |
-| Audio session | `MobileAudioSessionAdapter` and `AVAudioEngineClient` | Configures `.playback`/`.moviePlayback`, multichannel intent, sample rate, buffer duration, output channels, activation, deactivation, route state, and spatial capability | `MobileAudioSessionRuntimeSnapshot.isActive` remains inside the audio adapter/pipeline and is not carried by `SessionAudioRuntimeEvent`; continuity cannot yet prove an actual active permitted audio path |
-| Media ownership | `NativeSessionMediaEnvironment` | Owns session/media generation, video/audio/input processors and consumer tasks; forwards readiness, video presentation, audio runtime, and feedback | No scene/PiP/mobile-display runtime resource, event, application method, or teardown slot |
-| App state | `AppModel` | Applies real macOS lifecycle, render policy, coordinate state, display snapshot, HDR state, audio runtime, and diagnostics | No current mobile scene, geometry, PiP, continuity-path, or attached-screen state |
+| Coordinate contract | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Mobile normalized geometry publishes the same revision used by `MTKView.drawableSize`, fit/fill rendering, touch/absolute mapping, invalid-geometry suppression, and remote reference size | Physical rotation, Stage Manager, and external-display mapping remain unproved |
+| Touch and hover mapping | `TouchInputAdapter` | Consumes current-generation `InputMapper`, rejects invalid or letterboxed samples, and carries the actual source reference size | Physical touch, pencil, hover, and external pointer acceptance remains pending |
+| Renderer | `StreamMetalPresenter`, `HDRMetalVideoRenderer`, and `CVMetalVideoFrameMapper` | One decoded frame is mapped under the actual mobile geometry/display revision; EDR changes participate in current-generation render identity and stale-frame rejection | Visible mobile EDR/HDR and power behavior require physical evidence |
+| Current decoded frame | `StreamVideoPresentationSource` | Owns current session/media/decoder generations and feeds foreground Metal plus one bounded generation-filtered PiP subscription without another decoder | System PiP presentation remains unproved on hardware |
+| Decoded frame payload | `DecodedVideoFrame` and `MobilePictureInPictureSampleBufferAdapter` | Preserves the existing pixel buffer, timing, and color attachments while creating a bounded PiP sample-buffer view | Physical color/timing behavior remains unproved |
+| Continuity policy | `MobileContinuityPolicyResolver`, `MobileContinuityPathResolver`, and `MobileMediaGenerationOwner` | One serialized generation/revision owner resolves and applies foreground, PiP, audio-only, suspend, pause, or stop from actual current PiP/audio state and configuration eligibility | Background duration and system policy acceptance remain physical proof |
+| PiP state | Native PiP lifecycle and presentation coordinators | Owns content source, playback delegate, possibility/start/stop/failure/restore state, sample layer/sink, generation replacement, and bounded callbacks on the main actor | Accessible user commands/status are 5.5; system presentation is 6.6 |
+| Audio session | `MobileAudioSessionAdapter`, `AVAudioEngineClient`, and `NativeSessionAudioProcessor` | Carries actual mobile activation readback into `SessionAudioRuntimeEvent`, composes mobile policy pause/resume with interruption/media-services recovery, and feeds continuity state | Audible background continuity and route behavior remain physical proof |
+| Media ownership | `NativeSessionMediaEnvironment` | Owns one mobile media owner/action client per media generation, serializes application reservations, publishes actual runtime events/snapshots, gates input/control, and includes mobile stop in shared teardown | Full 5.6 policy-loss/resource matrix and 6.x runtime acceptance remain pending |
+| App state | `AppModel` | Owns current mobile scene/geometry, attached-screen EDR, PiP, actual audio activity, continuity result, bounded diagnostics, revision application, and stop/failure/replacement clearing | Accessible 5.5 status/commands and physical behavior remain pending |
 | Native UI | `StreamWorkspaceView` and `SettingsView` | Shows the Metal surface, actual HDR/spatial status, continuity preference toggles, and native navigation | No actual PiP command, mobile lifecycle/resize status, actual background path, or actual mobile EDR status |
 
 ### Generator and configuration
@@ -64,8 +64,9 @@ No lower tier may be reported as a higher tier.
   their later platform stages.
 - The iOS entitlement file currently requests the stage 16 head-pose
   entitlement. It does not grant PiP or prove background execution.
-- AVKit is available through SDK autolinking, but no source currently imports
-  AVKit.
+- AVKit remains platform-owned: iOS `AppModel` and the PiP bridge/coordinators
+  import or call it only behind iOS availability boundaries; shared mobile
+  runtime values contain no UIKit or AVKit objects.
 - New source and test files must be added to both the product `sources` and the
   test-support membership arrays where their contracts are compiled into
   `LuneXCoreTests`.
@@ -856,9 +857,9 @@ membership, platform-object isolation, reference boundary, and diff check pass
 All ordinary tests explicitly removed `LUNEX_RUN_KEYCHAIN_TEST`; the only skip
 is the opt-in real-Keychain round trip. No simulator was queried, created,
 booted, or modified. These results prove the injectable serialized value/action
-owner and four-platform compilation. Task 5.4 must still connect platform
-adapters, `NativeSessionMediaEnvironment`, and `AppModel`. System PiP,
-background duration, signed configuration, physical iPhone/iPad behavior,
+owner and four-platform compilation. Task 5.4 subsequently connects that owner
+to platform adapters, `NativeSessionMediaEnvironment`, and `AppModel`; system
+PiP, background duration, signed configuration, physical iPhone/iPad behavior,
 Stage Manager, external display, visible EDR, power, and live Sunshine remain
 unproved.
 
@@ -916,6 +917,90 @@ unsigned built-plist content only. It does not prove that a provisioning
 profile accepts the configuration. The declaration also does not prove an
 active `.playback` audio session, system PiP, background execution or duration,
 interruption recovery, physical-device behavior, or live Sunshine continuity.
+
+### Application and media-environment integration
+
+OpenSpec task 5.4 connects the actual mobile surface/media state to one current
+application and media generation without moving UIKit or AVKit objects into
+shared actors.
+
+`SessionMobileRuntimeApplication` is the immutable Sendable boundary. It binds
+session ID, media generation, mobile media/PiP generation, semantic revision,
+actual scene/window geometry, attached-screen EDR, native PiP snapshot, actual
+audio-session activation, continuity eligibility, user preferences, and the
+foreground render baseline. Construction validates all generation relations;
+missing, stale, exhausted, or inconsistent values fail closed.
+
+`RootView` routes the actual iOS stream surface callbacks into `AppModel`.
+`AppModel` accepts only its current stream/media/surface/decoder/PiP generation,
+deduplicates monotonic scene/display/PiP revisions, creates one queued runtime
+application, and publishes only a successfully applied state. Stop, launch
+failure, reconnect, remote termination, media replacement, surface detach, and
+revision exhaustion cancel pending work and clear scene, geometry, EDR, PiP,
+audio, continuity, and diagnostic ownership before a replacement can publish.
+
+`NativeSessionMediaEnvironment` reserves the application before awaiting the
+external action owner, shares matching in-flight work, revalidates ownership
+after every await, publishes `.mobileRuntime` only after action success, and
+exposes the state in its bounded snapshot. The production action client applies
+control/audio/video and input-release steps in a fixed order. Per-step progress
+allows one bounded retry without repeating already successful effects. Pending
+pause/stop and applied pause/stop both reject new remote input; the control
+provider also rejects IDR requests while paused or stopped.
+
+Video processing reconciles the existing platform lifecycle directive with the
+mobile directive and allows same-application recovery after a failed resume.
+Audio processing keeps mobile policy pause independent from system interruption
+and media-services recovery, committing the application only after the pipeline
+effect succeeds. Control, audio, and video providers all reject stale session,
+media, generation, or revision applications.
+
+Stop, failure, consumer cancellation, and same-session replacement atomically
+register one shared teardown operation before any await. That operation first
+stops the mobile owner and then tears down the resource tracker, so concurrent
+callers cannot publish partial cleanup or reuse an old report. Immediate input
+release and the input provider's idempotent teardown fallback remain distinct
+ownership layers.
+
+Diagnostics use stable scene, PiP, continuity, and mobile EDR codes with fixed
+summaries and bounded history. They do not retain raw scene/window/display,
+controller, sample-buffer, host, session-generation, or localized error values.
+
+Task 5.4 evidence:
+
+```text
+Focused application/action/replacement/failure gate:
+/tmp/LuneX-17-5_4-action-focused-final-r2.wUolwc/Focused.xcresult
+18 passed / 0 skipped / 0 failed
+
+Expanded 16-suite media/AppModel/PiP/scene/EDR/audio gate:
+/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult
+301 passed / 0 skipped / 0 failed
+
+Fresh complete macOS normal:
+/tmp/LuneX-17-5_4-action-full-final.BwDZJ2/Full.xcresult
+898 total / 897 passed / 1 explicit Keychain skip / 0 failed
+
+Four generic Debug application builds:
+/tmp/LuneX-17-5_4-action-builds-final.15Ul1N
+macOS, iOS/iPadOS, tvOS, visionOS succeeded with zero structured diagnostics
+and one AIR plus one metallib per platform
+iOS UIBackgroundModes = ["audio"], UIDeviceFamily = [1, 2]
+
+Repository gate before task marking:
+/tmp/LuneX-17-5_4-action-repository-final-r2.Qziu2H
+fixtures, OpenSpec strict 8/8, generator stability, compiler membership,
+privacy/API/reference/dependency/license/plist/result/artifact/diff gates pass
+```
+
+All normal tests removed the real-Keychain opt-in and used the established
+file/in-memory fallback. No simulator was queried, created, booted, or modified.
+This is deterministic offline and unsigned generic-build proof. It does not
+prove accessible PiP commands or status UI (5.5), the full policy-loss and
+resource matrix (5.6), signed background acceptance, system PiP, background
+duration, Stage Manager, rotation, external display, visible mobile EDR,
+spatial-audio hardware behavior, power/thermal behavior, physical input, or
+live Sunshine interoperability (6.x).
 
 ## Target ownership model
 

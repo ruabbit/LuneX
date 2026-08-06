@@ -360,6 +360,66 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         }
     }
 
+    func testMobileRuntimeDiagnosticsUseFixedPrivacyBoundedPayloads() {
+        let diagnostics = [
+            MobileSceneDiagnosticState.detached,
+            .active,
+            .inactive,
+            .background,
+            .resizing,
+            .settled,
+            .invalidGeometry
+        ].map(ApplicationDiagnosticFactory.mobileSceneState) + [
+            MobileDisplayDiagnosticState.detached,
+            .sdr,
+            .edr,
+            .fallback,
+            .unavailable
+        ].map(ApplicationDiagnosticFactory.mobileDisplayState) + [
+            MobilePictureInPictureDiagnosticState.preparing,
+            .possible,
+            .unavailable,
+            .starting,
+            .active,
+            .stopping,
+            .stopped,
+            .failed,
+            .invalidated
+        ].map(ApplicationDiagnosticFactory.mobilePictureInPictureState) + [
+            MobileContinuityDiagnosticState.foreground,
+            .pictureInPicture,
+            .audioOnly,
+            .suspended,
+            .stopped,
+            .stale,
+            .applicationFailed,
+            .revisionExhausted
+        ].map(ApplicationDiagnosticFactory.mobileContinuityState)
+        let forbiddenValues = [
+            "45F0C9CB-D795-49B2-A733-F68397632233",
+            "private-host.local",
+            "sceneIdentifier",
+            "windowIdentifier",
+            "screenIdentifier",
+            "controllerIdentifier",
+            "frameIdentifier",
+            "sampleBuffer"
+        ]
+
+        XCTAssertEqual(Set(diagnostics.map(\.code)).count, diagnostics.count)
+        for diagnostic in diagnostics {
+            XCTAssertNil(diagnostic.action)
+            for value in forbiddenValues {
+                XCTAssertFalse(
+                    diagnostic.code.localizedCaseInsensitiveContains(value)
+                )
+                XCTAssertFalse(
+                    diagnostic.summary.localizedCaseInsensitiveContains(value)
+                )
+            }
+        }
+    }
+
     func testHDRDiagnosticsUseStablePrivacyBoundedSemanticPayloads() throws {
         let states: [HDRPresentationDiagnosticState] = [
             .activeSDR,

@@ -72,6 +72,7 @@ struct AudioPipelineSnapshot: Codable, Equatable, Hashable, Sendable {
     var lastStopReason: AudioStopReason?
     var lastErrorMessage: String?
     var updatedAt: Date
+    var mobileAudioSessionActive: Bool? = nil
 }
 
 protocol AudioEngineClient: Sendable {
@@ -87,6 +88,7 @@ protocol AudioEngineClient: Sendable {
     func stop(drain: Bool)
     func routeSnapshot() -> AudioRouteSnapshot
     func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState
+    func mobileAudioSessionActiveReadback() -> Bool?
 }
 
 extension AudioEngineClient {
@@ -100,6 +102,8 @@ extension AudioEngineClient {
             maximumOutputChannelCount: channelCount
         )
     }
+
+    func mobileAudioSessionActiveReadback() -> Bool? { nil }
 }
 
 struct AVAudioEngineGraphReadback: Equatable, Sendable {
@@ -460,6 +464,16 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
         }
     }
 
+    func mobileAudioSessionActiveReadback() -> Bool? {
+        lock.withLock {
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            mobileAudioSessionAdapter.currentSnapshot().isActive
+            #else
+            nil
+            #endif
+        }
+    }
+
     func macOSRouteOutputCapability(
         revision: SpatialAudioSemanticRevision
     ) -> SpatialAudioRouteCapabilitySnapshot {
@@ -722,6 +736,8 @@ actor AudioSessionPipeline {
             snapshot.configuration = configuration
             snapshot.route = engineClient.routeSnapshot()
             snapshot.spatialRuntime = spatialRuntime
+            snapshot.mobileAudioSessionActive =
+                engineClient.mobileAudioSessionActiveReadback()
             snapshot.lastStopReason = nil
             snapshot.lastErrorMessage = nil
             snapshot.updatedAt = now
@@ -732,6 +748,8 @@ actor AudioSessionPipeline {
             snapshot.configuration = nil
             snapshot.route = nil
             snapshot.spatialRuntime = nil
+            snapshot.mobileAudioSessionActive =
+                engineClient.mobileAudioSessionActiveReadback()
             return fail(error, now: now)
         }
     }
@@ -746,6 +764,8 @@ actor AudioSessionPipeline {
             try engineClient.start()
             snapshot.stage = .running
             snapshot.route = engineClient.routeSnapshot()
+            snapshot.mobileAudioSessionActive =
+                engineClient.mobileAudioSessionActiveReadback()
             snapshot.lastErrorMessage = nil
             snapshot.updatedAt = now
             return snapshot
@@ -755,6 +775,8 @@ actor AudioSessionPipeline {
             snapshot.configuration = nil
             snapshot.route = nil
             snapshot.spatialRuntime = nil
+            snapshot.mobileAudioSessionActive =
+                engineClient.mobileAudioSessionActiveReadback()
             return fail(error, now: now)
         }
     }
@@ -818,6 +840,8 @@ actor AudioSessionPipeline {
         snapshot.lastStopReason = reason
         snapshot.route = engineClient.routeSnapshot()
         snapshot.spatialRuntime = nil
+        snapshot.mobileAudioSessionActive =
+            engineClient.mobileAudioSessionActiveReadback()
         snapshot.updatedAt = now
         return snapshot
     }
@@ -836,6 +860,8 @@ actor AudioSessionPipeline {
         snapshot.stage = .failed
         snapshot.lastStopReason = .failure
         snapshot.lastErrorMessage = String(describing: error)
+        snapshot.mobileAudioSessionActive =
+            engineClient.mobileAudioSessionActiveReadback()
         snapshot.updatedAt = now
         return snapshot
     }

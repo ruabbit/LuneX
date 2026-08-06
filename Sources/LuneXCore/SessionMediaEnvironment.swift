@@ -10,6 +10,8 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
     case inputUnavailable
     case staleInputApplication
     case staleAudioApplication
+    case staleMobileRuntimeApplication
+    case invalidMobileRuntimeApplication
 
     var description: String {
         switch self {
@@ -31,6 +33,10 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
             return "The input application does not belong to the current media generation."
         case .staleAudioApplication:
             return "The audio preference application does not belong to the current media generation."
+        case .staleMobileRuntimeApplication:
+            return "The mobile runtime application does not belong to the current media generation or revision."
+        case .invalidMobileRuntimeApplication:
+            return "The mobile runtime application is internally inconsistent."
         }
     }
 
@@ -49,6 +55,7 @@ enum SessionMediaEnvironmentEvent: Equatable, Sendable {
     case feedback(RemoteInputFeedback)
     case videoPresentation(StreamVideoPresentationEvent)
     case audioRuntime(SessionMediaAudioRuntimeState)
+    case mobileRuntime(SessionMobileRuntimeState)
 }
 
 struct SessionMediaAudioRuntimeState: Equatable, Sendable {
@@ -67,6 +74,7 @@ struct SessionMediaEnvironmentSnapshot: Equatable, Sendable {
     var lastTeardownReport: SessionTeardownReport?
     var lifecycleApplication: SessionLifecycleApplication? = nil
     var audioRuntime: SessionMediaAudioRuntimeState? = nil
+    var mobileRuntime: SessionMobileRuntimeState? = nil
 }
 
 struct SessionLifecycleApplication: Equatable, Sendable {
@@ -97,6 +105,9 @@ protocol SessionVideoProcessing: Sendable {
     func consume(_ event: VideoReceiveEvent) async throws -> Bool
     func updateColorMetadata(_ metadata: VideoColorMetadata) async throws
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws
     func stop() async
 }
 
@@ -117,6 +128,9 @@ protocol SessionAudioProcessing: Sendable {
     func audioRuntimeEvents() async -> AsyncStream<SessionAudioRuntimeEvent>
     func updateSpatialAudioPreferences(
         _ preferences: SessionSpatialAudioPreferences
+    ) async throws
+    func applyMobileAudio(
+        _ application: SessionMobileAudioApplication
     ) async throws
     func stop() async
 }
@@ -146,6 +160,10 @@ protocol SessionMediaEnvironment: Sendable {
         _ application: SessionSpatialAudioPreferenceApplication
     ) async throws
 
+    func applyMobileRuntime(
+        _ application: SessionMobileRuntimeApplication
+    ) async throws
+
     func sendInput(_ application: SessionInputApplication) async throws
 
     func releaseInput(_ application: SessionInputReleaseApplication) async throws
@@ -154,6 +172,15 @@ protocol SessionMediaEnvironment: Sendable {
     func stop(sessionID: UUID) async -> SessionTeardownReport?
 
     func snapshot() async -> SessionMediaEnvironmentSnapshot
+}
+
+extension SessionMediaEnvironment {
+    func applyMobileRuntime(
+        _ application: SessionMobileRuntimeApplication
+    ) async throws {
+        _ = application
+        throw SessionMediaEnvironmentError.invalidMobileRuntimeApplication
+    }
 }
 
 actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
@@ -174,6 +201,9 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var lifecycleApplication: SessionLifecycleApplication?
         var lifecycleReservation: SessionLifecycleApplication?
         var audioRuntime: SessionMediaAudioRuntimeState?
+        var mobileRuntime: SessionMobileRuntimeState?
+        var mobileRuntimeReservation: SessionMobileRuntimeApplication?
+        var mobileRuntimeOwner: MobileMediaGenerationOwner
     }
 
     private struct TeardownOperation {
@@ -193,6 +223,11 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var task: Task<Void, Error>
     }
 
+    private struct MobileRuntimeOperation {
+        var application: SessionMobileRuntimeApplication
+        var task: Task<MobileMediaGenerationPublicationOutcome, Error>
+    }
+
     private let videoReceiveProvider: (any VideoReceiveProvider)?
     private let audioReceiveProvider: (any AudioReceiveProvider)?
     private let remoteInputProvider: (any RemoteInputProvider)?
@@ -206,6 +241,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     private var lastStoppedSessionID: UUID?
     private var teardownOperation: TeardownOperation?
     private var lifecycleOperation: LifecycleOperation?
+    private var mobileRuntimeOperation: MobileRuntimeOperation?
     private var startingSession: StartingSession?
     private var cancelledStartingGenerations: Set<UInt64> = []
 
@@ -363,7 +399,19 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 readiness: [.input],
                 lifecycleApplication: nil,
                 lifecycleReservation: nil,
-                audioRuntime: nil
+                audioRuntime: nil,
+                mobileRuntime: nil,
+                mobileRuntimeReservation: nil,
+                mobileRuntimeOwner: MobileMediaGenerationOwner(
+                    actionClient: SessionMobileMediaActionClient(
+                        sessionID: sessionID,
+                        mediaGeneration: mediaGeneration,
+                        videoProcessor: videoProcessor,
+                        audioProcessor: audioProcessor,
+                        controlProvider: controlProvider,
+                        inputProvider: remoteInputProvider
+                    )
+                )
             )
             startingSession = nil
             cancelledStartingGenerations.remove(mediaGeneration)
@@ -621,12 +669,124 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         }
     }
 
+    func applyMobileRuntime(
+        _ application: SessionMobileRuntimeApplication
+    ) async throws {
+        do {
+            try application.validate()
+        } catch {
+            throw SessionMediaEnvironmentError.invalidMobileRuntimeApplication
+        }
+        guard var active, active.sessionID == application.sessionID else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard active.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+        }
+        let effectTask: Task<MobileMediaGenerationPublicationOutcome, Error>
+        if let operation = mobileRuntimeOperation,
+           operation.application == application,
+           active.mobileRuntimeReservation == application {
+            effectTask = operation.task
+        } else {
+            if let reservation = active.mobileRuntimeReservation {
+                guard application.revision.rawValue
+                        > reservation.revision.rawValue else {
+                    throw SessionMediaEnvironmentError
+                        .staleMobileRuntimeApplication
+                }
+            } else if let current = active.mobileRuntime?.application {
+                if application == current { return }
+                guard application.revision.rawValue
+                        > current.revision.rawValue else {
+                    throw SessionMediaEnvironmentError
+                        .staleMobileRuntimeApplication
+                }
+            }
+
+            active.mobileRuntimeReservation = application
+            self.active = active
+            let owner = active.mobileRuntimeOwner
+            let task = Task {
+                try await owner.apply(application.generationInput)
+            }
+            mobileRuntimeOperation = MobileRuntimeOperation(
+                application: application,
+                task: task
+            )
+            effectTask = task
+        }
+
+        let outcome: MobileMediaGenerationPublicationOutcome
+        do {
+            outcome = try await effectTask.value
+        } catch {
+            if var current = self.active,
+               current.sessionID == application.sessionID,
+               current.generation == application.mediaGeneration,
+               current.mobileRuntimeReservation == application {
+                current.mobileRuntimeReservation = nil
+                self.active = current
+            }
+            if mobileRuntimeOperation?.application == application {
+                mobileRuntimeOperation = nil
+            }
+            if error is MobileMediaGenerationOwnerError {
+                throw SessionMediaEnvironmentError
+                    .staleMobileRuntimeApplication
+            }
+            throw error
+        }
+
+        guard var current = self.active,
+              current.sessionID == application.sessionID,
+              current.generation == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+        }
+        if current.mobileRuntime?.application == application,
+           current.mobileRuntimeReservation == nil {
+            if mobileRuntimeOperation?.application == application {
+                mobileRuntimeOperation = nil
+            }
+            return
+        }
+        guard current.mobileRuntimeReservation == application else {
+            throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+        }
+        let media = outcome.snapshot
+        let state = SessionMobileRuntimeState(
+            application: application,
+            media: media
+        )
+        current.mobileRuntime = state
+        current.mobileRuntimeReservation = nil
+        self.active = current
+        if mobileRuntimeOperation?.application == application {
+            mobileRuntimeOperation = nil
+        }
+        current.continuation.yield(.mobileRuntime(state))
+    }
+
     func sendInput(_ application: SessionInputApplication) async throws {
         guard let active, active.sessionID == application.sessionID else {
             throw SessionMediaEnvironmentError.inactiveSession
         }
         guard active.generation == application.mediaGeneration else {
             throw SessionMediaEnvironmentError.staleInputApplication
+        }
+        if let reservation = active.mobileRuntimeReservation {
+            let pendingPlan = MobileMediaGenerationPlanResolver.resolve(
+                reservation.continuityContext,
+                foregroundBaseline: reservation.foregroundBaseline,
+                restoringForeground: false
+            )
+            guard pendingPlan.control == .continueSession else {
+                throw SessionMediaEnvironmentError.inputUnavailable
+            }
+        }
+        guard active.mobileRuntime?.media.plan.control != .pauseSession,
+              active.mobileRuntime?.media.plan.control != .stopSession else {
+            throw SessionMediaEnvironmentError.inputUnavailable
         }
         guard active.readiness.contains(.input) else {
             throw SessionMediaEnvironmentError.inputUnavailable
@@ -692,11 +852,12 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         }
         guard active.sessionID == sessionID else { return nil }
 
+        let operation = makeTeardownOperation(for: active)
         self.active = nil
         lifecycleOperation = nil
-        active.continuation.finish()
-        let operation = makeTeardownOperation(for: active)
+        mobileRuntimeOperation = nil
         teardownOperation = operation
+        active.continuation.finish()
         let report = await operation.task.value
         if teardownOperation?.generation == operation.generation {
             teardownOperation = nil
@@ -717,7 +878,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 activeResourceCount: 0,
                 lastTeardownReport: lastTeardownReport,
                 lifecycleApplication: nil,
-                audioRuntime: nil
+                audioRuntime: nil,
+                mobileRuntime: nil
             )
         }
         let resources = await active.tracker.snapshot()
@@ -730,7 +892,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             activeResourceCount: resources.activeResources.count,
             lastTeardownReport: lastTeardownReport,
             lifecycleApplication: active.lifecycleApplication,
-            audioRuntime: active.audioRuntime
+            audioRuntime: active.audioRuntime,
+            mobileRuntime: active.mobileRuntime
         )
     }
 
@@ -792,11 +955,12 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard let active,
               active.sessionID == sessionID,
               active.generation == generation else { return }
+        let operation = makeTeardownOperation(for: active)
         self.active = nil
         lifecycleOperation = nil
-        active.continuation.finish(throwing: error)
-        let operation = makeTeardownOperation(for: active)
+        mobileRuntimeOperation = nil
         teardownOperation = operation
+        active.continuation.finish(throwing: error)
         Task { [weak self] in
             let report = await operation.task.value
             await self?.recordTeardown(
@@ -817,13 +981,35 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         _ = await stop(sessionID: sessionID)
     }
 
+    private nonisolated static func stopMobileRuntime(
+        _ owner: MobileMediaGenerationOwner
+    ) async {
+        guard let snapshot = await owner.snapshot(),
+              snapshot.phase == .active else { return }
+        let nextRevision = snapshot.revision.rawValue.addingReportingOverflow(1)
+        guard !nextRevision.overflow,
+              let revision = MobileMediaGenerationRevision(
+                rawValue: nextRevision.partialValue
+              ) else { return }
+        _ = try? await owner.stop(
+            ownership: snapshot.ownership,
+            revision: revision
+        )
+    }
+
     private func makeTeardownOperation(
         for active: ActiveSession
     ) -> TeardownOperation {
-        makeTeardownOperation(
+        let gracePeriod = teardownGracePeriod
+        let owner = active.mobileRuntimeOwner
+        let tracker = active.tracker
+        return TeardownOperation(
             sessionID: active.sessionID,
             generation: active.generation,
-            tracker: active.tracker
+            task: Task {
+                await Self.stopMobileRuntime(owner)
+                return try? await tracker.teardown(gracePeriod: gracePeriod)
+            }
         )
     }
 
@@ -852,5 +1038,178 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         teardownOperation = nil
         lastTeardownReport = report
         lastStoppedSessionID = sessionID
+    }
+}
+
+private extension MobileMediaGenerationPublicationOutcome {
+    var snapshot: MobileMediaGenerationSnapshot {
+        switch self {
+        case let .unchanged(snapshot),
+             let .stateUpdated(snapshot),
+             let .actionsApplied(snapshot):
+            snapshot
+        }
+    }
+}
+
+private actor SessionMobileMediaActionClient:
+    MobileMediaGenerationActionApplying
+{
+    private enum Step: Equatable, Hashable, Sendable {
+        case video
+        case audio
+        case releaseInput
+        case control
+    }
+
+    private struct Progress: Sendable {
+        let application: MobileMediaGenerationActionApplication
+        var completed: Set<Step>
+    }
+
+    let sessionID: UUID
+    let mediaGeneration: UInt64
+    let videoProcessor: any SessionVideoProcessing
+    let audioProcessor: any SessionAudioProcessing
+    let controlProvider: any SessionControlProvider
+    let inputProvider: any RemoteInputProvider
+    private var progress: Progress?
+
+    init(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        videoProcessor: any SessionVideoProcessing,
+        audioProcessor: any SessionAudioProcessing,
+        controlProvider: any SessionControlProvider,
+        inputProvider: any RemoteInputProvider
+    ) {
+        self.sessionID = sessionID
+        self.mediaGeneration = mediaGeneration
+        self.videoProcessor = videoProcessor
+        self.audioProcessor = audioProcessor
+        self.controlProvider = controlProvider
+        self.inputProvider = inputProvider
+    }
+
+    func apply(
+        _ application: MobileMediaGenerationActionApplication
+    ) async throws {
+        guard application.ownership.sessionID == sessionID,
+              application.ownership.generation.mediaGeneration
+                == mediaGeneration else {
+            throw SessionMediaEnvironmentError
+                .staleMobileRuntimeApplication
+        }
+        let video = SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: application.ownership.generation,
+            revision: application.revision,
+            directive: application.plan.video
+        )
+        let audio = SessionMobileAudioApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: application.ownership.generation,
+            revision: application.revision,
+            directive: application.plan.audio
+        )
+        let control = SessionMobileControlApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: application.ownership.generation,
+            revision: application.revision,
+            directive: application.plan.control
+        )
+
+        let steps: [Step]
+        switch application.plan.control {
+        case .continueSession:
+            steps = [.control, .audio, .video]
+        case .pauseSession, .stopSession:
+            steps = [.video, .audio, .releaseInput, .control]
+        }
+
+        if let current = progress, current.application != application {
+            guard isNewer(application, than: current.application) else {
+                throw SessionMediaEnvironmentError
+                    .staleMobileRuntimeApplication
+            }
+            progress = Progress(application: application, completed: [])
+        } else if progress == nil {
+            progress = Progress(application: application, completed: [])
+        }
+
+        for step in steps {
+            guard progress?.application == application else {
+                throw SessionMediaEnvironmentError
+                    .staleMobileRuntimeApplication
+            }
+            if progress?.completed.contains(step) == true { continue }
+            try await apply(
+                step,
+                video: video,
+                audio: audio,
+                control: control
+            )
+            guard progress?.application == application else {
+                throw SessionMediaEnvironmentError
+                    .staleMobileRuntimeApplication
+            }
+            progress?.completed.insert(step)
+        }
+    }
+
+    private func isNewer(
+        _ candidate: MobileMediaGenerationActionApplication,
+        than current: MobileMediaGenerationActionApplication
+    ) -> Bool {
+        guard candidate.ownership.sessionID == current.ownership.sessionID else {
+            return false
+        }
+        let candidateGeneration = candidate.ownership.generation
+        let currentGeneration = current.ownership.generation
+        if candidateGeneration.mediaGeneration
+            != currentGeneration.mediaGeneration {
+            return candidateGeneration.mediaGeneration
+                > currentGeneration.mediaGeneration
+        }
+        if candidateGeneration.pictureInPictureGeneration
+            != currentGeneration.pictureInPictureGeneration {
+            return candidateGeneration.pictureInPictureGeneration
+                > currentGeneration.pictureInPictureGeneration
+        }
+        return candidate.revision.rawValue > current.revision.rawValue
+    }
+
+    private func apply(
+        _ step: Step,
+        video: SessionMobileVideoApplication,
+        audio: SessionMobileAudioApplication,
+        control: SessionMobileControlApplication
+    ) async throws {
+        var retryAvailable = true
+        while true {
+            do {
+                switch step {
+                case .video:
+                    try await videoProcessor.applyMobileVideo(video)
+                case .audio:
+                    try await audioProcessor.applyMobileAudio(audio)
+                case .releaseInput:
+                    await inputProvider.releaseAll(sessionID: sessionID)
+                case .control:
+                    try await controlProvider.applyMobileControl(control)
+                }
+                return
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as SessionMediaEnvironmentError {
+                throw error
+            } catch {
+                guard retryAvailable else { throw error }
+                retryAvailable = false
+            }
+        }
     }
 }

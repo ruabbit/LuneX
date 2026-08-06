@@ -21,6 +21,8 @@ enum SessionAudioRuntimeEventCause: String, Equatable, Hashable, Sendable {
     case mediaServicesReset = "media-services-reset"
     case spatialCapabilityChanged = "spatial-capability-changed"
     case preferencesChanged = "preferences-changed"
+    case mobilePolicyPaused = "mobile-policy-paused"
+    case mobilePolicyResumed = "mobile-policy-resumed"
     case recovery
     case failed
     case stopped
@@ -36,6 +38,31 @@ struct SessionAudioRuntimeEvent: Equatable, Sendable {
     let preferences: SessionSpatialAudioPreferences
     let concealedFrameCount: UInt64
     let lastAction: AudioRuntimeRecoveryAction
+    let mobileAudioSessionActive: Bool?
+
+    init(
+        sessionID: UUID,
+        sequence: UInt64,
+        graphGeneration: UInt64,
+        cause: SessionAudioRuntimeEventCause,
+        stage: SessionAudioRuntimeStage,
+        spatialRuntime: SpatialAudioRuntimeSnapshot?,
+        preferences: SessionSpatialAudioPreferences,
+        concealedFrameCount: UInt64,
+        lastAction: AudioRuntimeRecoveryAction,
+        mobileAudioSessionActive: Bool? = nil
+    ) {
+        self.sessionID = sessionID
+        self.sequence = sequence
+        self.graphGeneration = graphGeneration
+        self.cause = cause
+        self.stage = stage
+        self.spatialRuntime = spatialRuntime
+        self.preferences = preferences
+        self.concealedFrameCount = concealedFrameCount
+        self.lastAction = lastAction
+        self.mobileAudioSessionActive = mobileAudioSessionActive
+    }
 }
 
 enum NativeSessionAudioProcessorError: Error, Equatable, Sendable {
@@ -260,6 +287,9 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
     private var currentPreferences: SessionSpatialAudioPreferences
     private var currentEntitlement: SpatialAudioEntitlementState
     private var latestRuntime: SessionAudioRuntimeSnapshot
+    private var mobileAudioApplication: SessionMobileAudioApplication?
+    private var isMobileAudioPolicyPaused = false
+    private var isSystemAudioInterrupted = false
     private var graphGeneration: UInt64 = 1
     private var nextEventSequence: UInt64 = 1
     private var isStopping = false
@@ -327,7 +357,9 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
             spatialRuntime: initialRuntime.pipeline.spatialRuntime,
             preferences: initialPreferences,
             concealedFrameCount: initialRuntime.concealedFrameCount,
-            lastAction: initialRuntime.lastAction
+            lastAction: initialRuntime.lastAction,
+            mobileAudioSessionActive:
+                initialRuntime.pipeline.mobileAudioSessionActive
         ))
     }
 
@@ -387,6 +419,105 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
         }
     }
 
+    func applyMobileAudio(
+        _ application: SessionMobileAudioApplication
+    ) async throws {
+        do {
+            let shouldStop = try await serializedOperation {
+                try await self.applyMobileAudioSerialized(application)
+            }
+            if shouldStop {
+                await stop()
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SessionMediaEnvironmentError {
+            throw error
+        } catch {
+            await convergeRuntimeFailure(at: nextRuntimeEventTime())
+            throw error
+        }
+    }
+
+    private func applyMobileAudioSerialized(
+        _ application: SessionMobileAudioApplication
+    ) async throws -> Bool {
+        guard application.sessionID == sessionID,
+              application.mediaGeneration > 0,
+              application.generation.mediaGeneration
+                == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+        }
+        if let current = mobileAudioApplication {
+            if application == current { return false }
+            guard application.revision.rawValue > current.revision.rawValue else {
+                throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+            }
+        }
+        guard !isStopping, !isStopped else {
+            throw AudioRuntimeRecoveryError.stopped
+        }
+        guard !isFailed else {
+            throw AudioRuntimeRecoveryError.invalidState
+        }
+
+        switch application.directive {
+        case .continuePlayback:
+            guard isMobileAudioPolicyPaused else {
+                mobileAudioApplication = application
+                return false
+            }
+            try resetJitterBufferForContinuityTransition()
+            if !isSystemAudioInterrupted {
+                if latestRuntime.stage == .interrupted {
+                    let eventTime = nextRuntimeEventTime()
+                    let snapshot = try await runtime.handle(
+                        .interruptionEnded(shouldResume: true),
+                        at: eventTime
+                    )
+                    latestRuntimeEventTimeNanoseconds = eventTime
+                    latestRuntime = snapshot
+                    try publish(snapshot, cause: .mobilePolicyResumed)
+                } else {
+                    guard latestRuntime.stage == .running else {
+                        throw AudioRuntimeRecoveryError.invalidState
+                    }
+                }
+            }
+            isMobileAudioPolicyPaused = false
+            mobileAudioApplication = application
+            return false
+
+        case .pause:
+            guard !isMobileAudioPolicyPaused else {
+                mobileAudioApplication = application
+                return false
+            }
+            try resetJitterBufferForContinuityTransition()
+            if latestRuntime.stage == .running {
+                let eventTime = nextRuntimeEventTime()
+                let snapshot = try await runtime.handle(
+                    .interruptionBegan,
+                    at: eventTime
+                )
+                latestRuntimeEventTimeNanoseconds = eventTime
+                latestRuntime = snapshot
+                try publish(snapshot, cause: .mobilePolicyPaused)
+            } else {
+                guard latestRuntime.stage == .interrupted else {
+                    throw AudioRuntimeRecoveryError.invalidState
+                }
+            }
+            isMobileAudioPolicyPaused = true
+            mobileAudioApplication = application
+            return false
+
+        case .stop:
+            mobileAudioApplication = application
+            return true
+        }
+    }
+
     func consume(_ event: AudioReceiveEvent) async throws -> Bool {
         try await serializedOperation {
             try await self.consumeSerialized(event)
@@ -401,6 +532,15 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
         }
         guard !isFailed else {
             throw AudioRuntimeRecoveryError.invalidState
+        }
+        if isMobileAudioPolicyPaused {
+            if case let .packet(packet) = event {
+                latestReceiveTimeNanoseconds = max(
+                    latestReceiveTimeNanoseconds,
+                    packet.receiveTimeNanoseconds
+                )
+            }
+            return false
         }
         switch event {
         case let .packet(packet):
@@ -487,25 +627,47 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
         let runtimeSnapshot: SessionAudioRuntimeSnapshot
         switch snapshot.trigger {
         case .interruptionBegan, .mediaServicesLost:
-            _ = try await runtime.handle(.interruptionBegan, at: eventTime)
+            isSystemAudioInterrupted = true
+            if latestRuntime.stage == .running {
+                _ = try await runtime.handle(.interruptionBegan, at: eventTime)
+            }
             runtimeSnapshot = try await runtime.applySpatialPolicy(
                 intent,
                 at: eventTime
             )
 
         case let .interruptionEnded(shouldResume):
-            _ = try await runtime.applySpatialPolicy(intent, at: eventTime)
-            runtimeSnapshot = try await runtime.handle(
-                .interruptionEnded(shouldResume: shouldResume),
-                at: eventTime
-            )
-
-        case .mediaServicesReset:
+            isSystemAudioInterrupted = !shouldResume
             let applied = try await runtime.applySpatialPolicy(
                 intent,
                 at: eventTime
             )
             if applied.stage == .interrupted {
+                if !shouldResume {
+                    runtimeSnapshot = try await runtime.handle(
+                        .interruptionEnded(shouldResume: false),
+                        at: eventTime
+                    )
+                } else if !isMobileAudioPolicyPaused {
+                    runtimeSnapshot = try await runtime.handle(
+                        .interruptionEnded(shouldResume: true),
+                        at: eventTime
+                    )
+                } else {
+                    runtimeSnapshot = applied
+                }
+            } else {
+                runtimeSnapshot = applied
+            }
+
+        case .mediaServicesReset:
+            isSystemAudioInterrupted = false
+            let applied = try await runtime.applySpatialPolicy(
+                intent,
+                at: eventTime
+            )
+            if applied.stage == .interrupted,
+               !isMobileAudioPolicyPaused {
                 runtimeSnapshot = try await runtime.handle(
                     .interruptionEnded(shouldResume: true),
                     at: eventTime
@@ -529,6 +691,14 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
             runtimeSnapshot,
             cause: Self.eventCause(for: snapshot.trigger)
         )
+    }
+
+    private func resetJitterBufferForContinuityTransition() throws {
+        jitterBuffer = try AudioPacketJitterBuffer(
+            policy: .realtime(configuration: configuration)
+        )
+        nextRTPTimeStamp = nil
+        nextPresentationTimeNanoseconds = latestRuntimeEventTimeNanoseconds
     }
 
     private func process(
@@ -654,7 +824,9 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
             spatialRuntime: snapshot.pipeline.spatialRuntime,
             preferences: currentPreferences,
             concealedFrameCount: snapshot.concealedFrameCount,
-            lastAction: snapshot.lastAction
+            lastAction: snapshot.lastAction,
+            mobileAudioSessionActive:
+                snapshot.pipeline.mobileAudioSessionActive
         ))
         nextEventSequence += 1
     }
@@ -678,7 +850,9 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
                 spatialRuntime: snapshot.pipeline.spatialRuntime,
                 preferences: currentPreferences,
                 concealedFrameCount: snapshot.concealedFrameCount,
-                lastAction: snapshot.lastAction
+                lastAction: snapshot.lastAction,
+                mobileAudioSessionActive:
+                    snapshot.pipeline.mobileAudioSessionActive
             ))
             nextEventSequence += 1
         }

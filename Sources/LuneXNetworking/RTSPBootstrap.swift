@@ -279,6 +279,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         sessionID: UUID,
         metadata: VideoColorMetadata
     )?
+    private var mobileControlApplication: SessionMobileControlApplication?
 
     init(
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
@@ -311,6 +312,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         let token = UUID()
         negotiatedVideoSelection = nil
         negotiatedVideoColorMetadata = nil
+        mobileControlApplication = nil
         let teardown = SessionControlTeardownCoordinator(
             launchClient: launchClient,
             connection: connection,
@@ -351,7 +353,37 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         guard activeSession?.sessionID == sessionID else {
             throw ControlChannelError.invalidState
         }
+        guard mobileControlApplication?.directive != .pauseSession,
+              mobileControlApplication?.directive != .stopSession else {
+            throw ControlChannelError.invalidState
+        }
         try await controlChannel.requestIDR()
+    }
+
+    func applyMobileControl(
+        _ application: SessionMobileControlApplication
+    ) async throws {
+        guard let activeSession,
+              activeSession.sessionID == application.sessionID,
+              application.mediaGeneration > 0,
+              application.generation.mediaGeneration
+                == application.mediaGeneration else {
+            throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+        }
+        if let current = mobileControlApplication {
+            if application == current { return }
+            guard application.isNewer(than: current) else {
+                throw SessionMediaEnvironmentError.staleMobileRuntimeApplication
+            }
+        }
+        mobileControlApplication = application
+    }
+
+    func currentMobileControlApplication(
+        sessionID: UUID
+    ) -> SessionMobileControlApplication? {
+        guard activeSession?.sessionID == sessionID else { return nil }
+        return mobileControlApplication
     }
 
     func stop(sessionID: UUID) async {

@@ -8,7 +8,13 @@ final class StreamingSessionState {
     var lastError: SessionError?
 
     var isStreaming: Bool {
-        phase == .streaming
+        switch phase {
+        case .streaming, .suspending:
+            true
+        case .disconnected, .discovering, .pairing, .connecting, .stopping,
+             .failed:
+            false
+        }
     }
 }
 

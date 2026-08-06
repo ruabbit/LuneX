@@ -658,6 +658,29 @@ private struct StreamWorkspaceView: View {
                 diagnosticLease: hdrPresentationDiagnosticLease
             )
                 .ignoresSafeArea()
+            #elseif os(iOS)
+            MetalStreamSurface(
+                renderState: appModel.renderState,
+                presentationSource: appModel.videoPresentationSource,
+                userAllowsHDR: appModel.settings.stream.hdrEnabled,
+                diagnosticLease: hdrPresentationDiagnosticLease,
+                attachmentUpdateHandler: { update in
+                    appModel.receiveMobileSurfaceAttachment(
+                        surfaceGeneration: update.surfaceGeneration,
+                        isAttached: update.attachment != nil
+                    )
+                },
+                sceneLifecycleUpdateHandler: { update in
+                    appModel.receiveMobileSceneLifecycle(update)
+                },
+                sceneWindowSnapshotHandler: { snapshot in
+                    appModel.receiveMobileSceneWindowSnapshot(snapshot)
+                },
+                displayEDREventHandler: { event in
+                    appModel.receiveMobileDisplayEDREvent(event)
+                }
+            )
+                .ignoresSafeArea()
             #else
             MetalStreamSurface(
                 renderState: appModel.renderState,

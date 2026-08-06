@@ -84,6 +84,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 break
             case .audioRuntime:
                 break
+            case .mobileRuntime:
+                break
             }
         }
         XCTAssertEqual(finalReadiness, [.video, .audio, .input])
@@ -157,6 +159,569 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(snapshot.audioRuntime?.mediaGeneration, snapshot.generation)
 
         _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testMobileRuntimeAppliesCurrentGenerationAndPublishesActualState()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let application = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 1,
+            sceneActivity: .active
+        )
+
+        try await environment.applyMobileRuntime(application)
+
+        let snapshot = await environment.snapshot()
+        XCTAssertEqual(snapshot.mobileRuntime?.application, application)
+        XCTAssertEqual(snapshot.mobileRuntime?.continuityPath, .foreground)
+        XCTAssertEqual(
+            snapshot.mobileRuntime?.media.plan.video,
+            .continueForegroundPresentation
+        )
+        let applied = await processor.mobileApplications
+        XCTAssertEqual(applied.map(\.directive), [.continueForegroundPresentation])
+        let nextEvent = try await iterator.next()
+        guard case let .mobileRuntime(state)? = nextEvent else {
+            return XCTFail("Expected a mobile runtime event")
+        }
+        XCTAssertEqual(state, snapshot.mobileRuntime)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testMobileRuntimeRejectsInvalidGenerationAndStaleRevision()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let current = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 2,
+            sceneActivity: .background,
+            isAudioSessionActive: true
+        )
+        try await environment.applyMobileRuntime(current)
+
+        let stale = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 1,
+            sceneActivity: .active
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyMobileRuntime(stale)
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleMobileRuntimeApplication
+            )
+        }
+
+        let invalid = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 3,
+            sceneActivity: .active,
+            pictureInPictureMediaGeneration: generation + 1
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyMobileRuntime(invalid)
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .invalidMobileRuntimeApplication
+            )
+        }
+        let applied = await processor.mobileApplications
+        XCTAssertEqual(applied.count, 1)
+        XCTAssertEqual(applied.first?.directive, .drainTransportWithoutDecoding)
+        let final = await environment.snapshot()
+        XCTAssertEqual(final.mobileRuntime?.application, current)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testMobileRuntimeRoutesPiPAudioSuspensionAndForegroundRestore()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let input = ControlledRemoteInputProvider(calls: calls)
+        let control = RecordingMobileControlProvider()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: input,
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            ),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: control
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let applications = [
+            mobileRuntimeApplication(
+                sessionID: sessionID,
+                mediaGeneration: generation,
+                revision: 1,
+                sceneActivity: .background,
+                pictureInPictureLifecycle: .active
+            ),
+            mobileRuntimeApplication(
+                sessionID: sessionID,
+                mediaGeneration: generation,
+                revision: 2,
+                sceneActivity: .background,
+                isAudioSessionActive: true
+            ),
+            mobileRuntimeApplication(
+                sessionID: sessionID,
+                mediaGeneration: generation,
+                revision: 3,
+                sceneActivity: .background
+            ),
+            mobileRuntimeApplication(
+                sessionID: sessionID,
+                mediaGeneration: generation,
+                revision: 4,
+                sceneActivity: .active
+            )
+        ]
+
+        for application in applications.prefix(3) {
+            try await environment.applyMobileRuntime(application)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await environment.sendInput(SessionInputApplication(
+                sessionID: sessionID,
+                mediaGeneration: generation,
+                event: .keyboard(KeyboardInputEvent(
+                    rawKeyCode: 4,
+                    characters: nil,
+                    isDown: true,
+                    modifiers: [],
+                    isRepeat: false
+                ))
+            ))
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .inputUnavailable
+            )
+        }
+        try await environment.applyMobileRuntime(applications[3])
+        try await environment.applyMobileRuntime(applications[3])
+
+        let applied = await processor.mobileApplications
+        XCTAssertEqual(applied.map(\.directive), [
+            .continuePictureInPictureDelivery,
+            .drainTransportWithoutDecoding,
+            .drainTransportWithoutDecoding,
+            .continueForegroundPresentation
+        ])
+        let audioProcessor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let audioApplications = await audioProcessor.mobileApplications()
+        XCTAssertEqual(audioApplications.map(\.directive), [
+            .continuePlayback,
+            .continuePlayback,
+            .pause,
+            .continuePlayback
+        ])
+        let controlApplications = await control.mobileApplications()
+        XCTAssertEqual(controlApplications.map(\.directive), [
+            .continueSession,
+            .continueSession,
+            .pauseSession,
+            .continueSession
+        ])
+        let recordedCalls = await calls.values()
+        XCTAssertEqual(
+            recordedCalls.filter { $0 == "input.release" }.count,
+            1
+        )
+        let state = await environment.snapshot().mobileRuntime
+        XCTAssertEqual(state?.continuityPath, .foreground)
+        XCTAssertEqual(state?.media.foregroundRestorationCount, 1)
+        XCTAssertEqual(
+            state?.media.plan.foreground,
+            .restoreAndResample(.active)
+        )
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testConcurrentStopsShareMobileAndResourceTeardownOperation()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor(
+            blockMobileStopApplication: true,
+            blockResourceStop: true
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        try await environment.applyMobileRuntime(mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 1,
+            sceneActivity: .active
+        ))
+        guard case .mobileRuntime? = try await iterator.next() else {
+            return XCTFail("Expected the applied mobile runtime event")
+        }
+        let completions = StopCompletionRecorder()
+
+        let first = Task {
+            let report = await environment.stop(sessionID: sessionID)
+            await completions.record(report)
+            return report
+        }
+        guard await waitUntil({ await processor.isMobileStopBlocked }) else {
+            await processor.releaseAllBlocks()
+            _ = await first.value
+            return
+        }
+        let second = Task {
+            let report = await environment.stop(sessionID: sessionID)
+            await completions.record(report)
+            return report
+        }
+        for _ in 0..<20 { await Task.yield() }
+        let completionsBeforeMobileResume = await completions.count
+        XCTAssertEqual(completionsBeforeMobileResume, 0)
+
+        await processor.resumeMobileStopApplication()
+        guard await waitUntil({ await processor.isResourceStopBlocked }) else {
+            await processor.releaseAllBlocks()
+            _ = await first.value
+            _ = await second.value
+            return
+        }
+        for _ in 0..<20 { await Task.yield() }
+        let completionsBeforeResourceResume = await completions.count
+        XCTAssertEqual(completionsBeforeResourceResume, 0)
+
+        await processor.resumeResourceStop()
+        let firstOptionalReport = await first.value
+        let secondOptionalReport = await second.value
+        let firstReport = try XCTUnwrap(firstOptionalReport)
+        let secondReport = try XCTUnwrap(secondOptionalReport)
+        XCTAssertEqual(firstReport, secondReport)
+        XCTAssertTrue(firstReport.isClean)
+        XCTAssertEqual(firstReport.stoppedResourceCount, 5)
+        let finalCompletionCount = await completions.count
+        XCTAssertEqual(finalCompletionCount, 2)
+        let ended = try await iterator.next()
+        XCTAssertNil(ended)
+        let mobileApplications = await processor.mobileApplications
+        XCTAssertEqual(mobileApplications.filter { $0.directive == .stop }.count, 1)
+        let values = await calls.values()
+        // Mobile stop releases held input immediately; transport teardown
+        // repeats the idempotent release before closing the input provider.
+        XCTAssertEqual(values.filter { $0 == "input.release" }.count, 2)
+        XCTAssertEqual(values.filter { $0 == "input.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "video.processor.stop" }.count, 0)
+    }
+
+    func testDuplicateMobileRuntimeApplicationAwaitsOnePendingEffect()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor(
+            blockFirstMobileApplication: true
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let application = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 1,
+            sceneActivity: .background
+        )
+        let first = Task {
+            try await environment.applyMobileRuntime(application)
+        }
+        await waitUntil { await processor.mobileApplicationCount == 1 }
+        let duplicate = Task {
+            try await environment.applyMobileRuntime(application)
+        }
+        for _ in 0..<20 { await Task.yield() }
+
+        let pendingCount = await processor.mobileApplicationCount
+        let pendingSnapshot = await environment.snapshot()
+        XCTAssertEqual(pendingCount, 1)
+        XCTAssertNil(pendingSnapshot.mobileRuntime)
+        await XCTAssertThrowsErrorAsync(
+            try await environment.sendInput(SessionInputApplication(
+                sessionID: sessionID,
+                mediaGeneration: generation,
+                event: .keyboard(KeyboardInputEvent(
+                    rawKeyCode: 4,
+                    characters: nil,
+                    isDown: true,
+                    modifiers: [],
+                    isRepeat: false
+                ))
+            ))
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .inputUnavailable
+            )
+        }
+        await processor.resumeFirstMobileApplication()
+        try await first.value
+        try await duplicate.value
+        let appliedSnapshot = await environment.snapshot()
+        XCTAssertEqual(appliedSnapshot.mobileRuntime?.application, application)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testMobileRuntimeRetryResumesAfterLastCompletedActionStep()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let videoProcessor = ControlledLifecycleVideoProcessor()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let input = ControlledRemoteInputProvider(calls: calls)
+        let control = RecordingMobileControlProvider()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: input,
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: videoProcessor
+            ),
+            audioProcessorFactory: audioProcessorFactory
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: control
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let audioProcessor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        await audioProcessor.failNextMobileApplications(count: 2)
+        let application = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 1,
+            sceneActivity: .background
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyMobileRuntime(application)
+        ) { error in
+            XCTAssertEqual(
+                error as? MediaEnvironmentTestError,
+                .receiverFailure
+            )
+        }
+        let failedSnapshot = await environment.snapshot()
+        XCTAssertNil(failedSnapshot.mobileRuntime)
+
+        try await environment.applyMobileRuntime(application)
+
+        let videoApplicationCount = await videoProcessor.mobileApplicationCount
+        let audioApplications = await audioProcessor.mobileApplications()
+        let controlApplications = await control.mobileApplications()
+        XCTAssertEqual(videoApplicationCount, 1)
+        XCTAssertEqual(
+            audioApplications.map(\.directive),
+            [.pause, .pause, .pause]
+        )
+        XCTAssertEqual(
+            controlApplications.map(\.directive),
+            [.pauseSession]
+        )
+        let recordedCalls = await calls.values()
+        XCTAssertEqual(
+            recordedCalls.filter { $0 == "input.release" }.count,
+            1
+        )
+        let appliedSnapshot = await environment.snapshot()
+        XCTAssertEqual(appliedSnapshot.mobileRuntime?.application, application)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testLateMobileRuntimeCompletionCannotPolluteReplacementGeneration()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let processor = ControlledLifecycleVideoProcessor(
+            blockFirstMobileApplication: true
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoProcessorFactory: ControlledLifecycleVideoProcessorFactory(
+                processor: processor
+            )
+        )
+        let sessionID = UUID()
+        let configuration = makeConfiguration(sessionID: sessionID)
+        var stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let firstGeneration = await environment.snapshot().generation
+        let stale = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: firstGeneration,
+            revision: 1,
+            sceneActivity: .background
+        )
+        let staleTask = Task {
+            try await environment.applyMobileRuntime(stale)
+        }
+        await waitUntil { await processor.mobileApplicationCount == 1 }
+
+        _ = await environment.stop(sessionID: sessionID)
+        let stoppedSnapshot = await environment.snapshot()
+        XCTAssertNil(stoppedSnapshot.mobileRuntime)
+        stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: configuration,
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let replacementGeneration = await environment.snapshot().generation
+        let replacement = mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: replacementGeneration,
+            revision: 1,
+            sceneActivity: .active
+        )
+        try await environment.applyMobileRuntime(replacement)
+        await processor.resumeFirstMobileApplication()
+        await XCTAssertThrowsErrorAsync(try await staleTask.value) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleMobileRuntimeApplication
+            )
+        }
+
+        let final = await environment.snapshot()
+        XCTAssertGreaterThan(replacementGeneration, firstGeneration)
+        XCTAssertEqual(final.mobileRuntime?.application, replacement)
+        _ = await environment.stop(sessionID: sessionID)
+    }
+
+    func testMediaFailureClearsCurrentMobileRuntimeState() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let video = ControlledVideoReceiveProvider(calls: calls)
+        let environment = makeEnvironment(
+            calls: calls,
+            video: video,
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls)
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        let generation = await environment.snapshot().generation
+        try await environment.applyMobileRuntime(mobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            revision: 1,
+            sceneActivity: .active
+        ))
+        let activeSnapshot = await environment.snapshot()
+        XCTAssertNotNil(activeSnapshot.mobileRuntime)
+
+        video.finish(
+            sessionID: sessionID,
+            throwing: MediaEnvironmentTestError.receiverFailure
+        )
+        await waitUntil { await environment.snapshot().sessionID == nil }
+        let failed = await environment.snapshot()
+        XCTAssertNil(failed.mobileRuntime)
+        _ = stream
     }
 
     func testRejectsRegressiveAudioRuntimeSequencesAndGraphGenerations() async throws {
@@ -1189,19 +1754,27 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         )
         let consumer = Task {
             for try await _ in stream {
+                await calls.append("event.consumer.received")
                 try Task.checkCancellation()
             }
         }
-        await waitUntil {
-            let snapshot = await environment.snapshot()
-            return snapshot.sessionID == sessionID && snapshot.activeTaskCount == 4
+        guard await waitUntil(timeout: .seconds(5), {
+            await calls.values().contains("event.consumer.received")
+        }) else {
+            consumer.cancel()
+            _ = await consumer.result
+            _ = await environment.stop(sessionID: sessionID)
+            return
         }
 
         consumer.cancel()
         _ = await consumer.result
-        await waitUntil {
+        guard await waitUntil(timeout: .seconds(5), {
             let snapshot = await environment.snapshot()
             return snapshot.sessionID == nil
+        }) else {
+            _ = await environment.stop(sessionID: sessionID)
+            return
         }
         let optionalReport = await environment.stop(sessionID: sessionID)
         let report = try XCTUnwrap(optionalReport)
@@ -1644,6 +2217,140 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         await processor.stop()
     }
 
+    func testNativeVideoProcessorMergesLifecycleWithMobileContinuity()
+        async throws {
+        let source = StreamVideoPresentationSource()
+        let control = RecordingLifecycleControlProvider()
+        let sessionID = UUID()
+        let mediaGeneration: UInt64 = 12
+        let processor = try await NativeSessionVideoProcessorFactory(
+            presentationSource: source
+        ).makeVideoProcessor(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            configuration: makeConfiguration(sessionID: sessionID).video,
+            controlProvider: control
+        )
+        let pictureInPictureGeneration = MobilePictureInPictureGeneration(
+            mediaGeneration: mediaGeneration,
+            pictureInPictureGeneration: 1
+        )!
+        let hidden = lifecycleApplication(
+            sessionID: sessionID,
+            generation: mediaGeneration,
+            revision: 1,
+            isVisible: false,
+            isFocused: false,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        try await processor.applyLifecycle(hidden)
+
+        try await processor.applyMobileVideo(SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: pictureInPictureGeneration,
+            revision: MobileMediaGenerationRevision(rawValue: 1)!,
+            directive: .continuePictureInPictureDelivery
+        ))
+        let pictureInPictureIDRCount = await control.idrCount
+        XCTAssertEqual(pictureInPictureIDRCount, 1)
+
+        try await processor.applyMobileVideo(SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: pictureInPictureGeneration,
+            revision: MobileMediaGenerationRevision(rawValue: 2)!,
+            directive: .drainTransportWithoutDecoding
+        ))
+        let visible = lifecycleApplication(
+            sessionID: sessionID,
+            generation: mediaGeneration,
+            revision: 2,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        try await processor.applyLifecycle(visible)
+        let audioOnlyIDRCount = await control.idrCount
+        XCTAssertEqual(audioOnlyIDRCount, 1)
+
+        let foreground = SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: pictureInPictureGeneration,
+            revision: MobileMediaGenerationRevision(rawValue: 3)!,
+            directive: .continueForegroundPresentation
+        )
+        try await processor.applyMobileVideo(foreground)
+        try await processor.applyMobileVideo(foreground)
+        let foregroundIDRCount = await control.idrCount
+        XCTAssertEqual(foregroundIDRCount, 2)
+
+        try await processor.applyMobileVideo(SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: pictureInPictureGeneration,
+            revision: MobileMediaGenerationRevision(rawValue: 4)!,
+            directive: .drainTransportWithoutDecoding
+        ))
+        XCTAssertNil(source.currentFrame())
+        await processor.stop()
+    }
+
+    func testNativeVideoProcessorRetriesSameMobileResumeAfterIDRFailure()
+        async throws {
+        let source = StreamVideoPresentationSource()
+        let control = FailingOnceLifecycleControlProvider()
+        let sessionID = UUID()
+        let mediaGeneration: UInt64 = 13
+        let processor = try await NativeSessionVideoProcessorFactory(
+            presentationSource: source
+        ).makeVideoProcessor(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            configuration: makeConfiguration(sessionID: sessionID).video,
+            controlProvider: control
+        )
+        let generation = try XCTUnwrap(MobilePictureInPictureGeneration(
+            mediaGeneration: mediaGeneration,
+            pictureInPictureGeneration: 1
+        ))
+        let drain = SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: generation,
+            revision: try XCTUnwrap(
+                MobileMediaGenerationRevision(rawValue: 1)
+            ),
+            directive: .drainTransportWithoutDecoding
+        )
+        let resume = SessionMobileVideoApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            generation: generation,
+            revision: try XCTUnwrap(
+                MobileMediaGenerationRevision(rawValue: 2)
+            ),
+            directive: .continueForegroundPresentation
+        )
+
+        try await processor.applyMobileVideo(drain)
+        do {
+            try await processor.applyMobileVideo(resume)
+            XCTFail("The first synthetic IDR request must fail.")
+        } catch {
+            XCTAssertEqual(
+                error as? MediaEnvironmentTestError,
+                .receiverFailure
+            )
+        }
+        try await processor.applyMobileVideo(resume)
+
+        let idrCount = await control.idrCount
+        XCTAssertEqual(idrCount, 2)
+        await processor.stop()
+    }
+
     func testNativeAudioProcessorConnectsOpusFixtureToSessionAudioGraph() async throws {
         let fixtureURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1678,6 +2385,10 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             sessionID: UUID(),
             configuration: configuration
         )
+        let runtimeEvents = await processor.audioRuntimeEvents()
+        var runtimeIterator = runtimeEvents.makeAsyncIterator()
+        let initialRuntime = await runtimeIterator.next()
+        XCTAssertEqual(initialRuntime?.mobileAudioSessionActive, true)
         var becameReady = false
         for (index, packet) in fixture.packets.enumerated() {
             let payload = try XCTUnwrap(Data(base64Encoded: packet.base64Payload))
@@ -1757,6 +2468,56 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         )
     }
 
+    private func mobileRuntimeApplication(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        revision: UInt64,
+        sceneActivity: AppSceneActivity,
+        pictureInPictureLifecycle: MobilePictureInPictureLifecycle? = nil,
+        isAudioSessionActive: Bool? = nil,
+        pictureInPictureMediaGeneration: UInt64? = nil
+    ) -> SessionMobileRuntimeApplication {
+        let pictureInPictureGeneration = MobilePictureInPictureGeneration(
+            mediaGeneration: pictureInPictureMediaGeneration ?? mediaGeneration,
+            pictureInPictureGeneration: 1
+        )!
+        let pictureInPicture = pictureInPictureLifecycle.map { lifecycle in
+            MobilePictureInPictureSnapshot(
+                generation: pictureInPictureGeneration,
+                revision: MobilePictureInPictureRevision(rawValue: revision),
+                state: MobilePictureInPictureSemanticState(
+                    isPrepared: true,
+                    capability: .possible,
+                    lifecycle: lifecycle,
+                    frameSink: .ready(decoderGeneration: 1)!,
+                    restoration: .idle,
+                    failure: nil
+                )
+            )
+        }
+        return SessionMobileRuntimeApplication(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            revision: SessionMobileRuntimeRevision(rawValue: revision)!,
+            generation: pictureInPictureGeneration,
+            platform: .iOS,
+            sceneActivity: sceneActivity,
+            surfaceGeneration: nil,
+            sceneWindow: nil,
+            displayEDR: nil,
+            pictureInPicture: pictureInPicture,
+            isAudioSessionActive: isAudioSessionActive,
+            isAudioContinuityPermitted: isAudioSessionActive == true,
+            preferences: .defaults,
+            capabilities: PlatformContinuityCapabilities(
+                supportsAudioBackgroundMode: true,
+                supportsPictureInPicture: true,
+                hasAudioBackgroundModeDeclared: true
+            ),
+            foregroundBaseline: .active
+        )
+    }
+
     private func makeConfiguration(sessionID: UUID) -> NegotiatedSessionConfiguration {
         NegotiatedSessionConfiguration(
             sessionID: sessionID,
@@ -1814,14 +2575,19 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         return try XCTUnwrap(pixelBuffer)
     }
 
+    @discardableResult
     private func waitUntil(
+        timeout: Duration = .seconds(2),
         _ condition: @escaping @Sendable () async -> Bool
-    ) async {
-        for _ in 0..<200 {
-            if await condition() { return }
-            await Task.yield()
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while clock.now < deadline {
+            if await condition() { return true }
+            try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Timed out waiting for media environment state.")
+        return false
     }
 }
 
@@ -1884,6 +2650,10 @@ private final class MediaEnvironmentAudioEngineClient: AudioEngineClient, @unche
         )
     }
 
+    func mobileAudioSessionActiveReadback() -> Bool? {
+        withLock { !stopped }
+    }
+
     func scheduledBuffers() -> [DecodedPCMBuffer] {
         withLock { buffers }
     }
@@ -1930,6 +2700,37 @@ private struct MediaEnvironmentControlProvider: SessionControlProvider {
     }
 }
 
+private actor RecordingMobileControlProvider: SessionControlProvider {
+    private var applications: [SessionMobileControlApplication] = []
+
+    func start(
+        sessionID: UUID,
+        request: StreamLaunchRequest
+    ) async -> AsyncThrowingStream<SessionControlEvent, Error> {
+        _ = sessionID
+        _ = request
+        return AsyncThrowingStream { $0.finish() }
+    }
+
+    func requestIDR(sessionID: UUID) async throws {
+        _ = sessionID
+    }
+
+    func applyMobileControl(
+        _ application: SessionMobileControlApplication
+    ) async throws {
+        applications.append(application)
+    }
+
+    func mobileApplications() -> [SessionMobileControlApplication] {
+        applications
+    }
+
+    func stop(sessionID: UUID) async {
+        _ = sessionID
+    }
+}
+
 private actor RecordingLifecycleControlProvider: SessionControlProvider {
     private(set) var idrCount = 0
 
@@ -1945,6 +2746,31 @@ private actor RecordingLifecycleControlProvider: SessionControlProvider {
     func requestIDR(sessionID: UUID) async throws {
         _ = sessionID
         idrCount &+= 1
+    }
+
+    func stop(sessionID: UUID) async {
+        _ = sessionID
+    }
+}
+
+private actor FailingOnceLifecycleControlProvider: SessionControlProvider {
+    private(set) var idrCount = 0
+
+    func start(
+        sessionID: UUID,
+        request: StreamLaunchRequest
+    ) async -> AsyncThrowingStream<SessionControlEvent, Error> {
+        _ = sessionID
+        _ = request
+        return AsyncThrowingStream { $0.finish() }
+    }
+
+    func requestIDR(sessionID: UUID) async throws {
+        _ = sessionID
+        idrCount += 1
+        if idrCount == 1 {
+            throw MediaEnvironmentTestError.receiverFailure
+        }
     }
 
     func stop(sessionID: UUID) async {
@@ -1975,14 +2801,31 @@ private struct ControlledLifecycleVideoProcessorFactory: SessionVideoProcessorCr
 
 private actor ControlledLifecycleVideoProcessor: SessionVideoProcessing {
     private(set) var applications: [SessionLifecycleApplication] = []
+    private(set) var mobileApplications: [SessionMobileVideoApplication] = []
     private let blockFirstApplication: Bool
+    private let blockFirstMobileApplication: Bool
+    private var blockMobileStopApplication: Bool
+    private var blockResourceStop: Bool
     private var firstApplicationContinuation: CheckedContinuation<Void, Never>?
+    private var firstMobileApplicationContinuation:
+        CheckedContinuation<Void, Never>?
+    private var mobileStopContinuation: CheckedContinuation<Void, Never>?
+    private var resourceStopContinuation: CheckedContinuation<Void, Never>?
 
-    init(blockFirstApplication: Bool = false) {
+    init(
+        blockFirstApplication: Bool = false,
+        blockFirstMobileApplication: Bool = false,
+        blockMobileStopApplication: Bool = false,
+        blockResourceStop: Bool = false
+    ) {
         self.blockFirstApplication = blockFirstApplication
+        self.blockFirstMobileApplication = blockFirstMobileApplication
+        self.blockMobileStopApplication = blockMobileStopApplication
+        self.blockResourceStop = blockResourceStop
     }
 
     var applicationCount: Int { applications.count }
+    var mobileApplicationCount: Int { mobileApplications.count }
 
     func consume(_ event: VideoReceiveEvent) async throws -> Bool {
         _ = event
@@ -2001,12 +2844,79 @@ private actor ControlledLifecycleVideoProcessor: SessionVideoProcessing {
         }
     }
 
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws {
+        mobileApplications.append(application)
+        if blockFirstMobileApplication,
+           mobileApplications.count == 1 {
+            await withCheckedContinuation { continuation in
+                firstMobileApplicationContinuation = continuation
+            }
+        }
+        await blockMobileStopIfRequired(application)
+    }
+
+    private func blockMobileStopIfRequired(
+        _ application: SessionMobileVideoApplication
+    ) async {
+        guard blockMobileStopApplication,
+              application.directive == .stop else { return }
+        await withCheckedContinuation { continuation in
+            mobileStopContinuation = continuation
+        }
+    }
+
     func resumeFirstApplication() {
         firstApplicationContinuation?.resume()
         firstApplicationContinuation = nil
     }
 
-    func stop() async {}
+    func resumeFirstMobileApplication() {
+        firstMobileApplicationContinuation?.resume()
+        firstMobileApplicationContinuation = nil
+    }
+
+    var isMobileStopBlocked: Bool { mobileStopContinuation != nil }
+    var isResourceStopBlocked: Bool { resourceStopContinuation != nil }
+
+    func resumeMobileStopApplication() {
+        blockMobileStopApplication = false
+        mobileStopContinuation?.resume()
+        mobileStopContinuation = nil
+    }
+
+    func resumeResourceStop() {
+        blockResourceStop = false
+        resourceStopContinuation?.resume()
+        resourceStopContinuation = nil
+    }
+
+    func releaseAllBlocks() {
+        blockMobileStopApplication = false
+        blockResourceStop = false
+        mobileStopContinuation?.resume()
+        mobileStopContinuation = nil
+        resourceStopContinuation?.resume()
+        resourceStopContinuation = nil
+    }
+
+    func stop() async {
+        guard blockResourceStop else { return }
+        await withCheckedContinuation { continuation in
+            resourceStopContinuation = continuation
+        }
+    }
+}
+
+private actor StopCompletionRecorder {
+    private var reports: [SessionTeardownReport?] = []
+
+    var count: Int { reports.count }
+
+    func record(_ report: SessionTeardownReport?) {
+        reports.append(report)
+    }
 }
 
 private final class ControlledVideoReceiveProvider: VideoReceiveProvider, @unchecked Sendable {
@@ -2284,6 +3194,13 @@ private actor RecordingVideoProcessor: SessionVideoProcessing {
         await calls.append("video.lifecycle")
     }
 
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws {
+        _ = application
+        await calls.append("video.mobile")
+    }
+
     func stop() async {
         await calls.append("video.processor.stop")
     }
@@ -2339,6 +3256,13 @@ private actor RecordingAudioProcessor: SessionAudioProcessing {
         _ preferences: SessionSpatialAudioPreferences
     ) async throws {
         _ = preferences
+    }
+
+    func applyMobileAudio(
+        _ application: SessionMobileAudioApplication
+    ) async throws {
+        _ = application
+        await calls.append("audio.mobile")
     }
 
     func stop() async {
@@ -2398,6 +3322,8 @@ private actor ControlledAudioProcessor: SessionAudioProcessing {
     private let eventStream: AsyncStream<SessionAudioRuntimeEvent>
     private let eventContinuation: AsyncStream<SessionAudioRuntimeEvent>.Continuation
     private var appliedPreferences: [SessionSpatialAudioPreferences] = []
+    private var appliedMobileApplications: [SessionMobileAudioApplication] = []
+    private var mobileApplicationFailuresRemaining = 0
     private var shouldBlockNextPreferenceUpdate = false
     private var blockedPreferenceContinuation:
         CheckedContinuation<Void, Never>?
@@ -2433,6 +3359,24 @@ private actor ControlledAudioProcessor: SessionAudioProcessing {
             }
         }
         appliedPreferences.append(preferences)
+    }
+
+    func applyMobileAudio(
+        _ application: SessionMobileAudioApplication
+    ) async throws {
+        appliedMobileApplications.append(application)
+        if mobileApplicationFailuresRemaining > 0 {
+            mobileApplicationFailuresRemaining -= 1
+            throw MediaEnvironmentTestError.receiverFailure
+        }
+    }
+
+    func mobileApplications() -> [SessionMobileAudioApplication] {
+        appliedMobileApplications
+    }
+
+    func failNextMobileApplications(count: Int) {
+        mobileApplicationFailuresRemaining = count
     }
 
     func preferenceUpdates() -> [SessionSpatialAudioPreferences] {
