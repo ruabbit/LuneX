@@ -2431,3 +2431,26 @@
 - 勾选后final-state `/tmp/LuneX-18-2_3-final-state.LZtrAB`确认`9/50 ready`、next 2.4，generator SHA-256为`4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`，十文件scope、retained focused/normal/五build/Metal、privacy/opt-in/进程和diff边界全部一致；未重复test/build或simulator inventory。
 - 最终人工diff复核发现actual tvOS/visionOS view仍保留`MTKView.autoResizeDrawable`默认自动写入，与geometry owner的single drawable writer合同冲突；已在view初始化关闭auto resize。修复后focused `/tmp/LuneX-18-2_3-owner-fix-focused.kY6Oxo`保持`14/14`，direct tvOS `/tmp/LuneX-18-2_3-owner-fix-tvos.FCNNmM`与visionOS `/tmp/LuneX-18-2_3-owner-fix-vision.1Feeyo`均零诊断成功且各有AIR/metallib；仍未查询或操作simulator。
 - 修订final gate `/tmp/LuneX-18-2_3-final-amend-r2.0HXOJm`确认OpenSpec `9/50 next 2.4`、十文件scope、generator哈希、唯一drawable owner、新三份证据及retained normal/五build全部一致；真实Keychain/live-host opt-in和xcodebuild/xctest均为空。首轮只读gate仅因zsh特殊`path`变量覆盖`PATH`退出，未重复test/build。
+
+## 2026-08-07 阶段 18 任务 2.4 presentation coordinator 审计
+
+- 现有`TVVisionPlatformPresentationSnapshot`已经强制scene/input/display/audio与controller leases的平台、input generation和单一semantic revision一致；2.4应复用并由coordinator重建/rebrand独立组件，而不是放宽合同或让组件各自revision泄漏到应用层。
+- `StreamVideoPresentationSource`已是有界current-frame owner，delivery携带session/media/revision且最多保留一个latest frame；coordinator只需保存一个current delivery、再以presentation ownership与当前platform revision包装，不能创建第二decoder或frame queue。
+- `NativeSessionMediaEnvironment`和`SessionResourceTracker`已经拥有video/audio/input transport与逆序resource teardown；2.4只定义可注入的platform effects和shared presentation teardown顺序，2.5再把coordinator接入media environment/AppModel。
+- actor在`await` action client时仍可重入，因此需要沿用`MobileMediaGenerationOwner`的显式FIFO operation gate；每个transition先计算reserved next state和ordered effects，成功后commit，action failure则fail closed并best-effort执行一次shared teardown。
+- scene关闭必须先关闭input admission，再clear video，随后清/发布scene、display、audio和snapshot；replacement先完整teardown旧ownership再激活新ownership，late old scene/frame/route callback不得改变replacement。
+- 平台semantic revision只随scene/input/display/audio或teardown语义变化推进；逐帧delivery使用独立sequence/revision，避免每帧重建HDR/audio组件。组件完成后可重放唯一latest frame，保证surface恢复不依赖无界缓存。
+- coordinator diagnostics只记录bounded typed class和effect kind，不保存host、scene/window/controller对象、route label、payload或任意错误字符串；完整持久化/导出diagnostics仍属于7.4。
+- 首轮实现审计发现并修正三项真实性缺口：scene-close diagnostic改用实际commit sequence；terminal snapshot effect失败不再被吞掉，本地terminal phase/diagnostics会记录`.actionFailed(.snapshot)`且不会触发第二次teardown；presentation assembly按scene/input/display/audio component精确归因，不再固定误报scene。
+- 首轮fresh focused `/tmp/LuneX-18-2_4-focused.aQS6ye`在Swift/Clang/Metal warnings-as-errors下通过`8/8`。进一步审计确认还需证明suspended effect期间FIFO serialization、foreign session隔离、sequence exhaustion、incomplete input fail-closed及decoder generation watermark，已补实现和测试，等待fresh复验。
+- 补强后的最终focused `/tmp/LuneX-18-2_4-focused-r3.FG8Ckv`结构化通过`12/12`且build `succeeded/0 error/0 warning/0 analyzer warning`；覆盖FIFO gate、input unavailable、scene-close ordering、current frame、decoder watermark、replacement/foreign session/late callback、action/snapshot failure、revision/sequence exhaustion和幂等stop。
+- direct tvOS `/tmp/LuneX-18-2_4-tvos.AJeL2v`与visionOS `/tmp/LuneX-18-2_4-vision.B2ikcX` actual条件分支均结构化`succeeded/0/0/0`且各有一份AIR/metallib；固定UUID只作为build destination，没有读取、启动或改变simulator生命周期。
+- fresh normal `/tmp/LuneX-18-2_4-normal.p2HGpE`结构化通过`987 total / 986 passed / 1 skipped / 0 failed`，唯一skip精确为显式真实Keychain round-trip；build为`succeeded/0 error/0 warning/0 analyzer warning`，测试环境未启用Keychain或live-host opt-in。
+- repository pre-gate `/tmp/LuneX-18-2_4-repository-pre.YGBLze`完整通过fixture、OpenSpec strict `9/9`与勾选前`9/50 next 2.4`、generator四次稳定哈希、九文件scope、membership、FIFO/single-delivery/ordered-teardown/privacy/clean-room边界和全部retained证据；因此2.4已勾选，权威下一项为2.5。
+- 勾选后final-state虽在`/tmp/LuneX-18-2_4-final-state.n06XLb`通过，但提交前语义复核发现`isRenderEligible`未检查`display.isOutputAvailable`，display失效时可能继续frame replay并保留input eligible。该证据已失效；修复为display unavailable关闭input/video、恢复时只重放唯一current frame，并新增完整回归后重跑所有受影响门。
+- display fail-closed修复后的fresh focused `/tmp/LuneX-18-2_4-display-fix-focused-r2.cp7W6C`结构化通过`13/13`且build零诊断；新增用例覆盖display unavailable先关input再clear video、期间frame只更新current metadata、恢复时重放唯一latest frame和input重新eligible。
+- 修订fresh normal `/tmp/LuneX-18-2_4-display-fix-normal.HPUEMu`结构化通过`988/987/1 exact Keychain skip/0`且build零诊断；修订五平台Debug `/tmp/LuneX-18-2_4-display-fix-builds.Zcj3Gg`全部`succeeded/0/0/0`并各有AIR/metallib。固定UUID仅作build destination，未读取或操作simulator。
+- 修订final repository gate `/tmp/LuneX-18-2_4-display-fix-final-r3-cXPKxC`确认当前十文件补丁与修订证据一致：fixture self/tree、strict `9/9`、apply `10/50 next 2.5`、generator四次同哈希、membership、FIFO/single-current-delivery/display fail-closed/ordered teardown、privacy/clean-room、focused `13/13`、normal `988/987/1/0`、五build/Metal、opt-in/进程和diff边界全部通过。
+- final wrapper前两轮只暴露验证断言错误：第一轮低估Xcode工程内build-file声明和phase引用的文本计数，第二轮把普通scene/audioRoute/controller lease状态误匹配为identity；均未重跑test/build、访问Keychain或操作simulator，第三轮从fresh目录完整通过。
+- 当前2.4仍未把coordinator接入`NativeSessionMediaEnvironment`/`AppModel`，也未实现actual input/HDR/audio adapters；signed、物理设备、live Sunshine和性能层级仍未证明。
+- post-record r2 `/tmp/LuneX-18-2_4-post-record-r2-vJDin3`确认OpenSpec `10/50 next 2.5`、十文件scope、project hash、分层final-gate记录及diff检查一致；首轮只因错误要求roadmap重复临时证据路径而退出。
