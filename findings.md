@@ -2328,3 +2328,17 @@
 - 五平台Debug证据`/tmp/LuneX-18-1_2-builds.t1EbLt`中macOS、固定26.4 iPhone/iPad/Apple TV/Vision Pro均`succeeded`、结构化error/warning/analyzer warning为0，新source在每个target编译。只使用固定UUID作为build destination，没有inventory或simulator生命周期调用。
 - repository pre-gate最终`/tmp/LuneX-18-1_2-repository-pre-r3.QwpaS0`通过fixture self/tree、OpenSpec strict`9/9`、apply`1/50 next 1.2`、generator SHA-256`9737b94c610eefdb777466f0a8e4906ecd6353dfb509de94a511b7512cf224e6`连续4次一致、五target/test membership、framework-object/privacy/reference和diff检查。
 - 勾选后final-state`/tmp/LuneX-18-1_2-final-state.215ooC`确认apply`2/50 next 1.3`、focused`13/13`、normal`922/921/1/0`、五build全成功零结构化诊断、generator四次同哈希、精确十文件范围、Keychain/live opt-in unset、无LuneX残留测试进程；没有重复simulator inventory或生命周期操作。
+
+## 2026-08-07 阶段 18 任务 1.3 合同审计
+
+- tvOS remote stream capture可发送集合正好是select、play/pause与四个方向，共6个；Menu单独映射为reserved Back/Menu，因此`maximumActivePressCount = 6`与当前`TVRemoteButton`边界一致。
+- 单个controller snapshot只能证明自己的slot bit存在；完整active bitmap必须由roster在看到全部controller后校验。保持这两层职责可允许先构建各complete-state snapshot，再验证同一roster mask，不能把individual snapshot错误收紧为single-slot-only mask。
+- Ordered release plan是可独立构造的checked contract，不能依赖调用者已检查：必须分别拒绝stale press generation、非tvOS controller、stale controller input generation、duplicate token/button/slot/lease与reserved Menu，否则可能生成重复button-up或重复handler removal。
+- `.unsupported` reserved command使用typed `.ignoreLocally`，仍不生成Moonlight event；Home/volume/capture/power使用`.deferToSystem`，Back/Menu使用`.showOverlayOrExitCapture`。focus identity只参与本地ownership，不进入任何serialization effect。
+- final focused证据`/tmp/LuneX-18-1_3-focused-final.vfmkpn`为`16/16/0/0`，结构化build error/warning/analyzer warning均为0；首轮唯一失败是test helper的`Int`到`UInt8`转换，production合同已完成编译。
+- fresh normal证据`/tmp/LuneX-18-1_3-normal.X2XdFh`为`938 total / 937 passed / 1 explicit Keychain skip / 0 failed`，零结构化诊断；命令显式移除真实Keychain与live-host opt-in，没有再次触发Keychain授权。
+- 五平台Debug证据`/tmp/LuneX-18-1_3-builds.H78vE4`中macOS、固定iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 error/0 warning/0 analyzer warning`，且各有一个AIR和一个metallib；固定UUID只作build destination，没有查询或操作simulator。
+- 无配置`swift-format lint --strict`使用默认2-space规则，与仓库4-space风格不一致，输出不作为质量结论，也不据此重写文件；权威门保持warnings-as-errors、结构化xcresult、`git diff --check`与人工审阅。
+- repository pre-gate `/tmp/LuneX-18-1_3-repository-pre.cR5mnp`从头通过fixtures、strict `9/9`、apply `2/50 next 1.3`、generator四次同一SHA-256 `755323bf392b901cb0443bf5b2fc116a69b740b67f7e2930dd3c10c601c26779`、五target/test membership、framework-object/privacy/reference、Keychain/live opt-in、进程与diff检查；随后才勾选1.3。
+- 1.3勾选后OpenSpec权威进度为`3/50 ready`、next 1.4；首个Python单行摘要只因f-string转义在仓库外失败，改用heredoc读取JSON确认状态，未改变源码或重复任何测试/构建/设备操作。
+- 勾选后final-state最终证据`/tmp/LuneX-18-1_3-final-state-r2.piTqXW`完整通过：strict `9/9`、apply `3/50 next 1.4`、generator同一SHA-256、retained focused/normal/五build、唯一Keychain skip、五份AIR/metallib、精确十文件scope、docs/privacy/reference/opt-in/进程/diff边界；前两轮仅分别在shell启动前的反引号解析和文档大小写断言处退出。

@@ -2843,3 +2843,21 @@
 - repository gate首轮因旧OpenSpec summary字段退出；第二轮因PBX membership双份文本计数口径退出。最终`/tmp/LuneX-18-1_2-repository-pre-r3.QwpaS0`从头通过fixtures、strict`9/9`、apply`1/50`、generator四次同哈希、membership、platform-object/privacy/reference和diff检查。
 - 勾选OpenSpec 1.2并同步runtime合同、roadmap及三份planning文件，预期权威进度`2/50 ready`、next 1.3；下一步运行勾选后final-state并独立提交推送。
 - 勾选后final-state`/tmp/LuneX-18-1_2-final-state.215ooC`完整通过strict`9/9`、apply`2/50 next 1.3`、retained focused/normal/五平台build、generator四次稳定、docs/membership/reference/platform-object、精确变更范围、Keychain/live opt-in、LuneX进程和diff门；未重跑test/build或查询/操作simulator。
+
+## 2026-08-07 阶段 18 任务 1.3 恢复与首轮编译
+
+- macOS更新完成后从`e79246a`恢复：`HEAD == origin/main`，active goal不变，OpenSpec `integrate-tvos-visionos-runtime`为`2/50 ready`、next 1.3；工作树只有1.3纯值合同、测试和generator membership。
+- 重读planning skill、OpenSpec apply skill及proposal/design/四份spec/tasks；生成工程后`git diff --check`通过，未查询或操作simulator，Keychain/live-host opt-in继续显式移除。
+- 首轮fresh focused证据`/tmp/LuneX-18-1_3-focused-first.2LRtZM`在Swift编译阶段失败，唯一代码错误是测试helper把`Int` slot传给`UInt8`；production合同已完成编译。修复helper时同步收紧release plan的press/controller分域错误、duplicate和reserved-state校验，下一步重新运行fresh focused。
+- 首次同时追加source/test/planning的patch因`findings.md`上下文选择错误而在应用前原子失败，未产生半应用状态；随后拆分为code/test和各planning文件的精确patch。
+- 修复测试helper后从全新证据目录运行focused final `/tmp/LuneX-18-1_3-focused-final.vfmkpn`，16项全部通过、0 fail/skip，结构化build error/warning/analyzer warning均为0。
+- fresh完整macOS normal `/tmp/LuneX-18-1_3-normal.X2XdFh`通过`938 total / 937 passed / 1 skipped / 0 failed`，唯一skip仍是显式真实Keychain round-trip；Keychain/live-host opt-in均移除，没有再次访问真实Keychain。
+- 五平台Debug `/tmp/LuneX-18-1_3-builds.H78vE4`中macOS、固定iPhone/iPad/Apple TV/Vision Pro全部`succeeded`，结构化error/warning/analyzer warning为0且每份均有AIR/metallib；仅使用固定UUID作为build destination，没有simulator inventory或生命周期操作。
+- source/test语义审计确认local/stream ownership、六个remote按钮、reserved Menu/system command、balanced token、16-slot exact roster、lease-aware feedback和close admission -> remove handlers -> reverse button-up -> provider barrier -> restore focus顺序完整；合同不持有UIKit/GameController/AVFoundation/Metal对象或可持久化身份。
+- 对新文件运行无仓库配置的`swift-format lint --strict`产生默认2-space与项目4-space不一致的非权威报告；不重写源码，后续以warnings-as-errors、结构化xcresult、`git diff --check`和人工diff作为格式/编译门。
+- 已同步runtime contract、roadmap及三份planning文件；下一步执行fixture/OpenSpec/generator/membership/privacy/reference/repository pre-gate，通过后才勾选1.3并运行final-state。
+- repository pre-gate `/tmp/LuneX-18-1_3-repository-pre.cR5mnp`通过fixture self/tree、OpenSpec strict `9/9`、apply精确`2/50 next 1.3`、generator SHA-256 `755323bf392b901cb0443bf5b2fc116a69b740b67f7e2930dd3c10c601c26779`连续4次稳定、五target/test membership、framework-object/privacy/reference、Keychain/live opt-in、无xcodebuild/xctest与diff门。
+- pre-gate通过后勾选OpenSpec 1.3；下一步运行勾选后final-state，预期权威进度`3/50 ready`、next 1.4，不重复focused/normal/build或simulator inventory。
+- 勾选后首个只读OpenSpec摘要因Python单行f-string转义错误退出，仓库未受影响；改用heredoc从JSON解析并确认`3/50 ready`、next 1.4，没有重复build/test或设备操作。
+- 首个final-state包装器因未转义Markdown反引号在shell启动前退出；第二轮通过OpenSpec/generator/retained evidence后因文档`Actual stream-surface`句首大小写断言退出。两次都没有重复build/test或设备操作。
+- 最终勾选后final-state `/tmp/LuneX-18-1_3-final-state-r2.piTqXW`完整通过：OpenSpec strict `9/9`、apply `3/50 next 1.4`、generator SHA-256 `755323bf392b901cb0443bf5b2fc116a69b740b67f7e2930dd3c10c601c26779`、retained focused `16/16`、normal `938/937/1 exact Keychain/0`、五build `succeeded/0/0/0`、五份AIR/metallib、精确十文件scope、docs/reference/opt-in/进程和diff门。

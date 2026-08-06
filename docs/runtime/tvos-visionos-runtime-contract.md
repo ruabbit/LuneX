@@ -275,6 +275,59 @@ controller capture, window ownership, rendering, HDR output, spatial audio,
 signed installation, physical behavior, live Sunshine, performance, power, or
 thermal acceptance.
 
+## Task 1.3 tvOS focus and capture effect foundation
+
+Task 1.3 adds `TVRemoteFocusCaptureContract.swift` as a framework-object-free
+value contract. It defines what a future main-actor tvOS surface and controller
+owner may apply; it does not install `UIPress` or `GCController` handlers and
+does not send an event to a live Moonlight provider.
+
+The contract provides:
+
+- explicit local SwiftUI focus/navigation ownership versus current-generation
+  stream capture ownership, with overlay, focus, scene, surface, and capability
+  ineligibility represented as typed local reasons;
+- a generation-branded, nonzero opaque press token and a balanced
+  begin/end/cancel reducer for exactly six stream-eligible buttons: select,
+  play/pause, and the four directions;
+- local reservation of Back/Menu, Home, volume, capture, power, and unsupported
+  commands. Menu never enters the remote button set; unsupported input produces
+  a typed local ignore effect rather than a synthetic Moonlight event;
+- complete extended- and micro-gamepad state checks, deterministic bounded
+  sixteen-slot controller rosters, exact shared active masks, and duplicate
+  slot or lease rejection;
+- current-generation and current-lease feedback admission for supported rumble,
+  trigger rumble, LED, and bounded motion-rate requests, with typed stale,
+  missing-controller, and unsupported-capability decisions;
+- one checked release plan ordered as close remote admission, remove controller
+  handlers, emit reverse-order remote button-up effects, await the existing
+  provider held-release barrier, and then restore local focus.
+
+Focus identity remains ephemeral local UI ownership and never enters a remote
+serialization effect. Individual controller snapshots prove that their own slot
+bit is present; the roster separately proves that every complete snapshot has
+the same exact aggregate active mask. A release plan independently rejects
+stale generations, reserved active buttons, duplicate press tokens or buttons,
+non-tvOS controllers, and duplicate or stale controller leases.
+
+Task 1.3 verification used fresh isolated evidence:
+
+- focused macOS tests: `16/16` passed after correcting one test-only `Int` to
+  `UInt8` conversion, with zero build diagnostics;
+- complete macOS normal suite: `938 total / 937 passed / 1 skipped / 0 failed`,
+  with the sole skip being the explicit real-Keychain round trip and both real
+  Keychain and live-host opt-ins unset;
+- macOS and fixed iOS 26.4 iPhone/iPad, tvOS 26.4 Apple TV, and visionOS 26.4
+  Vision Pro Debug builds: all `succeeded`, with zero structured errors,
+  warnings, or analyzer warnings and one AIR plus one metallib artifact each.
+
+The fixed simulator UUIDs were build destinations only. Task 1.3 did not run a
+new simulator inventory or perform a simulator lifecycle operation. These are
+contract, deterministic-test, and unsigned-build results. Actual stream-surface
+press handlers, controller handlers and feedback, focus handoff, physical Siri
+Remote feel, live Sunshine delivery, signed installation, HDR, spatial audio,
+performance, power, and thermal behavior remain unproved.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

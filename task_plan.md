@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`2/50 ready`；1.2 immutable checked platform contract完成，下一项1.3 tvOS focus/capture effect合同 |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`3/50 ready`；1.3 tvOS focus/capture effect合同与自验完成，下一项1.4 visionOS windowed/focus/reserved合同 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`2/50 ready`。1.1完成target/config/entitlement、actual ownership、Xcode 26.4 API、固定simulator与proof inventory；1.2新增framework-object-free immutable checked platform snapshot，覆盖branded generation/revision、finite geometry/drawable、scene/surface/focus/input capability、16-slot controller lease、display headroom source、audio route/platform strategy与aggregate consistency。focused `13/13`、完整macOS `922/921/1/0`、五平台Debug和repository gate通过；下一项1.3定义tvOS local focus与stream capture effect合同，不把本项证据描述为actual runtime或physical proof。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`3/50 ready`、next 1.4。1.1完成target/config/entitlement、actual ownership、Xcode 26.4 API、固定simulator与proof inventory；1.2新增framework-object-free immutable checked platform snapshot。1.3完成tvOS local focus/stream capture分权、system-reserved command、balanced press token、16-slot complete controller roster、lease-aware feedback与ordered release纯值合同；focused `16/16`、完整macOS `938/937/1/0`、五平台Debug和repository pre-gate通过。下一项1.4定义visionOS windowed/system-reserved/focus-release/immersive-unavailable合同；当前证据仍不是actual handler/runtime或physical proof。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -81,6 +81,13 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.1.3首轮focused编译把测试helper的`Int` slot直接传给`UInt8` | 1 | production合同已完成编译；helper在既有checked slot构造后显式转为`UInt8`，并用全新DerivedData/result bundle重跑 |
+| 18.1.3首个code/test/planning组合patch使用了错误的`findings.md`尾部锚点 | 1 | `apply_patch`在写入前整体拒绝且没有部分状态；拆分code/test与两份planning精确patch |
+| 18.1.3记录上述patch错误的首个表格补丁假设了错误的首行错误项 | 1 | 补丁在写入前整体拒绝；只使用稳定表格分隔行作为插入锚点 |
+| 18.1.3对新文件运行无仓库配置的`swift-format lint --strict` | 1 | 工具默认2-space规则与仓库既有4-space风格冲突，产生大量非权威格式报告；不批量重写，继续使用warnings-as-errors编译、结构化xcresult、`git diff --check`和人工diff审计 |
+| 18.1.3勾选后首个OpenSpec摘要使用错误的Python单行f-string转义 | 1 | `openspec`只读JSON已写入临时文件但解析器在仓库外退出；改用heredoc从文件解析并确认`3/50 ready next 1.4`，未重复build/test或设备操作 |
+| 18.1.3首个final-state包装器含未转义Markdown反引号 | 1 | JavaScript在shell启动前退出，没有创建证据或执行门禁；移除包装器中的反引号固定匹配后从头运行，不重复build/test |
+| 18.1.3第二个final-state文档断言大小写不匹配 | 1 | OpenSpec、generator和全部保留结果已通过后在`Actual stream-surface`句首大小写处退出；改为大小写不敏感匹配并从新目录完整重跑 |
 | 17.6.4首轮final-state的精确进程名门命中另一个工作区TamaCore正在运行的xctest | 1 | 未终止或干扰外部进程；进程门收紧为只匹配comm为xcodebuild/xctest且args属于LuneX仓库或本阶段证据路径，再从新目录完成final-state |
 | 17.6.4第二轮pre-gate的`pgrep -f`误匹配包装器自身命令行内`xcodebuild.log`路径 | 1 | checkpoints证明前六组全通过，按进程名连续5秒查询为零；改用`pgrep -x xcodebuild`和`pgrep -x xctest`精确进程名完成组合门，不重跑测试 |
 | 17.6.4首轮repository pre-gate在generator后无结果退出 | 1 | 三份xcresult、skip、报告扫描、suite、环境、diff与当前进程只读复核均通过，未能从该轮保留文件确认具体断言；不重跑测试，下一轮为检查组写标记并对测试进程回收使用有界等待后从新目录完整组合验收 |
@@ -595,3 +602,15 @@
 - **边界：** Keychain/live opt-in未设置；固定UUID只作build destination，没有重复inventory或任何simulator生命周期操作。本项不证明actual surface/input/media接线、signed/physical HDR/空间音频、live Sunshine或性能。
 - **final-state：** `/tmp/LuneX-18-1_2-final-state.215ooC`通过strict`9/9`、apply`2/50 next 1.3`、focused/normal/五build retained evidence、generator四次稳定、精确变更范围、Keychain/live opt-in、无LuneX残留进程和diff检查。
 - **下一步：** final-state通过并提交推送后进入1.3 tvOS local-focus versus stream-capture effect合同。
+
+## 2026-08-07 阶段 18 任务 1.3
+
+- **状态：** `complete`，OpenSpec已勾选为`3/50 ready`、next 1.4，等待勾选后final-state与独立提交推送。
+- **实现：** 新增framework-object-free `TVRemoteFocusCaptureContract.swift`与16项测试，定义local SwiftUI focus/stream capture分权、reserved command、generation-branded balanced press、16-slot complete controller roster、lease-aware feedback及ordered release effect；不安装actual `UIPress`/`GCController` handler。
+- **语义审计：** stream只接收select、play/pause和四方向；Menu及Home/volume/capture/power/unsupported始终本地。single snapshot验证自己的slot bit，roster验证exact shared bitmap；release plan独立拒绝stale/duplicate/reserved/cross-platform ownership。
+- **自验：** focused final `/tmp/LuneX-18-1_3-focused-final.vfmkpn`为`16/16`；fresh normal `/tmp/LuneX-18-1_3-normal.X2XdFh`为`938/937/1 exact Keychain skip/0`；五平台Debug `/tmp/LuneX-18-1_3-builds.H78vE4`全部`succeeded/0 error/0 warning/0 analyzer warning`且有AIR/metallib。
+- **工具边界：** 仓库没有`.swift-format`，默认lint的2-space规则与既有4-space风格冲突，不作为权威门也不据此重写；使用warnings-as-errors、结构化xcresult、`git diff --check`和人工审阅。
+- **证明边界：** 未再次访问真实Keychain，未查询或操作simulator；actual surface/controller handler、remote delivery、signed/physical HDR/空间音频、live Sunshine与性能仍未证明。
+- **repository pre-gate：** `/tmp/LuneX-18-1_3-repository-pre.cR5mnp`通过fixtures、OpenSpec strict `9/9`、apply `2/50 next 1.3`、generator SHA-256 `755323bf392b901cb0443bf5b2fc116a69b740b67f7e2930dd3c10c601c26779`连续4次一致、五target/test membership、framework-object/privacy/reference、Keychain/live opt-in、进程与diff检查。
+- **final-state：** `/tmp/LuneX-18-1_3-final-state-r2.piTqXW`完整通过strict `9/9`、apply `3/50 next 1.4`、generator同一SHA-256、retained focused/normal/五build、唯一Keychain skip、五平台AIR/metallib、精确十文件scope、docs、reference、opt-in、进程与diff检查。
+- **下一步：** 轻量post-record门通过后独立提交推送，再进入1.4 visionOS windowed/system-reserved/focus-release/immersive-unavailable合同。
