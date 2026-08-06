@@ -85,8 +85,8 @@ evidence only.
 |---|---|---|---|
 | App scene | `LuneXApp` | tvOS and visionOS create a SwiftUI `WindowGroup`; visionOS shares the non-tvOS default-size branch | No current session/surface generation owns platform scene state |
 | Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; a few tvOS control styles avoid text fields | No actual tvOS focus/capture state or visionOS window/input capability state |
-| Stream surface | `StreamWorkspaceView` and `MetalStreamSurface` | macOS and iOS have platform callbacks; tvOS and visionOS now use `TVVisionStreamMetalView` to publish view-local raw attachment, layout, window-scene, visibility, scale, drawable, and focus-eligibility callbacks | No checked generation owner normalizes or applies those raw callbacks to `AppModel` |
-| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, and `StreamMetalViewScheduleResolver` | Shared value policy can pause/throttle and one presenter consumes decoded frames | No actual tvOS/visionOS view/window owner supplies lifecycle and geometry |
+| Stream surface | `StreamWorkspaceView` and `MetalStreamSurface` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and platform-available screen state | No normalized semantic geometry or presentation coordinator applies the checked state to `AppModel` |
+| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, and `StreamMetalViewScheduleResolver` | Shared value policy can pause/throttle and one presenter consumes decoded frames; the platform view now derives checked current-scene activity | Scene activity and raw drawable state are not yet applied to render scheduling under one presentation revision |
 | Geometry and input mapping | `StreamCoordinateSnapshotPublisher`, `StreamVideoRectangleResolver`, and `InputMapper` | Shared finite fit/fill and reference-size contracts exist | Generic surface consumes an existing coordinate snapshot but does not publish one from its actual tvOS/visionOS bounds |
 | Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, and `StreamMetalPresenter` | One decoder/frame source/presenter path exists | No platform presentation coordinator binds current frames to current tvOS/visionOS surface state |
 | Audio | `NativeSessionAudioProcessor`, `SessionAudioRuntime`, and `AVAudioEngineClient` | One canonical PCM and generation-owned audio graph exists | No stage 18 coordinator combines platform scene/input/display/audio state under one teardown |
@@ -96,9 +96,10 @@ The non-macOS UIKit surface configures the shared presenter, applies shared
 render scheduling, and stops the presenter on dismantle. iOS continues to use
 its sealed `MobileStreamMetalView` attachment, scene, EDR, touch, and pointer
 pipeline. tvOS and visionOS use a separate `TVVisionStreamMetalView` callback
-boundary; it reads only the actual view and window object for each callback and
-does not select a global scene or screen. This is actual framework-local
-observation, but it is not yet the checked generation-owned platform runtime.
+boundary and checked surface-generation owner; they read only the actual view,
+window, scene, and platform-available screen and never select a global scene or
+screen. Bounds/safe-area geometry normalization and presentation application
+remain tasks 2.3 through 2.5.
 
 ## tvOS remote, focus, and controller inventory
 
@@ -144,7 +145,7 @@ game event merely because a SwiftUI focus item changed.
 
 | Concern | Current state | Required stage 18 direction |
 |---|---|---|
-| Scene and surface | Actual `TVVisionStreamMetalView` publishes raw attachment, window-scene, visibility, scale, drawable, and focus-eligibility callbacks; no lifecycle/generation owner consumes them yet | Derive checked scene activity and effective geometry from the callbacks under one current generation |
+| Scene and surface | Actual `TVVisionStreamMetalView` owns one surface generation, actual window/scene/tvOS screen, scene lifecycle tokens, raw visibility/scale/drawable/focus, detach, invalid, stale, and teardown state | Derive finite effective bounds/safe-area geometry and one semantic revision from the checked generation state |
 | Geometry | Shared snapshot can be consumed but is not produced by tvOS surface | Publish one finite semantic revision for drawable, fit/fill, and supported input mapping |
 | Video | Shared decoder, bounded frame source, and Metal presenter exist | Bind only matching current-generation frames; clear on detach, invalid geometry, replacement, or stop |
 | HDR | `HDRPlatformOutputCapabilityAdapter` currently returns typed SDR fallback because the old extended-range surface contract is unavailable | Probe the tvOS 26 dynamic-range layer path; retain HDR-to-SDR until actual public capability and current display state form a complete contract |
@@ -166,12 +167,12 @@ game event merely because a SwiftUI focus item changed.
 
 ### Missing actual runtime
 
-- The actual view now emits framework-local attachment, window-scene,
-  visibility, scale, drawable, layout, and focus-eligibility callbacks. Scene
-  activity, normalized effective geometry, checked generation, and replacement
-  ownership are not yet derived or applied.
-- No visionOS presentation generation owns multiwindow filtering or rejects
-  callbacks from another or replaced window.
+- The actual view now owns a checked surface generation, actual window/scene,
+  current-scene lifecycle tokens, visibility, scale, drawable, layout, focus,
+  detach, invalid, replacement, and stale-callback rejection. visionOS
+  truthfully carries no public screen object.
+- No presentation generation or semantic geometry revision yet applies this
+  surface state to rendering, input, media, or `AppModel`.
 - Supported controller, keyboard, pointer, and indirect-input paths have not
   been individually inventoried and admitted under typed capability.
 - System gestures, recentering, capture, safety, volume, escape, gaze, and hand
@@ -190,7 +191,7 @@ resolution as window geometry is prohibited.
 | Concern | Current state | Required stage 18 direction |
 |---|---|---|
 | Presentation mode | Shared `WindowGroup`; no explicit runtime value | Publish current-generation windowed mode and typed unavailable immersive/stereoscopic/volumetric states |
-| Surface and video | Actual `TVVisionStreamMetalView` raw callback boundary plus shared decoded-frame presenter | Bind checked surface attachment/effective geometry and current frames; clear stale or detached presentation |
+| Surface and video | Actual `TVVisionStreamMetalView` checked surface-generation owner plus shared decoded-frame presenter | Bind finite effective geometry, semantic revision, and matching current frames; clear stale or detached presentation |
 | HDR | Layer intent/metadata foundation compiles, but `UIScreen` and current headroom are unavailable; capability resolver returns typed SDR fallback | Probe public layer/color/dynamic-range APIs and keep SDR fallback whenever a finite current output bound cannot be established |
 | Spatial audio | Output-node `intendedSpatialExperience` applies `.fixed` or `.headTracked` and resets to `.bypassed`; listener property is unavailable | Bind actual route, preference, typed readback, interruption/reset recovery, graph generation, and AppModel state |
 | Teardown | Shared media teardown stops video/audio/input resources | Add one platform presentation coordinator so scene, input, frames, HDR, audio, diagnostics, and replacement clear together |
@@ -499,11 +500,67 @@ Task 2.1 verification used fresh isolated evidence:
 
 The fixed simulator UUIDs were build destinations only. Task 2.1 did not query
 simulator inventory or create, clone, boot, install, launch, run, shut down, or
-delete a simulator. The bridge does not yet provide task 2.2 checked generation
-ownership, task 2.3 finite normalized geometry or semantic revisions, actual
-scene-activity observation, render/input geometry binding, AppModel/media/input
-integration, signed artifacts, physical HDR/spatial/input proof, or live
-Sunshine behavior.
+delete a simulator. Task 2.2 now provides checked generation ownership and
+actual current-scene activity observation. Task 2.3 finite normalized geometry
+and semantic revisions, render/input geometry binding, AppModel/media/input
+integration, signed artifacts, physical HDR/spatial/input proof, and live
+Sunshine behavior remain incomplete.
+
+## Task 2.2 actual surface generation owner
+
+Task 2.2 adds `TVVisionUIKitStreamSurfaceGenerationOwner`, a main-actor owner
+that validates a branded `.surface` generation and weakly owns the current
+surface, window, window scene, and optional screen. Its resolver receives only
+the callback's actual stream view. tvOS requires the actual window scene's
+screen; visionOS uses an explicit absent-screen path because the public 26.4
+SDK exposes neither `UIScreen` nor `UIWindowScene.screen` there.
+
+The owner publishes an immutable framework-object-free state containing
+platform, surface generation, raw callback class, attachment, actual scene
+activity, visibility, finite scale, bounded drawable size, and focus
+eligibility. Current detach and invalid state clear all window/scene/screen
+ownership before publishing a closed result. Wrong generation, wrong surface,
+late callback, and post-invalidation handler replacement are inert. Scene
+activity observers are installed only for the actual current window scene,
+replaced on attachment change, filtered again against the current view, and
+removed before callback relay teardown.
+
+Task 2.2 verification used fresh isolated evidence:
+
+- focused macOS tests: `8/8` passed, covering relay behavior, actual object
+  identity/activity, tvOS screen, visionOS absent screen, detach and invalid
+  recovery, every bounded invalid class, stale/late callback rejection,
+  generation domain, weak ownership, and idempotent invalidation;
+- complete macOS normal suite: `969 total / 968 passed / 1 skipped / 0 failed`,
+  with the sole skip being the explicit real-Keychain round trip and both real
+  Keychain and live-host opt-ins unset;
+- macOS and fixed iPhone, iPad, Apple TV, and Vision Pro Debug builds: all
+  `succeeded`, with zero structured errors, warnings, or analyzer warnings and
+  Metal AIR/metallib artifacts retained.
+
+After the host update, the same scope was revalidated on macOS 27.0 with Xcode
+26.4. Focused evidence at `/tmp/LuneX-18-2_2-focused-macos27.5VXuwb` remains
+`8/8`; complete normal evidence at
+`/tmp/LuneX-18-2_2-normal-macos27.APoh6b` remains
+`969/968/1/0` with the exact real-Keychain opt-in skip; and the five-platform
+Debug matrix at `/tmp/LuneX-18-2_2-builds-macos27.IgW5lP` remains
+`succeeded/0/0/0` with one AIR and one metallib per platform. The fixed UUIDs
+were used only as build destinations, without simulator inventory or lifecycle
+operations.
+
+The task 2.2 repository pre-gate at
+`/tmp/LuneX-18-2_2-repository-pre-macos27.NmlEN1` passed fixture self/tree,
+OpenSpec strict `9/9` and pre-mark `7/50 next 2.2`, four identical generator
+hashes, the exact seven-file scope, source/test membership, owner, privacy,
+clean-room, reference, opt-in, process, retained test/build/Metal, and diff
+checks. Task 2.2 was marked complete only after this gate; the authoritative
+next task is 2.3.
+
+The fixed UUIDs were build destinations only; no simulator inventory or
+lifecycle operation ran. Task 2.2 does not publish bounds, safe-area geometry,
+semantic revisions or deduplication, change drawable/render/input mapping,
+connect a presentation coordinator or `AppModel`, create a signed artifact, or
+prove physical input, HDR, spatial audio, live Sunshine, or performance.
 
 ## Fixed simulator inventory
 

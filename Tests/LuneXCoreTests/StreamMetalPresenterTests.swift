@@ -121,6 +121,421 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testTVVisionSurfaceGenerationOwnerDerivesActualAttachmentState()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(201)
+        let scene = TVVisionSurfaceGenerationTestScene(activity: .active)
+        let screen = TVVisionSurfaceGenerationTestScreen()
+        let window = TVVisionSurfaceGenerationTestWindow(
+            scene: scene,
+            screen: screen
+        )
+        let surface = TVVisionSurfaceGenerationTestSurface(window: window)
+        var statuses: [TVVisionUIKitStreamSurfaceGenerationStatus] = []
+        var states: [TVVisionUIKitStreamSurfaceGenerationState] = []
+        let owner = try TVVisionSurfaceGenerationTestOwner(
+            platform: .tvOS,
+            surfaceGeneration: generation,
+            surface: surface,
+            resolver: tvVisionSurfaceGenerationTestResolver,
+            handler: { update in
+                statuses.append(update.status)
+                if let state = update.state { states.append(state) }
+            }
+        )
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .attachment,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .attached
+        )
+        XCTAssertTrue(owner.currentSurface === surface)
+        XCTAssertTrue(owner.currentWindow === window)
+        XCTAssertTrue(owner.currentWindowScene === scene)
+        XCTAssertTrue(owner.currentScreen === screen)
+        XCTAssertEqual(statuses, [.attached])
+        XCTAssertEqual(states.last?.platform, .tvOS)
+        XCTAssertEqual(states.last?.surfaceGeneration, generation)
+        XCTAssertEqual(states.last?.callback, .attachment)
+        XCTAssertEqual(states.last?.activity, .active)
+        XCTAssertEqual(states.last?.attachment, .attached)
+        XCTAssertEqual(states.last?.scale, 2)
+        XCTAssertEqual(
+            states.last?.drawableSize,
+            PixelSize(width: 1920, height: 1080)
+        )
+        XCTAssertEqual(states.last?.isFocusEligible, true)
+
+        scene.activity = .inactive
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .windowScene,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .attached
+        )
+        XCTAssertEqual(states.last?.activity, .inactive)
+        XCTAssertEqual(states.last?.isFocusEligible, false)
+    }
+
+    @MainActor
+    func testTVVisionSurfaceGenerationOwnerFailsClosedAndRecovers() throws {
+        let generation = try tvVisionSurfaceGeneration(211)
+        let scene = TVVisionSurfaceGenerationTestScene(activity: .active)
+        let screen = TVVisionSurfaceGenerationTestScreen()
+        let window = TVVisionSurfaceGenerationTestWindow(
+            scene: scene,
+            screen: screen
+        )
+        let surface = TVVisionSurfaceGenerationTestSurface(window: window)
+        var statuses: [TVVisionUIKitStreamSurfaceGenerationStatus] = []
+        let owner = try TVVisionSurfaceGenerationTestOwner(
+            platform: .tvOS,
+            surfaceGeneration: generation,
+            surface: surface,
+            resolver: tvVisionSurfaceGenerationTestResolver,
+            handler: { statuses.append($0.status) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .attachment,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .attached
+        )
+        surface.window = nil
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .attachment,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .detached
+        )
+        XCTAssertNil(owner.currentWindow)
+        XCTAssertEqual(owner.currentState?.attachment, .detached)
+
+        surface.window = window
+        surface.drawableSize = CGSize(width: CGFloat.infinity, height: 1080)
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .drawable,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .invalid(.invalidDrawableSize)
+        )
+        XCTAssertNil(owner.currentWindow)
+        XCTAssertNil(owner.currentState)
+
+        surface.drawableSize = CGSize(width: 1920, height: 1080)
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .layout,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .attached
+        )
+        XCTAssertTrue(owner.currentWindow === window)
+        XCTAssertEqual(
+            statuses,
+            [
+                .attached,
+                .detached,
+                .invalid(.invalidDrawableSize),
+                .attached
+            ]
+        )
+    }
+
+    @MainActor
+    func testTVVisionSurfaceGenerationOwnerRejectsStaleAndLateCallbacks()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(221)
+        let staleGeneration = try tvVisionSurfaceGeneration(222)
+        let surface = TVVisionSurfaceGenerationTestSurface(
+            window: TVVisionSurfaceGenerationTestWindow(
+                scene: TVVisionSurfaceGenerationTestScene(activity: .active),
+                screen: nil
+            )
+        )
+        let otherSurface = TVVisionSurfaceGenerationTestSurface()
+        var statuses: [TVVisionUIKitStreamSurfaceGenerationStatus] = []
+        let owner = try TVVisionSurfaceGenerationTestOwner(
+            platform: .visionOS,
+            surfaceGeneration: generation,
+            surface: surface,
+            resolver: tvVisionSurfaceGenerationTestResolver,
+            handler: { statuses.append($0.status) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .attachment,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .attached
+        )
+        XCTAssertNil(owner.currentScreen)
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: staleGeneration,
+                callback: .layout,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            owner.handle(
+                surface: otherSurface,
+                surfaceGeneration: generation,
+                callback: .layout,
+                rawState: tvVisionSurfaceGenerationTestRawState(otherSurface)
+            ),
+            .staleSurface
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: otherSurface,
+                surfaceGeneration: generation
+            ),
+            .staleSurface
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .invalidated
+        )
+        owner.updateHandler { _ in
+            XCTFail("An invalidated owner must reject handler replacement")
+        }
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .visibility,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(statuses, [.attached, .invalidated])
+    }
+
+    @MainActor
+    func testTVVisionSurfaceGenerationOwnerRetainsNoPlatformObjects() throws {
+        let generation = try tvVisionSurfaceGeneration(231)
+        var scene: TVVisionSurfaceGenerationTestScene? =
+            TVVisionSurfaceGenerationTestScene(activity: .active)
+        var screen: TVVisionSurfaceGenerationTestScreen? =
+            TVVisionSurfaceGenerationTestScreen()
+        var window: TVVisionSurfaceGenerationTestWindow? =
+            TVVisionSurfaceGenerationTestWindow(
+                scene: scene!,
+                screen: screen
+            )
+        var surface: TVVisionSurfaceGenerationTestSurface? =
+            TVVisionSurfaceGenerationTestSurface(window: window)
+        weak let weakScene = scene
+        weak let weakScreen = screen
+        weak let weakWindow = window
+        weak let weakSurface = surface
+        let owner = try TVVisionSurfaceGenerationTestOwner(
+            platform: .tvOS,
+            surfaceGeneration: generation,
+            surface: surface!,
+            resolver: tvVisionSurfaceGenerationTestResolver,
+            handler: { _ in }
+        )
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface!,
+                surfaceGeneration: generation,
+                callback: .attachment,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface!)
+            ),
+            .attached
+        )
+        surface?.window = nil
+        surface = nil
+        window = nil
+        scene = nil
+        screen = nil
+
+        XCTAssertNil(weakSurface)
+        XCTAssertNil(weakWindow)
+        XCTAssertNil(weakScene)
+        XCTAssertNil(weakScreen)
+        XCTAssertNil(owner.currentSurface)
+        XCTAssertNil(owner.currentWindow)
+        XCTAssertNil(owner.currentWindowScene)
+        XCTAssertNil(owner.currentScreen)
+    }
+
+    @MainActor
+    func testTVVisionSurfaceGenerationOwnerRequiresSurfaceDomain() throws {
+        let surface = TVVisionSurfaceGenerationTestSurface()
+
+        XCTAssertThrowsError(try TVVisionSurfaceGenerationTestOwner(
+            platform: .tvOS,
+            surfaceGeneration: TVVisionGeneration(
+                domain: .presentation,
+                rawValue: 1
+            ),
+            surface: surface,
+            resolver: tvVisionSurfaceGenerationTestResolver,
+            handler: { _ in }
+        )) { error in
+            XCTAssertEqual(
+                error as? TVVisionPlatformContractError,
+                .generationDomainMismatch(
+                    expected: .surface,
+                    actual: .presentation
+                )
+            )
+        }
+    }
+
+    @MainActor
+    func testTVVisionSurfaceGenerationOwnerRejectsEveryInvalidStateClass()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(241)
+        let scene = TVVisionSurfaceGenerationTestScene(activity: .active)
+        let screen = TVVisionSurfaceGenerationTestScreen()
+        let window = TVVisionSurfaceGenerationTestWindow(
+            scene: scene,
+            screen: screen
+        )
+        let surface = TVVisionSurfaceGenerationTestSurface(window: window)
+        let owner = try TVVisionSurfaceGenerationTestOwner(
+            platform: .tvOS,
+            surfaceGeneration: generation,
+            surface: surface,
+            resolver: tvVisionSurfaceGenerationTestResolver,
+            handler: { _ in }
+        )
+        let otherScene = TVVisionSurfaceGenerationTestScene(activity: .active)
+
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .attachment,
+                rawState: TVVisionSurfaceGenerationTestOwner.RawState(
+                    isAttached: false,
+                    windowScene: scene,
+                    isVisible: false,
+                    scale: 2,
+                    drawableSize: CGSize(width: 1920, height: 1080),
+                    isFocusEligible: false
+                )
+            ),
+            .invalid(.inconsistentAttachment)
+        )
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .windowScene,
+                rawState: TVVisionSurfaceGenerationTestOwner.RawState(
+                    isAttached: true,
+                    windowScene: otherScene,
+                    isVisible: true,
+                    scale: 2,
+                    drawableSize: CGSize(width: 1920, height: 1080),
+                    isFocusEligible: true
+                )
+            ),
+            .invalid(.windowSceneMismatch)
+        )
+
+        surface.window = TVVisionSurfaceGenerationTestWindow(
+            scene: scene,
+            screen: nil
+        )
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .windowScene,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .invalid(.tvOSScreenUnavailable)
+        )
+
+        surface.window = window
+        surface.scale = .nan
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .scale,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .invalid(.invalidScale)
+        )
+        surface.scale = 2
+        surface.drawableSize = .zero
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .drawable,
+                rawState: tvVisionSurfaceGenerationTestRawState(surface)
+            ),
+            .invalid(.invalidDrawableSize)
+        )
+
+        surface.drawableSize = CGSize(width: 1920, height: 1080)
+        XCTAssertEqual(
+            owner.handle(
+                surface: surface,
+                surfaceGeneration: generation,
+                callback: .focusEligibility,
+                rawState: TVVisionSurfaceGenerationTestOwner.RawState(
+                    isAttached: true,
+                    windowScene: scene,
+                    isVisible: false,
+                    scale: 2,
+                    drawableSize: CGSize(width: 1920, height: 1080),
+                    isFocusEligible: true
+                )
+            ),
+            .invalid(.focusEligibleWhileInvisible)
+        )
+        XCTAssertNil(owner.currentState)
+        XCTAssertNil(owner.currentWindow)
+    }
+
+    @MainActor
     func testMobileSurfaceAttachmentRelayReplacesAndInvalidatesHandler() {
         let surface = MobileSurfaceAttachmentTestSurface()
         var firstEvents: [MobileStreamSurfaceAttachmentEvent] = []
@@ -3500,6 +3915,93 @@ private func tvVisionSurfaceRelayTestState(
         scale: surface.scale,
         drawableSize: surface.drawableSize,
         isFocusEligible: surface.isFocusEligible
+    )
+}
+
+private typealias TVVisionSurfaceGenerationTestOwner =
+    TVVisionUIKitStreamSurfaceGenerationOwner<
+        TVVisionSurfaceGenerationTestSurface,
+        TVVisionSurfaceGenerationTestWindow,
+        TVVisionSurfaceGenerationTestScene,
+        TVVisionSurfaceGenerationTestScreen
+    >
+
+private final class TVVisionSurfaceGenerationTestSurface {
+    var window: TVVisionSurfaceGenerationTestWindow?
+    var isVisible: Bool
+    var scale: Double
+    var drawableSize: CGSize
+    var isFocusEligible: Bool
+
+    init(
+        window: TVVisionSurfaceGenerationTestWindow? = nil,
+        isVisible: Bool = true,
+        scale: Double = 2,
+        drawableSize: CGSize = CGSize(width: 1920, height: 1080),
+        isFocusEligible: Bool = true
+    ) {
+        self.window = window
+        self.isVisible = isVisible
+        self.scale = scale
+        self.drawableSize = drawableSize
+        self.isFocusEligible = isFocusEligible
+    }
+}
+
+private final class TVVisionSurfaceGenerationTestWindow {
+    let scene: TVVisionSurfaceGenerationTestScene
+    let screen: TVVisionSurfaceGenerationTestScreen?
+
+    init(
+        scene: TVVisionSurfaceGenerationTestScene,
+        screen: TVVisionSurfaceGenerationTestScreen?
+    ) {
+        self.scene = scene
+        self.screen = screen
+    }
+}
+
+private final class TVVisionSurfaceGenerationTestScene {
+    var activity: AppSceneActivity
+
+    init(activity: AppSceneActivity) {
+        self.activity = activity
+    }
+}
+
+private final class TVVisionSurfaceGenerationTestScreen {}
+
+private func tvVisionSurfaceGeneration(
+    _ rawValue: UInt64
+) throws -> TVVisionGeneration {
+    try TVVisionGeneration(domain: .surface, rawValue: rawValue)
+}
+
+private func tvVisionSurfaceGenerationTestResolver(
+    _ surface: TVVisionSurfaceGenerationTestSurface
+) -> TVVisionSurfaceGenerationTestOwner.ResolvedAttachment? {
+    guard let window = surface.window else { return nil }
+    return TVVisionSurfaceGenerationTestOwner.ResolvedAttachment(
+        window: window,
+        windowScene: window.scene,
+        screen: window.screen,
+        activity: window.scene.activity
+    )
+}
+
+private func tvVisionSurfaceGenerationTestRawState(
+    _ surface: TVVisionSurfaceGenerationTestSurface
+) -> TVVisionSurfaceGenerationTestOwner.RawState {
+    let isAttached = surface.window != nil
+    return TVVisionSurfaceGenerationTestOwner.RawState(
+        isAttached: isAttached,
+        windowScene: surface.window?.scene,
+        isVisible: isAttached && surface.isVisible,
+        scale: surface.scale,
+        drawableSize: surface.drawableSize,
+        isFocusEligible: isAttached
+            && surface.isVisible
+            && surface.isFocusEligible
     )
 }
 

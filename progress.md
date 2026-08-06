@@ -2926,3 +2926,27 @@
 - pre-gate通过后已勾选OpenSpec 2.1并同步路线图与planning状态；预期权威进度`7/50 ready`、next 2.2，下一步运行只读final-state，不重复test/build或simulator inventory。
 - 勾选后final-state `/tmp/LuneX-18-2_1-final-state.dAGCFP`从头通过fixture、strict `9/9`、apply精确`7/50 next 2.2`、generator四次同哈希、retained focused `2/2`、normal `963/962/1 exact Keychain/0`、五build `succeeded/0/0/0`、精确八文件scope、docs/privacy/reference/opt-in/进程与diff检查；2.1可独立提交推送。
 - post-record人工diff发现状态补丁的通用锚点误命中历史阶段17任务5.6；production、tests和OpenSpec未受影响。已恢复历史行并仅将阶段18任务2.1标记为`complete`，随后重新运行轻量门。
+
+## 2026-08-07 阶段 18 任务 2.2 启动
+
+- 2.1已提交推送为`4069cc2`，fetch后`HEAD == origin/main == 4069cc2fc769f5c30afebb574390e335b5f34c56`且工作树clean；OpenSpec为`7/50 ready`、next 2.2。
+- 重读2.2 change context、TVVision immutable contracts、2.1 raw callback bridge与阶段17 mobile attachment/lifecycle/geometry owner；确认visionOS不能采用`UIScreen`假设。
+- 2.2将实现actual surface-only main-actor generation owner、checked immutable state与actual view接线；stale不发布、detach/invalid fail closed、weak ownership和idempotent invalidation。geometry revision/render/input/AppModel保持后置。
+- 已完成2.2第一版实现与tests：generic owner/state/status/outcome验证surface generation/domain、actual identity/activity、tvOS screen、finite scale/drawable和focus/visibility；actual tvOS/visionOS view生成surface generation并在raw callback后驱动owner，SwiftUI暴露update handler且dismantle失效owner。
+- 新增5项focused回归覆盖actual attachment/activity、detach/invalid recovery、visionOS no-screen、stale/late/invalidation、weak platform ownership及错误generation domain；下一步生成工程并运行2.1+2.2共7项focused tests。
+- 首轮focused `/tmp/LuneX-18-2_2-focused-first.8da8sW`在测试执行前因Swift不允许initializer argument list内的条件编译而失败；owner本体尚无语义诊断。已把platform和resolver改为完整表达式的静态helper，将从全新证据目录重跑。
+- 第二轮focused `/tmp/LuneX-18-2_2-focused-second.H4rge7`已通过production编译，但test fixture的无类型`.infinity`在`CGSize`中产生单一ambiguous诊断，0 tests执行；改为`CGFloat.infinity`后从新目录重跑。
+- focused final `/tmp/LuneX-18-2_2-focused-final.lEpy5T`通过`7/7 passed / 0 skipped / 0 failed / 0 expected failure`；下一步分别编译actual tvOS与visionOS分支，再运行fresh normal。
+- actual tvOS `/tmp/LuneX-18-2_2-tvos-first.DBIgFD`与visionOS `/tmp/LuneX-18-2_2-vision-first.qHmlwO`分支均`succeeded/0/0/0`；fresh normal `/tmp/LuneX-18-2_2-normal.YmP9ZH`通过`968/967/1 exact Keychain skip/0`。
+- 五平台Debug `/tmp/LuneX-18-2_2-builds.TV1lzR`全部`succeeded/0 error/0 warning/0 analyzer warning`。语义复核后补充actual current-scene lifecycle token replacement/removal与六类invalid-state exact matrix，需从新目录重跑focused/normal/build受影响证据。
+- 补强后focused `/tmp/LuneX-18-2_2-focused-final2.VLhqfP`通过`8/8`，actual tvOS `/tmp/LuneX-18-2_2-tvos-final.CSOrKb`与visionOS `/tmp/LuneX-18-2_2-vision-final.wkfDYn`均零诊断编译。
+- final normal `/tmp/LuneX-18-2_2-normal-final.jGEblk`通过`969/968/1 exact Keychain skip/0`；final五平台Debug `/tmp/LuneX-18-2_2-builds-final.5K2Eqp`全部`succeeded/0 error/0 warning/0 analyzer warning`。
+- 已同步runtime contract、roadmap及三份planning文件；OpenSpec保持`7/50 next 2.2`直到repository pre-gate通过，下一步人工diff与repository gate。
+- macOS更新结束后恢复检查确认`HEAD == origin/main == 4069cc2`且七个2.2工作文件完整；主机为macOS 27.0、Xcode 26.4，active goal与OpenSpec `7/50 next 2.2`不变。
+- 新工具链focused `/tmp/LuneX-18-2_2-focused-macos27.5VXuwb`通过`8/8`；fresh normal `/tmp/LuneX-18-2_2-normal-macos27.APoh6b`通过`969/968/1 exact Keychain skip/0`，真实Keychain/live-host opt-in显式移除。
+- 五平台Debug复验`/tmp/LuneX-18-2_2-builds-macos27.IgW5lP`全部`succeeded/0 error/0 warning/0 analyzer warning`并各有一份AIR/metallib；固定26.4 UUID精确命中预定destination，仅执行build，没有读取或操作simulator。
+- 人工diff复核确认weak framework ownership、invalid/detach fail-closed顺序、stale/late callback静默、actual current-scene token replacement/removal、visionOS无`UIScreen`、无`connectedScenes`且未越界实现2.3；下一步执行repository pre-gate。
+- repository pre-gate `/tmp/LuneX-18-2_2-repository-pre-macos27.NmlEN1`完整通过fixtures、OpenSpec strict `9/9`与apply `7/50 next 2.2`、generator四次稳定、七文件scope、owner/membership/privacy/reference、focused `8/8`、normal `969/968/1/0`、五build/Metal、opt-in、进程与diff检查。
+- pre-gate通过后已勾选OpenSpec 2.2并同步路线图与planning状态；预期权威进度`8/50 ready`、next 2.3。下一步只读final-state，不重复test/build或simulator inventory。
+- 勾选后首轮final-state `/tmp/LuneX-18-2_2-final-state-macos27.Q9gSPi`已通过strict `9/9`、apply `8/50 next 2.3`、generator四次同哈希、八文件scope与diff检查，随后因合同目标短语跨两行而单行`rg`断言退出；该轮不计最终验收，未重复test/build/simulator，改为分别匹配两行后从新目录重跑。
+- 修正后的勾选后final-state `/tmp/LuneX-18-2_2-final-state-macos27-r2.zjXtZr`从头通过fixtures、OpenSpec strict `9/9`与apply `8/50 next 2.3`、generator四次稳定、八文件scope、docs/owner/privacy/reference、retained focused/normal/五build/Metal、opt-in/进程及diff检查；2.2可独立提交推送。

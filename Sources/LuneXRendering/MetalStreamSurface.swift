@@ -131,17 +131,21 @@ final class TVVisionUIKitStreamSurfaceRelay<
         self.handler = handler
     }
 
-    func publish(_ callbacks: [TVVisionUIKitStreamSurfaceCallback]) {
+    @discardableResult
+    func publish(
+        _ callbacks: [TVVisionUIKitStreamSurfaceCallback]
+    ) -> State? {
         guard !isInvalidated,
               !callbacks.isEmpty,
               let surface,
               let stateReader else {
-            return
+            return nil
         }
         let state = stateReader(surface)
         for callback in callbacks {
             handler?(surface, callback, state)
         }
+        return state
     }
 
     func invalidate() {
@@ -150,6 +154,310 @@ final class TVVisionUIKitStreamSurfaceRelay<
         handler = nil
         stateReader = nil
         surface = nil
+    }
+}
+
+enum TVVisionUIKitStreamSurfaceGenerationValidationError:
+    Equatable,
+    Sendable
+{
+    case inconsistentAttachment
+    case windowSceneMismatch
+    case tvOSScreenUnavailable
+    case invalidScale
+    case invalidDrawableSize
+    case focusEligibleWhileInvisible
+}
+
+enum TVVisionUIKitStreamSurfaceGenerationStatus: Equatable, Sendable {
+    case attached
+    case detached
+    case invalid(TVVisionUIKitStreamSurfaceGenerationValidationError)
+    case invalidated
+}
+
+struct TVVisionUIKitStreamSurfaceGenerationState: Equatable, Sendable {
+    let platform: TVVisionPlatform
+    let surfaceGeneration: TVVisionGeneration
+    let callback: TVVisionUIKitStreamSurfaceCallback
+    let attachment: TVVisionSurfaceAttachment
+    let activity: AppSceneActivity
+    let isVisible: Bool
+    let scale: Double?
+    let drawableSize: PixelSize?
+    let isFocusEligible: Bool
+}
+
+struct TVVisionUIKitStreamSurfaceResolvedAttachment<
+    Window: AnyObject,
+    WindowScene: AnyObject,
+    Screen: AnyObject
+> {
+    let window: Window
+    let windowScene: WindowScene
+    let screen: Screen?
+    let activity: AppSceneActivity
+}
+
+struct TVVisionUIKitStreamSurfaceGenerationUpdate<
+    Surface: AnyObject,
+    Window: AnyObject,
+    WindowScene: AnyObject,
+    Screen: AnyObject
+> {
+    typealias ResolvedAttachment =
+        TVVisionUIKitStreamSurfaceResolvedAttachment<
+            Window,
+            WindowScene,
+            Screen
+        >
+
+    let surfaceGeneration: TVVisionGeneration
+    let status: TVVisionUIKitStreamSurfaceGenerationStatus
+    let state: TVVisionUIKitStreamSurfaceGenerationState?
+    let surface: Surface?
+    let attachment: ResolvedAttachment?
+}
+
+enum TVVisionUIKitStreamSurfaceGenerationOwnerOutcome: Equatable, Sendable {
+    case attached
+    case detached
+    case invalid(TVVisionUIKitStreamSurfaceGenerationValidationError)
+    case staleSurfaceGeneration
+    case staleSurface
+    case invalidated
+    case alreadyInvalidated
+}
+
+@MainActor
+final class TVVisionUIKitStreamSurfaceGenerationOwner<
+    Surface: AnyObject,
+    Window: AnyObject,
+    WindowScene: AnyObject,
+    Screen: AnyObject
+> {
+    typealias RawState = TVVisionUIKitStreamSurfaceState<WindowScene>
+    typealias ResolvedAttachment =
+        TVVisionUIKitStreamSurfaceResolvedAttachment<
+            Window,
+            WindowScene,
+            Screen
+        >
+    typealias Update = TVVisionUIKitStreamSurfaceGenerationUpdate<
+        Surface,
+        Window,
+        WindowScene,
+        Screen
+    >
+    typealias Resolver = @MainActor (Surface) -> ResolvedAttachment?
+    typealias Handler = @MainActor (Update) -> Void
+
+    let platform: TVVisionPlatform
+    let surfaceGeneration: TVVisionGeneration
+    var currentSurface: Surface? { surface }
+    var currentWindow: Window? { window }
+    var currentWindowScene: WindowScene? { windowScene }
+    var currentScreen: Screen? { screen }
+    private(set) var currentState: TVVisionUIKitStreamSurfaceGenerationState?
+
+    private weak var surface: Surface?
+    private weak var window: Window?
+    private weak var windowScene: WindowScene?
+    private weak var screen: Screen?
+    private var resolver: Resolver?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        platform: TVVisionPlatform,
+        surfaceGeneration: TVVisionGeneration,
+        surface: Surface,
+        resolver: @escaping Resolver,
+        handler: @escaping Handler
+    ) throws {
+        try surfaceGeneration.require(.surface)
+        self.platform = platform
+        self.surfaceGeneration = surfaceGeneration
+        self.surface = surface
+        self.resolver = resolver
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    @discardableResult
+    func handle(
+        surface candidate: Surface,
+        surfaceGeneration candidateGeneration: TVVisionGeneration,
+        callback: TVVisionUIKitStreamSurfaceCallback,
+        rawState: RawState
+    ) -> TVVisionUIKitStreamSurfaceGenerationOwnerOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidate else { return .staleSurface }
+
+        let attachment = resolver?(candidate)
+        guard rawState.isAttached else {
+            guard attachment == nil,
+                  rawState.windowScene == nil,
+                  !rawState.isVisible,
+                  !rawState.isFocusEligible else {
+                return reject(
+                    .inconsistentAttachment,
+                    surface: candidate
+                )
+            }
+            clearAttachment()
+            let state = TVVisionUIKitStreamSurfaceGenerationState(
+                platform: platform,
+                surfaceGeneration: surfaceGeneration,
+                callback: callback,
+                attachment: .detached,
+                activity: .background,
+                isVisible: false,
+                scale: nil,
+                drawableSize: nil,
+                isFocusEligible: false
+            )
+            currentState = state
+            handler?(
+                Update(
+                    surfaceGeneration: surfaceGeneration,
+                    status: .detached,
+                    state: state,
+                    surface: candidate,
+                    attachment: nil
+                )
+            )
+            return .detached
+        }
+
+        guard let attachment else {
+            return reject(.inconsistentAttachment, surface: candidate)
+        }
+        guard rawState.windowScene === attachment.windowScene else {
+            return reject(.windowSceneMismatch, surface: candidate)
+        }
+        if platform == .tvOS, attachment.screen == nil {
+            return reject(.tvOSScreenUnavailable, surface: candidate)
+        }
+        guard rawState.scale.isFinite,
+              rawState.scale > 0,
+              rawState.scale <= TVVisionSurfaceGeometry.maximumScale else {
+            return reject(.invalidScale, surface: candidate)
+        }
+        guard let drawableSize = Self.pixelSize(rawState.drawableSize) else {
+            return reject(.invalidDrawableSize, surface: candidate)
+        }
+        guard !rawState.isFocusEligible || rawState.isVisible else {
+            return reject(
+                .focusEligibleWhileInvisible,
+                surface: candidate
+            )
+        }
+
+        window = attachment.window
+        windowScene = attachment.windowScene
+        screen = attachment.screen
+        let state = TVVisionUIKitStreamSurfaceGenerationState(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            callback: callback,
+            attachment: .attached,
+            activity: attachment.activity,
+            isVisible: rawState.isVisible,
+            scale: rawState.scale,
+            drawableSize: drawableSize,
+            isFocusEligible: rawState.isFocusEligible
+                && attachment.activity == .active
+        )
+        currentState = state
+        handler?(
+            Update(
+                surfaceGeneration: surfaceGeneration,
+                status: .attached,
+                state: state,
+                surface: candidate,
+                attachment: attachment
+            )
+        )
+        return .attached
+    }
+
+    @discardableResult
+    func invalidate(
+        surface candidate: Surface? = nil,
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> TVVisionUIKitStreamSurfaceGenerationOwnerOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if let candidate, surface !== candidate { return .staleSurface }
+
+        isInvalidated = true
+        let update = Update(
+            surfaceGeneration: surfaceGeneration,
+            status: .invalidated,
+            state: nil,
+            surface: surface,
+            attachment: nil
+        )
+        clearAttachment()
+        currentState = nil
+        surface = nil
+        resolver = nil
+        let currentHandler = handler
+        handler = nil
+        currentHandler?(update)
+        return .invalidated
+    }
+
+    private func reject(
+        _ error: TVVisionUIKitStreamSurfaceGenerationValidationError,
+        surface candidate: Surface
+    ) -> TVVisionUIKitStreamSurfaceGenerationOwnerOutcome {
+        clearAttachment()
+        currentState = nil
+        handler?(
+            Update(
+                surfaceGeneration: surfaceGeneration,
+                status: .invalid(error),
+                state: nil,
+                surface: candidate,
+                attachment: nil
+            )
+        )
+        return .invalid(error)
+    }
+
+    private func clearAttachment() {
+        window = nil
+        windowScene = nil
+        screen = nil
+    }
+
+    private static func pixelSize(_ size: CGSize) -> PixelSize? {
+        let width = Double(size.width)
+        let height = Double(size.height)
+        let maximum = Double(TVVisionSurfaceGeometry.maximumDrawableDimension)
+        guard width.isFinite,
+              height.isFinite,
+              width > 0,
+              height > 0,
+              width <= maximum,
+              height <= maximum else {
+            return nil
+        }
+        return PixelSize(
+            width: Int(width.rounded(.toNearestOrAwayFromZero)),
+            height: Int(height.rounded(.toNearestOrAwayFromZero))
+        )
     }
 }
 
@@ -2512,14 +2820,59 @@ struct MetalStreamSurface: NSViewRepresentable {
 #else
 #if os(tvOS) || os(visionOS)
 @MainActor
+enum TVVisionStreamSurfaceGenerationSequence {
+    private static var nextRawValue: UInt64 = 1
+    private static var isExhausted = false
+
+    static func next() -> TVVisionGeneration? {
+        guard !isExhausted else { return nil }
+        let generation = try? TVVisionGeneration(
+            domain: .surface,
+            rawValue: nextRawValue
+        )
+        if nextRawValue == UInt64.max {
+            isExhausted = true
+        } else {
+            nextRawValue += 1
+        }
+        return generation
+    }
+}
+
+@MainActor
 final class TVVisionStreamMetalView: MTKView {
     typealias SurfaceRelay = TVVisionUIKitStreamSurfaceRelay<
         TVVisionStreamMetalView,
         UIWindowScene
     >
     typealias SurfaceCallbackHandler = SurfaceRelay.Handler
+#if os(tvOS)
+    typealias SurfaceGenerationOwner =
+        TVVisionUIKitStreamSurfaceGenerationOwner<
+            TVVisionStreamMetalView,
+            UIWindow,
+            UIWindowScene,
+            UIScreen
+        >
+#else
+    typealias SurfaceGenerationOwner =
+        TVVisionUIKitStreamSurfaceGenerationOwner<
+            TVVisionStreamMetalView,
+            UIWindow,
+            UIWindowScene,
+            NSObject
+        >
+#endif
+    typealias SurfaceGenerationUpdateHandler = SurfaceGenerationOwner.Handler
+
+    var surfaceGeneration: TVVisionGeneration? {
+        surfaceGenerationOwner?.surfaceGeneration
+    }
 
     private var surfaceRelay: SurfaceRelay?
+    private var surfaceGenerationOwner: SurfaceGenerationOwner?
+    private weak var observedWindowScene: UIWindowScene?
+    private var sceneLifecycleObservers: [NSObjectProtocol] = []
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 
@@ -2548,7 +2901,9 @@ final class TVVisionStreamMetalView: MTKView {
         frame frameRect: CGRect = .zero,
         device: (any MTLDevice)? = nil,
         surfaceCallbackHandler:
-            @escaping SurfaceCallbackHandler = { _, _, _ in }
+            @escaping SurfaceCallbackHandler = { _, _, _ in },
+        surfaceGenerationUpdateHandler:
+            @escaping SurfaceGenerationUpdateHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
         surfaceRelay = SurfaceRelay(
@@ -2573,6 +2928,16 @@ final class TVVisionStreamMetalView: MTKView {
             },
             handler: surfaceCallbackHandler
         )
+        if let surfaceGeneration =
+            TVVisionStreamSurfaceGenerationSequence.next() {
+            surfaceGenerationOwner = try? SurfaceGenerationOwner(
+                platform: Self.platform,
+                surfaceGeneration: surfaceGeneration,
+                surface: self,
+                resolver: Self.resolveAttachment,
+                handler: surfaceGenerationUpdateHandler
+            )
+        }
         traitChangeRegistration = registerForTraitChanges([
             UITraitDisplayScale.self,
             UITraitUserInterfaceStyle.self
@@ -2633,6 +2998,12 @@ final class TVVisionStreamMetalView: MTKView {
         surfaceRelay?.updateHandler(handler)
     }
 
+    func updateSurfaceGenerationUpdateHandler(
+        _ handler: @escaping SurfaceGenerationUpdateHandler
+    ) {
+        surfaceGenerationOwner?.updateHandler(handler)
+    }
+
     func refreshSurfaceCallbacks() {
         publishSurfaceCallbacks(TVVisionUIKitStreamSurfaceCallback.allCases)
     }
@@ -2642,6 +3013,14 @@ final class TVVisionStreamMetalView: MTKView {
             unregisterForTraitChanges(traitChangeRegistration)
             self.traitChangeRegistration = nil
         }
+        if let surfaceGenerationOwner {
+            surfaceGenerationOwner.invalidate(
+                surface: self,
+                surfaceGeneration: surfaceGenerationOwner.surfaceGeneration
+            )
+            self.surfaceGenerationOwner = nil
+        }
+        removeSceneLifecycleObservers()
         surfaceRelay?.invalidate()
         surfaceRelay = nil
     }
@@ -2649,7 +3028,108 @@ final class TVVisionStreamMetalView: MTKView {
     private func publishSurfaceCallbacks(
         _ callbacks: [TVVisionUIKitStreamSurfaceCallback]
     ) {
-        surfaceRelay?.publish(callbacks)
+        refreshSceneLifecycleObservation()
+        guard let rawState = surfaceRelay?.publish(callbacks) else { return }
+        if let surfaceGenerationOwner {
+            for callback in callbacks {
+                surfaceGenerationOwner.handle(
+                    surface: self,
+                    surfaceGeneration: surfaceGenerationOwner.surfaceGeneration,
+                    callback: callback,
+                    rawState: rawState
+                )
+            }
+        }
+    }
+
+    private func refreshSceneLifecycleObservation() {
+        let currentScene = window?.windowScene
+        guard observedWindowScene !== currentScene else { return }
+        removeSceneLifecycleObservers()
+        guard let currentScene else { return }
+
+        observedWindowScene = currentScene
+        let names: [Notification.Name] = [
+            UIScene.didActivateNotification,
+            UIScene.willDeactivateNotification,
+            UIScene.didEnterBackgroundNotification,
+            UIScene.willEnterForegroundNotification
+        ]
+        sceneLifecycleObservers = names.map { name in
+            NotificationCenter.default.addObserver(
+                forName: name,
+                object: currentScene,
+                queue: .main
+            ) { [weak self, weak currentScene] _ in
+                Task { @MainActor in
+                    guard let self,
+                          let currentScene,
+                          self.window?.windowScene === currentScene else {
+                        return
+                    }
+                    self.publishSurfaceCallbacks([
+                        .windowScene,
+                        .visibility,
+                        .focusEligibility
+                    ])
+                }
+            }
+        }
+    }
+
+    private func removeSceneLifecycleObservers() {
+        sceneLifecycleObservers.forEach(
+            NotificationCenter.default.removeObserver
+        )
+        sceneLifecycleObservers.removeAll()
+        observedWindowScene = nil
+    }
+
+    private static func sceneActivity(
+        _ scene: UIWindowScene
+    ) -> AppSceneActivity {
+        switch scene.activationState {
+        case .foregroundActive:
+            return .active
+        case .foregroundInactive:
+            return .inactive
+        case .background, .unattached:
+            return .background
+        @unknown default:
+            return .background
+        }
+    }
+
+    private static var platform: TVVisionPlatform {
+#if os(tvOS)
+        .tvOS
+#else
+        .visionOS
+#endif
+    }
+
+    private static func resolveAttachment(
+        _ surface: TVVisionStreamMetalView
+    ) -> SurfaceGenerationOwner.ResolvedAttachment? {
+        guard let window = surface.window,
+              let windowScene = window.windowScene else {
+            return nil
+        }
+#if os(tvOS)
+        return SurfaceGenerationOwner.ResolvedAttachment(
+            window: window,
+            windowScene: windowScene,
+            screen: windowScene.screen,
+            activity: sceneActivity(windowScene)
+        )
+#else
+        return SurfaceGenerationOwner.ResolvedAttachment(
+            window: window,
+            windowScene: windowScene,
+            screen: nil,
+            activity: sceneActivity(windowScene)
+        )
+#endif
     }
 }
 #endif
@@ -3341,6 +3821,8 @@ struct MetalStreamSurface: UIViewRepresentable {
 #elseif os(tvOS) || os(visionOS)
     var surfaceCallbackHandler:
         TVVisionStreamMetalView.SurfaceCallbackHandler = { _, _, _ in }
+    var surfaceGenerationUpdateHandler:
+        TVVisionStreamMetalView.SurfaceGenerationUpdateHandler = { _ in }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -3389,7 +3871,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         let view = TVVisionStreamMetalView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
-            surfaceCallbackHandler: surfaceCallbackHandler
+            surfaceCallbackHandler: surfaceCallbackHandler,
+            surfaceGenerationUpdateHandler: surfaceGenerationUpdateHandler
         )
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -3437,6 +3920,10 @@ struct MetalStreamSurface: UIViewRepresentable {
 #elseif os(tvOS) || os(visionOS)
         (view as? TVVisionStreamMetalView)?
             .updateSurfaceCallbackHandler(surfaceCallbackHandler)
+        (view as? TVVisionStreamMetalView)?
+            .updateSurfaceGenerationUpdateHandler(
+                surfaceGenerationUpdateHandler
+            )
         context.coordinator.update(
             renderState: renderState,
             inputOutputHandler: { _ in }

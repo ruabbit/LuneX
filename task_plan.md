@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`6/50 ready`；1.6 direct public API probes完成，下一项2.1 actual surface bridge callbacks |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`8/50 ready`；2.2 generation owner已实现并通过macOS 27 repository gate，下一项2.3 normalized semantic geometry |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`6/50 ready`、next 2.1。1.1至1.6已完成；1.6在tvOS/visionOS 26.4 simulator/device SDK完成`24/24`正向与`12/12`预期失败direct API probes，固定effective geometry、input symbol、动态范围、screen headroom、空间音频、弃用、entitlement和物理证明边界。下一项扩展actual non-iOS UIKit Metal surface bridge callbacks；当前证据仍不是actual handler/runtime、immersive runtime、physical或live Sunshine proof。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`8/50 ready`、next 2.3。1.1至2.2已完成；2.2 actual-view surface generation/current-scene owner在macOS 27.0/Xcode 26.4下通过focused `8/8`、normal `969/968/1/0`、五平台Debug与repository pre-gate。2.3 normalized semantic geometry及render/input/application接线尚未开始；当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -81,6 +81,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.2.2记录final-state包装器错误的首个补丁假设了四横线表格分隔符 | 1 | `apply_patch`原子拒绝且无部分写入；读取真实三横线分隔符后使用精确锚点 |
+| 18.2.2勾选后final-state将合同中跨行的`authoritative`与`next task is 2.3`写成单行`rg`断言 | 1 | OpenSpec、generator与scope已通过且未重复test/build/simulator；改为分别匹配两行并从新证据目录重跑只读final-state |
 | 18.1.6 repository pre-gate首轮把18个临时probe源误断言为19 | 1 | 在API/entitlement/doc检查前退出；修正精确源数量并用`plistlib`读取带点号entitlement key，从新目录完整重跑 |
 | 18.1.5勾选后final-state首轮误用不存在的`Fixtures/Protocol`根 | 1 | 在generator和结果读取前退出；读取validator默认根后改用`Tests/Fixtures/Moonlight`并从新证据目录完整重跑 |
 | 18.1.5文档同步组合patch使用不精确换行锚点 | 1 | `apply_patch`原子拒绝且无部分写入；改用各文件稳定标题拆分补丁 |
@@ -488,7 +490,7 @@
 
 ## 2026-08-06 阶段 17 任务 5.6 启动
 
-- **状态：** `in_progress`
+- **状态：** `complete`（待独立提交与推送）
 - **基线：** 5.5已以`6792840 Expose mobile continuity runtime state`提交并推送，`HEAD == origin/main`，工作树clean。
 - **范围：** AppModel policy-loss/audio-only/active-PiP/foreground-restore/replacement/diagnostic ownership/clean-stop联合回归，RootView actual-state/accessibility/localization合同，以及continuity migration fail-closed回归。
 - **验收：** 先运行三类新增focused tests，再扩大到owner/environment/AppModel/UI/persistence矩阵；之后fresh full macOS、四平台generic Debug与repository/OpenSpec门。测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`且不操作simulator。
@@ -681,3 +683,20 @@
 - **repository pre-gate：** `/tmp/LuneX-18-2_1-repository-pre.raFP1x`从头通过fixture self/tree、OpenSpec strict `9/9`与勾选前`6/50 next 2.1`、generator四次稳定SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、精确七文件scope、callback/weak ownership/iOS isolation/privacy/reference、retained test/build、opt-in/进程及diff门。
 - **OpenSpec：** pre-gate通过后已勾选2.1，权威进度预期为`7/50 ready`、next 2.2；下一步运行勾选后final-state，不重复test/build或simulator inventory。
 - **final-state：** `/tmp/LuneX-18-2_1-final-state.dAGCFP`从头通过fixture、strict `9/9`、apply精确`7/50 next 2.2`、generator四次稳定同哈希、retained focused/normal/五build、精确八文件scope、docs/privacy/reference/opt-in/进程与diff门；2.1可独立提交推送。
+
+## 2026-08-07 阶段 18 任务 2.2 启动
+
+- **状态：** `in_progress`
+- **基线：** 2.1已提交推送为`4069cc2 Add tvOS visionOS surface callbacks`，`HEAD == origin/main == 4069cc2fc769f5c30afebb574390e335b5f34c56`且工作树clean；OpenSpec为`7/50 ready`、next 2.2。
+- **范围：** 新增main-actor、弱引用的tvOS/visionOS surface generation owner，从callback所属actual surface解析window/scene、scene activity及平台可用screen，产出不含framework对象的checked state；验证generation domain/identity、attachment/scene一致性、tvOS screen、finite scale/drawable及focus visibility。
+- **失败边界：** stale generation/surface与late callback不触发handler；detach与current invalid callback清空window/scene/screen并发布fail-closed状态；visionOS按公开API边界允许screen absent，不扫描`connectedScenes`或读取global screen。
+- **后置边界：** 2.2不实现2.3 bounds/safe-area geometry normalization、semantic dedup/revision、drawable/render/input mapping，也不提前接2.4 coordinator或2.5 AppModel。
+- **验收：** actual identity/activity/tvOS screen、visionOS no-screen、detach/invalid recovery、stale/late/invalidation/weak ownership focused tests；随后fresh normal、五平台Debug与repository/OpenSpec门。继续禁用真实Keychain/live-host，不查询或操作simulator。
+- **实现：** generic main-actor owner弱持有surface/window/scene/optional screen并发布framework-object-free checked state；actual view生成branded surface generation，只观察当前window scene lifecycle，replacement/dismantle移除token。tvOS要求actual scene screen，visionOS明确screen absent。
+- **focused：** 首轮条件编译argument syntax与第二轮test-only infinity歧义均在0 tests时修正；最终`/tmp/LuneX-18-2_2-focused-final2.VLhqfP`通过`8/8`，覆盖全部identity/activity/platform/invalid/stale/weak/invalidation边界。
+- **normal：** `/tmp/LuneX-18-2_2-normal-final.jGEblk`通过`969 total / 968 passed / 1 skipped / 0 failed`，唯一skip精确为显式真实Keychain round trip，Keychain/live-host opt-in均unset。
+- **五平台build：** `/tmp/LuneX-18-2_2-builds-final.5K2Eqp`中macOS与固定iPhone/iPad/Apple TV/Vision Pro Debug全部`succeeded/0 error/0 warning/0 analyzer warning`；UUID仅作build destination，没有查询或操作simulator。
+- **系统更新后复验：** macOS 27.0/Xcode 26.4下`/tmp/LuneX-18-2_2-focused-macos27.5VXuwb`保持`8/8`，`/tmp/LuneX-18-2_2-normal-macos27.APoh6b`保持`969/968/1/0`且唯一skip为真实Keychain opt-in，`/tmp/LuneX-18-2_2-builds-macos27.IgW5lP`五平台Debug全部`succeeded/0/0/0`并各有AIR/metallib；未查询或操作simulator。
+- **repository pre-gate：** `/tmp/LuneX-18-2_2-repository-pre-macos27.NmlEN1`从头通过fixtures、OpenSpec strict `9/9`与勾选前`7/50 next 2.2`、generator四次稳定同哈希、精确七文件scope、owner/membership/privacy/clean-room、retained focused/normal/五build、opt-in/进程及diff门。
+- **OpenSpec：** pre-gate通过后已勾选2.2，权威进度预期为`8/50 ready`、next 2.3；下一步运行只读final-state，不重复test/build或simulator inventory。
+- **final-state：** `/tmp/LuneX-18-2_2-final-state-macos27-r2.zjXtZr`通过fixtures、strict `9/9`、apply精确`8/50 next 2.3`、generator四次同哈希、八文件scope、docs/owner/privacy/reference/opt-in/进程及全部保留证据读回；2.2可独立提交推送。

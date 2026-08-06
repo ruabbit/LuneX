@@ -2403,3 +2403,15 @@
 - 当前证据证明actual framework-local callback和unsigned build边界，不证明2.2 generation/stale rejection、2.3 normalized geometry、actual scene lifecycle、AppModel/media/input接线、signed/physical/live行为。
 - repository pre-gate `/tmp/LuneX-18-2_1-repository-pre.raFP1x`通过strict `9/9`、勾选前`6/50 next 2.1`、generator四次稳定同哈希、精确七文件scope、callback/weak ownership/iOS isolation、retained evidence及repository边界；因此2.1可勾选，下一项为2.2。
 - 勾选后final-state `/tmp/LuneX-18-2_1-final-state.dAGCFP`确认`7/50 ready`、next 2.2，generator与全部保留证据、八文件scope及repository边界一致；没有重复test/build、simulator inventory或Keychain访问。
+
+## 2026-08-07 阶段 18 任务 2.2 generation owner 审计
+
+- 共享`TVVisionGeneration(.surface)`、`TVVisionSurfaceGeometry`与`TVVisionSceneSurfaceSnapshot`已提供branded generation和finite geometry基础；2.2应在framework boundary先建立actual object identity/activity ownership，2.3再生成bounds/safe-area geometry与semantic revision。
+- 阶段17 mobile owner强制`UIWindowScene + UIScreen`且组合scene notification/geometry/EDR/input，不能复用于visionOS；visionOS 26.4公开SDK没有`UIScreen`或`UIWindowScene.screen`，因此新owner必须把screen建模为平台化optional，tvOS attached则要求actual scene screen存在。
+- owner应弱持有surface/window/scene/screen，resolver只能接收callback所属surface；不允许`connectedScenes`、global screen或requested stream size fallback。stale generation/surface不发布，current detach/invalid则清空实际对象状态以fail closed。
+- 最终owner将scene activity lifecycle token限制在actual current `UIWindowScene`，通知回调再次核对view当前scene；scene replacement和dismantle先移除旧token。状态不携带framework object或identity，仅包含platform/generation/callback/attachment/activity/visibility/finite scale/drawable/focus。
+- focused `/tmp/LuneX-18-2_2-focused-final2.VLhqfP`通过`8/8`，normal `/tmp/LuneX-18-2_2-normal-final.jGEblk`通过`969/968/1 exact Keychain skip/0`，五平台Debug `/tmp/LuneX-18-2_2-builds-final.5K2Eqp`全部`succeeded/0/0/0`。
+- macOS更新完成后在macOS 27.0/Xcode 26.4重新验收同一scope：focused `/tmp/LuneX-18-2_2-focused-macos27.5VXuwb`为`8/8`，normal `/tmp/LuneX-18-2_2-normal-macos27.APoh6b`为`969/968/1 exact Keychain skip/0`，五平台Debug `/tmp/LuneX-18-2_2-builds-macos27.IgW5lP`全部`succeeded/0/0/0`且各有AIR/metallib；固定UUID只作build destination，没有读取或操作simulator。
+- 当前仍未完成2.3 bounds/safe-area finite geometry、semantic revision/dedup、drawable/render/input mapping，也未接2.4 coordinator或2.5 AppModel；build destination不是simulator runtime或physical proof。
+- repository pre-gate `/tmp/LuneX-18-2_2-repository-pre-macos27.NmlEN1`通过fixtures、strict `9/9`、勾选前`7/50 next 2.2`、generator四次同哈希、精确scope、owner/membership/privacy/clean-room/reference、retained evidence、opt-in/进程与diff门；因此2.2已勾选，权威下一项为2.3。
+- 勾选后final-state `/tmp/LuneX-18-2_2-final-state-macos27-r2.zjXtZr`确认`8/50 ready`、next 2.3，generator、八文件scope、docs/owner边界与全部保留证据一致；未重复test/build或simulator inventory。
