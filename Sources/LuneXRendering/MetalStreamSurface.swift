@@ -3388,6 +3388,9 @@ final class TVVisionStreamMetalView: MTKView {
 #endif
     typealias SurfaceGenerationUpdateHandler = SurfaceGenerationOwner.Handler
     typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
+    typealias RemotePressEventHandler = @MainActor (
+        TVRemoteSurfacePressEvent
+    ) -> TVRemoteSurfacePressDisposition
 
     var surfaceGeneration: TVVisionGeneration? {
         surfaceGenerationOwner?.surfaceGeneration
@@ -3400,10 +3403,26 @@ final class TVVisionStreamMetalView: MTKView {
         SurfaceGenerationUpdateHandler = { _ in }
     private var geometryBindingUpdateHandler:
         GeometryBindingUpdateHandler = { _ in }
+    private var remotePressEventHandler: RemotePressEventHandler = { _ in .local }
     private weak var observedWindowScene: UIWindowScene?
     private var sceneLifecycleObservers: [NSObjectProtocol] = []
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
+#if os(tvOS)
+    private struct ActiveUIKitPress {
+        let surfaceGeneration: TVVisionGeneration
+        let pressID: UInt64
+        let button: TVRemoteButton
+        let disposition: TVRemoteSurfacePressDisposition
+    }
+
+    private var activeUIKitPresses: [ObjectIdentifier: ActiveUIKitPress] = [:]
+    private var nextRemotePressID: UInt64 = 1
+
+    override var canBecomeFocused: Bool {
+        isUserInteractionEnabled && !isHidden && alpha > 0
+    }
+#endif
 
     override var isHidden: Bool {
         didSet {
@@ -3436,13 +3455,16 @@ final class TVVisionStreamMetalView: MTKView {
         surfaceGenerationUpdateHandler:
             @escaping SurfaceGenerationUpdateHandler = { _ in },
         geometryBindingUpdateHandler:
-            @escaping GeometryBindingUpdateHandler = { _ in }
+            @escaping GeometryBindingUpdateHandler = { _ in },
+        remotePressEventHandler:
+            @escaping RemotePressEventHandler = { _ in .local }
     ) {
         super.init(frame: frameRect, device: device)
         autoResizeDrawable = false
         self.surfaceGenerationUpdateHandler =
             surfaceGenerationUpdateHandler
         self.geometryBindingUpdateHandler = geometryBindingUpdateHandler
+        self.remotePressEventHandler = remotePressEventHandler
         surfaceRelay = SurfaceRelay(
             surface: self,
             stateReader: { surface in
@@ -3543,6 +3565,59 @@ final class TVVisionStreamMetalView: MTKView {
         publishSurfaceCallbacks([.focusEligibility])
     }
 
+#if os(tvOS)
+    override func pressesBegan(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        var localPresses = Set<UIPress>()
+        for press in presses {
+            let identity = ObjectIdentifier(press)
+            if let active = activeUIKitPresses[identity] {
+                if active.disposition == .local { localPresses.insert(press) }
+                continue
+            }
+            guard let surfaceGeneration,
+                  let button = TVRemotePressMapper.button(for: press.type),
+                  let pressID = takeNextRemotePressID(),
+                  let pressEvent = try? TVRemoteSurfacePressEvent(
+                    surfaceGeneration: surfaceGeneration,
+                    pressID: pressID,
+                    button: button,
+                    phase: .began
+                  ) else {
+                localPresses.insert(press)
+                continue
+            }
+            let disposition = remotePressEventHandler(pressEvent)
+            activeUIKitPresses[identity] = ActiveUIKitPress(
+                surfaceGeneration: surfaceGeneration,
+                pressID: pressID,
+                button: button,
+                disposition: disposition
+            )
+            if disposition == .local { localPresses.insert(press) }
+        }
+        if !localPresses.isEmpty {
+            super.pressesBegan(localPresses, with: event)
+        }
+    }
+
+    override func pressesEnded(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        finishPresses(presses, phase: .ended, event: event)
+    }
+
+    override func pressesCancelled(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        finishPresses(presses, phase: .cancelled, event: event)
+    }
+#endif
+
     func updateSurfaceCallbackHandler(
         _ handler: @escaping SurfaceCallbackHandler
     ) {
@@ -3553,6 +3628,12 @@ final class TVVisionStreamMetalView: MTKView {
         _ handler: @escaping SurfaceGenerationUpdateHandler
     ) {
         surfaceGenerationUpdateHandler = handler
+    }
+
+    func updateRemotePressEventHandler(
+        _ handler: @escaping RemotePressEventHandler
+    ) {
+        remotePressEventHandler = handler
     }
 
     func updateGeometryBinding(
@@ -3581,6 +3662,9 @@ final class TVVisionStreamMetalView: MTKView {
     }
 
     func invalidateSurfaceCallbacks() {
+#if os(tvOS)
+        cancelCapturedPresses()
+#endif
         if let traitChangeRegistration {
             unregisterForTraitChanges(traitChangeRegistration)
             self.traitChangeRegistration = nil
@@ -3602,7 +3686,70 @@ final class TVVisionStreamMetalView: MTKView {
         removeSceneLifecycleObservers()
         surfaceRelay?.invalidate()
         surfaceRelay = nil
+        remotePressEventHandler = { _ in .local }
     }
+
+#if os(tvOS)
+    private func finishPresses(
+        _ presses: Set<UIPress>,
+        phase: TVRemoteSurfacePressPhase,
+        event: UIPressesEvent?
+    ) {
+        var localPresses = Set<UIPress>()
+        for press in presses {
+            let identity = ObjectIdentifier(press)
+            guard let active = activeUIKitPresses.removeValue(forKey: identity) else {
+                localPresses.insert(press)
+                continue
+            }
+            guard active.disposition == .captured else {
+                localPresses.insert(press)
+                continue
+            }
+            guard let pressEvent = try? TVRemoteSurfacePressEvent(
+                    surfaceGeneration: active.surfaceGeneration,
+                    pressID: active.pressID,
+                    button: active.button,
+                    phase: phase
+                  ) else {
+                continue
+            }
+            _ = remotePressEventHandler(pressEvent)
+        }
+        guard !localPresses.isEmpty else { return }
+        switch phase {
+        case .began:
+            break
+        case .ended:
+            super.pressesEnded(localPresses, with: event)
+        case .cancelled:
+            super.pressesCancelled(localPresses, with: event)
+        }
+    }
+
+    private func cancelCapturedPresses() {
+        let captured = activeUIKitPresses.values
+            .filter { $0.disposition == .captured }
+            .sorted { $0.pressID < $1.pressID }
+        activeUIKitPresses.removeAll()
+        for active in captured {
+            guard let event = try? TVRemoteSurfacePressEvent(
+                surfaceGeneration: active.surfaceGeneration,
+                pressID: active.pressID,
+                button: active.button,
+                phase: .cancelled
+            ) else { continue }
+            _ = remotePressEventHandler(event)
+        }
+    }
+
+    private func takeNextRemotePressID() -> UInt64? {
+        guard nextRemotePressID > 0 else { return nil }
+        let result = nextRemotePressID
+        nextRemotePressID = result == UInt64.max ? 0 : result + 1
+        return result
+    }
+#endif
 
     private func handleSurfaceGenerationUpdate(
         _ update: SurfaceGenerationOwner.Update
@@ -4455,6 +4602,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         TVVisionStreamMetalView.SurfaceGenerationUpdateHandler = { _ in }
     var geometryBindingUpdateHandler:
         TVVisionStreamMetalView.GeometryBindingUpdateHandler = { _ in }
+    var remotePressEventHandler:
+        TVVisionStreamMetalView.RemotePressEventHandler = { _ in .local }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -4513,7 +4662,8 @@ struct MetalStreamSurface: UIViewRepresentable {
                 [weak coordinator = context.coordinator] update in
                 coordinator?.handleTVVisionGeometryUpdate(update)
                 externalGeometryBindingUpdateHandler(update)
-            }
+            },
+            remotePressEventHandler: remotePressEventHandler
         )
         if let surfaceGeneration = view.surfaceGeneration {
             context.coordinator.activateTVVisionSurfaceGeneration(
@@ -4574,6 +4724,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateSurfaceGenerationUpdateHandler(
                 surfaceGenerationUpdateHandler
             )
+        (view as? TVVisionStreamMetalView)?
+            .updateRemotePressEventHandler(remotePressEventHandler)
         (view as? TVVisionStreamMetalView)?
             .updateGeometryBinding(
                 sourceSize: renderState.transform.sourceSize,

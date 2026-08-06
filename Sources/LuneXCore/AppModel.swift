@@ -312,6 +312,8 @@ final class AppModel: ApplicationInputSink {
         UUID?
     @ObservationIgnored private var tvVisionPlatformGeometryAdmission:
         TVVisionPlatformGeometryAdmission?
+    @ObservationIgnored private var tvRemoteSurfacePressCaptureOwner:
+        TVRemoteSurfacePressCaptureOwner?
 #if os(iOS)
     @ObservationIgnored private var mobilePictureInPictureCoordinator:
         MobilePictureInPicturePresentationCoordinator?
@@ -666,6 +668,20 @@ final class AppModel: ApplicationInputSink {
             update,
             ownership: ownership
         )
+    }
+
+    func receiveTVRemoteSurfacePressEvent(
+        _ event: TVRemoteSurfacePressEvent
+    ) -> TVRemoteSurfacePressDisposition {
+        tvRemoteSurfacePressCaptureOwner?.handle(event) ?? .local
+    }
+
+    func tvRemoteSurfacePressDisposition(
+        for surfaceGeneration: TVVisionGeneration
+    ) -> TVRemoteSurfacePressDisposition {
+        tvRemoteSurfacePressCaptureOwner?.disposition(
+            for: surfaceGeneration
+        ) ?? .local
     }
 
     func publishHDRPresentationDiagnostic(
@@ -2023,6 +2039,17 @@ final class AppModel: ApplicationInputSink {
 
     private func beginTVVisionPlatformPresentationRuntime() {
         clearTVVisionPlatformPresentationRuntime()
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        tvRemoteSurfacePressCaptureOwner = TVRemoteSurfacePressCaptureOwner(
+            delivery: { [weak self] inputGeneration, event in
+                guard let self,
+                      self.activeMediaGeneration == inputGeneration.rawValue,
+                      self.activeMediaReadiness.contains(.input) else {
+                    throw SessionMediaEnvironmentError.staleInputApplication
+                }
+                try await self.sendRemoteInput(.tvRemote(event))
+            }
+        )
     }
 
     private func scheduleTVVisionPlatformGeometryApplication(
@@ -2070,6 +2097,33 @@ final class AppModel: ApplicationInputSink {
                             action: .scene(update)
                         )
                     )
+                if ownership.platform == .tvOS,
+                   let input = self.makeTVRemoteInputSnapshot(
+                    update: update,
+                    ownership: ownership
+                   ) {
+                    if update.binding != nil {
+                        try await self.sessionMediaEnvironment
+                            .applyTVVisionPlatformPresentation(
+                                SessionTVVisionPlatformPresentationApplication(
+                                    ownership: ownership,
+                                    action: .input(
+                                        snapshot: input,
+                                        controllerLeases: []
+                                    )
+                                )
+                            )
+                    }
+                    guard !Task.isCancelled,
+                          self.tvVisionPlatformApplicationOperationID
+                            == operationID,
+                          self.tvVisionPlatformPresentationOwnership
+                            == ownership else { return }
+                    try self.tvRemoteSurfacePressCaptureOwner?.update(
+                        surfaceGeneration: update.surfaceGeneration,
+                        input: input
+                    )
+                }
             } catch {
                 guard !Task.isCancelled,
                       self.tvVisionPlatformApplicationOperationID
@@ -2156,6 +2210,8 @@ final class AppModel: ApplicationInputSink {
         tvVisionPlatformApplicationTask = nil
         tvVisionPlatformApplicationOperationID = nil
         tvVisionPlatformGeometryAdmission = nil
+        tvRemoteSurfacePressCaptureOwner?.invalidate()
+        tvRemoteSurfacePressCaptureOwner = nil
         tvVisionPlatformPresentationOwnership = nil
         guard preservingTerminalState,
               let phase = tvVisionPlatformPresentationState?.snapshot.phase else {
@@ -2168,6 +2224,36 @@ final class AppModel: ApplicationInputSink {
         case .active, .stopped:
             tvVisionPlatformPresentationState = nil
         }
+    }
+
+    private func makeTVRemoteInputSnapshot(
+        update: TVVisionStreamGeometryBindingUpdate,
+        ownership: TVVisionPresentationOwnership
+    ) -> TVVisionInputCapabilitySnapshot? {
+        guard ownership.platform == .tvOS,
+              ownership.inputGeneration.domain == .input else { return nil }
+        let eligibility: TVVisionFocusEligibility
+        if !activeMediaReadiness.contains(.input) {
+            eligibility = .ineligible(.inputUnavailable)
+        } else if let binding = update.binding {
+            if binding.sceneSurfaceSnapshot.activity != .active {
+                eligibility = .ineligible(.sceneInactive)
+            } else if !binding.sceneSurfaceSnapshot.isVisible
+                        || !binding.isFocusEligible {
+                eligibility = .ineligible(.notFocused)
+            } else {
+                eligibility = .eligible
+            }
+        } else {
+            eligibility = .ineligible(.detached)
+        }
+        return try? TVVisionInputCapabilitySnapshot(
+            platform: .tvOS,
+            revision: update.revision,
+            inputGeneration: ownership.inputGeneration,
+            supported: [.tvRemote],
+            focusEligibility: eligibility
+        )
     }
 
     private func tvVisionPlatformStopReason(

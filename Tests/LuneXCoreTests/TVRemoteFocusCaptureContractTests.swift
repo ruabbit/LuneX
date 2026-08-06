@@ -562,6 +562,182 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testSurfacePressOwnerDeliversBalancedBeginEndAndCancel() async throws {
+        let recorder = TVRemoteSurfaceDeliveryRecorder()
+        let owner = TVRemoteSurfacePressCaptureOwner { generation, event in
+            try recorder.deliver(generation: generation, event: event)
+        }
+        let surface = try generation(.surface, 1)
+        let inputGeneration = try generation(.input, 1)
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(generation: inputGeneration)
+        )
+        XCTAssertEqual(owner.disposition(for: surface), .captured)
+
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .select, .began)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .select, .ended)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 2, .playPause, .began)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 2, .playPause, .cancelled)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 3, .menu, .began)),
+            .local
+        )
+
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.events, [
+            TVRemoteInputEvent(button: .select, isDown: true),
+            TVRemoteInputEvent(button: .select, isDown: false),
+            TVRemoteInputEvent(button: .playPause, isDown: true),
+            TVRemoteInputEvent(button: .playPause, isDown: false)
+        ])
+        XCTAssertTrue(recorder.generations.allSatisfy { $0 == inputGeneration })
+
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(
+                generation: inputGeneration,
+                eligibility: .ineligible(.overlayVisible)
+            )
+        )
+        XCTAssertEqual(owner.disposition(for: surface), .local)
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 4, .up, .began)),
+            .local
+        )
+    }
+
+    @MainActor
+    func testSurfacePressOwnerReleasesReplacementAndRejectsLateSurface()
+        async throws {
+        let recorder = TVRemoteSurfaceDeliveryRecorder()
+        let owner = TVRemoteSurfacePressCaptureOwner { generation, event in
+            try recorder.deliver(generation: generation, event: event)
+        }
+        let firstSurface = try generation(.surface, 1)
+        let replacementSurface = try generation(.surface, 2)
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot()
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(firstSurface, 1, .left, .began)),
+            .captured
+        )
+
+        try owner.update(
+            surfaceGeneration: replacementSurface,
+            input: inputSnapshot()
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(firstSurface, 1, .left, .ended)),
+            .local
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(replacementSurface, 1, .right, .began)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(replacementSurface, 1, .right, .ended)),
+            .captured
+        )
+
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.events, [
+            TVRemoteInputEvent(button: .left, isDown: true),
+            TVRemoteInputEvent(button: .left, isDown: false),
+            TVRemoteInputEvent(button: .right, isDown: true),
+            TVRemoteInputEvent(button: .right, isDown: false)
+        ])
+    }
+
+    @MainActor
+    func testSurfacePressOwnerFailsClosedAfterDeliveryFailure() async throws {
+        let recorder = TVRemoteSurfaceDeliveryRecorder(failuresRemaining: 1)
+        let owner = TVRemoteSurfacePressCaptureOwner { generation, event in
+            try recorder.deliver(generation: generation, event: event)
+        }
+        let surface = try generation(.surface, 1)
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot()
+        )
+
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .select, .began)),
+            .captured
+        )
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.attemptedEvents, [
+            TVRemoteInputEvent(button: .select, isDown: true),
+            TVRemoteInputEvent(button: .select, isDown: false)
+        ])
+        XCTAssertEqual(recorder.events, [
+            TVRemoteInputEvent(button: .select, isDown: false)
+        ])
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 2, .right, .began)),
+            .local
+        )
+    }
+
+    @MainActor
+    func testSurfacePressOwnerRetriesFailedReleaseAndDropsQueuedDown()
+        async throws {
+        let recorder = TVRemoteSurfaceDeliveryRecorder(failingAttempts: [2])
+        let owner = TVRemoteSurfacePressCaptureOwner { generation, event in
+            try recorder.deliver(generation: generation, event: event)
+        }
+        let surface = try generation(.surface, 1)
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot()
+        )
+
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .select, .began)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .select, .ended)),
+            .captured
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 2, .right, .began)),
+            .captured
+        )
+
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.attemptedEvents, [
+            TVRemoteInputEvent(button: .select, isDown: true),
+            TVRemoteInputEvent(button: .select, isDown: false),
+            TVRemoteInputEvent(button: .select, isDown: false),
+            TVRemoteInputEvent(button: .right, isDown: false)
+        ])
+        XCTAssertEqual(recorder.events, [
+            TVRemoteInputEvent(button: .select, isDown: true),
+            TVRemoteInputEvent(button: .select, isDown: false),
+            TVRemoteInputEvent(button: .right, isDown: false)
+        ])
+        XCTAssertFalse(recorder.attemptedEvents.contains(
+            TVRemoteInputEvent(button: .right, isDown: true)
+        ))
+        XCTAssertEqual(owner.disposition(for: surface), .local)
+    }
+
     private func inputSnapshot(
         generation: TVVisionGeneration? = nil,
         eligibility: TVVisionFocusEligibility = .eligible,
@@ -573,6 +749,20 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             inputGeneration: generation ?? self.generation(.input, 1),
             supported: supported,
             focusEligibility: eligibility
+        )
+    }
+
+    private func surfacePress(
+        _ surfaceGeneration: TVVisionGeneration,
+        _ pressID: UInt64,
+        _ button: TVRemoteButton,
+        _ phase: TVRemoteSurfacePressPhase
+    ) throws -> TVRemoteSurfacePressEvent {
+        try TVRemoteSurfacePressEvent(
+            surfaceGeneration: surfaceGeneration,
+            pressID: pressID,
+            button: button,
+            phase: phase
         )
     }
 
@@ -655,4 +845,36 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
     private func semanticRevision() throws -> TVVisionSemanticRevision {
         try TVVisionSemanticRevision(rawValue: 1)
     }
+}
+
+@MainActor
+private final class TVRemoteSurfaceDeliveryRecorder {
+    private(set) var generations: [TVVisionGeneration] = []
+    private(set) var attemptedEvents: [TVRemoteInputEvent] = []
+    private(set) var events: [TVRemoteInputEvent] = []
+    private var failingAttempts: Set<Int>
+
+    init(failuresRemaining: Int = 0) {
+        failingAttempts = Set((0..<failuresRemaining).map { $0 + 1 })
+    }
+
+    init(failingAttempts: Set<Int>) {
+        self.failingAttempts = failingAttempts
+    }
+
+    func deliver(
+        generation: TVVisionGeneration,
+        event: TVRemoteInputEvent
+    ) throws {
+        generations.append(generation)
+        attemptedEvents.append(event)
+        if failingAttempts.remove(attemptedEvents.count) != nil {
+            throw TVRemoteSurfaceDeliveryTestError.failed
+        }
+        events.append(event)
+    }
+}
+
+private enum TVRemoteSurfaceDeliveryTestError: Error {
+    case failed
 }

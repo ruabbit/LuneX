@@ -681,6 +681,20 @@ private struct StreamWorkspaceView: View {
                 }
             )
                 .ignoresSafeArea()
+            #elseif os(tvOS)
+            MetalStreamSurface(
+                renderState: appModel.renderState,
+                presentationSource: appModel.videoPresentationSource,
+                userAllowsHDR: appModel.settings.stream.hdrEnabled,
+                diagnosticLease: hdrPresentationDiagnosticLease,
+                geometryBindingUpdateHandler: { update in
+                    appModel.receiveTVVisionGeometryUpdate(update)
+                },
+                remotePressEventHandler: { event in
+                    appModel.receiveTVRemoteSurfacePressEvent(event)
+                }
+            )
+                .ignoresSafeArea()
             #else
             MetalStreamSurface(
                 renderState: appModel.renderState,

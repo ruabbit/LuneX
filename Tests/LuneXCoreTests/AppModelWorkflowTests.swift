@@ -2401,6 +2401,136 @@ final class AppModelWorkflowTests: XCTestCase {
         await launchTask.value
     }
 
+    func testTVRemoteSurfacePressesUseCurrentGeometryAndBalancedInput()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 76,
+                    key: Data(repeating: 0x76, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let geometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(geometry)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 3
+        }
+        let platformApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(platformApplications[0].action, .activate)
+        guard case .scene = platformApplications[1].action else {
+            return XCTFail("Expected scene before tvOS input admission.")
+        }
+        guard case let .input(input, leases) = platformApplications[2].action else {
+            return XCTFail("Expected current tvOS input admission.")
+        }
+        XCTAssertEqual(input.supported, [.tvRemote])
+        XCTAssertEqual(input.focusEligibility, .eligible)
+        XCTAssertTrue(leases.isEmpty)
+
+        let surface = geometry.surfaceGeneration
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: surface) == .captured
+        }
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 1, .select, .began)
+            ),
+            .captured
+        )
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 1, .select, .ended)
+            ),
+            .captured
+        )
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 2, .playPause, .began)
+            ),
+            .captured
+        )
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 2, .playPause, .cancelled)
+            ),
+            .captured
+        )
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 3, .menu, .began)
+            ),
+            .local
+        )
+        let foreignSurface = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: 2
+        )
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(foreignSurface, 1, .right, .began)
+            ),
+            .local
+        )
+
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 4
+        }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().map(\.event),
+            [
+                .tvRemote(TVRemoteInputEvent(button: .select, isDown: true)),
+                .tvRemote(TVRemoteInputEvent(button: .select, isDown: false)),
+                .tvRemote(TVRemoteInputEvent(button: .playPause, isDown: true)),
+                .tvRemote(TVRemoteInputEvent(button: .playPause, isDown: false))
+            ]
+        )
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 2
+            )
+        )
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: surface) == .local
+        }
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 4, .up, .began)
+            ),
+            .local
+        )
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
     func testTVVisionApplicationFailurePreservesConsumedTerminalStateUntilStop()
         async throws {
         let provider = ControlledSessionControlProvider()
@@ -4100,6 +4230,74 @@ final class AppModelWorkflowTests: XCTestCase {
             revision: try TVVisionSemanticRevision(rawValue: revision),
             status: .closed(.detached),
             binding: nil
+        )
+    }
+
+    private func makeTVVisionActiveGeometryUpdate(
+        platform: TVVisionPlatform,
+        surfaceGeneration rawSurfaceGeneration: UInt64,
+        revision rawRevision: UInt64
+    ) throws -> TVVisionStreamGeometryBindingUpdate {
+        let surfaceGeneration = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: rawSurfaceGeneration
+        )
+        let revision = try TVVisionSemanticRevision(rawValue: rawRevision)
+        let geometry = try TVVisionSurfaceGeometry(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            viewBounds: TVVisionRect(x: 0, y: 0, width: 640, height: 360),
+            windowBounds: TVVisionRect(x: 0, y: 0, width: 640, height: 360),
+            safeAreaInsets: .zero,
+            scale: 2
+        )
+        let scene = try TVVisionSceneSurfaceSnapshot(
+            platform: platform,
+            revision: revision,
+            surfaceGeneration: surfaceGeneration,
+            activity: .active,
+            attachment: .attached,
+            isVisible: true,
+            geometry: geometry
+        )
+        let sourceSize = PixelSize(width: 1_920, height: 1_080)
+        let coordinateSnapshot = try XCTUnwrap(
+            StreamCoordinateSnapshot.resolve(
+                revision: revision.rawValue,
+                sourceSize: sourceSize,
+                drawableSize: geometry.drawableSize,
+                mode: .fit
+            )
+        )
+        let binding = TVVisionStreamGeometryBindingSnapshot(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: revision,
+            sceneSurfaceSnapshot: scene,
+            isFocusEligible: true,
+            coordinateSnapshot: coordinateSnapshot,
+            inputReferenceSize: sourceSize
+        )
+        return TVVisionStreamGeometryBindingUpdate(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: revision,
+            status: .active,
+            binding: binding
+        )
+    }
+
+    private func makeTVRemoteSurfacePress(
+        _ surfaceGeneration: TVVisionGeneration,
+        _ pressID: UInt64,
+        _ button: TVRemoteButton,
+        _ phase: TVRemoteSurfacePressPhase
+    ) throws -> TVRemoteSurfacePressEvent {
+        try TVRemoteSurfacePressEvent(
+            surfaceGeneration: surfaceGeneration,
+            pressID: pressID,
+            button: button,
+            phase: phase
         )
     }
 

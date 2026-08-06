@@ -18,7 +18,7 @@
 
 ## 3. tvOS remote, focus, and controller runtime
 
-- [ ] 3.1 Implement actual tvOS stream-surface press begin/end/cancel capture with current-generation admission and balanced remote events
+- [x] 3.1 Implement actual tvOS stream-surface press begin/end/cancel capture with current-generation admission and balanced remote events
 - [ ] 3.2 Coordinate SwiftUI focus and overlay visibility so browser/settings/overlay navigation remains local and stream capture owns only eligible supported presses
 - [ ] 3.3 Keep Back/Menu/Home, volume, capture, power, and unsupported system commands local with native escape and typed unavailable behavior
 - [ ] 3.4 Replace connection-list-only controller monitoring with generation-owned extended/micro gamepad handlers, deterministic bounded slots, normalized complete state, and disconnect replacement

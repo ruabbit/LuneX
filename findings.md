@@ -2501,3 +2501,21 @@
 - corrected repository pre-gate `/tmp/LuneX-18-2_6-repository-pre-r2.MNeROJ`通过fixtures、strict `9/9`、pre-mark `11/50 next 2.6`、四次稳定generator哈希、精确九文件scope、production/test semantics、retained `3/3`、`88/88`、`999/998/1/0`、五平台Debug/Metal、opt-in/reference/process及diff边界。
 - 2.6证明current media generation内terminal first-wins/shared report及AppModel replacement/geometry/event admission的确定性所有权；它不证明actual Siri Remote/controller capture、物理tvOS/visionOS输入、HDR、空间音频、signed install、live Sunshine或性能功耗。OpenSpec已勾选为预期`12/50 next 3.1`。
 - 勾选后只读final-state `/tmp/LuneX-18-2_6-final-state.Opv4SF`确认OpenSpec `12/50 next 3.1`、精确十文件scope、project hash与全部retained evidence/boundary一致；没有重复测试、构建、generator或simulator操作。
+
+## 2026-08-07 阶段 18 任务 3.1 调查
+
+- `TVRemoteCaptureState`已经提供input-generation ownership、最多6个active press、token/button去重、Menu保留、begin down、end/cancel up和unowned finish忽略合同；task 3.1应实现runtime application，而不是复制一套press reducer。
+- `TVRemotePressMapper`已把tvOS公开`UIPress.PressType`映射到select/play-pause/directional/Menu；实际`TVVisionStreamMetalView`尚未override任何press方法，当前没有actual UIKit callback到AppModel/remote provider的数据流。
+- AppModel已有`sendRemoteInput -> SessionInputApplication -> NativeSessionMediaEnvironment.sendInput -> RemoteInputProvider`单一路径。actual view应只发布framework-free press identity/phase；main-actor owner持有`UIPress` identity到checked token的短期映射，使用current input generation并在replacement/dismantle后拒绝late callback。
+- 3.1不得把Menu/Home/volume/capture/power等系统命令伪造成remote event；3.2–3.3仍负责overlay/local focus与完整reserved behavior，3.4–3.6仍负责controller和held-state release。
+- controlled media environment在`applyTVVisionPlatformPresentation`入口先append application再返回，application count不是AppModel已执行后续press-owner update的完成屏障；组合测试必须等待无副作用owner disposition，不能用重复began或任意`Task.yield()`改变或猜测状态。
+- actual UIKit press必须把began时surface generation与press ID一起持有；finish/cancel若读取当前view generation，会把旧surface迟到callback错误标记到replacement。captured press即使当前surface已失效也不交给UIKit补发一个没有local begin的local end。
+- 首轮delivery审计发现async button-up失败时reducer可能已同步移除该press，旧failure transition只释放仍active的其他press，既不重试失败up，也会让更早排队的后续down继续发送。3.1必须把failed button本身加入一次best-effort up，并在generation fail-closed后抑制queued down、保留up清理。
+- 3.1的unsigned fixed-destination build只证明tvOS actual UIKit分支和visionOS隔离分支可编译；没有launch simulator，因此不证明focus engine或remote callback运行，更不证明物理Siri Remote手感、系统命令、host receipt、signed install或性能。overlay/focus、完整reserved command、controller和stop/focus-loss release barrier仍分别归属3.2–3.6。
+
+## 2026-08-07 阶段 18 任务 3.1 验收
+
+- repository pre-gate `/tmp/LuneX-18-3_1-repository-pre.nYAHpJ`从头通过fixtures、OpenSpec strict `9/9`、pre-mark `12/50 next 3.1`、四次稳定generator、精确11文件scope、actual tvOS responder/owner/AppModel语义、retained test/build证据及privacy/clean-room/reference/opt-in/process/diff边界。
+- 人工复核确认captured/local `super`分流、begin-time surface generation、dismantle cancellation、Menu/unsupported local、FIFO failure release与queued-down suppression、current AppModel admission和visionOS隔离均成立；3.1已勾选，预期`13/50 next 3.2`。
+- 现有证据只证明deterministic ownership和unsigned SDK branch compatibility；不证明物理Siri Remote手感、完整系统reserved command、signed install、host receipt、controller、HDR/spatial、live Sunshine、延迟、性能、功耗或热状态。
+- 首轮final-state只因包装器将实际单一`failedInputGeneration`误写成复数断言而在retained evidence前退出；修正后的`/tmp/LuneX-18-3_1-final-state-r2.f0WIxl`复用已通过的strict/apply证据并完成source、retained test/build、Metal、privacy/reference、opt-in/process/diff门，确认`13/50 next 3.2`且没有重复test/build/generator/simulator操作。
