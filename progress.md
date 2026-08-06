@@ -2861,3 +2861,20 @@
 - 勾选后首个只读OpenSpec摘要因Python单行f-string转义错误退出，仓库未受影响；改用heredoc从JSON解析并确认`3/50 ready`、next 1.4，没有重复build/test或设备操作。
 - 首个final-state包装器因未转义Markdown反引号在shell启动前退出；第二轮通过OpenSpec/generator/retained evidence后因文档`Actual stream-surface`句首大小写断言退出。两次都没有重复build/test或设备操作。
 - 最终勾选后final-state `/tmp/LuneX-18-1_3-final-state-r2.piTqXW`完整通过：OpenSpec strict `9/9`、apply `3/50 next 1.4`、generator SHA-256 `755323bf392b901cb0443bf5b2fc116a69b740b67f7e2930dd3c10c601c26779`、retained focused `16/16`、normal `938/937/1 exact Keychain/0`、五build `succeeded/0/0/0`、五份AIR/metallib、精确十文件scope、docs/reference/opt-in/进程和diff门。
+
+## 2026-08-07 阶段 18 任务 1.4 启动
+
+- 1.3已提交推送为`d55d08c`，fetch后`HEAD == origin/main == d55d08cc108fd751846b5b27a236aea3b92186fa`且工作树clean；OpenSpec为`3/50 ready`、next 1.4。
+- 重读visionOS window/input与media spec、design、1.2 platform foundation及既有held-release合同，确定1.4只新增pure-value effect/admission/presentation状态，不持有UIKit/RealityKit/GameController对象或连接actual runtime。
+- 设计固定windowed mode与四类完整typed unavailable feature；输入只覆盖现有public capability snapshot的controller/keyboard/pointer/indirect paths；system/gaze/hand交互只有local reserve/drop。
+- release reducer区分focus loss与teardown：两者都close admission并等待provider held-release barrier，只有teardown取消system observers和释放surface lease；released phase让重复stop返回零effect。
+- 生成工程后首轮fresh focused `/tmp/LuneX-18-1_4-focused-first.M8I5D6`在测试编译阶段退出，唯一源码诊断是test helper的throwing nil-coalescing fallback缺少`try`；production合同已完成编译。修正后将从全新证据目录重跑。
+- fresh focused final `/tmp/LuneX-18-1_4-focused-final.nm9d5D`通过`15/15`、0 skip/fail/expected failure，结构化build error/warning/analyzer warning均为0；覆盖windowed/unavailable、snapshot consistency、admission、system interaction、ordered release、idempotency与controller ownership。
+- 下一步运行fresh完整macOS normal，再对macOS和固定26.4 iPhone/iPad/Apple TV/Vision Pro运行五平台Debug build；继续显式移除Keychain/live opt-in，不执行simulator inventory或生命周期操作。
+- fresh完整macOS normal `/tmp/LuneX-18-1_4-normal.9HxEOi`通过`953 total / 952 passed / 1 skipped / 0 failed`，唯一skip精确为显式真实Keychain round-trip，0 expected failure且结构化build error/warning/analyzer warning为0。
+- 五平台Debug `/tmp/LuneX-18-1_4-builds.9dNTC6`中macOS、固定iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 error/0 warning/0 analyzer warning`，每份均有一个AIR和一个metallib；固定UUID只作build destination，未读取或操作simulator。
+- 已同步runtime contract、roadmap与三份planning文件；下一步执行repository pre-gate，通过后才勾选1.4并确认`4/50 next 1.5`。
+- repository pre-gate `/tmp/LuneX-18-1_4-repository-pre.y4G7Md`通过fixture self/tree、OpenSpec strict `9/9`、apply精确`3/50 next 1.4`、generator SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`连续4次稳定、五target/test membership、framework-object/remote-effect/privacy/reference、retained evidence、Keychain/live opt-in、进程与diff门。
+- pre-gate通过后勾选OpenSpec 1.4；下一步确认`4/50 ready`、next 1.5并运行勾选后final-state，不重复focused/normal/build或simulator inventory。
+- 勾选后确认OpenSpec为`4/50 ready`、next 1.5；状态文档已同步，下一步运行final-state并复用已成功的focused/normal/五build证据。
+- 勾选后final-state `/tmp/LuneX-18-1_4-final-state.Hjcn6D`一次完整通过：OpenSpec strict `9/9`、apply `4/50 next 1.5`、generator SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、retained focused `15/15`、normal `953/952/1 exact Keychain/0`、五build `succeeded/0/0/0`、五份AIR/metallib、精确十文件scope、docs/framework/reference/opt-in/进程和diff门。

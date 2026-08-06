@@ -328,6 +328,59 @@ press handlers, controller handlers and feedback, focus handoff, physical Siri
 Remote feel, live Sunshine delivery, signed installation, HDR, spatial audio,
 performance, power, and thermal behavior remain unproved.
 
+## Task 1.4 visionOS window and input effect foundation
+
+Task 1.4 adds `VisionWindowInputContract.swift` as a framework-object-free
+value contract. It defines values and ordered effects for a later main-actor
+visionOS owner; it does not attach a view or window, install an input handler,
+create an immersive space, or send input to a live Moonlight provider.
+
+The contract provides:
+
+- one explicit `.windowed` presentation mode owned by checked presentation,
+  surface, and input generations plus a semantic revision;
+- an exact, duplicate-free set of typed unavailable states for immersive,
+  stereoscopic, volumetric, and passthrough presentation. There is no available
+  immersive branch in the task 1.4 contract;
+- five capability-mapped public input paths: extended and micro gamepad,
+  keyboard, pointer, and indirect pointer. Siri Remote, gaze, and hand input do
+  not enter this capability set;
+- typed admission decisions that reject stale presentation, surface, or input
+  generations before checking actual attachment, scene activity, visibility,
+  focus eligibility, and reported capability;
+- local reserve decisions for system gesture, recenter, capture, safety,
+  volume, and escape, plus typed local drop for unsupported gaze, hand, or
+  unknown interaction. The effect model contains no Moonlight serialization
+  case for these interactions;
+- separate focus-loss and teardown release scopes. Both close admission,
+  remove sorted controller handlers, cancel sorted keyboard/pointer monitors,
+  await the existing provider held-input release barrier, and only then restore
+  local navigation. Teardown additionally cancels system-interaction observers
+  and releases the surface lease after the held-release barrier;
+- an active/released ownership phase so a repeated release produces no second
+  effect sequence. Checked release rejects stale ownership, non-visionOS or
+  stale controller leases, duplicate slots or leases, controller paths passed
+  as monitors, and focus loss without a local restoration reason.
+
+Task 1.4 verification used fresh isolated evidence:
+
+- focused macOS tests: `15/15` passed after correcting one test-only throwing
+  nil-coalescing expression, with zero build diagnostics;
+- complete macOS normal suite: `953 total / 952 passed / 1 skipped / 0 failed`,
+  with the sole skip being the explicit real-Keychain round trip and both real
+  Keychain and live-host opt-ins unset;
+- macOS and fixed iOS 26.4 iPhone/iPad, tvOS 26.4 Apple TV, and visionOS 26.4
+  Vision Pro Debug builds: all `succeeded`, with zero structured errors,
+  warnings, or analyzer warnings and one AIR plus one metallib artifact each.
+
+The fixed simulator UUIDs were build destinations only. Task 1.4 did not run a
+simulator inventory or perform a simulator lifecycle operation. Actual
+multiwindow selection, resize observation, focus callbacks, controller,
+keyboard, pointer, or indirect-input adapters, system gesture observation,
+held-input delivery, immersive presentation, signed installation, physical
+Vision Pro behavior, live Sunshine, HDR, spatial audio, performance, power,
+thermal, and comfort acceptance remain unproved.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

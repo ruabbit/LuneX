@@ -2342,3 +2342,19 @@
 - repository pre-gate `/tmp/LuneX-18-1_3-repository-pre.cR5mnp`从头通过fixtures、strict `9/9`、apply `2/50 next 1.3`、generator四次同一SHA-256 `755323bf392b901cb0443bf5b2fc116a69b740b67f7e2930dd3c10c601c26779`、五target/test membership、framework-object/privacy/reference、Keychain/live opt-in、进程与diff检查；随后才勾选1.3。
 - 1.3勾选后OpenSpec权威进度为`3/50 ready`、next 1.4；首个Python单行摘要只因f-string转义在仓库外失败，改用heredoc读取JSON确认状态，未改变源码或重复任何测试/构建/设备操作。
 - 勾选后final-state最终证据`/tmp/LuneX-18-1_3-final-state-r2.piTqXW`完整通过：strict `9/9`、apply `3/50 next 1.4`、generator同一SHA-256、retained focused/normal/五build、唯一Keychain skip、五份AIR/metallib、精确十文件scope、docs/privacy/reference/opt-in/进程/diff边界；前两轮仅分别在shell启动前的反引号解析和文档大小写断言处退出。
+
+## 2026-08-07 阶段 18 任务 1.4 合同设计
+
+- `TVVisionInputCapabilitySnapshot`已把visionOS允许集合限制为extended/micro gamepad、keyboard、pointer和indirect pointer；1.4应消费该权威集合，不另建更宽的输入能力枚举或加入tvRemote/gaze/hand。
+- windowed presentation需要同时携带current presentation/input ownership、semantic revision和surface generation；immersive、stereoscopic、volumetric、passthrough必须以完整无重复的typed unavailable feature集合表达，不能只用一个模糊boolean。
+- admission需要把stale presentation/surface/input generation与detached/inactive/hidden/focus-ineligible/capability-unavailable分开，便于后续actual owner丢弃迟到callback而不改变current state。
+- focus loss不应释放window observer/surface lease，teardown才取消system observers并释放surface；两者都必须在恢复本地导航前close admission、移除controller handler、取消keyboard/pointer monitor并等待既有provider held-release barrier。
+- system gesture、recenter、capture、safety、volume、escape使用local reserve；gaze、hand与unknown使用typed local drop。合同effect类型不提供Moonlight serialization case，从类型层阻止伪造remote event。
+- `VisionWindowedPresentationState`只允许visionOS ownership并固定`.windowed`；四类unavailable feature必须exact、无重复且稳定排序，分别保留typed reason。它不提供immersive available分支，因此任务1.4不可能从值合同误报已创建immersive runtime。
+- `VisionInputAdmissionResolver`的拒绝顺序先隔离stale presentation/surface/input generation，再检查detached/inactive/hidden、focus和capability；这允许actual owner安全丢弃旧callback，同时保留current snapshot不变。
+- focused final `/tmp/LuneX-18-1_4-focused-final.nm9d5D`为`15/15`、0 skip/fail/expected failure，结构化build error/warning/analyzer warning均为0。首轮唯一问题是test helper的throwing nil-coalescing缺少`try`，production合同已完成编译。
+- fresh normal `/tmp/LuneX-18-1_4-normal.9HxEOi`为`953 total / 952 passed / 1 explicit Keychain skip / 0 failed`，0 expected failure与零结构化诊断；真实Keychain/live-host opt-in均unset。
+- 五平台Debug `/tmp/LuneX-18-1_4-builds.9dNTC6`中macOS、固定iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 error/0 warning/0 analyzer warning`且各有一份AIR/metallib；没有simulator inventory或生命周期操作。
+- repository pre-gate `/tmp/LuneX-18-1_4-repository-pre.y4G7Md`完整通过fixtures、strict `9/9`、apply `3/50 next 1.4`、generator四次同一SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、五target/test membership、framework-object/remote-effect/privacy/reference、retained evidence、opt-in、进程与diff边界；随后才勾选1.4。
+- 1.4勾选后OpenSpec权威进度为`4/50 ready`、next 1.5；下一项只扩展基础合同的finite/stale/reserved/release/capacity/privacy/capability测试，不把1.4结果提升为actual visionOS runtime。
+- 勾选后final-state `/tmp/LuneX-18-1_4-final-state.Hjcn6D`一次完整通过：strict `9/9`、apply `4/50 next 1.5`、generator同一SHA-256、retained focused/normal/五build、唯一Keychain skip、五份AIR/metallib、精确十文件scope与docs/framework/remote-effect/privacy/reference/opt-in/进程/diff边界。
