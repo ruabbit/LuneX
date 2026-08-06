@@ -34,7 +34,13 @@ struct GameControllerInputAdapter: Sendable {
     var pressedThreshold = 0.5
 
     func controllerElement(_ sample: GameControllerElementSample) -> InputAdapterOutput {
-        InputAdapterOutput(
+        guard sample.value.isFinite else {
+            return InputAdapterOutput(
+                event: nil,
+                policy: .drop(reason: "Controller element value must be finite")
+            )
+        }
+        return InputAdapterOutput(
             event: .gameController(GameControllerInputEvent(
                 controllerID: sample.controllerID,
                 playerIndex: sample.playerIndex,

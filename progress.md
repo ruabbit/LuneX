@@ -2878,3 +2878,21 @@
 - pre-gate通过后勾选OpenSpec 1.4；下一步确认`4/50 ready`、next 1.5并运行勾选后final-state，不重复focused/normal/build或simulator inventory。
 - 勾选后确认OpenSpec为`4/50 ready`、next 1.5；状态文档已同步，下一步运行final-state并复用已成功的focused/normal/五build证据。
 - 勾选后final-state `/tmp/LuneX-18-1_4-final-state.Hjcn6D`一次完整通过：OpenSpec strict `9/9`、apply `4/50 next 1.5`、generator SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、retained focused `15/15`、normal `953/952/1 exact Keychain/0`、五build `succeeded/0/0/0`、五份AIR/metallib、精确十文件scope、docs/framework/reference/opt-in/进程和diff门。
+
+## 2026-08-07 阶段 18 任务 1.5 启动
+
+- 1.4已提交推送为`165e0f6`，fetch后`HEAD == origin/main == 165e0f6fe1d11ef7d681a933da249675843ab48e`且工作树clean；OpenSpec为`4/50 ready`、next 1.5。
+- 完成1.2–1.4测试矩阵审计，确认大部分边界已有单点覆盖；新增范围收紧为nonfinite controller adapter fail-closed、全generation/capability/geometry矩阵、max controller held-release、reserved no-remote及aggregate privacy serialization门。
+- 本项优先修改既有test class，不新增重复contract或test target；只有adapter nonfinite路径需要最小production修复。
+- macOS 27.0更新后恢复active goal并重读planning/OpenSpec全部上下文；Xcode 26.4及macOS/iOS/tvOS/visionOS 26.4 SDK可用，`HEAD == origin/main == 165e0f6`，没有查询或操作simulator。
+- 已完成1.5实现与测试补丁：controller element拒绝NaN/Infinity并使用不含identity的固定drop reason；新增全generation exhaustion、geometry failure、platform capability、16-slot release、全reserved no-remote及runtime aggregate non-Encodable隐私矩阵。下一步从全新证据目录运行四类focused tests。
+- 首轮fresh focused `/tmp/LuneX-18-1_5-focused.JHzHJc`在production编译阶段退出：加入nonfinite `guard`后原单表达式函数不再允许隐式返回，唯一源码错误为`InputAdapterOutput` initializer unused；测试没有执行。补充显式`return`后从全新证据目录重跑。
+- 修复后的fresh focused `/tmp/LuneX-18-1_5-focused-final.TwI9GK`结构化通过`58/58 passed / 0 skipped / 0 failed / 0 expected failure`，build `succeeded`且error/warning/analyzer warning均为0；新增8项边界测试全部执行。命令显式移除Keychain/live-host opt-in且只使用macOS destination。
+- fresh完整macOS normal `/tmp/LuneX-18-1_5-normal.Ii5uKb`结构化通过`961 total / 960 passed / 1 skipped / 0 failed / 0 expected failure`；唯一skip精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，build `succeeded`且error/warning/analyzer warning均为0。命令显式移除Keychain/live-host opt-in，继续使用文件/内存fallback。
+- 五平台Debug `/tmp/LuneX-18-1_5-builds.epxn6e`中macOS、固定26.4 iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 error/0 warning/0 analyzer warning`，每个平台各有1份AIR和1份metallib；UUID只作build destination，没有simulator inventory或create/clone/boot/install/launch/run/shutdown/delete。
+- 首个合同/roadmap/planning组合patch因合同文件换行锚点不精确被`apply_patch`原子拒绝，未产生部分修改；改用稳定标题和精确行拆分后完成同步。
+- 已同步stage 18 runtime contract、roadmap及三份planning文件，保持OpenSpec `4/50 next 1.5`直到repository pre-gate通过；当前证据明确不提升为actual handler/runtime、physical device或live Sunshine证明。
+- repository pre-gate `/tmp/LuneX-18-1_5-repository-pre.35UmDy`从头通过fixture self/tree、OpenSpec strict `9/9`、勾选前apply `4/50 next 1.5`、generator连续4次稳定SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、五target/test membership、nonfinite固定drop reason、8项新增测试、七类aggregate non-Encodable隐私边界、retained focused/normal/五build、精确十文件scope、reference/opt-in/进程与`git diff --check`。
+- pre-gate通过后已勾选OpenSpec 1.5并同步权威进度为`5/50 ready`、next 1.6；下一步运行只读final-state，不重复focused/normal/build或simulator inventory。
+- 勾选后final-state首轮误用不存在的`Fixtures/Protocol`根，在generator和xcresult读取前立即退出；这不是产品、构建或测试失败。读取validator默认根后从新目录完整重跑。
+- final-state `/tmp/LuneX-18-1_5-final-state-r2.bBdtCr`通过fixtures、strict `9/9`、apply `5/50 next 1.6`、generator四次稳定同哈希、retained focused `58/58`、normal `961/960/1 exact Keychain/0`、五build `succeeded/0/0/0`、五平台AIR/metallib、精确十一文件scope、docs/privacy/reference/opt-in/进程与diff检查；没有重复测试、构建或simulator inventory。

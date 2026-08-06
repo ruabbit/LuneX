@@ -40,6 +40,54 @@ final class ControllerAndDiagnosticsTests: XCTestCase {
         )))
     }
 
+    func testGameControllerDropsEveryNonFiniteElementValue() {
+        let adapter = GameControllerInputAdapter()
+
+        for value in [Double.nan, .infinity, -.infinity] {
+            for element in [GameControllerElement.a, .leftThumbstickX] {
+                let output = adapter.controllerElement(
+                    GameControllerElementSample(
+                        controllerID: "private-controller-identity",
+                        playerIndex: nil,
+                        element: element,
+                        value: value
+                    )
+                )
+                XCTAssertNil(output.event)
+                XCTAssertEqual(
+                    output.policy,
+                    .drop(reason: "Controller element value must be finite")
+                )
+            }
+        }
+    }
+
+    func testGameControllerFiniteValuesClampToElementDomains() throws {
+        let adapter = GameControllerInputAdapter()
+        let cases: [(GameControllerElement, Double, Double, Bool)] = [
+            (.leftThumbstickX, -2, -1, true),
+            (.rightThumbstickY, 2, 1, true),
+            (.a, -2, 0, false),
+            (.rightTrigger, 2, 1, true)
+        ]
+
+        for (element, input, expectedValue, expectedPressed) in cases {
+            let output = adapter.controllerElement(GameControllerElementSample(
+                controllerID: "controller",
+                playerIndex: nil,
+                element: element,
+                value: input
+            ))
+            guard case let .gameController(event) = try XCTUnwrap(output.event) else {
+                return XCTFail("Expected a normalized controller event")
+            }
+            XCTAssertEqual(output.policy, .deliver)
+            XCTAssertTrue(event.value.isFinite)
+            XCTAssertEqual(event.value, expectedValue)
+            XCTAssertEqual(event.isPressed, expectedPressed)
+        }
+    }
+
     func testControllerSnapshotProducesRemoteBitmap() {
         let snapshot = GameControllerBindingSnapshot(controllers: [
             GameControllerConnectionState(

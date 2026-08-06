@@ -2358,3 +2358,20 @@
 - repository pre-gate `/tmp/LuneX-18-1_4-repository-pre.y4G7Md`完整通过fixtures、strict `9/9`、apply `3/50 next 1.4`、generator四次同一SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、五target/test membership、framework-object/remote-effect/privacy/reference、retained evidence、opt-in、进程与diff边界；随后才勾选1.4。
 - 1.4勾选后OpenSpec权威进度为`4/50 ready`、next 1.5；下一项只扩展基础合同的finite/stale/reserved/release/capacity/privacy/capability测试，不把1.4结果提升为actual visionOS runtime。
 - 勾选后final-state `/tmp/LuneX-18-1_4-final-state.Hjcn6D`一次完整通过：strict `9/9`、apply `4/50 next 1.5`、generator同一SHA-256、retained focused/normal/五build、唯一Keychain skip、五份AIR/metallib、精确十文件scope与docs/framework/remote-effect/privacy/reference/opt-in/进程/diff边界。
+
+## 2026-08-07 阶段 18 任务 1.5 覆盖审计
+
+- 1.2已有input/controller generation与semantic revision exhaustion、NaN view width、infinite scale、drawable mismatch、platform capability抽样、16-slot bounds和duplicate ownership；1.3已有reserved command、stale press/controller、held reverse release、exact 16-slot roster、nonfinite feedback与motion rate bounds；1.4已有stale三generation、system interaction、focus/teardown release和idempotency。
+- `GameControllerInputAdapter.normalizedValue`对普通越界finite值可clamp，但`controllerElement`没有先拒绝NaN/Infinity；非有限值可能以`.deliver`进入后续路径。1.5应在adapter入口固定drop并不回显controller identity。
+- tvOS/visionOS capability需要对`TVVisionInputCapability.allCases`做完整允许/拒绝矩阵，而不是仅验证tvOS pointer与visionOS tvRemote两个样本。
+- stage18 aggregate ownership/snapshot/release effect携带ephemeral generation或session关系，不应直接`Codable`；只有无身份的固定raw enum允许编码，并应验证编码内容有界且不含host/window/scene/controller/UUID等词。
+
+## 2026-08-07 阶段 18 任务 1.5 候选验收
+
+- production仅修正一个实际缺陷：controller element在normalize前拒绝NaN和正负Infinity，返回nil event与固定`Controller element value must be finite`，不会把controller identity写入drop reason；所有finite axis/button/trigger仍按既有域clamp。
+- 新增8项测试使1.5覆盖所有generation domain zero/exhaustion、完整geometry错误类、tvOS/visionOS exact capability matrix、nonfinite/finite controller输入、全部reserved command/Menu零remote effect、16-slot排序移除后单一held-release barrier，以及七类runtime aggregate不满足`Encodable`。测试只允许两个固定raw enum族编码，JSON不超过512 bytes且不含host/endpoint/UUID/window/scene/controller/gesture/credential/secret。
+- fresh focused `/tmp/LuneX-18-1_5-focused-final.TwI9GK`为`58/58`；fresh normal `/tmp/LuneX-18-1_5-normal.Ii5uKb`为`961/960/1/0`且唯一skip精确为真实Keychain opt-in；五平台Debug `/tmp/LuneX-18-1_5-builds.epxn6e`全部`succeeded/0/0/0`并各有AIR/metallib。
+- 固定UUID仅作build destination，没有读取simulator inventory或执行生命周期操作。这些证据不证明actual tvOS/visionOS handler、controller硬件、窗口/surface观察、远端接收、HDR、空间音频、签名设备或live Sunshine。
+- repository pre-gate `/tmp/LuneX-18-1_5-repository-pre.35UmDy`确认当前补丁与上述证据一致：strict `9/9`、勾选前apply `4/50 next 1.5`、generator四次同一SHA-256、五target/test membership、nonfinite无identity drop、8项新增测试、七类aggregate non-Encodable边界、retained focused/normal/五build、精确十文件scope及reference/opt-in/进程/diff门全部通过。
+- OpenSpec 1.5仅在pre-gate通过后勾选；权威进度现为`5/50 ready`、next 1.6。该状态仍只证明contract/static、测试与unsigned build层，不提升为actual runtime、simulator interaction、signed artifact、physical或live-host证明。
+- 勾选后final-state `/tmp/LuneX-18-1_5-final-state-r2.bBdtCr`再次确认strict `9/9`、apply `5/50 next 1.6`、generator四次同哈希、retained focused/normal/五build、唯一Keychain skip、五平台AIR/metallib、精确十一文件scope及docs/privacy/reference/opt-in/进程/diff边界。第一轮只因错误fixture根在任何生成器或结果读取前退出，不改变验收结论。

@@ -116,35 +116,32 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
         let state = try TVRemoteCaptureState(input: input)
         let token = try pressToken(input.inputGeneration, 1)
 
+        let menuEffects = try state.reducing(
+            .pressBegan(token: token, button: .menu)
+        ).effects
         XCTAssertEqual(
-            try state.reducing(.pressBegan(token: token, button: .menu)).effects,
+            menuEffects,
             [.handleReserved(
                 command: .backMenu,
                 disposition: .showOverlayOrExitCapture
             )]
         )
-        for command in [
-            TVRemoteReservedCommand.home,
-            .volumeUp,
-            .volumeDown,
-            .capture,
-            .power
-        ] {
+        XCTAssertFalse(containsRemoteDelivery(menuEffects))
+        for command in TVRemoteReservedCommand.allCases {
+            let effects = try state.reducing(.reserved(command)).effects
+            let disposition = TVRemoteReservedDisposition.resolve(command)
             XCTAssertEqual(
-                try state.reducing(.reserved(command)).effects,
+                effects,
                 [.handleReserved(
                     command: command,
-                    disposition: .deferToSystem
+                    disposition: disposition
                 )]
             )
+            XCTAssertFalse(
+                containsRemoteDelivery(effects),
+                "Reserved command \(command) must not reach the remote host"
+            )
         }
-        XCTAssertEqual(
-            try state.reducing(.reserved(.unsupported)).effects,
-            [.handleReserved(
-                command: .unsupported,
-                disposition: .ignoreLocally
-            )]
-        )
         XCTAssertTrue(state.activePresses.isEmpty)
     }
 
@@ -471,6 +468,30 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
         ])
     }
 
+    func testReleasePlanAcceptsMaximumControllerCapacityBeforeBarrier() throws {
+        let inputGeneration = try generation(.input, 1)
+        let leases = try (0..<TVVisionControllerSlot.maximumCount).reversed().map {
+            try controllerLease(slot: $0, lease: UInt64($0 + 1))
+        }
+        let plan = try TVPlatformInputReleasePlan(
+            inputGeneration: inputGeneration,
+            activePresses: [],
+            controllerLeases: leases,
+            restoreReason: nil
+        )
+        let sortedLeases = leases.sorted { $0.slot < $1.slot }
+
+        XCTAssertEqual(plan.effects, [
+            .closeRemoteAdmission(inputGeneration: inputGeneration),
+            .removeControllerHandlers(sortedLeases),
+            .awaitRemoteReleaseBarrier(inputGeneration: inputGeneration)
+        ])
+        XCTAssertEqual(
+            sortedLeases.map(\.slot.rawValue),
+            Array(0..<UInt8(TVVisionControllerSlot.maximumCount))
+        )
+    }
+
     func testReleasePlanRejectsInvalidPressAndControllerOwnership() throws {
         let inputGeneration = try generation(.input, 1)
         let otherInputGeneration = try generation(.input, 2)
@@ -553,6 +574,17 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             supported: supported,
             focusEligibility: eligibility
         )
+    }
+
+    private func containsRemoteDelivery(
+        _ effects: [TVRemoteCaptureEffect]
+    ) -> Bool {
+        effects.contains {
+            if case .sendRemote = $0 {
+                return true
+            }
+            return false
+        }
     }
 
     private func pressToken(

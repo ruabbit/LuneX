@@ -381,6 +381,50 @@ held-input delivery, immersive presentation, signed installation, physical
 Vision Pro behavior, live Sunshine, HDR, spatial audio, performance, power,
 thermal, and comfort acceptance remain unproved.
 
+## Task 1.5 immutable boundary verification
+
+Task 1.5 expands the deterministic foundation tests without creating an actual
+tvOS or visionOS runtime owner. It closes one production adapter defect:
+`GameControllerInputAdapter` now rejects NaN and either infinity before
+normalization, returns no event, and uses a fixed diagnostic reason that does
+not contain the controller identity. Finite axis values still clamp to
+`[-1, 1]`; finite buttons and triggers clamp to `[0, 1]`.
+
+The expanded test matrix verifies:
+
+- zero and exhausted values for every generation domain plus semantic revision
+  exhaustion;
+- every invalid geometry class covering view/window bounds, safe-area insets,
+  scale, drawable bounds, and drawable-to-view mismatch;
+- the exact tvOS and visionOS input capability sets rather than representative
+  samples;
+- every reserved tvOS command and Menu path produces no remote-delivery effect;
+- all 16 controller leases are sorted and removed before the single held-input
+  release barrier;
+- runtime ownership, snapshot, and effect aggregates carrying session,
+  generation, surface, controller, or release state do not conform to
+  `Encodable`; only selected bounded raw-value enums cross the tested encoding
+  boundary, and their JSON is size-bounded and free of identity or credential
+  terms.
+
+Task 1.5 verification used fresh isolated evidence:
+
+- focused macOS tests: `58/58` passed, with zero skips, failures, expected
+  failures, or structured build diagnostics;
+- complete macOS normal suite: `961 total / 960 passed / 1 skipped / 0 failed`,
+  with the sole skip being the explicit real-Keychain round trip and both real
+  Keychain and live-host opt-ins unset;
+- macOS and fixed iOS 26.4 iPhone/iPad, tvOS 26.4 Apple TV, and visionOS 26.4
+  Vision Pro Debug builds: all `succeeded`, with zero structured errors,
+  warnings, or analyzer warnings and one AIR plus one metallib artifact each.
+
+The fixed simulator UUIDs were build destinations only. Task 1.5 did not query
+simulator inventory or perform create, clone, boot, install, launch, run,
+shutdown, or delete operations. These tests and builds do not prove actual
+tvOS/visionOS handlers, surface/window observation, remote delivery, physical
+controller capacity, device HDR or spatial audio, signed installation, or live
+Sunshine behavior.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

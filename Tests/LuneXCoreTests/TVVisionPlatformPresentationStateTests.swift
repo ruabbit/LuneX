@@ -440,6 +440,215 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
         }
     }
 
+    func testEveryGenerationDomainRejectsZeroAndExhaustion() throws {
+        for domain in TVVisionGenerationDomain.allCases {
+            XCTAssertThrowsError(try TVVisionGeneration(
+                domain: domain,
+                rawValue: 0
+            )) { error in
+                XCTAssertEqual(
+                    error as? TVVisionPlatformContractError,
+                    .invalidGeneration(domain)
+                )
+            }
+            let exhausted = try TVVisionGeneration(
+                domain: domain,
+                rawValue: .max
+            )
+            XCTAssertThrowsError(try exhausted.advanced()) { error in
+                XCTAssertEqual(
+                    error as? TVVisionPlatformContractError,
+                    .generationExhausted(domain)
+                )
+            }
+        }
+    }
+
+    func testGeometryRejectsEveryFiniteAndBoundedFailureClass() throws {
+        let validView = TVVisionRect(x: 0, y: 0, width: 100, height: 50)
+        let validDrawable = PixelSize(width: 200, height: 100)
+
+        func geometry(
+            view: TVVisionRect = TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 50
+            ),
+            window: TVVisionRect = TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 50
+            ),
+            insets: TVVisionEdgeInsets = .zero,
+            scale: Double = 2,
+            drawable: PixelSize = PixelSize(width: 200, height: 100)
+        ) throws -> TVVisionSurfaceGeometry {
+            try TVVisionSurfaceGeometry(
+                platform: .visionOS,
+                surfaceGeneration: generation(.surface, 1),
+                viewBounds: view,
+                windowBounds: window,
+                safeAreaInsets: insets,
+                scale: scale,
+                drawableSize: drawable
+            )
+        }
+
+        let cases: [(
+            view: TVVisionRect,
+            window: TVVisionRect,
+            insets: TVVisionEdgeInsets,
+            scale: Double,
+            drawable: PixelSize,
+            error: TVVisionGeometryValidationError
+        )] = [
+            (
+                TVVisionRect(x: .infinity, y: 0, width: 100, height: 50),
+                validView,
+                .zero,
+                2,
+                validDrawable,
+                .invalidViewBounds
+            ),
+            (
+                TVVisionRect(x: 0, y: 0, width: 0, height: 50),
+                validView,
+                .zero,
+                2,
+                validDrawable,
+                .invalidViewBounds
+            ),
+            (
+                validView,
+                TVVisionRect(x: 0, y: 0, width: 100, height: .nan),
+                .zero,
+                2,
+                validDrawable,
+                .invalidWindowBounds
+            ),
+            (
+                validView,
+                validView,
+                TVVisionEdgeInsets(
+                    top: .nan,
+                    leading: 0,
+                    bottom: 0,
+                    trailing: 0
+                ),
+                2,
+                validDrawable,
+                .invalidSafeAreaInsets
+            ),
+            (
+                validView,
+                validView,
+                TVVisionEdgeInsets(
+                    top: 0,
+                    leading: 60,
+                    bottom: 0,
+                    trailing: 60
+                ),
+                2,
+                validDrawable,
+                .invalidSafeAreaInsets
+            ),
+            (validView, validView, .zero, .nan, validDrawable, .invalidScale),
+            (validView, validView, .zero, 0, validDrawable, .invalidScale),
+            (
+                validView,
+                validView,
+                .zero,
+                TVVisionSurfaceGeometry.maximumScale + 1,
+                validDrawable,
+                .invalidScale
+            ),
+            (
+                validView,
+                validView,
+                .zero,
+                2,
+                PixelSize(width: 0, height: 100),
+                .invalidDrawableSize
+            ),
+            (
+                validView,
+                validView,
+                .zero,
+                2,
+                PixelSize(
+                    width: TVVisionSurfaceGeometry.maximumDrawableDimension + 1,
+                    height: 100
+                ),
+                .invalidDrawableSize
+            ),
+            (
+                validView,
+                validView,
+                .zero,
+                2,
+                PixelSize(width: 201, height: 100),
+                .drawableSizeMismatch
+            )
+        ]
+
+        for value in cases {
+            XCTAssertThrowsError(try geometry(
+                view: value.view,
+                window: value.window,
+                insets: value.insets,
+                scale: value.scale,
+                drawable: value.drawable
+            )) { error in
+                XCTAssertEqual(
+                    error as? TVVisionPlatformContractError,
+                    .invalidGeometry(value.error)
+                )
+            }
+        }
+    }
+
+    func testInputCapabilityMatrixIsExactForEachPlatform() throws {
+        let allowed: [TVVisionPlatform: Set<TVVisionInputCapability>] = [
+            .tvOS: [.tvRemote, .extendedGamepad, .microGamepad, .keyboard],
+            .visionOS: [
+                .extendedGamepad,
+                .microGamepad,
+                .keyboard,
+                .pointer,
+                .indirectPointer
+            ]
+        ]
+
+        for platform in TVVisionPlatform.allCases {
+            for capability in TVVisionInputCapability.allCases {
+                let create = {
+                    try TVVisionInputCapabilitySnapshot(
+                        platform: platform,
+                        revision: self.semanticRevision(),
+                        inputGeneration: self.generation(.input, 1),
+                        supported: [capability],
+                        focusEligibility: .eligible
+                    )
+                }
+                if allowed[platform, default: []].contains(capability) {
+                    XCTAssertNoThrow(try create())
+                } else {
+                    XCTAssertThrowsError(try create()) { error in
+                        XCTAssertEqual(
+                            error as? TVVisionPlatformContractError,
+                            .unsupportedInputCapability(
+                                platform: platform,
+                                capability: capability
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     private struct PresentationValues {
         let ownership: TVVisionPresentationOwnership
         let revision: TVVisionSemanticRevision

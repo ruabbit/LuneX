@@ -431,6 +431,69 @@ final class VisionWindowInputContractTests: XCTestCase {
         }
     }
 
+    func testRuntimeOwnershipAggregatesAreNotEncodable() {
+        let runtimeTypes: [Any.Type] = [
+            TVVisionPresentationOwnership.self,
+            TVVisionPlatformPresentationSnapshot.self,
+            TVRemoteCaptureState.self,
+            TVRemoteCaptureEffect.self,
+            VisionWindowInputSnapshot.self,
+            VisionWindowInputOwnershipState.self,
+            VisionInputReleaseEffect.self
+        ]
+
+        for type in runtimeTypes {
+            XCTAssertFalse(
+                type is any Encodable.Type,
+                "Runtime ownership type \(type) must not become persistable"
+            )
+        }
+    }
+
+    func testOnlyBoundedRawPlatformEnumsCrossTheEncodingBoundary() throws {
+        let rawTypes: [Any.Type] = [
+            TVRemoteReservedCommand.self,
+            TVRemoteReservedDisposition.self
+        ]
+        for type in rawTypes {
+            XCTAssertTrue(type is any Encodable.Type)
+        }
+
+        let encoder = JSONEncoder()
+        let payloads = [
+            try encoder.encode(TVRemoteReservedCommand.allCases),
+            try encoder.encode([
+                TVRemoteReservedDisposition.showOverlayOrExitCapture,
+                .deferToSystem,
+                .ignoreLocally
+            ])
+        ]
+        let forbiddenTerms = [
+            "host",
+            "endpoint",
+            "uuid",
+            "window",
+            "scene",
+            "controller",
+            "gesture",
+            "credential",
+            "secret"
+        ]
+
+        for payload in payloads {
+            XCTAssertLessThanOrEqual(payload.count, 512)
+            let json = try XCTUnwrap(
+                String(data: payload, encoding: .utf8)?.lowercased()
+            )
+            for term in forbiddenTerms {
+                XCTAssertFalse(
+                    json.contains(term),
+                    "Encoded platform enum leaked forbidden term \(term)"
+                )
+            }
+        }
+    }
+
     private func ownership(
         platform: TVVisionPlatform = .visionOS,
         presentationGeneration: TVVisionGeneration? = nil,
