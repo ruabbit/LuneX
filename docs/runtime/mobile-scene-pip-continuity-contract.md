@@ -1153,6 +1153,23 @@ not prove signing, installation, system PiP, background duration, Stage
 Manager, visible EDR, physical input or spatial audio, power/thermal behavior,
 or live Sunshine interoperability.
 
+OpenSpec task 6.3 repository/API evidence is retained at
+`/tmp/LuneX-17-6_3-repository.NHQpyc`. It passes fixture self/tree validation,
+OpenSpec strict 8/8, stable generator SHA-256, complete source/test membership,
+reference and package isolation, byte-identical pinned ENet plus license
+verification, the single iOS `audio` plist declaration, bounded privacy and
+forbidden-API checks, a direct iOS 26.4 UIKit/AVKit/AVFoundation/EDR probe, and
+strict AVKit/ENet bridge and vendor compilation against four Apple SDKs. The
+macOS Debug and Release analyzers are retained under
+`/tmp/LuneX-17-6_3-analyzer.ZbHqMU`; both succeeded with zero errors and zero
+compiler warnings. Each reported the same four findings, all in byte-identical
+pinned ENet: three unused stores and one generic nullable-argument path in
+`unix.c`. LuneX first-party sources and bridges have zero analyzer findings;
+the production bridge does not call the raw socket receive API, and ENet's only
+production call passes both address arguments. The third-party finding remains
+recorded as residual dependency risk rather than being hidden or described as
+a zero-finding analysis.
+
 ## Target ownership model
 
 Stage 17 will use the following ownership chain:

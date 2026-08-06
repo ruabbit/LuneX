@@ -2760,3 +2760,18 @@
 - repository pre-gate `/tmp/LuneX-17-6_2-repository-pre.MR2Y1N`从头通过fixture self/tree、OpenSpec strict `8/8`与勾选前apply `30/36 next 6.2`、generator三次稳定SHA-256、十build/Metal/plist/simulator、Keychain opt-in未设置和`git diff --check`。
 - OpenSpec 6.2已勾选，预期权威进度`31/36`、next 6.3。unsigned build-only证据不证明签名安装、system PiP、background duration、Stage Manager、visible EDR、物理输入/空间音频、功耗/热状态或live Sunshine。
 - 勾选后final-state `/tmp/LuneX-17-6_2-final-state.lP9mOL`通过fixture、OpenSpec strict `8/8`、apply精确`31/36 next 6.3`、generator/docs、十build/Metal、simulator不变、Keychain opt-in未设置和diff检查。首轮final-state包装器仅在shell启动前因Markdown反引号触发JavaScript解析错误，未执行任何门禁或设备操作。
+
+## 2026-08-06 阶段 17 任务 6.2 提交与 6.3 启动
+
+- 6.2提交为`db4255c Verify mobile continuity platform builds`并成功推送；fetch后`HEAD == origin/main == db4255c9f5e49fb93780eb256d6df93422fa613e`，工作树clean。
+- OpenSpec apply为`31/36 ready`、next精确6.3。6.3限定为repository/static analyzer门，不重复6.2 build、不运行normal/sanitizer/resource、不访问真实Keychain或查询/操作simulator。
+
+## 2026-08-06 阶段 17 任务 6.3 完成
+
+- repository/API gate `/tmp/LuneX-17-6_3-repository.NHQpyc`从头通过fixture self/tree、OpenSpec strict `8/8`与勾选前apply `31/36 next 6.3`、generator稳定SHA-256、全部source/test membership、clean-room/reference/SPM隔离、固定ENet revision/license/逐文件一致、iOS单一`audio` source plist、privacy/forbidden API、iOS mobile public API probe和四SDK AVKit/ENet strict compile。
+- iOS API probe覆盖effective scene geometry、potential/current EDR headroom、registered trait changes、sample-buffer renderer及sample-buffer PiP content source/controller；只提供iOS 26.4 SDK availability，不声称物理runtime active。
+- macOS Debug/Release analyzer保存在`/tmp/LuneX-17-6_3-analyzer.ZbHqMU`，两项均`succeeded`、0 error、0 compiler warning、4 analyzer finding。normalized finding逐项一致且全部属于byte-identical固定ENet；LuneX自有Sources与bridge finding为0。
+- ENet 4项为3个unused store及1个`unix.c` generic nullable local-address dereference；production bridge不调用raw socket receive，vendor唯一production调用同时传入peer/local address，因此当前调用路径受约束，但finding仍作为第三方残余风险保留。
+- 历史strict C命令搜索首轮因`rg`模式以`-W`开头被当作选项退出，只读查询未影响编译；改用`rg --`后完成。普通环境无任何`LUNEX_*`opt-in，本项没有运行测试、访问Keychain或查询/操作simulator。
+- OpenSpec 6.3已勾选，预期权威进度`32/36`、next 6.4；下一步运行勾选后的final-state gate并独立提交推送。
+- 勾选后final-state `/tmp/LuneX-17-6_3-final-state.U9aRrJ`通过fixture self/tree、OpenSpec strict `8/8`、apply精确`32/36 next 6.4`、generator、repository/API retained evidence、Debug/Release analyzer归属、docs、Keychain opt-in未设置和`git diff --check`。

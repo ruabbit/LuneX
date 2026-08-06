@@ -2263,3 +2263,10 @@
 - 十配置正式读回全部为`succeeded/0 errors/0 warnings/0 analyzer warnings`，每项各有一份AIR和metallib；iPhone/iPad产品确认为`iphonesimulator`、`UIDeviceFamily [1,2]`和单一`audio`后台模式，macOS/tvOS/visionOS均无`UIBackgroundModes`。这证明SDK/配置/设备族构建边界，不证明签名或运行时行为。
 - simulator pre/post规范化清单完全一致且SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定iPhone/iPad仍唯一、available、`Shutdown`，全局`Booted=0`。本项只进行了一次post只读查询，没有设备生命周期操作。
 - pre-gate `/tmp/LuneX-17-6_2-repository-pre.MR2Y1N`通过fixture、OpenSpec strict `8/8`、勾选前apply `30/36 next 6.2`、generator稳定、十build/Metal/plist/simulator、Keychain opt-in和diff检查。勾选后权威进度应为`31/36`、next 6.3。
+
+## 2026-08-06 阶段 17 任务 6.3 边界
+
+- repository/API gate `/tmp/LuneX-17-6_3-repository.NHQpyc`通过fixture self/tree、OpenSpec strict `8/8`与勾选前apply `31/36 next 6.3`、generator四份哈希一致、全部source/test membership、reference/SPM隔离、固定ENet revision/license/18个上游文件逐字一致、iOS单一`audio` plist、隐私/禁止global-screen或动态private API、iOS 26.4 mobile public API probe和四SDK自有bridge/ENet strict C compile。
+- iOS public API probe直接编译`UIWindowScene.effectiveGeometry.interfaceOrientation`、attached `UIScreen` EDR headroom、registered trait changes、`AVSampleBufferDisplayLayer.sampleBufferRenderer`及sample-buffer PiP content source/controller，提供SDK availability证据；它不证明controller possible、系统PiP或visible EDR运行。
+- Debug/Release analyzer `/tmp/LuneX-17-6_3-analyzer.ZbHqMU`均成功且0 error/0 compiler warning；各4项finding逐项一致，全部位于byte-identical固定ENet：3项unused store和1项`unix.c` generic nullable local-address dereference。LuneX bridge只调用`enet_host_service`，vendor唯一production `enet_socket_receive`调用同时传入peer/local address，因此当前调用路径受约束；仍保留为第三方残余风险而非声称零finding。
+- 勾选6.3后权威进度应为`32/36`、next 6.4。6.3不运行normal/sanitizer/resource或simulator，不访问真实Keychain，也不替代6.6物理验收。
