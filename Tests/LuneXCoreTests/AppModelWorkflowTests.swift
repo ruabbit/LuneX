@@ -2290,6 +2290,117 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    func testTVVisionGeometryQueueKeepsLatestReplacementAndRejectsLateSurface()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            blocksFirstTVVisionActivation: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 75,
+                    key: Data(repeating: 0x75, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+        )
+        await waitUntil { mediaEnvironment.hasBlockedTVVisionActivation() }
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 2
+            )
+        )
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 2,
+                revision: 1
+            )
+        )
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 3
+            )
+        )
+        let lateFirstSurface = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 99
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            lateFirstSurface,
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+
+        mediaEnvironment.resumeBlockedTVVisionActivation()
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 3
+        }
+        let applications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(
+            applications.map(\.ownership.presentationGeneration.rawValue),
+            [1, 2, 2]
+        )
+        XCTAssertEqual(applications[0].action, .activate)
+        XCTAssertEqual(applications[1].action, .activate)
+        guard case let .scene(replacementScene) = applications[2].action else {
+            return XCTFail("Expected only the replacement scene to be applied.")
+        }
+        XCTAssertEqual(replacementScene.surfaceGeneration.rawValue, 2)
+        XCTAssertEqual(replacementScene.revision.rawValue, 1)
+
+        let replacement = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 2,
+            sequence: 1
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            replacement,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.tvVisionPlatformPresentationState == replacement }
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            lateFirstSurface,
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(model.tvVisionPlatformPresentationState, replacement)
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
     func testTVVisionApplicationFailurePreservesConsumedTerminalStateUntilStop()
         async throws {
         let provider = ControlledSessionControlProvider()
@@ -5350,6 +5461,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private let automaticallyReady: Bool
     private let failsLifecycleApplication: Bool
     private let failsInputSend: Bool
+    private let blocksFirstTVVisionActivation: Bool
     private let blocksFailingTVVisionActivationAfterTerminalEvent: Bool
     private var startRecords: [StartRecord] = []
     private var stoppedSessionIDs: [UUID] = []
@@ -5367,16 +5479,20 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var blockedStopContinuation: CheckedContinuation<Void, Never>?
     private var blockedTVVisionActivationContinuation:
         CheckedContinuation<Void, Never>?
+    private var shouldBlockTVVisionActivation: Bool
 
     init(
         automaticallyReady: Bool = true,
         failsLifecycleApplication: Bool = false,
         failsInputSend: Bool = false,
+        blocksFirstTVVisionActivation: Bool = false,
         blocksFailingTVVisionActivationAfterTerminalEvent: Bool = false
     ) {
         self.automaticallyReady = automaticallyReady
         self.failsLifecycleApplication = failsLifecycleApplication
         self.failsInputSend = failsInputSend
+        self.blocksFirstTVVisionActivation = blocksFirstTVVisionActivation
+        shouldBlockTVVisionActivation = blocksFirstTVVisionActivation
         self.blocksFailingTVVisionActivationAfterTerminalEvent =
             blocksFailingTVVisionActivationAfterTerminalEvent
     }
@@ -5475,6 +5591,19 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         }
         withLock {
             tvVisionPlatformPresentationApplications.append(application)
+        }
+        if blocksFirstTVVisionActivation,
+           application.action == .activate,
+           withLock({
+               guard shouldBlockTVVisionActivation else { return false }
+               shouldBlockTVVisionActivation = false
+               return true
+           }) {
+            await withCheckedContinuation { continuation in
+                withLock {
+                    blockedTVVisionActivationContinuation = continuation
+                }
+            }
         }
         if blocksFailingTVVisionActivationAfterTerminalEvent,
            application.action == .activate {

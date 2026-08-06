@@ -2484,3 +2484,20 @@
 - corrected repository pre-gate `/tmp/LuneX-18-2_5-repository-pre-r2.27GQDW`通过strict`9/9`、generator稳定、精确scope、ownership、privacy、reference、opt-in、process和diff边界；首轮错误fixture根不构成源码失败。
 - 2.5证明current-generation media/AppModel application和unsigned SDK branch compatibility，不证明actual platform input/display/HDR/audio adapter、signed install、物理HDR/spatial/input、live Sunshine、性能、功耗、热状态或舒适度。
 - 勾选后的只读final-state `/tmp/LuneX-18-2_5-final-state-r2.6tknnX`确认OpenSpec`11/50 next 2.6`、13文件scope和全部保留证据一致；首轮只暴露`jq`表达式优先级错误，未改变仓库或重复运行验收。
+
+## 2026-08-07 阶段 18 任务 2.6 覆盖审计
+
+- `StreamMetalPresenterTests`已覆盖actual attachment/detach、activity/visibility/focus-derived owner、geometry normalize/dedup/resize/close/recovery、stale/late callback和idempotent invalidation；无需在2.6复制同层用例。
+- `TVVisionPlatformPresentationCoordinatorTests`已覆盖complete/incomplete focus eligibility、FIFO application order、scene/display close order、replacement/late callback、action/sequence/revision failure和repeated stop；2.6应聚焦environment/AppModel跨层组合。
+- `AppModelWorkflowTests`当前只证明单次`activate -> scene`、event admission和三类stop reason；尚未证明多个排队geometry callback在挂起application期间只提交latest current ownership，也未证明late old surface在replacement后保持inert。
+- `NativeSessionMediaEnvironment.stop`和provider `fail`在task 2.5后会先await coordinator terminal effect，再将`active`清空。actor await期间第二个terminal caller可观察同一active session，因此需要共享current termination reservation，避免重复terminal admission或第二个caller丢失共享teardown report。
+- AppModel原有operation ID只会让已排队task在执行时自弃，不能阻止replacement已排队但尚未activate期间到达的old-surface callback成为新的最后operation；admission必须保留highest admitted presentation generation及同generation最高geometry revision直到runtime clear。
+- provider failure来自resource tracker拥有的consumer task，不能在failure路径同步等待完整tracker teardown，否则会self-join。共享terminal reservation只序列化coordinator terminal effect；finish event stream后异步tracker teardown，外部stop再等待同一report。
+- 人工审计发现geometry admission只保护queued application仍不足：replacement已排队、actual activation未提交时，旧ownership的platform state event仍可能通过actual ownership guard并短暂更新UI。event admission也必须拒绝低于highest admitted presentation generation的snapshot。
+- 首轮repository pre-gate保存的`openspec-validate.json`实际为`9 items / 9 passed / 0 failed`且每项`valid=true`；包装器把数组上下文误当根对象再次访问`.items[]`后退出。该失败只属于门禁断言，修正时复用已保存的OpenSpec诊断并从新目录完成其余只读/生成器检查，不重跑成功的测试和五平台构建。
+
+## 2026-08-07 阶段 18 任务 2.6 验收
+
+- corrected repository pre-gate `/tmp/LuneX-18-2_6-repository-pre-r2.MNeROJ`通过fixtures、strict `9/9`、pre-mark `11/50 next 2.6`、四次稳定generator哈希、精确九文件scope、production/test semantics、retained `3/3`、`88/88`、`999/998/1/0`、五平台Debug/Metal、opt-in/reference/process及diff边界。
+- 2.6证明current media generation内terminal first-wins/shared report及AppModel replacement/geometry/event admission的确定性所有权；它不证明actual Siri Remote/controller capture、物理tvOS/visionOS输入、HDR、空间音频、signed install、live Sunshine或性能功耗。OpenSpec已勾选为预期`12/50 next 3.1`。
+- 勾选后只读final-state `/tmp/LuneX-18-2_6-final-state.Opv4SF`确认OpenSpec `12/50 next 3.1`、精确十文件scope、project hash与全部retained evidence/boundary一致；没有重复测试、构建、generator或simulator操作。

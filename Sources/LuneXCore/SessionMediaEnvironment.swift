@@ -266,6 +266,12 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var task: Task<SessionTeardownReport?, Never>
     }
 
+    private struct ActiveTerminationOperation {
+        var sessionID: UUID
+        var generation: UInt64
+        var task: Task<Void, Never>
+    }
+
     private struct StartingSession {
         var sessionID: UUID
         var generation: UInt64
@@ -288,6 +294,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     private let videoProcessorFactory: any SessionVideoProcessorCreating
     private let audioProcessorFactory: any SessionAudioProcessorCreating
     private let videoPresentationSource: StreamVideoPresentationSource?
+    private let tvVisionPlatformCoordinatorFactory:
+        @Sendable () throws -> TVVisionPlatformPresentationCoordinator
     private let teardownGracePeriod: Duration
 
     private var active: ActiveSession?
@@ -295,6 +303,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     private var lastTeardownReport: SessionTeardownReport?
     private var lastStoppedSessionID: UUID?
     private var teardownOperation: TeardownOperation?
+    private var activeTerminationOperation: ActiveTerminationOperation?
     private var lifecycleOperation: LifecycleOperation?
     private var mobileRuntimeOperation: MobileRuntimeOperation?
     private var startingSession: StartingSession?
@@ -307,6 +316,10 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         videoProcessorFactory: any SessionVideoProcessorCreating,
         audioProcessorFactory: any SessionAudioProcessorCreating,
         videoPresentationSource: StreamVideoPresentationSource? = nil,
+        tvVisionPlatformCoordinatorFactory: @escaping @Sendable () throws
+            -> TVVisionPlatformPresentationCoordinator = {
+                try TVVisionPlatformPresentationCoordinator()
+            },
         teardownGracePeriod: Duration = .seconds(2)
     ) {
         self.videoReceiveProvider = videoReceiveProvider
@@ -315,6 +328,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         self.videoProcessorFactory = videoProcessorFactory
         self.audioProcessorFactory = audioProcessorFactory
         self.videoPresentationSource = videoPresentationSource
+        self.tvVisionPlatformCoordinatorFactory =
+            tvVisionPlatformCoordinatorFactory
         self.teardownGracePeriod = teardownGracePeriod
     }
 
@@ -441,7 +456,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             )
             let feedbackStream = await remoteInputProvider.feedback(sessionID: sessionID)
             let tvVisionPlatformCoordinator =
-                try TVVisionPlatformPresentationCoordinator()
+                try tvVisionPlatformCoordinatorFactory()
             guard startingSession?.sessionID == sessionID,
                   startingSession?.generation == mediaGeneration,
                   !cancelledStartingGenerations.contains(mediaGeneration) else {
@@ -1079,6 +1094,14 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
 
     @discardableResult
     func stop(sessionID: UUID) async -> SessionTeardownReport? {
+        if let operation = activeTerminationOperation,
+           operation.sessionID == sessionID {
+            await operation.task.value
+            return await completedTeardownReport(
+                sessionID: sessionID,
+                generation: operation.generation
+            )
+        }
         guard let active else {
             if let startingSession,
                startingSession.sessionID == sessionID {
@@ -1114,6 +1137,39 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             return lastStoppedSessionID == sessionID ? lastTeardownReport : nil
         }
         guard active.sessionID == sessionID else { return nil }
+
+        let generation = active.generation
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.prepareActiveStop(
+                sessionID: sessionID,
+                generation: generation
+            )
+        }
+        let operation = ActiveTerminationOperation(
+            sessionID: sessionID,
+            generation: generation,
+            task: task
+        )
+        activeTerminationOperation = operation
+        await task.value
+        if activeTerminationOperation?.sessionID == sessionID,
+           activeTerminationOperation?.generation == generation {
+            activeTerminationOperation = nil
+        }
+        return await completedTeardownReport(
+            sessionID: sessionID,
+            generation: generation
+        )
+    }
+
+    private func prepareActiveStop(
+        sessionID: UUID,
+        generation: UInt64
+    ) async {
+        guard let active,
+              active.sessionID == sessionID,
+              active.generation == generation else { return }
         if let ownership = active.tvVisionPlatformOwnership {
             let outcome = await active.tvVisionPlatformCoordinator.stop(
                 ownership: ownership,
@@ -1126,7 +1182,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         }
         guard let current = self.active,
               current.sessionID == sessionID,
-              current.generation == active.generation else { return nil }
+              current.generation == generation else { return }
         current.tvVisionPlatformSubscription?.cancel()
         let operation = makeTeardownOperation(for: current)
         self.active = nil
@@ -1134,8 +1190,22 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         mobileRuntimeOperation = nil
         teardownOperation = operation
         current.continuation.finish()
+    }
+
+    private func completedTeardownReport(
+        sessionID: UUID,
+        generation: UInt64
+    ) async -> SessionTeardownReport? {
+        guard let operation = teardownOperation,
+              operation.sessionID == sessionID,
+              operation.generation == generation else {
+            return lastStoppedSessionID == sessionID
+                ? lastTeardownReport
+                : nil
+        }
         let report = await operation.task.value
-        if teardownOperation?.generation == operation.generation {
+        if teardownOperation?.sessionID == sessionID,
+           teardownOperation?.generation == operation.generation {
             teardownOperation = nil
         }
         lastTeardownReport = report
@@ -1227,6 +1297,42 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     }
 
     private func fail(
+        _ error: Error,
+        sessionID: UUID,
+        generation: UInt64
+    ) async {
+        if let operation = activeTerminationOperation,
+           operation.sessionID == sessionID,
+           operation.generation == generation {
+            await operation.task.value
+            return
+        }
+        guard let active,
+              active.sessionID == sessionID,
+              active.generation == generation else { return }
+
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.prepareActiveFailure(
+                error,
+                sessionID: sessionID,
+                generation: generation
+            )
+        }
+        let operation = ActiveTerminationOperation(
+            sessionID: sessionID,
+            generation: generation,
+            task: task
+        )
+        activeTerminationOperation = operation
+        await task.value
+        if activeTerminationOperation?.sessionID == sessionID,
+           activeTerminationOperation?.generation == generation {
+            activeTerminationOperation = nil
+        }
+    }
+
+    private func prepareActiveFailure(
         _ error: Error,
         sessionID: UUID,
         generation: UInt64

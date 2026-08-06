@@ -3000,3 +3000,23 @@
 - repository pre-gate首轮`/tmp/LuneX-18-2_5-repository-pre.CbrOkr`因误把fixture根设为`.`而扫描既有build/reference/docs后退出；修正为权威fixture根后，`/tmp/LuneX-18-2_5-repository-pre-r2.27GQDW`通过fixtures、strict`9/9`、pre-mark`10/50 next 2.5`、四次generator稳定哈希、scope、ownership/privacy/reference/opt-in/process和diff门。
 - 已同步runtime contract、roadmap和三份planning并勾选OpenSpec 2.5；预期权威状态`11/50 ready`、next 2.6，下一步只读final-state，不重复test/build或simulator操作。
 - final-state首轮`/tmp/LuneX-18-2_5-final-state.GOe1Eq`因`jq`管道优先级在OpenSpec JSON解析处退出，尚未读任何xcresult；修正后的`/tmp/LuneX-18-2_5-final-state-r2.6tknnX`只读通过strict`9/9`、`11/50 next 2.6`、13/13 scope、project hash、focused`8/8`、normal`996/995/1/0`、五平台/Metal和全部边界，未重复test/build/generator或simulator操作。
+- 2.5已提交推送为`2157eb7`并fetch确认`HEAD == origin/main`、工作树clean；OpenSpec为`11/50 ready`、next 2.6。
+- 启动2.6覆盖审计：surface/coordinator单层矩阵已完整，缺少AppModel queued geometry replacement/late callback及active platform owner下concurrent terminal teardown的跨层测试。发现stop/fail在`active=nil`前新增actor await的潜在重入窗口，将先以测试复现再最小修复。
+- 系统更新后恢复确认Xcode 26.4与macOS/iOS/tvOS/visionOS 26.4 SDK可用，`HEAD == origin/main == 2157eb7`；未查询或操作simulator，真实Keychain/live-host opt-in仍禁用。
+- 2.6首轮实现加入generation-scoped共享termination operation和可注入coordinator factory；新增active platform双stop及provider-failure/stop竞态测试，要求单terminal effect、共享clean report、重复stop复用、subscription归零与五类resource各停一次。
+- AppModel新增surface ownership + geometry revision admission水位，避免replacement已排队但activation尚挂起时late old surface反向成为最后operation；新增确定性挂起测试，预期只提交`activate(surface 1) -> activate(surface 2) -> scene(surface 2)`。
+- 下一步生成工程并运行warnings-as-errors focused编译/测试；当前修改尚未验收，OpenSpec 2.6保持未勾选。
+- focused首轮预检在生成工程和启动测试前发现外部TamaSwift iOS Simulator Release `xcodebuild` PID 32408，因共享Xcode资源主动退出且未干预外部进程；该目录没有有效构建证据，等待进程结束后从fresh目录运行。
+- focused第二轮`/tmp/LuneX-18-2_6-focused-second.MJ0oOv`在测试执行前发现两处相同Swift类型错误：`[weak self]`使terminal task推断为`Task<Void?, Never>`而reservation要求`Task<Void, Never>`；production其余编译未报告诊断。已改为显式task类型和`guard let self`，失败bundle不复用。
+- focused第三轮`/tmp/LuneX-18-2_6-focused-third.1wPd3H`已使production在warnings-as-errors下编译通过；0 tests前仅新增environment测试中8处async值位于XCTest同步autoclosure而编译失败。已改为先await局部变量再同步断言，失败bundle不复用。
+- focused第四轮`/tmp/LuneX-18-2_6-focused-fourth.EdK5uu`执行`3 total / 2 passed / 1 failed`：geometry queue和provider-failure/stop竞态通过；双stop唯一失败是测试误期望立即EOF，实际按合同先yield `.stopped(.localStop)`再结束。已改为显式验证terminal-before-end，production无需修改。
+- focused第五轮`/tmp/LuneX-18-2_6-focused-final.L6uHOF`仍为`3/2/1`，检查源码发现上一补丁命中前部另一个EOF断言，目标双stop用例未改变且旧无owner测试被错误加上terminal要求。已精确恢复旧断言并按资源计数上下文修改目标；两项其余测试继续通过。
+- fresh focused `/tmp/LuneX-18-2_6-focused-final-r2.jlY8sf`在Swift/Clang/Metal warnings-as-errors下结构化通过`3/3 passed / 0 skipped / 0 failed / 0 expected failure`。覆盖active platform双stop、provider-failure/stop first-terminal-wins和AppModel queued geometry replacement/late callback；下一步人工竞态审计并扩大既有surface/coordinator矩阵。
+- focused后人工审计补齐event层同一replacement窗口：AppModel现拒绝低于highest admitted geometry ownership的platform snapshot；跨层测试在replacement排队但activation仍挂起时及replacement完成后各注入一次late owner state，均要求保持inert。该production修订需fresh focused复验。
+- 审计修订后fresh `/tmp/LuneX-18-2_6-focused-final-r3.VB6cr5`继续通过`3/3`且零诊断；扩大相关矩阵`/tmp/LuneX-18-2_6-related-final.OQl0xr`结构化通过`88/88`、0 skip/fail/expected failure和0 warning/error，覆盖完整presenter/coordinator及相关environment/AppModel路径。
+- 人工actor审计确认：terminal reservation在首个coordinator await前发布；stop/fail race保持first terminal wins；provider failure只异步启动tracker teardown避免consumer self-join；并发/后续stop均取得同一cached report；AppModel admission在runtime clear前保持最高surface generation和同surface最高revision。
+- fresh normal `/tmp/LuneX-18-2_6-normal.rKKWHh`结构化通过`999 total / 998 passed / 1 skipped / 0 failed / 0 expected failure`且零诊断；唯一skip精确为真实Keychain opt-in测试，Keychain/live-host环境变量均unset。
+- 五平台Debug `/tmp/LuneX-18-2_6-builds.k6M12b`中macOS、固定iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 error/0 warning/0 analyzer warning`且各有AIR/metallib；UUID只作build destination，未查询或操作simulator lifecycle。
+- repository pre-gate首轮`/tmp/LuneX-18-2_6-repository-pre.2PfeAN`在fixture通过后因OpenSpec `jq`数组/根对象上下文混淆而退出；保存JSON读回确认`9/9 valid`，源码/OpenSpec没有失败。下一步以根对象断言从fresh目录执行未完成门禁，并复用focused、related、normal和五平台build证据。
+- 修正后的repository pre-gate `/tmp/LuneX-18-2_6-repository-pre-r2.MNeROJ`完整通过strict `9/9`、pre-mark `11/50 next 2.6`、四次稳定generator、精确scope、语义、retained tests/builds、opt-in/reference/process和diff门；OpenSpec 2.6已勾选，预期`12/50 ready`、next 3.1。下一步只读final-state，不重复test/build/generator或simulator操作。
+- 勾选后的只读final-state `/tmp/LuneX-18-2_6-final-state.Opv4SF`通过strict `9/9`、apply `12/50 next 3.1`、稳定project hash、精确十文件scope、retained focused/related/normal/五平台build及全部边界；2.6可独立提交推送，未重复test/build/generator或simulator操作。

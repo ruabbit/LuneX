@@ -484,6 +484,179 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(values.filter { $0 == "video.processor.stop" }.count, 0)
     }
 
+    func testConcurrentStopsShareActiveTVVisionAndResourceTeardown()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let source = StreamVideoPresentationSource()
+        let actionClient = SuspendingTVVisionPresentationActionClient(
+            suspending: .teardown
+        )
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: actionClient
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+        _ = try await iterator.next()
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 1)
+        let completions = StopCompletionRecorder()
+
+        let first = Task {
+            let report = await environment.stop(sessionID: sessionID)
+            await completions.record(report)
+            return report
+        }
+        await actionClient.waitUntilSuspended()
+        let second = Task {
+            let report = await environment.stop(sessionID: sessionID)
+            await completions.record(report)
+            return report
+        }
+        for _ in 0..<20 { await Task.yield() }
+        let pendingCompletionCount = await completions.count
+        XCTAssertEqual(pendingCompletionCount, 0)
+
+        await actionClient.resume()
+        let firstOptionalReport = await first.value
+        let secondOptionalReport = await second.value
+        let firstReport = try XCTUnwrap(firstOptionalReport)
+        let secondReport = try XCTUnwrap(secondOptionalReport)
+        XCTAssertEqual(firstReport, secondReport)
+        XCTAssertTrue(firstReport.isClean)
+        XCTAssertEqual(firstReport.stoppedResourceCount, 5)
+        let optionalDuplicateReport = await environment.stop(sessionID: sessionID)
+        let duplicateReport = try XCTUnwrap(optionalDuplicateReport)
+        XCTAssertEqual(duplicateReport, firstReport)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+        let optionalTerminal = await coordinator.snapshot()
+        let terminal = try XCTUnwrap(optionalTerminal)
+        XCTAssertEqual(terminal.phase, .stopped(.localStop))
+        XCTAssertEqual(terminal.teardownCount, 1)
+        let effects = await actionClient.effectKinds()
+        XCTAssertEqual(effects.filter { $0 == .teardown }.count, 1)
+        let values = await calls.values()
+        XCTAssertEqual(values.filter { $0 == "video.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "input.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "video.processor.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.processor.stop" }.count, 1)
+        guard case let .tvVisionPlatformPresentation(terminalEvent)? =
+                try await iterator.next() else {
+            return XCTFail("Expected terminal presentation before stream end.")
+        }
+        XCTAssertEqual(terminalEvent.snapshot.phase, .stopped(.localStop))
+        let ended = try await iterator.next()
+        XCTAssertNil(ended)
+    }
+
+    func testTVVisionProviderFailureAndStopShareOneTerminalTeardown()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let video = ControlledVideoReceiveProvider(calls: calls)
+        let source = StreamVideoPresentationSource()
+        let actionClient = SuspendingTVVisionPresentationActionClient(
+            suspending: .teardown
+        )
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: actionClient
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: video,
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+        _ = try await iterator.next()
+
+        video.finish(
+            sessionID: sessionID,
+            throwing: MediaEnvironmentTestError.receiverFailure
+        )
+        await actionClient.waitUntilSuspended()
+        let stopTask = Task { await environment.stop(sessionID: sessionID) }
+        for _ in 0..<20 { await Task.yield() }
+        await actionClient.resume()
+
+        guard case let .tvVisionPlatformPresentation(terminalEvent)? =
+                try await iterator.next() else {
+            return XCTFail("Expected the shared terminal snapshot before failure.")
+        }
+        XCTAssertEqual(terminalEvent.snapshot.phase, .stopped(.failure))
+        do {
+            _ = try await iterator.next()
+            XCTFail("Expected the provider failure after the terminal snapshot.")
+        } catch {
+            XCTAssertEqual(error as? MediaEnvironmentTestError, .receiverFailure)
+        }
+        let optionalReport = await stopTask.value
+        let report = try XCTUnwrap(optionalReport)
+        XCTAssertTrue(report.isClean)
+        XCTAssertEqual(report.stoppedResourceCount, 5)
+        let optionalDuplicateReport = await environment.stop(sessionID: sessionID)
+        let duplicateReport = try XCTUnwrap(optionalDuplicateReport)
+        XCTAssertEqual(duplicateReport, report)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+        let optionalTerminal = await coordinator.snapshot()
+        let terminal = try XCTUnwrap(optionalTerminal)
+        XCTAssertEqual(terminal.phase, .stopped(.failure))
+        XCTAssertEqual(terminal.teardownCount, 1)
+        let effects = await actionClient.effectKinds()
+        XCTAssertEqual(effects.filter { $0 == .teardown }.count, 1)
+        let values = await calls.values()
+        XCTAssertEqual(values.filter { $0 == "video.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "input.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "video.processor.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.processor.stop" }.count, 1)
+    }
+
     func testDuplicateMobileRuntimeApplicationAwaitsOnePendingEffect()
         async throws {
         let calls = MediaEnvironmentCallRecorder()
@@ -2651,7 +2824,11 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         input: ControlledRemoteInputProvider,
         videoProcessorFactory: (any SessionVideoProcessorCreating)? = nil,
         audioProcessorFactory: (any SessionAudioProcessorCreating)? = nil,
-        videoPresentationSource: StreamVideoPresentationSource? = nil
+        videoPresentationSource: StreamVideoPresentationSource? = nil,
+        tvVisionPlatformCoordinatorFactory: @escaping @Sendable () throws
+            -> TVVisionPlatformPresentationCoordinator = {
+                try TVVisionPlatformPresentationCoordinator()
+            }
     ) -> NativeSessionMediaEnvironment {
         NativeSessionMediaEnvironment(
             videoReceiveProvider: video,
@@ -2662,6 +2839,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             audioProcessorFactory: audioProcessorFactory
                 ?? RecordingAudioProcessorFactory(calls: calls),
             videoPresentationSource: videoPresentationSource,
+            tvVisionPlatformCoordinatorFactory:
+                tvVisionPlatformCoordinatorFactory,
             teardownGracePeriod: .seconds(1)
         )
     }
@@ -2987,6 +3166,53 @@ private actor MediaEnvironmentCallRecorder {
 
     func values() -> [String] {
         calls
+    }
+}
+
+private actor SuspendingTVVisionPresentationActionClient:
+    TVVisionPlatformPresentationActionApplying
+{
+    private let suspendedKind: TVVisionPlatformPresentationEffectKind
+    private var applications: [TVVisionPlatformPresentationActionApplication] = []
+    private var didSuspend = false
+    private var isSuspended = false
+    private var suspensionWaiters: [CheckedContinuation<Void, Never>] = []
+    private var resumeContinuation: CheckedContinuation<Void, Never>?
+
+    init(suspending kind: TVVisionPlatformPresentationEffectKind) {
+        suspendedKind = kind
+    }
+
+    func apply(
+        _ application: TVVisionPlatformPresentationActionApplication
+    ) async throws {
+        applications.append(application)
+        guard !didSuspend, application.effect.kind == suspendedKind else { return }
+        didSuspend = true
+        isSuspended = true
+        let waiters = suspensionWaiters
+        suspensionWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        await withCheckedContinuation { continuation in
+            resumeContinuation = continuation
+        }
+        isSuspended = false
+    }
+
+    func waitUntilSuspended() async {
+        guard !isSuspended else { return }
+        await withCheckedContinuation { continuation in
+            suspensionWaiters.append(continuation)
+        }
+    }
+
+    func resume() {
+        resumeContinuation?.resume()
+        resumeContinuation = nil
+    }
+
+    func effectKinds() -> [TVVisionPlatformPresentationEffectKind] {
+        applications.map(\.effect.kind)
     }
 }
 

@@ -14,7 +14,7 @@
 - [x] 2.3 Publish one normalized geometry revision to drawable sizing, fit/fill rendering, and supported input reference mapping with semantic deduplication
 - [x] 2.4 Implement a serialized platform presentation coordinator for scene, input eligibility, decoded frames, display/HDR, audio route, diagnostics, replacement, and shared teardown
 - [x] 2.5 Connect current-generation presentation snapshots and bounded failures through `NativeSessionMediaEnvironment` and `AppModel`, clearing actual state on failure, reconnect, remote termination, and stop
-- [ ] 2.6 Add attachment, geometry, lifecycle, focus eligibility, application ordering, replacement, late callback, failure, and idempotent teardown tests
+- [x] 2.6 Add attachment, geometry, lifecycle, focus eligibility, application ordering, replacement, late callback, failure, and idempotent teardown tests
 
 ## 3. tvOS remote, focus, and controller runtime
 

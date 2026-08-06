@@ -124,6 +124,11 @@ enum ProductionRuntimeProviderFactory {
 @MainActor
 @Observable
 final class AppModel: ApplicationInputSink {
+    private struct TVVisionPlatformGeometryAdmission: Equatable {
+        let ownership: TVVisionPresentationOwnership
+        let update: TVVisionStreamGeometryBindingUpdate
+    }
+
     private let logger = Logger(subsystem: "dev.lunex.client", category: "app.model")
     var hosts: [MoonlightHost] = []
     var settings = AppSettings.defaults {
@@ -305,6 +310,8 @@ final class AppModel: ApplicationInputSink {
         Task<Void, Never>?
     @ObservationIgnored private var tvVisionPlatformApplicationOperationID:
         UUID?
+    @ObservationIgnored private var tvVisionPlatformGeometryAdmission:
+        TVVisionPlatformGeometryAdmission?
 #if os(iOS)
     @ObservationIgnored private var mobilePictureInPictureCoordinator:
         MobilePictureInPicturePresentationCoordinator?
@@ -633,13 +640,28 @@ final class AppModel: ApplicationInputSink {
                   inputGeneration: inputGeneration
               ) else { return }
 
-        if let current = tvVisionPlatformPresentationOwnership,
-           current.sessionID == sessionID,
-           current.mediaGeneration == mediaGeneration,
-           ownership.presentationGeneration
-            < current.presentationGeneration {
+        if let admission = tvVisionPlatformGeometryAdmission,
+           admission.ownership.sessionID == sessionID,
+           admission.ownership.mediaGeneration == mediaGeneration {
+            if ownership.presentationGeneration
+                < admission.ownership.presentationGeneration {
+                return
+            }
+            if ownership == admission.ownership,
+               update.revision.rawValue <= admission.update.revision.rawValue {
+                return
+            }
+        } else if let current = tvVisionPlatformPresentationOwnership,
+                  current.sessionID == sessionID,
+                  current.mediaGeneration == mediaGeneration,
+                  ownership.presentationGeneration
+                    < current.presentationGeneration {
             return
         }
+        tvVisionPlatformGeometryAdmission = TVVisionPlatformGeometryAdmission(
+            ownership: ownership,
+            update: update
+        )
         scheduleTVVisionPlatformGeometryApplication(
             update,
             ownership: ownership
@@ -2015,6 +2037,11 @@ final class AppModel: ApplicationInputSink {
             guard !Task.isCancelled,
                   let self,
                   self.tvVisionPlatformApplicationOperationID == operationID,
+                  self.tvVisionPlatformGeometryAdmission
+                    == TVVisionPlatformGeometryAdmission(
+                        ownership: ownership,
+                        update: update
+                    ),
                   self.activeStreamSessionID == ownership.sessionID,
                   self.activeMediaSessionID == ownership.sessionID,
                   self.activeMediaGeneration == ownership.mediaGeneration else {
@@ -2082,6 +2109,13 @@ final class AppModel: ApplicationInputSink {
               expectedTVVisionPlatform == snapshot.ownership.platform else {
             return
         }
+        if let admission = tvVisionPlatformGeometryAdmission,
+           admission.ownership.sessionID == sessionID,
+           admission.ownership.mediaGeneration == state.mediaGeneration,
+           snapshot.ownership.presentationGeneration
+            < admission.ownership.presentationGeneration {
+            return
+        }
         if let ownership = tvVisionPlatformPresentationOwnership {
             guard ownership == snapshot.ownership else { return }
         } else {
@@ -2121,6 +2155,7 @@ final class AppModel: ApplicationInputSink {
         tvVisionPlatformApplicationTask?.cancel()
         tvVisionPlatformApplicationTask = nil
         tvVisionPlatformApplicationOperationID = nil
+        tvVisionPlatformGeometryAdmission = nil
         tvVisionPlatformPresentationOwnership = nil
         guard preservingTerminalState,
               let phase = tvVisionPlatformPresentationState?.snapshot.phase else {
