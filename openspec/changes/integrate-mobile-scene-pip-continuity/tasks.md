@@ -45,7 +45,7 @@
 ## 6. Verification and acceptance
 
 - [x] 6.1 Run normal tests with live-host and real-Keychain opt-ins disabled and verify the only permitted skip remains the explicit real-Keychain test
-- [ ] 6.2 Build macOS, fixed iPhone, fixed iPad, tvOS, and visionOS Debug/Release with Swift, Clang, and Metal warnings as errors using isolated DerivedData/result bundles
+- [x] 6.2 Build macOS, fixed iPhone, fixed iPad, tvOS, and visionOS Debug/Release with Swift, Clang, and Metal warnings as errors using isolated DerivedData/result bundles
 - [ ] 6.3 Run OpenSpec strict, fixture, generator stability, source/test membership, clean-room/reference/license, generated plist, privacy, API availability, static analyzer, and repository-boundary gates
 - [ ] 6.4 Run ASan, TSan, malloc scribble/guard, PiP frame/backpressure release, scene/screen observer cancellation, generation replacement, and restoration-completion resource gates
 - [ ] 6.5 Verify fixed iPhone 17 Pro and iPad Pro 13-inch (M5) simulator identity and single-instance inventory, then run only the bounded simulator build/UI checks required by this change without creating or cloning devices

@@ -1136,6 +1136,23 @@ build errors, warnings, and analyzer warnings are zero. The pre-mark repository
 gate is `/tmp/LuneX-17-6_1-repository-pre.QcX64y`. This is normal-test proof,
 not physical mobile runtime acceptance.
 
+OpenSpec task 6.2 retained ten isolated warnings-as-errors builds under
+`/tmp/LuneX-17-6_2-builds.ORyQlN`: macOS, fixed iPhone 17 Pro, fixed iPad Pro
+13-inch (M5), tvOS, and visionOS, each in Debug and Release. Every structured
+build result is `succeeded` with zero errors, warnings, and analyzer warnings,
+and every configuration contains Metal AIR and metallib output. The iPhone and
+iPad products are `iphonesimulator` builds with `UIDeviceFamily = [1, 2]` and
+the single `audio` background mode; the other platform products have no
+`UIBackgroundModes` key. Normalized simulator inventories before and after the
+matrix have identical SHA-256
+`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`;
+both fixed devices remained unique, available, and shut down, with zero booted
+devices. The pre-mark gate is
+`/tmp/LuneX-17-6_2-repository-pre.MR2Y1N`. These unsigned build-only results do
+not prove signing, installation, system PiP, background duration, Stage
+Manager, visible EDR, physical input or spatial audio, power/thermal behavior,
+or live Sunshine interoperability.
+
 ## Target ownership model
 
 Stage 17 will use the following ownership chain:

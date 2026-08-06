@@ -2256,3 +2256,10 @@
 
 - 6.1只证明normal test路径在live-host与真实Keychain opt-in关闭时收敛，并要求唯一skip精确归属于显式真实Keychain round-trip；它不新增production实现，也不能替代6.2跨配置build或6.6物理移动设备验收。
 - 提交态normal suite通过`909/908/1/0`且唯一skip精确匹配真实Keychain用例；静态搜索确认测试树只有`LUNEX_RUN_KEYCHAIN_TEST`这一环境opt-in，当前环境无任何`LUNEX_*`变量。勾选6.1后权威进度应为`30/36`、next 6.2。
+
+## 2026-08-06 阶段 17 任务 6.2 边界
+
+- 6.2以固定iPhone/iPad simulator UUID作为build destination是SDK/架构/设备族编译证明，不需要也不得boot设备；macOS/tvOS/visionOS使用generic destination。十个Debug/Release产物都必须有独立DerivedData/xcresult并逐份串行读取diagnostics与Metal artifacts。
+- 十配置正式读回全部为`succeeded/0 errors/0 warnings/0 analyzer warnings`，每项各有一份AIR和metallib；iPhone/iPad产品确认为`iphonesimulator`、`UIDeviceFamily [1,2]`和单一`audio`后台模式，macOS/tvOS/visionOS均无`UIBackgroundModes`。这证明SDK/配置/设备族构建边界，不证明签名或运行时行为。
+- simulator pre/post规范化清单完全一致且SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定iPhone/iPad仍唯一、available、`Shutdown`，全局`Booted=0`。本项只进行了一次post只读查询，没有设备生命周期操作。
+- pre-gate `/tmp/LuneX-17-6_2-repository-pre.MR2Y1N`通过fixture、OpenSpec strict `8/8`、勾选前apply `30/36 next 6.2`、generator稳定、十build/Metal/plist/simulator、Keychain opt-in和diff检查。勾选后权威进度应为`31/36`、next 6.3。

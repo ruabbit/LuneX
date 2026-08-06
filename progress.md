@@ -2745,3 +2745,18 @@
 - 6.1提交态normal `/tmp/LuneX-17-6_1-normal.8bwnco/Normal.xcresult`通过`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`；唯一skip精确为真实Keychain round-trip，build status `succeeded`且error、warning、analyzer warning均为0。命令显式移除真实Keychain与live-host opt-in，未操作simulator。
 - 6.1 repository pre-gate `/tmp/LuneX-17-6_1-repository-pre.QcX64y`通过fixture、OpenSpec strict `8/8`与勾选前apply `29/36 next 6.1`、generator稳定、normal结果与唯一skip读回、全部opt-in未设置和diff检查。OpenSpec 6.1已勾选，预期权威进度`30/36`、next 6.2。
 - 6.1勾选后final-state `/tmp/LuneX-17-6_1-final-state.p8fbkL`通过fixture、OpenSpec strict `8/8`、apply精确`30/36 next 6.2`、generator稳定、合同/路线图当前态、normal `909/908/1/0`、唯一Keychain skip、全部opt-in未设置与diff检查；6.1可独立提交推送。
+
+## 2026-08-06 阶段 17 任务 6.1 提交与 6.2 启动
+
+- 6.1提交为`90fefbd Verify normal mobile continuity regression gate`并成功推送；fetch后`HEAD == origin/main == 90fefbd0bc4c52ed5af379b0b062c4f71af1cf5b`，工作树clean。
+- OpenSpec apply为`30/36 ready`、next 6.2。6.2将构建macOS、固定iPhone、固定iPad、tvOS、visionOS的Debug/Release十配置；所有build隔离、禁用签名、warnings-as-errors、移除Keychain/live opt-in，固定simulator只作build destination且不执行生命周期操作。
+
+## 2026-08-06 阶段 17 任务 6.2 完成
+
+- `/tmp/LuneX-17-6_2-builds.ORyQlN`保留macOS、固定iPhone、固定iPad、tvOS与visionOS的Debug/Release十个独立DerivedData/result bundle；五个Debug沿用系统更新前已成功证据，只补跑缺失的五个Release，未重复构建Debug。
+- 十份xcresult逐份串行结构化读回均为`succeeded / 0 errors / 0 warnings / 0 analyzer warnings`；每配置各有一份Metal AIR和metallib。iPhone/iPad产物为`iphonesimulator`、`UIDeviceFamily [1,2]`与单一`UIBackgroundModes [audio]`，其余平台无后台模式键。
+- 首轮xcresult包装器因zsh保留只读变量`status`在第一份读回时退出；没有重跑任何build，改用Bash和`build_status`后从原bundle完成十项验收。
+- 只执行一次post simulator inventory查询；pre/post规范化清单逐字一致，SHA-256同为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`。固定iPhone/iPad各唯一、available、`Shutdown`且全局`Booted=0`，未create/clone/boot/install/launch/shutdown/delete设备。
+- repository pre-gate `/tmp/LuneX-17-6_2-repository-pre.MR2Y1N`从头通过fixture self/tree、OpenSpec strict `8/8`与勾选前apply `30/36 next 6.2`、generator三次稳定SHA-256、十build/Metal/plist/simulator、Keychain opt-in未设置和`git diff --check`。
+- OpenSpec 6.2已勾选，预期权威进度`31/36`、next 6.3。unsigned build-only证据不证明签名安装、system PiP、background duration、Stage Manager、visible EDR、物理输入/空间音频、功耗/热状态或live Sunshine。
+- 勾选后final-state `/tmp/LuneX-17-6_2-final-state.lP9mOL`通过fixture、OpenSpec strict `8/8`、apply精确`31/36 next 6.3`、generator/docs、十build/Metal、simulator不变、Keychain opt-in未设置和diff检查。首轮final-state包装器仅在shell启动前因Markdown反引号触发JavaScript解析错误，未执行任何门禁或设备操作。

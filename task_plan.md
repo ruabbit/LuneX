@@ -51,7 +51,7 @@
 
 阶段16已在macOS 27.0/Xcode 26.4更新后恢复并进入`in_progress`。OpenSpec `integrate-spatial-audio-runtime`权威进度`34/35`：1.x至3.x的channel-layout、session-owned graph、平台策略、entitlement、route/capability adapter和observer矩阵已完成；4.1至4.6完成runtime到AppModel的generation-owned接线、恢复/replacement矩阵与合法WAVE 7.1 application gate；5.1至5.5完成设置、诊断、actual-runtime UI及responsive/localization/accessibility矩阵；6.1至6.5完成normal、十配置五平台build、strict/API/analyzer、完整ASan/TSan、11类malloc/resource与独立simulator门。6.7新增权威空间音频合同并同步路线图、entitlement/hardware说明和proof boundary；阶段级fresh normal再次通过`721 total / 720 passed / 1 Keychain skip / 0 failed`，strict/generator/sanitizer/resource/simulator组合门通过。唯一剩余6.6等待授权signed entitlement、AirPods、built-in/wired/HDMI、多声道识别、route transition、听感同步和live Sunshine物理证据；change不可archive、阶段不可标记complete。实现和测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`并使用Debug文件fallback；离线测试、属性赋值、编译或模拟器不能替代6.6。
 
-阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`28/36`。1.x至5.5已完成：actual UIKit scene/window/geometry/input、attached-screen mobile EDR、generation-scoped sample-buffer PiP、serialized legal continuity、media/AppModel application，以及typed actual-state/PiP commands/continuity Settings、compact/wide/accessibility/localization-safe UI和向后兼容迁移均已接线。5.5门为focused `9/9`、expanded `220/219/1/0`、fresh full `906/905/1/0`、四generic Debug零结构化诊断和repository pre-gate通过；普通测试未访问真实Keychain且没有操作simulator。下一项5.6补齐policy-loss、audio-only、active-PiP、foreground restore、replacement、diagnostic ownership、UI/accessibility/localization/migration与clean-stop扩展回归；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine保持pending。
+阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`31/36`。1.x至5.6的actual UIKit scene/window/geometry/input、attached-screen mobile EDR、generation-scoped sample-buffer PiP、serialized legal continuity、media/AppModel application、actual-state UI及完整跨层回归均已完成；6.1 normal为`909/908/1/0`且唯一skip是真实Keychain opt-in。6.2五平台Debug/Release十个隔离build全部为`succeeded/0/0/0`并各有AIR/metallib，iOS plist与simulator不变门通过。下一项6.3运行repository/static analyzer gates；6.6物理iPhone/iPad、系统PiP、Stage Manager、external display、visible EDR、power与live Sunshine保持pending。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -79,6 +79,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 17.6.2首轮final-state包装器含Markdown反引号导致JavaScript解析失败 | 1 | 失败发生在shell启动前，没有执行门禁或改变仓库/设备；改用不含反引号的固定语义匹配从头运行 |
+| 17.6.2首轮xcresult串行读回在zsh中把`status`用作局部变量 | 1 | 包装器在读取第一份结果时被zsh只读变量保护终止，未重跑或修改任何build；改用`/bin/bash`和`build_status`从原十份bundle重新验收 |
 | 17.5.1并行读取同一个full xcresult的summary/build/tests明细触发Xcode临时`database.sqlite3`同名冲突 | 1 | 测试与前两项结构化读回已成功且bundle未损坏；tests明细改为串行读取并精确确认唯一Keychain skip，后续同一bundle只串行访问 |
 | 17.4.7首轮repository pre-gate用`rg -c ... || true`断言零decoder匹配时得到空输出 | 1 | 前置fixtures/strict/apply/generator已通过但组合门不计验收；改用始终输出整数的`grep -Ec`并从全新目录完整重跑 |
 | 17.4.7首轮focused草案在`compactMap` Optional lease推断和只读`weak var`上被Swift 6.3 warnings-as-errors拒绝 | 1 | 显式标注`MobilePictureInPictureRestorationLease?` closure返回类型，并把释放观察改为`weak let`；production未报错，使用全新DerivedData/result bundle重跑 |
@@ -436,7 +438,7 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`30/36 in_progress`；1.x至5.6的actual mobile runtime与完整确定性跨层回归，以及6.1 normal/唯一Keychain skip门已完成。下一项6.2跨平台Debug/Release build；unsigned generic build仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`31/36 in_progress`；1.x至5.6、6.1 normal/唯一Keychain skip及6.2五平台Debug/Release十配置门已完成。下一项6.3 repository/static analyzer；unsigned build仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
 - macOS 27.0更新后已重新认证5.3：Xcode 26.4/macOS SDK 26.4下macOS全量`881/880/1/0`且唯一skip为禁用的真实Keychain用例，iOS Debug/Release generic build与built plist读回均通过；没有启动或修改simulator。
 - 阶段17任务5.4已于2026-08-06恢复并进入`in_progress`：先建立current session/media generation的scene/geometry/EDR/PiP/audio纯值application与serialized continuity action边界，再接入AppModel和iOS actual surface回调；stop/failure/replacement必须清空actual current state，UIKit/AVKit对象不得跨actor。5.5 UI与6.6物理证明保持在后续任务。
 - macOS 27.0更新结束后再次恢复5.4；当前第一门为串行结构化读回`/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult`。只有expanded、fresh full macOS、generic platform builds及repository gates全部通过后才允许勾选5.4并提交。
@@ -485,3 +487,15 @@
 - **自验：** `/tmp/LuneX-17-6_1-normal.8bwnco/Normal.xcresult`为`909/908/1/0`，唯一skip精确为显式真实Keychain round-trip，结构化build diagnostics为0；pre-gate `/tmp/LuneX-17-6_1-repository-pre.QcX64y`全部通过。
 - **最终状态门：** `/tmp/LuneX-17-6_1-final-state.p8fbkL`通过`30/36 next 6.2`、strict、generator、docs、normal、唯一skip、opt-in与diff检查。
 - **证明边界：** 真实Keychain/live-host opt-in均未设置，未查询或操作simulator；下一项6.2。
+
+## 2026-08-06 阶段 17 任务 6.2 启动
+
+- **状态：** `complete`
+- **基线：** 6.1已以`90fefbd Verify normal mobile continuity regression gate`提交并推送，`HEAD == origin/main`且工作树clean；OpenSpec为`30/36 ready`、next 6.2。
+- **矩阵：** macOS、固定iPhone 17 Pro、固定iPad Pro 13-inch (M5)、tvOS、visionOS各运行Debug/Release，共10个isolated DerivedData/result bundle；Swift/Clang/Metal warnings-as-errors且禁用签名。
+- **simulator约束：** 固定iPhone UUID `23A27088-C19F-4F77-A455-4E50E393167E`，固定iPad UUID `409A5908-8C39-4797-A41C-04503A05FA3D`；只作build destination，保存单次pre/post inventory并验证完全一致，不执行create/clone/boot/install/launch/shutdown/delete。
+- **自验：** `/tmp/LuneX-17-6_2-builds.ORyQlN`内十份xcresult均为`succeeded/0 errors/0 warnings/0 analyzer warnings`且各有AIR/metallib；iPhone/iPad为`iphonesimulator`、`UIDeviceFamily [1,2]`和单一`audio`后台模式，其余平台无`UIBackgroundModes`。
+- **simulator结果：** pre/post规范化清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`；固定iPhone/iPad各唯一、available、`Shutdown`，全局`Booted=0`。
+- **pre-gate：** `/tmp/LuneX-17-6_2-repository-pre.MR2Y1N`通过fixture、strict `8/8`、apply `30/36 next 6.2`、generator稳定、十build/Metal/plist/simulator、Keychain opt-in与diff检查；勾选后预期`31/36 next 6.3`。
+- **最终状态门：** `/tmp/LuneX-17-6_2-final-state.lP9mOL`通过fixture、strict `8/8`、apply精确`31/36 next 6.3`、generator/docs、十build/Metal、simulator不变、Keychain opt-in与diff检查。
+- **证明边界：** 构建禁用签名且未安装/运行，不能证明system PiP、background duration、Stage Manager、visible EDR、物理输入/空间音频、功耗/热状态或live Sunshine。
