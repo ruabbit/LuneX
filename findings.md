@@ -2415,3 +2415,19 @@
 - 当前仍未完成2.3 bounds/safe-area finite geometry、semantic revision/dedup、drawable/render/input mapping，也未接2.4 coordinator或2.5 AppModel；build destination不是simulator runtime或physical proof。
 - repository pre-gate `/tmp/LuneX-18-2_2-repository-pre-macos27.NmlEN1`通过fixtures、strict `9/9`、勾选前`7/50 next 2.2`、generator四次同哈希、精确scope、owner/membership/privacy/clean-room/reference、retained evidence、opt-in/进程与diff门；因此2.2已勾选，权威下一项为2.3。
 - 勾选后final-state `/tmp/LuneX-18-2_2-final-state-macos27-r2.zjXtZr`确认`8/50 ready`、next 2.3，generator、八文件scope、docs/owner边界与全部保留证据一致；未重复test/build或simulator inventory。
+
+## 2026-08-07 阶段 18 任务 2.3 geometry binding 审计
+
+- `TVVisionSurfaceGeometry`已经提供finite bounds/safe-area/scale/drawable一致性验证，`TVVisionSceneSurfaceSnapshot`和`TVVisionSemanticRevision`提供immutable publication合同；2.3应复用它们而不是复制阶段17 mobile几何类型。
+- 阶段17 `MobileStreamGeometryBindingOwner`证明actual drawable、`StreamCoordinateSnapshot`与`InputMapper`可共享同一binding，但其scene revision与coordinate revision分离且依赖`UIScreen`，不能直接复用于visionOS。阶段18必须使用单一semantic revision并保持screen optional边界。
+- tvOS/visionOS当前仍在SwiftUI update末尾从既有`renderState.coordinateSnapshot`反向写drawable，这会让requested/render transform成为surface authority。2.3应改为actual view bounds乘scale生成drawable，再把同一coordinate snapshot交给presenter和未来absolute/indirect input mapping。
+- source size或mode属于render/input binding语义，raw callback类别不属于；等价layout/trait/lifecycle callback必须去重。invalid/detached时coordinate与input reference关闭，stale generation/surface不得发布。
+- 本项不承担2.4跨scene/input/frame/HDR/audio serialized coordinator，也不承担2.5 media/AppModel application；只增加窄的surface-local geometry binding与现有presenter coordinate application。
+- 首轮代码审计确认raw callback不进入`ActiveInputs`，activity/visibility/focus/geometry/source/mode才推进统一revision；但coordinate resolution失败原本使用`clearDrawable: false`，会造成input关闭而旧drawable继续有效。已改为`clearDrawable: true`并加入source-size-zero回归断言。
+- focused测试现覆盖view bounds含非零origin的local-to-drawable换算、fit中心映射、fit/fill revision、callback去重、visionOS连续resize、detach/reattach、invalid geometry、stale generation/surface、幂等invalidation、`UInt64.max` revision exhaustion及coordinator对exact coordinate snapshot的消费。
+- fresh focused `/tmp/LuneX-18-2_3-focused-final.3ydyxX`为`14/14`；fresh normal `/tmp/LuneX-18-2_3-normal.LQmuaL`为`975/974/1 exact Keychain skip/0`；direct tvOS/visionOS与五平台Debug `/tmp/LuneX-18-2_3-builds.a3spj2`全部`succeeded/0/0/0`并有Metal产物。固定UUID只用于build destination，没有simulator inventory或生命周期操作。
+- 当前证明是deterministic contract、actual SDK分支编译与unsigned build tier；actual tvOS/visionOS input handler、frame/HDR/audio coordinator、AppModel、signed install、physical HDR/spatial/input、live Sunshine与性能仍未完成。
+- repository pre-gate `/tmp/LuneX-18-2_3-repository-pre.z6jCCO`通过strict `9/9`、勾选前`8/50 next 2.3`、generator四次同哈希、精确scope、owner/revision/fail-closed/clean-room、retained evidence、opt-in/进程和diff门；因此2.3已勾选，下一项为2.4。
+- 勾选后final-state `/tmp/LuneX-18-2_3-final-state.LZtrAB`确认`9/50 ready`、next 2.4，generator SHA-256为`4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`，十文件scope、retained focused/normal/五build/Metal、privacy/opt-in/进程和diff边界全部一致；未重复test/build或simulator inventory。
+- 最终人工diff复核发现actual tvOS/visionOS view仍保留`MTKView.autoResizeDrawable`默认自动写入，与geometry owner的single drawable writer合同冲突；已在view初始化关闭auto resize。修复后focused `/tmp/LuneX-18-2_3-owner-fix-focused.kY6Oxo`保持`14/14`，direct tvOS `/tmp/LuneX-18-2_3-owner-fix-tvos.FCNNmM`与visionOS `/tmp/LuneX-18-2_3-owner-fix-vision.1Feeyo`均零诊断成功且各有AIR/metallib；仍未查询或操作simulator。
+- 修订final gate `/tmp/LuneX-18-2_3-final-amend-r2.0HXOJm`确认OpenSpec `9/50 next 2.4`、十文件scope、generator哈希、唯一drawable owner、新三份证据及retained normal/五build全部一致；真实Keychain/live-host opt-in和xcodebuild/xctest均为空。首轮只读gate仅因zsh特殊`path`变量覆盖`PATH`退出，未重复test/build。

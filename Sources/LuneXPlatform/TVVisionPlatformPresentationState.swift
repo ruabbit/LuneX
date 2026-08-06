@@ -221,6 +221,69 @@ struct TVVisionSurfaceGeometry: Equatable, Hashable, Sendable {
         viewBounds: TVVisionRect,
         windowBounds: TVVisionRect,
         safeAreaInsets: TVVisionEdgeInsets,
+        scale: Double
+    ) throws {
+        guard Self.isValid(rect: viewBounds) else {
+            throw TVVisionPlatformContractError.invalidGeometry(
+                .invalidViewBounds
+            )
+        }
+        guard Self.isValid(rect: windowBounds) else {
+            throw TVVisionPlatformContractError.invalidGeometry(
+                .invalidWindowBounds
+            )
+        }
+        guard Self.isValid(insets: safeAreaInsets, inside: viewBounds) else {
+            throw TVVisionPlatformContractError.invalidGeometry(
+                .invalidSafeAreaInsets
+            )
+        }
+        guard scale.isFinite, scale > 0, scale <= Self.maximumScale else {
+            throw TVVisionPlatformContractError.invalidGeometry(.invalidScale)
+        }
+
+        let drawableWidth = viewBounds.width * scale
+        let drawableHeight = viewBounds.height * scale
+        guard drawableWidth.isFinite,
+              drawableHeight.isFinite,
+              drawableWidth > 0,
+              drawableHeight > 0,
+              drawableWidth <= Double(Self.maximumDrawableDimension),
+              drawableHeight <= Double(Self.maximumDrawableDimension) else {
+            throw TVVisionPlatformContractError.invalidGeometry(
+                .invalidDrawableSize
+            )
+        }
+        let roundedWidth = drawableWidth.rounded(.toNearestOrAwayFromZero)
+        let roundedHeight = drawableHeight.rounded(.toNearestOrAwayFromZero)
+        guard roundedWidth > 0,
+              roundedHeight > 0,
+              roundedWidth <= Double(Int.max),
+              roundedHeight <= Double(Int.max) else {
+            throw TVVisionPlatformContractError.invalidGeometry(
+                .invalidDrawableSize
+            )
+        }
+        try self.init(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            viewBounds: viewBounds,
+            windowBounds: windowBounds,
+            safeAreaInsets: safeAreaInsets,
+            scale: scale,
+            drawableSize: PixelSize(
+                width: Int(roundedWidth),
+                height: Int(roundedHeight)
+            )
+        )
+    }
+
+    init(
+        platform: TVVisionPlatform,
+        surfaceGeneration: TVVisionGeneration,
+        viewBounds: TVVisionRect,
+        windowBounds: TVVisionRect,
+        safeAreaInsets: TVVisionEdgeInsets,
         scale: Double,
         drawableSize: PixelSize
     ) throws {

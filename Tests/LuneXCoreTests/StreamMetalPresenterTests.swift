@@ -536,6 +536,496 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testTVVisionGeometryBindingNormalizesDrawableRenderAndInputRevision()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(251)
+        let surface = tvVisionGeometryBindingTestSurface(
+            geometry: TVVisionUIKitStreamSurfaceGeometryReading(
+                viewBounds: TVVisionRect(
+                    x: 10,
+                    y: 20,
+                    width: 400,
+                    height: 300
+                ),
+                windowBounds: TVVisionRect(
+                    x: 0,
+                    y: 0,
+                    width: 800,
+                    height: 600
+                ),
+                safeAreaInsets: .zero,
+                scale: 2
+            )
+        )
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .tvOS,
+            generation: generation,
+            surface: surface,
+            handler: { updates.append($0) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .tvOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+
+        let update = try XCTUnwrap(updates.last)
+        let binding = try XCTUnwrap(update.binding)
+        XCTAssertEqual(update.status, .active)
+        XCTAssertEqual(update.revision.rawValue, 1)
+        XCTAssertEqual(binding.revision, update.revision)
+        XCTAssertEqual(
+            binding.sceneSurfaceSnapshot.revision,
+            update.revision
+        )
+        XCTAssertEqual(
+            binding.coordinateSnapshot.revision,
+            update.revision.rawValue
+        )
+        XCTAssertEqual(
+            binding.coordinateSnapshot.drawableSize,
+            PixelSize(width: 800, height: 600)
+        )
+        XCTAssertEqual(
+            binding.coordinateSnapshot.resolvedVideo.videoRect,
+            StreamCoordinateRect(x: 0, y: 75, width: 800, height: 450)
+        )
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [PixelSize(width: 800, height: 600)]
+        )
+
+        let input = try XCTUnwrap(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 210, y: 170)
+        ))
+        XCTAssertEqual(input.revision, update.revision)
+        XCTAssertEqual(input.point, RemotePoint(x: 960, y: 540))
+        XCTAssertEqual(
+            input.referenceSize,
+            PixelSize(width: 1_920, height: 1_080)
+        )
+    }
+
+    @MainActor
+    func testTVVisionGeometryBindingDeduplicatesCallbacksAndRevisesFitFill()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(261)
+        let surface = tvVisionGeometryBindingTestSurface()
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .visionOS,
+            generation: generation,
+            surface: surface,
+            handler: { updates.append($0) }
+        )
+        let attached = tvVisionGeometryBindingTestAttachedUpdate(
+            platform: .visionOS,
+            generation: generation,
+            surface: surface
+        )
+
+        XCTAssertEqual(owner.handle(attached), .published)
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .layout
+            )),
+            .unchanged
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .visibility
+            )),
+            .unchanged
+        )
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: PixelSize(width: 1_920, height: 1_080),
+                mode: .fit,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .unchanged
+        )
+        XCTAssertEqual(updates.count, 1)
+
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: PixelSize(width: 1_920, height: 1_080),
+                mode: .fill,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: PixelSize(width: 1_920, height: 1_080),
+                mode: .fill,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .unchanged
+        )
+        XCTAssertEqual(updates.count, 2)
+        let binding = try XCTUnwrap(updates.last?.binding)
+        XCTAssertEqual(binding.revision.rawValue, 2)
+        XCTAssertEqual(binding.coordinateSnapshot.mode, .fill)
+        XCTAssertEqual(
+            binding.sceneSurfaceSnapshot.revision,
+            binding.revision
+        )
+        XCTAssertEqual(
+            owner.absoluteInputMapping(
+                localPoint: RemotePoint(x: 200, y: 150)
+            )?.revision,
+            binding.revision
+        )
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [PixelSize(width: 800, height: 600)]
+        )
+    }
+
+    @MainActor
+    func testTVVisionGeometryBindingResizesClosesAndRecovers() throws {
+        let generation = try tvVisionSurfaceGeneration(271)
+        let surface = tvVisionGeometryBindingTestSurface()
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .visionOS,
+            generation: generation,
+            surface: surface,
+            handler: { updates.append($0) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+        surface.geometryReading = TVVisionUIKitStreamSurfaceGeometryReading(
+            viewBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 600,
+                height: 400
+            ),
+            windowBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 600,
+                height: 400
+            ),
+            safeAreaInsets: .zero,
+            scale: 2
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .layout
+            )),
+            .published
+        )
+        XCTAssertEqual(
+            owner.currentBinding?.coordinateSnapshot.drawableSize,
+            PixelSize(width: 1_200, height: 800)
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestDetachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .closed(.detached)
+        )
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertNil(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 300, y: 200)
+        ))
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestDetachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .visibility
+            )),
+            .unchanged
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .attachment
+            )),
+            .published
+        )
+        XCTAssertEqual(owner.currentRevision?.rawValue, 4)
+
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: .zero,
+                mode: .fit,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .closed(.coordinateUnavailable)
+        )
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertEqual(surface.appliedDrawableSizes.last, .zero)
+
+        surface.geometryReading = TVVisionUIKitStreamSurfaceGeometryReading(
+            viewBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: .nan,
+                height: 400
+            ),
+            windowBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 600,
+                height: 400
+            ),
+            safeAreaInsets: .zero,
+            scale: 2
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .layout
+            )),
+            .closed(.invalidGeometry(.invalidViewBounds))
+        )
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertEqual(updates.last?.revision.rawValue, 6)
+    }
+
+    @MainActor
+    func testTVVisionGeometryBindingRejectsStaleAndInvalidatesIdempotently()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(281)
+        let staleGeneration = try tvVisionSurfaceGeneration(282)
+        let surface = tvVisionGeometryBindingTestSurface()
+        let otherSurface = tvVisionGeometryBindingTestSurface()
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .tvOS,
+            generation: generation,
+            surface: surface,
+            handler: { updates.append($0) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .tvOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .tvOS,
+                generation: staleGeneration,
+                surface: surface
+            )),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .tvOS,
+                generation: generation,
+                surface: otherSurface
+            )),
+            .staleSurface
+        )
+        XCTAssertEqual(updates.count, 1)
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: otherSurface,
+                surfaceGeneration: generation
+            ),
+            .staleSurface
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .invalidated
+        )
+        XCTAssertNil(owner.currentSurface)
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertEqual(updates.last?.status, .closed(.invalidated))
+        owner.updateHandler { _ in
+            XCTFail("An invalidated geometry owner must reject handlers")
+        }
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .tvOS,
+                generation: generation,
+                surface: surface,
+                callback: .layout
+            )),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(updates.count, 2)
+    }
+
+    @MainActor
+    func testTVVisionGeometryBindingFailsClosedOnRevisionExhaustion()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(291)
+        let surface = tvVisionGeometryBindingTestSurface()
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .tvOS,
+            generation: generation,
+            surface: surface,
+            initialRevision: try TVVisionSemanticRevision(rawValue: .max),
+            handler: { updates.append($0) }
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .tvOS,
+                generation: generation,
+                surface: surface
+            )),
+            .revisionExhausted
+        )
+        XCTAssertTrue(owner.isRevisionExhausted)
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertNil(owner.currentUpdate)
+        XCTAssertNil(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 200, y: 150)
+        ))
+        XCTAssertTrue(updates.isEmpty)
+        XCTAssertEqual(
+            surface.appliedDrawableSizes,
+            [PixelSize(width: 800, height: 600), .zero]
+        )
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: PixelSize(width: 1_280, height: 720),
+                mode: .fill,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .revisionExhausted
+        )
+    }
+
+    @MainActor
+    func testTVVisionSurfaceCoordinatorConsumesExactGeometryRevision()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(301)
+        let staleGeneration = try tvVisionSurfaceGeneration(302)
+        let surface = tvVisionGeometryBindingTestSurface()
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .visionOS,
+            generation: generation,
+            surface: surface,
+            handler: { updates.append($0) }
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+        let activeUpdate = try XCTUnwrap(updates.last)
+        let exactCoordinates = try XCTUnwrap(
+            activeUpdate.binding?.coordinateSnapshot
+        )
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: exactCoordinates.sourceSize,
+            drawableSize: .zero,
+            mode: exactCoordinates.mode
+        ))
+        let coordinator = MobileStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState
+        )
+        coordinator.activateTVVisionSurfaceGeneration(generation)
+
+        XCTAssertEqual(
+            coordinator.handleTVVisionGeometryUpdate(activeUpdate),
+            .applied
+        )
+        XCTAssertEqual(renderState.coordinateSnapshot, exactCoordinates)
+        XCTAssertEqual(
+            renderState.coordinateSnapshot?.revision,
+            activeUpdate.revision.rawValue
+        )
+        XCTAssertEqual(
+            coordinator.handleTVVisionGeometryUpdate(
+                TVVisionStreamGeometryBindingUpdate(
+                    platform: .visionOS,
+                    surfaceGeneration: staleGeneration,
+                    revision: activeUpdate.revision,
+                    status: activeUpdate.status,
+                    binding: activeUpdate.binding
+                )
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(renderState.coordinateSnapshot, exactCoordinates)
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestDetachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .closed(.detached)
+        )
+        let closedUpdate = try XCTUnwrap(updates.last)
+        XCTAssertEqual(
+            coordinator.handleTVVisionGeometryUpdate(closedUpdate),
+            .applied
+        )
+        XCTAssertNil(renderState.coordinateSnapshot)
+        XCTAssertEqual(renderState.transform.drawableSize, .zero)
+    }
+
+    @MainActor
     func testMobileSurfaceAttachmentRelayReplacesAndInvalidatesHandler() {
         let surface = MobileSurfaceAttachmentTestSurface()
         var firstEvents: [MobileStreamSurfaceAttachmentEvent] = []
@@ -3926,25 +4416,54 @@ private typealias TVVisionSurfaceGenerationTestOwner =
         TVVisionSurfaceGenerationTestScreen
     >
 
+private typealias TVVisionGeometryBindingTestOwner =
+    TVVisionUIKitStreamGeometryBindingOwner<
+        TVVisionSurfaceGenerationTestSurface,
+        TVVisionSurfaceGenerationTestWindow,
+        TVVisionSurfaceGenerationTestScene,
+        TVVisionSurfaceGenerationTestScreen
+    >
+
 private final class TVVisionSurfaceGenerationTestSurface {
     var window: TVVisionSurfaceGenerationTestWindow?
     var isVisible: Bool
     var scale: Double
     var drawableSize: CGSize
     var isFocusEligible: Bool
+    var geometryReading: TVVisionUIKitStreamSurfaceGeometryReading
+    var appliedDrawableSizes: [PixelSize] = []
+    var rejectsDrawableApplication = false
 
     init(
         window: TVVisionSurfaceGenerationTestWindow? = nil,
         isVisible: Bool = true,
         scale: Double = 2,
         drawableSize: CGSize = CGSize(width: 1920, height: 1080),
-        isFocusEligible: Bool = true
+        isFocusEligible: Bool = true,
+        geometryReading: TVVisionUIKitStreamSurfaceGeometryReading =
+            TVVisionUIKitStreamSurfaceGeometryReading(
+                viewBounds: TVVisionRect(
+                    x: 0,
+                    y: 0,
+                    width: 400,
+                    height: 300
+                ),
+                windowBounds: TVVisionRect(
+                    x: 0,
+                    y: 0,
+                    width: 400,
+                    height: 300
+                ),
+                safeAreaInsets: .zero,
+                scale: 2
+            )
     ) {
         self.window = window
         self.isVisible = isVisible
         self.scale = scale
         self.drawableSize = drawableSize
         self.isFocusEligible = isFocusEligible
+        self.geometryReading = geometryReading
     }
 }
 
@@ -4002,6 +4521,125 @@ private func tvVisionSurfaceGenerationTestRawState(
         isFocusEligible: isAttached
             && surface.isVisible
             && surface.isFocusEligible
+    )
+}
+
+@MainActor
+private func tvVisionGeometryBindingTestSurface(
+    geometry: TVVisionUIKitStreamSurfaceGeometryReading =
+        TVVisionUIKitStreamSurfaceGeometryReading(
+            viewBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 400,
+                height: 300
+            ),
+            windowBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 400,
+                height: 300
+            ),
+            safeAreaInsets: .zero,
+            scale: 2
+        )
+) -> TVVisionSurfaceGenerationTestSurface {
+    TVVisionSurfaceGenerationTestSurface(
+        window: TVVisionSurfaceGenerationTestWindow(
+            scene: TVVisionSurfaceGenerationTestScene(activity: .active),
+            screen: TVVisionSurfaceGenerationTestScreen()
+        ),
+        scale: geometry.scale,
+        drawableSize: CGSize(
+            width: geometry.viewBounds.width * geometry.scale,
+            height: geometry.viewBounds.height * geometry.scale
+        ),
+        geometryReading: geometry
+    )
+}
+
+@MainActor
+private func tvVisionGeometryBindingTestOwner(
+    platform: TVVisionPlatform,
+    generation: TVVisionGeneration,
+    surface: TVVisionSurfaceGenerationTestSurface,
+    initialRevision: TVVisionSemanticRevision? = nil,
+    handler: @escaping TVVisionGeometryBindingTestOwner.Handler
+) throws -> TVVisionGeometryBindingTestOwner {
+    try TVVisionGeometryBindingTestOwner(
+        platform: platform,
+        surfaceGeneration: generation,
+        surface: surface,
+        sourceSize: PixelSize(width: 1_920, height: 1_080),
+        mode: .fit,
+        initialRevision: initialRevision,
+        geometryReader: { $0.geometryReading },
+        drawableApplier: { surface, size in
+            surface.appliedDrawableSizes.append(size)
+            return !surface.rejectsDrawableApplication
+        },
+        handler: handler
+    )
+}
+
+private func tvVisionGeometryBindingTestAttachedUpdate(
+    platform: TVVisionPlatform,
+    generation: TVVisionGeneration,
+    surface: TVVisionSurfaceGenerationTestSurface,
+    callback: TVVisionUIKitStreamSurfaceCallback = .attachment
+) -> TVVisionSurfaceGenerationTestOwner.Update {
+    let window = surface.window!
+    let geometry = surface.geometryReading
+    return TVVisionSurfaceGenerationTestOwner.Update(
+        surfaceGeneration: generation,
+        status: .attached,
+        state: TVVisionUIKitStreamSurfaceGenerationState(
+            platform: platform,
+            surfaceGeneration: generation,
+            callback: callback,
+            attachment: .attached,
+            activity: window.scene.activity,
+            isVisible: surface.isVisible,
+            scale: geometry.scale,
+            drawableSize: PixelSize(
+                width: Int(surface.drawableSize.width.rounded()),
+                height: Int(surface.drawableSize.height.rounded())
+            ),
+            isFocusEligible: surface.isFocusEligible
+                && window.scene.activity == .active
+        ),
+        surface: surface,
+        attachment: TVVisionSurfaceGenerationTestOwner.ResolvedAttachment(
+            window: window,
+            windowScene: window.scene,
+            screen: window.screen,
+            activity: window.scene.activity
+        )
+    )
+}
+
+private func tvVisionGeometryBindingTestDetachedUpdate(
+    platform: TVVisionPlatform,
+    generation: TVVisionGeneration,
+    surface: TVVisionSurfaceGenerationTestSurface,
+    callback: TVVisionUIKitStreamSurfaceCallback = .attachment
+) -> TVVisionSurfaceGenerationTestOwner.Update {
+    TVVisionSurfaceGenerationTestOwner.Update(
+        surfaceGeneration: generation,
+        status: .detached,
+        state: TVVisionUIKitStreamSurfaceGenerationState(
+            platform: platform,
+            surfaceGeneration: generation,
+            callback: callback,
+            attachment: .detached,
+            activity: .background,
+            isVisible: false,
+            scale: nil,
+            drawableSize: nil,
+            isFocusEligible: false
+        ),
+        surface: surface,
+        attachment: nil
     )
 }
 

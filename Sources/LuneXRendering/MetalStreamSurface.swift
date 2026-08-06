@@ -461,6 +461,450 @@ final class TVVisionUIKitStreamSurfaceGenerationOwner<
     }
 }
 
+struct TVVisionUIKitStreamSurfaceGeometryReading: Equatable, Sendable {
+    let viewBounds: TVVisionRect
+    let windowBounds: TVVisionRect
+    let safeAreaInsets: TVVisionEdgeInsets
+    let scale: Double
+}
+
+enum TVVisionStreamGeometryBindingClosureReason: Equatable, Sendable {
+    case detached
+    case invalidSurfaceState(
+        TVVisionUIKitStreamSurfaceGenerationValidationError
+    )
+    case inconsistentSurfaceState
+    case geometryUnavailable
+    case invalidGeometry(TVVisionGeometryValidationError)
+    case coordinateUnavailable
+    case drawableApplicationFailed
+    case invalidated
+}
+
+enum TVVisionStreamGeometryBindingStatus: Equatable, Sendable {
+    case active
+    case closed(TVVisionStreamGeometryBindingClosureReason)
+}
+
+struct TVVisionStreamAbsoluteInputMapping: Equatable, Sendable {
+    let revision: TVVisionSemanticRevision
+    let point: RemotePoint
+    let referenceSize: PixelSize
+}
+
+struct TVVisionStreamGeometryBindingSnapshot: Equatable, Sendable {
+    let platform: TVVisionPlatform
+    let surfaceGeneration: TVVisionGeneration
+    let revision: TVVisionSemanticRevision
+    let sceneSurfaceSnapshot: TVVisionSceneSurfaceSnapshot
+    let isFocusEligible: Bool
+    let coordinateSnapshot: StreamCoordinateSnapshot
+    let inputReferenceSize: PixelSize
+}
+
+struct TVVisionStreamGeometryBindingUpdate: Equatable, Sendable {
+    let platform: TVVisionPlatform
+    let surfaceGeneration: TVVisionGeneration
+    let revision: TVVisionSemanticRevision
+    let status: TVVisionStreamGeometryBindingStatus
+    let binding: TVVisionStreamGeometryBindingSnapshot?
+}
+
+enum TVVisionStreamGeometryBindingOutcome: Equatable, Sendable {
+    case published
+    case unchanged
+    case closed(TVVisionStreamGeometryBindingClosureReason)
+    case staleSurfaceGeneration
+    case staleSurface
+    case revisionExhausted
+    case invalidated
+    case alreadyInvalidated
+}
+
+@MainActor
+final class TVVisionUIKitStreamGeometryBindingOwner<
+    Surface: AnyObject,
+    Window: AnyObject,
+    WindowScene: AnyObject,
+    Screen: AnyObject
+> {
+    typealias GenerationUpdate = TVVisionUIKitStreamSurfaceGenerationUpdate<
+        Surface,
+        Window,
+        WindowScene,
+        Screen
+    >
+    typealias GeometryReader = @MainActor (
+        Surface
+    ) -> TVVisionUIKitStreamSurfaceGeometryReading?
+    typealias DrawableApplier = @MainActor (Surface, PixelSize) -> Bool
+    typealias Handler = @MainActor (TVVisionStreamGeometryBindingUpdate) -> Void
+
+    private struct ActiveInputs: Equatable {
+        let activity: AppSceneActivity
+        let isVisible: Bool
+        let isFocusEligible: Bool
+        let geometry: TVVisionSurfaceGeometry
+        let sourceSize: PixelSize
+        let mode: RenderScaleMode
+    }
+
+    private enum SemanticState: Equatable {
+        case active(ActiveInputs)
+        case closed(TVVisionStreamGeometryBindingClosureReason)
+    }
+
+    let platform: TVVisionPlatform
+    let surfaceGeneration: TVVisionGeneration
+    var currentSurface: Surface? { surface }
+    var currentBinding: TVVisionStreamGeometryBindingSnapshot? {
+        currentUpdate?.binding
+    }
+    private(set) var currentRevision: TVVisionSemanticRevision?
+    private(set) var currentUpdate: TVVisionStreamGeometryBindingUpdate?
+    private(set) var isRevisionExhausted = false
+
+    private weak var surface: Surface?
+    private var sourceSize: PixelSize
+    private var mode: RenderScaleMode
+    private var generationState: TVVisionUIKitStreamSurfaceGenerationState?
+    private var semanticState: SemanticState?
+    private var appliedDrawableSize: PixelSize?
+    private var geometryReader: GeometryReader?
+    private var drawableApplier: DrawableApplier?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        platform: TVVisionPlatform,
+        surfaceGeneration: TVVisionGeneration,
+        surface: Surface,
+        sourceSize: PixelSize,
+        mode: RenderScaleMode,
+        initialRevision: TVVisionSemanticRevision? = nil,
+        geometryReader: @escaping GeometryReader,
+        drawableApplier: @escaping DrawableApplier,
+        handler: @escaping Handler
+    ) throws {
+        try surfaceGeneration.require(.surface)
+        self.platform = platform
+        self.surfaceGeneration = surfaceGeneration
+        self.surface = surface
+        self.sourceSize = sourceSize
+        self.mode = mode
+        currentRevision = initialRevision
+        self.geometryReader = geometryReader
+        self.drawableApplier = drawableApplier
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    @discardableResult
+    func handle(
+        _ update: GenerationUpdate
+    ) -> TVVisionStreamGeometryBindingOutcome {
+        guard update.surfaceGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard let candidate = update.surface,
+              surface === candidate else {
+            return .staleSurface
+        }
+
+        switch update.status {
+        case .attached:
+            guard let state = update.state,
+                  state.platform == platform,
+                  state.surfaceGeneration == surfaceGeneration,
+                  state.attachment == .attached else {
+                generationState = nil
+                return publishClosed(
+                    .inconsistentSurfaceState,
+                    clearDrawable: true
+                )
+            }
+            generationState = state
+            return resolveActiveBinding()
+        case .detached:
+            generationState = update.state
+            return publishClosed(.detached, clearDrawable: true)
+        case let .invalid(error):
+            generationState = nil
+            return publishClosed(
+                .invalidSurfaceState(error),
+                clearDrawable: true
+            )
+        case .invalidated:
+            return terminateFromGenerationOwner()
+        }
+    }
+
+    @discardableResult
+    func updateRenderInputs(
+        sourceSize: PixelSize,
+        mode: RenderScaleMode,
+        surface candidate: Surface,
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> TVVisionStreamGeometryBindingOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard surface === candidate else { return .staleSurface }
+        guard self.sourceSize != sourceSize || self.mode != mode else {
+            return currentUpdate == nil ? resolveActiveBinding() : .unchanged
+        }
+        self.sourceSize = sourceSize
+        self.mode = mode
+        return resolveActiveBinding()
+    }
+
+    func absoluteInputMapping(
+        localPoint: RemotePoint
+    ) -> TVVisionStreamAbsoluteInputMapping? {
+        guard let binding = currentBinding else { return nil }
+        let geometry = binding.sceneSurfaceSnapshot.geometry
+        guard let geometry,
+              localPoint.x.isFinite,
+              localPoint.y.isFinite,
+              localPoint.x >= geometry.viewBounds.x,
+              localPoint.y >= geometry.viewBounds.y,
+              localPoint.x <= geometry.viewBounds.x
+                + geometry.viewBounds.width,
+              localPoint.y <= geometry.viewBounds.y
+                + geometry.viewBounds.height else {
+            return nil
+        }
+        let drawableX = (localPoint.x - geometry.viewBounds.x) * geometry.scale
+        let drawableY = (localPoint.y - geometry.viewBounds.y) * geometry.scale
+        guard drawableX.isFinite,
+              drawableY.isFinite,
+              let point = InputMapper(
+                  snapshot: binding.coordinateSnapshot
+              ).remotePoint(localX: drawableX, localY: drawableY) else {
+            return nil
+        }
+        return TVVisionStreamAbsoluteInputMapping(
+            revision: binding.revision,
+            point: point,
+            referenceSize: binding.inputReferenceSize
+        )
+    }
+
+    @discardableResult
+    func invalidate(
+        surface candidate: Surface? = nil,
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> TVVisionStreamGeometryBindingOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if let candidate, surface !== candidate { return .staleSurface }
+        let outcome = publishClosed(.invalidated, clearDrawable: true)
+        finishInvalidation()
+        return outcome == .revisionExhausted ? .revisionExhausted : .invalidated
+    }
+
+    private func resolveActiveBinding()
+        -> TVVisionStreamGeometryBindingOutcome
+    {
+        guard !isRevisionExhausted else { return .revisionExhausted }
+        guard let generationState,
+              generationState.attachment == .attached,
+              let surface,
+              let reading = geometryReader?(surface) else {
+            return publishClosed(.geometryUnavailable, clearDrawable: true)
+        }
+
+        let geometry: TVVisionSurfaceGeometry
+        do {
+            geometry = try TVVisionSurfaceGeometry(
+                platform: platform,
+                surfaceGeneration: surfaceGeneration,
+                viewBounds: reading.viewBounds,
+                windowBounds: reading.windowBounds,
+                safeAreaInsets: reading.safeAreaInsets,
+                scale: reading.scale
+            )
+        } catch let error as TVVisionPlatformContractError {
+            guard case let .invalidGeometry(reason) = error else {
+                return publishClosed(
+                    .inconsistentSurfaceState,
+                    clearDrawable: true
+                )
+            }
+            return publishClosed(
+                .invalidGeometry(reason),
+                clearDrawable: true
+            )
+        } catch {
+            return publishClosed(
+                .invalidGeometry(.invalidViewBounds),
+                clearDrawable: true
+            )
+        }
+
+        guard generationState.scale == geometry.scale else {
+            return publishClosed(
+                .inconsistentSurfaceState,
+                clearDrawable: true
+            )
+        }
+        guard applyDrawableSize(geometry.drawableSize) else {
+            return publishClosed(
+                .drawableApplicationFailed,
+                clearDrawable: true
+            )
+        }
+
+        let inputs = ActiveInputs(
+            activity: generationState.activity,
+            isVisible: generationState.isVisible,
+            isFocusEligible: generationState.isFocusEligible,
+            geometry: geometry,
+            sourceSize: sourceSize,
+            mode: mode
+        )
+        let nextSemanticState = SemanticState.active(inputs)
+        guard nextSemanticState != semanticState else { return .unchanged }
+        guard let revision = nextRevision() else {
+            exhaustRevision()
+            return .revisionExhausted
+        }
+        guard let coordinateSnapshot = StreamCoordinateSnapshot.resolve(
+            revision: revision.rawValue,
+            sourceSize: sourceSize,
+            drawableSize: geometry.drawableSize,
+            mode: mode
+        ) else {
+            return publishClosed(
+                .coordinateUnavailable,
+                clearDrawable: true
+            )
+        }
+
+        let sceneSurfaceSnapshot: TVVisionSceneSurfaceSnapshot
+        do {
+            sceneSurfaceSnapshot = try TVVisionSceneSurfaceSnapshot(
+                platform: platform,
+                revision: revision,
+                surfaceGeneration: surfaceGeneration,
+                activity: generationState.activity,
+                attachment: .attached,
+                isVisible: generationState.isVisible,
+                geometry: geometry
+            )
+        } catch {
+            return publishClosed(
+                .inconsistentSurfaceState,
+                clearDrawable: true
+            )
+        }
+
+        let binding = TVVisionStreamGeometryBindingSnapshot(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: revision,
+            sceneSurfaceSnapshot: sceneSurfaceSnapshot,
+            isFocusEligible: generationState.isFocusEligible,
+            coordinateSnapshot: coordinateSnapshot,
+            inputReferenceSize: coordinateSnapshot.sourceSize
+        )
+        let update = TVVisionStreamGeometryBindingUpdate(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: revision,
+            status: .active,
+            binding: binding
+        )
+        currentRevision = revision
+        semanticState = nextSemanticState
+        currentUpdate = update
+        handler?(update)
+        return .published
+    }
+
+    private func publishClosed(
+        _ requestedReason: TVVisionStreamGeometryBindingClosureReason,
+        clearDrawable: Bool
+    ) -> TVVisionStreamGeometryBindingOutcome {
+        guard !isRevisionExhausted else { return .revisionExhausted }
+        let reason: TVVisionStreamGeometryBindingClosureReason
+        if clearDrawable, !applyDrawableSize(.zero) {
+            reason = .drawableApplicationFailed
+        } else {
+            reason = requestedReason
+        }
+        let nextSemanticState = SemanticState.closed(reason)
+        guard nextSemanticState != semanticState else { return .unchanged }
+        guard let revision = nextRevision() else {
+            exhaustRevision()
+            return .revisionExhausted
+        }
+        let update = TVVisionStreamGeometryBindingUpdate(
+            platform: platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: revision,
+            status: .closed(reason),
+            binding: nil
+        )
+        currentRevision = revision
+        semanticState = nextSemanticState
+        currentUpdate = update
+        handler?(update)
+        return .closed(reason)
+    }
+
+    private func nextRevision() -> TVVisionSemanticRevision? {
+        if let currentRevision {
+            return try? currentRevision.advanced()
+        }
+        return try? TVVisionSemanticRevision(rawValue: 1)
+    }
+
+    private func applyDrawableSize(_ size: PixelSize) -> Bool {
+        guard appliedDrawableSize != size else { return true }
+        guard let surface,
+              drawableApplier?(surface, size) == true else {
+            appliedDrawableSize = nil
+            return false
+        }
+        appliedDrawableSize = size
+        return true
+    }
+
+    private func exhaustRevision() {
+        isRevisionExhausted = true
+        semanticState = nil
+        currentUpdate = nil
+        generationState = nil
+        _ = applyDrawableSize(.zero)
+    }
+
+    private func terminateFromGenerationOwner()
+        -> TVVisionStreamGeometryBindingOutcome
+    {
+        let outcome = publishClosed(.invalidated, clearDrawable: true)
+        finishInvalidation()
+        return outcome == .revisionExhausted ? .revisionExhausted : .invalidated
+    }
+
+    private func finishInvalidation() {
+        isInvalidated = true
+        generationState = nil
+        surface = nil
+        geometryReader = nil
+        drawableApplier = nil
+        handler = nil
+    }
+}
+
 @MainActor
 final class MobileStreamSurfaceAttachmentRelay<Surface: AnyObject> {
     typealias Handler = @MainActor (
@@ -2313,6 +2757,13 @@ enum MobileStreamDisplayBindingOutcome: Equatable, Sendable {
     case revisionExhausted
 }
 
+enum TVVisionStreamGeometryApplicationOutcome: Equatable, Sendable {
+    case applied
+    case unchanged
+    case inactiveSurfaceGeneration
+    case staleSurfaceGeneration
+}
+
 @MainActor
 final class MobileStreamSurfaceCoordinator {
     typealias InputOutputHandler = @MainActor (InputAdapterOutput) -> Void
@@ -2324,6 +2775,9 @@ final class MobileStreamSurfaceCoordinator {
         MobileStreamGeometryBindingSnapshot?
     private(set) var currentDisplayEDRSnapshot:
         MobileDisplayEDRSnapshot?
+    private(set) var currentTVVisionSurfaceGeneration: TVVisionGeneration?
+    private(set) var currentTVVisionGeometryUpdate:
+        TVVisionStreamGeometryBindingUpdate?
     private(set) var isDisplayRevisionExhausted = false
     private var renderState: StreamRenderState
     private var inputOutputHandler: InputOutputHandler
@@ -2331,6 +2785,7 @@ final class MobileStreamSurfaceCoordinator {
     private let platformCapabilities: HDRPlatformOutputCapabilities
     private var ownsMobileGeometry = false
     private var ownsMobileDisplay = false
+    private var ownsTVVisionGeometry = false
 
     init(
         presentationSource: StreamVideoPresentationSource,
@@ -2373,6 +2828,9 @@ final class MobileStreamSurfaceCoordinator {
         _ surfaceGeneration: MobileSceneSurfaceGeneration
     ) {
         guard currentSurfaceGeneration != surfaceGeneration else { return }
+        currentTVVisionSurfaceGeneration = nil
+        currentTVVisionGeometryUpdate = nil
+        ownsTVVisionGeometry = false
         currentSurfaceGeneration = surfaceGeneration
         currentGeometryBinding = nil
         currentDisplayEDRSnapshot = nil
@@ -2395,6 +2853,52 @@ final class MobileStreamSurfaceCoordinator {
         currentSurfaceGeneration = nil
         ownsMobileGeometry = false
         ownsMobileDisplay = false
+    }
+
+    func activateTVVisionSurfaceGeneration(
+        _ surfaceGeneration: TVVisionGeneration
+    ) {
+        guard surfaceGeneration.domain == .surface else { return }
+        guard currentTVVisionSurfaceGeneration != surfaceGeneration else {
+            return
+        }
+        currentSurfaceGeneration = nil
+        currentGeometryBinding = nil
+        ownsMobileGeometry = false
+        currentTVVisionSurfaceGeneration = surfaceGeneration
+        currentTVVisionGeometryUpdate = nil
+        ownsTVVisionGeometry = true
+        applyCurrentState()
+    }
+
+    func deactivateTVVisionSurfaceGeneration(
+        _ surfaceGeneration: TVVisionGeneration
+    ) {
+        guard currentTVVisionSurfaceGeneration == surfaceGeneration else {
+            return
+        }
+        currentTVVisionGeometryUpdate = nil
+        ownsTVVisionGeometry = true
+        applyCurrentState()
+        currentTVVisionSurfaceGeneration = nil
+        ownsTVVisionGeometry = false
+    }
+
+    @discardableResult
+    func handleTVVisionGeometryUpdate(
+        _ update: TVVisionStreamGeometryBindingUpdate
+    ) -> TVVisionStreamGeometryApplicationOutcome {
+        guard let currentTVVisionSurfaceGeneration else {
+            return .inactiveSurfaceGeneration
+        }
+        guard update.surfaceGeneration == currentTVVisionSurfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard currentTVVisionGeometryUpdate != update else { return .unchanged }
+        ownsTVVisionGeometry = true
+        currentTVVisionGeometryUpdate = update
+        applyCurrentState()
+        return .applied
     }
 
     func handleGeometryBinding(
@@ -2471,7 +2975,12 @@ final class MobileStreamSurfaceCoordinator {
     }
 
     private func applyCurrentState() {
-        if let coordinateSnapshot = currentGeometryBinding?.coordinateSnapshot {
+        if ownsTVVisionGeometry {
+            renderState.applyPlatformCoordinateSnapshot(
+                currentTVVisionGeometryUpdate?.binding?.coordinateSnapshot
+            )
+        } else if let coordinateSnapshot =
+            currentGeometryBinding?.coordinateSnapshot {
             if renderState.transform.sourceSize == coordinateSnapshot.sourceSize,
                renderState.transform.mode == coordinateSnapshot.mode {
                 if renderState.transform.drawableSize
@@ -2854,6 +3363,13 @@ final class TVVisionStreamMetalView: MTKView {
             UIWindowScene,
             UIScreen
         >
+    typealias GeometryBindingOwner =
+        TVVisionUIKitStreamGeometryBindingOwner<
+            TVVisionStreamMetalView,
+            UIWindow,
+            UIWindowScene,
+            UIScreen
+        >
 #else
     typealias SurfaceGenerationOwner =
         TVVisionUIKitStreamSurfaceGenerationOwner<
@@ -2862,8 +3378,16 @@ final class TVVisionStreamMetalView: MTKView {
             UIWindowScene,
             NSObject
         >
+    typealias GeometryBindingOwner =
+        TVVisionUIKitStreamGeometryBindingOwner<
+            TVVisionStreamMetalView,
+            UIWindow,
+            UIWindowScene,
+            NSObject
+        >
 #endif
     typealias SurfaceGenerationUpdateHandler = SurfaceGenerationOwner.Handler
+    typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
 
     var surfaceGeneration: TVVisionGeneration? {
         surfaceGenerationOwner?.surfaceGeneration
@@ -2871,6 +3395,11 @@ final class TVVisionStreamMetalView: MTKView {
 
     private var surfaceRelay: SurfaceRelay?
     private var surfaceGenerationOwner: SurfaceGenerationOwner?
+    private var geometryBindingOwner: GeometryBindingOwner?
+    private var surfaceGenerationUpdateHandler:
+        SurfaceGenerationUpdateHandler = { _ in }
+    private var geometryBindingUpdateHandler:
+        GeometryBindingUpdateHandler = { _ in }
     private weak var observedWindowScene: UIWindowScene?
     private var sceneLifecycleObservers: [NSObjectProtocol] = []
     private var traitChangeRegistration:
@@ -2900,12 +3429,20 @@ final class TVVisionStreamMetalView: MTKView {
     init(
         frame frameRect: CGRect = .zero,
         device: (any MTLDevice)? = nil,
+        sourceSize: PixelSize = .zero,
+        mode: RenderScaleMode = .fit,
         surfaceCallbackHandler:
             @escaping SurfaceCallbackHandler = { _, _, _ in },
         surfaceGenerationUpdateHandler:
-            @escaping SurfaceGenerationUpdateHandler = { _ in }
+            @escaping SurfaceGenerationUpdateHandler = { _ in },
+        geometryBindingUpdateHandler:
+            @escaping GeometryBindingUpdateHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
+        autoResizeDrawable = false
+        self.surfaceGenerationUpdateHandler =
+            surfaceGenerationUpdateHandler
+        self.geometryBindingUpdateHandler = geometryBindingUpdateHandler
         surfaceRelay = SurfaceRelay(
             surface: self,
             stateReader: { surface in
@@ -2930,12 +3467,26 @@ final class TVVisionStreamMetalView: MTKView {
         )
         if let surfaceGeneration =
             TVVisionStreamSurfaceGenerationSequence.next() {
+            geometryBindingOwner = try? GeometryBindingOwner(
+                platform: Self.platform,
+                surfaceGeneration: surfaceGeneration,
+                surface: self,
+                sourceSize: sourceSize,
+                mode: mode,
+                geometryReader: Self.readGeometry,
+                drawableApplier: Self.applyDrawableSize,
+                handler: { [weak self] update in
+                    self?.geometryBindingUpdateHandler(update)
+                }
+            )
             surfaceGenerationOwner = try? SurfaceGenerationOwner(
                 platform: Self.platform,
                 surfaceGeneration: surfaceGeneration,
                 surface: self,
                 resolver: Self.resolveAttachment,
-                handler: surfaceGenerationUpdateHandler
+                handler: { [weak self] update in
+                    self?.handleSurfaceGenerationUpdate(update)
+                }
             )
         }
         traitChangeRegistration = registerForTraitChanges([
@@ -3001,7 +3552,28 @@ final class TVVisionStreamMetalView: MTKView {
     func updateSurfaceGenerationUpdateHandler(
         _ handler: @escaping SurfaceGenerationUpdateHandler
     ) {
-        surfaceGenerationOwner?.updateHandler(handler)
+        surfaceGenerationUpdateHandler = handler
+    }
+
+    func updateGeometryBinding(
+        sourceSize: PixelSize,
+        mode: RenderScaleMode,
+        handler: @escaping GeometryBindingUpdateHandler
+    ) {
+        geometryBindingUpdateHandler = handler
+        guard let geometryBindingOwner else { return }
+        geometryBindingOwner.updateRenderInputs(
+            sourceSize: sourceSize,
+            mode: mode,
+            surface: self,
+            surfaceGeneration: geometryBindingOwner.surfaceGeneration
+        )
+    }
+
+    func absoluteInputMapping(
+        localPoint: RemotePoint
+    ) -> TVVisionStreamAbsoluteInputMapping? {
+        geometryBindingOwner?.absoluteInputMapping(localPoint: localPoint)
     }
 
     func refreshSurfaceCallbacks() {
@@ -3013,6 +3585,13 @@ final class TVVisionStreamMetalView: MTKView {
             unregisterForTraitChanges(traitChangeRegistration)
             self.traitChangeRegistration = nil
         }
+        if let geometryBindingOwner {
+            geometryBindingOwner.invalidate(
+                surface: self,
+                surfaceGeneration: geometryBindingOwner.surfaceGeneration
+            )
+            self.geometryBindingOwner = nil
+        }
         if let surfaceGenerationOwner {
             surfaceGenerationOwner.invalidate(
                 surface: self,
@@ -3023,6 +3602,13 @@ final class TVVisionStreamMetalView: MTKView {
         removeSceneLifecycleObservers()
         surfaceRelay?.invalidate()
         surfaceRelay = nil
+    }
+
+    private func handleSurfaceGenerationUpdate(
+        _ update: SurfaceGenerationOwner.Update
+    ) {
+        _ = geometryBindingOwner?.handle(update)
+        surfaceGenerationUpdateHandler(update)
     }
 
     private func publishSurfaceCallbacks(
@@ -3106,6 +3692,50 @@ final class TVVisionStreamMetalView: MTKView {
 #else
         .visionOS
 #endif
+    }
+
+    private static func readGeometry(
+        _ surface: TVVisionStreamMetalView
+    ) -> TVVisionUIKitStreamSurfaceGeometryReading? {
+        guard let window = surface.window else { return nil }
+        return TVVisionUIKitStreamSurfaceGeometryReading(
+            viewBounds: TVVisionRect(
+                x: Double(surface.bounds.origin.x),
+                y: Double(surface.bounds.origin.y),
+                width: Double(surface.bounds.width),
+                height: Double(surface.bounds.height)
+            ),
+            windowBounds: TVVisionRect(
+                x: Double(window.bounds.origin.x),
+                y: Double(window.bounds.origin.y),
+                width: Double(window.bounds.width),
+                height: Double(window.bounds.height)
+            ),
+            safeAreaInsets: TVVisionEdgeInsets(
+                top: Double(surface.safeAreaInsets.top),
+                leading: Double(surface.safeAreaInsets.left),
+                bottom: Double(surface.safeAreaInsets.bottom),
+                trailing: Double(surface.safeAreaInsets.right)
+            ),
+            scale: Double(surface.contentScaleFactor)
+        )
+    }
+
+    private static func applyDrawableSize(
+        _ surface: TVVisionStreamMetalView,
+        _ size: PixelSize
+    ) -> Bool {
+        guard size.width >= 0, size.height >= 0 else { return false }
+        let drawableSize = CGSize(
+            width: CGFloat(size.width),
+            height: CGFloat(size.height)
+        )
+        guard drawableSize.width.isFinite,
+              drawableSize.height.isFinite else {
+            return false
+        }
+        surface.drawableSize = drawableSize
+        return surface.drawableSize == drawableSize
     }
 
     private static func resolveAttachment(
@@ -3823,6 +4453,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         TVVisionStreamMetalView.SurfaceCallbackHandler = { _, _, _ in }
     var surfaceGenerationUpdateHandler:
         TVVisionStreamMetalView.SurfaceGenerationUpdateHandler = { _ in }
+    var geometryBindingUpdateHandler:
+        TVVisionStreamMetalView.GeometryBindingUpdateHandler = { _ in }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -3868,12 +4500,26 @@ struct MetalStreamSurface: UIViewRepresentable {
             context.coordinator.activateSurfaceGeneration(surfaceGeneration)
         }
 #elseif os(tvOS) || os(visionOS)
+        let externalGeometryBindingUpdateHandler =
+            geometryBindingUpdateHandler
         let view = TVVisionStreamMetalView(
             frame: .zero,
             device: MTLCreateSystemDefaultDevice(),
+            sourceSize: renderState.transform.sourceSize,
+            mode: renderState.transform.mode,
             surfaceCallbackHandler: surfaceCallbackHandler,
-            surfaceGenerationUpdateHandler: surfaceGenerationUpdateHandler
+            surfaceGenerationUpdateHandler: surfaceGenerationUpdateHandler,
+            geometryBindingUpdateHandler: {
+                [weak coordinator = context.coordinator] update in
+                coordinator?.handleTVVisionGeometryUpdate(update)
+                externalGeometryBindingUpdateHandler(update)
+            }
         )
+        if let surfaceGeneration = view.surfaceGeneration {
+            context.coordinator.activateTVVisionSurfaceGeneration(
+                surfaceGeneration
+            )
+        }
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
 #endif
@@ -3918,16 +4564,25 @@ struct MetalStreamSurface: UIViewRepresentable {
                 }
             )
 #elseif os(tvOS) || os(visionOS)
+        context.coordinator.update(
+            renderState: renderState,
+            inputOutputHandler: { _ in }
+        )
         (view as? TVVisionStreamMetalView)?
             .updateSurfaceCallbackHandler(surfaceCallbackHandler)
         (view as? TVVisionStreamMetalView)?
             .updateSurfaceGenerationUpdateHandler(
                 surfaceGenerationUpdateHandler
             )
-        context.coordinator.update(
-            renderState: renderState,
-            inputOutputHandler: { _ in }
-        )
+        (view as? TVVisionStreamMetalView)?
+            .updateGeometryBinding(
+                sourceSize: renderState.transform.sourceSize,
+                mode: renderState.transform.mode,
+                handler: { [weak coordinator = context.coordinator] update in
+                    coordinator?.handleTVVisionGeometryUpdate(update)
+                    geometryBindingUpdateHandler(update)
+                }
+            )
 #else
         context.coordinator.update(
             renderState: renderState,
@@ -3937,14 +4592,6 @@ struct MetalStreamSurface: UIViewRepresentable {
         let schedule = StreamMetalViewScheduleResolver.resolve(renderState.policy)
         view.isPaused = schedule.isPaused
         view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
-#if !os(iOS)
-        if let snapshot = renderState.coordinateSnapshot {
-            view.drawableSize = CGSize(
-                width: snapshot.drawableSize.width,
-                height: snapshot.drawableSize.height
-            )
-        }
-#endif
 #if os(tvOS) || os(visionOS)
         (view as? TVVisionStreamMetalView)?.refreshSurfaceCallbacks()
 #endif
@@ -3963,7 +4610,14 @@ struct MetalStreamSurface: UIViewRepresentable {
             mobileView.invalidateAttachmentCallbacks()
         }
 #elseif os(tvOS) || os(visionOS)
-        (view as? TVVisionStreamMetalView)?.invalidateSurfaceCallbacks()
+        if let platformView = view as? TVVisionStreamMetalView {
+            if let surfaceGeneration = platformView.surfaceGeneration {
+                coordinator.deactivateTVVisionSurfaceGeneration(
+                    surfaceGeneration
+                )
+            }
+            platformView.invalidateSurfaceCallbacks()
+        }
 #endif
         coordinator.presenter.stop()
         view.delegate = nil

@@ -129,6 +129,30 @@ final class StreamRenderState {
         coordinatePublisher = publisher
     }
 
+    func applyPlatformCoordinateSnapshot(
+        _ snapshot: StreamCoordinateSnapshot?
+    ) {
+        guard let snapshot else {
+            if transform.drawableSize != .zero {
+                transform.drawableSize = .zero
+            }
+            coordinateSnapshot = nil
+            return
+        }
+        guard transform.sourceSize == snapshot.sourceSize,
+              transform.mode == snapshot.mode else {
+            if transform.drawableSize != .zero {
+                transform.drawableSize = .zero
+            }
+            coordinateSnapshot = nil
+            return
+        }
+        if transform.drawableSize != snapshot.drawableSize {
+            transform.drawableSize = snapshot.drawableSize
+        }
+        coordinateSnapshot = snapshot
+    }
+
     private func publishCoordinateSnapshot() {
         coordinateSnapshot = coordinatePublisher.update(
             sourceSize: transform.sourceSize,
