@@ -738,14 +738,172 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
         XCTAssertEqual(owner.disposition(for: surface), .local)
     }
 
+    func testFocusHandoffWaitsForFreshSurfaceFocusAndKeepsLocalUIOwned()
+        throws {
+        let firstRevision = try TVVisionSemanticRevision(rawValue: 1)
+        let secondRevision = try TVVisionSemanticRevision(rawValue: 2)
+        let thirdRevision = try TVVisionSemanticRevision(rawValue: 3)
+        let firstSurface = try generation(.surface, 1)
+        let replacementSurface = try generation(.surface, 2)
+        let firstStamp = try TVRemoteSurfaceFocusStamp(
+            surfaceGeneration: firstSurface,
+            revision: firstRevision
+        )
+        let secondStamp = try TVRemoteSurfaceFocusStamp(
+            surfaceGeneration: firstSurface,
+            revision: secondRevision
+        )
+        let thirdStamp = try TVRemoteSurfaceFocusStamp(
+            surfaceGeneration: firstSurface,
+            revision: thirdRevision
+        )
+        let replacementStamp = try TVRemoteSurfaceFocusStamp(
+            surfaceGeneration: replacementSurface,
+            revision: firstRevision
+        )
+        var state = TVRemoteFocusHandoffState.localNavigation
+
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.notFocused)
+        )
+        state = state.selectingStreamNavigation(
+            true,
+            currentGeometryStamp: nil
+        ).settingWorkspaceVisible(
+            true,
+            currentGeometryStamp: nil
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.overlayVisible)
+        )
+
+        state = state.settingOverlayVisible(
+            false,
+            currentGeometryStamp: firstStamp
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.notFocused)
+        )
+        state = state.observingSurfaceFocus(
+            stamp: firstStamp,
+            actualEligibility: .eligible
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.notFocused)
+        )
+        state = state.observingSurfaceFocus(
+            stamp: secondStamp,
+            actualEligibility: .ineligible(.notFocused)
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.notFocused)
+        )
+        state = state.observingSurfaceFocus(
+            stamp: thirdStamp,
+            actualEligibility: .eligible
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .eligible
+        )
+        state = state.settingOverlayVisible(
+            false,
+            currentGeometryStamp: thirdStamp
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .eligible
+        )
+
+        state = state.settingOverlayVisible(
+            true,
+            currentGeometryStamp: thirdStamp
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.overlayVisible)
+        )
+        state = state.settingOverlayVisible(
+            false,
+            currentGeometryStamp: thirdStamp
+        ).observingSurfaceFocus(
+            stamp: replacementStamp,
+            actualEligibility: .eligible
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .eligible
+        )
+        state = state.selectingStreamNavigation(
+            false,
+            currentGeometryStamp: replacementStamp
+        )
+        XCTAssertEqual(
+            state.resolving(actualEligibility: .eligible),
+            .ineligible(.notFocused)
+        )
+    }
+
+    @MainActor
+    func testSurfacePressOwnerReleasesForOverlayAndReopensAfterFocus()
+        async throws {
+        let recorder = TVRemoteSurfaceDeliveryRecorder()
+        let owner = TVRemoteSurfacePressCaptureOwner { generation, event in
+            try recorder.deliver(generation: generation, event: event)
+        }
+        let surface = try generation(.surface, 1)
+        let inputGeneration = try generation(.input, 1)
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(
+                generation: inputGeneration,
+                revision: 1
+            )
+        )
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .left, .began)),
+            .captured
+        )
+
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(
+                generation: inputGeneration,
+                eligibility: .ineligible(.overlayVisible),
+                revision: 2
+            )
+        )
+        XCTAssertEqual(owner.disposition(for: surface), .local)
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.events, [
+            TVRemoteInputEvent(button: .left, isDown: true),
+            TVRemoteInputEvent(button: .left, isDown: false)
+        ])
+
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(
+                generation: inputGeneration,
+                revision: 3
+            )
+        )
+        XCTAssertEqual(owner.disposition(for: surface), .captured)
+    }
+
     private func inputSnapshot(
         generation: TVVisionGeneration? = nil,
         eligibility: TVVisionFocusEligibility = .eligible,
-        supported: Set<TVVisionInputCapability> = [.tvRemote, .extendedGamepad]
+        supported: Set<TVVisionInputCapability> = [.tvRemote, .extendedGamepad],
+        revision: UInt64 = 1
     ) throws -> TVVisionInputCapabilitySnapshot {
         try TVVisionInputCapabilitySnapshot(
             platform: .tvOS,
-            revision: semanticRevision(),
+            revision: TVVisionSemanticRevision(rawValue: revision),
             inputGeneration: generation ?? self.generation(.input, 1),
             supported: supported,
             focusEligibility: eligibility

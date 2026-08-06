@@ -151,7 +151,12 @@ final class AppModel: ApplicationInputSink {
     var session = StreamingSessionState()
     var renderState = StreamRenderState()
     var diagnostics = DiagnosticsStore()
-    var navigationSelection: AppNavigationSelection = .library
+    var navigationSelection: AppNavigationSelection = .library {
+        didSet {
+            guard navigationSelection != oldValue else { return }
+            updateTVRemoteNavigationSelection()
+        }
+    }
     var selectedHostID: MoonlightHost.ID?
     var appsByHostID: [MoonlightHost.ID: [RemoteApp]] = [:]
     var pairingUI = PairingUIState()
@@ -169,6 +174,12 @@ final class AppModel: ApplicationInputSink {
     private(set) var mobileAudioSessionActive: Bool?
     private(set) var tvVisionPlatformPresentationState:
         SessionTVVisionPlatformPresentationState?
+    private(set) var tvRemoteFocusHandoffState =
+        TVRemoteFocusHandoffState.localNavigation
+
+    var tvStreamOverlayVisible: Bool {
+        tvRemoteFocusHandoffState.isOverlayVisible
+    }
 
     var tvVisionPlatformPresentationSnapshot:
         TVVisionPlatformPresentationSnapshot?
@@ -664,6 +675,18 @@ final class AppModel: ApplicationInputSink {
             ownership: ownership,
             update: update
         )
+        if platform == .tvOS,
+           let stamp = try? TVRemoteSurfaceFocusStamp(
+            surfaceGeneration: update.surfaceGeneration,
+            revision: update.revision
+           ) {
+            tvRemoteFocusHandoffState = tvRemoteFocusHandoffState
+                .observingSurfaceFocus(
+                    stamp: stamp,
+                    actualEligibility:
+                        actualTVRemoteSurfaceFocusEligibility(update)
+                )
+        }
         scheduleTVVisionPlatformGeometryApplication(
             update,
             ownership: ownership
@@ -682,6 +705,26 @@ final class AppModel: ApplicationInputSink {
         tvRemoteSurfacePressCaptureOwner?.disposition(
             for: surfaceGeneration
         ) ?? .local
+    }
+
+    func setTVStreamWorkspaceVisible(_ visible: Bool) {
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        applyTVRemoteFocusHandoffState(
+            tvRemoteFocusHandoffState.settingWorkspaceVisible(
+                visible,
+                currentGeometryStamp: currentTVVisionGeometryStamp
+            )
+        )
+    }
+
+    func setTVStreamOverlayVisible(_ visible: Bool) {
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        applyTVRemoteFocusHandoffState(
+            tvRemoteFocusHandoffState.settingOverlayVisible(
+                visible,
+                currentGeometryStamp: currentTVVisionGeometryStamp
+            )
+        )
     }
 
     func publishHDRPresentationDiagnostic(
@@ -2040,6 +2083,12 @@ final class AppModel: ApplicationInputSink {
     private func beginTVVisionPlatformPresentationRuntime() {
         clearTVVisionPlatformPresentationRuntime()
         guard expectedTVVisionPlatform == .tvOS else { return }
+        applyTVRemoteFocusHandoffState(
+            tvRemoteFocusHandoffState.settingOverlayVisible(
+                true,
+                currentGeometryStamp: currentTVVisionGeometryStamp
+            )
+        )
         tvRemoteSurfacePressCaptureOwner = TVRemoteSurfacePressCaptureOwner(
             delivery: { [weak self] inputGeneration, event in
                 guard let self,
@@ -2206,6 +2255,13 @@ final class AppModel: ApplicationInputSink {
     private func clearTVVisionPlatformPresentationRuntime(
         preservingTerminalState: Bool = false
     ) {
+        if expectedTVVisionPlatform == .tvOS {
+            tvRemoteFocusHandoffState = tvRemoteFocusHandoffState
+                .settingOverlayVisible(
+                    true,
+                    currentGeometryStamp: currentTVVisionGeometryStamp
+                )
+        }
         tvVisionPlatformApplicationTask?.cancel()
         tvVisionPlatformApplicationTask = nil
         tvVisionPlatformApplicationOperationID = nil
@@ -2232,28 +2288,92 @@ final class AppModel: ApplicationInputSink {
     ) -> TVVisionInputCapabilitySnapshot? {
         guard ownership.platform == .tvOS,
               ownership.inputGeneration.domain == .input else { return nil }
-        let eligibility: TVVisionFocusEligibility
+        let actualEligibility: TVVisionFocusEligibility
         if !activeMediaReadiness.contains(.input) {
-            eligibility = .ineligible(.inputUnavailable)
+            actualEligibility = .ineligible(.inputUnavailable)
         } else if let binding = update.binding {
             if binding.sceneSurfaceSnapshot.activity != .active {
-                eligibility = .ineligible(.sceneInactive)
+                actualEligibility = .ineligible(.sceneInactive)
             } else if !binding.sceneSurfaceSnapshot.isVisible
                         || !binding.isFocusEligible {
-                eligibility = .ineligible(.notFocused)
+                actualEligibility = .ineligible(.notFocused)
             } else {
-                eligibility = .eligible
+                actualEligibility = .eligible
             }
         } else {
-            eligibility = .ineligible(.detached)
+            actualEligibility = .ineligible(.detached)
         }
         return try? TVVisionInputCapabilitySnapshot(
             platform: .tvOS,
             revision: update.revision,
             inputGeneration: ownership.inputGeneration,
             supported: [.tvRemote],
-            focusEligibility: eligibility
+            focusEligibility: tvRemoteFocusHandoffState.resolving(
+                actualEligibility: actualEligibility
+            )
         )
+    }
+
+    private var currentTVVisionGeometryStamp: TVRemoteSurfaceFocusStamp? {
+        guard let update = tvVisionPlatformGeometryAdmission?.update else {
+            return nil
+        }
+        return try? TVRemoteSurfaceFocusStamp(
+            surfaceGeneration: update.surfaceGeneration,
+            revision: update.revision
+        )
+    }
+
+    private func updateTVRemoteNavigationSelection() {
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        applyTVRemoteFocusHandoffState(
+            tvRemoteFocusHandoffState.selectingStreamNavigation(
+                navigationSelection == .stream,
+                currentGeometryStamp: currentTVVisionGeometryStamp
+            )
+        )
+    }
+
+    private func applyTVRemoteFocusHandoffState(
+        _ nextState: TVRemoteFocusHandoffState
+    ) {
+        guard nextState != tvRemoteFocusHandoffState else { return }
+        tvRemoteFocusHandoffState = nextState
+        refreshTVRemoteSurfacePressOwnership()
+    }
+
+    private func refreshTVRemoteSurfacePressOwnership() {
+        guard expectedTVVisionPlatform == .tvOS,
+              let admission = tvVisionPlatformGeometryAdmission,
+              admission.ownership == tvVisionPlatformPresentationOwnership,
+              let input = makeTVRemoteInputSnapshot(
+                update: admission.update,
+                ownership: admission.ownership
+              ) else { return }
+        do {
+            try tvRemoteSurfacePressCaptureOwner?.update(
+                surfaceGeneration: admission.update.surfaceGeneration,
+                input: input
+            )
+        } catch {
+            tvRemoteSurfacePressCaptureOwner?.invalidate()
+        }
+    }
+
+    private func actualTVRemoteSurfaceFocusEligibility(
+        _ update: TVVisionStreamGeometryBindingUpdate
+    ) -> TVVisionFocusEligibility {
+        guard let binding = update.binding else {
+            return .ineligible(.detached)
+        }
+        guard binding.sceneSurfaceSnapshot.activity == .active else {
+            return .ineligible(.sceneInactive)
+        }
+        guard binding.sceneSurfaceSnapshot.isVisible,
+              binding.isFocusEligible else {
+            return .ineligible(.notFocused)
+        }
+        return .eligible
     }
 
     private func tvVisionPlatformStopReason(

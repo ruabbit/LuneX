@@ -2519,3 +2519,26 @@
 - 人工复核确认captured/local `super`分流、begin-time surface generation、dismantle cancellation、Menu/unsupported local、FIFO failure release与queued-down suppression、current AppModel admission和visionOS隔离均成立；3.1已勾选，预期`13/50 next 3.2`。
 - 现有证据只证明deterministic ownership和unsigned SDK branch compatibility；不证明物理Siri Remote手感、完整系统reserved command、signed install、host receipt、controller、HDR/spatial、live Sunshine、延迟、性能、功耗或热状态。
 - 首轮final-state只因包装器将实际单一`failedInputGeneration`误写成复数断言而在retained evidence前退出；修正后的`/tmp/LuneX-18-3_1-final-state-r2.f0WIxl`复用已通过的strict/apply证据并完成source、retained test/build、Metal、privacy/reference、opt-in/process/diff门，确认`13/50 next 3.2`且没有重复test/build/generator/simulator操作。
+
+## 2026-08-07 阶段 18 任务 3.2 调查
+
+- `TVRemoteCaptureState.updateInput`已经把stream到`.overlayVisible`或`.notFocused`转换为close admission、反序button-up、release barrier与restore-local-focus effects；3.2应驱动现有合同，不复制press reducer。
+- 当前tvOS `StreamStatusOverlay`始终叠在surface上且含Disconnect等focusable Button；没有overlay visibility状态、Hide Controls命令或SwiftUI focus target。actual `TVVisionStreamMetalView.isFocusEligible`只能在UIKit focus变化后反馈，不能在SwiftUI导航/overlay意图发生时先关闭远端input。
+- `makeTVRemoteInputSnapshot`目前只组合media input readiness与actual scene/visibility/focus；需要叠加framework-free handoff gate。严格顺序应为：overlay显示或workspace离开先同步更新owner为local，再让SwiftUI移动focus；overlay隐藏只撤销应用层gate，仍由下一次actual eligible geometry callback开放capture。
+- `navigationSelection`属于AppModel且launch会切到`.stream`，适合作为browser/settings/diagnostics local ownership的前置门；但view实际出现/消失仍需单独workspace visibility回调，避免仅凭requested navigation声称stream surface存在。
+- 3.2不应接管Menu/Home/volume/capture/power；这些保持UIKit/system local并由3.3完成native escape和typed unavailable。也不应提前实现controller handlers或provider级held release barrier。
+- fresh-focus边界不能只比较semantic revision；replacement surface可能从更小revision重新开始，因此必须比较`(surface generation, semantic revision)`。相同surface的相同/更旧revision和旧surface回调都不能清除等待，而更高surface generation即使revision回到1也可以成为fresh actual focus。
+- 系统更新后续接的focused evidence `/tmp/LuneX-18-3_2-focused.xA2quo`已结构化证明pure handoff、owner overlay release/reopen和AppModel组合路径`4/4`通过且build零诊断；它仍不构成actual tvOS focus engine运行、物理Siri Remote或signed install证明。
+- overlay visibility setter必须幂等：capture已开放时重复写入`false`没有伴随任何SwiftUI focus变化，若仍重置为`.after(currentStamp)`，就会等待一个可能永不到达的新geometry callback并永久保持local ownership。同值调用应保留`.none`和current capture。
+
+## 2026-08-07 阶段 18 任务 3.2 验收
+
+- 人工竞态复核确认overlay show或导航离开先同步更新current owner为local；隐藏overlay不复用旧eligible geometry；admission generation/revision水位拒绝旧surface；replacement更高surface generation允许较低revision成为fresh；held release沿现有FIFO owner执行；tvOS SwiftUI API由条件编译与visionOS direct build隔离。
+- 修订focused `/tmp/LuneX-18-3_2-focused-r2.KTjwGJ`为`4/4`，相关矩阵`/tmp/LuneX-18-3_2-related.kbZRhO`为`43/43`，normal `/tmp/LuneX-18-3_2-normal.KIqw0B`为`1006/1005/1 exact Keychain skip/0`，五平台 `/tmp/LuneX-18-3_2-builds.AwsH8s`全部零结构化诊断并有Metal产物。
+- 当前证据只证明deterministic handoff与unsigned SDK branch compatibility；actual tvOS focus engine、物理Siri Remote、完整reserved commands、signed install、host receipt、HDR/spatial、live Sunshine、延迟、性能、功耗和热状态仍未证明。
+- repository pre-gate `/tmp/LuneX-18-3_2-repository-pre.CmABju`从头通过fixtures、strict `9/9`、pre-mark `13/50 next 3.2`、四次稳定generator、十文件scope、source/test semantics、全部retained evidence与privacy/reference/opt-in/process/diff边界；因此3.2已勾选，权威下一项应为3.3。
+- 勾选后final-state `/tmp/LuneX-18-3_2-final-state.HzeLfq`确认OpenSpec `14/50 next 3.3`、十一文件scope、project hash与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
+- conditional overlay引入新的terminal UX义务：runtime clear不能只失效surface owner；若overlay此前隐藏且导航仍为Stream，remote termination、reconnect或provider failure会留下无操作入口的黑屏。clear应恢复application overlay state，但不在3.2提前声称3.6的provider-level ordered held-state release。
+- terminal修订后的fresh `5/5` focused明确包含reconnect和remote termination overlay恢复；`43/43`相关矩阵、`1006/1005/1/0` normal与五平台Debug再次通过。最终证据不再复用修订前direct/pre/final路径，fixed Apple TV/Vision Pro由修订五平台build覆盖actual/隔离分支。
+- 修订repository pre-gate `/tmp/LuneX-18-3_2-repository-pre-r3.rICtus`通过pre-mark `13/50 next 3.2`及当前terminal semantics与全部修订证据/边界；3.2可重新勾选并进入post-mark只读验证。
+- 修订final-state `/tmp/LuneX-18-3_2-final-state-r2.dFJcBe`确认`14/50 next 3.3`、十一文件scope、current terminal/focus semantics与全部修订evidence/boundary一致，未重复测试、构建、generator或simulator操作。

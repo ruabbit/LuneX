@@ -66,6 +66,136 @@ enum TVRemoteCaptureOwnership: Equatable, Hashable, Sendable {
     }
 }
 
+struct TVRemoteSurfaceFocusStamp: Equatable, Sendable {
+    let surfaceGeneration: TVVisionGeneration
+    let revision: TVVisionSemanticRevision
+
+    init(
+        surfaceGeneration: TVVisionGeneration,
+        revision: TVVisionSemanticRevision
+    ) throws {
+        try surfaceGeneration.require(.surface)
+        self.surfaceGeneration = surfaceGeneration
+        self.revision = revision
+    }
+
+    func isNewer(than other: TVRemoteSurfaceFocusStamp) -> Bool {
+        if surfaceGeneration != other.surfaceGeneration {
+            return surfaceGeneration.rawValue > other.surfaceGeneration.rawValue
+        }
+        return revision > other.revision
+    }
+}
+
+enum TVRemoteFreshSurfaceFocusRequirement: Equatable, Sendable {
+    case none
+    case any
+    case after(TVRemoteSurfaceFocusStamp)
+
+    static func afterCurrent(
+        _ stamp: TVRemoteSurfaceFocusStamp?
+    ) -> TVRemoteFreshSurfaceFocusRequirement {
+        stamp.map(Self.after) ?? .any
+    }
+}
+
+struct TVRemoteFocusHandoffState: Equatable, Sendable {
+    let isStreamNavigationSelected: Bool
+    let isStreamWorkspaceVisible: Bool
+    let isOverlayVisible: Bool
+    let freshSurfaceFocusRequirement: TVRemoteFreshSurfaceFocusRequirement
+
+    static let localNavigation = TVRemoteFocusHandoffState(
+        isStreamNavigationSelected: false,
+        isStreamWorkspaceVisible: false,
+        isOverlayVisible: true,
+        freshSurfaceFocusRequirement: .any
+    )
+
+    func selectingStreamNavigation(
+        _ selected: Bool,
+        currentGeometryStamp: TVRemoteSurfaceFocusStamp?
+    ) -> TVRemoteFocusHandoffState {
+        TVRemoteFocusHandoffState(
+            isStreamNavigationSelected: selected,
+            isStreamWorkspaceVisible: isStreamWorkspaceVisible,
+            isOverlayVisible: selected ? isOverlayVisible : true,
+            freshSurfaceFocusRequirement: selected
+                ? freshSurfaceFocusRequirement
+                : .afterCurrent(currentGeometryStamp)
+        )
+    }
+
+    func settingWorkspaceVisible(
+        _ visible: Bool,
+        currentGeometryStamp: TVRemoteSurfaceFocusStamp?
+    ) -> TVRemoteFocusHandoffState {
+        TVRemoteFocusHandoffState(
+            isStreamNavigationSelected: isStreamNavigationSelected,
+            isStreamWorkspaceVisible: visible,
+            isOverlayVisible: visible ? isOverlayVisible : true,
+            freshSurfaceFocusRequirement: visible
+                ? freshSurfaceFocusRequirement
+                : .afterCurrent(currentGeometryStamp)
+        )
+    }
+
+    func settingOverlayVisible(
+        _ visible: Bool,
+        currentGeometryStamp: TVRemoteSurfaceFocusStamp?
+    ) -> TVRemoteFocusHandoffState {
+        guard visible != isOverlayVisible else { return self }
+        return TVRemoteFocusHandoffState(
+            isStreamNavigationSelected: isStreamNavigationSelected,
+            isStreamWorkspaceVisible: isStreamWorkspaceVisible,
+            isOverlayVisible: visible,
+            freshSurfaceFocusRequirement: .afterCurrent(currentGeometryStamp)
+        )
+    }
+
+    func observingSurfaceFocus(
+        stamp: TVRemoteSurfaceFocusStamp,
+        actualEligibility: TVVisionFocusEligibility
+    ) -> TVRemoteFocusHandoffState {
+        guard isStreamNavigationSelected,
+              isStreamWorkspaceVisible,
+              !isOverlayVisible,
+              actualEligibility == .eligible else {
+            return self
+        }
+        switch freshSurfaceFocusRequirement {
+        case .none:
+            return self
+        case .any:
+            break
+        case let .after(boundary):
+            guard stamp.isNewer(than: boundary) else { return self }
+        }
+        return TVRemoteFocusHandoffState(
+            isStreamNavigationSelected: isStreamNavigationSelected,
+            isStreamWorkspaceVisible: isStreamWorkspaceVisible,
+            isOverlayVisible: isOverlayVisible,
+            freshSurfaceFocusRequirement: .none
+        )
+    }
+
+    func resolving(
+        actualEligibility: TVVisionFocusEligibility
+    ) -> TVVisionFocusEligibility {
+        guard isStreamNavigationSelected,
+              isStreamWorkspaceVisible else {
+            return .ineligible(.notFocused)
+        }
+        guard !isOverlayVisible else {
+            return .ineligible(.overlayVisible)
+        }
+        guard freshSurfaceFocusRequirement == .none else {
+            return .ineligible(.notFocused)
+        }
+        return actualEligibility
+    }
+}
+
 enum TVRemoteReservedCommand: String, Codable, CaseIterable, Hashable, Sendable {
     case backMenu = "back-menu"
     case home

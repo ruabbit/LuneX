@@ -2121,6 +2121,9 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
+        model.setTVStreamWorkspaceVisible(true)
+        model.setTVStreamOverlayVisible(false)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
 
         model.receiveTVVisionGeometryUpdate(
             try makeTVVisionClosedGeometryUpdate(
@@ -2196,6 +2199,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil { mediaEnvironment.hasBlockedStop() }
         XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertTrue(model.tvStreamOverlayVisible)
         let reconnectApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
         XCTAssertEqual(reconnectApplications.last?.action, .stop(.reconnect))
@@ -2212,6 +2216,8 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil { mediaEnvironment.currentStartRecords().count == 2 }
         provider.yield(.channelsReady(.control), sessionID: record.sessionID)
         await waitUntil { model.session.isStreaming }
+        model.setTVStreamOverlayVisible(false)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
 
         let replacement = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
@@ -2236,6 +2242,7 @@ final class AppModelWorkflowTests: XCTestCase {
         provider.finish(sessionID: record.sessionID)
         await launchTask.value
         XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertTrue(model.tvStreamOverlayVisible)
         let terminatedApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
         XCTAssertEqual(
@@ -2424,13 +2431,15 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
+        XCTAssertTrue(model.tvStreamOverlayVisible)
+        model.setTVStreamWorkspaceVisible(true)
 
-        let geometry = try makeTVVisionActiveGeometryUpdate(
+        let overlayGeometry = try makeTVVisionActiveGeometryUpdate(
             platform: .tvOS,
             surfaceGeneration: 1,
             revision: 1
         )
-        model.receiveTVVisionGeometryUpdate(geometry)
+        model.receiveTVVisionGeometryUpdate(overlayGeometry)
         await waitUntil {
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().count == 3
@@ -2445,10 +2454,45 @@ final class AppModelWorkflowTests: XCTestCase {
             return XCTFail("Expected current tvOS input admission.")
         }
         XCTAssertEqual(input.supported, [.tvRemote])
-        XCTAssertEqual(input.focusEligibility, .eligible)
+        XCTAssertEqual(
+            input.focusEligibility,
+            .ineligible(.overlayVisible)
+        )
         XCTAssertTrue(leases.isEmpty)
 
-        let surface = geometry.surfaceGeneration
+        let surface = overlayGeometry.surfaceGeneration
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: surface) == .local
+        }
+        model.setTVStreamOverlayVisible(false)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+
+        let focusedGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 1,
+            revision: 2
+        )
+        model.receiveTVVisionGeometryUpdate(focusedGeometry)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 5
+        }
+        let focusApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        guard case .scene = focusApplications[3].action else {
+            return XCTFail("Expected refreshed scene before focus admission.")
+        }
+        guard case let .input(focusedInput, focusedLeases) =
+                focusApplications[4].action else {
+            return XCTFail("Expected fresh focused tvOS input admission.")
+        }
+        XCTAssertEqual(focusedInput.focusEligibility, .eligible)
+        XCTAssertTrue(focusedLeases.isEmpty)
+
         await waitUntil {
             model.tvRemoteSurfacePressDisposition(for: surface) == .captured
         }
@@ -2506,23 +2550,76 @@ final class AppModelWorkflowTests: XCTestCase {
             ]
         )
 
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 4, .right, .began)
+            ),
+            .captured
+        )
+        model.setTVStreamOverlayVisible(true)
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 6
+        }
+        XCTAssertEqual(
+            Array(mediaEnvironment.currentSentInputApplications().suffix(2))
+                .map(\.event),
+            [
+                .tvRemote(TVRemoteInputEvent(button: .right, isDown: true)),
+                .tvRemote(TVRemoteInputEvent(button: .right, isDown: false))
+            ]
+        )
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+        model.setTVStreamOverlayVisible(false)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
         model.receiveTVVisionGeometryUpdate(
-            try makeTVVisionClosedGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
                 platform: .tvOS,
                 surfaceGeneration: 1,
-                revision: 2
+                revision: 3
             )
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 4
+                .currentTVVisionPlatformPresentationApplications().count == 7
+                && model.tvRemoteSurfacePressDisposition(for: surface)
+                    == .captured
+        }
+
+        model.navigationSelection = .settings
+        XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+        model.navigationSelection = .stream
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 4
+            )
+        )
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 8
         }
         await waitUntil {
             model.tvRemoteSurfacePressDisposition(for: surface) == .local
         }
         XCTAssertEqual(
             model.receiveTVRemoteSurfacePressEvent(
-                try makeTVRemoteSurfacePress(surface, 4, .up, .began)
+                try makeTVRemoteSurfacePress(surface, 5, .up, .began)
             ),
             .local
         )

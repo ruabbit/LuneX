@@ -640,6 +640,9 @@ private struct StreamWorkspaceView: View {
     #if os(macOS)
     let platformLifecycle: PlatformLifecycleState
     #endif
+    #if os(tvOS)
+    @FocusState private var isTVStreamSurfaceFocused: Bool
+    #endif
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -695,6 +698,8 @@ private struct StreamWorkspaceView: View {
                 }
             )
                 .ignoresSafeArea()
+                .focusable()
+                .focused($isTVStreamSurfaceFocused)
             #else
             MetalStreamSurface(
                 renderState: appModel.renderState,
@@ -708,8 +713,15 @@ private struct StreamWorkspaceView: View {
                 .ignoresSafeArea()
             #endif
 
+            #if os(tvOS)
+            if appModel.tvStreamOverlayVisible {
+                StreamStatusOverlay()
+                    .padding(16)
+            }
+            #else
             StreamStatusOverlay()
                 .padding(16)
+            #endif
 
             if appModel.settings.input.showVirtualController && appModel.session.isStreaming {
                 VirtualControllerOverlay()
@@ -718,6 +730,20 @@ private struct StreamWorkspaceView: View {
             }
         }
         .background(Color.black)
+        #if os(tvOS)
+        .onAppear {
+            appModel.setTVStreamWorkspaceVisible(true)
+            isTVStreamSurfaceFocused = !appModel.tvStreamOverlayVisible
+        }
+        .onDisappear {
+            appModel.setTVStreamWorkspaceVisible(false)
+            isTVStreamSurfaceFocused = false
+        }
+        .onChange(of: appModel.tvStreamOverlayVisible, initial: true) {
+            _, isVisible in
+            isTVStreamSurfaceFocused = !isVisible
+        }
+        #endif
     }
 
     private var hdrPresentationDiagnosticLease: HDRPresentationDiagnosticLease {
@@ -748,6 +774,13 @@ private struct StreamStatusOverlay: View {
                     .font(.headline)
                 #if os(iOS)
                 MobilePictureInPictureCommandButton()
+                #endif
+                #if os(tvOS)
+                Button {
+                    appModel.setTVStreamOverlayVisible(false)
+                } label: {
+                    Label("Hide Controls", systemImage: "eye.slash")
+                }
                 #endif
                 Button {
                     Task {

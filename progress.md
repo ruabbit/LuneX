@@ -3035,3 +3035,23 @@
 - 首轮final-state `/tmp/LuneX-18-3_1-final-state.IrtwNB`通过strict、apply、工程哈希与精确scope后，被推测性的复数内部符号正则错误终止，尚未读取retained test/build。已确认实际单一failure-generation与failed-button up补发语义，下一步从fresh目录继续未完成门。
 - corrected final-state `/tmp/LuneX-18-3_1-final-state-r2.f0WIxl`已通过current source/task semantics、retained `5/5`、`41/41`、`1004/1003/1/0`、五平台build/Metal、privacy/reference/opt-in/process/diff，并保留首轮strict `9/9`、`13/50 next 3.2`、hash/scope结果；没有重复test/build/generator或simulator操作。下一步post-record与独立提交推送。
 - post-record `/tmp/LuneX-18-3_1-post-record.XZcSS0`通过`13/50 next 3.2`、project hash、12文件scope、evidence record、opt-in/process/reference和diff门；进入最终diff审计与独立提交推送。
+- 3.1已提交推送为`e3abab8 Capture tvOS stream surface presses`；fetch确认`HEAD == origin/main`、工作树clean，OpenSpec为`13/50 ready`、next 3.2。
+- 启动3.2审计：确认现有reducer已具overlay/notFocused release合同，缺口是tvOS SwiftUI overlay/workspace没有显式状态，AppModel只在actual UIKit focus callback后关闭admission。计划新增framework-free handoff gate、AppModel current application与明确tvOS focus target，不提前实现3.3 reserved commands或3.4–3.6 controller/release。
+- 完成3.2首版production/test修改：framework-free handoff + fresh geometry focus边界、AppModel同步owner gate、tvOS conditional overlay/FocusState/Hide Controls，以及pure owner/application矩阵。首个AppModel大补丁因远距离锚点失败且无部分写入，已拆为局部补丁完成；下一步格式、diff与warnings-as-errors focused编译。
+- 系统更新后接回唯一focused session 29733并等待到明确成功；`/tmp/LuneX-18-3_2-focused.xA2quo`结构化通过`4/4`且build零诊断，`git diff --check`通过，当前精确8文件scope与3.2预期一致。
+- OpenSpec保持`13/50 next 3.2`未勾选；下一步构建fixed tvOS/visionOS actual条件分支，再做竞态人工审计与后续完整门禁。未查询或操作simulator inventory/lifecycle，Keychain/live-host opt-in继续unset。
+- direct tvOS `/tmp/LuneX-18-3_2-tvos.2CvZrC`与visionOS `/tmp/LuneX-18-3_2-vision.XBsmrc`均结构化`succeeded/0/0/0`且有AIR/metallib；人工审计随后发现重复hide overlay会错误重置fresh-focus requirement。已改为同值no-op并加回归，旧focused/direct证据不再作为最终验收，下一步fresh重跑。
+- 修订fresh focused `/tmp/LuneX-18-3_2-focused-r2.KTjwGJ`通过`4/4`；direct tvOS `/tmp/LuneX-18-3_2-tvos-r2.aq89tz`和visionOS `/tmp/LuneX-18-3_2-vision-r2.qU9HtD`均零诊断成功且有Metal产物。
+- 扩大相关矩阵 `/tmp/LuneX-18-3_2-related.kbZRhO`通过`43/43`且零诊断；fresh normal `/tmp/LuneX-18-3_2-normal.KIqw0B`通过`1006/1005/1 exact Keychain skip/0`且零诊断。
+- 五平台fresh Debug `/tmp/LuneX-18-3_2-builds.AwsH8s`全部结构化`succeeded/0/0/0`且各有AIR/metallib；固定UUID仅作build destination，没有simulator inventory或生命周期操作。已同步合同/roadmap/planning，下一步repository pre-gate。
+- 首个文档同步补丁因错误的runtime contract换行锚点被原子拒绝，无部分写入；改用稳定章节标题后完成同步，没有重复test/build或模拟器操作。
+- repository pre-gate `/tmp/LuneX-18-3_2-repository-pre.CmABju`完整通过fixtures、strict `9/9`、pre-mark `13/50 next 3.2`、generator四次稳定、精确十文件scope、语义与全部retained evidence/boundary；已勾选3.2并同步为预期`14/50 next 3.3`。下一步只读final-state，不重复test/build/generator或simulator操作。
+- 勾选后的只读final-state `/tmp/LuneX-18-3_2-final-state.HzeLfq`通过strict `9/9`、apply `14/50 next 3.3`、稳定project hash、精确十一文件scope、current source/task、retained tests/builds及全部边界；3.2可独立提交推送，未重复test/build/generator或simulator操作。
+- post-record `/tmp/LuneX-18-3_2-post-record.K9dE1v`通过`14/50 next 3.3`、project hash、十一文件scope、pre/final引用、retained counts、opt-in/process/reference和diff门；进入最终diff审计与独立提交推送。
+- 最终diff审计发现overlay隐藏时remote termination/provider failure会留下无controls的Stream黑屏；已在统一platform clear中恢复overlay，并让现有reconnect/remote-termination测试验证两次终态恢复。此前3.2 test/build/pre/final证据失效，OpenSpec checkbox与roadmap已回退到`13/50 next 3.2`，需fresh重跑后再完成。
+- 终态修订fresh focused `/tmp/LuneX-18-3_2-focused-r3.b9ciW0`通过`5/5`、相关矩阵`/tmp/LuneX-18-3_2-related-r2.FdIxGY`通过`43/43`、normal `/tmp/LuneX-18-3_2-normal-r2.7WhDLh`通过`1006/1005/1 exact Keychain skip/0`，均零诊断。
+- 修订五平台Debug `/tmp/LuneX-18-3_2-builds-r2.huymlz`全部`succeeded/0/0/0`且各有AIR/metallib；固定UUID仅作destination，没有simulator inventory/lifecycle。下一步从头运行修订repository pre-gate。
+- 修订repository pre-gate首轮在fixtures、OpenSpec、generator与scope通过后，因包装器用单行`rg`跨行匹配terminal overlay调用而退出；不是源码/测试失败。下一轮从fresh目录改用函数上下文断言，不重复test/build或simulator操作。
+- 修订repository pre-gate `/tmp/LuneX-18-3_2-repository-pre-r3.rICtus`从头通过fixtures、strict/pre-mark、四次generator、十文件scope、terminal/source/test semantics、修订retained evidence与全部边界；已重新勾选3.2并推进为预期`14/50 next 3.3`。下一步只读final-state。
+- 修订final-state `/tmp/LuneX-18-3_2-final-state-r2.dFJcBe`只读通过`14/50 next 3.3`、十一文件scope、project hash、terminal/current semantics、修订retained tests/五平台build和全部边界；没有重复test/build/generator/simulator操作，3.2可提交推送。
+- 修订post-record `/tmp/LuneX-18-3_2-post-record-r2.CzhtnJ`通过`14/50 next 3.3`、project hash、十一文件scope、修订pre/final引用、retained counts、opt-in/process/reference和diff门；进入最终diff审计与独立提交推送。

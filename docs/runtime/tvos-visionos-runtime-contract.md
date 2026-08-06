@@ -885,6 +885,73 @@ HDR/spatial output, live Sunshine, latency, performance, power, or thermal
 acceptance. Tasks 3.2 through 3.7 retain overlay/focus, reserved command,
 controller, release-barrier, and broader application verification.
 
+## Task 3.2 SwiftUI focus and overlay handoff
+
+The tvOS stream workspace now has an explicit application-level focus handoff
+contract shared by SwiftUI and the current surface press owner. Remote capture
+requires stream navigation to be selected, the stream workspace to be visible,
+the controls overlay to be hidden, and a fresh actual surface callback to report
+an active, visible, focus-eligible surface. Browser, settings, diagnostics, a
+visible overlay, and a disappearing workspace remain local.
+
+Showing the overlay or leaving stream navigation updates the current press owner
+synchronously before SwiftUI moves focus. Existing held presses therefore enter
+the reducer's ordered release path before local controls can own subsequent
+presses. Hiding the overlay does not reuse the last eligible geometry: capture
+waits for a newer `(surface generation, semantic revision)` stamp. A replacement
+surface may restart at a lower semantic revision, while an old surface or the
+same revision cannot satisfy the fresh-focus requirement. Repeating the current
+overlay visibility is a strict no-op so an idempotent hide cannot strand capture
+waiting for a geometry callback that no UI change will produce.
+
+The tvOS SwiftUI branch conditionally presents the status controls, exposes a
+`Hide Controls` command, and makes the Metal surface an explicit `FocusState`
+target. Back/Menu/Home, volume, capture, power, and unsupported system-command
+policy remain task 3.3. Controller handlers, feedback, and the broader
+stop/focus-loss provider release barrier remain tasks 3.4 through 3.6.
+Reconnect, remote termination, provider failure, and other platform-runtime
+clear paths restore the controls overlay before discarding current geometry and
+ownership, so Stream navigation cannot remain on a control-free terminal view.
+
+Task 3.2 verification retains:
+
+- focused evidence `/tmp/LuneX-18-3_2-focused-r3.b9ciW0` with `5/5` passed and
+  zero structured diagnostics;
+- related evidence `/tmp/LuneX-18-3_2-related-r2.FdIxGY` with `43/43` passed across
+  the complete remote contract/owner suite, surface and geometry lifecycle, and
+  relevant AppModel replacement and terminal paths;
+- normal evidence `/tmp/LuneX-18-3_2-normal-r2.7WhDLh` with
+  `1006 total / 1005 passed / 1 skipped / 0 failed`, where the sole skip is the
+  explicitly disabled real-Keychain round trip; and
+- macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro Debug
+  evidence `/tmp/LuneX-18-3_2-builds-r2.huymlz`, all `succeeded/0/0/0` with one
+  AIR/metallib pair. The Apple TV build covers the actual tvOS SwiftUI branch;
+  the Vision Pro build proves compile-time isolation after the terminal fix;
+  and
+- revised repository pre-gate
+  `/tmp/LuneX-18-3_2-repository-pre-r3.rICtus`, which passed fixture self/tree,
+  OpenSpec strict `9/9`, pre-mark `13/50 next 3.2`, four identical generator
+  hashes, exact ten-file scope, current source/test semantics, all revised
+  retained evidence, privacy/clean-room/reference boundaries, disabled opt-ins,
+  process checks, and `git diff --check`; and
+- revised post-mark final-state evidence
+  `/tmp/LuneX-18-3_2-final-state-r2.dFJcBe`, which confirmed OpenSpec
+  `14/50 next 3.3`, exact 11-file scope, stable project hash, current terminal
+  and focus semantics, all revised retained evidence, and every boundary without
+  rerunning tests, builds, the generator, or simulator operations.
+
+The earlier pre-mark and post-mark gates were superseded when final diff review
+found that a hidden overlay was not restored by terminal runtime clear. They are
+not retained as final task evidence. The revised pre-gate passed before task 3.2
+was marked again; post-mark final-state remains a separate proof tier.
+
+All test commands removed real-Keychain and live-host opt-ins. Fixed UUIDs were
+build destinations only; no simulator inventory or lifecycle command ran. The
+results prove deterministic handoff ownership and unsigned SDK branch
+compatibility. They do not prove actual tvOS focus-engine behavior, physical
+Siri Remote feel, signed installation, host receipt, HDR/spatial output, live
+Sunshine, latency, performance, power, or thermal acceptance.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the
