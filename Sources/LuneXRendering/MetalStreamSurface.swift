@@ -79,6 +79,80 @@ enum MobileStreamSurfaceAttachmentEvent: CaseIterable, Equatable, Sendable {
     case registeredTraitsChanged
 }
 
+enum TVVisionUIKitStreamSurfaceCallback: CaseIterable, Equatable, Sendable {
+    case attachment
+    case layout
+    case windowScene
+    case visibility
+    case scale
+    case drawable
+    case focusEligibility
+}
+
+struct TVVisionUIKitStreamSurfaceState<WindowScene: AnyObject> {
+    let isAttached: Bool
+    let windowScene: WindowScene?
+    let isVisible: Bool
+    let scale: Double
+    let drawableSize: CGSize
+    let isFocusEligible: Bool
+}
+
+@MainActor
+final class TVVisionUIKitStreamSurfaceRelay<
+    Surface: AnyObject,
+    WindowScene: AnyObject
+> {
+    typealias State = TVVisionUIKitStreamSurfaceState<WindowScene>
+    typealias StateReader = @MainActor (Surface) -> State
+    typealias Handler = @MainActor (
+        Surface,
+        TVVisionUIKitStreamSurfaceCallback,
+        State
+    ) -> Void
+
+    private weak var surface: Surface?
+    private var stateReader: StateReader?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        surface: Surface,
+        stateReader: @escaping StateReader,
+        handler: @escaping Handler
+    ) {
+        self.surface = surface
+        self.stateReader = stateReader
+        self.handler = handler
+    }
+
+    func updateHandler(_ handler: @escaping Handler) {
+        guard !isInvalidated else { return }
+        self.handler = handler
+    }
+
+    func publish(_ callbacks: [TVVisionUIKitStreamSurfaceCallback]) {
+        guard !isInvalidated,
+              !callbacks.isEmpty,
+              let surface,
+              let stateReader else {
+            return
+        }
+        let state = stateReader(surface)
+        for callback in callbacks {
+            handler?(surface, callback, state)
+        }
+    }
+
+    func invalidate() {
+        guard !isInvalidated else { return }
+        isInvalidated = true
+        handler = nil
+        stateReader = nil
+        surface = nil
+    }
+}
+
 @MainActor
 final class MobileStreamSurfaceAttachmentRelay<Surface: AnyObject> {
     typealias Handler = @MainActor (
@@ -2436,6 +2510,150 @@ struct MetalStreamSurface: NSViewRepresentable {
     }
 }
 #else
+#if os(tvOS) || os(visionOS)
+@MainActor
+final class TVVisionStreamMetalView: MTKView {
+    typealias SurfaceRelay = TVVisionUIKitStreamSurfaceRelay<
+        TVVisionStreamMetalView,
+        UIWindowScene
+    >
+    typealias SurfaceCallbackHandler = SurfaceRelay.Handler
+
+    private var surfaceRelay: SurfaceRelay?
+    private var traitChangeRegistration:
+        (any UITraitChangeRegistration)?
+
+    override var isHidden: Bool {
+        didSet {
+            guard isHidden != oldValue else { return }
+            publishSurfaceCallbacks([.visibility, .focusEligibility])
+        }
+    }
+
+    override var alpha: CGFloat {
+        didSet {
+            guard alpha != oldValue else { return }
+            publishSurfaceCallbacks([.visibility, .focusEligibility])
+        }
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            guard isUserInteractionEnabled != oldValue else { return }
+            publishSurfaceCallbacks([.focusEligibility])
+        }
+    }
+
+    init(
+        frame frameRect: CGRect = .zero,
+        device: (any MTLDevice)? = nil,
+        surfaceCallbackHandler:
+            @escaping SurfaceCallbackHandler = { _, _, _ in }
+    ) {
+        super.init(frame: frameRect, device: device)
+        surfaceRelay = SurfaceRelay(
+            surface: self,
+            stateReader: { surface in
+                let window = surface.window
+                let isAttached = window != nil
+                let isVisible = isAttached
+                    && !surface.isHidden
+                    && surface.alpha > 0
+                    && window?.isHidden == false
+                return TVVisionUIKitStreamSurfaceState(
+                    isAttached: isAttached,
+                    windowScene: window?.windowScene,
+                    isVisible: isVisible,
+                    scale: Double(surface.contentScaleFactor),
+                    drawableSize: surface.drawableSize,
+                    isFocusEligible: isVisible
+                        && surface.isUserInteractionEnabled
+                        && surface.canBecomeFocused
+                )
+            },
+            handler: surfaceCallbackHandler
+        )
+        traitChangeRegistration = registerForTraitChanges([
+            UITraitDisplayScale.self,
+            UITraitUserInterfaceStyle.self
+        ]) { (view: TVVisionStreamMetalView, _) in
+            view.publishSurfaceCallbacks([
+                .visibility,
+                .scale,
+                .drawable,
+                .focusEligibility
+            ])
+        }
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("TVVisionStreamMetalView must be created programmatically")
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        publishSurfaceCallbacks([
+            .attachment,
+            .windowScene,
+            .visibility,
+            .scale,
+            .drawable,
+            .focusEligibility
+        ])
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        publishSurfaceCallbacks([
+            .layout,
+            .visibility,
+            .scale,
+            .drawable,
+            .focusEligibility
+        ])
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        publishSurfaceCallbacks([.layout, .drawable])
+    }
+
+    override func didUpdateFocus(
+        in context: UIFocusUpdateContext,
+        with coordinator: UIFocusAnimationCoordinator
+    ) {
+        super.didUpdateFocus(in: context, with: coordinator)
+        publishSurfaceCallbacks([.focusEligibility])
+    }
+
+    func updateSurfaceCallbackHandler(
+        _ handler: @escaping SurfaceCallbackHandler
+    ) {
+        surfaceRelay?.updateHandler(handler)
+    }
+
+    func refreshSurfaceCallbacks() {
+        publishSurfaceCallbacks(TVVisionUIKitStreamSurfaceCallback.allCases)
+    }
+
+    func invalidateSurfaceCallbacks() {
+        if let traitChangeRegistration {
+            unregisterForTraitChanges(traitChangeRegistration)
+            self.traitChangeRegistration = nil
+        }
+        surfaceRelay?.invalidate()
+        surfaceRelay = nil
+    }
+
+    private func publishSurfaceCallbacks(
+        _ callbacks: [TVVisionUIKitStreamSurfaceCallback]
+    ) {
+        surfaceRelay?.publish(callbacks)
+    }
+}
+#endif
+
 #if os(iOS)
 extension MobileStreamSceneLifecycleNotificationNames {
     static let current = MobileStreamSceneLifecycleNotificationNames(
@@ -3120,6 +3338,9 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamMetalView.SceneWindowSnapshotHandler = { _ in }
     var displayEDREventHandler:
         MobileStreamMetalView.DisplayEDREventHandler = { _ in }
+#elseif os(tvOS) || os(visionOS)
+    var surfaceCallbackHandler:
+        TVVisionStreamMetalView.SurfaceCallbackHandler = { _, _, _ in }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -3164,6 +3385,12 @@ struct MetalStreamSurface: UIViewRepresentable {
         if let surfaceGeneration = view.surfaceGeneration {
             context.coordinator.activateSurfaceGeneration(surfaceGeneration)
         }
+#elseif os(tvOS) || os(visionOS)
+        let view = TVVisionStreamMetalView(
+            frame: .zero,
+            device: MTLCreateSystemDefaultDevice(),
+            surfaceCallbackHandler: surfaceCallbackHandler
+        )
 #else
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
 #endif
@@ -3207,6 +3434,13 @@ struct MetalStreamSurface: UIViewRepresentable {
                     coordinator?.handleInputOutput(output)
                 }
             )
+#elseif os(tvOS) || os(visionOS)
+        (view as? TVVisionStreamMetalView)?
+            .updateSurfaceCallbackHandler(surfaceCallbackHandler)
+        context.coordinator.update(
+            renderState: renderState,
+            inputOutputHandler: { _ in }
+        )
 #else
         context.coordinator.update(
             renderState: renderState,
@@ -3224,6 +3458,9 @@ struct MetalStreamSurface: UIViewRepresentable {
             )
         }
 #endif
+#if os(tvOS) || os(visionOS)
+        (view as? TVVisionStreamMetalView)?.refreshSurfaceCallbacks()
+#endif
         if schedule.requestsImmediateDraw { view.draw() }
     }
 
@@ -3238,6 +3475,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             }
             mobileView.invalidateAttachmentCallbacks()
         }
+#elseif os(tvOS) || os(visionOS)
+        (view as? TVVisionStreamMetalView)?.invalidateSurfaceCallbacks()
 #endif
         coordinator.presenter.stop()
         view.delegate = nil

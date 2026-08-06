@@ -6,6 +6,121 @@ import XCTest
 
 final class StreamMetalPresenterTests: XCTestCase {
     @MainActor
+    func testTVVisionSurfaceRelayPublishesOrderedStateAndReplacesHandler() {
+        let scene = TVVisionSurfaceRelayTestScene()
+        let surface = TVVisionSurfaceRelayTestSurface(
+            isAttached: true,
+            scene: scene,
+            isVisible: true,
+            scale: 2,
+            drawableSize: CGSize(width: 1920, height: 1080),
+            isFocusEligible: true
+        )
+        var firstCallbacks: [TVVisionUIKitStreamSurfaceCallback] = []
+        var replacementCallbacks: [TVVisionUIKitStreamSurfaceCallback] = []
+        var stateReadCount = 0
+        let relay = TVVisionUIKitStreamSurfaceRelay(
+            surface: surface,
+            stateReader: { candidate in
+                stateReadCount += 1
+                return tvVisionSurfaceRelayTestState(candidate)
+            },
+            handler: { candidate, callback, state in
+                XCTAssertTrue(candidate === surface)
+                XCTAssertTrue(state.windowScene === scene)
+                XCTAssertTrue(state.isAttached)
+                XCTAssertTrue(state.isVisible)
+                XCTAssertEqual(state.scale, 2)
+                XCTAssertEqual(
+                    state.drawableSize,
+                    CGSize(width: 1920, height: 1080)
+                )
+                XCTAssertTrue(state.isFocusEligible)
+                firstCallbacks.append(callback)
+            }
+        )
+
+        relay.publish([
+            .attachment,
+            .windowScene,
+            .visibility,
+            .scale,
+            .drawable,
+            .focusEligibility
+        ])
+        relay.updateHandler { candidate, callback, state in
+            XCTAssertTrue(candidate === surface)
+            XCTAssertNil(state.windowScene)
+            XCTAssertFalse(state.isAttached)
+            XCTAssertFalse(state.isVisible)
+            XCTAssertEqual(state.scale, 1)
+            XCTAssertEqual(state.drawableSize, .zero)
+            XCTAssertFalse(state.isFocusEligible)
+            replacementCallbacks.append(callback)
+        }
+        surface.isAttached = false
+        surface.scene = nil
+        surface.isVisible = false
+        surface.scale = 1
+        surface.drawableSize = .zero
+        surface.isFocusEligible = false
+        relay.publish([.attachment, .windowScene, .visibility])
+
+        XCTAssertEqual(stateReadCount, 2)
+        XCTAssertEqual(
+            firstCallbacks,
+            [
+                .attachment,
+                .windowScene,
+                .visibility,
+                .scale,
+                .drawable,
+                .focusEligibility
+            ]
+        )
+        XCTAssertEqual(
+            replacementCallbacks,
+            [.attachment, .windowScene, .visibility]
+        )
+    }
+
+    @MainActor
+    func testTVVisionSurfaceRelayRejectsLateCallbacksAndRetainsNoSurface() {
+        var surface: TVVisionSurfaceRelayTestSurface? =
+            TVVisionSurfaceRelayTestSurface()
+        weak let weakSurface = surface
+        var callbacks: [TVVisionUIKitStreamSurfaceCallback] = []
+        let relay = TVVisionUIKitStreamSurfaceRelay(
+            surface: surface!,
+            stateReader: tvVisionSurfaceRelayTestState,
+            handler: { _, callback, _ in callbacks.append(callback) }
+        )
+
+        relay.publish([])
+        surface = nil
+        relay.publish(TVVisionUIKitStreamSurfaceCallback.allCases)
+        XCTAssertNil(weakSurface)
+        relay.invalidate()
+        relay.invalidate()
+        relay.updateHandler { _, callback, _ in callbacks.append(callback) }
+        relay.publish(TVVisionUIKitStreamSurfaceCallback.allCases)
+
+        XCTAssertTrue(callbacks.isEmpty)
+        XCTAssertEqual(
+            TVVisionUIKitStreamSurfaceCallback.allCases,
+            [
+                .attachment,
+                .layout,
+                .windowScene,
+                .visibility,
+                .scale,
+                .drawable,
+                .focusEligibility
+            ]
+        )
+    }
+
+    @MainActor
     func testMobileSurfaceAttachmentRelayReplacesAndInvalidatesHandler() {
         let surface = MobileSurfaceAttachmentTestSurface()
         var firstEvents: [MobileStreamSurfaceAttachmentEvent] = []
@@ -3347,6 +3462,46 @@ private typealias MobileSurfaceAttachmentTestOwner =
         MobileSurfaceAttachmentTestScene,
         MobileSurfaceAttachmentTestScreen
     >
+
+private final class TVVisionSurfaceRelayTestScene {}
+
+private final class TVVisionSurfaceRelayTestSurface {
+    var isAttached: Bool
+    var scene: TVVisionSurfaceRelayTestScene?
+    var isVisible: Bool
+    var scale: Double
+    var drawableSize: CGSize
+    var isFocusEligible: Bool
+
+    init(
+        isAttached: Bool = false,
+        scene: TVVisionSurfaceRelayTestScene? = nil,
+        isVisible: Bool = false,
+        scale: Double = 0,
+        drawableSize: CGSize = .zero,
+        isFocusEligible: Bool = false
+    ) {
+        self.isAttached = isAttached
+        self.scene = scene
+        self.isVisible = isVisible
+        self.scale = scale
+        self.drawableSize = drawableSize
+        self.isFocusEligible = isFocusEligible
+    }
+}
+
+private func tvVisionSurfaceRelayTestState(
+    _ surface: TVVisionSurfaceRelayTestSurface
+) -> TVVisionUIKitStreamSurfaceState<TVVisionSurfaceRelayTestScene> {
+    TVVisionUIKitStreamSurfaceState(
+        isAttached: surface.isAttached,
+        windowScene: surface.scene,
+        isVisible: surface.isVisible,
+        scale: surface.scale,
+        drawableSize: surface.drawableSize,
+        isFocusEligible: surface.isFocusEligible
+    )
+}
 
 private typealias MobileSceneLifecycleTestObserver =
     MobileStreamSceneLifecycleObserver<MobileSceneLifecycleTestScene>

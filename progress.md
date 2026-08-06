@@ -2911,3 +2911,18 @@
 - repository pre-gate `/tmp/LuneX-18-1_6-repository-pre-r2.WVVlEP`通过fixtures、strict `9/9`、勾选前apply `5/50 next 1.6`、generator四次稳定同哈希、API正向/负向状态与诊断、toolchain/SDK、entitlement差异、精确五文件scope、reference/production/opt-in/进程和diff检查。
 - pre-gate通过后已勾选OpenSpec 1.6并同步权威进度为`6/50 ready`、next 2.1；下一步只读final-state，不重跑app测试/构建或查询simulator。
 - 勾选后final-state `/tmp/LuneX-18-1_6-final-state.e4uqxq`一次通过fixtures、strict `9/9`、apply `6/50 next 2.1`、generator四次同哈希、API `24/24 + 12/12`与诊断、entitlement差异、精确六文件scope、reference/production/opt-in/进程和diff检查；未执行app测试/构建、simctl、runtime或Keychain。
+
+## 2026-08-07 阶段 18 任务 2.1 启动
+
+- 系统更新后恢复检查通过：active goal不变，`HEAD == origin/main == cfee986c14c622c36448b3b735e9f2aa4e20b55c`、工作树clean；Xcode 26.4、Swift 6.3、tvOS/visionOS 26.4 SDK可用，OpenSpec为`6/50 ready`、next 2.1。
+- 重读planning/OpenSpec skills、全部change context、三份planning文件及surface/mobile lifecycle/presenter tests/generator；没有查询或操作simulator，也没有访问真实Keychain。
+- 确认2.1只新增tvOS/visionOS actual UIKit Metal view callback boundary：attachment/layout trigger与actual scene/visibility/scale/drawable/focus reading，配套replacement、late callback、weak ownership和幂等dismantle测试；generation owner、geometry normalization与application接线分别保留给2.2–2.5。
+- 完成2.1实现：新增七类raw callback、generic state/relay和仅tvOS/visionOS编译的actual `TVVisionStreamMetalView`；SwiftUI make/update/dismantle分别创建、替换handler/刷新及失效callback，阶段17 iOS/iPadOS pipeline不变。
+- focused final `/tmp/LuneX-18-2_1-focused-final.Dn6Ogw`通过`2/2`；direct tvOS `/tmp/LuneX-18-2_1-tvos-final.7cwVUt`与visionOS `/tmp/LuneX-18-2_1-visionos-final.9SGGGX` compile均成功。
+- fresh normal `/tmp/LuneX-18-2_1-normal.qH028K`通过`963 total / 962 passed / 1 skipped / 0 failed`，唯一skip是显式真实Keychain round trip；Keychain/live-host opt-in均unset。
+- 五平台Debug `/tmp/LuneX-18-2_1-builds.mherO0`中macOS、固定iPhone/iPad/Apple TV/Vision Pro均`succeeded/0/0/0`且各有AIR/metallib；无本任务build/test残留进程，没有查询或操作simulator。
+- 已人工审阅完整code/test diff并同步runtime contract、roadmap及三份planning文件；OpenSpec保持`6/50 next 2.1`直到repository pre-gate通过。
+- repository pre-gate `/tmp/LuneX-18-2_1-repository-pre.raFP1x`从头通过fixture self/tree、OpenSpec strict `9/9`与apply `6/50 next 2.1`、generator四次稳定同哈希、精确七文件scope、callback/weak ownership/iOS isolation/privacy/reference、retained focused/normal/五build、opt-in/进程及diff检查。
+- pre-gate通过后已勾选OpenSpec 2.1并同步路线图与planning状态；预期权威进度`7/50 ready`、next 2.2，下一步运行只读final-state，不重复test/build或simulator inventory。
+- 勾选后final-state `/tmp/LuneX-18-2_1-final-state.dAGCFP`从头通过fixture、strict `9/9`、apply精确`7/50 next 2.2`、generator四次同哈希、retained focused `2/2`、normal `963/962/1 exact Keychain/0`、五build `succeeded/0/0/0`、精确八文件scope、docs/privacy/reference/opt-in/进程与diff检查；2.1可独立提交推送。
+- post-record人工diff发现状态补丁的通用锚点误命中历史阶段17任务5.6；production、tests和OpenSpec未受影响。已恢复历史行并仅将阶段18任务2.1标记为`complete`，随后重新运行轻量门。

@@ -2390,3 +2390,16 @@
 - repository pre-gate `/tmp/LuneX-18-1_6-repository-pre-r2.WVVlEP`确认task 1.6文档与保留证据一致：strict `9/9`、勾选前apply `5/50 next 1.6`、generator四次同哈希、`24/24 + 12/12`及诊断分类、toolchain/SDK、entitlement差异、五文件scope和repository边界全部通过。
 - 1.6勾选后权威进度为`6/50 ready`、next 2.1。API probe只证明compile-time surface；它没有改变production capability、运行simulator、生成signed artifact或完成physical/live验收。
 - 勾选后final-state `/tmp/LuneX-18-1_6-final-state.e4uqxq`再次确认OpenSpec、generator、API矩阵、entitlement、六文件scope与repository边界一致；因此1.6可独立提交，2.1才开始修改actual surface bridge。
+
+## 2026-08-07 阶段 18 任务 2.1 surface bridge 审计
+
+- non-macOS `MetalStreamSurface`当前仅在`os(iOS)`使用`MobileStreamMetalView`；tvOS/visionOS仍直接创建裸`MTKView`，update只复制render coordinate snapshot的drawable size，没有attachment、actual window scene、visibility、scale或focus callback边界。
+- 阶段17的mobile bridge已拥有iOS专用surface generation、`UIWindow`/`UIWindowScene`/`UIScreen` attachment owner、scene notification、geometry、EDR及touch/pointer pipeline；将其外扩到tvOS/visionOS会错误引入`UIScreen`假设并破坏已封版合同。
+- 2.1应只提供framework-object-local raw callback boundary：实际view触发事件时读取自身window scene、visible、content scale、drawable和focus eligibility，并立即交给main-actor handler；不存储或跨actor传递`UIWindowScene`，由2.2另行生成checked immutable snapshot。
+- relay需要弱持有surface、允许SwiftUI update替换handler、dismantle后拒绝late callback且重复invalidate无副作用；这些性质可在macOS test target用generic fake object确定性验证，tvOS/visionOS actual subclass则由两平台warnings-as-errors build证明SDK编译边界。
+- 2.1实现符合上述边界：七类raw callback覆盖attachment/layout/window scene/visibility/scale/drawable/focus eligibility；actual subclass只在`os(tvOS) || os(visionOS)`编译，iOS/iPadOS原有attachment/scene/EDR/input pipeline没有外扩或改变。
+- focused `/tmp/LuneX-18-2_1-focused-final.Dn6Ogw`通过`2/2`，normal `/tmp/LuneX-18-2_1-normal.qH028K`通过`963/962/1 exact Keychain skip/0`；真实Keychain与live-host opt-in均unset。
+- 五平台Debug `/tmp/LuneX-18-2_1-builds.mherO0`全部结构化`succeeded/0 error/0 warning/0 analyzer warning`且各有AIR/metallib；固定UUID只用作build destination，没有simulator inventory或生命周期操作。
+- 当前证据证明actual framework-local callback和unsigned build边界，不证明2.2 generation/stale rejection、2.3 normalized geometry、actual scene lifecycle、AppModel/media/input接线、signed/physical/live行为。
+- repository pre-gate `/tmp/LuneX-18-2_1-repository-pre.raFP1x`通过strict `9/9`、勾选前`6/50 next 2.1`、generator四次稳定同哈希、精确七文件scope、callback/weak ownership/iOS isolation、retained evidence及repository边界；因此2.1可勾选，下一项为2.2。
+- 勾选后final-state `/tmp/LuneX-18-2_1-final-state.dAGCFP`确认`7/50 ready`、next 2.2，generator与全部保留证据、八文件scope及repository边界一致；没有重复test/build、simulator inventory或Keychain访问。

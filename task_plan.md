@@ -665,3 +665,19 @@
 - **OpenSpec：** pre-gate通过后勾选1.6，权威进度`6/50 ready`、next 2.1；当前仍无actual runtime、simulator interaction、signed artifact、physical或live-host证明。
 - **final-state：** `/tmp/LuneX-18-1_6-final-state.e4uqxq`一次完整通过fixtures、strict `9/9`、apply `6/50 next 2.1`、generator四次同一SHA-256、API `24/24 + 12/12`及诊断分类、entitlement差异、精确六文件scope、reference/production/opt-in/进程与diff门。
 - **下一步：** 人工审阅完整diff并运行轻量post-record门；通过后独立提交推送，再进入2.1 actual surface bridge callbacks。
+
+## 2026-08-07 阶段 18 任务 2.1 启动
+
+- **状态：** `complete`（待独立提交与推送）
+- **基线：** 1.6已以`cfee986 Document tvOS visionOS API boundaries`提交推送，`HEAD == origin/main == cfee986c14c622c36448b3b735e9f2aa4e20b55c`且工作树clean；OpenSpec为`6/50 ready`、next 2.1。
+- **范围：** 为tvOS/visionOS的non-iOS UIKit `MTKView` bridge新增独立main-actor callback relay和actual view subclass，发布attachment/layout trigger及view-local `UIWindowScene?`、visibility、scale、drawable size和focus eligibility原始reading；支持handler replacement、弱持有和幂等失效。
+- **边界：** 不复用或改变阶段17的iOS/iPadOS `MobileStreamMetalView` pipeline；本项不创建2.2 generation owner、不做2.3 finite normalization/semantic revision、不接AppModel、输入或媒体coordinator。
+- **验收：** 新增relay replacement/late-callback/weak-retention/idempotent teardown focused tests，生成工程后运行fresh focused、normal、五平台Debug及repository/OpenSpec门；继续显式移除Keychain/live-host opt-in，不查询或操作simulator。
+- **实现：** 新增七类callback、generic raw state与弱持有main-actor relay；tvOS/visionOS actual `TVVisionStreamMetalView`从自身window/view读取状态，SwiftUI update替换handler，dismantle先失效callback再停止presenter。iOS/iPadOS `MobileStreamMetalView`分支没有改变。
+- **focused：** `/tmp/LuneX-18-2_1-focused-final.Dn6Ogw`为`2/2 passed / 0 skipped / 0 failed`，覆盖callback顺序、每批单次读取、handler replacement、actual scene identity、weak ownership、empty/late callback、exact enum matrix与重复invalidate。
+- **normal：** `/tmp/LuneX-18-2_1-normal.qH028K`为`963 total / 962 passed / 1 skipped / 0 failed`；唯一skip精确为显式真实Keychain round trip，Keychain/live-host opt-in均unset。
+- **五平台build：** `/tmp/LuneX-18-2_1-builds.mherO0`中macOS与固定iPhone/iPad/Apple TV/Vision Pro Debug全部`succeeded/0 error/0 warning/0 analyzer warning`，每份各有AIR和metallib；UUID仅作build destination，没有查询或操作simulator。
+- **下一步：** 运行repository pre-gate；通过后才勾选2.1并确认`7/50 ready`、next 2.2，随后运行只读final-state、独立commit/push。
+- **repository pre-gate：** `/tmp/LuneX-18-2_1-repository-pre.raFP1x`从头通过fixture self/tree、OpenSpec strict `9/9`与勾选前`6/50 next 2.1`、generator四次稳定SHA-256 `4b641128ba2139552abc2319671e0e4749b818167b5f9151ada3ac16c80774b0`、精确七文件scope、callback/weak ownership/iOS isolation/privacy/reference、retained test/build、opt-in/进程及diff门。
+- **OpenSpec：** pre-gate通过后已勾选2.1，权威进度预期为`7/50 ready`、next 2.2；下一步运行勾选后final-state，不重复test/build或simulator inventory。
+- **final-state：** `/tmp/LuneX-18-2_1-final-state.dAGCFP`从头通过fixture、strict `9/9`、apply精确`7/50 next 2.2`、generator四次稳定同哈希、retained focused/normal/五build、精确八文件scope、docs/privacy/reference/opt-in/进程与diff门；2.1可独立提交推送。

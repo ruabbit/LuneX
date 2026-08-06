@@ -39,7 +39,7 @@ flowchart LR
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
 | 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
 | 17 | `in_progress`，OpenSpec `35/36` | actual UIKit scene/window/geometry/input、actual-window mobile EDR、sample-buffer PiP runtime、actual-state continuity policy、serialized mobile media owner、media environment/AppModel application与bounded diagnostics、stop/failure/replacement清理、iPhone/iPad单值`audio`配置、UI/回归、normal/build/repository/analyzer/sanitizer/resource/fixed-simulator，以及6.7合同/证明边界封版均已完成 | 唯一剩余6.6 signed/physical PiP/background/Stage Manager/EDR/live Sunshine验收；固定ENet保留4项已归属analyzer finding |
-| 18 | `in_progress`，OpenSpec `6/50` | 1.1–1.6完成；tvOS/visionOS 26.4 simulator/device SDK正向`24/24`与预期失败`12/12` direct API probes及repository门通过 | 下一项2.1 actual surface bridge callbacks；仍无actual handler、generation-owned platform owner、输入/scene/media接线、signed artifact或物理设备证据 |
+| 18 | `in_progress`，OpenSpec `7/50` | 1.1–2.1完成；actual tvOS/visionOS surface raw callback bridge、focused/normal、五平台Debug与repository gate已通过 | 下一项2.2 generation owner；仍无normalized geometry、输入/scene/media接线、signed artifact或物理设备证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
 | 20 | `pending` | Release配置与sanitizer静态门禁可执行 | 尚无签名发布包、端到端延迟、功耗、热状态、弱网、内存基线与长时真机证据 |
 
@@ -156,7 +156,7 @@ flowchart LR
 ## 阶段 18：tvOS/visionOS 运行适配
 
 - `docs/runtime/tvos-visionos-runtime-contract.md`是阶段18 target/config、actual ownership、public API、simulator identity、clean-room和physical/live proof boundary的权威合同。
-- OpenSpec `integrate-tvos-visionos-runtime`当前`6/50 ready`，1.1–1.6完成；direct probes在tvOS/visionOS 26.4 simulator和device SDK上通过`24/24`正向typecheck、`12/12`预期失败及repository门。下一项2.1扩展actual non-iOS UIKit Metal surface bridge callbacks，probe没有连接actual runtime。
+- OpenSpec `integrate-tvos-visionos-runtime`当前`7/50 ready`，1.1–2.1完成；独立于iOS mobile pipeline的actual tvOS/visionOS UIKit Metal surface raw callback bridge、focused `2/2`、normal `963/962/1 exact Keychain skip/0`、五平台Debug及repository pre-gate均通过。下一项2.2实现checked generation owner；2.3 normalized geometry及后续application/media/input接线仍未实现。
 - tvOS 26.4旧`wantsExtendedDynamicRangeContent`/`edrMetadata`不可用，新`CALayer.preferredDynamicRange`、`contentsHeadroom`和`toneMapMode`可编译，actual scene screen headroom可读；4.2仍须以实际有限headroom和物理电视证明决定direct HDR。visionOS旧Metal EDR属性与新CALayer路径可编译，但`UIScreen`/`UIWindowScene.screen`不可用，不能虚构current headroom，6.3仍保持typed fallback直到公开有限来源成立。
 - 固定tvOS 26.4 Apple TV UUID为`6C0EC809-4C15-4AEC-9470-00F91480CAA7`，固定visionOS 26.4 Vision Pro UUID为`9BF41D0C-B423-4B3F-B75D-00B31E85FE18`；1.1只读清单时均available/Shutdown且全局Booted为0，27.0同名默认设备必须按不同runtime披露并避免名称解析。
 - tvOS把remote/focus、GameController和stream overlay焦点移动接入同一个session input ownership边界。
