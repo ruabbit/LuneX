@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`0/50 ready`；proposal/design/四spec/tasks完成，下一项1.1 inventory |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`1/50 ready`；1.1 inventory合同完成，下一项1.2 immutable platform contract |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`已创建并为`0/50 ready`。proposal、design、四项新能力spec和依赖有序任务清单通过strict `9/9`；下一项1.1只读盘点tvOS/visionOS target、实际surface/lifecycle、remote/focus/controller、Metal/HDR/audio/spatial、SDK API、entitlement、simulator identity与物理证明边界。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`1/50 ready`。1.1已新增`docs/runtime/tvos-visionos-runtime-contract.md`，盘点target/config/entitlement、实际surface/lifecycle、remote/focus/controller、Metal/HDR/audio/spatial、Xcode 26.4 public API、固定26.4 simulator identity与signed/physical/live证明边界；没有修改runtime行为。下一项1.2定义immutable checked platform presentation contract。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -440,6 +440,8 @@
 | 17.6.5首轮final-state把中文UI边界文档误断言为英文固定短语 | 1 | fixture、strict、apply、generator、inventory/build读回与空UI target扫描均已通过；只修正文档语义匹配并从新目录重跑，不重复simulator查询、build或test |
 | 17.6.7首轮final-state读取不存在的`skipped-identifiers.txt` | 1 | 其余门虽通过但该轮不计干净最终证据；从保留`tests.json`精确断言唯一Skipped节点为真实Keychain用例，并从新目录重跑全部只读门，不重复test/build/simulator |
 | 18提案首轮OpenSpec strict未识别5个requirement的换行规范词 | 1 | 标题或后续行虽含`SHALL`但validator要求首段明确规范句；改为`LuneX SHALL ...`首句后strict `9/9`，未修改runtime行为 |
+| 18.1.1读取两个不存在的合同文件名 | 1 | `mobile-continuity-runtime-contract.md`和`spatial-audio-runtime-contract.md`不是仓库文件；改读实际`mobile-scene-pip-continuity-contract.md`与`spatial-audio-contract.md`，未修改源码或重复任何平台操作 |
+| 18.1.1辅助搜索包含不存在的根`README.md` | 1 | `rg`同时返回目标文档证据和单个缺文件诊断；后续只搜索实际存在的`docs/`、`Tools/`与规划文件，不影响验收事实 |
 
 ## 当前执行点（2026-07-30）
 
@@ -450,7 +452,7 @@
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
 - 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`35/36 in_progress`；1.x至5.6、6.1–6.5与6.7 normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator/跟踪封版及阶段级fresh normal自验已完成。唯一剩余6.6 signed physical acceptance；unsigned/macOS/simulator证据仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
-- 阶段18 `integrate-tvos-visionos-runtime`权威进度`0/50 ready`；proposal/design/四份能力spec/tasks通过strict，下一项1.1只读inventory，不提前声称平台runtime已接线。
+- 阶段18 `integrate-tvos-visionos-runtime`权威进度`1/50 ready`；1.1权威runtime baseline合同完成，确认tvOS/visionOS仍无generation-owned actual platform runtime，下一项1.2 immutable contract，不提前声称平台runtime已接线。
 - macOS 27.0更新后已重新认证5.3：Xcode 26.4/macOS SDK 26.4下macOS全量`881/880/1/0`且唯一skip为禁用的真实Keychain用例，iOS Debug/Release generic build与built plist读回均通过；没有启动或修改simulator。
 - 阶段17任务5.4已于2026-08-06恢复并进入`in_progress`：先建立current session/media generation的scene/geometry/EDR/PiP/audio纯值application与serialized continuity action边界，再接入AppModel和iOS actual surface回调；stop/failure/replacement必须清空actual current state，UIKit/AVKit对象不得跨actor。5.5 UI与6.6物理证明保持在后续任务。
 - macOS 27.0更新结束后再次恢复5.4；当前第一门为串行结构化读回`/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult`。只有expanded、fresh full macOS、generic platform builds及repository gates全部通过后才允许勾选5.4并提交。
@@ -570,3 +572,13 @@
 - **边界：** 平台对象只在main actor，shared层只接immutable generation snapshot；复用单decoder/Metal/audio/session graph；system commands本地保留，unsupported能力typed fail closed，physical/live任务独立。
 - **自验：** artifacts全部done，OpenSpec strict `9/9`，`git diff --check`通过；没有production/test/generator改动、Keychain访问或simulator操作。
 - **下一步：** 提案独立提交推送后执行1.1只读inventory和Xcode 26.4 public API probe，再定义1.2 immutable platform contract。
+
+## 2026-08-07 阶段 18 任务 1.1
+
+- **状态：** `complete`，final-state通过，等待独立提交与推送。
+- **合同：** 新增`docs/runtime/tvos-visionos-runtime-contract.md`，记录五级proof、target/membership/config、product ownership、tvOS remote/focus/controller与media、visionOS window/input与media、Xcode 26.4 API、固定simulator和physical/live边界。
+- **关键结论：** tvOS/visionOS当前使用generic `MTKView`且没有actual scene/surface generation owner；tvOS controller monitor只有连接清单；visionOS没有window/input owner。tvOS旧EDR layer属性不可用，但SDK 26新增`preferredDynamicRange`/`contentsHeadroom`候选路径；visionOS没有`UIScreen`/current headroom。
+- **固定identity：** tvOS 26.4 `6C0EC809-4C15-4AEC-9470-00F91480CAA7`、visionOS 26.4 `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`均available/Shutdown，全局Booted为0；27.0同名设备已披露，后续只按固定UUID选择。
+- **边界：** 没有production/test/generator/config改动，没有真实Keychain访问，没有simulator生命周期操作；SDK/header/build/simulator层均不证明物理HDR、空间音频、remote手感、live Sunshine或性能。
+- **自验：** `/tmp/LuneX-18-1_1-final-state.H9NGtH`通过fixture、OpenSpec strict `9/9`、apply `1/50 next 1.2`、generator稳定4次、target/config/API/doc/privacy/clean-room、runtime behavior diff 0、Keychain/live opt-in和diff检查；没有重复simulator inventory或生命周期操作。
+- **下一步：** 独立提交推送后进入1.2 immutable platform presentation contract。

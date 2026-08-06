@@ -2305,3 +2305,14 @@
 - 新change `integrate-tvos-visionos-runtime`拆为四能力：tvOS remote/focus/controller、tvOS media/HDR/audio、visionOS window/input/system reservation、visionOS windowed media/HDR/spatial audio。visionOS本阶段明确windowed，不伪造immersive/stereoscopic/volumetric runtime。
 - 实现清单共50项，依赖顺序为inventory/API、immutable/shared owner、tvOS输入、tvOS媒体、visionOS输入、visionOS媒体、AppModel/UI、质量/simulator/physical验收。8.7 signed physical Apple TV/Vision Pro与live Sunshine保持独立，不能由build/simulator替代。
 - 首轮strict因5个requirement虽然标题或换行包含`SHALL`，首段未被validator识别为规范句而失败；改为明确`LuneX SHALL ...`首句后OpenSpec strict通过`9/9`，apply为`0/50 ready`、next 1.1。
+
+## 2026-08-07 阶段 18 任务 1.1 恢复与固定平台清单
+
+- 系统更新后仍为macOS 27.0 build `26A5388g`、Xcode 26.4 build `17E192`，macOS/tvOS/visionOS SDK均为26.4；`HEAD == origin/main == 4411f5548803d3b2a9815265e5d8b40104ecbd70`且恢复时工作树clean。
+- generator将tvOS与visionOS deployment target均固定为26.0；tvOS使用bundle `dev.lunex.client.tvos`、family 3与`LuneX-tvOS.entitlements`，visionOS使用bundle `dev.lunex.client.visionos`、family 7且当前没有独立entitlement或Info.plist。tvOS entitlement仅声明`com.apple.developer.coremotion.head-pose=true`，不能当作签名授权、头部姿态输入或空间音频有效证明。
+- 本项唯一一次`simctl list --json`显示tvOS 26.4与visionOS 26.4 runtime均available；固定Apple TV为`Apple TV 4K (3rd generation)` / `6C0EC809-4C15-4AEC-9470-00F91480CAA7`，固定Vision Pro为`Apple Vision Pro` / `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`，均available且`Shutdown`，全平台`Booted=0`。
+- tvOS/visionOS 27.0 runtime也已安装并含同名默认设备，均`Shutdown`。后续所有固定门必须以26.4 `runtime + name + UUID`选择，不能使用名称自动解析；本次没有create、clone、boot、bootstatus、install、launch、run、shutdown或delete。
+- SDK headers精查显示tvOS 26.4仍明确禁用旧`CALayer`/`CAMetalLayer.wantsExtendedDynamicRangeContent`和`CAMetalLayer.EDRMetadata`，但公开`CALayer.toneMapMode`以及26.0新增的`preferredDynamicRange`和`contentsHeadroom`；`UIScreen.currentEDRHeadroom`/`potentialEDRHeadroom`继续可用。现有tvOS typed SDR fallback准确描述旧surface合同，但阶段18不能忽略新的公开动态范围路径；是否改变能力合同留给1.6直接public API compile probes、4.2实现和物理电视证明。visionOS的`UIScreen`/`UIWindowScene.screen`明确不可用，geometry必须来自actual window/view和`effectiveGeometry`。
+- 新增`docs/runtime/tvos-visionos-runtime-contract.md`作为阶段18 baseline权威合同。它确认generic UIKit `MTKView`没有tvOS/visionOS attachment/lifecycle/geometry/focus回调，RootView没有对应AppModel接线，controller monitor没有element handler/lease/feedback，visionOS仅有windowed SwiftUI shell；同时固定复用一个decoder、Metal presenter、audio graph和remote input transport，禁止平行平台栈。
+- 任务1.1只完成contract/static inventory，不执行1.6 compile probes、不改变HDR capability、不连接runtime。合同、OpenSpec、路线图和规划同步后权威进度为`1/50 ready`、next 1.2；physical Apple TV/Vision Pro、signed entitlement、remote feel、HDR、spatial audio、live Sunshine与性能仍未证明。
+- final-state `/tmp/LuneX-18-1_1-final-state.H9NGtH`确认OpenSpec strict `9/9`、apply `1/50 next 1.2`、generator SHA-256 `78cab89798454bcb0bf629e42832423747475eee64165a42f04fbaebf106f817`连续4次一致、runtime behavior diff为0、target/config/API/doc/privacy/clean-room边界通过。未重复simulator清单或生命周期操作，未访问真实Keychain。

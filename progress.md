@@ -2821,3 +2821,14 @@
 - 创建OpenSpec `integrate-tvos-visionos-runtime`，完成proposal、design、四份spec和50项tasks。能力覆盖tvOS remote/focus/controller与media/HDR/audio，以及visionOS actual window/input与windowed media/HDR/spatial audio。
 - 设计固定main-actor平台对象、immutable generation/revision snapshot、单decoder/Metal/audio/session graph、ordered held release、system-reserved command、typed HDR/input/spatial fallback、privacy diagnostics与离线/simulator/signed/physical/live证明分层；Moonlight上游仅作只读行为参考。
 - 首轮strict的5项spec因validator要求requirement首段显式`SHALL/MUST`而失败；改成`LuneX SHALL ...`规范首句后通过`9/9`。apply当前`0/50 ready`、next 1.1 inventory；proposal阶段没有修改production/test/generator，也未访问Keychain或操作simulator。
+
+## 2026-08-07 阶段 18 任务 1.1 恢复与只读盘点
+
+- 完成系统更新后的仓库、目标、工具链与OpenSpec恢复：`HEAD == origin/main == 4411f55`、工作树clean、active goal不变，OpenSpec `integrate-tvos-visionos-runtime`为`0/50 ready`且next 1.1。
+- 重读全部OpenSpec context、三份planning文件、generator、RootView/Metal surface、tvOS remote/focus、GameController、HDR与audio/spatial现有实现；确认tvOS/visionOS尚无与current generation接线的actual platform owner。
+- 仅一次读取simulator inventory，固定26.4 Apple TV UUID为`6C0EC809-4C15-4AEC-9470-00F91480CAA7`、Vision Pro UUID为`9BF41D0C-B423-4B3F-B75D-00B31E85FE18`，两者均available/Shutdown，全局Booted为0；披露27.0同名默认设备且未做任何生命周期操作。
+- 完成Xcode 26.4 public SDK header精查：tvOS旧`wantsExtendedDynamicRangeContent`/`EDRMetadata`明确不可用，但SDK 26新增`preferredDynamicRange`/`contentsHeadroom`并保留screen headroom；visionOS的`UIScreen`/`UIWindowScene.screen`不可用，公开output-node intended spatial experience取代listener属性。
+- 新增283行`docs/runtime/tvos-visionos-runtime-contract.md`，覆盖proof tiers、target/config、当前product ownership、tvOS输入/媒体、visionOS窗口/输入/媒体、API矩阵、固定simulator与physical/live/clean-room边界；自验确认`Sources/Tests/Tools/Configuration`行为diff为0。
+- 勾选OpenSpec 1.1并同步runtime roadmap、`task_plan.md`、`findings.md`和`progress.md`，预期apply为`1/50 ready`、next 1.2；下一步运行strict/generator/repository final-state，独立提交并推送。
+- final-state `/tmp/LuneX-18-1_1-final-state.H9NGtH`通过：fixture self/tree、OpenSpec strict `9/9`、apply精确`1/50 next 1.2`、generator 4次同哈希、target/config/entitlement、Xcode 26.4 API header、合同结构/privacy、clean-room/package/reference、runtime behavior diff 0与diff检查均通过。
+- final-state明确`LUNEX_RUN_KEYCHAIN_TEST`和live-host opt-in未设置；未重跑build/test，未重复`simctl` inventory，也未执行任何simulator生命周期操作。下一步为1.1独立commit/push，然后进入1.2。

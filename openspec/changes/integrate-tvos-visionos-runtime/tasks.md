@@ -1,6 +1,6 @@
 ## 1. Platform inventory and immutable foundation
 
-- [ ] 1.1 Inventory current tvOS/visionOS targets, SwiftUI navigation, actual surface/lifecycle ownership, remote/focus/controller paths, decoder/Metal/HDR/audio/spatial integration, public SDK APIs, entitlements, simulator identities, and physical proof limits without changing runtime behavior
+- [x] 1.1 Inventory current tvOS/visionOS targets, SwiftUI navigation, actual surface/lifecycle ownership, remote/focus/controller paths, decoder/Metal/HDR/audio/spatial integration, public SDK APIs, entitlements, simulator identities, and physical proof limits without changing runtime behavior
 - [ ] 1.2 Define immutable checked platform presentation, scene/surface, focus eligibility, geometry/drawable, input capability, controller lease, display, audio route, generation, and semantic-revision contracts
 - [ ] 1.3 Define tvOS local-focus versus stream-capture ownership, reserved-command, balanced press, controller slot/state/feedback, and ordered release effects
 - [ ] 1.4 Define visionOS windowed presentation mode, system-reserved interaction, supported input capability, focus/release, and explicit immersive-unavailable state
