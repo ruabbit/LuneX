@@ -2790,3 +2790,12 @@
 - corrected pre-gate r3 `/tmp/LuneX-17-6_4-repository-pre-r3.M8A6Ib`从头通过fixture self/tree、OpenSpec strict `8/8`与勾选前apply `32/36 next 6.4`、generator三次稳定、ASan/TSan/resource结构化结果与报告、精确进程名、Keychain opt-in未设置和`git diff --check`。
 - OpenSpec 6.4已勾选，预期权威进度`33/36`、next 6.5；下一步运行勾选后的final-state gate并独立提交推送。本项未查询或操作simulator。
 - 首轮final-state唯一失败是全局精确进程名门命中另一个工作区`/Users/tanmy/Projects/TamaCore`正在运行的xctest；没有终止或干扰该进程。收紧为只匹配LuneX仓库/证据路径后，final-state r2 `/tmp/LuneX-17-6_4-final-state-r2.LbWI04`通过fixture、strict `8/8`、apply精确`33/36 next 6.5`、generator、三份结果、docs、LuneX无残留进程、Keychain opt-in和diff检查。
+
+## 2026-08-06 阶段 17 任务 6.4 提交与 6.5 完成
+
+- 6.4提交为`81b656e Verify mobile continuity memory safety`并成功推送；fetch后`HEAD == origin/main == 81b656ebc2c2f7404cc51444dcfc5b521fc379ea`，工作树clean。OpenSpec apply为`33/36 ready`、next精确6.5。
+- 系统恢复后环境仍为macOS 27.0 build `26A5388g`、Xcode 26.4 build `17E192`。本项只进行一次CoreSimulator inventory读取；`/tmp/LuneX-17-6_5-simulator-audit.wNPE0P`证明6.2 pre/post/current规范化清单逐字一致且SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`。
+- 固定iOS 26.4 iPhone/iPad identity和UUID均各唯一、available、`Shutdown`，全局`Booted=0`。iOS 27.0同名默认实例按不同runtime披露且也保持`Shutdown`；没有创建、克隆或运行重复设备。
+- 复用并只读验收6.2的固定iPhone/iPad Debug/Release四份build：全部`succeeded/0/0/0`、destination匹配固定UUID、各有AIR/metallib，built plist为`iphonesimulator`、family `[1,2]`和单一`audio`。没有重复build。
+- 工程没有UI-test product target或XCUIApplication harness；因此没有启动、安装或launch-only伪UI门。本项未执行任何simulator生命周期变更，也未访问真实Keychain。OpenSpec 6.5已勾选，预期权威进度`34/36`、next 6.6；下一步运行勾选后的final-state gate并独立提交推送。
+- 勾选后final-state `/tmp/LuneX-17-6_5-final-state-r2.GDMtqY`通过fixture、OpenSpec strict `8/8`、apply精确`34/36 next 6.6`、generator稳定、pre/post/current inventory、固定identity、四build/Metal/plist、UI target absent/no launch、simulator mutation none、Keychain opt-in未设置、无LuneX残留进程和diff检查。首轮final-state只因把中文UI边界误断言为英文固定短语退出；全部实质门已先通过且未重复simulator查询/build/test。

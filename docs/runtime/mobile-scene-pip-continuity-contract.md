@@ -1187,6 +1187,27 @@ deterministic macOS sanitizer results do not prove physical iOS system PiP,
 background duration, mobile EDR, Stage Manager, power/thermal behavior, or
 long-running live Sunshine resource use.
 
+OpenSpec task 6.5 fixed-simulator evidence is retained at
+`/tmp/LuneX-17-6_5-simulator-audit.wNPE0P`. The normalized CoreSimulator
+inventory from task 6.2 before builds, after builds, and the single current
+read are byte-identical with SHA-256
+`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`.
+The fixed iOS 26.4 iPhone 17 Pro and iPad Pro 13-inch (M5) runtime/name/UUID
+identities each occur once, each UUID occurs once globally, both are available
+and shut down, and no simulator is booted. Installed iOS 27.0 provides one
+additional shut-down same-name default identity per device class; those are
+different runtime identities and were neither created nor run by this change.
+The retained task 6.2 Debug and Release builds for both fixed devices remain
+successful with zero structured diagnostics, one AIR and metallib per build,
+and the expected simulator platform, device family, and single `audio`
+background mode. The project has no UI-test product target or
+`XCUIApplication` harness, so task 6.5 did not invent a launch-only UI gate or
+boot, install, launch, shut down, clone, create, or delete any simulator. This
+evidence proves fixed simulator identity, state, and build compatibility only;
+it does not prove signed installation, native PiP presentation, background
+duration, Stage Manager, external display, physical input, visible EDR,
+spatial audio, live Sunshine, power, or thermal behavior.
+
 ## Target ownership model
 
 Stage 17 will use the following ownership chain:

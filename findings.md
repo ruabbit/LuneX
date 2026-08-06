@@ -2277,3 +2277,10 @@
 - 强化resource `/tmp/LuneX-17-6_4-resource.6jwPh7`在关闭coverage并启用scribble、pre-scribble、guard edges、stack logging、每次分配heap check与error abort后，精确16个mobile/PiP/media/AppModel/diagnostic/Metal suite通过`320/320`、无skip、无allocator报告。范围覆盖frame/backpressure/pixel-buffer release、scene/screen observer cancellation、generation replacement、restoration/skip exactly-once completion和clean stop。
 - 首轮pre-gate在generator后退出但未保留具体失败断言；全部retained evidence随后只读通过。第二轮checkpoints精确定位为`pgrep -f`误匹配包装器自身的`xcodebuild.log`路径；改用精确进程名后第三轮`/tmp/LuneX-17-6_4-repository-pre-r3.M8A6Ib`从头通过，不重跑任何成功测试。
 - 6.4只证明macOS可注入路径在本轮sanitizer/allocator配置下没有检测到内存、线程或ownership问题；不证明物理iOS AVKit/UIKit对象、system PiP、后台时长、功耗/热状态或live Sunshine长时资源行为。勾选后权威进度应为`33/36`、next 6.5。
+
+## 2026-08-06 阶段 17 任务 6.5 验收结论
+
+- 只读证据`/tmp/LuneX-17-6_5-simulator-audit.wNPE0P`保存当前raw/normalized inventory、runtime、固定identity、跨runtime同名披露、6.2固定build读回和UI自动化边界。6.2 pre/post与当前三份规范化清单逐字一致，SHA-256均为`0470edc00aea815358b4bed51fa43b73b79a5cbc61f80856f9630c6128568d41`。
+- iOS 26.4固定iPhone 17 Pro与iPad Pro 13-inch (M5)的`runtime + name + UUID`各出现一次，两个UUID全局各出现一次、均available和`Shutdown`，51个available simulator中`Booted=0`。iOS 27.0各有一个系统同名默认identity；它们属于不同runtime，均`Shutdown`，不是固定26.4 UUID重复。
+- 只读复核6.2的固定iPhone/iPad Debug/Release四份xcresult均为`succeeded / 0 errors / 0 warnings / 0 analyzer warnings`且destination精确匹配固定UUID和iOS 26.4；每份各有AIR/metallib，built plist仍为`iphonesimulator`、`UIDeviceFamily [1,2]`和单一`UIBackgroundModes [audio]`，没有重复构建。
+- 工程静态扫描没有UI-test product type、`XCUIApplication`或`XCUITest` harness，因此没有可诚实执行的simulator UI target；本项没有create、clone、boot、bootstatus、install、launch、run、shutdown或delete设备，也不把launch-only或simulator观察冒充system PiP/Stage Manager/EDR证明。勾选后权威进度应为`34/36`、next 6.6。
