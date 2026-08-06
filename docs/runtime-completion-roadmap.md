@@ -39,7 +39,7 @@ flowchart LR
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
 | 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
 | 17 | `in_progress`，OpenSpec `35/36` | actual UIKit scene/window/geometry/input、actual-window mobile EDR、sample-buffer PiP runtime、actual-state continuity policy、serialized mobile media owner、media environment/AppModel application与bounded diagnostics、stop/failure/replacement清理、iPhone/iPad单值`audio`配置、UI/回归、normal/build/repository/analyzer/sanitizer/resource/fixed-simulator，以及6.7合同/证明边界封版均已完成 | 唯一剩余6.6 signed/physical PiP/background/Stage Manager/EDR/live Sunshine验收；固定ENet保留4项已归属analyzer finding |
-| 18 | `pending` | tvOS/visionOS target与基础adapter可构建 | 尚无平台媒体、输入、HDR、空间音频和设备工作流证据 |
+| 18 | `in_progress`，OpenSpec `0/50` | `integrate-tvos-visionos-runtime`提案、设计、四份能力spec与实现/验收清单已完成并通过strict `9/9` | 下一项1.1盘点；尚无generation-owned tvOS/visionOS输入、scene/media接线或物理设备证据 |
 | 19 | `pending` | 原生SwiftUI host/app/settings/diagnostics基础界面可构建 | 尚无完整stream controls、恢复UX、多窗口、VoiceOver与键盘/触控任务回归 |
 | 20 | `pending` | Release配置与sanitizer静态门禁可执行 | 尚无签名发布包、端到端延迟、功耗、热状态、弱网、内存基线与长时真机证据 |
 
@@ -155,6 +155,7 @@ flowchart LR
 
 ## 阶段 18：tvOS/visionOS 运行适配
 
+- OpenSpec `integrate-tvos-visionos-runtime`当前`0/50 ready`，下一项1.1。四项权威能力为`tvos-remote-focus-runtime`、`tvos-media-presentation-runtime`、`visionos-window-input-runtime`和`visionos-media-presentation-runtime`；设计明确平台对象main-actor ownership、immutable generation snapshots、单decoder/Metal/audio/session graph、typed capability fallback与五级proof boundary。
 - tvOS把remote/focus、GameController和stream overlay焦点移动接入同一个session input ownership边界。
 - tvOS使用平台支持的VideoToolbox/Metal/HDR输出与AVAudioSession route，不假设AppKit或触控API存在。
 - visionOS明确window geometry、immersive/volumetric限制、系统手势保留、controller/keyboard输入和空间音频路径。

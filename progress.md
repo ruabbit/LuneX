@@ -2814,3 +2814,10 @@
 - 从该提交用全新DerivedData/result bundle运行fresh完整macOS normal `/tmp/LuneX-17-stage-acceptance.xnt9je`，显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结构化结果为`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`，唯一skip精确为真实Keychain opt-in用例，build `succeeded`且error/warning/analyzer warning为0。
 - 阶段组合门`/tmp/LuneX-17-stage-acceptance-final.k8BdmF`通过HEAD/remote parity、clean tree、fixture、strict `8/8`、apply精确`35/36 only 6.6 pending`、generator稳定、fresh normal、fixed simulator no-launch/no-mutation、Keychain opt-in unset、无残留LuneX进程与diff检查。
 - 本自验没有再次访问真实Keychain，也没有查询、创建、启动或运行simulator；6.6 signed physical receipt保持唯一缺口，阶段17保持`in_progress`。记录提交推送后进入阶段18，不以阶段18证据回填6.6。
+
+## 2026-08-07 阶段 18 OpenSpec 提案完成
+
+- 阶段17自验记录已以`52ee4f5 Record mobile continuity stage acceptance`提交并推送，`HEAD == origin/main`且工作树clean后进入阶段18；阶段17仍为`35/36 in_progress`且6.6不变。
+- 创建OpenSpec `integrate-tvos-visionos-runtime`，完成proposal、design、四份spec和50项tasks。能力覆盖tvOS remote/focus/controller与media/HDR/audio，以及visionOS actual window/input与windowed media/HDR/spatial audio。
+- 设计固定main-actor平台对象、immutable generation/revision snapshot、单decoder/Metal/audio/session graph、ordered held release、system-reserved command、typed HDR/input/spatial fallback、privacy diagnostics与离线/simulator/signed/physical/live证明分层；Moonlight上游仅作只读行为参考。
+- 首轮strict的5项spec因validator要求requirement首段显式`SHALL/MUST`而失败；改成`LuneX SHALL ...`规范首句后通过`9/9`。apply当前`0/50 ready`、next 1.1 inventory；proposal阶段没有修改production/test/generator，也未访问Keychain或操作simulator。

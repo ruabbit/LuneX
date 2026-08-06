@@ -1,0 +1,67 @@
+## ADDED Requirements
+
+### Requirement: visionOS presentation SHALL be explicitly windowed
+Stage 18 SHALL present the current decoded stream in the actual SwiftUI window
+Metal surface. It SHALL NOT report immersive, stereoscopic, volumetric, or
+passthrough presentation without a separately owned runtime.
+
+#### Scenario: Stream starts on Vision Pro
+- **WHEN** a valid media generation starts in the windowed product path
+- **THEN** LuneX SHALL create one current-generation Metal presentation owner and report windowed mode
+
+### Requirement: visionOS frames SHALL use the shared decoder and render identity
+visionOS SHALL consume the existing decoded-frame source and validate decoder,
+color, surface, display, and presentation revisions before presenting. It SHALL
+NOT create a second decoder or unbounded frame queue.
+
+#### Scenario: Stale frame completes
+- **WHEN** a frame from an old decoder or surface revision completes after replacement
+- **THEN** LuneX SHALL reject it and SHALL NOT present it in the current window
+
+### Requirement: visionOS HDR SHALL fail closed from actual capability
+LuneX SHALL use public visionOS surface/color capability and actual bounded
+headroom when available. Without current headroom proof, HDR input SHALL use a
+typed HDR-to-SDR path even if extended-range surface intent compiles.
+
+#### Scenario: Current headroom is unavailable
+- **WHEN** the platform cannot provide a finite current display headroom
+- **THEN** LuneX SHALL select HDR-to-SDR and UI SHALL NOT claim EDR active
+
+### Requirement: visionOS audio SHALL use intended spatial experience
+The current media generation SHALL reuse the canonical session-owned audio
+graph and public visionOS intended spatial experience, route, interruption, and
+media-reset behavior without claiming unavailable listener head tracking.
+
+#### Scenario: Spatial route is available
+- **WHEN** a stereo or multichannel stream and supported visionOS route are active
+- **THEN** LuneX SHALL apply the public intended spatial experience and publish actual route state
+
+#### Scenario: Media services reset
+- **WHEN** the audio service resets during the current stream
+- **THEN** LuneX SHALL rebuild one current graph and reject old scheduling completions
+
+### Requirement: visionOS media ownership SHALL be generation scoped
+LuneX SHALL bind window scene, surface, decoded frames, HDR policy, audio route,
+diagnostics, and teardown to one current media presentation coordinator.
+
+#### Scenario: Stream stops
+- **WHEN** local or remote stop completes
+- **THEN** LuneX SHALL release surface, frame, audio, observer, and coordinator ownership idempotently
+
+### Requirement: visionOS media UI SHALL expose actual state accessibly
+Stream controls and Settings SHALL show actual windowed mode, render state, HDR
+fallback, spatial-audio route, input capability, and bounded failures using
+native accessible SwiftUI controls.
+
+#### Scenario: Requested feature is unavailable
+- **WHEN** HDR, immersive presentation, head tracking, or input is not actually available
+- **THEN** UI SHALL show typed fallback/unavailable state rather than the preference as active
+
+### Requirement: visionOS media verification SHALL preserve physical proof boundaries
+Builds, injected tests, and simulator windows SHALL NOT prove headset HDR,
+spatial audio, comfort, interaction latency, thermal behavior, signed install,
+or live Sunshine operation.
+
+#### Scenario: Physical acceptance is performed
+- **WHEN** an authorized signed Vision Pro exercises window resize, supported input, video/audio, route recovery, live Sunshine, comfort duration, resources, and clean stop
+- **THEN** evidence SHALL correlate commit, sanitized conditions, actual state, observed result, performance/thermal observations, and teardown

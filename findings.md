@@ -2297,3 +2297,11 @@
 - 已推送`c7c9089a965eb1eea100b84e844f87ab003f939d`上的fresh complete macOS normal `/tmp/LuneX-17-stage-acceptance.xnt9je`通过`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`；唯一Skipped节点精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化error/warning/analyzer warning均为0，日志无sanitizer/crash/test-failed marker。
 - 组合门`/tmp/LuneX-17-stage-acceptance-final.k8BdmF`确认`HEAD == origin/main`、起始工作树clean、fixture、OpenSpec strict `8/8`、apply `35/36 only 6.6 pending`、generator稳定SHA-256、fresh normal、fixed simulator no-launch/no-mutation、Keychain opt-in unset、无LuneX残留进程和diff检查。
 - 自验未查询或操作simulator、未访问真实Keychain，也不证明signed artifact、system PiP、background duration、Stage Manager、external display、visible EDR、空间音频、live Sunshine或power/thermal；阶段17继续`in_progress`且不可archive。
+
+## 2026-08-07 阶段 18 OpenSpec 提案结论
+
+- 现有tvOS/visionOS target、共享SwiftUI UI、VideoToolbox/Metal/audio foundation和跨平台build已经存在，但实际运行接线不足：`TVRemoteFocusInputAdapter`主要是值mapper，`GameControllerPlatformMonitor`只发布连接清单，未拥有element handler/slot/held release/feedback；visionOS没有独立actual window/scene/input owner。
+- 现有HDR能力合同对tvOS因extended-range surface不可用、visionOS因current headroom不可用均进入typed HDR-to-SDR fallback；这是诚实的SDK/静态策略，不是电视或头显物理HDR证明。阶段16空间音频提供共享graph/route foundation，但Apple TV/Vision Pro route、听感和设备行为仍未证明。
+- 新change `integrate-tvos-visionos-runtime`拆为四能力：tvOS remote/focus/controller、tvOS media/HDR/audio、visionOS window/input/system reservation、visionOS windowed media/HDR/spatial audio。visionOS本阶段明确windowed，不伪造immersive/stereoscopic/volumetric runtime。
+- 实现清单共50项，依赖顺序为inventory/API、immutable/shared owner、tvOS输入、tvOS媒体、visionOS输入、visionOS媒体、AppModel/UI、质量/simulator/physical验收。8.7 signed physical Apple TV/Vision Pro与live Sunshine保持独立，不能由build/simulator替代。
+- 首轮strict因5个requirement虽然标题或换行包含`SHALL`，首段未被validator识别为规范句而失败；改为明确`LuneX SHALL ...`首句后OpenSpec strict通过`9/9`，apply为`0/50 ready`、next 1.1。
