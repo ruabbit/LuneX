@@ -2832,3 +2832,14 @@
 - 勾选OpenSpec 1.1并同步runtime roadmap、`task_plan.md`、`findings.md`和`progress.md`，预期apply为`1/50 ready`、next 1.2；下一步运行strict/generator/repository final-state，独立提交并推送。
 - final-state `/tmp/LuneX-18-1_1-final-state.H9NGtH`通过：fixture self/tree、OpenSpec strict `9/9`、apply精确`1/50 next 1.2`、generator 4次同哈希、target/config/entitlement、Xcode 26.4 API header、合同结构/privacy、clean-room/package/reference、runtime behavior diff 0与diff检查均通过。
 - final-state明确`LUNEX_RUN_KEYCHAIN_TEST`和live-host opt-in未设置；未重跑build/test，未重复`simctl` inventory，也未执行任何simulator生命周期操作。下一步为1.1独立commit/push，然后进入1.2。
+
+## 2026-08-07 阶段 18 任务 1.2 完成
+
+- 从`1b88f5a`恢复未提交1.2代码，生成工程并修正测试`ReversedCollection`到Array。新增immutable checked platform presentation foundation及13项确定性测试，shared层无UIKit/GameController/AVFoundation/Metal framework对象。
+- 语义审计把display headroom改为显式`unavailable/platform-reported` source，避免把visionOS当前无公开finite source写成永久禁止；补充`.none` audio strategy与head-tracking unavailable一致性。tvOS pointer继续按26.4 public API边界拒绝。
+- 首轮代码focused`13/13`通过；语义修正后首轮fresh focused因Optional `.none`歧义被warnings-as-errors拒绝，显式类型修正后`/tmp/LuneX-18-1_2-focused-final2.V3FbgD`重新通过`13/13`。
+- fresh完整macOS normal`/tmp/LuneX-18-1_2-normal.I2XCvy`通过`922/921/1/0`，唯一skip精确为显式真实Keychain round-trip；Keychain/live-host opt-in均unset。
+- `/tmp/LuneX-18-1_2-builds.t1EbLt`保留macOS、固定iPhone/iPad/Apple TV/Vision Pro五份Debug build；全部`succeeded`且结构化error/warning/analyzer warning为0，新source membership/编译成立。没有create/clone/boot/install/launch/run/shutdown/delete或重复inventory。
+- repository gate首轮因旧OpenSpec summary字段退出；第二轮因PBX membership双份文本计数口径退出。最终`/tmp/LuneX-18-1_2-repository-pre-r3.QwpaS0`从头通过fixtures、strict`9/9`、apply`1/50`、generator四次同哈希、membership、platform-object/privacy/reference和diff检查。
+- 勾选OpenSpec 1.2并同步runtime合同、roadmap及三份planning文件，预期权威进度`2/50 ready`、next 1.3；下一步运行勾选后final-state并独立提交推送。
+- 勾选后final-state`/tmp/LuneX-18-1_2-final-state.215ooC`完整通过strict`9/9`、apply`2/50 next 1.3`、retained focused/normal/五平台build、generator四次稳定、docs/membership/reference/platform-object、精确变更范围、Keychain/live opt-in、LuneX进程和diff门；未重跑test/build或查询/操作simulator。

@@ -215,6 +215,66 @@ Deprecated or unavailable APIs must not be hidden behind broad conditional
 compilation and called indirectly. Private compositor, gaze, hand-tracking, or
 undocumented display APIs are out of scope.
 
+## Immutable presentation foundation
+
+Task 1.2 adds `TVVisionPlatformPresentationState.swift` as a framework-object-
+free value contract shared by all application targets and deterministic tests.
+It does not attach a tvOS or visionOS view, install a controller handler, read a
+display or audio route, or mutate the current session.
+
+The contract provides:
+
+- branded nonzero, checked, exhaustible generations for presentation, surface,
+  input, controller lease, display, and audio route ownership;
+- a nonzero monotonic semantic revision and aggregate ownership carrying the
+  platform, ephemeral session UUID, media generation, presentation generation,
+  and input generation without making the aggregate persistable;
+- finite bounded view/window rectangles, safe-area insets, scale, and drawable
+  dimensions whose rounded point-to-pixel relationship must agree;
+- attached/detached scene and surface state, typed focus ineligibility, and a
+  current platform capability set that rejects unavailable tvOS pointer paths
+  and visionOS Siri Remote paths;
+- sixteen deterministic controller slots with branded controller leases,
+  complete remote capability facts, and aggregate duplicate slot/lease checks;
+- display output, layer dynamic-range capability, and explicit
+  `unavailable`/`platform-reported` headroom source. Current visionOS adapters
+  must publish `unavailable` until a public finite source exists, but the value
+  model does not mistake the current SDK limitation for a permanent platform
+  prohibition;
+- output channel bounds, route spatial support, platform strategy, and typed
+  head-tracking capability. A `.none` strategy can only carry unavailable head
+  tracking, and tvOS listener versus visionOS intended-experience strategies
+  cannot be crossed;
+- one aggregate snapshot that rejects platform, revision, input-generation,
+  duplicate controller, and eligible-but-detached/inactive/invisible state.
+
+No `UIWindowScene`, `UIFocusEnvironment`, `UIPress`, `GCController`, `UIScreen`,
+`AVAudioSession`, `CAMetalLayer`, or `AVAudioEnvironmentNode` object enters the
+shared contract. Tasks 1.3 through 1.6 own the platform-specific reducers,
+reserved behavior, normalization expansion, and direct SDK probes; task 2.x
+owns actual surface and media-generation integration.
+
+Task 1.2 verification used fresh isolated evidence:
+
+- focused macOS tests: `13/13` passed with Swift, Clang, and Metal warnings as
+  errors;
+- complete macOS normal suite: `922 total / 921 passed / 1 skipped / 0 failed`,
+  with the sole skip being the explicit real-Keychain round trip and both real
+  Keychain and live-host opt-ins unset;
+- macOS and fixed iOS 26.4 iPhone/iPad, tvOS 26.4 Apple TV, and visionOS 26.4
+  Vision Pro Debug builds: all `succeeded`, with zero structured errors,
+  warnings, or analyzer warnings and exact new-source membership;
+- fixture validation, OpenSpec strict `9/9`, generator four-run byte stability,
+  platform-object, privacy, clean-room/reference, and whitespace gates.
+
+The fixed simulator UUIDs were used only as build destinations. Task 1.2 did
+not execute a new simulator inventory and did not create, clone, boot, install,
+launch, run, shut down, or delete a simulator. These results are deterministic
+contract and unsigned build evidence only. They do not prove actual remote or
+controller capture, window ownership, rendering, HDR output, spatial audio,
+signed installation, physical behavior, live Sunshine, performance, power, or
+thermal acceptance.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the
