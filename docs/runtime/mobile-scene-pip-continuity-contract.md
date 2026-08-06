@@ -1381,3 +1381,15 @@ Stages 18 through 20 may proceed using the completed deterministic foundation,
 but their tests cannot backfill task 6.6. The rollback before physical
 acceptance remains foreground-only rendering with typed suspend/pause/stop and
 truthful unavailable/fallback UI; it is not an unsupported keepalive path.
+
+The independent stage-level offline acceptance on pushed commit
+`c7c9089a965eb1eea100b84e844f87ab003f939d` is retained at
+`/tmp/LuneX-17-stage-acceptance.xnt9je` with combination gate
+`/tmp/LuneX-17-stage-acceptance-final.k8BdmF`. A fresh complete macOS normal
+suite passed 909 total, 908 passed, the one exact authorized-Keychain opt-in
+skip, and zero failed or expected failures; structured errors, warnings, and
+analyzer warnings are zero. The combination gate also passes fixtures,
+OpenSpec strict 8/8, stable generator, exact 35/36 with only task 6.6 pending,
+retained fixed-simulator no-launch/no-mutation evidence, clean Git parity, and
+an unset Keychain opt-in. This revalidates the offline tier only and does not
+change the physical acceptance status.

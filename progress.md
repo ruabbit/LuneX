@@ -2807,3 +2807,10 @@
 - 6.7同步mobile continuity合同、runtime roadmap、OpenSpec与三份planning文件，修正simulator tier为identity/state/build及“有真实target才执行UI path”，新增五级proof matrix、6.6 receipt隐私/场景要求、唯一pending与不可archive边界。
 - 6.7勾选后预期OpenSpec为`35/36 in_progress`且唯一pending 6.6。下一步执行strict/generator/docs/retained evidence final-state门、独立提交推送，再在已推送HEAD执行阶段17 fresh normal离线自验；测试继续移除真实Keychain opt-in且不操作simulator。
 - 勾选后final-state `/tmp/LuneX-17-6_7-final-state-r2.3enrxA`通过fixture、strict `8/8`、apply精确`35/36 only 6.6 pending`、generator、normal `909/908/1 exact Keychain/0`、十build、analyzer归属、ASan/TSan/resource、fixed simulator、五级proof docs、Keychain opt-in、LuneX进程和diff检查。首轮读取不存在的skip清单虽未令包装器失败但不计干净最终证据；r2从保留`tests.json`精确验证唯一Skipped节点且未重复test/build/simulator。
+
+## 2026-08-07 阶段 17 离线阶段级自验
+
+- 6.7提交为`c7c9089 Document mobile continuity acceptance boundary`并成功推送；fetch后`HEAD == origin/main == c7c9089a965eb1eea100b84e844f87ab003f939d`，起始工作树clean。
+- 从该提交用全新DerivedData/result bundle运行fresh完整macOS normal `/tmp/LuneX-17-stage-acceptance.xnt9je`，显式移除`LUNEX_RUN_KEYCHAIN_TEST`；结构化结果为`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`，唯一skip精确为真实Keychain opt-in用例，build `succeeded`且error/warning/analyzer warning为0。
+- 阶段组合门`/tmp/LuneX-17-stage-acceptance-final.k8BdmF`通过HEAD/remote parity、clean tree、fixture、strict `8/8`、apply精确`35/36 only 6.6 pending`、generator稳定、fresh normal、fixed simulator no-launch/no-mutation、Keychain opt-in unset、无残留LuneX进程与diff检查。
+- 本自验没有再次访问真实Keychain，也没有查询、创建、启动或运行simulator；6.6 signed physical receipt保持唯一缺口，阶段17保持`in_progress`。记录提交推送后进入阶段18，不以阶段18证据回填6.6。

@@ -2291,3 +2291,9 @@
 - 合同与路线图统一五级证据：contract/static、unsigned build、simulator、signed artifact、physical/live。当前仅前三层有证据；6.6缺少后两层，不能archive change或把阶段17标记complete。
 - 6.6 receipt必须覆盖签名配置、system PiP与恢复/失败、背景audio/PiP及最后合法路径丢失、锁屏/中断/reset、Stage Manager/rotation/external display/input、visible HDR/EDR、空间音频共存、live Sunshine、CPU/GPU/memory/power/thermal和clean teardown，并排除endpoint、secret、profile/certificate/device/raw identity与媒体payload。
 - 阶段18–20可以使用阶段17确定性foundation继续推进，但其build、simulator或离线验证不能回填6.6。6.7勾选后权威进度应为`35/36`，唯一pending为6.6。
+
+## 2026-08-07 阶段 17 离线自验结论
+
+- 已推送`c7c9089a965eb1eea100b84e844f87ab003f939d`上的fresh complete macOS normal `/tmp/LuneX-17-stage-acceptance.xnt9je`通过`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`；唯一Skipped节点精确为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，结构化error/warning/analyzer warning均为0，日志无sanitizer/crash/test-failed marker。
+- 组合门`/tmp/LuneX-17-stage-acceptance-final.k8BdmF`确认`HEAD == origin/main`、起始工作树clean、fixture、OpenSpec strict `8/8`、apply `35/36 only 6.6 pending`、generator稳定SHA-256、fresh normal、fixed simulator no-launch/no-mutation、Keychain opt-in unset、无LuneX残留进程和diff检查。
+- 自验未查询或操作simulator、未访问真实Keychain，也不证明signed artifact、system PiP、background duration、Stage Manager、external display、visible EDR、空间音频、live Sunshine或power/thermal；阶段17继续`in_progress`且不可archive。
