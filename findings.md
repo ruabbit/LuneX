@@ -2243,3 +2243,11 @@
 - continuity整体缺失迁移为defaults，部分字段逐项补default并保留已有布尔值；malformed present type仍失败而不是静默吞掉。
 - 正式证据为focused`9/9`、expanded`220/219/1/0`、fresh full`906/905/1/0`、四generic Debug均`succeeded/0/0/0`及repository pre-gate`/tmp/LuneX-17-5_5-repository-pre-r3.CQDfTT`。唯一skip为显式真实Keychain测试，opt-in未设置；没有查询或操作simulator。
 - 这些证据不证明system PiP、signed background acceptance、background duration、Stage Manager/rotation/external display、visible mobile EDR、物理输入/空间音频、power/thermal或live Sunshine；5.6只扩展确定性跨层/UI回归，6.6继续保留物理证明。
+
+## 2026-08-06 阶段 17 任务 5.6 回归边界
+
+- 底层并非缺少background policy测试：`MobileMediaGenerationOwnerTests`已有confirmed PiP、audio-only、configuration-only suspension、last-path loss与foreground single resample；`SessionMediaEnvironmentTests`已有同序列action routing、replacement stale completion、media failure清理和shared clean teardown。
+- 5.6剩余风险位于AppModel/UI/persistence联合边界，因此新增跨层sequence、replacement diagnostic re-ownership、actual status clean-stop、RootView responsive/accessibility/localization和malformed migration回归，不复制底层状态机或新增第二套runtime。
+- 12-suite expanded矩阵在macOS 27.0/Xcode 26.4的全新DerivedData中通过`246/245/1/0`；唯一skip仍是必须显式启用的真实Keychain round-trip，说明新联合回归没有破坏既有owner/environment/PiP/scene/EDR合同，但仍不构成system PiP或物理移动设备证明。
+- fresh完整normal suite增加到909项并通过`908 passed / 1 explicit Keychain skip / 0 failed`，确认5.6测试补充在全仓离线回归中收敛；这仍只证明macOS可注入与跨平台共享代码，不证明iOS后台持续时间或物理PiP/EDR行为。
+- 5.6四平台generic Debug与repository pre-gate均通过；当前提交点的generator SHA-256仍为`78cab89798454bcb0bf629e42832423747475eee64165a42f04fbaebf106f817`，iOS built plist精确为单一`audio`后台模式和`UIDeviceFamily [1,2]`。勾选5.6后权威进度应为`29/36`、next 6.1。

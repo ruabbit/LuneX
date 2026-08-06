@@ -108,6 +108,44 @@ final class MobileExperiencePresentationStatusTests: XCTestCase {
         XCTAssertEqual(status.display, .reconfiguring)
     }
 
+    func testRootViewUsesActualMobileStateWithAccessibleLocalizedLayouts()
+        throws
+    {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let rootViewURL = repositoryRoot
+            .appendingPathComponent("Sources/LuneXApp/RootView.swift")
+        let source = try String(contentsOf: rootViewURL, encoding: .utf8)
+
+        let requiredContracts = [
+            "let mobileStatus = appModel.mobileExperiencePresentationStatus",
+            "MobilePictureInPictureCommandButton()",
+            "MobileActualStatusRows(",
+            "MobileActualStatusPill(",
+            "continuityPreferenceControls",
+            "ViewThatFits(in: .horizontal)",
+            "dynamicTypeSize.isAccessibilitySize",
+            "systemImage: \"pip.enter\"",
+            "systemImage: \"pip.exit\"",
+            ".accessibilityLabel(Text(label))",
+            ".accessibilityValue(value)",
+            "let title: LocalizedStringResource",
+            "Text(\"Current headroom is \\(current, format:",
+            "Text(\"EDR active at \\(current, format:"
+        ]
+        for contract in requiredContracts {
+            XCTAssertTrue(source.contains(contract), "Missing \(contract)")
+        }
+        XCTAssertFalse(source.contains(
+            "settings.continuity.pictureInPictureEnabled ? \"Active\""
+        ))
+        XCTAssertFalse(source.contains(
+            "Text(verbatim: content.accessibilityValue)"
+        ))
+    }
+
     private func resolve(
         hasActiveSession: Bool,
         scene: MobileSceneWindowState? = nil,

@@ -425,6 +425,8 @@
 | 17.5.5续接只读门禁编排局部变量覆盖工具命名空间 | 1 | JavaScript在任何shell命令执行前以`ReferenceError`退出且仓库未改；变量改名后继续，不重复该编排 |
 | 17.5.5勾选后final-state文档断言再次包含Markdown反引号 | 1 | fixture、OpenSpec与generator已通过后静态断言无输出退出，未运行或重复test/build；改为不含反引号的固定语义匹配，从全新目录重跑完整门 |
 | 17.5.5 final-state r2命令所有权断言使用不存在的字段名 | 1 | 实现实际使用`mobilePictureInPictureCoordinator`且generation检查完整；修正只读断言，先逐项预检剩余静态/plist门再完整重跑 |
+| 17.5.6首次test/tracking组合补丁使用不存在的findings尾句 | 1 | `apply_patch`整体拒绝且仓库仍clean；拆分test与tracking补丁，按三个文件真实尾部追加，不重复错误上下文 |
+| 17.5.6勾选后final-state文档断言包含Markdown反引号 | 1 | JavaScript在shell启动前报`SyntaxError: Unexpected number`；没有创建证据目录、执行门禁或修改仓库。改用不含反引号的固定语义匹配，从全新目录重跑且不重复build/test |
 
 ## 当前执行点（2026-07-30）
 
@@ -434,7 +436,7 @@
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。
 - 阶段16 `integrate-spatial-audio-runtime`权威进度`34/35 in_progress`；1.1至6.5与6.7的production、normal/build、strict/API/analyzer、sanitizer/resource、simulator、合同和阶段级离线自验均完成并封版。唯一剩余6.6保持未完成；当前证据仍不证明AirPods head tracking、visionOS硬件可听行为、signed entitlement、真实route transition、物理声道输出或live Sunshine播放。
-- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`28/36 in_progress`；1.x至5.5的actual mobile runtime、media/AppModel ownership、native PiP commands、actual status、continuity UI与migration已完成。下一项5.6扩展跨层/UI回归；unsigned generic build仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
+- 阶段17 `integrate-mobile-scene-pip-continuity`权威进度`29/36 in_progress`；1.x至5.6的actual mobile runtime、media/AppModel ownership、native PiP commands、actual status、continuity UI/migration与完整确定性跨层回归已完成。下一项6.1运行normal gate；unsigned generic build仍不证明provisioning接受、live Stage Manager、系统PiP、background duration、visible mobile EDR、physical设备或live Sunshine。
 - macOS 27.0更新后已重新认证5.3：Xcode 26.4/macOS SDK 26.4下macOS全量`881/880/1/0`且唯一skip为禁用的真实Keychain用例，iOS Debug/Release generic build与built plist读回均通过；没有启动或修改simulator。
 - 阶段17任务5.4已于2026-08-06恢复并进入`in_progress`：先建立current session/media generation的scene/geometry/EDR/PiP/audio纯值application与serialized continuity action边界，再接入AppModel和iOS actual surface回调；stop/failure/replacement必须清空actual current state，UIKit/AVKit对象不得跨actor。5.5 UI与6.6物理证明保持在后续任务。
 - macOS 27.0更新结束后再次恢复5.4；当前第一门为串行结构化读回`/tmp/LuneX-17-5_4-action-expanded-final-r2.U2uuha/Expanded.xcresult`。只有expanded、fresh full macOS、generic platform builds及repository gates全部通过后才允许勾选5.4并提交。
@@ -452,3 +454,20 @@
 - **实现：** typed actual-state projection、current-generation PiP command bridge、stream/Settings actual scene/PiP/continuity/mobile-EDR状态、compact/wide和accessibility/localization-safe UI、missing/partial continuity migration。
 - **自验：** focused `9/9`、expanded `220/219/1/0`、fresh full `906/905/1/0`、四generic Debug零结构化诊断、repository pre-gate `/tmp/LuneX-17-5_5-repository-pre-r3.CQDfTT`全部通过。
 - **证明边界：** 未操作simulator、未访问真实Keychain；system PiP、signed background、background duration、Stage Manager、external display、visible EDR、物理输入/空间音频、power/thermal与live Sunshine仍未证明。下一项5.6。
+
+## 2026-08-06 阶段 17 任务 5.6 启动
+
+- **状态：** `in_progress`
+- **基线：** 5.5已以`6792840 Expose mobile continuity runtime state`提交并推送，`HEAD == origin/main`，工作树clean。
+- **范围：** AppModel policy-loss/audio-only/active-PiP/foreground-restore/replacement/diagnostic ownership/clean-stop联合回归，RootView actual-state/accessibility/localization合同，以及continuity migration fail-closed回归。
+- **验收：** 先运行三类新增focused tests，再扩大到owner/environment/AppModel/UI/persistence矩阵；之后fresh full macOS、四平台generic Debug与repository/OpenSpec门。测试继续显式移除`LUNEX_RUN_KEYCHAIN_TEST`且不操作simulator。
+- **expanded 状态：** `/tmp/LuneX-17-5_6-expanded.rMzx7g/Expanded.xcresult` 已通过 `246/245/1/0`，唯一skip为显式真实Keychain测试，结构化build diagnostics为0；下一门为fresh full macOS normal suite。
+- **full 状态：** `/tmp/LuneX-17-5_6-full.vIdYY6/Full.xcresult` 已通过 `909/908/1/0`，唯一skip仍为显式真实Keychain测试且结构化build diagnostics为0；下一门为四平台generic Debug build。
+
+## 2026-08-06 阶段 17 任务 5.6 完成
+
+- **状态：** `complete`
+- **实现：** AppModel连续跨层sequence、replacement diagnostic re-ownership、actual-state clean-stop、RootView responsive/accessibility/localization静态合同，以及malformed continuity migration fail-closed回归；production runtime零修改。
+- **自验：** focused `3/3`、expanded `246/245/1/0`、fresh full `909/908/1/0`、四generic Debug零结构化诊断及repository pre-gate `/tmp/LuneX-17-5_6-repository-pre.yLerRh`全部通过。
+- **最终状态门：** `/tmp/LuneX-17-5_6-final-state-r2.RXA6yF`通过`29/36 next 6.1`、generator稳定、production diff clean、精确九文件scope、全部保留证据与diff检查。
+- **证明边界：** 未查询或操作simulator、未访问真实Keychain；system PiP、signed background、background duration、Stage Manager、external display、visible EDR、物理输入/空间音频、power/thermal与live Sunshine仍属于6.x。下一项6.1。

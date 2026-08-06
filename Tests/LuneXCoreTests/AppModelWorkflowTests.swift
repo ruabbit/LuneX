@@ -2163,6 +2163,229 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testMobileContinuityRegressionProjectsActualStateAcrossReplacementAndCleanStop()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 41,
+                    key: Data(repeating: 0x41, count: 16)
+                )),
+                .success(RemoteInputKeyMaterial(
+                    keyID: 42,
+                    key: Data(repeating: 0x42, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let firstLaunch = Task { await model.launchSelectedApp() }
+        let firstRecord = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: firstRecord)
+        await waitUntil { model.session.isStreaming }
+        model.diagnostics.record(
+            ApplicationDiagnosticFactory.streamFailure(
+                VideoDecoderError.noActiveSession
+            )
+        )
+
+        let pictureInPicture = try makeMobileRuntimeState(
+            sessionID: firstRecord.sessionID,
+            mediaGeneration: 1,
+            revision: 1,
+            sceneActivity: .background,
+            pictureInPictureLifecycle: .active,
+            includesActualSceneAndDisplay: true
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            pictureInPicture,
+            sessionID: firstRecord.sessionID
+        )
+        await waitUntil { model.mobileRuntimeState == pictureInPicture }
+        XCTAssertEqual(model.mobileExperiencePresentationStatus.scene, .background)
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.pictureInPicture,
+            .active
+        )
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.continuity,
+            .pictureInPicture
+        )
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.display,
+            .edrCapable(potentialHeadroom: 4, currentHeadroom: 2)
+        )
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.pictureInPictureCommand,
+            .stop
+        )
+        XCTAssertEqual(
+            model.renderState.policy,
+            .paused(reason: "picture-in-picture-active")
+        )
+
+        let duplicatePictureInPicture = try makeMobileRuntimeState(
+            sessionID: firstRecord.sessionID,
+            mediaGeneration: 1,
+            revision: 2,
+            sceneActivity: .background,
+            pictureInPictureLifecycle: .active,
+            includesActualSceneAndDisplay: true
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            duplicatePictureInPicture,
+            sessionID: firstRecord.sessionID
+        )
+        await waitUntil {
+            model.mobileRuntimeState == duplicatePictureInPicture
+        }
+        XCTAssertEqual(
+            model.diagnostics.events.filter {
+                $0.code == "mobile_continuity_pip"
+            }.count,
+            1
+        )
+
+        let audioOnly = try makeMobileRuntimeState(
+            sessionID: firstRecord.sessionID,
+            mediaGeneration: 1,
+            revision: 3,
+            sceneActivity: .background,
+            isAudioSessionActive: true,
+            includesActualSceneAndDisplay: true
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            audioOnly,
+            sessionID: firstRecord.sessionID
+        )
+        await waitUntil { model.mobileRuntimeState == audioOnly }
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.continuity,
+            .audioOnly
+        )
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.pictureInPicture,
+            .unavailable
+        )
+
+        let policyLoss = try makeMobileRuntimeState(
+            sessionID: firstRecord.sessionID,
+            mediaGeneration: 1,
+            revision: 4,
+            sceneActivity: .background,
+            includesActualSceneAndDisplay: true
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            policyLoss,
+            sessionID: firstRecord.sessionID
+        )
+        await waitUntil { model.mobileRuntimeState == policyLoss }
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.continuity,
+            .paused
+        )
+        XCTAssertEqual(
+            model.session.phase,
+            .suspending(reason: "no-active-permitted-media-path")
+        )
+
+        let foreground = try makeMobileRuntimeState(
+            sessionID: firstRecord.sessionID,
+            mediaGeneration: 1,
+            revision: 5,
+            sceneActivity: .active,
+            foregroundRestorationCount: 1,
+            includesActualSceneAndDisplay: true
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            foreground,
+            sessionID: firstRecord.sessionID
+        )
+        await waitUntil { model.mobileRuntimeState == foreground }
+        XCTAssertEqual(model.mobileExperiencePresentationStatus.scene, .active)
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.continuity,
+            .foreground
+        )
+        XCTAssertEqual(model.renderState.policy, .active)
+        XCTAssertEqual(
+            model.diagnostics.latestStreamActionableEvent?.category,
+            .decoder
+        )
+
+        let firstMobileEvents = model.diagnostics.events.filter {
+            $0.code.hasPrefix("mobile_")
+        }
+        for event in firstMobileEvents {
+            XCTAssertFalse(event.message.contains(firstRecord.sessionID.uuidString))
+            XCTAssertFalse(event.message.contains("moon.local"))
+        }
+
+        await model.stopStream()
+        await firstLaunch.value
+        XCTAssertNil(model.mobileRuntimeState)
+        XCTAssertNil(model.mobileSceneWindowSnapshot)
+        XCTAssertNil(model.mobileDisplayEDRSnapshot)
+        XCTAssertNil(model.mobilePictureInPictureSnapshot)
+        XCTAssertNil(model.mobileAudioSessionActive)
+        XCTAssertEqual(model.mobileExperiencePresentationStatus.scene, .noSession)
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.pictureInPicture,
+            .noSession
+        )
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.continuity,
+            .noSession
+        )
+        XCTAssertEqual(model.mobileExperiencePresentationStatus.display, .noSession)
+
+        let replacementLaunch = Task { await model.launchSelectedApp() }
+        await waitUntil { provider.currentStartRecords().count == 2 }
+        let replacementRecord = try XCTUnwrap(provider.currentStartRecords().last)
+        driveSessionToStreaming(provider, record: replacementRecord)
+        await waitUntil { model.session.isStreaming }
+        let replacementPictureInPicture = try makeMobileRuntimeState(
+            sessionID: replacementRecord.sessionID,
+            mediaGeneration: 2,
+            revision: 1,
+            sceneActivity: .background,
+            pictureInPictureLifecycle: .active,
+            includesActualSceneAndDisplay: true
+        )
+        mediaEnvironment.yieldMobileRuntime(
+            replacementPictureInPicture,
+            sessionID: replacementRecord.sessionID
+        )
+        await waitUntil {
+            model.mobileRuntimeState == replacementPictureInPicture
+        }
+        XCTAssertNotEqual(firstRecord.sessionID, replacementRecord.sessionID)
+        XCTAssertEqual(
+            model.diagnostics.events.filter {
+                $0.code == "mobile_continuity_pip"
+            }.count,
+            2
+        )
+        XCTAssertEqual(
+            model.mobileExperiencePresentationStatus.continuity,
+            .pictureInPicture
+        )
+
+        await model.stopStream()
+        await replacementLaunch.value
+        XCTAssertNil(model.mobileRuntimeState)
+        XCTAssertEqual(model.mobileExperiencePresentationStatus.scene, .noSession)
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs().count, 2)
+    }
+
     func testAppModelBindsSpatialPreferencesAndCurrentAudioRuntime() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
@@ -3487,12 +3710,82 @@ final class AppModelWorkflowTests: XCTestCase {
         mediaGeneration: UInt64,
         revision: UInt64,
         sceneActivity: AppSceneActivity,
-        foregroundRestorationCount: UInt64 = 0
+        foregroundRestorationCount: UInt64 = 0,
+        pictureInPictureLifecycle: MobilePictureInPictureLifecycle? = nil,
+        isAudioSessionActive: Bool? = nil,
+        includesActualSceneAndDisplay: Bool = false
     ) throws -> SessionMobileRuntimeState {
         let generation = try XCTUnwrap(MobilePictureInPictureGeneration(
             mediaGeneration: mediaGeneration,
             pictureInPictureGeneration: 1
         ))
+        let surfaceGeneration = includesActualSceneAndDisplay
+            ? try XCTUnwrap(MobileSceneSurfaceGeneration(
+                rawValue: mediaGeneration
+            ))
+            : nil
+        let sceneWindow = surfaceGeneration.map {
+            MobileSceneWindowSnapshot(
+                surfaceGeneration: $0,
+                revision: MobileSceneWindowRevision(rawValue: revision),
+                state: .attached(
+                    activity: sceneActivity,
+                    display: MobileDisplayGeneration(rawValue: mediaGeneration)!,
+                    geometry: MobileSceneWindowGeometry(
+                        viewBounds: MobileSceneRect(
+                            x: 0,
+                            y: 0,
+                            width: 1_024,
+                            height: 768
+                        ),
+                        windowBounds: MobileSceneRect(
+                            x: 0,
+                            y: 0,
+                            width: 1_024,
+                            height: 768
+                        ),
+                        safeAreaInsets: .zero,
+                        scale: 2,
+                        drawableSize: PixelSize(width: 2_048, height: 1_536),
+                        orientation: .landscapeLeft,
+                        traits: MobileSceneTraits(
+                            horizontalSizeClass: .regular,
+                            verticalSizeClass: .regular,
+                            interfaceStyle: .dark
+                        ),
+                        resizePhase: .settled
+                    )
+                )
+            )
+        }
+        let displayEDR = surfaceGeneration.map { surfaceGeneration in
+            var publisher = MobileDisplayEDRSnapshotPublisher(
+                surfaceGeneration: surfaceGeneration
+            )
+            _ = publisher.update(MobileDisplayEDREventEnvelope(
+                surfaceGeneration: surfaceGeneration,
+                sample: .attached(MobileDisplayEDRReading(
+                    displayGeneration: mediaGeneration,
+                    potentialHeadroom: 4,
+                    currentHeadroom: 2
+                ))
+            ))
+            return publisher.snapshot!
+        }
+        let pictureInPicture = pictureInPictureLifecycle.map { lifecycle in
+            MobilePictureInPictureSnapshot(
+                generation: generation,
+                revision: MobilePictureInPictureRevision(rawValue: revision),
+                state: MobilePictureInPictureSemanticState(
+                    isPrepared: true,
+                    capability: .possible,
+                    lifecycle: lifecycle,
+                    frameSink: .ready(decoderGeneration: 1)!,
+                    restoration: .idle,
+                    failure: nil
+                )
+            )
+        }
         let application = SessionMobileRuntimeApplication(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
@@ -3502,12 +3795,12 @@ final class AppModelWorkflowTests: XCTestCase {
             generation: generation,
             platform: .iOS,
             sceneActivity: sceneActivity,
-            surfaceGeneration: nil,
-            sceneWindow: nil,
-            displayEDR: nil,
-            pictureInPicture: nil,
-            isAudioSessionActive: nil,
-            isAudioContinuityPermitted: false,
+            surfaceGeneration: surfaceGeneration,
+            sceneWindow: sceneWindow,
+            displayEDR: displayEDR,
+            pictureInPicture: pictureInPicture,
+            isAudioSessionActive: isAudioSessionActive,
+            isAudioContinuityPermitted: isAudioSessionActive == true,
             preferences: .defaults,
             capabilities: PlatformContinuityCapabilities(
                 supportsAudioBackgroundMode: true,

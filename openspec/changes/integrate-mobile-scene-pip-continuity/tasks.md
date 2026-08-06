@@ -40,7 +40,7 @@
 - [x] 5.3 Generate and verify the narrow iOS/iPadOS playback background-mode configuration while keeping configuration, signed acceptance, and runtime behavior as separate evidence
 - [x] 5.4 Route current scene/geometry/PiP/continuity/mobile-EDR state and bounded diagnostics through `NativeSessionMediaEnvironment` and `AppModel`, clearing actual state on stop/failure/replacement
 - [x] 5.5 Add accessible native PiP commands, actual scene/PiP/background/HDR status, continuity settings, compact/wide layouts, localization-safe copy, and preference migration
-- [ ] 5.6 Add policy-loss-in-background, audio-only, active-PiP, foreground restore, media replacement, diagnostic ownership, UI actual-state, accessibility, localization, migration, and clean-stop tests
+- [x] 5.6 Add policy-loss-in-background, audio-only, active-PiP, foreground restore, media replacement, diagnostic ownership, UI actual-state, accessibility, localization, migration, and clean-stop tests
 
 ## 6. Verification and acceptance
 

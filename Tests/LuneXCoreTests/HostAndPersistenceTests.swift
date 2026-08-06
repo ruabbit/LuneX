@@ -198,6 +198,25 @@ final class HostAndPersistenceTests: XCTestCase {
         )
     }
 
+    func testContinuitySettingsMigrationRejectsMalformedStoredTypes() throws {
+        let malformed = Data(
+            """
+            {
+              "audioContinuityEnabled": true,
+              "pictureInPictureEnabled": "yes",
+              "reduceRenderingInBackground": true
+            }
+            """.utf8
+        )
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                ContinuityPreferences.self,
+                from: malformed
+            )
+        )
+    }
+
     func testAudioPreferencesConvertToAndFromSessionPreferences() {
         let sessionPreferences = SessionSpatialAudioPreferences(
             spatialAudioEnabled: false,
