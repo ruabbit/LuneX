@@ -12,6 +12,8 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
     case staleAudioApplication
     case staleMobileRuntimeApplication
     case invalidMobileRuntimeApplication
+    case staleTVVisionPlatformPresentationApplication
+    case invalidTVVisionPlatformPresentationApplication
 
     var description: String {
         switch self {
@@ -37,6 +39,10 @@ enum SessionMediaEnvironmentError: Error, Equatable, Sendable, CustomStringConve
             return "The mobile runtime application does not belong to the current media generation or revision."
         case .invalidMobileRuntimeApplication:
             return "The mobile runtime application is internally inconsistent."
+        case .staleTVVisionPlatformPresentationApplication:
+            return "The platform presentation application does not belong to the current media generation or ownership."
+        case .invalidTVVisionPlatformPresentationApplication:
+            return "The platform presentation application is internally inconsistent."
         }
     }
 
@@ -56,6 +62,33 @@ enum SessionMediaEnvironmentEvent: Equatable, Sendable {
     case videoPresentation(StreamVideoPresentationEvent)
     case audioRuntime(SessionMediaAudioRuntimeState)
     case mobileRuntime(SessionMobileRuntimeState)
+    case tvVisionPlatformPresentation(
+        SessionTVVisionPlatformPresentationState
+    )
+}
+
+enum SessionTVVisionPlatformPresentationAction: Equatable, Sendable {
+    case activate
+    case scene(TVVisionStreamGeometryBindingUpdate)
+    case input(
+        snapshot: TVVisionInputCapabilitySnapshot,
+        controllerLeases: [TVVisionControllerLease]
+    )
+    case display(TVVisionDisplaySnapshot)
+    case audioRoute(TVVisionAudioRouteSnapshot)
+    case fail(TVVisionPlatformPresentationFailure)
+    case stop(TVVisionPlatformPresentationStopReason)
+}
+
+struct SessionTVVisionPlatformPresentationApplication: Equatable, Sendable {
+    let ownership: TVVisionPresentationOwnership
+    let action: SessionTVVisionPlatformPresentationAction
+}
+
+struct SessionTVVisionPlatformPresentationState: Equatable, Sendable {
+    let sessionID: UUID
+    let mediaGeneration: UInt64
+    let snapshot: TVVisionPlatformPresentationCoordinatorSnapshot
 }
 
 struct SessionMediaAudioRuntimeState: Equatable, Sendable {
@@ -75,6 +108,8 @@ struct SessionMediaEnvironmentSnapshot: Equatable, Sendable {
     var lifecycleApplication: SessionLifecycleApplication? = nil
     var audioRuntime: SessionMediaAudioRuntimeState? = nil
     var mobileRuntime: SessionMobileRuntimeState? = nil
+    var tvVisionPlatformPresentation:
+        SessionTVVisionPlatformPresentationState? = nil
 }
 
 struct SessionLifecycleApplication: Equatable, Sendable {
@@ -164,6 +199,10 @@ protocol SessionMediaEnvironment: Sendable {
         _ application: SessionMobileRuntimeApplication
     ) async throws
 
+    func applyTVVisionPlatformPresentation(
+        _ application: SessionTVVisionPlatformPresentationApplication
+    ) async throws
+
     func sendInput(_ application: SessionInputApplication) async throws
 
     func releaseInput(_ application: SessionInputReleaseApplication) async throws
@@ -180,6 +219,14 @@ extension SessionMediaEnvironment {
     ) async throws {
         _ = application
         throw SessionMediaEnvironmentError.invalidMobileRuntimeApplication
+    }
+
+    func applyTVVisionPlatformPresentation(
+        _ application: SessionTVVisionPlatformPresentationApplication
+    ) async throws {
+        _ = application
+        throw SessionMediaEnvironmentError
+            .invalidTVVisionPlatformPresentationApplication
     }
 }
 
@@ -204,6 +251,13 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var mobileRuntime: SessionMobileRuntimeState?
         var mobileRuntimeReservation: SessionMobileRuntimeApplication?
         var mobileRuntimeOwner: MobileMediaGenerationOwner
+        var tvVisionPlatformCoordinator:
+            TVVisionPlatformPresentationCoordinator
+        var tvVisionPlatformPresentation:
+            SessionTVVisionPlatformPresentationState?
+        var tvVisionPlatformOwnership: TVVisionPresentationOwnership?
+        var tvVisionPlatformSubscription:
+            StreamVideoPresentationSubscription?
     }
 
     private struct TeardownOperation {
@@ -233,6 +287,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     private let remoteInputProvider: (any RemoteInputProvider)?
     private let videoProcessorFactory: any SessionVideoProcessorCreating
     private let audioProcessorFactory: any SessionAudioProcessorCreating
+    private let videoPresentationSource: StreamVideoPresentationSource?
     private let teardownGracePeriod: Duration
 
     private var active: ActiveSession?
@@ -251,6 +306,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         remoteInputProvider: (any RemoteInputProvider)?,
         videoProcessorFactory: any SessionVideoProcessorCreating,
         audioProcessorFactory: any SessionAudioProcessorCreating,
+        videoPresentationSource: StreamVideoPresentationSource? = nil,
         teardownGracePeriod: Duration = .seconds(2)
     ) {
         self.videoReceiveProvider = videoReceiveProvider
@@ -258,6 +314,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         self.remoteInputProvider = remoteInputProvider
         self.videoProcessorFactory = videoProcessorFactory
         self.audioProcessorFactory = audioProcessorFactory
+        self.videoPresentationSource = videoPresentationSource
         self.teardownGracePeriod = teardownGracePeriod
     }
 
@@ -383,6 +440,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 configuration: configuration.input
             )
             let feedbackStream = await remoteInputProvider.feedback(sessionID: sessionID)
+            let tvVisionPlatformCoordinator =
+                try TVVisionPlatformPresentationCoordinator()
             guard startingSession?.sessionID == sessionID,
                   startingSession?.generation == mediaGeneration,
                   !cancelledStartingGenerations.contains(mediaGeneration) else {
@@ -411,7 +470,11 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                         controlProvider: controlProvider,
                         inputProvider: remoteInputProvider
                     )
-                )
+                ),
+                tvVisionPlatformCoordinator: tvVisionPlatformCoordinator,
+                tvVisionPlatformPresentation: nil,
+                tvVisionPlatformOwnership: nil,
+                tvVisionPlatformSubscription: nil
             )
             startingSession = nil
             cancelledStartingGenerations.remove(mediaGeneration)
@@ -767,6 +830,206 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         current.continuation.yield(.mobileRuntime(state))
     }
 
+    func applyTVVisionPlatformPresentation(
+        _ application: SessionTVVisionPlatformPresentationApplication
+    ) async throws {
+        guard let active,
+              active.sessionID == application.ownership.sessionID else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard active.generation == application.ownership.mediaGeneration else {
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+
+        let coordinator = active.tvVisionPlatformCoordinator
+        let outcome: TVVisionPlatformPresentationCoordinatorOutcome
+        switch application.action {
+        case .activate:
+            outcome = await coordinator.activate(application.ownership)
+        case let .scene(update):
+            outcome = await coordinator.applyScene(
+                update,
+                ownership: application.ownership
+            )
+        case let .input(snapshot, controllerLeases):
+            outcome = await coordinator.applyInput(
+                snapshot,
+                controllerLeases: controllerLeases,
+                ownership: application.ownership
+            )
+        case let .display(snapshot):
+            outcome = await coordinator.applyDisplay(
+                snapshot,
+                ownership: application.ownership
+            )
+        case let .audioRoute(snapshot):
+            outcome = await coordinator.applyAudioRoute(
+                snapshot,
+                ownership: application.ownership
+            )
+        case let .fail(failure):
+            outcome = await coordinator.fail(
+                ownership: application.ownership,
+                failure: failure
+            )
+        case let .stop(reason):
+            outcome = await coordinator.stop(
+                ownership: application.ownership,
+                reason: reason
+            )
+        }
+
+        let state = try await publishTVVisionPlatformOutcome(
+            outcome,
+            expectedOwnership: application.ownership
+        )
+        switch application.action {
+        case .activate where state.snapshot.phase == .active:
+            try await installTVVisionPlatformSubscription(
+                ownership: application.ownership
+            )
+        case .fail, .stop:
+            clearTVVisionPlatformSubscription(
+                ownership: application.ownership
+            )
+        default:
+            if case .failed = state.snapshot.phase {
+                clearTVVisionPlatformSubscription(
+                    ownership: application.ownership
+                )
+            }
+        }
+    }
+
+    private func publishTVVisionPlatformOutcome(
+        _ outcome: TVVisionPlatformPresentationCoordinatorOutcome,
+        expectedOwnership: TVVisionPresentationOwnership
+    ) async throws -> SessionTVVisionPlatformPresentationState {
+        let snapshot: TVVisionPlatformPresentationCoordinatorSnapshot
+        switch outcome {
+        case let .applied(value),
+             let .unchanged(value),
+             let .failed(value):
+            snapshot = value
+        case .staleOwnership, .staleRevision:
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+        guard snapshot.ownership == expectedOwnership,
+              var current = active,
+              current.sessionID == expectedOwnership.sessionID,
+              current.generation == expectedOwnership.mediaGeneration else {
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+
+        let state = SessionTVVisionPlatformPresentationState(
+            sessionID: current.sessionID,
+            mediaGeneration: current.generation,
+            snapshot: snapshot
+        )
+        if let existing = current.tvVisionPlatformPresentation {
+            if existing.snapshot.ownership == snapshot.ownership {
+                guard snapshot.sequence >= existing.snapshot.sequence else {
+                    throw SessionMediaEnvironmentError
+                        .staleTVVisionPlatformPresentationApplication
+                }
+                if state == existing { return state }
+            }
+        }
+        if current.tvVisionPlatformOwnership != expectedOwnership {
+            current.tvVisionPlatformSubscription?.cancel()
+            current.tvVisionPlatformSubscription = nil
+        }
+        current.tvVisionPlatformOwnership = expectedOwnership
+        current.tvVisionPlatformPresentation = state
+        self.active = current
+        current.continuation.yield(.tvVisionPlatformPresentation(state))
+        return state
+    }
+
+    private func installTVVisionPlatformSubscription(
+        ownership: TVVisionPresentationOwnership
+    ) async throws {
+        guard var current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership else {
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+        if current.tvVisionPlatformSubscription != nil { return }
+        guard let videoPresentationSource else { return }
+        guard let subscription = videoPresentationSource.subscribe(
+            sessionID: ownership.sessionID,
+            mediaGeneration: ownership.mediaGeneration,
+            handler: { [weak self] delivery in
+                Task {
+                    await self?.receiveTVVisionPlatformVideo(
+                        delivery,
+                        ownership: ownership
+                    )
+                }
+            }
+        ) else {
+            let outcome = await current.tvVisionPlatformCoordinator.fail(
+                ownership: ownership,
+                failure: .invalidComponent(.video)
+            )
+            _ = try await publishTVVisionPlatformOutcome(
+                outcome,
+                expectedOwnership: ownership
+            )
+            throw SessionMediaEnvironmentError
+                .invalidTVVisionPlatformPresentationApplication
+        }
+        guard let latest = active,
+              latest.sessionID == ownership.sessionID,
+              latest.generation == ownership.mediaGeneration,
+              latest.tvVisionPlatformOwnership == ownership else {
+            subscription.cancel()
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+        current = latest
+        current.tvVisionPlatformSubscription = subscription
+        self.active = current
+    }
+
+    private func receiveTVVisionPlatformVideo(
+        _ delivery: StreamVideoPresentationDelivery,
+        ownership: TVVisionPresentationOwnership
+    ) async {
+        guard let current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership else { return }
+        let outcome = await current.tvVisionPlatformCoordinator.receiveVideo(
+            delivery,
+            ownership: ownership
+        )
+        guard let state = try? await publishTVVisionPlatformOutcome(
+            outcome,
+            expectedOwnership: ownership
+        ) else { return }
+        if case .failed = state.snapshot.phase {
+            clearTVVisionPlatformSubscription(ownership: ownership)
+        }
+    }
+
+    private func clearTVVisionPlatformSubscription(
+        ownership: TVVisionPresentationOwnership
+    ) {
+        guard var current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership else { return }
+        current.tvVisionPlatformSubscription?.cancel()
+        current.tvVisionPlatformSubscription = nil
+        self.active = current
+    }
+
     func sendInput(_ application: SessionInputApplication) async throws {
         guard let active, active.sessionID == application.sessionID else {
             throw SessionMediaEnvironmentError.inactiveSession
@@ -851,13 +1114,26 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             return lastStoppedSessionID == sessionID ? lastTeardownReport : nil
         }
         guard active.sessionID == sessionID else { return nil }
-
-        let operation = makeTeardownOperation(for: active)
+        if let ownership = active.tvVisionPlatformOwnership {
+            let outcome = await active.tvVisionPlatformCoordinator.stop(
+                ownership: ownership,
+                reason: .localStop
+            )
+            _ = try? await publishTVVisionPlatformOutcome(
+                outcome,
+                expectedOwnership: ownership
+            )
+        }
+        guard let current = self.active,
+              current.sessionID == sessionID,
+              current.generation == active.generation else { return nil }
+        current.tvVisionPlatformSubscription?.cancel()
+        let operation = makeTeardownOperation(for: current)
         self.active = nil
         lifecycleOperation = nil
         mobileRuntimeOperation = nil
         teardownOperation = operation
-        active.continuation.finish()
+        current.continuation.finish()
         let report = await operation.task.value
         if teardownOperation?.generation == operation.generation {
             teardownOperation = nil
@@ -879,7 +1155,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 lastTeardownReport: lastTeardownReport,
                 lifecycleApplication: nil,
                 audioRuntime: nil,
-                mobileRuntime: nil
+                mobileRuntime: nil,
+                tvVisionPlatformPresentation: nil
             )
         }
         let resources = await active.tracker.snapshot()
@@ -893,7 +1170,9 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             lastTeardownReport: lastTeardownReport,
             lifecycleApplication: active.lifecycleApplication,
             audioRuntime: active.audioRuntime,
-            mobileRuntime: active.mobileRuntime
+            mobileRuntime: active.mobileRuntime,
+            tvVisionPlatformPresentation:
+                active.tvVisionPlatformPresentation
         )
     }
 
@@ -955,12 +1234,26 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard let active,
               active.sessionID == sessionID,
               active.generation == generation else { return }
-        let operation = makeTeardownOperation(for: active)
+        if let ownership = active.tvVisionPlatformOwnership {
+            let outcome = await active.tvVisionPlatformCoordinator.stop(
+                ownership: ownership,
+                reason: .failure
+            )
+            _ = try? await publishTVVisionPlatformOutcome(
+                outcome,
+                expectedOwnership: ownership
+            )
+        }
+        guard let current = self.active,
+              current.sessionID == sessionID,
+              current.generation == generation else { return }
+        current.tvVisionPlatformSubscription?.cancel()
+        let operation = makeTeardownOperation(for: current)
         self.active = nil
         lifecycleOperation = nil
         mobileRuntimeOperation = nil
         teardownOperation = operation
-        active.continuation.finish(throwing: error)
+        current.continuation.finish(throwing: error)
         Task { [weak self] in
             let report = await operation.task.value
             await self?.recordTeardown(
@@ -1002,11 +1295,21 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     ) -> TeardownOperation {
         let gracePeriod = teardownGracePeriod
         let owner = active.mobileRuntimeOwner
+        let tvVisionCoordinator = active.tvVisionPlatformCoordinator
+        let tvVisionOwnership = active.tvVisionPlatformOwnership
+        let tvVisionSubscription = active.tvVisionPlatformSubscription
         let tracker = active.tracker
         return TeardownOperation(
             sessionID: active.sessionID,
             generation: active.generation,
             task: Task {
+                tvVisionSubscription?.cancel()
+                if let tvVisionOwnership {
+                    _ = await tvVisionCoordinator.stop(
+                        ownership: tvVisionOwnership,
+                        reason: .localStop
+                    )
+                }
                 await Self.stopMobileRuntime(owner)
                 return try? await tracker.teardown(gracePeriod: gracePeriod)
             }

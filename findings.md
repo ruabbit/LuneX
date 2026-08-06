@@ -2454,3 +2454,33 @@
 - final wrapper前两轮只暴露验证断言错误：第一轮低估Xcode工程内build-file声明和phase引用的文本计数，第二轮把普通scene/audioRoute/controller lease状态误匹配为identity；均未重跑test/build、访问Keychain或操作simulator，第三轮从fresh目录完整通过。
 - 当前2.4仍未把coordinator接入`NativeSessionMediaEnvironment`/`AppModel`，也未实现actual input/HDR/audio adapters；signed、物理设备、live Sunshine和性能层级仍未证明。
 - post-record r2 `/tmp/LuneX-18-2_4-post-record-r2-vJDin3`确认OpenSpec `10/50 next 2.5`、十文件scope、project hash、分层final-gate记录及diff检查一致；首轮只因错误要求roadmap重复临时证据路径而退出。
+
+## 2026-08-07 阶段 18 任务 2.5 media/AppModel 接线调查
+
+- `NativeSessionMediaEnvironment`已是session/media generation、video/audio/input processor、resource tracker和mobile owner的权威owner；2.5应在该actor内新增每代唯一TV/vision coordinator及subscription，不能由SwiftUI view直接拥有第二套media state。
+- `AppModel`已通过`SessionMediaEnvironmentEvent`消费video/audio/mobile actual state，并在reconnect、remote termination、local stop和provider failure清理media state；platform presentation应沿同一event path接入并复用这些清理点。
+- `MetalStreamSurface`的tvOS/visionOS分支已暴露`geometryBindingUpdateHandler`，但`RootView`尚未转发。2.5可以用该actual geometry建立surface-derivedpresentation ownership和scene application；input/display/audio实际snapshot仍后置，因而当前presentation可truthfully保持incomplete而不是从偏好合成。
+- `StreamVideoPresentationSource`已提供generation-filtered bounded subscription和latest-frame replay。环境应在ownership activation后订阅现有source；启动前订阅会丢失activation前delivery且不能replay，因此subscription必须跟随current activated ownership。
+
+## 2026-08-07 阶段 18 任务 2.5 系统更新后恢复
+
+- 恢复时`HEAD == origin/main == a2e04df187d36bae4eea695a29fb8c8270eb75df`，仅task 2.5预期的`SessionMediaEnvironment.swift`、`AppModel.swift`、`RootView.swift`与三份planning文件有未提交修改。
+- 当前工具链为macOS 27.0 build 26A5388g、Xcode 26.4 build 17E192、Swift 6.3；OpenSpec仍为spec-driven `10/50 ready`、next 2.5。
+- 首轮warnings-as-errors编译已进入新增runtime类型，唯一显式诊断是`ApplicationDiagnostics.swift`对两个新`SessionMediaEnvironmentError` case缺少穷尽映射；这不是运行时语义证据，修复后必须从fresh目录重新编译并继续检查被遮蔽诊断。
+- 第二轮`/tmp/LuneX-18-2_5-compile-second.FTXZUb`越过production源码和diagnostics后，仅在`SessionMediaEnvironmentTests.swift:78`发现既有event switch未覆盖新`.tvVisionPlatformPresentation`；该循环只等待readiness/feedback，因此显式忽略presentation event符合原测试边界。
+- 第三轮`/tmp/LuneX-18-2_5-compile-third.axivxW`在Swift/Clang/Metal warnings-as-errors下`build-for-testing`成功；语义审计随后发现subscription安装失败会先yield terminal snapshot再throw，AppModel旧catch可能在事件已消费后无条件清除该bounded terminal state。
+- application catch现只保留同ownership的`.failed`或`.stopped(.failure)`，并始终解除application ownership；active、普通stopped或foreign snapshot均清除，避免把失败状态作为actual active presentation或跨replacement保留。
+- environment focused首轮`/tmp/LuneX-18-2_5-env-focused-first.seHM1E`在测试执行前因两处XCTest autoclosure内直接`await environment.snapshot()`而编译失败；production无诊断。已改为先捕获actor snapshot再同步断言，失败bundle不复用。
+- environment focused第二轮`/tmp/LuneX-18-2_5-env-focused-second.DrRTpN`通过`3/3`；证明current snapshot、单subscription、decoder delivery、stale/replacement、component failure、provider terminal-before-error和stop清理。
+- AppModel local stop原先在`activeStreamSessionID`先清零后才调用presentation stop，因此application guard会跳过`.localStop`并只依赖environment teardown兜底。stop admission已改为current media session/generation/ownership，三类显式stop reason都能先送达coordinator。
+- final focused `/tmp/LuneX-18-2_5-focused-third.ILQdlM`结构化通过`8/8 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 error / 0 warning / 0 analyzer warning`。覆盖environment current/subscription/video/replacement/failure/stop、AppModel geometry/current/stale/reconnect/remote/local/terminal race/media failure及privacy diagnostic。
+
+## 2026-08-07 阶段 18 任务 2.5 task级验收
+
+- environment teardown在显式`.reconnect`、`.remoteTermination`、`.failure`或`.localStop`后会再次调用shared coordinator stop，但coordinator已清空active state并返回既有terminal snapshot，因此不会执行第二次effects、增加teardown count或覆盖最初reason。
+- AppModel geometry application先等待前一个operation，再检查operation ID、active stream/media generation和完整ownership；stop/reconnect也在current generation内串行完成，old queued application无法提交到replacement。
+- AppModel只在tvOS默认`.tvOS`、visionOS默认`.visionOS`；macOS/iOS production默认`nil`，测试注入只用于纯值application合同，不会在非目标平台凭设置合成actual state。
+- fresh normal `/tmp/LuneX-18-2_5-normal-r2.6qYfC2`为`996/995/1 exact Keychain skip/0`且零结构化诊断；五平台Debug `/tmp/LuneX-18-2_5-builds.zPlpja`全部零诊断并有Metal产物。
+- corrected repository pre-gate `/tmp/LuneX-18-2_5-repository-pre-r2.27GQDW`通过strict`9/9`、generator稳定、精确scope、ownership、privacy、reference、opt-in、process和diff边界；首轮错误fixture根不构成源码失败。
+- 2.5证明current-generation media/AppModel application和unsigned SDK branch compatibility，不证明actual platform input/display/HDR/audio adapter、signed install、物理HDR/spatial/input、live Sunshine、性能、功耗、热状态或舒适度。
+- 勾选后的只读final-state `/tmp/LuneX-18-2_5-final-state-r2.6tknnX`确认OpenSpec`11/50 next 2.6`、13文件scope和全部保留证据一致；首轮只暴露`jq`表达式优先级错误，未改变仓库或重复运行验收。

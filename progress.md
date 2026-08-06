@@ -2983,3 +2983,20 @@
 - 修正后的final repository gate `/tmp/LuneX-18-2_4-display-fix-final-r3-cXPKxC`从头通过fixtures、OpenSpec strict `9/9`与apply `10/50 next 2.5`、generator四次稳定同哈希、精确十文件scope、membership、FIFO/single-current-delivery/display fail-closed/ordered teardown、privacy/clean-room、修订focused `13/13`、normal `988/987/1/0`、五平台build/Metal、opt-in、进程与diff检查。
 - 2.4现可独立提交推送；当前证据仍不是2.5 AppModel application、actual adapters、signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 - 首轮post-record错误要求高层roadmap重复临时final-gate路径而退出；收窄为roadmap记录结论、runtime contract和三份planning记录具体路径后，`/tmp/LuneX-18-2_4-post-record-r2-vJDin3`通过`10/50 next 2.5`、十文件scope、project hash及diff检查，未重复test/build/generator。
+- 2.4已提交推送为`a2e04df Add tvOS visionOS presentation coordinator`；fetch后`HEAD == origin/main == a2e04df187d36bae4eea695a29fb8c8270eb75df`且工作树clean，OpenSpec为`10/50 ready`、next 2.5。
+- 启动2.5：将由`NativeSessionMediaEnvironment`每个media generation持有唯一coordinator和现有presentation source subscription，通过typed event把current/terminal snapshot送入`AppModel`；actual geometry只建立scene ownership，input/display/audio adapters保持后置。
+- 2.5清理必须覆盖coordinator/media failure、reconnect、remote termination和stop，旧session/media/surface callback不得更新replacement；继续禁用真实Keychain/live host且不查询或操作simulator。
+- 2026-08-07系统更新后恢复：active goal仍有效，`HEAD`与`origin/main`均为`a2e04df`，task 2.5六个预期文件保持未提交；session catchup、三份planning、OpenSpec status/apply和全部context files已复核。
+- OpenSpec `integrate-tvos-visionos-runtime`仍为spec-driven `10/50 ready`、next 2.5；本轮不操作simulator inventory/lifecycle，继续显式禁用真实Keychain与live host。
+- task 2.5首轮warnings-as-errors编译`/tmp/LuneX-18-2_5-compile-first-QVMjyp`唯一已知阻断为`ApplicationDiagnostics.swift`的error switch未覆盖新增stale/invalid platform-presentation application；已补固定privacy-bounded transport diagnostic映射，下一步从fresh evidence目录重跑。
+- 第二轮warnings-as-errors编译`/tmp/LuneX-18-2_5-compile-second.FTXZUb`已越过production源和diagnostics，唯一错误为既有readiness/feedback测试event switch缺少`.tvVisionPlatformPresentation`；已显式忽略该不相关事件，下一步从第三个fresh目录复编。
+- 第三轮warnings-as-errors编译`/tmp/LuneX-18-2_5-compile-third.axivxW`成功；production、tests与Metal均完成build-for-testing。进入语义审计后修复AppModel application catch无条件清掉已消费terminal failure snapshot的竞态，只保留同ownership的bounded failure phase。
+- 首轮environment focused `/tmp/LuneX-18-2_5-env-focused-first.seHM1E`在执行前因两处XCTest async autoclosure编译错误退出；已先捕获snapshot再断言，下一轮使用fresh bundle。
+- environment focused第二轮`/tmp/LuneX-18-2_5-env-focused-second.DrRTpN`通过`3/3`。随后增加AppModel immutable platform dependency/test injection，并修复local stop因control session先清零而未显式应用`.localStop`的问题。
+- 增加deterministic terminal-race和media-failure AppModel回归后，final focused `/tmp/LuneX-18-2_5-focused-third.ILQdlM`结构化通过`8/8`且build `succeeded/0 error/0 warning/0 analyzer warning`；下一步最终人工diff/并发语义审计后运行fresh normal与五平台Debug。
+- 恢复后的完整语义审计确认coordinator terminal后二次stop幂等、geometry application受operation ID和current session/media/ownership隔离、五平台compile-time默认platform正确，且2.5未越界实现actual input/display/HDR/audio adapters。
+- normal首轮`/tmp/LuneX-18-2_5-normal.bZrKDT`因误用不存在的`LuneX` scheme在测试前退出；fresh `/tmp/LuneX-18-2_5-normal-r2.6qYfC2`改用`LuneXCoreTests`并显式移除Keychain/live-host opt-in，结构化通过`996/995/1 exact Keychain skip/0`且build零诊断。
+- 五平台Debug `/tmp/LuneX-18-2_5-builds.zPlpja`全部`succeeded/0/0/0`并各有AIR/metallib；固定UUID只作build destination，没有inventory或create/clone/boot/install/launch/run/shutdown/delete。
+- repository pre-gate首轮`/tmp/LuneX-18-2_5-repository-pre.CbrOkr`因误把fixture根设为`.`而扫描既有build/reference/docs后退出；修正为权威fixture根后，`/tmp/LuneX-18-2_5-repository-pre-r2.27GQDW`通过fixtures、strict`9/9`、pre-mark`10/50 next 2.5`、四次generator稳定哈希、scope、ownership/privacy/reference/opt-in/process和diff门。
+- 已同步runtime contract、roadmap和三份planning并勾选OpenSpec 2.5；预期权威状态`11/50 ready`、next 2.6，下一步只读final-state，不重复test/build或simulator操作。
+- final-state首轮`/tmp/LuneX-18-2_5-final-state.GOe1Eq`因`jq`管道优先级在OpenSpec JSON解析处退出，尚未读任何xcresult；修正后的`/tmp/LuneX-18-2_5-final-state-r2.6tknnX`只读通过strict`9/9`、`11/50 next 2.6`、13/13 scope、project hash、focused`8/8`、normal`996/995/1/0`、五平台/Metal和全部边界，未重复test/build/generator或simulator操作。

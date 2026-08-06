@@ -185,6 +185,36 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testTVVisionPresentationApplicationsUseSafeStableDiagnostics() {
+        let stale = ApplicationDiagnosticFactory.streamFailure(
+            SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        )
+        let invalid = ApplicationDiagnosticFactory.streamFailure(
+            SessionMediaEnvironmentError
+                .invalidTVVisionPlatformPresentationApplication
+        )
+
+        XCTAssertEqual(stale.category, .transport)
+        XCTAssertEqual(stale.code, "platform_presentation_stale")
+        XCTAssertEqual(stale.action, .retryStream)
+        XCTAssertEqual(invalid.category, .transport)
+        XCTAssertEqual(invalid.code, "platform_presentation_invalid")
+        XCTAssertEqual(invalid.action, .retryStream)
+        for diagnostic in [stale, invalid] {
+            XCTAssertFalse(
+                diagnostic.summary.localizedCaseInsensitiveContains("session")
+            )
+            XCTAssertFalse(
+                diagnostic.summary.localizedCaseInsensitiveContains("generation")
+            )
+            XCTAssertFalse(
+                diagnostic.summary.localizedCaseInsensitiveContains("ownership")
+            )
+        }
+    }
+
+    @MainActor
     func testUnknownFailureNeverCopiesSecretBearingDescription() {
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(
             SecretBearingDiagnosticError()

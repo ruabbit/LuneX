@@ -817,6 +817,10 @@ enum ApplicationDiagnosticFactory {
                 return transportFailure(code: "mobile_runtime_stale")
             case .invalidMobileRuntimeApplication:
                 return transportFailure(code: "mobile_runtime_invalid")
+            case .staleTVVisionPlatformPresentationApplication:
+                return transportFailure(code: "platform_presentation_stale")
+            case .invalidTVVisionPlatformPresentationApplication:
+                return transportFailure(code: "platform_presentation_invalid")
             }
         }
         if error is VideoDecoderError || error is VideoDecodePipelineError ||

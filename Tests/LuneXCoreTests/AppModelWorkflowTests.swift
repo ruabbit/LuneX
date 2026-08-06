@@ -2098,6 +2098,299 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testTVVisionPresentationAcceptsCurrentGenerationAndClearsOnReconnectAndRemoteTermination()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 71,
+                    key: Data(repeating: 0x71, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+        )
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 2
+        }
+        let geometryApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(geometryApplications[0].action, .activate)
+        guard case .scene = geometryApplications[1].action else {
+            return XCTFail("Expected geometry to follow activation.")
+        }
+
+        let current = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 2
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            current,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.tvVisionPlatformPresentationState == current }
+
+        let regressive = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 1
+        )
+        let wrongPlatform = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .visionOS,
+            presentationGeneration: 1,
+            sequence: 9
+        )
+        let wrongGeneration = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 2,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 9
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            regressive,
+            sessionID: record.sessionID
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            wrongPlatform,
+            sessionID: record.sessionID
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            wrongGeneration,
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(model.tvVisionPlatformPresentationState, current)
+
+        mediaEnvironment.blockNextStop()
+        provider.yield(
+            .reconnecting(attempt: 1, reason: "Control channel interrupted."),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.hasBlockedStop() }
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+        let reconnectApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(reconnectApplications.last?.action, .stop(.reconnect))
+        mediaEnvironment.resumeBlockedStop()
+
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 2 }
+        provider.yield(.channelsReady(.control), sessionID: record.sessionID)
+        await waitUntil { model.session.isStreaming }
+
+        let replacement = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 2,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 1
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            current,
+            sessionID: record.sessionID
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            replacement,
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.tvVisionPlatformPresentationState == replacement
+        }
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+        let terminatedApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(
+            terminatedApplications.last?.action,
+            .stop(.remoteTermination)
+        )
+    }
+
+    func testTVVisionPresentationClearsAndAppliesLocalStop() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 72,
+                    key: Data(repeating: 0x72, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        let current = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 1
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            current,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.tvVisionPlatformPresentationState == current }
+
+        await model.stopStream()
+        await launchTask.value
+
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertEqual(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().last?.action,
+            .stop(.localStop)
+        )
+    }
+
+    func testTVVisionApplicationFailurePreservesConsumedTerminalStateUntilStop()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            blocksFailingTVVisionActivationAfterTerminalEvent: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 73,
+                    key: Data(repeating: 0x73, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionClosedGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+        )
+        await waitUntil { mediaEnvironment.hasBlockedTVVisionActivation() }
+        await waitUntil {
+            model.tvVisionPlatformPresentationState?.snapshot.phase
+                == .failed(.invalidComponent(.video))
+        }
+        let terminal = model.tvVisionPlatformPresentationState
+        mediaEnvironment.resumeBlockedTVVisionActivation()
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertEqual(model.tvVisionPlatformPresentationState, terminal)
+        XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+    }
+
+    func testTVVisionMediaFailurePreservesOnlyTerminalBoundedState()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 74,
+                    key: Data(repeating: 0x74, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        let terminal = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 2,
+            phase: .stopped(.failure)
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            terminal,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.tvVisionPlatformPresentationState == terminal }
+
+        mediaEnvironment.finish(
+            sessionID: record.sessionID,
+            throwing: MediaEnvironmentApplicationTestError.failed
+        )
+        await launchTask.value
+
+        guard case .failed = model.session.phase else {
+            return XCTFail("A media environment failure must fail the session.")
+        }
+        XCTAssertEqual(model.tvVisionPlatformPresentationState, terminal)
+        XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
+        XCTAssertFalse(model.hasActiveStreamSession)
+    }
+
     func testAppModelReflectsMobileSuspensionAndForegroundRestoration()
         async throws {
         let provider = ControlledSessionControlProvider()
@@ -3624,6 +3917,7 @@ final class AppModelWorkflowTests: XCTestCase {
         sessionMediaEnvironment: any SessionMediaEnvironment =
             ControlledSessionMediaEnvironment(),
         videoPresentationSource: StreamVideoPresentationSource? = nil,
+        tvVisionPlatform: TVVisionPlatform? = nil,
         launchClient: StubStreamLaunchClient,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating,
         runtimeProviders: RuntimeProviderInventory? = nil,
@@ -3659,6 +3953,7 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             sessionMediaEnvironment: sessionMediaEnvironment,
             videoPresentationSource: videoPresentationSource,
+            tvVisionPlatform: tvVisionPlatform,
             clientIdentityStore: InMemoryClientIdentityStore(),
             clientUniqueID: "test-client",
             remoteInputKeyGenerator: remoteInputKeyGenerator
@@ -3678,6 +3973,66 @@ final class AppModelWorkflowTests: XCTestCase {
         lifecycle.drawableSize = drawableSize
         lifecycle.updateRenderPolicy()
         return lifecycle
+    }
+
+    private func makeTVVisionClosedGeometryUpdate(
+        platform: TVVisionPlatform,
+        surfaceGeneration: UInt64,
+        revision: UInt64
+    ) throws -> TVVisionStreamGeometryBindingUpdate {
+        TVVisionStreamGeometryBindingUpdate(
+            platform: platform,
+            surfaceGeneration: try TVVisionGeneration(
+                domain: .surface,
+                rawValue: surfaceGeneration
+            ),
+            revision: try TVVisionSemanticRevision(rawValue: revision),
+            status: .closed(.detached),
+            binding: nil
+        )
+    }
+
+    private func makeTVVisionPresentationState(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        platform: TVVisionPlatform,
+        presentationGeneration: UInt64,
+        sequence: UInt64,
+        phase: TVVisionPlatformPresentationPhase = .active
+    ) throws -> SessionTVVisionPlatformPresentationState {
+        let ownership = try TVVisionPresentationOwnership(
+            platform: platform,
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            presentationGeneration: TVVisionGeneration(
+                domain: .presentation,
+                rawValue: presentationGeneration
+            ),
+            inputGeneration: TVVisionGeneration(
+                domain: .input,
+                rawValue: mediaGeneration
+            )
+        )
+        return SessionTVVisionPlatformPresentationState(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            snapshot: TVVisionPlatformPresentationCoordinatorSnapshot(
+                ownership: ownership,
+                sequence: sequence,
+                revision: try TVVisionSemanticRevision(rawValue: sequence),
+                phase: phase,
+                presentation: nil,
+                video: TVVisionPlatformVideoSnapshot(
+                    phase: .idle,
+                    lastDeliveryRevision: nil,
+                    isPresented: false
+                ),
+                diagnostics: [],
+                teardownCount: 0,
+                isSemanticRevisionExhausted: false,
+                isSequenceExhausted: false
+            )
+        )
     }
 
     private func makeAudioRuntimeState(
@@ -4995,6 +5350,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private let automaticallyReady: Bool
     private let failsLifecycleApplication: Bool
     private let failsInputSend: Bool
+    private let blocksFailingTVVisionActivationAfterTerminalEvent: Bool
     private var startRecords: [StartRecord] = []
     private var stoppedSessionIDs: [UUID] = []
     private var continuations: [UUID: Continuation] = [:]
@@ -5003,19 +5359,26 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var lifecycleApplications: [SessionLifecycleApplication] = []
     private var spatialAudioPreferenceApplications:
         [SessionSpatialAudioPreferenceApplication] = []
+    private var tvVisionPlatformPresentationApplications:
+        [SessionTVVisionPlatformPresentationApplication] = []
     private var shouldBlockNextRelease = false
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
     private var shouldBlockNextStop = false
     private var blockedStopContinuation: CheckedContinuation<Void, Never>?
+    private var blockedTVVisionActivationContinuation:
+        CheckedContinuation<Void, Never>?
 
     init(
         automaticallyReady: Bool = true,
         failsLifecycleApplication: Bool = false,
-        failsInputSend: Bool = false
+        failsInputSend: Bool = false,
+        blocksFailingTVVisionActivationAfterTerminalEvent: Bool = false
     ) {
         self.automaticallyReady = automaticallyReady
         self.failsLifecycleApplication = failsLifecycleApplication
         self.failsInputSend = failsInputSend
+        self.blocksFailingTVVisionActivationAfterTerminalEvent =
+            blocksFailingTVVisionActivationAfterTerminalEvent
     }
 
     func start(
@@ -5091,6 +5454,61 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         }
         withLock {
             spatialAudioPreferenceApplications.append(application)
+        }
+    }
+
+    func applyTVVisionPlatformPresentation(
+        _ application: SessionTVVisionPlatformPresentationApplication
+    ) async throws {
+        let state = withLock {
+            (
+                continuations[application.ownership.sessionID] != nil,
+                UInt64(startRecords.count)
+            )
+        }
+        guard state.0 else {
+            throw SessionMediaEnvironmentError.inactiveSession
+        }
+        guard application.ownership.mediaGeneration == state.1 else {
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+        withLock {
+            tvVisionPlatformPresentationApplications.append(application)
+        }
+        if blocksFailingTVVisionActivationAfterTerminalEvent,
+           application.action == .activate {
+            let revision = try TVVisionSemanticRevision(rawValue: 1)
+            let terminal = SessionTVVisionPlatformPresentationState(
+                sessionID: application.ownership.sessionID,
+                mediaGeneration: application.ownership.mediaGeneration,
+                snapshot: TVVisionPlatformPresentationCoordinatorSnapshot(
+                    ownership: application.ownership,
+                    sequence: 1,
+                    revision: revision,
+                    phase: .failed(.invalidComponent(.video)),
+                    presentation: nil,
+                    video: TVVisionPlatformVideoSnapshot(
+                        phase: .idle,
+                        lastDeliveryRevision: nil,
+                        isPresented: false
+                    ),
+                    diagnostics: [],
+                    teardownCount: 1,
+                    isSemanticRevisionExhausted: false,
+                    isSequenceExhausted: false
+                )
+            )
+            continuation(for: application.ownership.sessionID)?.yield(
+                .tvVisionPlatformPresentation(terminal)
+            )
+            await withCheckedContinuation { continuation in
+                withLock {
+                    blockedTVVisionActivationContinuation = continuation
+                }
+            }
+            throw SessionMediaEnvironmentError
+                .invalidTVVisionPlatformPresentationApplication
         }
     }
 
@@ -5199,6 +5617,15 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         continuation(for: sessionID)?.yield(.mobileRuntime(state))
     }
 
+    func yieldTVVisionPlatformPresentation(
+        _ state: SessionTVVisionPlatformPresentationState,
+        sessionID: UUID
+    ) {
+        continuation(for: sessionID)?.yield(
+            .tvVisionPlatformPresentation(state)
+        )
+    }
+
     func finish(sessionID: UUID, throwing error: Error) {
         let continuation = withLock { continuations.removeValue(forKey: sessionID) }
         continuation?.finish(throwing: error)
@@ -5222,6 +5649,23 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func currentLifecycleApplications() -> [SessionLifecycleApplication] {
         withLock { lifecycleApplications }
+    }
+
+    func currentTVVisionPlatformPresentationApplications()
+        -> [SessionTVVisionPlatformPresentationApplication] {
+        withLock { tvVisionPlatformPresentationApplications }
+    }
+
+    func hasBlockedTVVisionActivation() -> Bool {
+        withLock { blockedTVVisionActivationContinuation != nil }
+    }
+
+    func resumeBlockedTVVisionActivation() {
+        let continuation = withLock {
+            defer { blockedTVVisionActivationContinuation = nil }
+            return blockedTVVisionActivationContinuation
+        }
+        continuation?.resume()
     }
 
     func currentSpatialAudioPreferenceApplications()

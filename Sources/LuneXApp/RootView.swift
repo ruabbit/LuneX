@@ -686,7 +686,10 @@ private struct StreamWorkspaceView: View {
                 renderState: appModel.renderState,
                 presentationSource: appModel.videoPresentationSource,
                 userAllowsHDR: appModel.settings.stream.hdrEnabled,
-                diagnosticLease: hdrPresentationDiagnosticLease
+                diagnosticLease: hdrPresentationDiagnosticLease,
+                geometryBindingUpdateHandler: { update in
+                    appModel.receiveTVVisionGeometryUpdate(update)
+                }
             )
                 .ignoresSafeArea()
             #endif

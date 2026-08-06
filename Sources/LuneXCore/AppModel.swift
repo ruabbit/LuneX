@@ -162,6 +162,19 @@ final class AppModel: ApplicationInputSink {
     private(set) var mobilePictureInPictureSnapshot:
         MobilePictureInPictureSnapshot?
     private(set) var mobileAudioSessionActive: Bool?
+    private(set) var tvVisionPlatformPresentationState:
+        SessionTVVisionPlatformPresentationState?
+
+    var tvVisionPlatformPresentationSnapshot:
+        TVVisionPlatformPresentationSnapshot?
+    {
+        guard let state = tvVisionPlatformPresentationState,
+              state.sessionID == activeStreamSessionID,
+              state.sessionID == activeMediaSessionID,
+              state.mediaGeneration == activeMediaGeneration,
+              state.snapshot.phase == .active else { return nil }
+        return state.snapshot.presentation
+    }
 
     var spatialAudioPresentationStatus: SpatialAudioPresentationStatus {
         SpatialAudioPresentationStatus(audioRuntimeState)
@@ -232,6 +245,7 @@ final class AppModel: ApplicationInputSink {
     private let streamSessionCoordinator: StreamSessionCoordinator
     private let runtimeProviders: RuntimeProviderInventory
     private let sessionMediaEnvironment: any SessionMediaEnvironment
+    private let configuredTVVisionPlatform: TVVisionPlatform?
     private let clientIdentityStore: any ClientIdentityStore
     private let clientIdentityProvisioner: any ClientIdentityProvisioning
     private var clientUniqueID: String
@@ -285,6 +299,12 @@ final class AppModel: ApplicationInputSink {
         UInt64 = 0
     @ObservationIgnored private var isMobilePictureInPictureGenerationExhausted = false
     @ObservationIgnored private var lastMobileDiagnosticCodes: [String: String] = [:]
+    @ObservationIgnored private var tvVisionPlatformPresentationOwnership:
+        TVVisionPresentationOwnership?
+    @ObservationIgnored private var tvVisionPlatformApplicationTask:
+        Task<Void, Never>?
+    @ObservationIgnored private var tvVisionPlatformApplicationOperationID:
+        UUID?
 #if os(iOS)
     @ObservationIgnored private var mobilePictureInPictureCoordinator:
         MobilePictureInPicturePresentationCoordinator?
@@ -311,6 +331,7 @@ final class AppModel: ApplicationInputSink {
         runtimeProviders: RuntimeProviderInventory = ProductionRuntimeProviderFactory.makeDefault(),
         sessionMediaEnvironment: (any SessionMediaEnvironment)? = nil,
         videoPresentationSource: StreamVideoPresentationSource? = nil,
+        tvVisionPlatform: TVVisionPlatform? = nil,
         clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
         clientIdentityProvisioner: (any ClientIdentityProvisioning)? = nil,
         clientUniqueID: String = "LuneX-\(UUID().uuidString)",
@@ -325,6 +346,13 @@ final class AppModel: ApplicationInputSink {
         self.runtimeProviders = runtimeProviders
         let presentationSource = videoPresentationSource ?? StreamVideoPresentationSource()
         self.videoPresentationSource = presentationSource
+#if os(tvOS)
+        configuredTVVisionPlatform = tvVisionPlatform ?? .tvOS
+#elseif os(visionOS)
+        configuredTVVisionPlatform = tvVisionPlatform ?? .visionOS
+#else
+        configuredTVVisionPlatform = tvVisionPlatform
+#endif
         self.sessionMediaEnvironment = sessionMediaEnvironment
             ?? NativeSessionMediaEnvironment(
                 videoReceiveProvider: runtimeProviders.videoReceive,
@@ -333,7 +361,8 @@ final class AppModel: ApplicationInputSink {
                 videoProcessorFactory: NativeSessionVideoProcessorFactory(
                     presentationSource: presentationSource
                 ),
-                audioProcessorFactory: NativeSessionAudioProcessorFactory()
+                audioProcessorFactory: NativeSessionAudioProcessorFactory(),
+                videoPresentationSource: presentationSource
             )
         self.clientIdentityStore = clientIdentityStore
         self.clientIdentityProvisioner = clientIdentityProvisioner
@@ -578,6 +607,44 @@ final class AppModel: ApplicationInputSink {
         queueMobileRuntimeApplication()
     }
 #endif
+
+    func receiveTVVisionGeometryUpdate(
+        _ update: TVVisionStreamGeometryBindingUpdate
+    ) {
+        guard let platform = expectedTVVisionPlatform,
+              update.platform == platform,
+              update.surfaceGeneration.domain == .surface,
+              let sessionID = activeStreamSessionID,
+              activeMediaSessionID == sessionID,
+              let mediaGeneration = activeMediaGeneration,
+              let presentationGeneration = try? TVVisionGeneration(
+                  domain: .presentation,
+                  rawValue: update.surfaceGeneration.rawValue
+              ),
+              let inputGeneration = try? TVVisionGeneration(
+                  domain: .input,
+                  rawValue: mediaGeneration
+              ),
+              let ownership = try? TVVisionPresentationOwnership(
+                  platform: platform,
+                  sessionID: sessionID,
+                  mediaGeneration: mediaGeneration,
+                  presentationGeneration: presentationGeneration,
+                  inputGeneration: inputGeneration
+              ) else { return }
+
+        if let current = tvVisionPlatformPresentationOwnership,
+           current.sessionID == sessionID,
+           current.mediaGeneration == mediaGeneration,
+           ownership.presentationGeneration
+            < current.presentationGeneration {
+            return
+        }
+        scheduleTVVisionPlatformGeometryApplication(
+            update,
+            ownership: ownership
+        )
+    }
 
     func publishHDRPresentationDiagnostic(
         _ state: HDRPresentationDiagnosticState
@@ -1411,6 +1478,7 @@ final class AppModel: ApplicationInputSink {
             controlProvider: sessionControlProvider
         )
         guard activeStreamSessionID == sessionID else {
+            clearTVVisionPlatformPresentationRuntime()
             _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
             return false
         }
@@ -1418,6 +1486,7 @@ final class AppModel: ApplicationInputSink {
         guard activeStreamSessionID == sessionID,
               environmentSnapshot.sessionID == sessionID,
               environmentSnapshot.generation > 0 else {
+            clearTVVisionPlatformPresentationRuntime()
             _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
             return false
         }
@@ -1425,6 +1494,7 @@ final class AppModel: ApplicationInputSink {
         clearActiveAudioRuntime()
         activeMediaSessionID = sessionID
         activeMediaGeneration = environmentSnapshot.generation
+        beginTVVisionPlatformPresentationRuntime()
 #if os(iOS)
         beginMobileRuntime(mediaGeneration: environmentSnapshot.generation)
 #endif
@@ -1519,6 +1589,11 @@ final class AppModel: ApplicationInputSink {
             applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
         case let .mobileRuntime(mobileRuntime):
             applyMobileRuntimeState(mobileRuntime, sessionID: sessionID)
+        case let .tvVisionPlatformPresentation(platformPresentation):
+            applyTVVisionPlatformPresentationState(
+                platformPresentation,
+                sessionID: sessionID
+            )
         }
     }
 
@@ -1614,6 +1689,9 @@ final class AppModel: ApplicationInputSink {
         guard activeStreamSessionID == sessionID else { return }
         await terminateMacInputGeneration(reason: .inputChannelFailure)
         invalidateLifecycleApplicationPump()
+        clearTVVisionPlatformPresentationRuntime(
+            preservingTerminalState: true
+        )
         clearMobileRuntime()
         mediaConsumerTask = nil
         activeMediaSessionID = nil
@@ -1636,6 +1714,9 @@ final class AppModel: ApplicationInputSink {
     ) async {
         await terminateMacInputGeneration(reason: inputReason)
         invalidateLifecycleApplicationPump()
+        await stopTVVisionPlatformPresentation(
+            reason: tvVisionPlatformStopReason(for: inputReason)
+        )
         clearMobileRuntime()
         mediaConsumerTask?.cancel()
         mediaConsumerTask = nil
@@ -1852,6 +1933,9 @@ final class AppModel: ApplicationInputSink {
         }
 
         invalidateLifecycleApplicationPump()
+        clearTVVisionPlatformPresentationRuntime(
+            preservingTerminalState: true
+        )
         clearMobileRuntime()
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
         let sessionError = SessionError(
@@ -1909,6 +1993,161 @@ final class AppModel: ApplicationInputSink {
 #if os(macOS)
         publishMacInputDiagnosticState()
 #endif
+    }
+
+    private var expectedTVVisionPlatform: TVVisionPlatform? {
+        configuredTVVisionPlatform
+    }
+
+    private func beginTVVisionPlatformPresentationRuntime() {
+        clearTVVisionPlatformPresentationRuntime()
+    }
+
+    private func scheduleTVVisionPlatformGeometryApplication(
+        _ update: TVVisionStreamGeometryBindingUpdate,
+        ownership: TVVisionPresentationOwnership
+    ) {
+        let previous = tvVisionPlatformApplicationTask
+        let operationID = UUID()
+        tvVisionPlatformApplicationOperationID = operationID
+        tvVisionPlatformApplicationTask = Task { [weak self] in
+            await previous?.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.tvVisionPlatformApplicationOperationID == operationID,
+                  self.activeStreamSessionID == ownership.sessionID,
+                  self.activeMediaSessionID == ownership.sessionID,
+                  self.activeMediaGeneration == ownership.mediaGeneration else {
+                return
+            }
+            do {
+                if self.tvVisionPlatformPresentationOwnership != ownership {
+                    self.tvVisionPlatformPresentationOwnership = ownership
+                    try await self.sessionMediaEnvironment
+                        .applyTVVisionPlatformPresentation(
+                            SessionTVVisionPlatformPresentationApplication(
+                                ownership: ownership,
+                                action: .activate
+                            )
+                        )
+                }
+                guard !Task.isCancelled,
+                      self.tvVisionPlatformApplicationOperationID
+                        == operationID,
+                      self.tvVisionPlatformPresentationOwnership
+                        == ownership else { return }
+                try await self.sessionMediaEnvironment
+                    .applyTVVisionPlatformPresentation(
+                        SessionTVVisionPlatformPresentationApplication(
+                            ownership: ownership,
+                            action: .scene(update)
+                        )
+                    )
+            } catch {
+                guard !Task.isCancelled,
+                      self.tvVisionPlatformApplicationOperationID
+                        == operationID,
+                      self.tvVisionPlatformPresentationOwnership
+                        == ownership else { return }
+                self.tvVisionPlatformPresentationOwnership = nil
+                if let current = self.tvVisionPlatformPresentationState,
+                   current.snapshot.ownership == ownership {
+                    switch current.snapshot.phase {
+                    case .failed, .stopped(.failure):
+                        break
+                    case .active, .stopped:
+                        self.tvVisionPlatformPresentationState = nil
+                    }
+                } else {
+                    self.tvVisionPlatformPresentationState = nil
+                }
+            }
+            if self.tvVisionPlatformApplicationOperationID == operationID {
+                self.tvVisionPlatformApplicationTask = nil
+                self.tvVisionPlatformApplicationOperationID = nil
+            }
+        }
+    }
+
+    private func applyTVVisionPlatformPresentationState(
+        _ state: SessionTVVisionPlatformPresentationState,
+        sessionID: UUID
+    ) {
+        let snapshot = state.snapshot
+        guard state.sessionID == sessionID,
+              state.mediaGeneration == snapshot.ownership.mediaGeneration,
+              activeStreamSessionID == sessionID,
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration == state.mediaGeneration,
+              expectedTVVisionPlatform == snapshot.ownership.platform else {
+            return
+        }
+        if let ownership = tvVisionPlatformPresentationOwnership {
+            guard ownership == snapshot.ownership else { return }
+        } else {
+            tvVisionPlatformPresentationOwnership = snapshot.ownership
+        }
+        if let current = tvVisionPlatformPresentationState,
+           current.snapshot.ownership == snapshot.ownership {
+            guard snapshot.sequence >= current.snapshot.sequence else { return }
+            if state == current { return }
+        }
+        tvVisionPlatformPresentationState = state
+    }
+
+    private func stopTVVisionPlatformPresentation(
+        reason: TVVisionPlatformPresentationStopReason
+    ) async {
+        await tvVisionPlatformApplicationTask?.value
+        guard let ownership = tvVisionPlatformPresentationOwnership,
+              activeMediaSessionID == ownership.sessionID,
+              activeMediaGeneration == ownership.mediaGeneration else {
+            clearTVVisionPlatformPresentationRuntime()
+            return
+        }
+        _ = try? await sessionMediaEnvironment
+            .applyTVVisionPlatformPresentation(
+                SessionTVVisionPlatformPresentationApplication(
+                    ownership: ownership,
+                    action: .stop(reason)
+                )
+            )
+        clearTVVisionPlatformPresentationRuntime()
+    }
+
+    private func clearTVVisionPlatformPresentationRuntime(
+        preservingTerminalState: Bool = false
+    ) {
+        tvVisionPlatformApplicationTask?.cancel()
+        tvVisionPlatformApplicationTask = nil
+        tvVisionPlatformApplicationOperationID = nil
+        tvVisionPlatformPresentationOwnership = nil
+        guard preservingTerminalState,
+              let phase = tvVisionPlatformPresentationState?.snapshot.phase else {
+            tvVisionPlatformPresentationState = nil
+            return
+        }
+        switch phase {
+        case .failed, .stopped(.failure):
+            break
+        case .active, .stopped:
+            tvVisionPlatformPresentationState = nil
+        }
+    }
+
+    private func tvVisionPlatformStopReason(
+        for inputReason: MacSessionInputTerminationReason
+    ) -> TVVisionPlatformPresentationStopReason {
+        switch inputReason {
+        case .replacement:
+            .reconnect
+        case .remoteTermination:
+            .remoteTermination
+        case .sendFailure, .inputChannelFailure:
+            .failure
+        case .stop, .detached:
+            .localStop
+        }
     }
 
     private func applyMobileRuntimeState(

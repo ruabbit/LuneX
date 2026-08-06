@@ -711,6 +711,68 @@ privacy/clean-room boundaries, every corrected structured result and Metal
 artifact, disabled opt-ins, no owned test process, reference isolation, and
 `git diff --check`. OpenSpec remains marked `10/50`, next task 2.5.
 
+## Task 2.5 media environment and AppModel application
+
+`NativeSessionMediaEnvironment` now creates exactly one
+`TVVisionPlatformPresentationCoordinator` for each current media generation.
+It accepts typed activate, scene, input, display, audio-route, failure, and stop
+applications only when the session, media generation, and complete presentation
+ownership are current. Every coordinator result is checked again after actor
+suspension before it can become environment state or an event.
+
+Activation subscribes to the existing `StreamVideoPresentationSource` for the
+same session and media generation. The source still owns the single bounded
+latest-frame delivery; task 2.5 creates no decoder, frame queue, audio graph, or
+platform transport. Replacement cancels the old subscription before storing the
+new ownership, and subscription callbacks re-enter the environment actor before
+current-generation admission. Provider failure publishes one typed terminal
+snapshot before finishing the media event stream with its bounded error.
+
+`AppModel` injects that same presentation source into the production media
+environment and forwards actual tvOS/visionOS stream-surface geometry from
+`RootView`. Geometry applications are serialized and coalesced as activation
+followed by scene application. Operation identity plus session, media,
+platform, ownership, and monotonic-sequence checks prevent an old queued task or
+event from mutating a replacement. macOS and iOS/iPadOS default to no platform
+application; tvOS and visionOS select only their compile-time platform.
+
+Reconnect, remote termination, and local stop request their distinct coordinator
+stop reasons before environment teardown. Failure retains only a typed bounded
+terminal snapshot for diagnosis while the active presentation accessor becomes
+`nil`; replacement and normal stop clear state and ownership. Subscription
+cancellation and coordinator stop are idempotent: the shared resource teardown's
+second stop returns the existing terminal state and does not increment teardown
+or overwrite its first reason. Diagnostics use only the fixed codes
+`platform_presentation_stale` and `platform_presentation_invalid`.
+
+Task 2.5 verification retains:
+
+- focused evidence `/tmp/LuneX-18-2_5-focused-third.ILQdlM` with `8/8 passed`,
+  no skip/failure/expected failure, and zero structured build diagnostics;
+- normal evidence `/tmp/LuneX-18-2_5-normal-r2.6qYfC2` with
+  `996 total / 995 passed / 1 skipped / 0 failed`, where the sole skip is the
+  explicitly disabled real-Keychain round trip;
+- macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro Debug
+  evidence `/tmp/LuneX-18-2_5-builds.zPlpja`, all `succeeded/0/0/0` with one
+  AIR/metallib pair; and
+- pre-mark repository evidence
+  `/tmp/LuneX-18-2_5-repository-pre-r2.27GQDW`, which passed fixture self/tree,
+  OpenSpec strict `9/9`, four identical generator hashes
+  `ef2e3e615f1dbd84b76bfe4c8681fab7d44291176f06324acd757fa1c1008353`, exact
+  scope, ownership, privacy, reference, opt-in, process, and diff gates; and
+- post-mark read-only evidence `/tmp/LuneX-18-2_5-final-state-r2.6tknnX`, which
+  confirmed OpenSpec `11/50 next 2.6`, exact 13-file scope, the retained focused,
+  normal, five-platform, and Metal results, stable project hash, and all boundary
+  checks without rerunning tests, builds, the generator, or simulator operations.
+
+All normal commands removed the real-Keychain and live-host opt-ins. Fixed
+simulator UUIDs were build destinations only; task 2.5 did not read inventory or
+perform simulator lifecycle operations. These results prove current-generation
+application and unsigned SDK branch compatibility. Actual platform input,
+display/HDR, and audio-route adapters remain in tasks 3.x through 6.x. Signed
+installation, physical input/HDR/spatial behavior, live Sunshine, latency,
+power, thermal behavior, and comfort remain unproved.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

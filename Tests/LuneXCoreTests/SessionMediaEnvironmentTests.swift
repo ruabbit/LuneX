@@ -86,6 +86,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 break
             case .mobileRuntime:
                 break
+            case .tvVisionPlatformPresentation:
+                break
             }
         }
         XCTAssertEqual(finalReadiness, [.video, .audio, .input])
@@ -722,6 +724,240 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         let failed = await environment.snapshot()
         XCTAssertNil(failed.mobileRuntime)
         _ = stream
+    }
+
+    func testTVVisionPresentationPublishesCurrentSnapshotAndSubscribesToVideo()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let source = StreamVideoPresentationSource()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoPresentationSource: source
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        source.beginSession(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+
+        let activatedEvent = try await iterator.next()
+        guard case let .tvVisionPlatformPresentation(activated)? =
+                activatedEvent else {
+            return XCTFail("Expected an activated platform presentation event.")
+        }
+        XCTAssertEqual(activated.snapshot.ownership, ownership)
+        XCTAssertEqual(activated.snapshot.phase, .active)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 1)
+
+        let scene = try tvVisionSceneUpdate(ownership: ownership)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .scene(scene)
+            )
+        )
+        source.consume(
+            .sessionStarted(
+                generation: 7,
+                colorMetadata: .rec709VideoRange()
+            ),
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        await waitUntil {
+            let snapshot = await environment.snapshot()
+            return snapshot.tvVisionPlatformPresentation?.snapshot.video.phase
+                == .decoderReady(decoderGeneration: 7)
+        }
+        let current = await environment.snapshot()
+        XCTAssertEqual(
+            current.tvVisionPlatformPresentation?.snapshot.ownership,
+            ownership
+        )
+        XCTAssertNil(current.tvVisionPlatformPresentation?.snapshot.presentation)
+
+        _ = await environment.stop(sessionID: sessionID)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+        let stopped = await environment.snapshot()
+        XCTAssertNil(stopped.tvVisionPlatformPresentation)
+    }
+
+    func testTVVisionPresentationRejectsStaleOwnershipAndIsolatesReplacement()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let source = StreamVideoPresentationSource()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoPresentationSource: source
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let first = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            presentationGeneration: 1
+        )
+        let replacement = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            presentationGeneration: 2
+        )
+        source.beginSession(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: first,
+                action: .activate
+            )
+        )
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 1)
+
+        let staleGeneration = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation + 1
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyTVVisionPlatformPresentation(
+                SessionTVVisionPlatformPresentationApplication(
+                    ownership: staleGeneration,
+                    action: .activate
+                )
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleTVVisionPlatformPresentationApplication
+            )
+        }
+
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: replacement,
+                action: .activate
+            )
+        )
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 1)
+        let replacementSnapshot = await environment.snapshot()
+        XCTAssertEqual(
+            replacementSnapshot.tvVisionPlatformPresentation?.snapshot.ownership,
+            replacement
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await environment.applyTVVisionPlatformPresentation(
+                SessionTVVisionPlatformPresentationApplication(
+                    ownership: first,
+                    action: .scene(try tvVisionSceneUpdate(ownership: first))
+                )
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? SessionMediaEnvironmentError,
+                .staleTVVisionPlatformPresentationApplication
+            )
+        }
+
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: replacement,
+                action: .fail(.invalidComponent(.display))
+            )
+        )
+        let failed = await environment.snapshot()
+        XCTAssertEqual(
+            failed.tvVisionPlatformPresentation?.snapshot.phase,
+            .failed(.invalidComponent(.display))
+        )
+        XCTAssertNil(failed.tvVisionPlatformPresentation?.snapshot.presentation)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+        _ = await environment.stop(sessionID: sessionID)
+        _ = stream
+    }
+
+    func testTVVisionProviderFailurePublishesTerminalStateBeforeStreamError()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let video = ControlledVideoReceiveProvider(calls: calls)
+        let source = StreamVideoPresentationSource()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: video,
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoPresentationSource: source
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+        _ = try await iterator.next()
+
+        video.finish(
+            sessionID: sessionID,
+            throwing: MediaEnvironmentTestError.receiverFailure
+        )
+        guard case let .tvVisionPlatformPresentation(terminal)? =
+                try await iterator.next() else {
+            return XCTFail("Expected terminal presentation before stream error.")
+        }
+        XCTAssertEqual(terminal.snapshot.phase, .stopped(.failure))
+        XCTAssertNil(terminal.snapshot.presentation)
+        do {
+            _ = try await iterator.next()
+            XCTFail("Expected the provider error after the terminal snapshot.")
+        } catch {
+            XCTAssertEqual(error as? MediaEnvironmentTestError, .receiverFailure)
+        }
+        await waitUntil { await environment.snapshot().sessionID == nil }
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
     }
 
     func testRejectsRegressiveAudioRuntimeSequencesAndGraphGenerations() async throws {
@@ -2414,7 +2650,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         audio: ControlledAudioReceiveProvider,
         input: ControlledRemoteInputProvider,
         videoProcessorFactory: (any SessionVideoProcessorCreating)? = nil,
-        audioProcessorFactory: (any SessionAudioProcessorCreating)? = nil
+        audioProcessorFactory: (any SessionAudioProcessorCreating)? = nil,
+        videoPresentationSource: StreamVideoPresentationSource? = nil
     ) -> NativeSessionMediaEnvironment {
         NativeSessionMediaEnvironment(
             videoReceiveProvider: video,
@@ -2424,7 +2661,79 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 ?? RecordingVideoProcessorFactory(calls: calls),
             audioProcessorFactory: audioProcessorFactory
                 ?? RecordingAudioProcessorFactory(calls: calls),
+            videoPresentationSource: videoPresentationSource,
             teardownGracePeriod: .seconds(1)
+        )
+    }
+
+    private func tvVisionPresentationOwnership(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        presentationGeneration: UInt64 = 1,
+        platform: TVVisionPlatform = .tvOS
+    ) throws -> TVVisionPresentationOwnership {
+        try TVVisionPresentationOwnership(
+            platform: platform,
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            presentationGeneration: TVVisionGeneration(
+                domain: .presentation,
+                rawValue: presentationGeneration
+            ),
+            inputGeneration: TVVisionGeneration(
+                domain: .input,
+                rawValue: mediaGeneration
+            )
+        )
+    }
+
+    private func tvVisionSceneUpdate(
+        ownership: TVVisionPresentationOwnership,
+        revision: UInt64 = 1
+    ) throws -> TVVisionStreamGeometryBindingUpdate {
+        let semanticRevision = try TVVisionSemanticRevision(rawValue: revision)
+        let surfaceGeneration = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: ownership.presentationGeneration.rawValue
+        )
+        let geometry = try TVVisionSurfaceGeometry(
+            platform: ownership.platform,
+            surfaceGeneration: surfaceGeneration,
+            viewBounds: TVVisionRect(x: 0, y: 0, width: 640, height: 360),
+            windowBounds: TVVisionRect(x: 0, y: 0, width: 640, height: 360),
+            safeAreaInsets: .zero,
+            scale: 2
+        )
+        let scene = try TVVisionSceneSurfaceSnapshot(
+            platform: ownership.platform,
+            revision: semanticRevision,
+            surfaceGeneration: surfaceGeneration,
+            activity: .active,
+            attachment: .attached,
+            isVisible: true,
+            geometry: geometry
+        )
+        let sourceSize = PixelSize(width: 1_920, height: 1_080)
+        let coordinates = try XCTUnwrap(StreamCoordinateSnapshot.resolve(
+            revision: revision,
+            sourceSize: sourceSize,
+            drawableSize: geometry.drawableSize,
+            mode: .fit
+        ))
+        return TVVisionStreamGeometryBindingUpdate(
+            platform: ownership.platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: semanticRevision,
+            status: .active,
+            binding: TVVisionStreamGeometryBindingSnapshot(
+                platform: ownership.platform,
+                surfaceGeneration: surfaceGeneration,
+                revision: semanticRevision,
+                sceneSurfaceSnapshot: scene,
+                isFocusEligible: true,
+                coordinateSnapshot: coordinates,
+                inputReferenceSize: sourceSize
+            )
         )
     }
 
