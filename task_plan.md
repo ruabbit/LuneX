@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`5/50 ready`；1.5扩展边界已完成并通过repository pre-gate，下一项1.6 public API probes |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`6/50 ready`；1.6 direct public API probes完成，下一项2.1 actual surface bridge callbacks |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`5/50 ready`、next 1.6。1.1至1.5已完成；1.5修复nonfinite controller adapter fail-closed并补齐全generation/geometry/capability、reserved no-remote、16-slot held release及aggregate non-Encodable隐私矩阵。fresh focused `58/58`、完整macOS `961/960/1/0`、五平台Debug与repository pre-gate均通过；下一项直接探测tvOS/visionOS 26.4 public API，当前证据仍不是actual handler/runtime、immersive runtime、physical或live Sunshine proof。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`6/50 ready`、next 2.1。1.1至1.6已完成；1.6在tvOS/visionOS 26.4 simulator/device SDK完成`24/24`正向与`12/12`预期失败direct API probes，固定effective geometry、input symbol、动态范围、screen headroom、空间音频、弃用、entitlement和物理证明边界。下一项扩展actual non-iOS UIKit Metal surface bridge callbacks；当前证据仍不是actual handler/runtime、immersive runtime、physical或live Sunshine proof。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -81,6 +81,7 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.1.6 repository pre-gate首轮把18个临时probe源误断言为19 | 1 | 在API/entitlement/doc检查前退出；修正精确源数量并用`plistlib`读取带点号entitlement key，从新目录完整重跑 |
 | 18.1.5勾选后final-state首轮误用不存在的`Fixtures/Protocol`根 | 1 | 在generator和结果读取前退出；读取validator默认根后改用`Tests/Fixtures/Moonlight`并从新证据目录完整重跑 |
 | 18.1.5文档同步组合patch使用不精确换行锚点 | 1 | `apply_patch`原子拒绝且无部分写入；改用各文件稳定标题拆分补丁 |
 | 18.1.5首轮focused中controller adapter加入guard后缺少显式return | 1 | production修复逻辑不变；为成功分支补充显式`return`，从全新DerivedData/result bundle重跑 |
@@ -649,3 +650,18 @@
 - **OpenSpec：** pre-gate通过后勾选1.5，权威进度`5/50 ready`、next 1.6；actual handler/runtime、physical device与live Sunshine仍未证明。
 - **final-state：** `/tmp/LuneX-18-1_5-final-state-r2.bBdtCr`完整通过fixtures、strict `9/9`、apply `5/50 next 1.6`、generator四次同一SHA-256、retained focused `58/58`、normal `961/960/1 exact Keychain/0`、五build `succeeded/0/0/0`、五平台AIR/metallib、精确十一文件scope、docs/privacy/reference/opt-in/进程与diff门。首轮仅因使用不存在的fixture根在任何generator或结果读取前退出。
 - **下一步：** 人工审阅完整diff并运行轻量post-record门；通过后独立提交推送，再进入1.6 public API probes。
+
+## 2026-08-07 阶段 18 任务 1.6 启动
+
+- **状态：** `complete`
+- **基线：** 1.5已以`eb0ecc1 Expand tvOS visionOS contract boundaries`提交推送，`HEAD == origin/main == eb0ecc18b35f653444d6204f20592cfbd77d76de`且工作树clean；OpenSpec为`5/50 ready`、next 1.6。
+- **范围：** 使用仓库外临时Swift源对tvOS/visionOS 26.4 SDK分别执行warnings-as-errors正向typecheck和预期失败的unavailable/deprecated probes；覆盖actual window/effective geometry、press/focus、controller/keyboard/mouse边界、CALayer/CAMetalLayer动态范围、screen headroom、空间音频与route/recovery通知。
+- **边界：** header存在不等于可调用；compile success不等于entitlement、simulator runtime、signed artifact、physical HDR/head tracking或live Sunshine。probe不加入production target，不查询或操作simulator，不访问真实Keychain。
+- **验收：** 保存source、命令、SDK/build identity、stdout/stderr/exit与稳定摘要到`/tmp`；同步runtime contract、roadmap和三份planning文件，执行strict/generator/reference/privacy/repository门后再勾选1.6。
+- **API证据：** `/tmp/LuneX-18-1_6-api.ZD2a58`使用Xcode 26.4/Swift 6.3、tvOS SDK `23L236`与visionOS SDK `23O238`；12类正向源在simulator/device SDK共`24/24`零诊断，6类unavailable/deprecated源在两种SDK共`12/12`按预期失败，机器摘要门通过。
+- **关键结论：** 两平台effective geometry/press/focus/controller/新CALayer动态范围/audio recovery可编译；tvOS actual screen headroom与listener head tracking可编译但旧Metal EDR和intended spatial不可用；visionOS旧/新layer动态范围与intended spatial可编译但screen/headroom及listener property不可用。keyboard/mouse/pointer符号可编译不等于设备支持。
+- **entitlement/运行边界：** tvOS源码与Debug/Release build setting声明head-pose entitlement；visionOS无entitlement文件/设置。probe未调用simctl、runtime、签名、设备、Keychain或live host，不证明HDR、head tracking、input delivery或物理行为。
+- **repository pre-gate：** `/tmp/LuneX-18-1_6-repository-pre-r2.WVVlEP`完整通过fixtures、strict `9/9`、apply `5/50 next 1.6`、generator四次稳定同哈希、API `24/24 + 12/12`、诊断分类、toolchain/SDK、tvOS/visionOS entitlement差异、精确五文件scope、reference/production/opt-in/进程与diff门。首轮仅因把18个临时源误计为19而在后续检查前退出。
+- **OpenSpec：** pre-gate通过后勾选1.6，权威进度`6/50 ready`、next 2.1；当前仍无actual runtime、simulator interaction、signed artifact、physical或live-host证明。
+- **final-state：** `/tmp/LuneX-18-1_6-final-state.e4uqxq`一次完整通过fixtures、strict `9/9`、apply `6/50 next 2.1`、generator四次同一SHA-256、API `24/24 + 12/12`及诊断分类、entitlement差异、精确六文件scope、reference/production/opt-in/进程与diff门。
+- **下一步：** 人工审阅完整diff并运行轻量post-record门；通过后独立提交推送，再进入2.1 actual surface bridge callbacks。

@@ -2896,3 +2896,18 @@
 - pre-gate通过后已勾选OpenSpec 1.5并同步权威进度为`5/50 ready`、next 1.6；下一步运行只读final-state，不重复focused/normal/build或simulator inventory。
 - 勾选后final-state首轮误用不存在的`Fixtures/Protocol`根，在generator和xcresult读取前立即退出；这不是产品、构建或测试失败。读取validator默认根后从新目录完整重跑。
 - final-state `/tmp/LuneX-18-1_5-final-state-r2.bBdtCr`通过fixtures、strict `9/9`、apply `5/50 next 1.6`、generator四次稳定同哈希、retained focused `58/58`、normal `961/960/1 exact Keychain/0`、五build `succeeded/0/0/0`、五平台AIR/metallib、精确十一文件scope、docs/privacy/reference/opt-in/进程与diff检查；没有重复测试、构建或simulator inventory。
+
+## 2026-08-07 阶段 18 任务 1.6 启动
+
+- 1.5已提交推送为`eb0ecc1`，fetch后`HEAD == origin/main == eb0ecc18b35f653444d6204f20592cfbd77d76de`且工作树clean；OpenSpec为`5/50 ready`、next 1.6。
+- 已盘点既有阶段15/16/17 API合同、阶段18 public API矩阵及Xcode 26.4 tvOS/visionOS SDK headers。1.6将用仓库外临时Swift源分别验证正向可用API和预期失败的unavailable/deprecated边界，不把header存在或编译成功提升为runtime/physical proof。
+- 本项不新增production runtime，不查询或操作simulator，不访问真实Keychain；probe evidence仅保存在`/tmp`，仓库只同步合同、路线图、OpenSpec和planning状态。
+- 首轮两份UI probe因Swift 6.3拒绝Objective-C名称`UIWindowSceneGeometry`而失败；API在Swift中导入为`UIWindowScene.Geometry`。修正仓库外临时源后tvOS/visionOS UI probe均零诊断通过，production与仓库源码未受影响。
+- 初步负向假设中的tvOS `GCMouse`实际零诊断编译，因此从expected-unavailable矩阵移除并以current/list/movement handler正向probe重验；该结果只证明SDK symbol surface，不改变当前tvOS pointer-unadvertised产品合同。
+- 最终`/tmp/LuneX-18-1_6-api.ZD2a58`机器门通过：12类正向源在simulator/device SDK共`24/24`成功且零诊断，6类unavailable/deprecated源在两类SDK共`12/12`预期失败、0 unexpected success；保存toolchain、source、command/log/status和SHA-256。
+- tvOS head-pose entitlement源码及Debug/Release build setting存在；visionOS无entitlement文件或`CODE_SIGN_ENTITLEMENTS`。probe全程没有simctl、runtime、签名/安装、物理设备、Keychain或live-host调用。
+- 已同步runtime contract、roadmap及三份planning文件，OpenSpec保持`5/50 next 1.6`直到repository pre-gate通过；本项不需要重跑未受影响的normal或五平台app build。
+- 首轮repository pre-gate `/tmp/LuneX-18-1_6-repository-pre.Xc0mN4`在fixtures、strict、apply与generator四次稳定后，因为把实际18个临时probe源误断言为19而退出；API/entitlement/doc/scope后续门尚未执行。修正计数并改用`plistlib`读取带点号entitlement key后从新目录完整重跑。
+- repository pre-gate `/tmp/LuneX-18-1_6-repository-pre-r2.WVVlEP`通过fixtures、strict `9/9`、勾选前apply `5/50 next 1.6`、generator四次稳定同哈希、API正向/负向状态与诊断、toolchain/SDK、entitlement差异、精确五文件scope、reference/production/opt-in/进程和diff检查。
+- pre-gate通过后已勾选OpenSpec 1.6并同步权威进度为`6/50 ready`、next 2.1；下一步只读final-state，不重跑app测试/构建或查询simulator。
+- 勾选后final-state `/tmp/LuneX-18-1_6-final-state.e4uqxq`一次通过fixtures、strict `9/9`、apply `6/50 next 2.1`、generator四次同哈希、API `24/24 + 12/12`与诊断、entitlement差异、精确六文件scope、reference/production/opt-in/进程和diff检查；未执行app测试/构建、simctl、runtime或Keychain。

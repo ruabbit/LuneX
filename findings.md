@@ -2375,3 +2375,18 @@
 - repository pre-gate `/tmp/LuneX-18-1_5-repository-pre.35UmDy`确认当前补丁与上述证据一致：strict `9/9`、勾选前apply `4/50 next 1.5`、generator四次同一SHA-256、五target/test membership、nonfinite无identity drop、8项新增测试、七类aggregate non-Encodable边界、retained focused/normal/五build、精确十文件scope及reference/opt-in/进程/diff门全部通过。
 - OpenSpec 1.5仅在pre-gate通过后勾选；权威进度现为`5/50 ready`、next 1.6。该状态仍只证明contract/static、测试与unsigned build层，不提升为actual runtime、simulator interaction、signed artifact、physical或live-host证明。
 - 勾选后final-state `/tmp/LuneX-18-1_5-final-state-r2.bBdtCr`再次确认strict `9/9`、apply `5/50 next 1.6`、generator四次同哈希、retained focused/normal/五build、唯一Keychain skip、五平台AIR/metallib、精确十一文件scope及docs/privacy/reference/opt-in/进程/diff边界。第一轮只因错误fixture根在任何生成器或结果读取前退出，不改变验收结论。
+
+## 2026-08-07 阶段 18 任务 1.6 API probe 审计
+
+- Xcode 26.4 headers把`CALayer.toneMapMode`标为tvOS 18+/visionOS 2+，把`preferredDynamicRange`和`contentsHeadroom`标为tvOS/visionOS 26+；旧`CALayer.wantsExtendedDynamicRangeContent`在tvOS明确unavailable并建议迁移到新路径。
+- `UIWindowScene.effectiveGeometry`与`windowScene(_:didUpdateEffectiveGeometry:)`在两平台可用；legacy `coordinateSpace`在26.0 deprecated。`UIWindowScene.screen`在visionOS明确unavailable，因此visionOS不能合成`UIScreen`/current headroom来源。
+- `AVAudioEnvironmentNode.isListenerHeadTrackingEnabled`在tvOS 18+公开、visionOS明确unavailable；`AVAudioOutputNode.intendedSpatialExperience`仅visionOS 26+公开。API availability仍与head-pose entitlement、route capability、签名和物理设备行为分层。
+- GameController headers明确tvOS支持extended/micro gamepad和`GCKeyboard`，而`GCMouse`声明只列macOS/iOS；visionOS controller/keyboard/mouse实际Swift可调用边界必须由1.6直接typecheck固定，不能从头文件被SDK打包推断。
+- direct Swift 6.3 probe推翻了“tvOS `GCMouse`不可编译”的推断：current/list与movement handler在tvOS simulator/device SDK均零诊断；visionOS的controller、keyboard、mouse、pointer interaction、hover及indirect-pointer符号也可编译。compiler surface不等于runtime delivery，当前tvOS产品能力仍不宣称pointer。
+- `/tmp/LuneX-18-1_6-api.ZD2a58`最终正向矩阵为`24/24`：tvOS 5类与visionOS 7类源分别对simulator/device SDK typecheck，Swift 6 complete strict concurrency和warnings-as-errors下全部零诊断。
+- 最终负向矩阵为`12/12` expected failure：tvOS旧CAMetal EDR、vision-only intended spatial、legacy scene coordinate space；visionOS screen/UIScreen、listener head tracking、legacy scene coordinate space，均在simulator/device SDK给出明确unavailable/deprecated诊断。
+- tvOS新CALayer dynamic-range API与actual-scene screen headroom均可编译；visionOS旧Metal EDR和新CALayer API可编译但没有公开screen/current headroom。因此4.2可继续设计实际tvOS有限headroom路径，6.3仍不能从layer intent推出visionOS active HDR。
+- tvOS entitlement源和两种build configuration声明head-pose key；visionOS无entitlement设置。编译不检查provisioning，也未接触route或硬件；signed entitlement、AirPods/Apple TV/Vision Pro、HDR/空间音频和live Sunshine仍由8.7证明。
+- repository pre-gate `/tmp/LuneX-18-1_6-repository-pre-r2.WVVlEP`确认task 1.6文档与保留证据一致：strict `9/9`、勾选前apply `5/50 next 1.6`、generator四次同哈希、`24/24 + 12/12`及诊断分类、toolchain/SDK、entitlement差异、五文件scope和repository边界全部通过。
+- 1.6勾选后权威进度为`6/50 ready`、next 2.1。API probe只证明compile-time surface；它没有改变production capability、运行simulator、生成signed artifact或完成physical/live验收。
+- 勾选后final-state `/tmp/LuneX-18-1_6-final-state.e4uqxq`再次确认OpenSpec、generator、API矩阵、entitlement、六文件scope与repository边界一致；因此1.6可独立提交，2.1才开始修改actual surface bridge。

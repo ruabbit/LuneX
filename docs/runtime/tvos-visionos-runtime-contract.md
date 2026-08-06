@@ -194,26 +194,65 @@ resolution as window geometry is prohibited.
 
 ## Xcode 26.4 public API inventory
 
-This table records header/interface availability and already-retained stage 15
-or 16 typecheck evidence. Task 1.6 owns new direct compile probes. Header
-presence alone does not authorize behavior.
+This table records Xcode 26.4 header/interface availability plus task 1.6 direct
+Swift 6.3 warnings-as-errors compile probes. Header presence and successful
+typechecking do not authorize runtime behavior.
 
 | API area | tvOS 26.4 | visionOS 26.4 | Boundary |
 |---|---|---|---|
-| Actual window scene | `UIWindowScene`; `effectiveGeometry`; delegate `windowScene(_:didUpdateEffectiveGeometry:)` available in 26.0; `screen` available | `UIWindowScene`; `effectiveGeometry`; 26.0 delegate available; `screen` explicitly unavailable | Read only from the actual surface window scene; legacy `coordinateSpace` is deprecated in 26.0 |
-| Press lifecycle | `UIResponder` begin/change/end/cancel and `UIPress` arrow/select/menu/play-pause values available | Generic responder and press types appear in UIKit | tvOS may implement balanced eligible capture; visionOS must prove each supported physical input and keep system interactions local |
-| Focus | `UIFocusEnvironment`, `UIFocusSystem`, preferred environments, update callbacks | General focus environment exists; tvOS-only focus sound is unavailable | Focus identity is ephemeral UI state and must not enter persistent diagnostics |
-| Controllers | Connect/disconnect/current notifications, extended/micro profiles, value handlers, player index, battery, motion, light, and haptics are public capability surfaces | Same framework surface is present in the SDK | Every optional capability requires current controller lease checks; system Home/Menu semantics remain local |
-| Screen headroom | `UIScreen.currentEDRHeadroom` and `potentialEDRHeadroom` compile | `UIScreen` and `UIWindowScene.screen` explicitly unavailable | tvOS can read actual scene screen; visionOS cannot invent a screen/headroom source |
-| Old Metal EDR properties | `CAMetalLayer.wantsExtendedDynamicRangeContent` and `EDRMetadata` explicitly unavailable | Retained stage 15 typechecks show the layer intent/metadata surface compiles | Do not share a single old-API implementation across platforms |
-| Dynamic range in SDK 26 | `CALayer.toneMapMode`; `preferredDynamicRange`; `contentsHeadroom` available | Same APIs available | These are candidate public paths, not proof of compositor or panel HDR; task 1.6/4.2/6.3 must validate contracts |
-| Listener head tracking | `AVAudioEnvironmentNode.isListenerHeadTrackingEnabled` available from tvOS 18 | Explicitly unavailable | tvOS still requires entitlement, route, signed, and physical proof |
-| Intended spatial experience | Output-node property is unavailable | Output-node `intendedSpatialExperience` available from visionOS 26 | visionOS uses typed `.fixed`/`.headTracked` readback and `.bypassed` reset |
-| Audio recovery | AVAudioSession route, interruption, and media-services-reset notifications available | Same notifications are available | Notifications must be generation-owned and removed before teardown |
+| Actual window scene | `UIWindowScene.effectiveGeometry`, Swift-imported `UIWindowScene.Geometry`, 26.0 delegate, actual `screen`, and focus system typecheck | `effectiveGeometry`, `Geometry`, 26.0 delegate, and focus system typecheck; `screen` fails as explicitly unavailable | Read only from the actual surface window scene; legacy `coordinateSpace` fails the 26.0 warnings-as-errors probe |
+| Press lifecycle and focus | `UIView` begin/change/end/cancel overrides and arrow/select/menu/play-pause press values typecheck | Generic responder press overrides and focus eligibility typecheck | Compilation does not prove Siri Remote, keyboard, pointer, system gesture, or focus delivery; focus identity remains ephemeral |
+| Controllers | Notifications, extended/micro handlers, player index, battery, motion, light, and haptics typecheck | Same controller surface typechecks | Every optional capability requires a current controller lease; no handler was installed or device connected by the probe |
+| Keyboard and pointer symbols | `GCKeyboard` handler typechecks; `GCMouse` current/list/handler also typechecks despite its C availability declaration omitting tvOS | `GCKeyboard`, `GCMouse`, `UIPointerInteraction`, hover, and indirect-pointer touch symbols typecheck | Symbol availability is not runtime support. tvOS pointer remains unadvertised until an actual handler and physical acceptance exist; visionOS admission remains capability-gated |
+| Screen headroom | Actual-scene `UIScreen.currentEDRHeadroom` and `potentialEDRHeadroom` typecheck | `UIScreen` and `UIWindowScene.screen` fail as explicitly unavailable | tvOS can sample its actual scene screen; visionOS must keep headroom source unavailable until another public finite source is proven |
+| Old Metal EDR properties | `CAMetalLayer.wantsExtendedDynamicRangeContent` and `edrMetadata` fail as explicitly unavailable | Both properties typecheck | Do not share a single old-API implementation across platforms; old-property success still does not provide finite visionOS headroom |
+| Dynamic range in SDK 26 | `CALayer.toneMapMode`, `preferredDynamicRange`, and `contentsHeadroom` typecheck | The same three properties typecheck | Candidate public presentation paths for 4.2/6.3, not compositor or panel HDR proof; output must remain bounded by actual finite capability |
+| Listener head tracking | `AVAudioEnvironmentNode.isListenerHeadTrackingEnabled` set/read typechecks | Property fails as explicitly unavailable | tvOS still requires declared entitlement, matching signed provisioning, capable route, and physical proof |
+| Intended spatial experience | Output-node property fails because the member is unavailable | `.headTracked`, `.fixed`, typed readback, and `.bypassed` reset typecheck | visionOS must use intended experience, not the unavailable listener property; compile success is not audible/head-motion proof |
+| Audio recovery | Actual route plus route-change, interruption, and media-services-reset notifications typecheck | Same APIs typecheck | Notifications must be generation-owned and removed before teardown |
 
 Deprecated or unavailable APIs must not be hidden behind broad conditional
 compilation and called indirectly. Private compositor, gaze, hand-tracking, or
 undocumented display APIs are out of scope.
+
+### Task 1.6 direct probe evidence
+
+The retained evidence directory is:
+
+```text
+/tmp/LuneX-18-1_6-api.ZD2a58
+```
+
+The probe used Xcode 26.4 build `17E192`, Apple Swift 6.3, tvOS 26.4 SDK build
+`23L236`, and visionOS 26.4 SDK build `23O238`. Each source was typechecked with
+Swift 6, complete strict concurrency, and warnings as errors. The exact source,
+command inputs, stdout/stderr, exit status, toolchain identity, and source
+SHA-256 list are retained in the evidence directory.
+
+- 12 positive API-domain sources typechecked against the simulator SDKs and
+  the same 12 typechecked against the device SDKs: `24/24` succeeded with zero
+  diagnostics.
+- Six explicitly unavailable or deprecated sources failed as expected against
+  each SDK kind: `12/12` expected failures and zero unexpected successes.
+- The first UI probe draft used Objective-C name `UIWindowSceneGeometry` and
+  was rejected before other UI checks; Swift 6.3 imports it as
+  `UIWindowScene.Geometry`. Corrected tvOS and visionOS UI probes then passed.
+- A preliminary assumption that tvOS `GCMouse` would fail was disproved by the
+  compiler. Current/list access and a movement-handler assignment typecheck on
+  both simulator and device SDKs. This is recorded as a compiler surface only,
+  not an actual Apple TV input capability or LuneX feature.
+
+The repository declares `com.apple.developer.coremotion.head-pose = true` in
+the tvOS entitlement source and assigns that file to tvOS Debug and Release
+configurations. The visionOS target has no entitlement file or
+`CODE_SIGN_ENTITLEMENTS` setting. Typechecking validates neither provisioning
+authorization nor runtime access; task 8.7 retains signed and physical proof.
+
+No probe called `simctl`, created or booted a simulator, launched an app,
+installed or signed an artifact, connected a controller/keyboard/mouse, opened
+an audio route, requested Keychain access, rendered HDR, moved a window, or
+invoked a runtime API. SDK build identifiers above are not the installed
+simulator runtime build identifiers recorded by task 1.1.
 
 ## Immutable presentation foundation
 
