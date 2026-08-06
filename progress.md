@@ -2737,3 +2737,11 @@
 - 5.6 repository pre-gate `/tmp/LuneX-17-5_6-repository-pre.yLerRh`从头通过fixtures、OpenSpec strict `8/8`与勾选前apply `28/36 next 5.6`、generator四次稳定SHA-256 `78cab89798454bcb0bf629e42832423747475eee64165a42f04fbaebf106f817`、membership/artifacts、UI/accessibility/localization、privacy/API、reference/dependency/ENet license、source/built plist、focused/expanded/full/四平台结果、Keychain opt-in未设置与diff检查。
 - 合同、路线图、OpenSpec 5.6与三份planning文件已同步；5.6勾选后权威进度预期为`29/36`、next 6.1。下一步运行final-state gate，再独立提交并推送；本项没有修改production runtime、访问真实Keychain或操作simulator。
 - 5.6勾选后final-state r2 `/tmp/LuneX-17-5_6-final-state-r2.RXA6yF`完整通过：fixture、OpenSpec strict `8/8`、apply精确`29/36 next 6.1`、generator四次稳定SHA-256、production diff clean、精确九文件scope、membership/docs/privacy/API/reference/dependency/license/plist、focused `3/3`、expanded `246/245/1/0`、full `909/908/1/0`、四平台build、Keychain opt-in未设置与diff检查。首轮包装器仅在shell前因Markdown反引号触发JavaScript语法错误，未运行门禁或改仓库，已记录并用无反引号匹配纠正。
+
+## 2026-08-06 阶段 17 任务 5.6 提交与 6.1 启动
+
+- 5.6提交为`d88533f Expand mobile continuity regression coverage`并成功推送；fetch后`HEAD == origin/main == d88533f6a2cba0b17f491dfccd3cbbe4ddc2fda7`，工作树clean。
+- OpenSpec apply为`29/36 ready`、next精确6.1。6.1将从提交态重新运行完整macOS normal suite，显式移除真实Keychain/live-host opt-in，精确断言唯一skip并串行读取同一xcresult；不操作simulator。
+- 6.1提交态normal `/tmp/LuneX-17-6_1-normal.8bwnco/Normal.xcresult`通过`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`；唯一skip精确为真实Keychain round-trip，build status `succeeded`且error、warning、analyzer warning均为0。命令显式移除真实Keychain与live-host opt-in，未操作simulator。
+- 6.1 repository pre-gate `/tmp/LuneX-17-6_1-repository-pre.QcX64y`通过fixture、OpenSpec strict `8/8`与勾选前apply `29/36 next 6.1`、generator稳定、normal结果与唯一skip读回、全部opt-in未设置和diff检查。OpenSpec 6.1已勾选，预期权威进度`30/36`、next 6.2。
+- 6.1勾选后final-state `/tmp/LuneX-17-6_1-final-state.p8fbkL`通过fixture、OpenSpec strict `8/8`、apply精确`30/36 next 6.2`、generator稳定、合同/路线图当前态、normal `909/908/1/0`、唯一Keychain skip、全部opt-in未设置与diff检查；6.1可独立提交推送。

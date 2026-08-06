@@ -2251,3 +2251,8 @@
 - 12-suite expanded矩阵在macOS 27.0/Xcode 26.4的全新DerivedData中通过`246/245/1/0`；唯一skip仍是必须显式启用的真实Keychain round-trip，说明新联合回归没有破坏既有owner/environment/PiP/scene/EDR合同，但仍不构成system PiP或物理移动设备证明。
 - fresh完整normal suite增加到909项并通过`908 passed / 1 explicit Keychain skip / 0 failed`，确认5.6测试补充在全仓离线回归中收敛；这仍只证明macOS可注入与跨平台共享代码，不证明iOS后台持续时间或物理PiP/EDR行为。
 - 5.6四平台generic Debug与repository pre-gate均通过；当前提交点的generator SHA-256仍为`78cab89798454bcb0bf629e42832423747475eee64165a42f04fbaebf106f817`，iOS built plist精确为单一`audio`后台模式和`UIDeviceFamily [1,2]`。勾选5.6后权威进度应为`29/36`、next 6.1。
+
+## 2026-08-06 阶段 17 任务 6.1 边界
+
+- 6.1只证明normal test路径在live-host与真实Keychain opt-in关闭时收敛，并要求唯一skip精确归属于显式真实Keychain round-trip；它不新增production实现，也不能替代6.2跨配置build或6.6物理移动设备验收。
+- 提交态normal suite通过`909/908/1/0`且唯一skip精确匹配真实Keychain用例；静态搜索确认测试树只有`LUNEX_RUN_KEYCHAIN_TEST`这一环境opt-in，当前环境无任何`LUNEX_*`变量。勾选6.1后权威进度应为`30/36`、next 6.2。

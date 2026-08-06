@@ -1127,6 +1127,15 @@ rotation, external display, visible mobile EDR, physical input/spatial audio,
 power/thermal behavior, or live Sunshine interoperability. Those remain 6.x
 acceptance work.
 
+OpenSpec task 6.1 repeated the complete normal suite from committed 5.6 source
+with both real-Keychain and live-host opt-ins absent. The retained result is
+`/tmp/LuneX-17-6_1-normal.8bwnco/Normal.xcresult`: 909 total, 908 passed,
+one skipped, and zero failed or expected failures. The only skipped identifier
+is `HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`;
+build errors, warnings, and analyzer warnings are zero. The pre-mark repository
+gate is `/tmp/LuneX-17-6_1-repository-pre.QcX64y`. This is normal-test proof,
+not physical mobile runtime acceptance.
+
 ## Target ownership model
 
 Stage 17 will use the following ownership chain:
