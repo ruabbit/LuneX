@@ -2270,3 +2270,10 @@
 - iOS public API probe直接编译`UIWindowScene.effectiveGeometry.interfaceOrientation`、attached `UIScreen` EDR headroom、registered trait changes、`AVSampleBufferDisplayLayer.sampleBufferRenderer`及sample-buffer PiP content source/controller，提供SDK availability证据；它不证明controller possible、系统PiP或visible EDR运行。
 - Debug/Release analyzer `/tmp/LuneX-17-6_3-analyzer.ZbHqMU`均成功且0 error/0 compiler warning；各4项finding逐项一致，全部位于byte-identical固定ENet：3项unused store和1项`unix.c` generic nullable local-address dereference。LuneX bridge只调用`enet_host_service`，vendor唯一production `enet_socket_receive`调用同时传入peer/local address，因此当前调用路径受约束；仍保留为第三方残余风险而非声称零finding。
 - 勾选6.3后权威进度应为`32/36`、next 6.4。6.3不运行normal/sanitizer/resource或simulator，不访问真实Keychain，也不替代6.6物理验收。
+
+## 2026-08-06 阶段 17 任务 6.4 边界
+
+- 完整ASan `/tmp/LuneX-17-6_4-asan.wtKUhx`与完整TSan `/tmp/LuneX-17-6_4-tsan.7v8bx9`均通过`909 total / 908 passed / 1 explicit Keychain skip / 0 failed`，唯一skip精确匹配真实Keychain opt-in；两者结构化error/warning/analyzer warning为0，日志没有Address/Leak/Thread sanitizer报告。
+- 强化resource `/tmp/LuneX-17-6_4-resource.6jwPh7`在关闭coverage并启用scribble、pre-scribble、guard edges、stack logging、每次分配heap check与error abort后，精确16个mobile/PiP/media/AppModel/diagnostic/Metal suite通过`320/320`、无skip、无allocator报告。范围覆盖frame/backpressure/pixel-buffer release、scene/screen observer cancellation、generation replacement、restoration/skip exactly-once completion和clean stop。
+- 首轮pre-gate在generator后退出但未保留具体失败断言；全部retained evidence随后只读通过。第二轮checkpoints精确定位为`pgrep -f`误匹配包装器自身的`xcodebuild.log`路径；改用精确进程名后第三轮`/tmp/LuneX-17-6_4-repository-pre-r3.M8A6Ib`从头通过，不重跑任何成功测试。
+- 6.4只证明macOS可注入路径在本轮sanitizer/allocator配置下没有检测到内存、线程或ownership问题；不证明物理iOS AVKit/UIKit对象、system PiP、后台时长、功耗/热状态或live Sunshine长时资源行为。勾选后权威进度应为`33/36`、next 6.5。

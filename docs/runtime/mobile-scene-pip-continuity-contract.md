@@ -1170,6 +1170,23 @@ production call passes both address arguments. The third-party finding remains
 recorded as residual dependency risk rather than being hidden or described as
 a zero-finding analysis.
 
+OpenSpec task 6.4 complete sanitizer evidence is retained at
+`/tmp/LuneX-17-6_4-asan.wtKUhx` and
+`/tmp/LuneX-17-6_4-tsan.7v8bx9`. Each full suite passed 909 total, 908 passed,
+one explicit real-Keychain skip, and zero failed or expected failures, with
+zero structured diagnostics and no AddressSanitizer, LeakSanitizer, or
+ThreadSanitizer report. The strengthened malloc/resource gate at
+`/tmp/LuneX-17-6_4-resource.6jwPh7` passed 320/320 tests across the exact 16
+mobile scene, EDR, PiP, continuity, media, AppModel, diagnostic, and Metal
+presenter suites with scribble, pre-scribble, guard edges, stack logging,
+per-allocation heap checks, and allocator error abort enabled. It reported no
+allocator failure and covers frame backpressure/release, observer cancellation,
+generation replacement, restoration completion, and clean stop. The pre-mark
+combination gate is `/tmp/LuneX-17-6_4-repository-pre-r3.M8A6Ib`. These
+deterministic macOS sanitizer results do not prove physical iOS system PiP,
+background duration, mobile EDR, Stage Manager, power/thermal behavior, or
+long-running live Sunshine resource use.
+
 ## Target ownership model
 
 Stage 17 will use the following ownership chain:

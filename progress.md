@@ -2775,3 +2775,18 @@
 - 历史strict C命令搜索首轮因`rg`模式以`-W`开头被当作选项退出，只读查询未影响编译；改用`rg --`后完成。普通环境无任何`LUNEX_*`opt-in，本项没有运行测试、访问Keychain或查询/操作simulator。
 - OpenSpec 6.3已勾选，预期权威进度`32/36`、next 6.4；下一步运行勾选后的final-state gate并独立提交推送。
 - 勾选后final-state `/tmp/LuneX-17-6_3-final-state.U9aRrJ`通过fixture self/tree、OpenSpec strict `8/8`、apply精确`32/36 next 6.4`、generator、repository/API retained evidence、Debug/Release analyzer归属、docs、Keychain opt-in未设置和`git diff --check`。
+
+## 2026-08-06 阶段 17 任务 6.3 提交与 6.4 启动
+
+- 6.3提交为`ef0168c Verify mobile continuity repository gates`并成功推送；fetch后`HEAD == origin/main == ef0168cab7dba7b7461396c2eeb116ee5c4a90da`，工作树clean。
+- OpenSpec apply为`32/36 ready`、next精确6.4。将以完整ASan、完整TSan和16-suite强化malloc/resource三份独立证据覆盖PiP frame/backpressure release、scene/screen observer cancellation、generation replacement和restoration completion；不访问真实Keychain或操作simulator。
+
+## 2026-08-06 阶段 17 任务 6.4 完成
+
+- 完整ASan `/tmp/LuneX-17-6_4-asan.wtKUhx`通过`909 total / 908 passed / 1 skipped / 0 failed / 0 expected failure`，唯一skip为真实Keychain opt-in，结构化diagnostics为0且日志无AddressSanitizer/LeakSanitizer报告。
+- 完整TSan `/tmp/LuneX-17-6_4-tsan.7v8bx9`同样通过`909/908/1/0`、唯一Keychain skip、零结构化diagnostics和零ThreadSanitizer report；两项均显式移除`LUNEX_RUN_KEYCHAIN_TEST`、关闭coverage并串行测试。
+- 强化malloc/resource `/tmp/LuneX-17-6_4-resource.6jwPh7`启用scribble/pre-scribble/guard edges/stack logging/逐分配heap check/error abort，精确16-suite通过`320/320`、0 skip、零结构化diagnostics和零allocator report；suite清单与预期逐字一致。
+- 首轮repository pre-gate在generator后退出且未保留具体失败断言；全部retained evidence与当前环境随后只读通过。第二轮`/tmp/LuneX-17-6_4-repository-pre-r2.Ciyhr6`的checkpoints通过到reports，随后`pgrep -f`误匹配包装器自身命令行的`xcodebuild.log`路径；按进程名连续查询确认实际无测试进程。
+- corrected pre-gate r3 `/tmp/LuneX-17-6_4-repository-pre-r3.M8A6Ib`从头通过fixture self/tree、OpenSpec strict `8/8`与勾选前apply `32/36 next 6.4`、generator三次稳定、ASan/TSan/resource结构化结果与报告、精确进程名、Keychain opt-in未设置和`git diff --check`。
+- OpenSpec 6.4已勾选，预期权威进度`33/36`、next 6.5；下一步运行勾选后的final-state gate并独立提交推送。本项未查询或操作simulator。
+- 首轮final-state唯一失败是全局精确进程名门命中另一个工作区`/Users/tanmy/Projects/TamaCore`正在运行的xctest；没有终止或干扰该进程。收紧为只匹配LuneX仓库/证据路径后，final-state r2 `/tmp/LuneX-17-6_4-final-state-r2.LbWI04`通过fixture、strict `8/8`、apply精确`33/36 next 6.5`、generator、三份结果、docs、LuneX无残留进程、Keychain opt-in和diff检查。
