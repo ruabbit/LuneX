@@ -202,12 +202,27 @@ workspace, clears its draft, and records a typed success. Invalid input performs
 no persistence, keeps the user's editable draft local, and stores only a closed
 field-safe issue code for presentation.
 
-This migration is deterministic application-state evidence. The Add Host sheet
-still uses its legacy presentation callback and awaited success/failure dismissal
-is task 2.2. Catalog, pairing, root scene/multiwindow, and active-session owner
-wiring remain tasks 2.3, 2.4, 4.x, and 3.x respectively. No Simulator lifecycle,
-signed artifact, physical-device interaction, or live Sunshine behavior is
-proved by task 2.1.
+`AddHostSheet` now binds both fields directly to the initiating workspace draft
+and awaits `addManualHost(in:)`. It dismisses only for a typed successful result;
+validation and persistence failures keep the sheet open, expose only the closed
+field-safe issue presentation beside the address field, and restore address
+focus for correction. Editing either field clears the prior submission result.
+
+While validation or persistence is in progress, fields, Cancel, Add, and
+interactive sheet dismissal are disabled. `AppModel` also rejects a duplicate
+in-flight submission before another repository save begins, so rapid repeated
+activation cannot create a second add operation. Success selects the host whose
+stored address exactly matches the normalized submission and clears the draft;
+an unexpected result without that address fails instead of selecting an
+unrelated host.
+
+Opening or cancelling the current compatibility sheet clears only the primary
+workspace draft. Root presentation is still the existing Boolean SwiftUI sheet
+bound to `primaryWorkspaceReference`; direct per-scene sheet ownership remains
+task 4.2. Catalog, pairing, multiwindow, and active-session owner wiring remain
+tasks 2.3, 2.4, 4.x, and 3.x respectively. Deterministic tests and unsigned
+generic builds do not prove Simulator interaction, signed artifacts, physical
+devices, or live Sunshine behavior.
 
 ## Compatibility Boundary
 

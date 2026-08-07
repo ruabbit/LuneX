@@ -14,11 +14,7 @@ struct RootView: View {
                 await appModel.loadInitialState()
             }
             .sheet(isPresented: $isShowingAddHost) {
-                AddHostSheet { name, address in
-                    Task {
-                        await appModel.addManualHost(name: name, address: address)
-                    }
-                }
+                AddHostSheet(workspace: appModel.primaryWorkspaceReference)
             }
     }
 
@@ -66,7 +62,7 @@ struct RootView: View {
                 .toolbar {
                     ToolbarItemGroup {
                         Button {
-                            isShowingAddHost = true
+                            presentAddHost()
                         } label: {
                             Label("Add Host", systemImage: "plus")
                         }
@@ -95,7 +91,7 @@ struct RootView: View {
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             Button {
-                                isShowingAddHost = true
+                                presentAddHost()
                             } label: {
                                 Label("Add Host", systemImage: "plus")
                             }
@@ -175,6 +171,14 @@ struct RootView: View {
         case .settings: "Settings"
         }
     }
+
+    private func presentAddHost() {
+        appModel.setManualHostDraft(
+            ManualHostDraft(),
+            in: appModel.primaryWorkspaceReference
+        )
+        isShowingAddHost = true
+    }
 }
 
 private struct SidebarNavigationList: View {
@@ -237,40 +241,122 @@ private struct NavigationRow: View {
 }
 
 private struct AddHostSheet: View {
+    private enum Field: Hashable {
+        case name
+        case address
+    }
+
+    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var address = ""
-    let onAdd: (String?, String) -> Void
+    @FocusState private var focusedField: Field?
+    let workspace: ProductWorkspaceReference
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Name", text: $name)
-                TextField("Address", text: $address)
+                Section {
+                    TextField("Name", text: nameBinding)
+                        .focused($focusedField, equals: .name)
+                        .disabled(isSubmitting)
+
+                    TextField("Address", text: addressBinding)
+                        .focused($focusedField, equals: .address)
+                        .disabled(isSubmitting)
                     #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
                     #endif
+                } footer: {
+                    if let issue = submission.fieldIssue {
+                        Label {
+                            Text(issue.presentation.message)
+                        } icon: {
+                            Image(systemName: issue.presentation.systemImage)
+                        }
+                        .foregroundStyle(issue.severity == .error ? Color.red : Color.orange)
+                    } else if isSubmitting {
+                        ProgressView("Adding host...")
+                    }
+                }
             }
             .navigationTitle("Add Host")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        clearDraft()
                         dismiss()
                     }
+                    .disabled(isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        onAdd(name.isEmpty ? nil : name, address)
-                        dismiss()
+                        Task {
+                            let result = await appModel.addManualHost(in: workspace)
+                            if result.shouldDismissSheet {
+                                dismiss()
+                            } else if result.fieldIssue != nil {
+                                focusedField = .address
+                            }
+                        }
                     }
-                    .disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isSubmitting)
                 }
             }
+            .interactiveDismissDisabled(isSubmitting)
+            .onDisappear {
+                guard !isSubmitting else { return }
+                clearDraft()
+            }
             #if os(macOS)
-            .frame(width: 380, height: 190)
+            .frame(
+                minWidth: 380,
+                idealWidth: 420,
+                maxWidth: 480,
+                minHeight: 240,
+                idealHeight: 260
+            )
             #endif
         }
+    }
+
+    private var draft: ManualHostDraft {
+        appModel.workspaceState(for: workspace)?.hostLibrary.manualHostDraft
+            ?? ManualHostDraft()
+    }
+
+    private var submission: ManualHostSubmissionState {
+        appModel.workspaceState(for: workspace)?.hostLibrary.manualHostSubmission
+            ?? .idle
+    }
+
+    private var isSubmitting: Bool { submission.isSubmitting }
+
+    private var nameBinding: Binding<String> {
+        Binding(
+            get: { draft.name },
+            set: { name in
+                appModel.setManualHostDraft(
+                    ManualHostDraft(name: name, address: draft.address),
+                    in: workspace
+                )
+            }
+        )
+    }
+
+    private var addressBinding: Binding<String> {
+        Binding(
+            get: { draft.address },
+            set: { address in
+                appModel.setManualHostDraft(
+                    ManualHostDraft(name: draft.name, address: address),
+                    in: workspace
+                )
+            }
+        )
+    }
+
+    private func clearDraft() {
+        appModel.setManualHostDraft(ManualHostDraft(), in: workspace)
     }
 }
 

@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`7/48`；product foundations与host-library workspace migration完成，继续Add Host awaited presentation |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`8/48`；host library与awaited Add Host presentation完成，继续catalog generation ownership |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`7/48`。Group 1 product-state foundations完成；2.1已将legacy navigation/host selection compatibility projection及first-use/refresh/manual-add draft/result迁入checked owner workspace，并在await后拒绝stale generation。final related `103/103`，final serial normal `1158/1157/1 exact Keychain skip/0`。scene/multiwindow与Add Host sheet awaited dismissal尚未接线；下一项2.2完成field-safe Add Host presentation。
+阶段19当前权威进度`8/48`。Group 1与2.1/2.2完成：host library state属于checked workspace，Add Host fields直接绑定owner draft、await persistence、仅typed success dismiss，failure保留sheet并回焦Address，in-flight禁止dismiss和重复save。focused `41/41`、related `106/106`、normal `1161/1160/1 exact Keychain skip/0`、四application target generic Debug build通过。root sheet仍是primary compatibility binding；下一项2.3迁移catalog generation ownership。
 
 ### 阶段19错误记录
 

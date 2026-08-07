@@ -3220,3 +3220,12 @@
 - 2.1未接线Add Host sheet awaited dismissal、catalog/pairing、scene multiwindow或session owner；这些分别保留给2.2、2.3、2.4、4.x与3.x。
 - final review移除normalized address缺失时fallback选择首个无关host的路径；异常manager结果现在映射typed `hostAddFailed`，不会虚报成功或错误选择。
 - focused `/tmp/LuneX-19-2_1-focused-r3.LMQhRz`为`38/38`；final related `/tmp/LuneX-19-2_1-related-final.onnIaL`为`103/103`；final serial normal `/tmp/LuneX-19-2_1-normal-final.OmNZLt`为`1158/1157/1/0`，精确Keychain skip proof `/tmp/LuneX-19-2_1-keychain-skip-proof.nEMMlR`为`1 skipped / 0 failed`且opt-in unset。所有raw日志与xcresult均删除。
+
+## 2026-08-08 阶段 19 Task 2.2 Awaited Add Host Presentation
+
+- Root Add Host presentation仍使用primary workspace compatibility reference和Boolean sheet；fields不再是sheet local `@State`，而是通过checked AppModel API直接读写owner workspace draft。真正per-scene sheet owner留给4.2。
+- Add动作await `addManualHost(in:)`且仅`ManualHostSubmissionState.succeeded`触发dismiss；empty/invalid/provider-save failure保持sheet并仅呈现typed `ProductIssue.presentation.message`，不把draft、endpoint、credentials或provider error带入issue。
+- validating/saving期间name/address、Add、Cancel与interactive dismissal全部关闭；失败后Address重新获得focus，用户编辑会把submission恢复idle并移除旧correction。
+- SwiftUI disabled更新前仍可能发生极快重复activation，因此AppModel入口另行检查`isSubmitting`；suspended repository测试确认duplicate返回`.saving`且save count始终为1。
+- focused `/tmp/LuneX-19-2_2-focused.WQaZkZ`为`41/41`，expanded related `/tmp/LuneX-19-2_2-related.Pr0grt`为`106/106`，normal `/tmp/LuneX-19-2_2-normal.5tr9B2`为`1161/1160/1/0`；唯一skip继续是opt-in unset的真实Keychain测试。
+- unsigned generic Debug build `/tmp/LuneX-19-2_2-platform-builds.ySNAZ1`覆盖macOS、iOS/iPadOS、tvOS、visionOS并全部通过，未创建/启动Simulator，也不证明signed、physical或live-host行为。

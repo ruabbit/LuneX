@@ -413,6 +413,25 @@ enum ManualHostSubmissionState: Equatable, Sendable {
     case saving
     case succeeded(hostID: MoonlightHost.ID)
     case failed(ProductIssue)
+
+    var isSubmitting: Bool {
+        switch self {
+        case .validating, .saving:
+            true
+        case .idle, .succeeded, .failed:
+            false
+        }
+    }
+
+    var fieldIssue: ProductIssue? {
+        guard case let .failed(issue) = self else { return nil }
+        return issue
+    }
+
+    var shouldDismissSheet: Bool {
+        guard case .succeeded = self else { return false }
+        return true
+    }
 }
 
 struct ProductHostLibraryWorkspaceState: Equatable, Sendable {

@@ -1469,6 +1469,9 @@ final class AppModel: ApplicationInputSink {
         guard let workspaceState = workspaceRegistry.state(for: workspace) else {
             return .failed(ProductIssue(code: .staleAction))
         }
+        guard !workspaceState.hostLibrary.manualHostSubmission.isSubmitting else {
+            return workspaceState.hostLibrary.manualHostSubmission
+        }
         _ = try? workspaceRegistry.update(workspace) {
             $0.hostLibrary.manualHostSubmission = .validating
         }

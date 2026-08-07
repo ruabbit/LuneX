@@ -115,6 +115,41 @@ final class ProductHostWorkspaceTests: XCTestCase {
         XCTAssertEqual(saveCount, 1)
     }
 
+    func testManualHostSubmissionPresentationDismissesOnlyAfterSuccess() {
+        let hostID = makeHost(idSuffix: 9, address: "state.local").id
+        let issue = ProductIssue(code: .hostAddressInvalid)
+
+        for state in [
+            ManualHostSubmissionState.idle,
+            .validating,
+            .saving,
+            .failed(issue)
+        ] {
+            XCTAssertFalse(state.shouldDismissSheet)
+        }
+        XCTAssertFalse(ManualHostSubmissionState.idle.isSubmitting)
+        XCTAssertTrue(ManualHostSubmissionState.validating.isSubmitting)
+        XCTAssertTrue(ManualHostSubmissionState.saving.isSubmitting)
+        XCTAssertFalse(ManualHostSubmissionState.failed(issue).isSubmitting)
+        XCTAssertNil(ManualHostSubmissionState.saving.fieldIssue)
+        XCTAssertEqual(ManualHostSubmissionState.failed(issue).fieldIssue, issue)
+        XCTAssertTrue(
+            ManualHostSubmissionState.succeeded(hostID: hostID).shouldDismissSheet
+        )
+    }
+
+    func testAddHostSheetAwaitsWorkspaceResultBeforeConditionalDismiss() throws {
+        let source = try String(contentsOf: rootViewURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("AddHostSheet(workspace:"))
+        XCTAssertTrue(source.contains("let result = await appModel.addManualHost(in: workspace)"))
+        XCTAssertTrue(source.contains("if result.shouldDismissSheet"))
+        XCTAssertTrue(source.contains(".interactiveDismissDisabled(isSubmitting)"))
+        XCTAssertTrue(source.contains("Text(issue.presentation.message)"))
+        XCTAssertTrue(source.contains("focusedField = .address"))
+        XCTAssertFalse(source.contains("let onAdd: (String?, String) -> Void"))
+    }
+
     func testLateHostLoadFromReplacedWorkspaceCannotMutateSharedState() async throws {
         let host = makeHost(idSuffix: 3, address: "late.local")
         let repository = SuspendedProductHostRepository(result: [host])
@@ -170,6 +205,30 @@ final class ProductHostWorkspaceTests: XCTestCase {
         )
     }
 
+    func testDuplicateManualHostSubmissionDoesNotStartAnotherSave() async throws {
+        let repository = SuspendedProductHostSaveRepository()
+        let model = makeModel(repository: repository)
+        let workspace = model.primaryWorkspaceReference
+        model.setManualHostDraft(
+            ManualHostDraft(name: "Studio", address: "once.local"),
+            in: workspace
+        )
+
+        let first = Task { await model.addManualHost(in: workspace) }
+        await repository.waitUntilSaveIsPending()
+        let duplicate = await model.addManualHost(in: workspace)
+
+        XCTAssertEqual(duplicate, .saving)
+        let saveCountBeforeCompletion = await repository.saveCount()
+        XCTAssertEqual(saveCountBeforeCompletion, 1)
+        await repository.resumeSave()
+        guard case .succeeded = await first.value else {
+            return XCTFail("Expected the original submission to succeed")
+        }
+        let saveCountAfterCompletion = await repository.saveCount()
+        XCTAssertEqual(saveCountAfterCompletion, 1)
+    }
+
     private func makeModel(repository: any HostRepository) -> AppModel {
         AppModel(
             hostLibraryManager: HostLibraryManager(
@@ -202,6 +261,14 @@ final class ProductHostWorkspaceTests: XCTestCase {
             pairingState: .unpaired,
             reachability: .unknown
         )
+    }
+
+    private var rootViewURL: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/LuneXApp/RootView.swift")
     }
 }
 
@@ -264,6 +331,7 @@ private actor SuspendedProductHostRepository: HostRepository {
 
 private actor SuspendedProductHostSaveRepository: HostRepository {
     private var continuation: CheckedContinuation<Void, Never>?
+    private var saves = 0
 
     func loadHosts() async throws -> [MoonlightHost] {
         []
@@ -271,6 +339,7 @@ private actor SuspendedProductHostSaveRepository: HostRepository {
 
     func saveHosts(_ hosts: [MoonlightHost]) async throws {
         _ = hosts
+        saves += 1
         await withCheckedContinuation { continuation = $0 }
     }
 
@@ -282,6 +351,8 @@ private actor SuspendedProductHostSaveRepository: HostRepository {
         continuation?.resume()
         continuation = nil
     }
+
+    func saveCount() -> Int { saves }
 }
 
 private struct ProductHostServerInfoClient: ServerInfoClient {

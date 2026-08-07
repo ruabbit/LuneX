@@ -3706,3 +3706,8 @@
 - 2026-08-08：final review移除manual add找不到normalized address时选择首个无关host的fallback；final related `/tmp/LuneX-19-2_1-related-final.onnIaL`为`103/103`，final serial normal `/tmp/LuneX-19-2_1-normal-final.OmNZLt`为`1158/1157/1/0`，两个opt-in unset且raw/xcresult均删除。
 - 2026-08-08：首个final scope gate仅因generated pbxproj membership精确计数预期3、实际4而退出；诊断确认其余断言通过，修正gate后继续，不重跑已成功测试。
 - 2026-08-08：task 2.1 corrected final gate `/tmp/LuneX-19-2_1-final-r2.asqNYj`通过11文件scope、generator稳定SHA-256、strict、`7/48 next 2.2`、related `103/103`、normal `1158/1157/1/0`、exact Keychain skip、opt-in unset及raw/xcresult absent；准备独立提交推送。
+- 2026-08-08：task 2.1提交`c039fca Migrate host library state to workspaces`并推送；fetch与ls-remote确认HEAD/origin/main/remote三方一致，工作树clean，进入2.2。
+- 2026-08-08：task 2.2将Add Host sheet改为owner workspace draft binding，await typed result，仅success dismiss；failure显示field-safe footer并回焦Address，validating/saving禁用字段/按钮/interactive dismiss，AppModel拒绝duplicate in-flight save。
+- 2026-08-08：2.2 focused `/tmp/LuneX-19-2_2-focused.WQaZkZ`为`41/41`，related `/tmp/LuneX-19-2_2-related.Pr0grt`为`106/106`，normal `/tmp/LuneX-19-2_2-normal.5tr9B2`为`1161/1160/1/0`；opt-in unset，raw/xcresult删除。
+- 2026-08-08：2.2 unsigned generic Debug builds `/tmp/LuneX-19-2_2-platform-builds.ySNAZ1`的macOS、iOS/iPadOS、tvOS、visionOS均通过；未调用Simulator lifecycle，不构成signed/physical/live proof。勾选OpenSpec至`8/48`，下一项2.3。
+- 2026-08-08：task 2.2 final gate `/tmp/LuneX-19-2_2-final.Q47MFp`通过9文件scope、strict、`8/48 next 2.3`、generator no drift、focused/related/normal、4/4 generic Debug build、opt-in unset及raw identity artifacts absent；准备独立提交推送。
