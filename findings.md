@@ -3137,3 +3137,15 @@
 - corrected post-mark `/tmp/LuneX-18-8_6-final-state-r2.MqvuzZ`确认OpenSpec精确为`48/50 next 8.7`，唯一task变化是8.6 checkbox；8.7 signed physical/live与8.8 final synchronization均保持未勾选，项目/生成器/opt-in/进程边界无漂移。
 - corrected final audit `/tmp/LuneX-18-8_6-final-audit-r2.c9Anqw`未发现阻止独立提交的问题：最终7文件无production/test/project/config/vendor/reference改动，空集合证据、offline/Simulator/physical/live分层、唯一checkbox与OpenSpec状态一致。
 - final-record `/tmp/LuneX-18-8_6-final-record.eWNhuu`再次确认8.6可独立提交；该提交不得扩称为Simulator App启动、signed artifact、physical/live acceptance或阶段18完成。
+
+## 2026-08-08 阶段 18 任务 8.7 readiness 与 8.8 证据同步
+
+- 8.6已以`339b71a Record bounded simulator UI target boundary`提交推送，fetch确认本地与远端一致且Git clean；OpenSpec为`48/50`，8.7和8.8 pending。
+- privacy-minimized CoreDevice readiness `/tmp/LuneX-18-8_7-readiness.nLhQfT`确认物理Apple TV类计数1，其中paired/booted/developer-mode-capable计数1；物理Vision Pro类计数0。只保留类别/布尔状态，不保留设备名称、序列号、UDID、ECID、地址或连接时间。
+- `LUNEX_RUN_LIVE_HOST_TEST`与真实Keychain opt-in均unset，仓库没有task 8.7 signed physical/live acceptance receipt；为避免无必要Keychain访问，没有查询code-signing identity。没有安装/启动LuneX、打开stream或操作设备。
+- 首个脱敏清理命令因`rm -f`风格被策略在执行前拒绝；随后先验证脱敏摘要，再精确删除本轮创建的raw JSON与两个中间projection，最终`raw_identity_fields_retained=false`且evidence SUCCESS。
+- 8.7仍缺授权signed Vision Pro、双设备完整输入/窗口/HDR/音频/中断/live Sunshine/延迟/资源/comfort/teardown receipt；物理Apple TV被发现不等于其已获任务授权或通过验收。
+- 8.8最终矩阵为：offline按已记录范围通过；Simulator fixed inventory成立但UI target/execution为0/0；signed artifact无receipt；physical缺Vision Pro且Apple TV未验收；live host无opt-in/receipt。8.7保持pending，change不可archive，阶段18继续in_progress，后续阶段不可回填。
+- 8.8 repository pre-gate `/tmp/LuneX-18-8_8-repository-pre.U0WN6n`与post-mark `/tmp/LuneX-18-8_8-final-state.r8HNJn`均通过；OpenSpec精确为`49/50`且唯一pending为8.7，唯一task变化是8.8 checkbox。该状态不是all-done，不能archive。
+- corrected final audit `/tmp/LuneX-18-8_8-final-audit-r2.Kma7ZH`确认最终7文件只有authority/tasks，五级矩阵与readiness不含identity、没有signed/physical/live完成误报，8.7仍唯一pending且阶段18仍in_progress。
+- final-record `/tmp/LuneX-18-8_8-final-record.xuo5aN`再次确认8.8可独立提交，但change只有`49/50`，不能archive或把阶段18报告为完成。

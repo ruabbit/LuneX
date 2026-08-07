@@ -3663,3 +3663,12 @@
 - 2026-08-08：首个8.6 final audit编排再次因JavaScript模板内Markdown反引号在shell前SyntaxError退出；无证据目录或副作用。corrected轮移除全部反引号字符并从fresh目录完整运行。
 - 2026-08-08：corrected final audit `/tmp/LuneX-18-8_6-final-audit-r2.c9Anqw`通过最终7文件authority/tasks scope、零production/test/project/config/vendor/reference、唯一8.6 checkbox、strict `9/9`、`48/50 next 8.7`及retained evidence/repository/proof边界；下一步final-record。
 - 2026-08-08：final-record `/tmp/LuneX-18-8_6-final-record.eWNhuu`通过authority、四道retained gate、空集合结果、固定设备、唯一checkbox、稳定project与repository边界；补入索引后运行final-record r2再提交。
+- 2026-08-08：8.6以`339b71a Record bounded simulator UI target boundary`提交推送，fetch确认`HEAD == origin/main`且工作树clean；OpenSpec为`48/50`，进入8.7 readiness盘点。
+- 2026-08-08：privacy-minimized `/tmp/LuneX-18-8_7-readiness.nLhQfT`确认物理Apple TV类1台且paired/booted/developer-mode-capable，物理Vision Pro为0，live-host/真实Keychain opt-in均unset，无signed physical/live receipt；未探测signing identity、安装/启动App或打开stream。
+- 2026-08-08：首个脱敏清理命令因`rm -f`风格被策略执行前拒绝；corrected命令验证summary后精确删除raw identity JSON与中间projection，最终只保留类别计数/布尔/blocking classes且SUCCESS。
+- 2026-08-08：8.7条件不成立并保持pending；开始8.8同步五级proof boundary，明确change不archive、阶段18不complete且阶段19/20不得替代物理/live receipt。下一步repository pre-gate，通过前8.8不勾选。
+- 2026-08-08：8.8 repository pre-gate `/tmp/LuneX-18-8_8-repository-pre.U0WN6n`通过fixture、strict `9/9`、pre-mark `48/50`、6 authority scope、三次稳定generator、脱敏readiness、五级矩阵与repository边界；随后只勾选8.8。
+- 2026-08-08：post-mark `/tmp/LuneX-18-8_8-final-state.r8HNJn`通过strict `9/9`、`49/50`、唯一pending 8.7、7文件scope、唯一8.8 checkbox、retained evidence与repository边界；change仍active且不可archive，下一步final audit/record。
+- 2026-08-08：首轮8.8 final audit `/tmp/LuneX-18-8_8-final-audit.Yi4ckM`通过scope/OpenSpec/checkbox后，因contract关键句跨行而被单行全文断言误判；无实现或设备副作用，改为两段稳定token fresh重跑。
+- 2026-08-08：corrected final audit `/tmp/LuneX-18-8_8-final-audit-r2.Kma7ZH`通过最终7文件authority/tasks、唯一8.8 checkbox、strict `9/9`、`49/50 only 8.7 pending`、脱敏readiness、五级矩阵与repository边界；下一步final-record。
+- 2026-08-08：final-record `/tmp/LuneX-18-8_8-final-record.xuo5aN`通过authority、完整retained chain、8.7 not-ready脱敏状态、唯一checkbox、稳定project与repository边界；补入索引后运行r2再提交。

@@ -3396,6 +3396,32 @@ Vision Pro acceptance must cover:
 - live Sunshine, latency, CPU/GPU/memory, power/thermal state, comfort, and
   complete scene/video/audio/input teardown.
 
+### Current task 8.7 readiness and task 8.8 proof matrix
+
+The privacy-minimized readiness record is
+`/tmp/LuneX-18-8_7-readiness.nLhQfT`. CoreDevice currently exposes one
+physical Apple TV class that is paired, booted, and developer-mode capable,
+but zero physical Vision Pro classes. `LUNEX_RUN_LIVE_HOST_TEST` and the real
+Keychain opt-in are absent, and no signed physical/live acceptance receipt is
+present. The query does not inspect a signing identity, install or launch an
+artifact, open a stream, or operate any device. Its raw identity-bearing JSON
+and intermediate name-bearing projection were deleted; the retained summary
+contains only category counts, booleans, and blocking classes.
+
+| Evidence tier | Current task 8.8 record | What remains unproved |
+|---|---|---|
+| Offline deterministic | Tasks 1.1-8.4 and application task 7.5 evidence pass at their recorded test/build/repository/sanitizer scopes | Framework-injected behavior is not physical output or live interoperability |
+| Simulator | Task 8.5 fixed 26.4 identities are unique/available/Shutdown; task 8.6 has zero existing and zero executed bounded UI targets | App launch/navigation and all physical behavior |
+| Signed artifact | No task 8.7 signed artifact inspection or installation receipt exists | Signing, entitlements at runtime, installation, launch |
+| Physical device | One discoverable Apple TV class is not an acceptance receipt; no Vision Pro class is present | Required Apple TV and Vision Pro input, window/focus, HDR, audio, comfort, resource, and teardown matrix |
+| Live host | Live-host opt-in and sanitized Sunshine receipt are absent | Pairing/stream/reconnect/termination, latency, drops, synchronization, performance, power, thermal behavior |
+
+Task 8.8 records these boundaries and does not waive them. Task 8.7 remains the
+only physical/live acceptance task. The OpenSpec change must remain active and
+unarchived, and stage 18 must remain `in_progress`, until one authorized signed
+Apple TV and one authorized signed Vision Pro complete the required sanitized
+live Sunshine matrix. Later stage evidence cannot substitute for that receipt.
+
 Receipts and diagnostics must not contain host endpoints, credentials, keys,
 PINs, pairing material, provisioning profile UUIDs, certificate/device serial
 numbers, raw controller/window/display identities, input payloads, media

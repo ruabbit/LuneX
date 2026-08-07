@@ -752,6 +752,25 @@ records the honest no-applicable-target boundary without claiming app runtime,
 signing, physical input/HDR/spatial audio, live Sunshine, latency, performance,
 power, or thermal proof. Tasks 8.7 and 8.8 remain separate.
 
+Task 8.7 is not inferred from device discovery. A privacy-minimized CoreDevice
+readiness query currently finds one paired, booted, developer-mode-capable
+physical Apple TV class but no physical Vision Pro class. The live-host and
+real-Keychain opt-ins are absent, no signed physical/live acceptance receipt is
+present, and signing identity is deliberately not probed merely to complete a
+planning task. The raw query copy is deleted after retaining category counts
+and bounded blocking classes. Device presence is not task-specific
+authorization, and the missing Vision Pro and live Sunshine receipt keep task
+8.7 pending.
+
+Task 8.8 synchronizes the final evidence tiers without completing task 8.7.
+Offline deterministic tests, warnings-as-errors builds, repository/analyzer,
+sanitizer/resource, and fixed Simulator inventory evidence retain their exact
+scope. Simulator UI execution remains zero because no bounded target exists.
+Signed-artifact, physical Apple TV/Vision Pro, and live-host tiers remain
+unproved. The change must not be archived and stage 18 remains in progress
+until the complete privacy-bounded task 8.7 receipt exists; work on later
+stages cannot backfill it.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->

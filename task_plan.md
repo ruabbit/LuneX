@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `48/50 ready`；8.6现有bounded tvOS/visionOS Simulator UI/navigation target空集合审计已通过，下一项8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收 |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -1683,3 +1683,14 @@
 - **final-audit编排修正：** 首个final audit再次因JavaScript模板中的Markdown反引号在shell前SyntaxError退出，无证据目录或仓库/设备副作用；corrected轮禁止wrapper出现反引号并使用纯文本稳定token。
 - **final audit通过：** corrected `/tmp/LuneX-18-8_6-final-audit-r2.c9Anqw`通过最终7文件authority/tasks scope、零production/test/project/config/vendor/reference diff、唯一8.6 checkbox、strict `9/9`、`48/50 next 8.7`、retained audit/pre/post gates及全部repository/proof边界。下一步final-record后独立提交推送。
 - **final-record：** `/tmp/LuneX-18-8_6-final-record.eWNhuu`通过最终authority状态、四道retained gate、`existing/executed=0/0`、固定设备无变化、唯一checkbox、稳定project及全部repository边界；补入本索引后运行r2确认最终diff，再独立提交推送。
+
+## 2026-08-08 阶段 18 任务 8.7 readiness 与 8.8 同步
+
+- **8.6提交：** `339b71a Record bounded simulator UI target boundary`已推送并fetch确认`HEAD == origin/main == 339b71a4ba8175d2b8d8c8702f0df4c23a4286e8`、工作树clean；OpenSpec为`48/50`，pending仅8.7与8.8。
+- **8.7 readiness：** `/tmp/LuneX-18-8_7-readiness.nLhQfT`脱敏摘要记录1台paired/booted/developer-mode-capable物理Apple TV类设备、0台物理Vision Pro，live-host/真实Keychain opt-in均unset且无signed physical/live receipt。未探测signing identity、安装/启动App或打开stream；原始identity-bearing JSON已删除。
+- **8.7判定：** device discovery不是任务授权或验收，且Vision Pro与live Sunshine receipt缺失，所以8.7必须保持未勾选。当前不是同一阻塞条件连续三次goal turn，长期goal继续active而不标记blocked。
+- **8.8范围：** 同步offline、Simulator、signed artifact、physical device、live host五级证据边界。8.8可记录8.7 pending，但不得archive change或把阶段18标记complete；阶段19/20证据不得替代8.7。
+- **8.8 gates：** repository pre-gate `/tmp/LuneX-18-8_8-repository-pre.U0WN6n`通过fixture、strict `9/9`、pre-mark `48/50`、6 authority scope、三次稳定generator、脱敏readiness、五级矩阵与repository边界；只勾选8.8后，post-mark `/tmp/LuneX-18-8_8-final-state.r8HNJn`确认`49/50`、唯一pending 8.7、精确7文件scope及唯一checkbox。下一步final audit/record后独立提交推送。
+- **final-audit断言修正：** 首轮`/tmp/LuneX-18-8_8-final-audit.Yi4ckM`通过scope/OpenSpec/checkbox后，对contract中跨两行的Task 8.7唯一physical/live语义使用单行全文匹配而退出；改查两段稳定token后fresh重跑只读audit。
+- **final audit通过：** corrected `/tmp/LuneX-18-8_8-final-audit-r2.Kma7ZH`通过最终7文件authority/tasks scope、唯一8.8 checkbox、strict `9/9`、`49/50 only 8.7 pending`、五级proof matrix、脱敏readiness、稳定project及全部repository边界；下一步final-record后独立提交推送。
+- **final-record：** `/tmp/LuneX-18-8_8-final-record.xuo5aN`通过最终authority、完整retained chain、8.7 not-ready脱敏状态、唯一8.8 checkbox、稳定project及repository边界；补入索引后运行r2，再独立提交推送。
