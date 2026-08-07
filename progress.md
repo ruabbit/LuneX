@@ -3684,3 +3684,7 @@
 - 2026-08-08：开始task 1.2，新增closed ProductIssue/domain/severity/presentation、checked ProductActionToken/scope及聚焦测试；通过generator纳入所有App与macOS test target，不接线现有UI/runtime。
 - 2026-08-08：task 1.2 generator双次hash稳定，focused `ProductIssueTests`为`5/5`；真实Keychain/live-host opt-in均unset，未操作Simulator。Xcode自动外接设备枚举警告不作为设备验收且不保留identity-bearing raw output。
 - 2026-08-08：task 1.2 final gate `/tmp/LuneX-19-1_2-product-issue.rXdSpM`通过strict、`2/48`、9文件scope、generator/membership、focused `5/5`与privacy/opt-in边界；准备独立提交推送。
+- 2026-08-08：开始task 1.3，收紧HostEndpointParser并新增ManualHostDraft typed validation；补齐normalization、URL/credential/path/query、IP/hostname/port/control-character矩阵，不在本任务改Add Host UI。
+- 2026-08-08：task 1.3首个focused wrapper因zsh只读`status`变量在测试后退出；xcresult为`11/1/0`，唯一失败是`[not-ipv6]`被当作hostname接受。修复bracketed IPv6入口并改用`test_exit` fresh重跑，identity-bearing raw log删除。
+- 2026-08-08：task 1.3 corrected focused `/tmp/LuneX-19-1_3-focused-r2.Oxw4ZF`为`12/12`；typed draft/parser矩阵通过，raw日志删除。勾选1.3后运行final scope/privacy/OpenSpec gate。
+- 2026-08-08：task 1.3 final gate `/tmp/LuneX-19-1_3-host-validation-final.vF8FAE`通过strict、`3/48`、8文件scope、stable project、failure privacy shape、focused `12/12`与proof boundary；准备独立提交推送。

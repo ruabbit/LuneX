@@ -3175,3 +3175,11 @@
 - generator连续两次生成`project.pbxproj`的SHA-256均为`e8e1ac4f1b2a528648f78dd8d4b8c7307e865ac0727974086bd69047a460b573`；`ProductWorkflowState.swift`进入四个App与test target，`ProductIssueTests.swift`只进入macOS test target。
 - focused macOS `ProductIssueTests`通过`5/5`。Xcode初始化时自动枚举外接锁定iOS设备并产生非致命DDI warning，但实际destination/test runner为本机macOS，没有install/launch LuneX到外接设备；原始identity-bearing输出不持久化，也不构成physical proof。
 - Task 1.2 final gate `/tmp/LuneX-19-1_2-product-issue.rXdSpM`通过strict、`2/48`、精确9文件scope、generator stability/membership、focused `5/5`、privacy-shape与opt-in unset；没有Simulator lifecycle或physical install/launch。
+
+## 2026-08-08 阶段 19 Task 1.3 Manual Host 验证合同
+
+- `HostEndpointParser`此前会忽略URL user/password/path/query/fragment、接受空host与无效IPv4，并把任意scheme当作endpoint；这些输入可能造成错误持久化或把credential-bearing文本跨过产品边界。
+- 新合同支持plain hostname/IPv4、raw IPv6 default port、bracketed IPv6 optional port及无额外URL component的http/https形式；canonical persistence统一使用`displayAddress`。
+- `ManualHostDraft`只返回typed normalized submission或`host_address_required`/`host_address_invalid`，不会把原draft、credentials或parser内部细节写入issue。Add Host sheet的await/dismiss接线保留给2.2。
+- corrected focused evidence `/tmp/LuneX-19-1_3-focused-r2.Oxw4ZF`通过`DiscoveryTests + ProductIssueTests = 12/12`；raw Xcode log成功后删除，未触发真实Keychain/live host或Simulator lifecycle。
+- Task 1.3 final gate `/tmp/LuneX-19-1_3-host-validation-final.vF8FAE`通过strict、`3/48`、精确8文件scope、stable project、parser/draft contract、failure redaction shape、focused `12/12`与opt-in unset；UI integration明确未完成。

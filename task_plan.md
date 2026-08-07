@@ -43,13 +43,15 @@
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`2/48`。Task 1.1完成pre-change静态基线；1.2新增closed `ProductIssueCode`派生domain/severity/localized presentation/default action，以及application/workspace/session scoped `ProductActionToken`，focused `5/5`通过。现有UI string迁移、workspace registry与dispatcher复核仍属后续任务，1.2不扩称为已接线产品UX。
+阶段19当前权威进度`3/48`。1.1静态基线、1.2 typed issue/action与1.3 manual host normalization/validation合同完成；1.3 corrected focused `12/12`。Add Host sheet的await/dismiss与workspace state尚未接线，下一项1.4定义workspace identity/generation及local state。
 
 ### 阶段19错误记录
 
 - Task 1.1首轮项目元数据读取假设存在`project.yml`，命令返回`No such file or directory`；无文件或运行时副作用。已确认本仓库权威生成器为`Tools/generate_xcodeproj.rb`，后续直接审计生成器与pbxproj，不重复错误路径。
 - Task 1.1首个验收编排使用`git diff --name-only`比较范围，未包含未跟踪的新合同文档而退出；OpenSpec strict已通过，无production/test/device/Keychain副作用。corrected gate改用`git status --porcelain`解析tracked与untracked精确集合，并从fresh evidence目录完整重跑。
 - Task 1.1 corrected scope gate通过后，单行全文断言因合同中的proof句跨两行而退出；逐项诊断确认production diff为0、checkbox精确2行、opt-in unset，其余token均通过。final gate改为两个稳定短token并给每项断言显式marker。
+- Task 1.3首个focused编排在xcodebuild结束后尝试写zsh只读特殊变量`status`而退出；fresh xcresult仍可读，确认实际测试`11 passed / 1 failed`。后续编排使用`test_exit`，不重复该shell错误。
+- Task 1.3唯一测试失败为`[not-ipv6]`未抛错：bracketed parser剥离方括号后误走通用hostname校验。修复在bracketed入口强制IPv6语义，继续复用统一normalization；原始含自动设备枚举的Xcode日志已删除。
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 

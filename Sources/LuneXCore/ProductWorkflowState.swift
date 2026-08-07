@@ -263,3 +263,39 @@ struct ProductIssue: Identifiable, Equatable, Sendable {
     var severity: ProductIssueSeverity { code.severity }
     var presentation: ProductIssuePresentation { code.presentation }
 }
+
+struct ManualHostSubmission: Equatable, Sendable {
+    let name: String?
+    let endpoint: HostEndpoint
+
+    var normalizedAddress: String { endpoint.displayAddress }
+}
+
+struct ManualHostValidationFailure: Error, Equatable, Sendable {
+    let issueCode: ProductIssueCode
+}
+
+struct ManualHostDraft: Equatable, Sendable {
+    var name: String
+    var address: String
+
+    init(name: String = "", address: String = "") {
+        self.name = name
+        self.address = address
+    }
+
+    func validate() -> Result<ManualHostSubmission, ManualHostValidationFailure> {
+        do {
+            let endpoint = try HostEndpointParser.parse(address)
+            let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return .success(ManualHostSubmission(
+                name: normalizedName.isEmpty ? nil : normalizedName,
+                endpoint: endpoint
+            ))
+        } catch HostEndpointParseError.emptyAddress {
+            return .failure(ManualHostValidationFailure(issueCode: .hostAddressRequired))
+        } catch {
+            return .failure(ManualHostValidationFailure(issueCode: .hostAddressInvalid))
+        }
+    }
+}

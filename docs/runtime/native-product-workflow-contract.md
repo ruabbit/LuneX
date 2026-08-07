@@ -118,6 +118,24 @@ The value is an authorization claim, not authorization by itself. The action
 dispatcher must compare its scope with current checked owners at invocation and
 must return a `stale_action` issue without executing when they differ.
 
+### Manual host endpoint validation
+
+Manual host input is normalized through `HostEndpointParser`, not SwiftUI
+string splitting. Supported forms are a hostname, IPv4 address, raw IPv6
+address using the default HTTP port, bracketed IPv6 address with an optional
+explicit port, and an `http` or `https` URL containing only host, optional port,
+and an optional root slash. Hostnames are lowercased, a DNS root dot is
+removed, IPv6 hex and zone text are lowercased, and the persisted value is
+always `HostEndpoint.displayAddress`.
+
+User information, unsupported schemes, non-root paths, queries, fragments,
+internal whitespace, control characters, empty or malformed hosts, malformed
+IPv4/IPv6, and ports outside `1...65535` fail before persistence. The product
+layer maps an empty draft to `host_address_required` and every other parser
+failure to `host_address_invalid`; neither issue contains or echoes the draft.
+`ManualHostSubmission` carries the normalized optional display name and typed
+endpoint for the later awaited persistence workflow.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public
