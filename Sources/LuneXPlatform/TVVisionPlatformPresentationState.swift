@@ -1,6 +1,6 @@
 import Foundation
 
-#if os(tvOS)
+#if os(tvOS) || os(visionOS)
 import CoreGraphics
 import QuartzCore
 import UIKit
@@ -608,6 +608,7 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
     let potentialEDRHeadroom: Double?
     let layerCapability: TVVisionLayerDynamicRangeCapability
     let tvOSHDRCapabilityResolution: TVOSDisplayHDRCapabilityResolution?
+    let visionOSHDRCapabilityResolution: TVOSDisplayHDRCapabilityResolution?
 
     init(
         platform: TVVisionPlatform,
@@ -619,6 +620,8 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
         potentialEDRHeadroom: Double?,
         layerCapability: TVVisionLayerDynamicRangeCapability,
         tvOSHDRCapabilityResolution:
+            TVOSDisplayHDRCapabilityResolution? = nil,
+        visionOSHDRCapabilityResolution:
             TVOSDisplayHDRCapabilityResolution? = nil
     ) throws {
         try displayGeneration.require(.display)
@@ -647,15 +650,27 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
                 throw TVVisionPlatformContractError.invalidDisplaySnapshot
             }
         }
-        if let tvOSHDRCapabilityResolution {
-            let capabilities = tvOSHDRCapabilityResolution.capabilities
+        guard tvOSHDRCapabilityResolution == nil
+                || visionOSHDRCapabilityResolution == nil else {
+            throw TVVisionPlatformContractError.invalidDisplaySnapshot
+        }
+        let displayHDRCapabilityResolution = tvOSHDRCapabilityResolution
+            ?? visionOSHDRCapabilityResolution
+        if let displayHDRCapabilityResolution {
+            let capabilities = displayHDRCapabilityResolution.capabilities
             let expectedOutputAvailable =
-                tvOSHDRCapabilityResolution.fallbackReason != .outputUnavailable
+                displayHDRCapabilityResolution.fallbackReason != .outputUnavailable
             let expectedHeadroomSource: TVVisionDisplayHeadroomSource =
                 capabilities.currentEDRHeadroom == nil
                     ? .unavailable
                     : .platformReported
-            guard platform == .tvOS,
+            let resolutionMatchesPlatform = switch platform {
+            case .tvOS:
+                tvOSHDRCapabilityResolution != nil
+            case .visionOS:
+                visionOSHDRCapabilityResolution != nil
+            }
+            guard resolutionMatchesPlatform,
                   isOutputAvailable == expectedOutputAvailable,
                   headroomSource == expectedHeadroomSource,
                   currentEDRHeadroom == capabilities.currentEDRHeadroom,
@@ -663,7 +678,7 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
                   layerCapability == capabilities.layerCapability else {
                 throw TVVisionPlatformContractError.invalidDisplaySnapshot
             }
-            if case .directEDR = tvOSHDRCapabilityResolution {
+            if case .directEDR = displayHDRCapabilityResolution {
                 guard layerCapability == .preferredDynamicRange,
                       !capabilities.supportedEDRGamuts.isEmpty,
                       let currentEDRHeadroom,
@@ -683,12 +698,17 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
         self.potentialEDRHeadroom = potentialEDRHeadroom
         self.layerCapability = layerCapability
         self.tvOSHDRCapabilityResolution = tvOSHDRCapabilityResolution
+        self.visionOSHDRCapabilityResolution = visionOSHDRCapabilityResolution
+    }
+
+    var displayHDRCapabilityResolution: TVOSDisplayHDRCapabilityResolution? {
+        tvOSHDRCapabilityResolution ?? visionOSHDRCapabilityResolution
     }
 
     var hdrRenderSnapshot: HDRDisplaySnapshot? {
         guard isOutputAvailable else { return nil }
         let headroom: DisplayHeadroom
-        if case .directEDR = tvOSHDRCapabilityResolution,
+        if case .directEDR = displayHDRCapabilityResolution,
            let currentEDRHeadroom,
            let potentialEDRHeadroom {
             headroom = DisplayHeadroom(
@@ -707,14 +727,13 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
     }
 
     var hdrPlatformCapabilities: HDRPlatformOutputCapabilities {
-        guard platform == .tvOS,
-              let tvOSHDRCapabilityResolution else {
+        guard let displayHDRCapabilityResolution else {
             return HDRPlatformOutputCapabilityAdapter.current.capabilities
         }
-        let capabilities = tvOSHDRCapabilityResolution.capabilities
+        let capabilities = displayHDRCapabilityResolution.capabilities
         let headroomSource: HDRDisplayHeadroomSource
         let surfaceSupport: HDRExtendedRangeSurfaceSupport
-        switch tvOSHDRCapabilityResolution {
+        switch displayHDRCapabilityResolution {
         case .directEDR:
             headroomSource = .currentAndPotential
             surfaceSupport = .preferredDynamicRangeAndHeadroom
@@ -737,8 +756,12 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
                 surfaceSupport = .unavailable
             }
         }
+        let renderingPlatform: AppleRenderingPlatform = switch platform {
+        case .tvOS: .tvOS
+        case .visionOS: .visionOS
+        }
         return HDRPlatformOutputCapabilities(
-            platform: .tvOS,
+            platform: renderingPlatform,
             headroomSource: headroomSource,
             extendedRangeSurfaceSupport: surfaceSupport,
             supportedEDRGamuts: capabilities.supportedEDRGamuts,
@@ -854,15 +877,28 @@ enum TVOSDisplayHDRCapabilityResolver {
     }
 }
 
+typealias TVVisionDisplayHDRFallbackReason = TVOSDisplayHDRFallbackReason
+typealias TVVisionDisplayHDRCapabilityInputs = TVOSDisplayHDRCapabilityInputs
+typealias TVVisionDisplayHDRCapabilities = TVOSDisplayHDRCapabilities
+typealias TVVisionDisplayHDRCapabilityResolution =
+    TVOSDisplayHDRCapabilityResolution
+typealias TVVisionDisplayHDRCapabilityResolver = TVOSDisplayHDRCapabilityResolver
+typealias TVVisionDisplayHDRObservation = TVOSDisplayHDRObservation
+typealias TVVisionDisplayHDRSnapshotPublisher = TVOSDisplayHDRSnapshotPublisher
+typealias TVVisionDisplayHDREvent = TVOSDisplayHDRObserverEvent
+
 struct TVOSDisplayHDRObservation: Equatable, Sendable {
+    let platform: TVVisionPlatform
     let displayGeneration: TVVisionGeneration
     let resolution: TVOSDisplayHDRCapabilityResolution
 
     init(
+        platform: TVVisionPlatform = .tvOS,
         displayGeneration: TVVisionGeneration,
         resolution: TVOSDisplayHDRCapabilityResolution
     ) throws {
         try displayGeneration.require(.display)
+        self.platform = platform
         self.displayGeneration = displayGeneration
         self.resolution = resolution
     }
@@ -872,10 +908,12 @@ enum TVOSDisplayHDRPublicationOutcome: Equatable, Sendable {
     case unchanged
     case published(TVVisionDisplaySnapshot)
     case staleSurfaceGeneration
+    case incompatiblePlatform
     case revisionExhausted
 }
 
 struct TVOSDisplayHDRSnapshotPublisher: Sendable {
+    let platform: TVVisionPlatform
     let surfaceGeneration: TVVisionGeneration
     private(set) var revisionRawValue: UInt64
     private(set) var snapshot: TVVisionDisplaySnapshot?
@@ -884,10 +922,12 @@ struct TVOSDisplayHDRSnapshotPublisher: Sendable {
     private var observation: TVOSDisplayHDRObservation?
 
     init(
+        platform: TVVisionPlatform = .tvOS,
         surfaceGeneration: TVVisionGeneration,
         initialRevisionRawValue: UInt64 = 0
     ) throws {
         try surfaceGeneration.require(.surface)
+        self.platform = platform
         self.surfaceGeneration = surfaceGeneration
         revisionRawValue = initialRevisionRawValue
     }
@@ -899,6 +939,9 @@ struct TVOSDisplayHDRSnapshotPublisher: Sendable {
     ) -> TVOSDisplayHDRPublicationOutcome {
         guard candidateSurfaceGeneration == surfaceGeneration else {
             return .staleSurfaceGeneration
+        }
+        guard nextObservation.platform == platform else {
+            return .incompatiblePlatform
         }
         guard !isRevisionExhausted else { return .revisionExhausted }
         guard nextObservation != observation else { return .unchanged }
@@ -932,7 +975,7 @@ struct TVOSDisplayHDRSnapshotPublisher: Sendable {
         let capabilities = resolution.capabilities
         let isOutputAvailable = resolution.fallbackReason != .outputUnavailable
         return try TVVisionDisplaySnapshot(
-            platform: .tvOS,
+            platform: observation.platform,
             revision: revision,
             displayGeneration: observation.displayGeneration,
             isOutputAvailable: isOutputAvailable,
@@ -942,7 +985,12 @@ struct TVOSDisplayHDRSnapshotPublisher: Sendable {
             currentEDRHeadroom: capabilities.currentEDRHeadroom,
             potentialEDRHeadroom: capabilities.potentialEDRHeadroom,
             layerCapability: capabilities.layerCapability,
-            tvOSHDRCapabilityResolution: resolution
+            tvOSHDRCapabilityResolution: observation.platform == .tvOS
+                ? resolution
+                : nil,
+            visionOSHDRCapabilityResolution: observation.platform == .visionOS
+                ? resolution
+                : nil
         )
     }
 }
@@ -964,6 +1012,7 @@ enum TVOSDisplayHDRObserverOutcome: Equatable, Sendable {
     case published
     case unchanged
     case staleSurfaceGeneration
+    case incompatiblePlatform
     case revisionExhausted
     case displayGenerationExhausted
     case invalidated
@@ -1023,7 +1072,8 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
 
     private let notificationCenter: NotificationCenter
     private let tokens: TVOSDisplayHDRObserverTokens
-    private let names: TVOSDisplayHDRNotificationNames
+    private let names: TVOSDisplayHDRNotificationNames?
+    private let platform: TVVisionPlatform
     private let generationProvider: GenerationProvider
     private var reader: Reader?
     private var handler: Handler?
@@ -1036,15 +1086,17 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
     private var didPublishRevisionExhaustion = false
 
     init(
+        platform: TVVisionPlatform = .tvOS,
         surfaceGeneration: TVVisionGeneration,
         initialRevisionRawValue: UInt64 = 0,
         notificationCenter: NotificationCenter,
-        names: TVOSDisplayHDRNotificationNames,
+        names: TVOSDisplayHDRNotificationNames? = nil,
         generationProvider: @escaping GenerationProvider,
         reader: @escaping Reader,
         handler: @escaping Handler
     ) throws {
         self.surfaceGeneration = surfaceGeneration
+        self.platform = platform
         self.notificationCenter = notificationCenter
         tokens = TVOSDisplayHDRObserverTokens(
             notificationCenter: notificationCenter
@@ -1054,6 +1106,7 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
         self.reader = reader
         self.handler = handler
         publisher = try TVOSDisplayHDRSnapshotPublisher(
+            platform: platform,
             surfaceGeneration: surfaceGeneration,
             initialRevisionRawValue: initialRevisionRawValue
         )
@@ -1061,7 +1114,7 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
 
     @discardableResult
     func attach(
-        screen candidateScreen: Screen,
+        screen candidateScreen: Screen?,
         layer candidateLayer: Layer,
         surfaceGeneration candidateSurfaceGeneration: TVVisionGeneration,
         reason: TVOSDisplayHDRResampleReason
@@ -1074,7 +1127,7 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
             return .revisionExhausted
         }
 
-        if screen !== candidateScreen || layer !== candidateLayer {
+        if !Self.identical(screen, candidateScreen) || layer !== candidateLayer {
             stopObserving()
             guard let nextGeneration = generationProvider(),
                   nextGeneration.domain == .display else {
@@ -1087,20 +1140,24 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
             displayGeneration = nextGeneration
             let nextObservationID = UUID()
             observationID = nextObservationID
-            tokens.replace([
-                observe(
-                    name: names.modeDidChange,
-                    screen: candidateScreen,
-                    observationID: nextObservationID,
-                    reason: .screenMode
-                ),
-                observe(
-                    name: names.brightnessDidChange,
-                    screen: candidateScreen,
-                    observationID: nextObservationID,
-                    reason: .brightness
-                )
-            ])
+            if let candidateScreen, let names {
+                tokens.replace([
+                    observe(
+                        name: names.modeDidChange,
+                        screen: candidateScreen,
+                        observationID: nextObservationID,
+                        reason: .screenMode
+                    ),
+                    observe(
+                        name: names.brightnessDidChange,
+                        screen: candidateScreen,
+                        observationID: nextObservationID,
+                        reason: .brightness
+                    )
+                ])
+            } else {
+                tokens.replace([])
+            }
         }
         return resample(reason, surfaceGeneration: candidateSurfaceGeneration)
     }
@@ -1117,8 +1174,7 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
         guard !publisher.isRevisionExhausted else {
             return .revisionExhausted
         }
-        guard let screen,
-              let layer,
+        guard let layer,
               let displayGeneration,
               let reader else {
             return detach(surfaceGeneration: candidateSurfaceGeneration)
@@ -1239,6 +1295,7 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
         displayGeneration: TVVisionGeneration
     ) -> TVOSDisplayHDRObserverOutcome {
         guard let observation = try? TVOSDisplayHDRObservation(
+            platform: platform,
             displayGeneration: displayGeneration,
             resolution: resolution
         ) else {
@@ -1260,6 +1317,8 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
             return .published
         case .staleSurfaceGeneration:
             return .staleSurfaceGeneration
+        case .incompatiblePlatform:
+            return .incompatiblePlatform
         case .revisionExhausted:
             return publishRevisionExhaustion(outcome: .revisionExhausted)
         }
@@ -1274,6 +1333,17 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
             handler?(.revisionExhausted(surfaceGeneration: surfaceGeneration))
         }
         return outcome
+    }
+
+    private static func identical(_ lhs: Screen?, _ rhs: Screen?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            true
+        case let (lhs?, rhs?):
+            lhs === rhs
+        default:
+            false
+        }
     }
 }
 
@@ -1338,6 +1408,63 @@ enum TVOSNativeDisplayHDRCapabilityProbe {
                 potentialEDRHeadroom: screen.map {
                     Double($0.potentialEDRHeadroom)
                 }
+            )
+        )
+    }
+}
+#endif
+
+#if os(visionOS)
+@MainActor
+enum VisionOSDisplayGenerationSequence {
+    private static var nextRawValue: UInt64 = 1
+    private static var isExhausted = false
+
+    static func next() -> TVVisionGeneration? {
+        guard !isExhausted else { return nil }
+        let generation = try? TVVisionGeneration(
+            domain: .display,
+            rawValue: nextRawValue
+        )
+        if nextRawValue == UInt64.max {
+            isExhausted = true
+        } else {
+            nextRawValue += 1
+        }
+        return generation
+    }
+}
+
+@MainActor
+enum VisionOSNativeDisplayHDRCapabilityProbe {
+    static func resolve(
+        layer: CAMetalLayer?
+    ) -> TVVisionDisplayHDRCapabilityResolution {
+        if let layer {
+            _ = layer.preferredDynamicRange
+            _ = layer.toneMapMode
+            _ = layer.contentsHeadroom
+            _ = layer.wantsExtendedDynamicRangeContent
+            _ = layer.edrMetadata
+        }
+        var gamuts: Set<HDROutputGamut> = []
+        if CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3) != nil {
+            gamuts.insert(.displayP3)
+        }
+        if CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020) != nil {
+            gamuts.insert(.ituR2020)
+        }
+        return TVVisionDisplayHDRCapabilityResolver.resolve(
+            TVVisionDisplayHDRCapabilityInputs(
+                isOutputAvailable: layer != nil,
+                layerCapability: layer == nil
+                    ? .unavailable
+                    : .preferredDynamicRange,
+                supportsToneMapControl: layer != nil,
+                supportsContentsHeadroom: layer != nil,
+                supportedEDRGamuts: gamuts,
+                currentEDRHeadroom: nil,
+                potentialEDRHeadroom: nil
             )
         )
     }

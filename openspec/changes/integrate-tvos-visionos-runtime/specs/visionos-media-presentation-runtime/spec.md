@@ -47,6 +47,14 @@ typed HDR-to-SDR path even if extended-range surface intent compiles.
 - **WHEN** the platform cannot provide a finite current display headroom
 - **THEN** LuneX SHALL select HDR-to-SDR and UI SHALL NOT claim EDR active
 
+#### Scenario: Actual Metal layer changes or detaches
+- **WHEN** the current visionOS window attaches, changes layout or traits, replaces its Metal layer, or detaches
+- **THEN** LuneX SHALL sample only the current layer, advance replacement ownership, publish output unavailable on detach, and reject stale or invalidated callbacks without registering a screen notification
+
+#### Scenario: Finite capability is supplied for checked validation
+- **WHEN** a public source supplies finite headroom satisfying `1 < current <= potential <= 64` together with the complete layer and color capability
+- **THEN** LuneX MAY construct the shared checked direct-EDR contract but SHALL NOT treat injected values, layer intent, compilation, or simulator output as current physical headset headroom proof
+
 ### Requirement: visionOS audio SHALL use intended spatial experience
 The current media generation SHALL reuse the canonical session-owned audio
 graph and public visionOS intended spatial experience, route, interruption, and

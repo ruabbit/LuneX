@@ -290,8 +290,25 @@ source closes old render state before asynchronous application, and surface
 replacement, revision exhaustion, failure, reconnect, and stop clear display
 ownership. No setting or stream metadata alone publishes active HDR.
 
-If visionOS cannot provide current headroom, it remains typed SDR fallback even
-when the layer accepts extended-range intent.
+Task 6.3 keeps the same checked capability resolver, transactional surface
+adapter, platform coordinator, and actual `TVVisionStreamMetalView`. XROS 26.4
+allows the actual `CAMetalLayer` to expose `preferredDynamicRange`,
+`toneMapMode`, `contentsHeadroom`, legacy extended-range intent/metadata, and
+extended-linear Display P3 or ITU-R 2020 color spaces. `UIScreen` and
+`UIWindowScene.screen` are explicitly unavailable, so none of the layer
+properties is accepted as current compositor headroom.
+
+The visionOS stream surface therefore owns a layer-only display observer. It
+samples on attachment, layout, and trait callbacks, advances display generation
+when the actual layer identity changes, publishes output unavailable on detach,
+and makes stale or post-invalidation work inert. The native probe always leaves
+current and potential headroom absent and consequently publishes the typed
+`.headroomUnavailable` HDR-to-SDR resolution. A finite injected headroom source
+may pass the same checked `1 < current <= potential <= 64` contract for future
+public capability work, but it is not evidence that the current native path or
+physical headset presents direct EDR. Task 6.5 remains responsible for wiring
+this current display event through `AppModel` and the complete coordinator
+lifecycle; task 7.2 remains responsible for actual-state UI.
 
 A separate platform decoder or an unverified private compositor API was
 rejected. Physical television/headset HDR remains a hardware gate.

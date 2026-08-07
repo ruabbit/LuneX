@@ -312,6 +312,34 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             layerCapability: .preferredDynamicRange,
             tvOSHDRCapabilityResolution: directResolution
         ))
+        let visionDirect = try TVVisionDisplaySnapshot(
+            platform: .visionOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: true,
+            headroomSource: .platformReported,
+            currentEDRHeadroom: 2,
+            potentialEDRHeadroom: 4,
+            layerCapability: .preferredDynamicRange,
+            visionOSHDRCapabilityResolution: directResolution
+        )
+        XCTAssertNil(visionDirect.tvOSHDRCapabilityResolution)
+        XCTAssertEqual(
+            visionDirect.visionOSHDRCapabilityResolution,
+            directResolution
+        )
+        XCTAssertThrowsError(try TVVisionDisplaySnapshot(
+            platform: .visionOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: true,
+            headroomSource: .platformReported,
+            currentEDRHeadroom: 2,
+            potentialEDRHeadroom: 4,
+            layerCapability: .preferredDynamicRange,
+            tvOSHDRCapabilityResolution: directResolution,
+            visionOSHDRCapabilityResolution: directResolution
+        ))
         XCTAssertThrowsError(try TVVisionDisplaySnapshot(
             platform: .tvOS,
             revision: revision,
@@ -503,6 +531,77 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
         )
     }
 
+    func testVisionOSDisplayHDRCapabilityFailsClosedWithoutCurrentHeadroom()
+        throws
+    {
+        let fallback = TVVisionDisplayHDRCapabilityResolver.resolve(
+            TVVisionDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.displayP3, .ituR2020],
+                currentEDRHeadroom: nil,
+                potentialEDRHeadroom: nil
+            )
+        )
+        XCTAssertEqual(fallback.fallbackReason, .headroomUnavailable)
+        XCTAssertNil(fallback.capabilities.currentEDRHeadroom)
+        XCTAssertNil(fallback.capabilities.potentialEDRHeadroom)
+
+        let snapshot = try TVVisionDisplaySnapshot(
+            platform: .visionOS,
+            revision: semanticRevision(),
+            displayGeneration: generation(.display, 1),
+            isOutputAvailable: true,
+            headroomSource: .unavailable,
+            currentEDRHeadroom: nil,
+            potentialEDRHeadroom: nil,
+            layerCapability: .preferredDynamicRange,
+            visionOSHDRCapabilityResolution: fallback
+        )
+        XCTAssertNil(snapshot.tvOSHDRCapabilityResolution)
+        XCTAssertEqual(snapshot.visionOSHDRCapabilityResolution, fallback)
+        XCTAssertEqual(snapshot.hdrRenderSnapshot?.headroom, DisplayHeadroom())
+        XCTAssertEqual(snapshot.hdrPlatformCapabilities.platform, .visionOS)
+        XCTAssertEqual(
+            snapshot.hdrPlatformCapabilities.headroomSource,
+            .unavailable
+        )
+        XCTAssertEqual(
+            snapshot.hdrPlatformCapabilities.extendedRangeSurfaceSupport,
+            .preferredDynamicRangeAndHeadroom
+        )
+
+        let injectedDirect = TVVisionDisplayHDRCapabilityResolver.resolve(
+            TVVisionDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.displayP3],
+                currentEDRHeadroom: 2.5,
+                potentialEDRHeadroom: 4
+            )
+        )
+        guard case .directEDR = injectedDirect else {
+            return XCTFail("Expected injected finite headroom to pass the checked contract")
+        }
+        let directSnapshot = try TVVisionDisplaySnapshot(
+            platform: .visionOS,
+            revision: TVVisionSemanticRevision(rawValue: 2),
+            displayGeneration: generation(.display, 2),
+            isOutputAvailable: true,
+            headroomSource: .platformReported,
+            currentEDRHeadroom: 2.5,
+            potentialEDRHeadroom: 4,
+            layerCapability: .preferredDynamicRange,
+            visionOSHDRCapabilityResolution: injectedDirect
+        )
+        XCTAssertEqual(directSnapshot.hdrRenderSnapshot?.headroom.current, 2.5)
+        XCTAssertEqual(directSnapshot.hdrRenderSnapshot?.headroom.potential, 4)
+    }
+
     func testTVOSDisplayPublisherNormalizesFallbackAndSemanticRevisions()
         throws
     {
@@ -596,6 +695,46 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             publisher.update(observation, surfaceGeneration: surface),
             .revisionExhausted
         )
+    }
+
+    func testVisionOSDisplayPublisherRejectsCrossPlatformObservation() throws {
+        let surface = try generation(.surface, 12)
+        let display = try generation(.display, 3)
+        let resolution = TVVisionDisplayHDRCapabilityResolver.resolve(
+            makeTVOSDisplayInputs(current: nil, potential: nil)
+        )
+        var publisher = try TVVisionDisplayHDRSnapshotPublisher(
+            platform: .visionOS,
+            surfaceGeneration: surface
+        )
+
+        XCTAssertEqual(
+            publisher.update(
+                try TVVisionDisplayHDRObservation(
+                    platform: .tvOS,
+                    displayGeneration: display,
+                    resolution: resolution
+                ),
+                surfaceGeneration: surface
+            ),
+            .incompatiblePlatform
+        )
+        XCTAssertNil(publisher.snapshot)
+
+        guard case let .published(snapshot) = publisher.update(
+            try TVVisionDisplayHDRObservation(
+                platform: .visionOS,
+                displayGeneration: display,
+                resolution: resolution
+            ),
+            surfaceGeneration: surface
+        ) else {
+            return XCTFail("Expected a current visionOS display snapshot")
+        }
+        XCTAssertEqual(snapshot.platform, .visionOS)
+        XCTAssertNil(snapshot.tvOSHDRCapabilityResolution)
+        XCTAssertEqual(snapshot.visionOSHDRCapabilityResolution, resolution)
+        XCTAssertEqual(snapshot.hdrRenderSnapshot?.headroom, DisplayHeadroom())
     }
 
     @MainActor
@@ -708,6 +847,132 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             observer.invalidate(surfaceGeneration: surface),
             .alreadyInvalidated
         )
+    }
+
+    @MainActor
+    func testVisionOSDisplayObserverOwnsLayerOnlyLifecycle() throws {
+        final class Screen: NSObject {}
+        final class Layer: NSObject {}
+
+        let center = NotificationCenter()
+        let surface = try generation(.surface, 14)
+        var nextDisplayGeneration: UInt64 = 1
+        let fallback = TVVisionDisplayHDRCapabilityResolver.resolve(
+            makeTVOSDisplayInputs(current: nil, potential: nil)
+        )
+        var events: [TVVisionDisplayHDREvent] = []
+        let observer = try TVOSDisplayHDRObserver<Screen, Layer>(
+            platform: .visionOS,
+            surfaceGeneration: surface,
+            notificationCenter: center,
+            generationProvider: {
+                defer { nextDisplayGeneration += 1 }
+                return try? TVVisionGeneration(
+                    domain: .display,
+                    rawValue: nextDisplayGeneration
+                )
+            },
+            reader: { screen, layer in
+                XCTAssertNil(screen)
+                XCTAssertNotNil(layer)
+                return fallback
+            },
+            handler: { events.append($0) }
+        )
+        let firstLayer = Layer()
+        let replacementLayer = Layer()
+
+        XCTAssertEqual(
+            observer.attach(
+                screen: nil,
+                layer: firstLayer,
+                surfaceGeneration: surface,
+                reason: .attachment
+            ),
+            .published
+        )
+        XCTAssertEqual(
+            observer.resample(.layout, surfaceGeneration: surface),
+            .unchanged
+        )
+        XCTAssertTrue(observer.replayCurrentEvent(surfaceGeneration: surface))
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(events[0], events[1])
+
+        XCTAssertEqual(
+            observer.attach(
+                screen: nil,
+                layer: replacementLayer,
+                surfaceGeneration: surface,
+                reason: .traits
+            ),
+            .published
+        )
+        guard case let .snapshot(_, replacement) = events.last else {
+            return XCTFail("Expected replacement layer publication")
+        }
+        XCTAssertEqual(replacement.platform, .visionOS)
+        XCTAssertEqual(replacement.displayGeneration.rawValue, 2)
+        XCTAssertEqual(
+            replacement.visionOSHDRCapabilityResolution?.fallbackReason,
+            .headroomUnavailable
+        )
+        let countBeforeStale = events.count
+        XCTAssertEqual(
+            observer.attach(
+                screen: nil,
+                layer: firstLayer,
+                surfaceGeneration: try generation(.surface, 13),
+                reason: .attachment
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(events.count, countBeforeStale)
+
+        XCTAssertEqual(
+            observer.detach(surfaceGeneration: surface),
+            .published
+        )
+        guard case let .snapshot(_, unavailable) = events.last else {
+            return XCTFail("Expected output-unavailable publication")
+        }
+        XCTAssertFalse(unavailable.isOutputAvailable)
+        XCTAssertEqual(unavailable.platform, .visionOS)
+        XCTAssertEqual(
+            unavailable.visionOSHDRCapabilityResolution?.fallbackReason,
+            .outputUnavailable
+        )
+
+        XCTAssertEqual(
+            observer.attach(
+                screen: nil,
+                layer: firstLayer,
+                surfaceGeneration: surface,
+                reason: .attachment
+            ),
+            .published
+        )
+        XCTAssertEqual(observer.currentSnapshot?.displayGeneration.rawValue, 3)
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: surface),
+            .invalidated
+        )
+        let countAfterInvalidation = events.count
+        XCTAssertEqual(
+            observer.resample(.layout, surfaceGeneration: surface),
+            .alreadyInvalidated
+        )
+        XCTAssertEqual(
+            observer.attach(
+                screen: nil,
+                layer: replacementLayer,
+                surfaceGeneration: surface,
+                reason: .attachment
+            ),
+            .alreadyInvalidated
+        )
+        XCTAssertFalse(observer.replayCurrentEvent(surfaceGeneration: surface))
+        XCTAssertEqual(events.count, countAfterInvalidation)
     }
 
     func testAudioRouteRequiresValidCountsAndPlatformStrategy() throws {

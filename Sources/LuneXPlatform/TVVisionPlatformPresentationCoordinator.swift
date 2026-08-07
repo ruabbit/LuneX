@@ -625,7 +625,7 @@ actor TVVisionPlatformPresentationCoordinator {
         state.revision = revision
         state.display = candidate
         let diagnostic: TVVisionPlatformPresentationDiagnosticClass?
-        switch snapshot.tvOSHDRCapabilityResolution {
+        switch snapshot.displayHDRCapabilityResolution {
         case .directEDR:
             diagnostic = .displayDirectEDR
         case let .sdrFallback(_, reason):
@@ -1248,7 +1248,9 @@ actor TVVisionPlatformPresentationCoordinator {
             currentEDRHeadroom: value.currentEDRHeadroom,
             potentialEDRHeadroom: value.potentialEDRHeadroom,
             layerCapability: value.layerCapability,
-            tvOSHDRCapabilityResolution: value.tvOSHDRCapabilityResolution
+            tvOSHDRCapabilityResolution: value.tvOSHDRCapabilityResolution,
+            visionOSHDRCapabilityResolution:
+                value.visionOSHDRCapabilityResolution
         )
     }
 

@@ -4033,6 +4033,10 @@ final class TVVisionStreamMetalView: MTKView {
         isUserInteractionEnabled && !isHidden && alpha > 0
     }
 #elseif os(visionOS)
+    private typealias DisplayHDRObserver =
+        TVOSDisplayHDRObserver<NSObject, CAMetalLayer>
+    private var displayHDRObserver: DisplayHDRObserver?
+
     private struct ActiveVisionKeyPress {
         let sample: VisionKeyboardSample
         let disposition: VisionSurfaceInputDisposition
@@ -4190,6 +4194,21 @@ final class TVVisionStreamMetalView: MTKView {
                 reader: { screen, layer in
                     TVOSNativeDisplayHDRCapabilityProbe.resolve(
                         screen: screen,
+                        layer: layer
+                    )
+                },
+                handler: { [weak self] event in
+                    self?.displayHDREventHandler(event)
+                }
+            )
+#elseif os(visionOS)
+            displayHDRObserver = try? DisplayHDRObserver(
+                platform: .visionOS,
+                surfaceGeneration: surfaceGeneration,
+                notificationCenter: .default,
+                generationProvider: VisionOSDisplayGenerationSequence.next,
+                reader: { _, layer in
+                    VisionOSNativeDisplayHDRCapabilityProbe.resolve(
                         layer: layer
                     )
                 },
@@ -4475,7 +4494,7 @@ final class TVVisionStreamMetalView: MTKView {
              .revisionExhausted, .invalidated, .alreadyInvalidated:
             return
         }
-#if os(tvOS)
+#if os(tvOS) || os(visionOS)
         _ = displayHDRObserver?.replayCurrentEvent(
             surfaceGeneration: geometryBindingOwner.surfaceGeneration
         )
@@ -4495,14 +4514,16 @@ final class TVVisionStreamMetalView: MTKView {
     func invalidateSurfaceCallbacks() {
 #if os(tvOS)
         cancelCapturedPresses()
+#elseif os(visionOS)
+        invalidateVisionInputHandlers()
+#endif
+#if os(tvOS) || os(visionOS)
         if let displayHDRObserver {
             _ = displayHDRObserver.invalidate(
                 surfaceGeneration: displayHDRObserver.surfaceGeneration
             )
             self.displayHDRObserver = nil
         }
-#elseif os(visionOS)
-        invalidateVisionInputHandlers()
 #endif
         if let windowObservation {
             _ = windowObservation.invalidate(
@@ -4870,18 +4891,19 @@ final class TVVisionStreamMetalView: MTKView {
                 )
             }
         }
-#if os(tvOS)
+#if os(tvOS) || os(visionOS)
         refreshDisplayHDRObservation(
             callbacks.contains(.layout) ? .layout : .attachment
         )
 #endif
     }
 
-#if os(tvOS)
+#if os(tvOS) || os(visionOS)
     private func refreshDisplayHDRObservation(
         _ reason: TVOSDisplayHDRResampleReason
     ) {
         guard let displayHDRObserver else { return }
+#if os(tvOS)
         guard let windowScene = window?.windowScene,
               let metalLayer = layer as? CAMetalLayer else {
             _ = displayHDRObserver.detach(
@@ -4895,6 +4917,21 @@ final class TVVisionStreamMetalView: MTKView {
             surfaceGeneration: displayHDRObserver.surfaceGeneration,
             reason: reason
         )
+#else
+        guard window != nil,
+              let metalLayer = layer as? CAMetalLayer else {
+            _ = displayHDRObserver.detach(
+                surfaceGeneration: displayHDRObserver.surfaceGeneration
+            )
+            return
+        }
+        _ = displayHDRObserver.attach(
+            screen: nil,
+            layer: metalLayer,
+            surfaceGeneration: displayHDRObserver.surfaceGeneration,
+            reason: reason
+        )
+#endif
     }
 #endif
 

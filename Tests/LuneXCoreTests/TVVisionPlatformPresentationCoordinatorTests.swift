@@ -132,6 +132,110 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         XCTAssertNil(stopped.visionWindowedPresentation)
     }
 
+    func testVisionOSDisplayFallbackRebrandsAndClearsWithOwnership()
+        async throws
+    {
+        let coordinator = try TVVisionPlatformPresentationCoordinator()
+        let first = try makeOwnership(platform: .visionOS)
+        _ = await coordinator.activate(first)
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: first),
+            ownership: first
+        )
+        let fallback = TVVisionDisplayHDRCapabilityResolver.resolve(
+            makeDisplayInputs(current: nil, potential: nil)
+        )
+
+        guard case let .applied(displayApplied) = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: first,
+                sourceRevision: 2,
+                resolution: fallback
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected visionOS HDR fallback to apply")
+        }
+        XCTAssertNil(displayApplied.display?.tvOSHDRCapabilityResolution)
+        XCTAssertEqual(
+            displayApplied.display?.visionOSHDRCapabilityResolution,
+            fallback
+        )
+        XCTAssertEqual(
+            displayApplied.display?.hdrRenderSnapshot?.headroom,
+            DisplayHeadroom()
+        )
+        XCTAssertEqual(
+            displayApplied.display?.hdrPlatformCapabilities.platform,
+            .visionOS
+        )
+        XCTAssertEqual(
+            displayApplied.diagnostics.last?.classification,
+            .displayFallback(.headroomUnavailable)
+        )
+
+        guard case let .applied(rebranded) = await coordinator.applyInput(
+            try makeInput(ownership: first),
+            controllerLeases: [],
+            ownership: first
+        ) else {
+            return XCTFail("Expected display state to rebrand with input")
+        }
+        XCTAssertEqual(rebranded.display?.revision, rebranded.revision)
+        XCTAssertEqual(
+            rebranded.display?.visionOSHDRCapabilityResolution,
+            fallback
+        )
+        let staleRevision = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: first,
+                sourceRevision: 1,
+                resolution: fallback
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(staleRevision, .staleRevision)
+
+        let replacement = try makeOwnership(
+            platform: .visionOS,
+            presentationGeneration: 2,
+            inputGeneration: 2
+        )
+        guard case let .applied(replacementActivated) = await coordinator.activate(
+            replacement
+        ) else {
+            return XCTFail("Expected replacement visionOS ownership")
+        }
+        XCTAssertNil(replacementActivated.display)
+        let staleOwnership = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: first,
+                sourceRevision: 3,
+                resolution: fallback
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(staleOwnership, .staleOwnership)
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(
+                ownership: replacement,
+                surfaceGeneration: 2
+            ),
+            ownership: replacement
+        )
+        _ = await coordinator.applyDisplay(
+            try makeDisplay(ownership: replacement, resolution: fallback),
+            ownership: replacement
+        )
+        guard case let .applied(stopped) = await coordinator.stop(
+            ownership: replacement,
+            reason: .localStop
+        ) else {
+            return XCTFail("Expected clean visionOS stop")
+        }
+        XCTAssertNil(stopped.display)
+    }
+
     func testCoordinatorPublishesOneRebrandedCompleteSnapshot() async throws {
         let recorder = TVVisionPresentationActionRecorder()
         let coordinator = try TVVisionPlatformPresentationCoordinator(
@@ -1280,7 +1384,12 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
             layerCapability: actualOutputAvailable
                 ? capabilities?.layerCapability ?? .preferredDynamicRange
                 : .unavailable,
-            tvOSHDRCapabilityResolution: resolution
+            tvOSHDRCapabilityResolution: ownership.platform == .tvOS
+                ? resolution
+                : nil,
+            visionOSHDRCapabilityResolution: ownership.platform == .visionOS
+                ? resolution
+                : nil
         )
     }
 

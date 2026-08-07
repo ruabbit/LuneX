@@ -83,10 +83,10 @@ evidence only.
 
 | Concern | Current source owner | Current behavior | Missing stage 18 ownership |
 |---|---|---|---|
-| App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application | visionOS display/audio actual-state ownership remains later work |
+| App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application | visionOS AppModel display coordination and audio actual-state ownership remain 6.4-6.5 |
 | Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; tvOS forwards only eligible supported remote presses, while visionOS routes admitted hardware-key/indirect-pointer input, keeps system interaction local, and restores local ownership only after ordered release | Dedicated visionOS input-status and product UI remain 7.x |
-| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; visionOS capture closure clears active key/button state, resigns first responder, and removes indirect recognizers before idempotent current-generation recovery | visionOS display and audio adapters remain 6.x |
-| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and matching tvOS display/audio components drive actual HDR and route state | visionOS HDR/audio presentation remains later work |
+| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; visionOS capture closure clears active input handlers and its layer-only HDR observer samples actual attachment/layout/trait state and clears on detach/invalidation | visionOS display application and audio adapters remain 6.4-6.5 |
+| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and platform-branded display resolution retains typed HDR-to-SDR whenever current finite headroom is absent | visionOS AppModel HDR application is 6.5 and audio presentation is 6.4 |
 | Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware input are admitted only for the current eligible generation, while focus/scene/provider/replacement/stop loss drains accepted work and performs one ordered held-state release; task 5.6 connects multiwindow, resize, capability, stale, replacement, and teardown behavior in three deterministic matrices | Explicit visionOS media modes and actual display/audio application remain 6.x |
 | Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator admits actual frames and tvOS display components by checked ownership, revisions, decoder/frame or display-source identity, and surface generation, with clear/rebind/replacement fences | explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
 | Audio | `SpatialAudioPlatformNotificationSource`, `AudioEngineRouteCapabilityReader`, `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, `NativeSessionMediaEnvironment`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph publishes actual route/capability, entitlement, spatial readback, interruption/media-reset recovery, and graph generation; tvOS normalizes and applies only current ownership, replays on presentation replacement, and clears audio on terminal state | visionOS intended-spatial application remains 6.4 |
@@ -214,7 +214,7 @@ resolution as window geometry is prohibited.
 |---|---|---|
 | Presentation mode | Shared `WindowGroup`; current attached visionOS scene publishes checked `.windowed` state through `TVVisionPlatformPresentationCoordinator` and `AppModel`, with immersive/passthrough/stereoscopic/volumetric all typed unavailable | Bind current decoded frames to that actual window surface in 6.2; native actual-state UI remains 7.2 |
 | Surface and video | Actual `TVVisionStreamMetalView` publishes finite geometry and one revision to drawable/fit/fill/input reference; current media ownership subscribes to the single frame source and rejects stale decoder/revision state | Connect actual coordinator render effects in visionOS media work |
-| HDR | Layer intent/metadata foundation compiles, but `UIScreen` and current headroom are unavailable; capability resolver returns typed SDR fallback | Probe public layer/color/dynamic-range APIs and keep SDR fallback whenever a finite current output bound cannot be established |
+| HDR | The actual Metal layer is observed without a screen token; XROS 26.4 layer/color capabilities compile, but `UIScreen` and current headroom are unavailable, so the native resolver publishes platform-branded `.headroomUnavailable` HDR-to-SDR and clears output on detach | Connect the current display event through AppModel in 6.5; physical compositor/headset HDR remains 8.7 |
 | Spatial audio | Output-node `intendedSpatialExperience` applies `.fixed` or `.headTracked` and resets to `.bypassed`; listener property is unavailable | Bind actual route, preference, typed readback, interruption/reset recovery, graph generation, and AppModel state |
 | Teardown | Shared media teardown and the platform coordinator now share current-generation terminal admission; repeated stop and provider-failure races retain one first terminal reason and one resource report | Extend the same ownership to actual visionOS component observers in 6.x |
 
@@ -2390,6 +2390,87 @@ The final record `/tmp/LuneX-18-6_2-final-record.Q9ZZvx` confirms the same
 `33/50 next 6.3` state, final scope and authority classification, retained
 evidence, implementation semantics, disabled opt-ins, and repository proof
 boundaries before the task-level commit.
+
+## Task 6.3 visionOS public HDR capability
+
+Task 6.3 extends the existing platform display contract rather than creating a
+visionOS HDR resolver or rendering pipeline. `TVVisionDisplaySnapshot` now
+stores mutually exclusive tvOS and visionOS capability resolutions, derives one
+platform-neutral checked resolution for render headroom and diagnostics, and
+preserves the matching field whenever the platform coordinator rebrands a
+component to its current semantic revision.
+
+The actual visionOS `TVVisionStreamMetalView` owns one layer-only display
+observer. It never accesses `UIScreen`, `UIWindowScene.screen`, or a private
+compositor API. Attachment, layout, and trait callbacks sample the current
+`CAMetalLayer`; replacement advances display generation; detach publishes
+output unavailable; stale surface generations and work after invalidation are
+inert. The public native probe confirms layer dynamic-range, tone-map,
+content-headroom, legacy intent/metadata, and extended-linear color-space API
+availability, but leaves current and potential headroom `nil`. The resulting
+native capability is therefore `.headroomUnavailable`, uses conservative
+`DisplayHeadroom()`, and cannot claim direct EDR.
+
+Fresh retained pre-mark evidence is:
+
+- focused `/tmp/LuneX-18-6_3-focused-r2.nLEOjb/Focused.xcresult`:
+  `31/31 passed / 0 skipped / 0 failed / 0 expected failure`;
+- XROS 26.4 API probe `/tmp/LuneX-18-6_3-xros-probe.KqmYxE`: all seven public
+  layer/color expressions typecheck with warnings as errors, while the expected
+  negative probe rejects both `UIScreen` and `UIWindowScene.screen`;
+- fixed Vision Pro unsigned Debug
+  `/tmp/LuneX-18-6_3-visionos-direct.1gbruA/VisionOS.xcresult`: succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib;
+- related `/tmp/LuneX-18-6_3-related.sM3JhP/Related.xcresult`:
+  `258/258 passed / 0 skipped / 0 failed / 0 expected failure`;
+- normal `/tmp/LuneX-18-6_3-normal.culXSh/Normal.xcresult`:
+  `1082 total / 1081 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain test;
+- five-platform unsigned Debug `/tmp/LuneX-18-6_3-builds.O6tTU8`: macOS and the
+  fixed iPhone, iPad, Apple TV, and Vision Pro destinations all succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib each.
+
+Both real opt-ins remained unset. Fixed UUIDs were used only as build
+destinations, and no Simulator inventory or lifecycle operation ran. These
+results prove deterministic value/observer/coordinator ownership, typed native
+fallback, SDK availability, and unsigned cross-platform compilation. They do
+not prove Simulator runtime, signed installation, current Vision Pro compositor
+headroom, physical HDR brightness/color, spatial audio, live Sunshine, latency,
+comfort, performance, power, or thermal behavior. Task 6.4 still owns visionOS
+audio, task 6.5 still owns AppModel/RootView display coordination and complete
+teardown, and tasks 6.6-8.x remain pending.
+
+The fresh pre-mark repository gate
+`/tmp/LuneX-18-6_3-repository-pre.ioYbts` passed the protocol fixture self-test
+and tree, OpenSpec strict `9/9`, `33/50 next 6.3`, exact twelve-file scope,
+three byte-stable project generations at SHA-256
+`e6a88cd00f4364b7e3a8011841abba9344a9ae3ac1c411e18d1ce426b9b739cb`,
+generator/project membership, layer-only and typed-fallback semantics, all
+retained test/probe/build evidence, the exact Keychain skip, and privacy,
+clean-room, reference, dependency, opt-in, process, diff, and proof boundaries.
+Only task 6.3 may be checked after this gate.
+
+After that gate, only task 6.3 was checked. The read-only post-mark final-state
+`/tmp/LuneX-18-6_3-final-state.dySg9y` confirmed OpenSpec strict `9/9`,
+`34/50 ready`, task 6.3 complete, task 6.4 next, exact thirteen-file scope, the
+single checkbox replacement, stable generated project, and unchanged
+reference, dependency, configuration, and diff boundaries. It did not repeat
+tests, builds, generation, Keychain, live-host, or Simulator operations.
+
+The final diff audit `/tmp/LuneX-18-6_3-final-audit.c5MAQz` confirmed the
+thirteen-file scope as three production, two test, and eight authority files;
+the mutually exclusive resolution, layer-only observer, native nil-headroom,
+replacement, stale, detach, and invalidation semantics; all four focused tests
+without weakening; the single task checkbox; and stable privacy, reference,
+dependency, opt-in, process, project, and proof boundaries.
+
+The final record `/tmp/LuneX-18-6_3-final-record.7lzi44` confirmed the same
+`34/50 next 6.4` state, thirteen-file `3/2/8` classification, complete
+pre/final authority indexes, stable project and retained evidence, disabled
+opt-ins, and implementation, task, privacy, dependency, and proof boundaries
+before the task-level commit.
 
 ## Fixed simulator inventory
 
