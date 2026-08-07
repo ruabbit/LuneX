@@ -207,6 +207,20 @@ release. macOS callers continue to use the default barrier. This avoids
 weakening macOS input ownership while preserving one host-visible release for
 platform terminal paths.
 
+Task 5.6 verifies the completed visionOS window/input runtime as three connected
+regression matrices rather than repeating isolated task 5.1-5.5 assertions. The
+AppModel sequence keeps one held key admitted while same-generation resize and
+fit/fill revisions update current geometry without a release, keeps reserved
+system input local, then proves surface replacement releases once, rejects the
+old surface, restores only the replacement, and tears down once more. The
+surface sequence filters foreign window and scene notifications, advances one
+shared geometry/input-mapping revision through continuous resize, rejects a
+stale generation, and makes window callbacks and absolute mapping inert after
+detach/invalidation. The value sequence covers the exact capability matrix,
+reserved and unsupported-local disposition, absolute pointer output, ordered
+controller/monitor/held/surface release, and repeated-release idempotency. It
+adds no production bypass, platform object retention, or media behavior.
+
 ### Keep visionOS windowed streaming explicit
 
 Stage 18 supports the actual SwiftUI window containing the Metal stream

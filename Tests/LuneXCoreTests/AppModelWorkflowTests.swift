@@ -2209,6 +2209,139 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testVisionResizePreservesCaptureUntilReplacementAndTeardown()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 75,
+                    key: Data(repeating: 0x75, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let initial = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1,
+            viewSize: PixelSize(width: 640, height: 360)
+        )
+        model.receiveTVVisionGeometryUpdate(initial)
+        await waitUntil { model.visionInputCaptureEnabled }
+
+        let surface1 = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: 1
+        )
+        let heldKey = RemoteInputEvent.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x52,
+            characters: "r",
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        let heldEvent = try VisionSurfaceInputEvent(
+            surfaceGeneration: surface1,
+            path: .keyboard,
+            event: heldKey
+        )
+        XCTAssertEqual(
+            model.receiveVisionSurfaceInputEvent(heldEvent),
+            .captured
+        )
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 1
+        }
+
+        for (revision, size, mode) in [
+            (UInt64(2), PixelSize(width: 800, height: 600), RenderScaleMode.fit),
+            (UInt64(3), PixelSize(width: 1_024, height: 720), .fill)
+        ] {
+            let resized = try makeTVVisionActiveGeometryUpdate(
+                platform: .visionOS,
+                surfaceGeneration: 1,
+                revision: revision,
+                viewSize: size,
+                mode: mode
+            )
+            model.receiveTVVisionGeometryUpdate(resized)
+            await waitUntil {
+                mediaEnvironment
+                    .currentTVVisionPlatformPresentationApplications()
+                    .last?.action == .scene(resized)
+                    && model.visionInputCaptureEnabled
+            }
+            XCTAssertTrue(
+                mediaEnvironment.currentReleasedInputApplications().isEmpty
+            )
+            XCTAssertEqual(
+                model.visionInputOwnershipState?.surfaceGeneration,
+                surface1
+            )
+        }
+
+        let reserved = try VisionSurfaceSystemInteractionEvent(
+            surfaceGeneration: surface1,
+            decision: VisionSystemInteractionDecision.resolve(.volume)
+        )
+        model.receiveVisionSystemInteractionEvent(reserved)
+        XCTAssertEqual(
+            model.visionSystemInteractionDecisionState,
+            .resolve(.volume)
+        )
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().map(\.event),
+            [heldKey]
+        )
+
+        let replacement = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 1,
+            viewSize: PixelSize(width: 900, height: 700)
+        )
+        model.receiveTVVisionGeometryUpdate(replacement)
+        await waitUntil {
+            mediaEnvironment.currentReleasedInputApplications().count == 1
+                && model.visionInputCaptureEnabled
+        }
+        XCTAssertEqual(
+            model.receiveVisionSurfaceInputEvent(heldEvent),
+            .local
+        )
+        XCTAssertNil(model.visionSystemInteractionDecisionState)
+        XCTAssertEqual(
+            model.visionInputOwnershipState?.surfaceGeneration.rawValue,
+            2
+        )
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertNil(model.visionInputOwnershipState)
+        XCTAssertFalse(model.visionInputCaptureEnabled)
+        XCTAssertEqual(model.visionLocalNavigationRestoreReason, .stopped)
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            2
+        )
+    }
+
     func testVisionInputRequiresCurrentFocusedSurfaceAndMatchingControllerLease()
         async throws
     {
@@ -5832,7 +5965,9 @@ final class AppModelWorkflowTests: XCTestCase {
         revision rawRevision: UInt64,
         activity: AppSceneActivity = .active,
         isVisible: Bool = true,
-        isFocusEligible: Bool = true
+        isFocusEligible: Bool = true,
+        viewSize: PixelSize = PixelSize(width: 640, height: 360),
+        mode: RenderScaleMode = .fit
     ) throws -> TVVisionStreamGeometryBindingUpdate {
         let surfaceGeneration = try TVVisionGeneration(
             domain: .surface,
@@ -5842,8 +5977,18 @@ final class AppModelWorkflowTests: XCTestCase {
         let geometry = try TVVisionSurfaceGeometry(
             platform: platform,
             surfaceGeneration: surfaceGeneration,
-            viewBounds: TVVisionRect(x: 0, y: 0, width: 640, height: 360),
-            windowBounds: TVVisionRect(x: 0, y: 0, width: 640, height: 360),
+            viewBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: Double(viewSize.width),
+                height: Double(viewSize.height)
+            ),
+            windowBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: Double(viewSize.width),
+                height: Double(viewSize.height)
+            ),
             safeAreaInsets: .zero,
             scale: 2
         )
@@ -5862,7 +6007,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 revision: revision.rawValue,
                 sourceSize: sourceSize,
                 drawableSize: geometry.drawableSize,
-                mode: .fit
+                mode: mode
             )
         )
         let binding = TVVisionStreamGeometryBindingSnapshot(

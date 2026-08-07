@@ -42,7 +42,7 @@
 - [x] 5.3 Inventory and implement public supported visionOS controller, keyboard, pointer, and indirect-input adapters behind typed capability and current-generation admission
 - [x] 5.4 Reserve system gestures, recentering, capture, safety, volume, escape, and unsupported gaze/hand interactions locally without synthetic Moonlight events
 - [x] 5.5 Integrate controller/keyboard/pointer focus loss, scene loss, provider failure, replacement, and stop with ordered held-state release and local UI restoration
-- [ ] 5.6 Add multiwindow filtering, resize sequence, focus, capability matrix, reserved interaction, input mapping, held release, stale callback, replacement, and teardown tests
+- [x] 5.6 Add multiwindow filtering, resize sequence, focus, capability matrix, reserved interaction, input mapping, held release, stale callback, replacement, and teardown tests
 
 ## 6. visionOS media presentation runtime
 

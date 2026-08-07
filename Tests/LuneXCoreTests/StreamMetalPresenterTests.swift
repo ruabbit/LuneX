@@ -1273,6 +1273,163 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testVisionMultiwindowResizeReplacementAndTeardownMatrix()
+        async throws
+    {
+        let generation = try tvVisionSurfaceGeneration(304)
+        let staleGeneration = try tvVisionSurfaceGeneration(303)
+        let surface = tvVisionGeometryBindingTestSurface()
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .visionOS,
+            generation: generation,
+            surface: surface,
+            handler: { updates.append($0) }
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+        let initialMapping = try XCTUnwrap(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 200, y: 150)
+        ))
+        XCTAssertEqual(initialMapping.revision.rawValue, 1)
+
+        let center = NotificationCenter()
+        let names = tvVisionWindowObservationTestNotificationNames()
+        let scene = TVVisionWindowObservationTestScene()
+        let foreignScene = TVVisionWindowObservationTestScene()
+        let firstWindow = TVVisionWindowObservationTestWindow()
+        let foreignWindow = TVVisionWindowObservationTestWindow()
+        let replacementWindow = TVVisionWindowObservationTestWindow()
+        var windowCallbacks: [[TVVisionUIKitStreamSurfaceCallback]] = []
+        let observation = try TVVisionUIKitWindowObservation<
+            TVVisionWindowObservationTestWindow,
+            TVVisionWindowObservationTestScene
+        >(
+            surfaceGeneration: generation,
+            notificationCenter: center,
+            names: names,
+            handler: { windowCallbacks.append($0) }
+        )
+        XCTAssertEqual(
+            observation.attach(
+                window: firstWindow,
+                windowScene: scene,
+                surfaceGeneration: generation
+            ),
+            .attached
+        )
+        center.post(name: names.didBecomeKey, object: foreignWindow)
+        center.post(name: names.sceneWillDeactivate, object: foreignScene)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(windowCallbacks.isEmpty)
+
+        for (width, height, expectedRevision) in [
+            (500.0, 350.0, UInt64(2)),
+            (640.0, 360.0, UInt64(3))
+        ] {
+            surface.geometryReading = TVVisionUIKitStreamSurfaceGeometryReading(
+                viewBounds: TVVisionRect(
+                    x: 0,
+                    y: 0,
+                    width: width,
+                    height: height
+                ),
+                windowBounds: TVVisionRect(
+                    x: 0,
+                    y: 0,
+                    width: width,
+                    height: height
+                ),
+                safeAreaInsets: .zero,
+                scale: 2
+            )
+            surface.drawableSize = CGSize(
+                width: width * 2,
+                height: height * 2
+            )
+            XCTAssertEqual(
+                owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                    platform: .visionOS,
+                    generation: generation,
+                    surface: surface,
+                    callback: .layout
+                )),
+                .published
+            )
+            let binding = try XCTUnwrap(owner.currentBinding)
+            let mapping = try XCTUnwrap(owner.absoluteInputMapping(
+                localPoint: RemotePoint(x: width / 2, y: height / 2)
+            ))
+            XCTAssertEqual(binding.revision.rawValue, expectedRevision)
+            XCTAssertEqual(
+                binding.coordinateSnapshot.revision,
+                expectedRevision
+            )
+            XCTAssertEqual(mapping.revision, binding.revision)
+            XCTAssertEqual(mapping.referenceSize, binding.inputReferenceSize)
+        }
+        XCTAssertEqual(initialMapping.revision.rawValue, 1)
+        XCTAssertEqual(updates.map(\.revision.rawValue), [1, 2, 3])
+
+        XCTAssertEqual(
+            observation.attach(
+                window: replacementWindow,
+                windowScene: scene,
+                surfaceGeneration: generation
+            ),
+            .replaced
+        )
+        center.post(name: names.didResignKey, object: firstWindow)
+        center.post(name: names.didBecomeKey, object: replacementWindow)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(windowCallbacks, [[.focusEligibility]])
+        XCTAssertTrue(observation.currentWindow === replacementWindow)
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: staleGeneration,
+                surface: surface,
+                callback: .layout
+            )),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(updates.count, 3)
+        XCTAssertEqual(
+            owner.invalidate(
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .invalidated
+        )
+        XCTAssertNil(owner.currentBinding)
+        XCTAssertNil(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 320, y: 180)
+        ))
+        XCTAssertEqual(
+            observation.detach(surfaceGeneration: generation),
+            .detached
+        )
+        center.post(name: names.didBecomeKey, object: replacementWindow)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(windowCallbacks.count, 1)
+        XCTAssertEqual(
+            observation.invalidate(surfaceGeneration: generation),
+            .invalidated
+        )
+        XCTAssertEqual(
+            observation.invalidate(surfaceGeneration: generation),
+            .alreadyInvalidated
+        )
+    }
+
+    @MainActor
     func testMobileSurfaceAttachmentRelayReplacesAndInvalidatesHandler() {
         let surface = MobileSurfaceAttachmentTestSurface()
         var firstEvents: [MobileStreamSurfaceAttachmentEvent] = []

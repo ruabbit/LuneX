@@ -120,3 +120,7 @@ controller/keyboard, focus comfort, or live Sunshine acceptance.
 #### Scenario: Simulator checks pass
 - **WHEN** window, navigation, reducer, and build checks pass in a fixed simulator
 - **THEN** physical Vision Pro input and comfort acceptance SHALL remain pending
+
+#### Scenario: Connected window and input regression completes
+- **WHEN** deterministic tests exercise foreign-window filtering, same-generation resize, focus and capability admission, reserved interaction, crop-aware mapping, held release, stale callbacks, surface replacement, and repeated teardown as connected sequences
+- **THEN** LuneX SHALL keep render/input revisions aligned, avoid release during eligible resize, release exactly once per replacement or terminal owner, keep old callbacks and mappings inert, and retain physical-device proof as pending

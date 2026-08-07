@@ -87,7 +87,7 @@ evidence only.
 | Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; tvOS forwards only eligible supported remote presses, while visionOS routes admitted hardware-key/indirect-pointer input, keeps system interaction local, and restores local ownership only after ordered release | Dedicated visionOS input-status and product UI remain 7.x |
 | Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; visionOS capture closure clears active key/button state, resigns first responder, and removes indirect recognizers before idempotent current-generation recovery | visionOS display and audio adapters remain 6.x |
 | Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and matching tvOS display/audio components drive actual HDR and route state | visionOS HDR/audio presentation remains later work |
-| Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware input are admitted only for the current eligible generation, while focus/scene/provider/replacement/stop loss drains accepted work and performs one ordered held-state release | Multiwindow/resize/capability/stale callback matrix remains task 5.6 |
+| Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware input are admitted only for the current eligible generation, while focus/scene/provider/replacement/stop loss drains accepted work and performs one ordered held-state release; task 5.6 connects multiwindow, resize, capability, stale, replacement, and teardown behavior in three deterministic matrices | Explicit visionOS media modes and actual display/audio application remain 6.x |
 | Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator admits actual frames and tvOS display components by checked ownership, revisions, decoder/frame or display-source identity, and surface generation, with clear/rebind/replacement fences | explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
 | Audio | `SpatialAudioPlatformNotificationSource`, `AudioEngineRouteCapabilityReader`, `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, `NativeSessionMediaEnvironment`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph publishes actual route/capability, entitlement, spatial readback, interruption/media-reset recovery, and graph generation; tvOS normalizes and applies only current ownership, replays on presentation replacement, and clears audio on terminal state | visionOS intended-spatial application remains 6.4 |
 | Application state | `AppModel` | Current tvOS/visionOS presentation is admitted by media generation, platform, ownership, sequence, and highest surface ownership; visionOS rechecks input admission before capture/delivery and serializes terminal-latched ordered release plus bounded local restoration | visionOS media actual state and complete product UI projection remain 6.x/7.x |
@@ -2182,6 +2182,70 @@ authority files, the single task 5.5 checkbox replacement, typed release
 effect order, release-failure terminal closure, no second shared-coordinator
 barrier, local surface capture suspension/recovery, and task 5.6 remaining
 pending. No issue blocks the independent task 5.5 commit.
+
+## Task 5.6 connected visionOS window and input regression matrix
+
+Task 5.6 adds no production runtime. Three deterministic connected matrices
+verify the completed task 5.1-5.5 ownership boundaries:
+
+- the AppModel matrix admits one held key, applies two same-generation resize
+  and fit/fill revisions without releasing capture, keeps a reserved volume
+  decision local, then releases exactly once for surface replacement, rejects
+  the old surface, and releases the replacement exactly once on terminal stop;
+- the surface matrix filters foreign window and scene notifications, advances
+  geometry, drawable, render, and absolute-input mapping through two resize
+  revisions together, rejects a stale surface generation, and leaves window
+  callbacks and mapping inert after detach and idempotent invalidation;
+- the value matrix admits every declared visionOS input capability, rejects a
+  missing pointer capability, preserves crop-aware absolute pointer output,
+  keeps every system or unsupported interaction local, orders controller,
+  monitor, held-input, and surface release effects, and proves repeated release
+  emits no second effect.
+
+Fresh retained evidence is:
+
+- focused `/tmp/LuneX-18-5_6-focused-r2.Es1RDS/Focused.xcresult`:
+  `3/3 passed / 0 skipped / 0 failed / 0 expected failure`;
+- related `/tmp/LuneX-18-5_6-related.yIYDyZ/Related.xcresult`:
+  `213/213 passed / 0 skipped / 0 failed / 0 expected failure`;
+- normal `/tmp/LuneX-18-5_6-normal.4E7C3M/Normal.xcresult`:
+  `1072 total / 1071 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain test;
+- five-platform unsigned Debug `/tmp/LuneX-18-5_6-builds.ijxOfl`: macOS and the
+  fixed iPhone, iPad, Apple TV, and Vision Pro destinations all succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib.
+
+Both real opt-ins were unset. Fixed UUIDs were build destinations only; no
+Simulator lifecycle operation occurred. The evidence proves deterministic
+contracts, application sequencing, and unsigned SDK compilation. It does not
+prove Simulator runtime, signed installation, physical Vision Pro window,
+focus, keyboard, pointer, controller, HDR, or spatial-audio behavior, live
+Sunshine receipt, latency, comfort, performance, power, or thermal behavior.
+Fresh repository pre-gate
+`/tmp/LuneX-18-5_6-repository-pre-r3.FltJEs` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `30/50` with task 5.6 next, three byte-stable project
+generations, exact ten-file scope, target membership and all three connected
+matrix semantics, retained test/build/Metal evidence, the exact Keychain skip,
+and privacy, clean-room, reference, dependency, opt-in, process, and diff
+boundaries.
+
+The read-only post-mark final-state at
+`/tmp/LuneX-18-5_6-final-state-r2.ZtO9JF` confirmed OpenSpec strict `9/9`,
+`31/50 ready`, task 5.6 done, task 6.1 next, exact eleven-file scope, and the
+single task 5.6 checkbox replacement. It retained every prior evidence tier,
+kept both real opt-ins disabled, and found no test/build process without
+rerunning tests, builds, the generator, Keychain, live-host I/O, or any
+Simulator operation. Task 5.6 is complete; tasks 6.x-8.x stay pending and no
+proof tier is promoted.
+
+Post-record `/tmp/LuneX-18-5_6-post-record-r2.omtl07` confirmed the five
+authority indexes, exact eleven-file classification as three test and eight
+authority files, current matrix semantics, retained evidence, stable project,
+and repository boundaries. Final diff audit
+`/tmp/LuneX-18-5_6-final-audit.cNq2is` found no weakened/disabled test path,
+sensitive test literal, production change, second checkbox, or proof-tier
+promotion. No issue blocks the independent task 5.6 commit.
 
 ## Fixed simulator inventory
 

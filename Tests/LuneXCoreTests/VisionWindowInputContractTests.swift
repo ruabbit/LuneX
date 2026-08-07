@@ -760,6 +760,92 @@ final class VisionWindowInputContractTests: XCTestCase {
         ))
     }
 
+    func testVisionCapabilityReservationMappingAndReleaseMatrix() throws {
+        let snapshot = try windowInputSnapshot()
+        for path in VisionInputPath.allCases {
+            let request = try admissionRequest(path: path)
+            XCTAssertEqual(
+                VisionInputAdmissionResolver.resolve(
+                    request,
+                    snapshot: snapshot
+                ),
+                .admit(
+                    path: path,
+                    inputGeneration: request.inputGeneration
+                )
+            )
+        }
+
+        let keyboardAndIndirect = try windowInputSnapshot(
+            supported: [.keyboard, .indirectPointer]
+        )
+        XCTAssertEqual(
+            VisionInputAdmissionResolver.resolve(
+                try admissionRequest(path: .pointer),
+                snapshot: keyboardAndIndirect
+            ),
+            .unavailable(
+                path: .pointer,
+                reason: .capabilityUnavailable(.pointer)
+            )
+        )
+
+        let adapter = VisionNativeInputAdapter()
+        let mapping = TVVisionStreamAbsoluteInputMapping(
+            revision: try revision(2),
+            point: RemotePoint(x: 960, y: 540),
+            referenceSize: PixelSize(width: 1_920, height: 1_080)
+        )
+        XCTAssertEqual(
+            adapter.absolutePointerMove(mapping: mapping, buttons: [.left]),
+            InputAdapterOutput(
+                event: .pointer(.absoluteMove(
+                    point: mapping.point,
+                    referenceSize: mapping.referenceSize,
+                    buttons: [.left]
+                )),
+                policy: .deliver
+            )
+        )
+        for interaction in VisionSystemReservedInteraction.allCases {
+            let decision = VisionSystemInteractionDecision.resolve(interaction)
+            switch interaction {
+            case .systemGesture, .recenter, .capture, .safety, .volume, .escape:
+                XCTAssertEqual(decision.disposition, .reserveLocally)
+            case .gaze, .hand, .unsupported:
+                XCTAssertEqual(decision.disposition, .dropUnsupportedLocally)
+            }
+        }
+
+        let state = VisionWindowInputOwnershipState(snapshot: snapshot)
+        let lease = try controllerLease(slot: 0, lease: 1)
+        let inputGeneration = try generation(.input, 1)
+        let surfaceGeneration = try generation(.surface, 1)
+        let release = try state.releasing(releaseRequest(
+            scope: .teardown,
+            controllerLeases: [lease],
+            monitoredPaths: [.keyboard, .pointer, .indirectPointer],
+            restoreReason: .stopped
+        ))
+        XCTAssertEqual(release.effects, [
+            .closeAdmission(inputGeneration: inputGeneration),
+            .cancelSystemInteractionObservers,
+            .removeControllerHandlers([lease]),
+            .cancelInputMonitors([.indirectPointer, .keyboard, .pointer]),
+            .awaitHeldInputRelease(inputGeneration: inputGeneration),
+            .releaseSurfaceLease(surfaceGeneration: surfaceGeneration),
+            .restoreLocalNavigation(.stopped)
+        ])
+        XCTAssertTrue(
+            try release.state.releasing(releaseRequest(
+                scope: .teardown,
+                controllerLeases: [lease],
+                monitoredPaths: [.keyboard, .pointer, .indirectPointer],
+                restoreReason: .stopped
+            )).effects.isEmpty
+        )
+    }
+
     private func ownership(
         platform: TVVisionPlatform = .visionOS,
         presentationGeneration: TVVisionGeneration? = nil,
