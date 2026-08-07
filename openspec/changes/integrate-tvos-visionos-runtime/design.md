@@ -653,6 +653,27 @@ artifacts for every action. These are unsigned compilation results and do not
 prove signed artifacts, app runtime, physical output/input, live Sunshine, or
 performance; tasks 8.3-8.8 remain separate.
 
+Task 8.3 validates the repository independently from task 8.2's ordinary build
+summaries. Fixture self/tree validation, all-change strict OpenSpec validation,
+generated-project stability and exact compile-source/test membership,
+clean-room/reference/package/binary isolation, the pinned MIT ENet license and
+byte identity, entitlement and background-mode target configuration, bounded
+diagnostic redaction, and forbidden private/global-screen API checks must all
+pass together. The retained task 1.6 positive and expected-negative public API
+inventory is revalidated against its source hashes and current Xcode/SDK
+versions, while current source availability remains backed by task 8.2's ten
+SDK builds and strict four-SDK C/Objective-C bridge compilation.
+
+The macOS Debug and Release Analyze actions use independent result bundles and
+must report zero compiler errors and warnings. Analyzer findings are classified
+by ownership rather than hidden: current first-party sources and bridges must
+remain at zero, while any finding in the byte-identical pinned ENet dependency
+is recorded as residual dependency risk with identical Debug/Release results.
+This repository/static/analyzer gate does not inventory or operate Simulator
+lifecycle and does not prove signing, runtime behavior, physical HDR or spatial
+audio, live Sunshine, performance, power, or thermal behavior. Tasks 8.4-8.8
+remain responsible for those separate tiers.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->

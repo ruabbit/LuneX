@@ -3157,6 +3157,53 @@ scope, the only 8.2 checkbox change, all ten builds and pre/post/audit evidence,
 stable project/reference/dependency state, disabled opt-ins, and proof
 boundaries.
 
+## Task 8.3 repository and analyzer gates
+
+Fresh macOS Analyze evidence is retained at
+`/tmp/LuneX-18-8_3-analyzer.1Edacz`. Debug and Release each use an independent
+DerivedData directory, log, and `.xcresult`; both structured build results are
+`succeeded / 0 errors / 0 compiler warnings / 4 analyzer findings`. Their
+normalized findings are identical. All four belong to the byte-identical
+pinned ENet dependency: dead stores at `compress.c:320`, `unix.c:521`, and
+`unix.c:526`, plus the existing null-dereference path at `unix.c:867`. LuneX
+first-party source and both repository-owned bridges have zero findings. These
+are Analyze actions, not the zero analyzer-warning field from task 8.2's normal
+build actions.
+
+Repository pre-gate `/tmp/LuneX-18-8_3-repository-pre.1yCWep` passes fixture
+self/tree validation, OpenSpec strict `9/9`, pre-mark `44/50` with task 8.3
+next, and generator stability. The baseline plus three generated
+`project.pbxproj` files have the same SHA-256
+`aee5f8cb55fffe616537d30eb933012a068658cea6e67ac48d06c3b236d8ed5e`.
+Exact generated membership covers 114 production compile sources and 83 test
+sources. `references/` remains ignored and untracked; there is no package,
+submodule, tracked binary framework, or GPL production input. Eighteen shipped
+ENet source/header/license files are byte-identical to pinned revision
+`aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1`, and the retained license contains
+the complete MIT grant.
+
+Configuration checks retain the head-pose entitlement only for macOS, iOS, and
+tvOS, no visionOS entitlement file or build setting, and the single iOS/iPadOS
+`UIBackgroundModes = ["audio"]` declaration. Both diagnostic stores remain
+finite and apply runtime plus export redaction; source contains no global
+`UIScreen.main`/`connectedScenes` scan or dynamic private-framework lookup.
+The retained task 1.6 probe at `/tmp/LuneX-18-1_6-api.ZD2a58` remains readable
+and source-hash valid: 24 positive device/simulator compiles, 12 expected
+negative compiles, zero unexpected results, and zero runtime, Simulator
+lifecycle, signing, physical-device, or Keychain action. Current tvOS/visionOS
+26.4 availability is additionally bounded by task 8.2's ten current-source
+builds and strict C/Objective-C bridge/vendor compilation against macOS, iOS
+Simulator, tvOS Simulator, and visionOS Simulator SDK 26.4.
+
+Both real-Keychain and live-host opt-ins remain unset and no residual build
+process, staged change, generated-project drift, reference drift, or tracked
+artifact exists. No Simulator inventory or lifecycle action was run for task
+8.3. This proves repository/static/API-compile/analyzer integrity only. It does
+not prove Simulator runtime, signed installation, physical remote/controller/
+window behavior, HDR brightness, audible spatial audio or head tracking, live
+Sunshine, latency, comfort, performance, power, or thermal behavior. Tasks
+8.4-8.8 remain separate.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

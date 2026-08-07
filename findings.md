@@ -3058,3 +3058,18 @@
 - post-mark `/tmp/LuneX-18-8_2-final-state.tVJVek`确认OpenSpec精确为`44/50 next 8.3`、最终7个authority文件与唯一8.2 checkbox，未重复十项build/generator或操作Simulator；8.3 repository/analyzer gates仍未执行。
 - final audit `/tmp/LuneX-18-8_2-final-audit.WMG1HZ`确认8.2最终为authority-only、唯一checkbox，十项structured summary完整且project/reference/dependency/proof tier无漂移。
 - final-record `/tmp/LuneX-18-8_2-final-record.hv5iVY`再次确认8.2可独立提交；十项unsigned结果不替代8.3-8.8的analyzer/sanitizer/Simulator/signed/physical/live/final同步证明。
+
+## 2026-08-08 阶段 18 任务 8.3 repository 与 analyzer gate
+
+- 8.2已以`390db08`提交推送并fetch对账clean；8.3必须执行独立repository/analyzer gate，不能把8.2 build result中的`analyzerWarningCount == 0`直接改称已运行Analyze action。
+- gate范围包括fixture self/tree、OpenSpec strict、generator稳定和membership、clean-room/reference/license、entitlement/configuration、privacy、public API availability、fresh analyzer及Git/repository边界；8.5/8.6前仍不查询或操作Simulator lifecycle。
+- retained task 1.6 public API probe `/tmp/LuneX-18-1_6-api.ZD2a58` 在更新后仍可读：24个positive device/simulator compile、12个expected negative compile、0 unexpected result，且记录0 Simulator lifecycle/runtime、0 signed/physical、Xcode 26.4/Swift 6.3；8.2当前十项SDK build另行证明current source可编译，但两者均不是runtime/physical证明。
+- fresh macOS Debug/Release Analyze证据为`/tmp/LuneX-18-8_3-analyzer.1Edacz`：两项均`succeeded / 0 error / 0 compiler warning / 4 analyzer finding`，normalized finding完全一致；4项均在byte-identical固定ENet（`compress.c:320`、`unix.c:521`、`unix.c:526` dead store及`unix.c:867` null dereference），LuneX first-party与bridge为0项。
+- generator pre-gate目录`/tmp/LuneX-18-8_3-repository-pre.1yCWep`已记录生成前与连续三次生成后的`project.pbxproj` SHA-256均为`aee5f8cb55fffe616537d30eb933012a068658cea6e67ac48d06c3b236d8ed5e`，且工程文件无Git diff。
+- 完整repository pre-gate同目录通过fixture self/tree、OpenSpec strict `9/9`与`44/50 next 8.3`、114 production/83 test exact membership、references/package/binary隔离、18个ENet文件与固定revision逐字节一致及MIT grant、macOS/iOS/tvOS head-pose entitlement与visionOS无entitlement、iOS唯一`audio`后台配置、双层bounded diagnostic redaction及零global-screen/private-dynamic API。
+- API gate确认task 1.6 probe source hash仍有效、24 positive与12 expected-negative结果无漂移、当前四个相关SDK均为26.4；task 8.2十项current-source build和fresh四SDK C/ObjC bridge/vendor warnings-as-errors compile补充current availability，但仍只是compile proof。
+- pre-gate还确认`HEAD == origin/main == 390db08`、仅三份pre-sync planning dirty、无staged/artifact/reference drift、两个真实opt-in unset且无残留build process。未查询/操作Simulator lifecycle；8.4 sanitizer/resource、8.5/8.6 Simulator、8.7 physical/live与8.8 final sync仍未被8.3替代。
+- corrected pre-mark authority gate `/tmp/LuneX-18-8_3-authority-pre.Q34BIA`确认同步后精确6个authority文件、零production/test、strict `9/9`与`44/50 next 8.3`，且不重复任何实质action；首轮唯一退出是对design跨行proof语义使用单行全文正则，稳定token收尾已通过。随后只修改8.3 checkbox，8.4-8.8保持pending。
+- post-mark `/tmp/LuneX-18-8_3-final-state.9FJ4uY`确认OpenSpec精确为`45/50 next 8.4`、最终7个authority文件、零production/test及唯一8.3 checkbox；project、repository/analyzer/authority-pre证据、opt-ins/process和proof tier无漂移，且未执行Simulator lifecycle。
+- final audit `/tmp/LuneX-18-8_3-final-audit.n2fBD4`确认最终scope仅为7个authority文件，tasks只替换8.3 checkbox，design/runtime contract/roadmap/planning只新增8.3证据与严格边界；无production/test、project、reference、artifact或依赖漂移。
+- final-record `/tmp/LuneX-18-8_3-final-record.bYIj8N`再次确认8.3可独立提交；当前结果不替代8.4 sanitizer/resource、8.5/8.6 Simulator、8.7 signed physical/live及8.8最终同步证明。
