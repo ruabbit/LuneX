@@ -718,6 +718,9 @@ private struct StreamWorkspaceView: View {
                     appModel.tvVisionMetalPresentationOwner,
                 geometryBindingUpdateHandler: { update in
                     appModel.receiveTVVisionGeometryUpdate(update)
+                },
+                visionSurfaceInputEventHandler: { event in
+                    appModel.receiveVisionSurfaceInputEvent(event)
                 }
             )
                 .ignoresSafeArea()

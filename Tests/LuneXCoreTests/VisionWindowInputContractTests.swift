@@ -494,6 +494,201 @@ final class VisionWindowInputContractTests: XCTestCase {
         }
     }
 
+    func testVisionKeyboardAdapterMapsHIDAndReservesSystemCommands() throws {
+        let adapter = VisionNativeInputAdapter()
+        let keyDown = adapter.keyboard(VisionKeyboardSample(
+            hidUsage: 0x04,
+            characters: "a",
+            isDown: true,
+            modifiers: [.shift],
+            isRepeat: false
+        ))
+        XCTAssertEqual(keyDown.policy, .deliver)
+        XCTAssertEqual(keyDown.event, .keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x41,
+            characters: "a",
+            isDown: true,
+            modifiers: [.shift],
+            isRepeat: false
+        )))
+
+        for sample in [
+            VisionKeyboardSample(
+                hidUsage: 0x29,
+                characters: nil,
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            ),
+            VisionKeyboardSample(
+                hidUsage: 0x14,
+                characters: "q",
+                isDown: true,
+                modifiers: [.command],
+                isRepeat: false
+            )
+        ] {
+            let output = adapter.keyboard(sample)
+            XCTAssertNil(output.event)
+            guard case .reserveLocally = output.policy else {
+                return XCTFail("Expected a system-reserved keyboard command")
+            }
+        }
+
+        let unknown = adapter.keyboard(VisionKeyboardSample(
+            hidUsage: UInt16.max,
+            characters: nil,
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        XCTAssertNil(unknown.event)
+        guard case .drop = unknown.policy else {
+            return XCTFail("Expected an unmapped hardware key to be dropped")
+        }
+    }
+
+    func testVisionFirstResponderPolicyRequiresKeyInteractiveVisibleWindow() {
+        XCTAssertTrue(VisionFirstResponderPolicy.shouldOwnInput(
+            isKeyWindow: true,
+            isUserInteractionEnabled: true,
+            isVisible: true
+        ))
+        for state in [
+            (false, true, true),
+            (true, false, true),
+            (true, true, false)
+        ] {
+            XCTAssertFalse(VisionFirstResponderPolicy.shouldOwnInput(
+                isKeyWindow: state.0,
+                isUserInteractionEnabled: state.1,
+                isVisible: state.2
+            ))
+        }
+    }
+
+    func testVisionPointerAdapterRequiresFiniteCurrentGeometry() throws {
+        let adapter = VisionNativeInputAdapter()
+        let mapping = TVVisionStreamAbsoluteInputMapping(
+            revision: try revision(2),
+            point: RemotePoint(x: 640, y: 360),
+            referenceSize: PixelSize(width: 1_280, height: 720)
+        )
+
+        XCTAssertEqual(
+            adapter.absolutePointerMove(mapping: mapping, buttons: [.left]),
+            InputAdapterOutput(
+                event: .pointer(.absoluteMove(
+                    point: RemotePoint(x: 640, y: 360),
+                    referenceSize: PixelSize(width: 1_280, height: 720),
+                    buttons: [.left]
+                )),
+                policy: .deliver
+            )
+        )
+        XCTAssertEqual(
+            adapter.pointerButton(.left, isDown: false, mapping: nil),
+            InputAdapterOutput(
+                event: .pointer(.button(button: .left, isDown: false, point: nil)),
+                policy: .deliver
+            )
+        )
+        XCTAssertNil(
+            adapter.pointerButton(.left, isDown: true, mapping: nil).event
+        )
+        XCTAssertNil(
+            adapter.scroll(
+                deltaX: .infinity,
+                deltaY: 1,
+                mapping: mapping
+            ).event
+        )
+        XCTAssertEqual(
+            adapter.scroll(deltaX: 3, deltaY: -4, mapping: mapping).event,
+            .pointer(.scroll(
+                deltaX: 3,
+                deltaY: -4,
+                point: RemotePoint(x: 640, y: 360)
+            ))
+        )
+    }
+
+    func testVisionSurfaceEventRequiresMatchingPathAndSurfaceGeneration() throws {
+        let surface = try generation(.surface, 7)
+        let keyboard = RemoteInputEvent.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x41,
+            characters: "a",
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        XCTAssertNoThrow(try VisionSurfaceInputEvent(
+            surfaceGeneration: surface,
+            path: .keyboard,
+            event: keyboard
+        ))
+        XCTAssertThrowsError(try VisionSurfaceInputEvent(
+            surfaceGeneration: surface,
+            path: .pointer,
+            event: keyboard
+        )) { error in
+            XCTAssertEqual(
+                error as? VisionNativeInputAdapterError,
+                .pathEventMismatch(.pointer)
+            )
+        }
+        XCTAssertThrowsError(try VisionSurfaceInputEvent(
+            surfaceGeneration: surface,
+            path: .extendedGamepad,
+            event: keyboard
+        )) { error in
+            XCTAssertEqual(
+                error as? VisionNativeInputAdapterError,
+                .unsupportedSurfacePath(.extendedGamepad)
+            )
+        }
+        XCTAssertThrowsError(try VisionSurfaceInputEvent(
+            surfaceGeneration: generation(.input, 7),
+            path: .keyboard,
+            event: keyboard
+        )) { error in
+            XCTAssertEqual(
+                error as? VisionNativeInputAdapterError,
+                .invalidSurfaceGeneration
+            )
+        }
+    }
+
+    func testVisionControllerRuntimeUsesVisionLeaseAndRoutingIdentity() throws {
+        var runtime = try TVGameControllerSlotRuntime(
+            inputGeneration: generation(.input, 9),
+            platform: .visionOS
+        )
+        let token = try TVGameControllerDeviceToken(1)
+        let roster = try runtime.connect(
+            token: token,
+            profile: .extendedGamepad,
+            capabilities: [.rumble],
+            supportedButtons: [.a],
+            completeState: TVGameControllerCompleteState(buttons: [.a])
+        )
+        let lease = try XCTUnwrap(runtime.lease(for: token))
+
+        XCTAssertEqual(lease.platform, .visionOS)
+        XCTAssertTrue(
+            TVGameControllerRoutingIdentity(lease: lease).rawValue
+                .hasPrefix("vision:9:")
+        )
+        XCTAssertEqual(roster.controllers.map(\.lease), [lease])
+        XCTAssertNoThrow(try TVGameControllerMotionSample(
+            lease: lease,
+            type: .accelerometer,
+            x: 0,
+            y: 0.5,
+            z: -1
+        ))
+    }
+
     private func ownership(
         platform: TVVisionPlatform = .visionOS,
         presentationGeneration: TVVisionGeneration? = nil,

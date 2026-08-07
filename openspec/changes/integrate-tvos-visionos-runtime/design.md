@@ -142,6 +142,29 @@ coordinates, and absolute mapping together. Task 5.3 remains responsible for
 installing public keyboard, pointer, indirect-input, and controller adapters
 and admitting their events to the current generation.
 
+Task 5.3 uses direct XROS 26.4 compile probes rather than header-name inference.
+The actual Metal view reads public `UIPress.key` hardware keys, becomes first
+responder only while its current window is key and the view is visible and
+interactive, and installs hover plus scroll recognizers whose touch type is
+restricted to `.indirectPointer`. `UIPress` exposes no public repeat flag on
+this SDK, so a supported key produces one balanced down/up pair with repeat
+set false; Escape and Command-Q/H/Tab remain local. Direct touch and unsupported
+spatial interaction are not converted into pointer events. A framework-free
+adapter maps supported HID usages and current crop-aware absolute coordinates
+to the existing canonical input events. `AppModel` performs capability,
+ownership, surface/input generation, and focus admission both when the UIKit
+event is captured and immediately before serialized asynchronous delivery.
+
+The existing GameController slot owner is parameterized with a platform while
+retaining tvOS as its default. visionOS leases use the same complete-snapshot
+registry, opaque routing identity, motion, and feedback contracts. Routed
+roster state records the last state successfully delivered to the host, so
+valid intermediate sends remain the base for later disconnect differences;
+late completion is rejected after cancellation, generation replacement,
+release admission closure, or focus loss. Task 5.3 cancels surface handlers and
+current deliveries on replacement, but task 5.5 still owns the complete ordered
+held-state release barrier and restoration of local UI ownership.
+
 ### Keep visionOS windowed streaming explicit
 
 Stage 18 supports the actual SwiftUI window containing the Metal stream

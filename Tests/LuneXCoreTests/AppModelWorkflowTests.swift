@@ -2208,6 +2208,225 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testVisionInputRequiresCurrentFocusedSurfaceAndMatchingControllerLease()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 71,
+                    key: Data(repeating: 0x71, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let currentGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(currentGeometry)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 2
+        }
+
+        let firstKey = RemoteInputEvent.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x41,
+            characters: "a",
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        let secondKey = RemoteInputEvent.keyboard(KeyboardInputEvent(
+            rawKeyCode: 0x42,
+            characters: "b",
+            isDown: true,
+            modifiers: [],
+            isRepeat: false
+        ))
+        let currentSurface = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: 1
+        )
+        let firstEvent = try VisionSurfaceInputEvent(
+            surfaceGeneration: currentSurface,
+            path: .keyboard,
+            event: firstKey
+        )
+        let secondEvent = try VisionSurfaceInputEvent(
+            surfaceGeneration: currentSurface,
+            path: .keyboard,
+            event: secondKey
+        )
+
+        mediaEnvironment.blockNextInputSend()
+        XCTAssertEqual(model.receiveVisionSurfaceInputEvent(firstEvent), .captured)
+        await waitUntil { mediaEnvironment.hasBlockedInputSend() }
+        XCTAssertEqual(model.receiveVisionSurfaceInputEvent(secondEvent), .captured)
+
+        let replacementGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(replacementGeometry)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        mediaEnvironment.resumeBlockedInputSend()
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 1
+        }
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().map(\.event),
+            [firstKey]
+        )
+        XCTAssertEqual(model.receiveVisionSurfaceInputEvent(secondEvent), .local)
+
+        let replacementSurface = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: 2
+        )
+        let replacementEvent = try VisionSurfaceInputEvent(
+            surfaceGeneration: replacementSurface,
+            path: .keyboard,
+            event: secondKey
+        )
+        XCTAssertEqual(
+            model.receiveVisionSurfaceInputEvent(replacementEvent),
+            .captured
+        )
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 2
+        }
+
+        let hiddenGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 2,
+            isVisible: false
+        )
+        model.receiveTVVisionGeometryUpdate(hiddenGeometry)
+        XCTAssertEqual(model.receiveVisionSurfaceInputEvent(replacementEvent), .local)
+
+        let inactiveGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 3,
+            activity: .inactive
+        )
+        model.receiveTVVisionGeometryUpdate(inactiveGeometry)
+        XCTAssertEqual(model.receiveVisionSurfaceInputEvent(replacementEvent), .local)
+
+        let unfocusedGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 4,
+            isFocusEligible: false
+        )
+        model.receiveTVVisionGeometryUpdate(unfocusedGeometry)
+        XCTAssertEqual(model.receiveVisionSurfaceInputEvent(replacementEvent), .local)
+
+        let restoredGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 5
+        )
+        model.receiveTVVisionGeometryUpdate(restoredGeometry)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().last?.action
+                == .scene(restoredGeometry)
+        }
+
+        let inputGeneration = try TVVisionGeneration(
+            domain: .input,
+            rawValue: 1
+        )
+        var tvRuntime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        let tvRoster = try tvRuntime.connect(
+            token: TVGameControllerDeviceToken(10),
+            profile: .extendedGamepad,
+            capabilities: [],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.a])
+        )
+        model.receiveTVGameControllerRoster(tvRoster)
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertNil(model.tvControllerRosterState)
+        XCTAssertEqual(mediaEnvironment.currentSentInputApplications().count, 2)
+
+        var visionRuntime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration,
+            platform: .visionOS
+        )
+        let visionRoster = try visionRuntime.connect(
+            token: TVGameControllerDeviceToken(11),
+            profile: .extendedGamepad,
+            capabilities: [],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.b])
+        )
+        model.receiveTVGameControllerRoster(visionRoster)
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 3
+                && model.tvControllerRoutedRosterState == visionRoster
+        }
+        XCTAssertEqual(model.tvControllerRosterState, visionRoster)
+        XCTAssertTrue(visionRoster.controllers.allSatisfy {
+            $0.lease.platform == .visionOS
+        })
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().last?.event,
+            .controllerRoster(TVGameControllerRosterRouter.reconcile(
+                previous: nil,
+                current: visionRoster
+            ))
+        )
+
+        mediaEnvironment.blockNextInputSend()
+        let updatedVisionRoster = try visionRuntime.update(
+            token: TVGameControllerDeviceToken(11),
+            completeState: TVGameControllerCompleteState(buttons: [.a])
+        )
+        model.receiveTVGameControllerRoster(updatedVisionRoster)
+        await waitUntil { mediaEnvironment.hasBlockedInputSend() }
+        let controllerFocusLost = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 6,
+            isFocusEligible: false
+        )
+        model.receiveTVVisionGeometryUpdate(controllerFocusLost)
+        mediaEnvironment.resumeBlockedInputSend()
+        for _ in 0..<100 { await Task.yield() }
+        XCTAssertNil(model.tvControllerRosterState)
+        XCTAssertNil(model.tvControllerRoutedRosterState)
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertEqual(model.session.phase, .disconnected)
+    }
+
     func testTVVisionPresentationAcceptsCurrentGenerationAndClearsOnReconnectAndRemoteTermination()
         async throws {
         let provider = ControlledSessionControlProvider()
@@ -5347,7 +5566,10 @@ final class AppModelWorkflowTests: XCTestCase {
     private func makeTVVisionActiveGeometryUpdate(
         platform: TVVisionPlatform,
         surfaceGeneration rawSurfaceGeneration: UInt64,
-        revision rawRevision: UInt64
+        revision rawRevision: UInt64,
+        activity: AppSceneActivity = .active,
+        isVisible: Bool = true,
+        isFocusEligible: Bool = true
     ) throws -> TVVisionStreamGeometryBindingUpdate {
         let surfaceGeneration = try TVVisionGeneration(
             domain: .surface,
@@ -5366,9 +5588,9 @@ final class AppModelWorkflowTests: XCTestCase {
             platform: platform,
             revision: revision,
             surfaceGeneration: surfaceGeneration,
-            activity: .active,
+            activity: activity,
             attachment: .attached,
-            isVisible: true,
+            isVisible: isVisible,
             geometry: geometry
         )
         let sourceSize = PixelSize(width: 1_920, height: 1_080)
@@ -5385,7 +5607,7 @@ final class AppModelWorkflowTests: XCTestCase {
             surfaceGeneration: surfaceGeneration,
             revision: revision,
             sceneSurfaceSnapshot: scene,
-            isFocusEligible: true,
+            isFocusEligible: isFocusEligible,
             coordinateSnapshot: coordinateSnapshot,
             inputReferenceSize: sourceSize
         )

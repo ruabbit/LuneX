@@ -3985,6 +3985,9 @@ final class TVVisionStreamMetalView: MTKView {
     typealias ReservedRemoteCommandHandler = @MainActor (
         TVRemoteReservedCommand
     ) -> Void
+    typealias VisionSurfaceInputEventHandler = @MainActor (
+        VisionSurfaceInputEvent
+    ) -> VisionSurfaceInputDisposition
 
     var surfaceGeneration: TVVisionGeneration? {
         surfaceGenerationOwner?.surfaceGeneration
@@ -4001,6 +4004,8 @@ final class TVVisionStreamMetalView: MTKView {
     private var displayHDREventHandler: DisplayHDREventHandler = { _ in }
     private var remotePressEventHandler: RemotePressEventHandler = { _ in .local }
     private var reservedRemoteCommandHandler: ReservedRemoteCommandHandler = { _ in }
+    private var visionSurfaceInputEventHandler:
+        VisionSurfaceInputEventHandler = { _ in .local }
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 #if os(tvOS)
@@ -4022,11 +4027,28 @@ final class TVVisionStreamMetalView: MTKView {
     override var canBecomeFocused: Bool {
         isUserInteractionEnabled && !isHidden && alpha > 0
     }
+#elseif os(visionOS)
+    private struct ActiveVisionKeyPress {
+        let sample: VisionKeyboardSample
+        let disposition: VisionSurfaceInputDisposition
+    }
+
+    private let visionInputAdapter = VisionNativeInputAdapter()
+    private var visionHoverGestureRecognizer: UIHoverGestureRecognizer?
+    private var visionScrollGestureRecognizer: UIPanGestureRecognizer?
+    private var activeVisionKeyPresses:
+        [ObjectIdentifier: ActiveVisionKeyPress] = [:]
+    private var visionPointerButtons: PointerButtonSet = []
+
+    override var canBecomeFirstResponder: Bool { true }
 #endif
 
     override var isHidden: Bool {
         didSet {
             guard isHidden != oldValue else { return }
+#if os(visionOS)
+            refreshVisionFirstResponder()
+#endif
             publishSurfaceCallbacks([.visibility, .focusEligibility])
         }
     }
@@ -4034,6 +4056,9 @@ final class TVVisionStreamMetalView: MTKView {
     override var alpha: CGFloat {
         didSet {
             guard alpha != oldValue else { return }
+#if os(visionOS)
+            refreshVisionFirstResponder()
+#endif
             publishSurfaceCallbacks([.visibility, .focusEligibility])
         }
     }
@@ -4041,6 +4066,9 @@ final class TVVisionStreamMetalView: MTKView {
     override var isUserInteractionEnabled: Bool {
         didSet {
             guard isUserInteractionEnabled != oldValue else { return }
+#if os(visionOS)
+            refreshVisionFirstResponder()
+#endif
             publishSurfaceCallbacks([.focusEligibility])
         }
     }
@@ -4061,7 +4089,9 @@ final class TVVisionStreamMetalView: MTKView {
         remotePressEventHandler:
             @escaping RemotePressEventHandler = { _ in .local },
         reservedRemoteCommandHandler:
-            @escaping ReservedRemoteCommandHandler = { _ in }
+            @escaping ReservedRemoteCommandHandler = { _ in },
+        visionSurfaceInputEventHandler:
+            @escaping VisionSurfaceInputEventHandler = { _ in .local }
     ) {
         super.init(frame: frameRect, device: device)
         autoResizeDrawable = false
@@ -4071,6 +4101,7 @@ final class TVVisionStreamMetalView: MTKView {
         self.displayHDREventHandler = displayHDREventHandler
         self.remotePressEventHandler = remotePressEventHandler
         self.reservedRemoteCommandHandler = reservedRemoteCommandHandler
+        self.visionSurfaceInputEventHandler = visionSurfaceInputEventHandler
         surfaceRelay = SurfaceRelay(
             surface: self,
             stateReader: { surface in
@@ -4107,6 +4138,9 @@ final class TVVisionStreamMetalView: MTKView {
                 notificationCenter: .default,
                 names: .current,
                 handler: { [weak self] callbacks in
+#if os(visionOS)
+                    self?.refreshVisionFirstResponder()
+#endif
                     self?.publishSurfaceCallbacks(callbacks)
                 }
             )
@@ -4149,6 +4183,9 @@ final class TVVisionStreamMetalView: MTKView {
             )
 #endif
         }
+#if os(visionOS)
+        installVisionInputRecognizers()
+#endif
         traitChangeRegistration = registerForTraitChanges([
             UITraitDisplayScale.self,
             UITraitUserInterfaceStyle.self
@@ -4169,6 +4206,9 @@ final class TVVisionStreamMetalView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+#if os(visionOS)
+        refreshVisionFirstResponder()
+#endif
         publishSurfaceCallbacks([
             .attachment,
             .windowScene,
@@ -4275,6 +4315,63 @@ final class TVVisionStreamMetalView: MTKView {
     ) {
         finishPresses(presses, phase: .cancelled, event: event)
     }
+#elseif os(visionOS)
+    override func pressesBegan(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        var localPresses = Set<UIPress>()
+        for press in presses {
+            let identity = ObjectIdentifier(press)
+            guard activeVisionKeyPresses[identity] == nil,
+                  let sample = Self.visionKeyboardSample(
+                    press,
+                    isDown: true
+                  ) else {
+                localPresses.insert(press)
+                continue
+            }
+            let output = visionInputAdapter.keyboard(sample)
+            let disposition = emitVisionSurfaceInput(
+                output,
+                path: .keyboard
+            )
+            activeVisionKeyPresses[identity] = ActiveVisionKeyPress(
+                sample: sample,
+                disposition: disposition
+            )
+            if disposition == .local { localPresses.insert(press) }
+        }
+        if !localPresses.isEmpty {
+            super.pressesBegan(localPresses, with: event)
+        }
+    }
+
+    override func pressesEnded(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        finishVisionKeyPresses(presses, cancelled: false, event: event)
+    }
+
+    override func pressesChanged(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        let localPresses = presses.filter {
+            activeVisionKeyPresses[ObjectIdentifier($0)]?.disposition != .captured
+        }
+        if !localPresses.isEmpty {
+            super.pressesChanged(Set(localPresses), with: event)
+        }
+    }
+
+    override func pressesCancelled(
+        _ presses: Set<UIPress>,
+        with event: UIPressesEvent?
+    ) {
+        finishVisionKeyPresses(presses, cancelled: true, event: event)
+    }
 #endif
 
     func updateSurfaceCallbackHandler(
@@ -4305,6 +4402,12 @@ final class TVVisionStreamMetalView: MTKView {
         _ handler: @escaping ReservedRemoteCommandHandler
     ) {
         reservedRemoteCommandHandler = handler
+    }
+
+    func updateVisionSurfaceInputEventHandler(
+        _ handler: @escaping VisionSurfaceInputEventHandler
+    ) {
+        visionSurfaceInputEventHandler = handler
     }
 
     func updateGeometryBinding(
@@ -4358,6 +4461,8 @@ final class TVVisionStreamMetalView: MTKView {
             )
             self.displayHDRObserver = nil
         }
+#elseif os(visionOS)
+        invalidateVisionInputHandlers()
 #endif
         if let windowObservation {
             _ = windowObservation.invalidate(
@@ -4388,6 +4493,7 @@ final class TVVisionStreamMetalView: MTKView {
         displayHDREventHandler = { _ in }
         remotePressEventHandler = { _ in .local }
         reservedRemoteCommandHandler = { _ in }
+        visionSurfaceInputEventHandler = { _ in .local }
     }
 
 #if os(tvOS)
@@ -4455,6 +4561,227 @@ final class TVVisionStreamMetalView: MTKView {
         nextRemotePressID = result == UInt64.max ? 0 : result + 1
         return result
     }
+#elseif os(visionOS)
+    private func installVisionInputRecognizers() {
+        let allowedTouchTypes = [
+            NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)
+        ]
+        let hover = UIHoverGestureRecognizer(
+            target: self,
+            action: #selector(handleVisionHover(_:))
+        )
+        hover.allowedTouchTypes = allowedTouchTypes
+        hover.cancelsTouchesInView = false
+        addGestureRecognizer(hover)
+        visionHoverGestureRecognizer = hover
+
+        let scroll = UIPanGestureRecognizer(
+            target: self,
+            action: #selector(handleVisionScroll(_:))
+        )
+        scroll.allowedTouchTypes = allowedTouchTypes
+        scroll.allowedScrollTypesMask = [.continuous, .discrete]
+        scroll.cancelsTouchesInView = false
+        addGestureRecognizer(scroll)
+        visionScrollGestureRecognizer = scroll
+    }
+
+    private func invalidateVisionInputHandlers() {
+        activeVisionKeyPresses.removeAll()
+        visionPointerButtons = []
+        if isFirstResponder { resignFirstResponder() }
+        if let hover = visionHoverGestureRecognizer {
+            removeGestureRecognizer(hover)
+            visionHoverGestureRecognizer = nil
+        }
+        if let scroll = visionScrollGestureRecognizer {
+            removeGestureRecognizer(scroll)
+            visionScrollGestureRecognizer = nil
+        }
+    }
+
+    private func refreshVisionFirstResponder() {
+        let shouldOwnInput = VisionFirstResponderPolicy.shouldOwnInput(
+            isKeyWindow: window?.isKeyWindow == true,
+            isUserInteractionEnabled: isUserInteractionEnabled,
+            isVisible: !isHidden && alpha > 0
+        )
+        guard shouldOwnInput else {
+            if isFirstResponder { resignFirstResponder() }
+            return
+        }
+        if !isFirstResponder { becomeFirstResponder() }
+    }
+
+    private func finishVisionKeyPresses(
+        _ presses: Set<UIPress>,
+        cancelled: Bool,
+        event: UIPressesEvent?
+    ) {
+        var localPresses = Set<UIPress>()
+        for press in presses {
+            let identity = ObjectIdentifier(press)
+            guard let active = activeVisionKeyPresses.removeValue(
+                forKey: identity
+            ) else {
+                localPresses.insert(press)
+                continue
+            }
+            guard active.disposition == .captured else {
+                localPresses.insert(press)
+                continue
+            }
+            let sample = VisionKeyboardSample(
+                hidUsage: active.sample.hidUsage,
+                characters: active.sample.characters,
+                isDown: false,
+                modifiers: active.sample.modifiers,
+                isRepeat: false
+            )
+            _ = emitVisionSurfaceInput(
+                visionInputAdapter.keyboard(sample),
+                path: .keyboard
+            )
+        }
+        guard !localPresses.isEmpty else { return }
+        if cancelled {
+            super.pressesCancelled(localPresses, with: event)
+        } else {
+            super.pressesEnded(localPresses, with: event)
+        }
+    }
+
+    @objc
+    private func handleVisionHover(_ recognizer: UIHoverGestureRecognizer) {
+        switch recognizer.state {
+        case .began, .changed:
+            let point = recognizer.location(in: self)
+            let mapping = absoluteInputMapping(localPoint: RemotePoint(
+                x: Double(point.x),
+                y: Double(point.y)
+            ))
+            let nextButtons = Self.pointerButtons(recognizer.buttonMask)
+            _ = emitVisionSurfaceInput(
+                visionInputAdapter.absolutePointerMove(
+                    mapping: mapping,
+                    buttons: nextButtons
+                ),
+                path: .indirectPointer
+            )
+            emitVisionPointerButtonChanges(
+                from: visionPointerButtons,
+                to: nextButtons,
+                mapping: mapping
+            )
+            visionPointerButtons = nextButtons
+        case .ended, .cancelled, .failed:
+            emitVisionPointerButtonChanges(
+                from: visionPointerButtons,
+                to: [],
+                mapping: nil
+            )
+            visionPointerButtons = []
+        case .possible, .recognized:
+            break
+        @unknown default:
+            visionPointerButtons = []
+        }
+    }
+
+    @objc
+    private func handleVisionScroll(_ recognizer: UIPanGestureRecognizer) {
+        guard recognizer.state == .began || recognizer.state == .changed else {
+            return
+        }
+        let delta = recognizer.translation(in: self)
+        recognizer.setTranslation(.zero, in: self)
+        guard delta.x != 0 || delta.y != 0 else { return }
+        let point = recognizer.location(in: self)
+        let mapping = absoluteInputMapping(localPoint: RemotePoint(
+            x: Double(point.x),
+            y: Double(point.y)
+        ))
+        _ = emitVisionSurfaceInput(
+            visionInputAdapter.scroll(
+                deltaX: Double(delta.x),
+                deltaY: Double(delta.y),
+                mapping: mapping
+            ),
+            path: .indirectPointer
+        )
+    }
+
+    private func emitVisionPointerButtonChanges(
+        from previous: PointerButtonSet,
+        to current: PointerButtonSet,
+        mapping: TVVisionStreamAbsoluteInputMapping?
+    ) {
+        let mappings: [(PointerButtonSet, PointerButton)] = [
+            (.left, .left),
+            (.right, .right)
+        ]
+        for (flag, button) in mappings where previous.contains(flag) != current.contains(flag) {
+            _ = emitVisionSurfaceInput(
+                visionInputAdapter.pointerButton(
+                    button,
+                    isDown: current.contains(flag),
+                    mapping: mapping
+                ),
+                path: .pointer
+            )
+        }
+    }
+
+    private func emitVisionSurfaceInput(
+        _ output: InputAdapterOutput,
+        path: VisionInputPath
+    ) -> VisionSurfaceInputDisposition {
+        guard output.policy == .deliver,
+              let event = output.event,
+              let surfaceGeneration,
+              let surfaceEvent = try? VisionSurfaceInputEvent(
+                surfaceGeneration: surfaceGeneration,
+                path: path,
+                event: event
+              ) else {
+            return .local
+        }
+        return visionSurfaceInputEventHandler(surfaceEvent)
+    }
+
+    private static func visionKeyboardSample(
+        _ press: UIPress,
+        isDown: Bool
+    ) -> VisionKeyboardSample? {
+        guard let key = press.key,
+              let usage = UInt16(exactly: key.keyCode.rawValue) else {
+            return nil
+        }
+        var modifiers: InputModifiers = []
+        if key.modifierFlags.contains(.shift) { modifiers.insert(.shift) }
+        if key.modifierFlags.contains(.control) { modifiers.insert(.control) }
+        if key.modifierFlags.contains(.alternate) { modifiers.insert(.option) }
+        if key.modifierFlags.contains(.command) { modifiers.insert(.command) }
+        if key.modifierFlags.contains(.alphaShift) {
+            modifiers.insert(.capsLock)
+        }
+        return VisionKeyboardSample(
+            hidUsage: usage,
+            characters: key.characters,
+            isDown: isDown,
+            modifiers: modifiers,
+            isRepeat: false
+        )
+    }
+
+    private static func pointerButtons(
+        _ mask: UIEvent.ButtonMask
+    ) -> PointerButtonSet {
+        var buttons: PointerButtonSet = []
+        if mask.contains(.primary) { buttons.insert(.left) }
+        if mask.contains(.secondary) { buttons.insert(.right) }
+        return buttons
+    }
 #endif
 
     private func handleSurfaceGenerationUpdate(
@@ -4468,6 +4795,9 @@ final class TVVisionStreamMetalView: MTKView {
         _ callbacks: [TVVisionUIKitStreamSurfaceCallback]
     ) {
         refreshWindowObservation()
+#if os(visionOS)
+        refreshVisionFirstResponder()
+#endif
         guard let rawState = surfaceRelay?.publish(callbacks) else { return }
         if let surfaceGenerationOwner {
             for callback in callbacks {
@@ -5314,6 +5644,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         TVVisionStreamMetalView.RemotePressEventHandler = { _ in .local }
     var reservedRemoteCommandHandler:
         TVVisionStreamMetalView.ReservedRemoteCommandHandler = { _ in }
+    var visionSurfaceInputEventHandler:
+        TVVisionStreamMetalView.VisionSurfaceInputEventHandler = { _ in .local }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -5375,7 +5707,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             },
             displayHDREventHandler: displayHDREventHandler,
             remotePressEventHandler: remotePressEventHandler,
-            reservedRemoteCommandHandler: reservedRemoteCommandHandler
+            reservedRemoteCommandHandler: reservedRemoteCommandHandler,
+            visionSurfaceInputEventHandler: visionSurfaceInputEventHandler
         )
         if let surfaceGeneration = view.surfaceGeneration {
             context.coordinator.activateTVVisionSurfaceGeneration(
@@ -5451,6 +5784,10 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateRemotePressEventHandler(remotePressEventHandler)
         (view as? TVVisionStreamMetalView)?
             .updateReservedRemoteCommandHandler(reservedRemoteCommandHandler)
+        (view as? TVVisionStreamMetalView)?
+            .updateVisionSurfaceInputEventHandler(
+                visionSurfaceInputEventHandler
+            )
         (view as? TVVisionStreamMetalView)?
             .updateGeometryBinding(
                 sourceSize: renderState.transform.sourceSize,

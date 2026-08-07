@@ -56,6 +56,18 @@ is active and focused.
 - **WHEN** a supported controller is leased to the current focused stream
 - **THEN** LuneX SHALL use the existing controller registry and ordered delivery contract
 
+#### Scenario: Hardware keyboard press is supported
+- **WHEN** the current key window receives a public hardware-key press with a supported HID usage
+- **THEN** LuneX SHALL emit one balanced canonical key down/up pair under current-generation admission and SHALL keep reserved local commands out of the remote path
+
+#### Scenario: Indirect pointer moves or scrolls
+- **WHEN** a public indirect-pointer hover or scroll recognizer reports finite input inside current render geometry
+- **THEN** LuneX SHALL map it through the current crop-aware absolute reference and SHALL NOT treat direct touch, gaze, or hand interaction as a mouse event
+
+#### Scenario: Queued input becomes stale
+- **WHEN** focus, surface generation, input generation, or presentation ownership changes before an admitted event is delivered
+- **THEN** LuneX SHALL reject the queued event without sending it to the current host
+
 #### Scenario: Window loses focus
 - **WHEN** the stream window loses input eligibility
 - **THEN** LuneX SHALL close admission and release held input before local navigation resumes

@@ -591,7 +591,7 @@ struct TVControllerInputSnapshot: Equatable, Sendable {
         supportedButtons: RemoteControllerButtonFlags,
         state: RemoteControllerState
     ) throws {
-        guard lease.platform == .tvOS else {
+        guard lease.platform == .tvOS || lease.platform == .visionOS else {
             throw TVRemoteCaptureContractError.controllerPlatformMismatch
         }
         guard state.controllerIndex == lease.slot.rawValue else {
@@ -677,7 +677,7 @@ struct TVControllerFeedbackRequest: Equatable, Sendable {
         lease: TVVisionControllerLease,
         payload: TVControllerFeedbackPayload
     ) throws {
-        guard lease.platform == .tvOS else {
+        guard lease.platform == .tvOS || lease.platform == .visionOS else {
             throw TVRemoteCaptureContractError.controllerPlatformMismatch
         }
         switch payload {

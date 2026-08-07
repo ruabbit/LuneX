@@ -135,12 +135,17 @@ struct TVGameControllerSlotRuntime: Sendable {
     }
 
     let inputGeneration: TVVisionGeneration
+    let platform: TVVisionPlatform
     private var entries: [TVGameControllerDeviceToken: Entry] = [:]
     private var nextLeaseGeneration: UInt64? = 1
 
-    init(inputGeneration: TVVisionGeneration) throws {
+    init(
+        inputGeneration: TVVisionGeneration,
+        platform: TVVisionPlatform = .tvOS
+    ) throws {
         try inputGeneration.require(.input)
         self.inputGeneration = inputGeneration
+        self.platform = platform
     }
 
     var roster: TVControllerRosterSnapshot {
@@ -177,7 +182,7 @@ struct TVGameControllerSlotRuntime: Sendable {
         }
         let slot = try TVVisionControllerSlot(slotValue)
         let lease = try TVVisionControllerLease(
-            platform: .tvOS,
+            platform: platform,
             leaseGeneration: TVVisionGeneration(
                 domain: .controller,
                 rawValue: rawLeaseGeneration
@@ -256,7 +261,7 @@ struct TVGameControllerRoutingIdentity: Equatable, Hashable, Sendable {
 
     var rawValue: String {
         [
-            "tv",
+            lease.platform == .tvOS ? "tv" : "vision",
             String(lease.inputGeneration.rawValue),
             String(lease.leaseGeneration.rawValue),
             String(lease.slot.rawValue)
@@ -326,7 +331,7 @@ struct TVGameControllerMotionSample: Equatable, Sendable {
         y: Float,
         z: Float
     ) throws {
-        guard lease.platform == .tvOS,
+        guard (lease.platform == .tvOS || lease.platform == .visionOS),
               [x, y, z].allSatisfy(\.isFinite) else {
             throw TVGameControllerRuntimeError.invalidCompleteState
         }
@@ -396,7 +401,7 @@ struct GameControllerInputAdapter: Sendable {
     }
 }
 
-#if canImport(GameController) && os(tvOS)
+#if canImport(GameController) && (os(tvOS) || os(visionOS))
 import GameController
 import CoreHaptics
 
@@ -543,13 +548,15 @@ final class TVGameControllerRuntimeOwner {
 
     func start(
         inputGeneration: TVVisionGeneration,
+        platform: TVVisionPlatform = .tvOS,
         notificationCenter: NotificationCenter = .default,
         rosterHandler: @escaping RosterHandler,
         motionHandler: @escaping MotionHandler = { _ in }
     ) throws {
         stop()
         runtime = try TVGameControllerSlotRuntime(
-            inputGeneration: inputGeneration
+            inputGeneration: inputGeneration,
+            platform: platform
         )
         self.notificationCenter = notificationCenter
         self.rosterHandler = rosterHandler
