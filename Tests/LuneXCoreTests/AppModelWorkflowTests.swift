@@ -1417,7 +1417,7 @@ final class AppModelWorkflowTests: XCTestCase {
 
         let host = try XCTUnwrap(model.selectedHost)
         await model.beginPairing(host: host)
-        model.pairingUI.pin = "1234"
+        model.updatePairingPIN("1234", in: model.primaryWorkspaceReference)
         await model.submitPairingPIN()
 
         XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
@@ -1451,7 +1451,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(provider.currentRequestCount(), 0)
         XCTAssertNotEqual(model.diagnostics.latestActionableEvent?.category, .pairing)
 
-        model.pairingUI.pin = "1234"
+        model.updatePairingPIN("1234", in: model.primaryWorkspaceReference)
         let submitTask = Task { await model.submitPairingPIN() }
         for _ in 0..<100 where provider.currentRequestCount() == 0 {
             await Task.yield()
@@ -1496,7 +1496,7 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.loadHosts()
         await model.beginPairing(host: host)
-        model.pairingUI.pin = "4321"
+        model.updatePairingPIN("4321", in: model.primaryWorkspaceReference)
         let submitTask = Task { await model.submitPairingPIN() }
         for _ in 0..<100 where provider.currentRequestCount() == 0 {
             await Task.yield()
@@ -1527,7 +1527,7 @@ final class AppModelWorkflowTests: XCTestCase {
 
             await model.loadHosts()
             await model.beginPairing(host: host)
-            model.pairingUI.pin = "2468"
+            model.updatePairingPIN("2468", in: model.primaryWorkspaceReference)
             let submitTask = Task { await model.submitPairingPIN() }
             for _ in 0..<100 where provider.currentRequestCount() == 0 {
                 await Task.yield()
@@ -1560,7 +1560,7 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.loadHosts()
         await model.beginPairing(host: host)
-        model.pairingUI.pin = "9753"
+        model.updatePairingPIN("9753", in: model.primaryWorkspaceReference)
         let submitTask = Task { await model.submitPairingPIN() }
         for _ in 0..<100 where provider.currentRequestCount() == 0 {
             await Task.yield()
@@ -1613,7 +1613,7 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.loadHosts()
         await model.beginPairing(host: host)
-        model.pairingUI.pin = "１２３４"
+        model.updatePairingPIN("１２３４", in: model.primaryWorkspaceReference)
 
         XCTAssertFalse(model.isPairingPINValid)
         await model.submitPairingPIN()
@@ -1661,14 +1661,14 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.loadHosts()
         await model.beginPairing(host: host)
-        model.pairingUI.pin = "1357"
+        model.updatePairingPIN("1357", in: model.primaryWorkspaceReference)
         let firstSubmission = Task { await model.submitPairingPIN() }
         for _ in 0..<100 where provider.currentRequestCount() == 0 {
             await Task.yield()
         }
         let request = try XCTUnwrap(provider.latestRequest())
 
-        model.pairingUI.pin = "2468"
+        model.updatePairingPIN("2468", in: model.primaryWorkspaceReference)
         await model.submitPairingPIN()
         XCTAssertEqual(provider.currentRequestCount(), 1)
 
@@ -1688,7 +1688,7 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.loadHosts()
         await model.beginPairing(host: host)
-        model.pairingUI.pin = "8642"
+        model.updatePairingPIN("8642", in: model.primaryWorkspaceReference)
         let submission = Task { await model.submitPairingPIN() }
         for _ in 0..<100 where provider.currentRequestCount() == 0 {
             await Task.yield()

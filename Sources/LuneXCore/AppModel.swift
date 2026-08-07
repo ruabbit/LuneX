@@ -13,16 +13,6 @@ enum AppNavigationSelection: Hashable, Sendable {
     case settings
 }
 
-struct PairingUIState: Equatable {
-    var hostID: MoonlightHost.ID?
-    var attemptID: UUID?
-    var stage: PairingStage = .idle
-    var pin: String = ""
-    var isRunning = false
-    var message: String?
-    var actionMessage: String?
-}
-
 private enum PairingApplicationError: Error {
     case incompleteRuntimeStream
     case invalidAuthenticatedCompletion
@@ -117,6 +107,11 @@ enum ProductionRuntimeProviderFactory {
 @MainActor
 @Observable
 final class AppModel: ApplicationInputSink {
+    private struct PreparedPairingIdentity {
+        let owner: ProductPairingOwner
+        let material: ClientIdentityMaterial
+    }
+
     private struct TVVisionPlatformGeometryAdmission: Equatable {
         let ownership: TVVisionPresentationOwnership
         let update: TVVisionStreamGeometryBindingUpdate
@@ -177,6 +172,7 @@ final class AppModel: ApplicationInputSink {
                 state.selectedHostID = newValue
                 applyCachedCatalog(to: &state)
             }
+            invalidateActivePairingIfOwnerStale()
         }
     }
     var selectedAppID: RemoteApp.ID? {
@@ -185,7 +181,10 @@ final class AppModel: ApplicationInputSink {
     }
     var appsByHostID: [MoonlightHost.ID: [RemoteApp]] = [:]
     private var appCatalogUpdatedAtByHostID: [MoonlightHost.ID: Date] = [:]
-    var pairingUI = PairingUIState()
+    var pairingUI: PairingUIState {
+        workspaceRegistry.state(for: primaryWorkspaceReference)?.pairing
+            ?? PairingUIState()
+    }
     var streamLaunchUI = StreamLaunchUIState()
     var latestRemoteInputFeedback: RemoteInputFeedback?
     private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
@@ -532,7 +531,8 @@ final class AppModel: ApplicationInputSink {
     private let clientIdentityStore: any ClientIdentityStore
     private let clientIdentityProvisioner: any ClientIdentityProvisioning
     private var clientUniqueID: String
-    private var preparedPairingIdentity: ClientIdentityMaterial?
+    private var activePairingOwner: ProductPairingOwner?
+    private var preparedPairingIdentity: PreparedPairingIdentity?
     private var activeStreamSessionID: UUID?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
@@ -735,6 +735,16 @@ final class AppModel: ApplicationInputSink {
         workspaceState(for: reference)?.catalog
     }
 
+    var primaryPairingState: PairingUIState? {
+        primaryWorkspaceState?.pairing
+    }
+
+    func pairingState(
+        for reference: ProductWorkspaceReference
+    ) -> PairingUIState? {
+        workspaceState(for: reference)?.pairing
+    }
+
     private func updatePrimaryWorkspace(
         _ mutation: (inout ProductWorkspaceState) -> Void
     ) {
@@ -757,6 +767,7 @@ final class AppModel: ApplicationInputSink {
                 Set($0.map(\.id))
             }
         )
+        invalidateActivePairingIfOwnerStale()
     }
 
     private func applyCachedCatalog(
@@ -826,6 +837,60 @@ final class AppModel: ApplicationInputSink {
         workspaceRegistry.state(for: owner.workspace)?.catalogOwner == owner
     }
 
+    private func makePairingOwner(
+        in workspace: ProductWorkspaceReference,
+        hostID: MoonlightHost.ID
+    ) -> ProductPairingOwner? {
+        guard let state = workspaceRegistry.state(for: workspace),
+              state.selectedHostID == hostID else { return nil }
+        return ProductPairingOwner(
+            workspace: workspace,
+            hostID: hostID,
+            hostSelectionGeneration: state.hostSelectionGeneration,
+            attemptGeneration: ProductPairingAttemptGeneration()
+        )
+    }
+
+    private func pairingOwnerMatchesCurrentSelection(
+        _ owner: ProductPairingOwner
+    ) -> Bool {
+        guard let state = workspaceRegistry.state(for: owner.workspace) else {
+            return false
+        }
+        return state.selectedHostID == owner.hostID
+            && state.hostSelectionGeneration == owner.hostSelectionGeneration
+    }
+
+    private func pairingOwnerIsCurrent(
+        _ owner: ProductPairingOwner,
+        requireActiveAttempt: Bool = true
+    ) -> Bool {
+        guard pairingOwnerMatchesCurrentSelection(owner),
+              let state = workspaceRegistry.state(for: owner.workspace),
+              state.pairing.owner == owner else { return false }
+        guard requireActiveAttempt else { return true }
+        return activePairingOwner == owner
+            && state.pairing.attemptID == owner.attemptGeneration.rawValue
+    }
+
+    private func invalidateActivePairingIfOwnerStale() {
+        guard let owner = activePairingOwner,
+              !pairingOwnerIsCurrent(owner) else { return }
+        activePairingOwner = nil
+        if preparedPairingIdentity?.owner == owner {
+            preparedPairingIdentity = nil
+        }
+        if case .pairing = session.phase {
+            session.phase = .disconnected
+        }
+        guard let provider = runtimeProviders.pairing else { return }
+        Task {
+            await provider.cancelPairing(
+                attemptID: owner.attemptGeneration.rawValue
+            )
+        }
+    }
+
     var selectedApps: [RemoteApp] {
         guard let hostID = selectedHostID else { return [] }
         return appsByHostID[hostID] ?? []
@@ -856,8 +921,34 @@ final class AppModel: ApplicationInputSink {
     }
 
     var isPairingPINValid: Bool {
-        let bytes = Array(pairingUI.pin.utf8)
+        isPairingPINValid(in: primaryWorkspaceReference)
+    }
+
+    func isPairingPINValid(
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        guard let pin = workspaceRegistry.state(for: workspace)?.pairing.pin else {
+            return false
+        }
+        let bytes = Array(pin.utf8)
         return bytes.count == 4 && bytes.allSatisfy { (48...57).contains($0) }
+    }
+
+    func updatePairingPIN(
+        _ pin: String,
+        in workspace: ProductWorkspaceReference
+    ) {
+        _ = try? workspaceRegistry.update(workspace) { state in
+            guard let owner = state.pairing.owner,
+                  activePairingOwner == owner,
+                  state.selectedHostID == owner.hostID,
+                  state.hostSelectionGeneration == owner.hostSelectionGeneration,
+                  state.pairing.stage == .waitingForPIN,
+                  !state.pairing.isRunning else { return }
+            state.pairing.pin = pin
+            state.pairing.issue = nil
+            state.pairing.actionMessage = nil
+        }
     }
 
     func loadInitialState() async {
@@ -1687,139 +1778,244 @@ final class AppModel: ApplicationInputSink {
     }
 
     func beginPairing(host: MoonlightHost) async {
+        await beginPairing(host: host, in: primaryWorkspaceReference)
+    }
+
+    func beginPairing(
+        host: MoonlightHost,
+        in workspace: ProductWorkspaceReference
+    ) async {
+        guard workspaceRegistry.state(for: workspace)?.selectedHostID == host.id,
+              hosts.contains(where: { $0.id == host.id }) else { return }
+        if let activePairingOwner {
+            await cancelPairing(owner: activePairingOwner, showCancelledState: false)
+        }
+        guard let owner = makePairingOwner(in: workspace, hostID: host.id),
+              hosts.contains(where: { $0.id == host.id }) else { return }
+
         guard runtimeProviders.pairing != nil else {
             let diagnostic = ApplicationDiagnosticFactory.pairingUnavailable
-            pairingUI = PairingUIState(
-                hostID: host.id,
-                stage: .failed,
-                message: diagnostic.summary,
-                actionMessage: diagnostic.action?.label
-            )
+            _ = try? workspaceRegistry.update(workspace) { state in
+                guard state.selectedHostID == owner.hostID,
+                      state.hostSelectionGeneration == owner.hostSelectionGeneration else {
+                    return
+                }
+                state.pairing = PairingUIState(
+                    owner: owner,
+                    stage: .failed,
+                    message: diagnostic.summary,
+                    actionMessage: diagnostic.action?.label,
+                    issue: ProductIssue(
+                        code: .pairingUnavailable,
+                        actionScope: .pairing(owner)
+                    )
+                )
+            }
             session.phase = .disconnected
             diagnostics.record(diagnostic)
             return
         }
 
-        await cancelPairing(showCancelledState: false)
         diagnostics.clearActionableEvents(in: [.pairing])
-        let attemptID = UUID()
-        pairingUI = PairingUIState(
-            hostID: host.id,
-            attemptID: attemptID,
-            stage: .idle,
-            isRunning: true,
-            message: "Preparing client identity..."
-        )
-        session.phase = .pairing(pin: "")
+        activePairingOwner = owner
         preparedPairingIdentity = nil
+        _ = try? workspaceRegistry.update(workspace) { state in
+            state.pairing = PairingUIState(
+                owner: owner,
+                attemptID: owner.attemptGeneration.rawValue,
+                stage: .idle,
+                isRunning: true,
+                message: "Preparing client identity..."
+            )
+        }
+        session.phase = .pairing(pin: "")
 
         do {
             let identity = try await clientIdentityProvisioner.loadOrCreateIdentity(
                 createdAt: Date()
             )
-            guard pairingUI.attemptID == attemptID else { return }
-            preparedPairingIdentity = identity
+            guard pairingOwnerIsCurrent(owner) else {
+                invalidateActivePairingIfOwnerStale()
+                return
+            }
+            preparedPairingIdentity = PreparedPairingIdentity(
+                owner: owner,
+                material: identity
+            )
             clientUniqueID = identity.id.uuidString
-            pairingUI.stage = .waitingForPIN
-            pairingUI.isRunning = false
-            pairingUI.message = "Enter the PIN shown on \(host.name)."
+            _ = try? workspaceRegistry.update(workspace) { state in
+                guard state.pairing.owner == owner else { return }
+                state.pairing.stage = .waitingForPIN
+                state.pairing.isRunning = false
+                state.pairing.message = "Enter the PIN shown on \(host.name)."
+                state.pairing.issue = nil
+            }
             diagnostics.record("Prepared client identity for pairing", subsystem: "pairing")
         } catch {
-            guard pairingUI.attemptID == attemptID else { return }
+            guard pairingOwnerIsCurrent(owner) else {
+                invalidateActivePairingIfOwnerStale()
+                return
+            }
             failPairingAttempt(
-                attemptID: attemptID,
+                owner: owner,
                 diagnostic: ApplicationDiagnosticFactory.pairingIdentityUnavailable
             )
         }
     }
 
     func submitPairingPIN() async {
-        guard let hostID = pairingUI.hostID,
-              let host = hosts.first(where: { $0.id == hostID }),
-              let attemptID = pairingUI.attemptID
-        else { return }
+        await submitPairingPIN(in: primaryWorkspaceReference)
+    }
 
-        guard !pairingUI.isRunning,
-              pairingUI.stage == .waitingForPIN else {
-            return
-        }
+    func submitPairingPIN(
+        in workspace: ProductWorkspaceReference
+    ) async {
+        guard let state = workspaceRegistry.state(for: workspace),
+              let owner = state.pairing.owner,
+              pairingOwnerIsCurrent(owner),
+              let host = hosts.first(where: { $0.id == owner.hostID }),
+              state.pairing.stage == .waitingForPIN,
+              !state.pairing.isRunning else { return }
 
         guard let provider = runtimeProviders.pairing else {
             failPairingAttempt(
-                attemptID: attemptID,
-                diagnostic: ApplicationDiagnosticFactory.pairingUnavailable
+                owner: owner,
+                diagnostic: ApplicationDiagnosticFactory.pairingUnavailable,
+                issueCode: .pairingUnavailable
             )
             return
         }
-        guard let identity = preparedPairingIdentity else {
+        guard let preparedPairingIdentity,
+              preparedPairingIdentity.owner == owner else {
             failPairingAttempt(
-                attemptID: attemptID,
+                owner: owner,
                 diagnostic: ApplicationDiagnosticFactory.pairingIdentityUnavailable
             )
             return
         }
 
-        let pin = pairingUI.pin
-        guard isPairingPINValid else {
-            pairingUI.message = "PIN must contain exactly four digits."
+        let pin = state.pairing.pin
+        guard isPairingPINValid(in: workspace) else {
+            _ = try? workspaceRegistry.update(workspace) { current in
+                guard current.pairing.owner == owner else { return }
+                current.pairing.message = "PIN must contain exactly four digits."
+                current.pairing.issue = ProductIssue(
+                    code: .pairingPINInvalid,
+                    actionScope: .pairing(owner)
+                )
+            }
             return
         }
 
         let request = PairingRuntimeRequest(
-            attemptID: attemptID,
+            attemptID: owner.attemptGeneration.rawValue,
             host: host,
             pin: pin,
-            clientIdentity: identity
+            clientIdentity: preparedPairingIdentity.material
         )
-        pairingUI.pin = ""
-        pairingUI.isRunning = true
-        pairingUI.stage = .exchangingSecrets
-        pairingUI.message = pairingMessage(for: .exchangingSecrets, hostName: host.name)
+        _ = try? workspaceRegistry.update(workspace) { current in
+            guard current.pairing.owner == owner else { return }
+            current.pairing.pin = ""
+            current.pairing.isRunning = true
+            current.pairing.stage = .exchangingSecrets
+            current.pairing.message = pairingMessage(
+                for: .exchangingSecrets,
+                hostName: host.name
+            )
+            current.pairing.issue = nil
+        }
         session.phase = .pairing(pin: "")
 
         var completedResult: PairingResult?
         do {
             let events = await provider.pair(request)
             for try await event in events {
-                guard pairingUI.attemptID == attemptID else { return }
+                guard pairingOwnerIsCurrent(owner) else {
+                    invalidateActivePairingIfOwnerStale()
+                    return
+                }
                 switch event {
                 case let .progress(snapshot):
-                    guard snapshot.attemptID == attemptID,
-                          snapshot.hostID == hostID else {
+                    guard snapshot.attemptID == owner.attemptGeneration.rawValue,
+                          snapshot.hostID == owner.hostID else {
                         throw PairingApplicationError.invalidAuthenticatedCompletion
                     }
                     if let failure = snapshot.failure {
                         throw failure
                     }
-                    pairingUI.stage = snapshot.stage
-                    pairingUI.message = pairingMessage(for: snapshot.stage, hostName: host.name)
-                    pairingUI.actionMessage = nil
+                    _ = try? workspaceRegistry.update(workspace) { current in
+                        guard current.pairing.owner == owner else { return }
+                        current.pairing.stage = snapshot.stage
+                        current.pairing.message = pairingMessage(
+                            for: snapshot.stage,
+                            hostName: host.name
+                        )
+                        current.pairing.actionMessage = nil
+                        current.pairing.issue = nil
+                    }
                 case let .completed(result):
-                    try validatePairingCompletion(result, expectedHostID: hostID)
+                    try validatePairingCompletion(
+                        result,
+                        expectedHostID: owner.hostID
+                    )
                     completedResult = result
                 }
             }
             guard let result = completedResult else {
                 throw PairingApplicationError.incompleteRuntimeStream
             }
-            guard pairingUI.attemptID == attemptID else { return }
-            applyPairingCompletion(result)
+            guard pairingOwnerIsCurrent(owner) else {
+                invalidateActivePairingIfOwnerStale()
+                return
+            }
+            applyPairingCompletion(result, owner: owner)
         } catch {
-            guard pairingUI.attemptID == attemptID else { return }
+            guard pairingOwnerIsCurrent(owner) else {
+                invalidateActivePairingIfOwnerStale()
+                return
+            }
             if let failure = error as? PairingFailure, failure.code == .cancelled {
-                await cancelPairing(showCancelledState: true)
+                await cancelPairing(owner: owner, showCancelledState: true)
                 return
             }
             failPairingAttempt(
-                attemptID: attemptID,
+                owner: owner,
                 diagnostic: ApplicationDiagnosticFactory.pairingFailure(error)
             )
-            await provider.cancelPairing(attemptID: attemptID)
+            await provider.cancelPairing(
+                attemptID: owner.attemptGeneration.rawValue
+            )
         }
     }
 
+    @discardableResult
+    func retryPairing(
+        in workspace: ProductWorkspaceReference
+    ) async -> Bool {
+        guard let state = workspaceRegistry.state(for: workspace),
+              state.pairing.stage == .failed,
+              let owner = state.pairing.owner,
+              pairingOwnerIsCurrent(owner, requireActiveAttempt: false),
+              let action = state.pairing.issue?.action,
+              action.kind == .retryPairing,
+              action.scope == .pairing(owner),
+              let host = hosts.first(where: { $0.id == owner.hostID }) else {
+            return false
+        }
+        await beginPairing(host: host, in: workspace)
+        return pairingState(for: workspace)?.owner != owner
+    }
+
     func cancelPairing() async {
-        await cancelPairing(showCancelledState: true)
+        await cancelPairing(in: primaryWorkspaceReference)
+    }
+
+    func cancelPairing(
+        in workspace: ProductWorkspaceReference
+    ) async {
+        guard let owner = activePairingOwner,
+              owner.workspace == workspace else { return }
+        await cancelPairing(owner: owner, showCancelledState: true)
     }
 
     func refreshAppsForSelectedHost() async {
@@ -2157,58 +2353,102 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
-    private func cancelPairing(showCancelledState: Bool) async {
-        guard let attemptID = pairingUI.attemptID else { return }
-        let hostID = pairingUI.hostID
-        pairingUI.attemptID = nil
-        pairingUI.pin = ""
-        pairingUI.isRunning = false
-        preparedPairingIdentity = nil
-        session.phase = .disconnected
+    private func cancelPairing(
+        owner: ProductPairingOwner,
+        showCancelledState: Bool
+    ) async {
+        guard activePairingOwner == owner else { return }
+        let ownerWasCurrent = pairingOwnerIsCurrent(owner)
+        activePairingOwner = nil
+        if preparedPairingIdentity?.owner == owner {
+            preparedPairingIdentity = nil
+        }
+        if case .pairing = session.phase {
+            session.phase = .disconnected
+        }
 
+        if ownerWasCurrent {
+            _ = try? workspaceRegistry.update(owner.workspace) { state in
+                guard state.pairing.owner == owner else { return }
+                if showCancelledState {
+                    state.pairing = PairingUIState(
+                        owner: owner,
+                        stage: .cancelled,
+                        message: "Pairing was cancelled.",
+                        issue: ProductIssue(
+                            code: .pairingCancelled,
+                            actionScope: .pairing(owner)
+                        )
+                    )
+                } else {
+                    state.pairing = PairingUIState()
+                }
+            }
+        }
         if showCancelledState {
-            pairingUI.stage = .cancelled
-            pairingUI.message = "Pairing was cancelled."
             diagnostics.record("Cancelled pairing attempt", subsystem: "pairing")
-        } else if !showCancelledState {
-            pairingUI = PairingUIState(hostID: hostID)
         }
 
         if let provider = runtimeProviders.pairing {
-            await provider.cancelPairing(attemptID: attemptID)
+            await provider.cancelPairing(
+                attemptID: owner.attemptGeneration.rawValue
+            )
         }
     }
 
-    private func applyPairingCompletion(_ result: PairingResult) {
+    private func applyPairingCompletion(
+        _ result: PairingResult,
+        owner: ProductPairingOwner
+    ) {
+        guard pairingOwnerIsCurrent(owner) else { return }
+        activePairingOwner = nil
+        if preparedPairingIdentity?.owner == owner {
+            preparedPairingIdentity = nil
+        }
         if let index = hosts.firstIndex(where: { $0.id == result.host.id }) {
             hosts[index] = result.host
         } else {
             hosts.append(result.host)
         }
-        selectedHostID = result.host.id
-        pairingUI = PairingUIState(
-            hostID: result.host.id,
-            stage: .paired,
-            message: "Paired with \(result.host.name)."
-        )
-        preparedPairingIdentity = nil
+        reconcileWorkspaceSelections()
+        _ = try? workspaceRegistry.update(owner.workspace) { state in
+            guard state.selectedHostID == owner.hostID,
+                  state.hostSelectionGeneration == owner.hostSelectionGeneration,
+                  state.pairing.owner == owner else { return }
+            state.pairing = PairingUIState(
+                owner: owner,
+                stage: .paired,
+                message: "Paired with \(result.host.name)."
+            )
+        }
         session.phase = .disconnected
         diagnostics.clearActionableEvents(in: [.pairing])
         diagnostics.record("Authenticated pairing completed", subsystem: "pairing")
     }
 
     private func failPairingAttempt(
-        attemptID: UUID,
-        diagnostic: ApplicationDiagnostic
+        owner: ProductPairingOwner,
+        diagnostic: ApplicationDiagnostic,
+        issueCode: ProductIssueCode = .pairingFailed
     ) {
-        guard pairingUI.attemptID == attemptID else { return }
-        pairingUI.attemptID = nil
-        pairingUI.stage = .failed
-        pairingUI.pin = ""
-        pairingUI.isRunning = false
-        pairingUI.message = diagnostic.summary
-        pairingUI.actionMessage = diagnostic.action?.label
-        preparedPairingIdentity = nil
+        guard pairingOwnerIsCurrent(owner) else { return }
+        activePairingOwner = nil
+        if preparedPairingIdentity?.owner == owner {
+            preparedPairingIdentity = nil
+        }
+        _ = try? workspaceRegistry.update(owner.workspace) { state in
+            guard state.pairing.owner == owner else { return }
+            state.pairing = PairingUIState(
+                owner: owner,
+                stage: .failed,
+                message: diagnostic.summary,
+                actionMessage: diagnostic.action?.label,
+                issue: ProductIssue(
+                    code: issueCode,
+                    actionScope: .pairing(owner)
+                )
+            )
+        }
         let failure = SessionError(subsystem: diagnostic.subsystem, message: diagnostic.summary)
         session.phase = .failed(failure)
         diagnostics.record(diagnostic)

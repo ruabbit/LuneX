@@ -481,7 +481,8 @@ private struct PairingPanel: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        @Bindable var appModel = appModel
+        let workspace = appModel.primaryWorkspaceReference
+        let pairing = appModel.pairingState(for: workspace) ?? PairingUIState()
 
         Panel {
             VStack(alignment: .leading, spacing: 12) {
@@ -502,22 +503,33 @@ private struct PairingPanel: View {
                         Label("Authenticated pairing transport unavailable", systemImage: "exclamationmark.shield")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else if appModel.pairingUI.isRunning {
+                    } else if pairing.isRunning,
+                              pairing.hostID == host.id {
                         HStack(spacing: 12) {
                             ProgressView()
                                 .controlSize(.small)
                             Button {
                                 Task {
-                                    await appModel.cancelPairing()
+                                    await appModel.cancelPairing(in: workspace)
                                 }
                             } label: {
                                 Label("Cancel", systemImage: "xmark")
                             }
                         }
-                    } else if appModel.pairingUI.stage == .waitingForPIN,
-                              appModel.pairingUI.hostID == host.id {
+                    } else if pairing.stage == .waitingForPIN,
+                              pairing.hostID == host.id {
                         HStack {
-                            TextField("PIN", text: $appModel.pairingUI.pin)
+                            TextField(
+                                "PIN",
+                                text: Binding(
+                                    get: {
+                                        appModel.pairingState(for: workspace)?.pin ?? ""
+                                    },
+                                    set: {
+                                        appModel.updatePairingPIN($0, in: workspace)
+                                    }
+                                )
+                            )
                                 #if os(iOS)
                                 .keyboardType(.numberPad)
                                 #endif
@@ -528,50 +540,61 @@ private struct PairingPanel: View {
 
                             Button {
                                 Task {
-                                    await appModel.submitPairingPIN()
+                                    await appModel.submitPairingPIN(in: workspace)
                                 }
                             } label: {
                                 Label("Submit", systemImage: "checkmark")
                             }
-                            .disabled(!appModel.isPairingPINValid)
+                            .disabled(!appModel.isPairingPINValid(in: workspace))
 
                             Button {
                                 Task {
-                                    await appModel.cancelPairing()
+                                    await appModel.cancelPairing(in: workspace)
                                 }
                             } label: {
                                 Label("Cancel", systemImage: "xmark")
                             }
                         }
+                    } else if pairing.stage == .failed,
+                              pairing.issue?.action?.kind == .retryPairing {
+                        Button {
+                            Task {
+                                await appModel.retryPairing(in: workspace)
+                            }
+                        } label: {
+                            Label("Retry Pairing", systemImage: "arrow.clockwise")
+                        }
                     } else {
                         Button {
                             Task {
-                                await appModel.beginPairing(host: host)
+                                await appModel.beginPairing(
+                                    host: host,
+                                    in: workspace
+                                )
                             }
                         } label: {
                             Label("Start Pairing", systemImage: "lock.open")
                         }
                     }
 
-                    if let message = appModel.pairingUI.message {
+                    if let issue = pairing.issue {
+                        Label {
+                            Text(issue.presentation.message)
+                        } icon: {
+                            Image(systemName: issue.presentation.systemImage)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(
+                            issue.severity == .error ? .orange : .secondary
+                        )
+                    } else if let message = pairing.message {
                         Text(message)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    if let action = appModel.pairingUI.actionMessage {
-                        Label(action, systemImage: "arrow.forward.circle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
                 } else {
                     ContentUnavailableView("Select a Host", systemImage: "key")
                 }
-            }
-        }
-        .onChange(of: appModel.selectedHostID) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            Task {
-                await appModel.cancelPairing()
             }
         }
     }

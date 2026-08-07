@@ -83,10 +83,26 @@ struct ProductCatalogOwner: Hashable, Sendable {
     let hostSelectionGeneration: ProductHostSelectionGeneration
 }
 
+struct ProductPairingAttemptGeneration: Hashable, Sendable {
+    let rawValue: UUID
+
+    init(rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+}
+
+struct ProductPairingOwner: Hashable, Sendable {
+    let workspace: ProductWorkspaceReference
+    let hostID: MoonlightHost.ID
+    let hostSelectionGeneration: ProductHostSelectionGeneration
+    let attemptGeneration: ProductPairingAttemptGeneration
+}
+
 enum ProductActionScope: Hashable, Sendable {
     case application
     case workspace(ProductWorkspaceReference)
     case catalog(ProductCatalogOwner)
+    case pairing(ProductPairingOwner)
     case session(
         workspace: ProductWorkspaceReference,
         sessionID: UUID
@@ -390,6 +406,41 @@ struct ProductWorkspacePresentationState: Equatable, Sendable {
     }
 }
 
+struct PairingUIState: Equatable, Sendable {
+    var owner: ProductPairingOwner?
+    var attemptID: UUID?
+    var stage: PairingStage
+    var pin: String
+    var isRunning: Bool
+    var message: String?
+    var actionMessage: String?
+    var issue: ProductIssue?
+
+    init(
+        owner: ProductPairingOwner? = nil,
+        attemptID: UUID? = nil,
+        stage: PairingStage = .idle,
+        pin: String = "",
+        isRunning: Bool = false,
+        message: String? = nil,
+        actionMessage: String? = nil,
+        issue: ProductIssue? = nil
+    ) {
+        self.owner = owner
+        self.attemptID = attemptID
+        self.stage = stage
+        self.pin = pin
+        self.isRunning = isRunning
+        self.message = message
+        self.actionMessage = actionMessage
+        self.issue = issue
+    }
+
+    var hostID: MoonlightHost.ID? {
+        owner?.hostID
+    }
+}
+
 struct ProductWorkspaceState: Equatable, Sendable {
     let reference: ProductWorkspaceReference
     var navigationSelection: AppNavigationSelection
@@ -402,6 +453,7 @@ struct ProductWorkspaceState: Equatable, Sendable {
                 owner: catalogOwner,
                 phase: selectedHostID == nil ? .unavailable : .idle
             )
+            pairing = PairingUIState()
         }
     }
     private(set) var hostSelectionGeneration: ProductHostSelectionGeneration
@@ -409,6 +461,7 @@ struct ProductWorkspaceState: Equatable, Sendable {
     var presentation: ProductWorkspacePresentationState
     var hostLibrary: ProductHostLibraryWorkspaceState
     var catalog: ProductAppCatalogWorkspaceState
+    var pairing: PairingUIState
 
     init(
         reference: ProductWorkspaceReference,
@@ -418,7 +471,8 @@ struct ProductWorkspaceState: Equatable, Sendable {
         selectedAppID: RemoteApp.ID? = nil,
         presentation: ProductWorkspacePresentationState = .init(),
         hostLibrary: ProductHostLibraryWorkspaceState = .init(),
-        catalog: ProductAppCatalogWorkspaceState? = nil
+        catalog: ProductAppCatalogWorkspaceState? = nil,
+        pairing: PairingUIState = .init()
     ) {
         self.reference = reference
         self.navigationSelection = navigationSelection
@@ -438,6 +492,7 @@ struct ProductWorkspaceState: Equatable, Sendable {
             owner: owner,
             phase: selectedHostID == nil ? .unavailable : .idle
         )
+        self.pairing = pairing
     }
 
     var catalogOwner: ProductCatalogOwner? {

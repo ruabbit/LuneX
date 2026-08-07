@@ -3239,3 +3239,13 @@
 - Apps panel改读workspace catalog state并显示loading、saved/current、empty和typed failure；当前root仍固定primary workspace，真正per-scene binding留给4.2，pairing generation ownership留给2.4。
 - final focused `/tmp/LuneX-19-2_3-focused-final-r2.qoZFcB`为`44/44`，related `/tmp/LuneX-19-2_3-related-final-r2.P2U0aA`为`117/117`，serial normal `/tmp/LuneX-19-2_3-normal-final-r2.Q0xvUU`为`1172/1171/1/0`；唯一skip仍为opt-in unset的真实Keychain测试，raw log与xcresult均删除。
 - final generic Debug build `/tmp/LuneX-19-2_3-platform-builds-final-r2.hEc7xM`在最终代码上覆盖macOS、iOS/iPadOS、tvOS、visionOS并`4/4`通过，signing disabled且未调用Simulator lifecycle。它只证明unsigned SDK compilation，不证明Simulator App启动、signed artifact、physical device或live Sunshine。
+
+## 2026-08-08 阶段 19 Task 2.4 Pairing Generation Ownership
+
+- `ProductPairingOwner`绑定完整workspace reference、host ID、host-selection generation和attempt generation；attempt UUID直接用于`PairingRuntimeRequest`，没有复制第二套provider或pairing protocol owner。
+- primary `pairingUI`收紧为只读compatibility projection；PIN/begin/submit/cancel/retry都走workspace-scoped checked API。PIN mutation要求active owner、waiting stage与同一host generation，submit只接受4位ASCII并在provider前清空。
+- cancel先清active owner、prepared identity和pairing session phase，再await provider；non-owner/stale workspace无权取消。无效workspace begin也在替换当前owner前fail closed。
+- identity与provider每个await/event边界都复核完整owner；A-to-B-to-A、workspace replacement、cancelled attempt和late authenticated completion不能写trust、hosts或replacement UI。retry从当前typed `.pairing(owner)` action重新校验并创建新attempt generation。
+- terminal failure/cancelled保留historical owner但清runtime attempt ID；retryable failure有scoped action，cancelled按合同无action。成功只更新shared authenticated host与发起workspace pairing presentation。
+- corrected new focused `/tmp/LuneX-19-2_4-focused-r2.X9h9Nm`为`6/6`；expanded focused `/tmp/LuneX-19-2_4-focused-r3.KwsLsn`为`71/71`；related `/tmp/LuneX-19-2_4-related.XTst2Q`为`135/135`；serial normal `/tmp/LuneX-19-2_4-normal.LWChiM`为`1178/1177/1/0`。
+- final generic Debug build `/tmp/LuneX-19-2_4-platform-builds.CeubCP`为macOS、iOS/iPadOS、tvOS、visionOS `4/4`，signing disabled、Simulator lifecycle未调用。所有test/build raw log、xcresult和临时DerivedData均已删除，两个opt-in unset。

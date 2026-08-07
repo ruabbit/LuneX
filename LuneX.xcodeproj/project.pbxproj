@@ -633,6 +633,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 			}; name = Release; };
+		505FE125EDD4E4B09A5E8B6E /* ProductPairingWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ProductPairingWorkspaceTests.swift"; sourceTree = "<group>"; };
 		506FD4673FD5C13E7F49E26B /* VideoPacketAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034D057B26B7D00AA2AD265F /* VideoPacketAssembly.swift */; };
 		507CBEBBFD16B6EF19A12A0B /* PairingPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD8DB1FC579838127AC329D /* PairingPersistence.swift */; };
 		509B6EB9DC08AC023AD4E1E3 /* TVRemoteFocusInputAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B914C11A487EF67BA586616 /* TVRemoteFocusInputAdapter.swift */; };
@@ -1018,6 +1019,7 @@
 				90839AFF7B8B511A9A9192A2 /* ProductIssueTests.swift in Sources */,
 				83B8F481915A54959D22C057 /* ProductCatalogWorkspaceTests.swift in Sources */,
 				BB081FFB382A9ED7A150975B /* ProductHostWorkspaceTests.swift in Sources */,
+				FB909213A9045EE1CD459B06 /* ProductPairingWorkspaceTests.swift in Sources */,
 				448226712FAADF2A088D4998 /* ProductWorkspaceRegistryTests.swift in Sources */,
 				34C94E1980B1C5FD249A30C0 /* RTSPBootstrapTests.swift in Sources */,
 				75A65E7A995C54E2505DF2FD /* RTSPMessageTests.swift in Sources */,
@@ -1549,6 +1551,7 @@
 				C83DAA4B00855126BB5C2683 /* ProductIssueTests.swift */,
 				0C98D8ED81E453E45881264C /* ProductCatalogWorkspaceTests.swift */,
 				95624CEAD48AC534A89B8B13 /* ProductHostWorkspaceTests.swift */,
+				505FE125EDD4E4B09A5E8B6E /* ProductPairingWorkspaceTests.swift */,
 				39E94E4EA6C479D697AC470D /* ProductWorkspaceRegistryTests.swift */,
 				265ED2A218A1036C56367315 /* RTSPBootstrapTests.swift */,
 				4FF5B5DAD873E001E9585812 /* RTSPMessageTests.swift */,
@@ -2183,6 +2186,7 @@
 		FA41F4AA9D10B6788BA136CB /* VideoColorMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C8F80ADD20AB099E9EB6906 /* VideoColorMetadataTests.swift */; };
 		FB43824D4AD972A315152898 /* list.c in Sources */ = {isa = PBXBuildFile; fileRef = C72D8E8A5B0B2B4AC571D122 /* list.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		FB4AFD13BCF45C8B5F76A060 /* VideoDecompressionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/VideoDecompressionSession.swift"; sourceTree = "<group>"; };
+		FB909213A9045EE1CD459B06 /* ProductPairingWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505FE125EDD4E4B09A5E8B6E /* ProductPairingWorkspaceTests.swift */; };
 		FB9F573E862DCA22185062FC /* ClientIdentityGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B0F9A45402D4D70BB3B0D1 /* ClientIdentityGenerator.swift */; };
 		FBAB368A6FAB0C315E232E56 /* VideoColorMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/VideoColorMetadata.swift"; sourceTree = "<group>"; };
 		FC0C54D990685ABD1903CDCF /* HostAndPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E109E9620BAF2BA03F793106 /* HostAndPersistenceTests.swift */; };

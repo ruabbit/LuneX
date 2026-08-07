@@ -3719,3 +3719,11 @@
 - 2026-08-08：static final `/tmp/LuneX-19-2_3-static-final.lRAYqQ`通过generator双次稳定SHA-256、diff check、strict与apply精确`9/48 next 2.4`。
 - 2026-08-08：final generic Debug build `/tmp/LuneX-19-2_3-platform-builds-final-r2.hEc7xM`的macOS、iOS/iPadOS、tvOS、visionOS均通过；signing disabled、两个opt-in unset、未调用Simulator lifecycle，raw log和临时DerivedData删除。
 - 2026-08-08：task 2.3 final audit `/tmp/LuneX-19-2_3-final-audit.4wCcwh`通过精确11文件scope、diff check、strict/apply `9/48 next 2.4`、stable generator、focused/related/normal、4/4 generic Debug及artifact/opt-in/process/proof边界；准备final-record与独立提交推送。
+- 2026-08-08：task 2.3以`5ce492c Bind app catalog to workspace generations`提交推送，fetch与ls-remote确认HEAD/origin/main/remote三方一致且工作树clean；OpenSpec进入`9/48 next 2.4`。
+- 2026-08-08：开始task 2.4，审计现有global PairingUIState、identity preparation、provider stream、PIN/cancel/retry UI与late-event tests；确定复用单一provider，以workspace+host-selection+attempt generation作为checked product owner。
+- 2026-08-08：2.4首轮focused `/tmp/LuneX-19-2_4-focused.zS6AM7`为`6 total / 5 passed / 1 failed`；唯一失败是测试误要求无默认action的`pairingCancelled` issue携带action scope，production已编译且其余owner/retry/replacement测试通过。修正为terminal state owner + nil action后fresh重跑，不原样重复。
+- 2026-08-08：2.4 corrected focused `/tmp/LuneX-19-2_4-focused-r2.X9h9Nm`为`6/6`；final review随后把global pairing projection收紧为read-only、PIN统一走checked API，并在无效begin前增加workspace/host预校验。
+- 2026-08-08：expanded focused `/tmp/LuneX-19-2_4-focused-r3.KwsLsn`为`71/71`，related `/tmp/LuneX-19-2_4-related.XTst2Q`为`135/135`，serial normal `/tmp/LuneX-19-2_4-normal.LWChiM`为`1178/1177/1/0`；唯一skip是opt-in unset真实Keychain测试。
+- 2026-08-08：2.4 final generic Debug build `/tmp/LuneX-19-2_4-platform-builds.CeubCP`四application target `4/4`通过，signing disabled、未调用Simulator lifecycle；raw logs与临时DerivedData删除。
+- 2026-08-08：static pre-mark `/tmp/LuneX-19-2_4-static-pre.rPZV4d`通过generator双次稳定SHA-256、diff check、strict与OpenSpec精确`9/48 next 2.4`；同步合同后仅勾选2.4至`10/48`，下一项2.5。
+- 2026-08-08：task 2.4 final audit `/tmp/LuneX-19-2_4-final-audit.8zFRm5`通过精确12文件scope、diff check、strict/apply `10/48 next 2.5`、stable generator、focused/related/normal、4/4 generic Debug及artifact/opt-in/process/proof边界；准备final-record与独立提交推送。

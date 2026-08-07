@@ -43,7 +43,7 @@
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`9/48`。Group 1与2.1至2.3完成：host library与catalog presentation属于checked workspace；catalog owner同时携带workspace、host和selection generation，A-to-B-to-A与workspace replacement均使旧结果失效，cached/current/empty/failure和typed retry状态已进入Apps panel。final focused `44/44`、related `117/117`、normal `1172/1171/1 exact Keychain skip/0`通过；四application target generic Debug build门在最终代码上复验后记录。root UI仍是primary compatibility binding；下一项2.4迁移pairing workspace/host/attempt generations。
+阶段19当前权威进度`10/48`。Group 1与2.1至2.4完成：host library、catalog和pairing presentation属于checked workspace；pairing owner同时携带workspace、host selection与attempt generation，取消先失效owner再await provider，late identity/progress/completion、A-to-B-to-A、replacement与non-owner action均fail closed。focused `71/71`、related `135/135`、normal `1178/1177/1 exact Keychain skip/0`、四application target generic Debug `4/4`通过。root UI仍是primary compatibility binding；下一项2.5实现typed host removal/trust reset与active owner teardown。
 
 ### 阶段19错误记录
 
@@ -59,6 +59,7 @@
 - Task 2.1 final review发现manual add异常返回缺少normalized address时会fallback选择首个无关host；移除fallback并改走typed `hostAddFailed`。修正后expanded related `103/103`及完整serial normal `1158/1157/1/0`通过。
 - Task 2.1首个final scope gate把新测试文件在generated pbxproj中的引用数假设为3，实际稳定结构为4而提前退出；其余scope/OpenSpec/generator/test/artifact断言均通过。corrected gate只修正精确计数，不重复测试或运行时操作。
 - Task 2.3新增回归后的首个focused wrapper误用无test action的`LuneX-macOS` scheme并以退出码66、0 tests结束，同时过早删除失败raw log；通过`xcodebuild -list`确认scheme后改用`LuneXCoreTests`，保留结构化失败摘要的corrected wrapper从fresh目录通过，不原样重试。
+- Task 2.4首轮新focused为`6/5/0/1`，唯一失败是测试误要求无默认action的`pairingCancelled` issue携带action scope；terminal state已保留checked owner，修正断言为nil action后fresh focused通过`6/6`，production无需回退。
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 

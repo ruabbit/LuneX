@@ -112,9 +112,9 @@ user-visible failure therefore requires an explicit code and reviewed
 presentation rather than copying a lower-level string.
 
 `ProductActionToken` carries an opaque identifier, a closed
-`ProductActionKind`, and one of four non-display scopes: application,
-workspace identity/generation, catalog owner, or session identity plus its
-owning workspace.
+`ProductActionKind`, and one of five non-display scopes: application,
+workspace identity/generation, catalog owner, pairing owner, or session
+identity plus its owning workspace.
 The value is an authorization claim, not authorization by itself. The action
 dispatcher must compare its scope with current checked owners at invocation and
 must return a `stale_action` issue without executing when they differ.
@@ -220,10 +220,10 @@ unrelated host.
 Opening or cancelling the current compatibility sheet clears only the primary
 workspace draft. Root presentation is still the existing Boolean SwiftUI sheet
 bound to `primaryWorkspaceReference`; direct per-scene sheet ownership remains
-task 4.2. Pairing, multiwindow, and active-session owner wiring remain tasks
-2.4, 4.x, and 3.x respectively. Deterministic tests and unsigned generic builds
-do not prove Simulator interaction, signed artifacts, physical devices, or live
-Sunshine behavior.
+task 4.2. Multiwindow and active-session owner wiring remain tasks 4.x and 3.x
+respectively. Deterministic tests and unsigned generic builds do not prove
+Simulator interaction, signed artifacts, physical devices, or live Sunshine
+behavior.
 
 ### Catalog workspace and selected-host generation
 
@@ -258,7 +258,51 @@ The Apps panel reads the primary compatibility workspace catalog, invokes
 workspace-scoped refresh and selection, distinguishes saved/current/empty/
 loading/failure presentation, and keeps cached tiles visible on refresh
 failure. Direct scene-specific catalog bindings remain part of the broader
-multiwindow migration in task 4.2. Pairing ownership remains task 2.4.
+multiwindow migration in task 4.2. Pairing ownership is recorded below.
+
+### Pairing workspace, host, and attempt generation
+
+Pairing product state now belongs to `ProductWorkspaceState`. A
+`ProductPairingOwner` combines the complete workspace reference, selected host
+ID, selected-host generation, and a UUID-backed attempt generation. The runtime
+request uses the attempt generation UUID directly, so product progress and
+provider events refer to the same attempt without creating a second pairing
+runtime owner. The process still has at most one active pairing provider stream.
+
+The legacy primary `pairingUI` value is a read-only compatibility projection.
+PIN edits, begin, submit, cancel, and retry entry points all accept a complete
+workspace reference. PIN mutation also requires the exact active owner,
+waiting-for-PIN stage, unchanged selected-host generation, and a non-running
+attempt. Submission accepts only four ASCII digits, clears the PIN before the
+provider request, and never writes the PIN into product issues or diagnostics.
+
+Begin validates the initiating workspace and selected host before it may
+replace an existing process attempt. A new begin or retry creates a fresh
+attempt generation. Retry reads the current typed `retryPairing` action and
+revalidates its `.pairing(owner)` scope at invocation. An old failure action
+therefore cannot revive an attempt after A-to-B-to-A selection or workspace
+replacement.
+
+Cancellation invalidates the active owner, prepared identity, PIN, and pairing
+session phase before awaiting provider cancellation. A non-owning or stale
+workspace cannot cancel the current attempt. Provider progress and authenticated
+completion must match both runtime attempt UUID and host ID, and every awaited
+identity or provider boundary rechecks the full product owner. Late identity,
+progress, failure, or completion from cancelled, replaced, or host-switched
+owners cannot update trust, shared hosts, or replacement presentation.
+
+Terminal failed and cancelled states keep the historical owner for typed local
+presentation, but their runtime attempt ID is cleared. Pairing failure carries
+only a closed product issue; retryable failure actions remain scoped to that
+historical owner, while cancellation intentionally has no action. Successful
+completion updates the shared authenticated host record and only the initiating
+workspace's pairing presentation.
+
+`PairingPanel` currently uses the checked primary compatibility workspace for
+PIN, submit, cancel, retry, progress, and typed failure presentation. Direct
+scene-specific panel injection remains part of task 4.2. The retained progress
+messages and other legacy workflow strings are removed or mapped in tasks 6.1
+and 6.2; task 2.4 does not claim that later privacy migration is complete.
 
 ## Compatibility Boundary
 
