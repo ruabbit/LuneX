@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `42/50 ready`；7.5本地化、compact/wide、focus/window/input、迁移与clean-stop应用回归及repository pre-gate已通过，下一项8.1 normal verification |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `43/50 ready`；8.1 fresh complete normal与repository pre-gate已通过，下一项8.2五平台Debug/Release warnings-as-errors build矩阵 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -1606,3 +1606,11 @@
 - **final-audit断言错误：** 首轮`/tmp/LuneX-18-7_5-final-audit.L2aaaO`因把所有删除的`XCTAssert`视为测试弱化而退出；本次`String`到`LocalizedStringResource`迁移必然以删除旧直接断言、增加`localized(resource)`等价断言呈现。实际为69条新增断言对37条删除断言、1个新增测试函数、0个删除测试函数且无skip/disable。改为无测试函数删除、断言总量不下降和无skip/disable门，从fresh目录重跑。
 - **final diff audit：** corrected `/tmp/LuneX-18-7_5-final-audit-r2.7dsVBW`通过最终21文件`5 production / 5 test / 6 OpenSpec / 2 docs / 3 planning`分类、69新增/37迁移删除断言、1新增/0删除测试函数、无skip/disable、localization/layout/current coordinator projection实现、唯一7.5 checkbox及project/reference/dependency/opt-in/process/proof边界。下一步final-record后精确stage、提交和push/fetch。
 - **final-record：** `/tmp/LuneX-18-7_5-final-record.fepytG`通过基线remote parity、strict `9/9`、`42/50 next 8.1`、最终21文件分类、唯一7.5 checkbox、稳定project、三道final gate、全部retained evidence、disabled opt-ins与proof boundary。7.5进入精确stage、独立提交与push/fetch。
+- **提交与8.1启动：** 7.5已以`9ca6c12 Add adaptive localized TV and Vision controls`提交推送，fetch确认`HEAD == origin/main == 9ca6c120c2de3fc2e0598281246d86403a5dfa77`且工作树clean；OpenSpec为`42/50 next 8.1`。8.1将从fresh目录运行完整normal suite，显式移除真实Keychain/live-host opt-in并验证唯一skip，不复用7.5 normal作为8.1完成证据，也不操作Simulator lifecycle。
+- **fresh normal：** `/tmp/LuneX-18-8_1-normal.GjIqrj/Normal.xcresult`结构化通过`1123 total / 1122 passed / 1 skipped / 0 failed / 0 expected failure`；唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`并有`1 AIR/1 metallib`。命令显式移除两个真实opt-in、继续文件fallback且未操作Simulator。
+- **authority同步：** design、阶段18runtime contract、completion roadmap与三份planning已记录8.1必须使用fresh normal、唯一Keychain skip、文件fallback、零diagnostics/Metal及严格proof boundary；OpenSpec仍保持pre-mark`42/50 next 8.1`，下一步repository pre-gate。
+- **repository authority断言错误：** 首轮`/tmp/LuneX-18-8_1-repository-pre.qbRDTl`已通过fixtures、strict/apply、三次稳定generator、精确6文件scope及fresh normal test/skip/build/Metal结构化读取，随后因循环要求`design.md`出现固定`fresh normal`短语而退出；design使用等价`new complete macOS normal-suite run`并正确记录file fallback/proof tier，具体路径由runtime contract、roadmap与planning索引。按职责拆分语义与路径断言后fresh完整重跑，不重复normal。
+- **repository pre-gate：** corrected `/tmp/LuneX-18-8_1-repository-pre-r2.gPOMhm`完整通过fixtures、strict `9/9`、pre-mark `42/50 next 8.1`、三次稳定generator、精确6个authority文件、fresh normal `1123/1122/1/0`、唯一Keychain skip、build `succeeded/0/0/0`与`1 AIR/1 metallib`、disabled opt-ins/file fallback及全部仓库/proof边界；现在只勾选8.1，8.2+保持pending。
+- **post-mark final-state：** `/tmp/LuneX-18-8_1-final-state.uybdfA`只读通过strict `9/9`、`43/50 next 8.2`、精确7个authority文件、唯一8.1 checkbox、稳定project/normal/pre-gate、disabled opt-ins与无残留构建进程；未重复generator/normal或操作Simulator。下一步final audit/record。
+- **final audit：** `/tmp/LuneX-18-8_1-final-audit.fk0oho`通过7个authority文件/零production-test diff、唯一8.1 checkbox、strict `9/9`、`43/50 next 8.2`、normal/pre/post证据、project/reference/dependency、disabled opt-ins/process及proof边界；下一步final-record。
+- **final-record：** `/tmp/LuneX-18-8_1-final-record.w4fV2U`通过基线remote parity、strict `9/9`、`43/50 next 8.2`、7个authority文件、唯一8.1 checkbox、fresh normal/pre/post/audit、稳定project/reference/dependency、disabled opt-ins和proof boundary；8.1进入独立提交推送。

@@ -3059,6 +3059,55 @@ parity, OpenSpec strict `9/9`, `42/50` with task 8.1 next, the final file
 classification, the only 7.5 checkbox change, stable project membership, all
 three final gates, retained evidence, disabled opt-ins, and proof boundaries.
 
+## Task 8.1 complete normal-suite verification
+
+Task 8.1 runs the complete `LuneXCoreTests` normal suite from a fresh evidence
+directory on the macOS test destination. The command explicitly removes
+`LUNEX_RUN_KEYCHAIN_TEST` and `LUNEX_RUN_LIVE_HOST_TEST`; it therefore exercises
+the normal Debug file identity fallback and does not request real Keychain or
+live Sunshine access. It performs no Simulator inventory or lifecycle action.
+
+Fresh `/tmp/LuneX-18-8_1-normal.GjIqrj/Normal.xcresult` reports `1123 total /
+1122 passed / 1 skipped / 0 failed / 0 expected failure`. The sole skip is
+exactly
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`.
+Structured build results report `succeeded`, zero warnings, errors, and analyzer
+warnings, with one AIR and one metallib in the isolated DerivedData.
+
+This evidence proves the current complete normal deterministic suite with the
+two opt-ins disabled and file fallback active. It does not prove real Keychain
+authorization, live-host interoperability, Simulator runtime, signed
+installation, physical Apple TV or Vision Pro input/HDR/spatial audio,
+performance, power, or thermal behavior. Tasks 8.2-8.8 remain responsible for
+those separate gates.
+
+Corrected repository pre-gate
+`/tmp/LuneX-18-8_1-repository-pre-r2.gPOMhm` passed fixture self/tree,
+OpenSpec strict `9/9`, pre-mark `42/50` with task 8.1 next, three identical
+generator hashes, exact six-file authority scope, the fresh normal summary and
+single skip, zero structured build diagnostics, Metal artifacts, disabled
+opt-ins, file fallback, clean-room, dependency, process, and proof-tier gates.
+Only task 8.1 was then marked complete; tasks 8.2-8.8 remain pending.
+
+Post-mark final-state `/tmp/LuneX-18-8_1-final-state.uybdfA` confirmed OpenSpec
+strict `9/9`, exact `43/50` with task 8.2 next, exact seven-file authority
+scope, the single task 8.1 checkbox replacement, stable project and normal
+evidence, disabled opt-ins, no residual build process, and unchanged proof
+boundaries. It did not rerun the generator, normal suite, or any Simulator
+lifecycle action.
+
+Final audit `/tmp/LuneX-18-8_1-final-audit.fk0oho` confirmed a seven-file
+authority-only scope with no production or test diff, the single task 8.1
+checkbox replacement, OpenSpec `43/50` with task 8.2 next, all normal/pre/post
+evidence, stable project/reference/dependency state, disabled opt-ins, and the
+same proof boundaries.
+
+Final record `/tmp/LuneX-18-8_1-final-record.w4fV2U` reconfirmed baseline remote
+parity, OpenSpec strict `9/9`, `43/50` with task 8.2 next, the seven-file
+authority-only scope, the only 8.1 checkbox change, fresh normal/pre/post/audit
+evidence, stable project/reference/dependency state, disabled opt-ins, and proof
+boundaries.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

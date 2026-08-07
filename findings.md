@@ -3034,3 +3034,15 @@
 - post-mark `/tmp/LuneX-18-7_5-final-state.cb0UO9`确认OpenSpec精确推进为`42/50 next 8.1`，tasks只有7.5 checkbox替换，最终21文件scope、project hash、retained evidence、disabled opt-ins与proof boundary稳定；没有重跑测试/build/generator或操作Simulator lifecycle。
 - corrected final diff audit `/tmp/LuneX-18-7_5-final-audit-r2.7dsVBW`未发现阻止提交的问题：5个production文件只实现本地化资源、适应性布局和current coordinator projection修复，5个测试文件断言总量增加且无函数删除/禁用，6份OpenSpec、2份runtime docs和三份planning与唯一7.5 checkbox保持同一proof tier。
 - final-record `/tmp/LuneX-18-7_5-final-record.fepytG`再次确认7.5没有剩余离线验收问题并可独立提交；它不替代8.1-8.8或任何Simulator runtime、signed、physical、live与性能证明。
+
+## 2026-08-08 阶段 18 任务 8.1 normal verification
+
+- 7.5已以`9ca6c12`提交推送且`HEAD == origin/main`、工作树clean；8.1要求新的完整normal运行，不能把7.5为回归目的保留的normal bundle直接改称8.1证据。
+- 8.1只在macOS测试destination运行`LuneXCoreTests`完整suite，显式`env -u LUNEX_RUN_KEYCHAIN_TEST -u LUNEX_RUN_LIVE_HOST_TEST`并使用Debug文件fallback；不得查询或操作Simulator lifecycle。
+- 完成条件是test result Passed、failed/expected failure均为0、唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`、build warning/error/analyzer warning均为0并生成Metal AIR/metallib；这仍不证明live Keychain、host、Simulator、signed或physical行为。
+- fresh `/tmp/LuneX-18-8_1-normal.GjIqrj`满足全部条件：`1123/1122/1/0`且0 expected failure，唯一skip精确为显式真实Keychain round-trip；结构化build为`succeeded/0 warning/0 error/0 analyzer warning`并有`1 AIR/1 metallib`。
+- 该命令显式`env -u`两个真实opt-in，文件fallback是实际测试路径；它没有查询或操作Simulator，也不提供真实Keychain授权、live host、signed/physical或性能证明。authority已保持8.2-8.8分层，8.1在repository gate前未勾选。
+- corrected repository pre-gate `/tmp/LuneX-18-8_1-repository-pre-r2.gPOMhm`确认pre-mark`42/50 next 8.1`、strict `9/9`、稳定project、精确6个authority文件、fresh normal/skip/build/Metal、disabled opt-ins/file fallback及全部证明边界；不存在阻止只勾选8.1的离线问题，8.2-8.8未提前满足。
+- post-mark `/tmp/LuneX-18-8_1-final-state.uybdfA`确认OpenSpec精确为`43/50 next 8.2`、最终7个authority文件与唯一8.1 checkbox，未重复normal/generator或操作Simulator；8.2五平台Debug/Release仍没有执行。
+- final audit `/tmp/LuneX-18-8_1-final-audit.fk0oho`确认8.1最终只有authority/task记录，无production/test变更，normal/pre/post证据与唯一checkbox完整；project/reference/dependency和proof tier没有漂移。
+- final-record `/tmp/LuneX-18-8_1-final-record.w4fV2U`再次确认8.1可独立提交；8.2五平台Debug/Release、8.3 repository/analyzer、8.4 sanitizer/resource及8.5-8.8 runtime/physical/final sync均未由此完成。

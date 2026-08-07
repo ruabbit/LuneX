@@ -633,6 +633,15 @@ created or booted. Signed installation, Siri Remote feel, controller feedback,
 television/headset HDR, spatial audio, Vision Pro interaction, performance,
 thermal state, and live Sunshine require authorized physical receipts.
 
+Task 8.1 uses a new complete macOS normal-suite run rather than relabeling task
+7.5 regression evidence. Both real-Keychain and live-host opt-ins are removed
+from the test environment, so the existing file identity fallback remains the
+normal test path. Completion requires every non-opt-in test to pass and the
+only skip to be the explicitly gated real-Keychain round trip. This proves the
+normal deterministic suite and build diagnostics only; it does not prove real
+Keychain access, live host behavior, Simulator runtime, signing, hardware, or
+performance and does not complete tasks 8.2-8.8.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->
