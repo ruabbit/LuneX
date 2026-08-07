@@ -99,11 +99,15 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
         XCTAssertEqual(state.hdr, .sdrFallback(.insufficientHeadroom))
         XCTAssertEqual(state.spatial, .headTracked(channelCount: 8))
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .hdr })?.value,
+            state.rows.first(where: { $0.kind == .hdr }).map {
+                localized($0.value)
+            },
             "SDR fallback"
         )
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .spatial })?.value,
+            state.rows.first(where: { $0.kind == .spatial }).map {
+                localized($0.value)
+            },
             "8 ch head tracked"
         )
     }
@@ -210,7 +214,12 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
             presentationFailure: .actionFailed(.audioRoute)
         )
         let published = state.rows.flatMap {
-            [$0.title, $0.value, $0.detail, $0.accessibilityValue]
+            [
+                localized($0.title),
+                localized($0.value),
+                localized($0.detail),
+                localized($0.accessibilityValue)
+            ]
         }.joined(separator: " ")
         let forbidden = [
             "192.0.2.44",
@@ -227,11 +236,11 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
         XCTAssertEqual(state.render, .failed)
         XCTAssertEqual(state.rows.count, 8)
         for row in state.rows {
-            XCTAssertFalse(row.title.isEmpty)
-            XCTAssertFalse(row.value.isEmpty)
-            XCTAssertFalse(row.detail.isEmpty)
+            XCTAssertFalse(localized(row.title).isEmpty)
+            XCTAssertFalse(localized(row.value).isEmpty)
+            XCTAssertFalse(localized(row.detail).isEmpty)
             XCTAssertFalse(row.systemImage.isEmpty)
-            XCTAssertFalse(row.accessibilityValue.isEmpty)
+            XCTAssertFalse(localized(row.accessibilityValue).isEmpty)
         }
         for fragment in forbidden {
             XCTAssertFalse(published.contains(fragment))
@@ -299,9 +308,13 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
             "Text(\"Actual Windowed Stream State\")",
             "Button(role: .destructive)",
             "Label(\"Disconnect\", systemImage: \"xmark.circle\")",
-            ".accessibilityLabel(row.title)",
-            ".accessibilityValue(row.accessibilityValue)",
-            ".frame(maxWidth: 760, alignment: .leading)"
+            ".accessibilityLabel(Text(row.title))",
+            ".accessibilityValue(Text(row.accessibilityValue))",
+            ".frame(maxWidth: 760, alignment: .leading)",
+            "TVVisionStreamControlsLayout(",
+            "ViewThatFits(in: .horizontal)",
+            "compactStatusRows(state)",
+            "wideStatusRows(state)"
         ]
         for contract in required {
             XCTAssertTrue(controls.contains(contract), "Missing \(contract)")
@@ -320,6 +333,10 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
         XCTAssertTrue(generator.contains(
             "Tests/LuneXCoreTests/VisionStreamControlPresentationStateTests.swift"
         ))
+    }
+
+    private func localized(_ resource: LocalizedStringResource) -> String {
+        String(localized: resource)
     }
 
     private func resolve(

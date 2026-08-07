@@ -54,11 +54,15 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
             .spatial(channelCount: 6, mode: .fixedSpatial)
         )
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .hdr })?.value,
+            state.rows.first(where: { $0.kind == .hdr }).map {
+                localized($0.value)
+            },
             "SDR fallback"
         )
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .controllers })?.value,
+            state.rows.first(where: { $0.kind == .controllers }).map {
+                localized($0.value)
+            },
             "2 connected, 1 routed"
         )
     }
@@ -97,11 +101,15 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
             .spatial(channelCount: 8, mode: .headTracked)
         )
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .render })?.value,
+            state.rows.first(where: { $0.kind == .render }).map {
+                localized($0.value)
+            },
             "Presenting"
         )
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .audio })?.value,
+            state.rows.first(where: { $0.kind == .audio }).map {
+                localized($0.value)
+            },
             "8 ch head tracked"
         )
     }
@@ -136,7 +144,9 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
         XCTAssertEqual(state.audio, .recovering)
         XCTAssertEqual(state.failure, .actionFailed(.audioRoute))
         XCTAssertEqual(
-            state.rows.first(where: { $0.kind == .failure })?.value,
+            state.rows.first(where: { $0.kind == .failure }).map {
+                localized($0.value)
+            },
             "Audio route failed"
         )
     }
@@ -176,7 +186,12 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
             spatialAudio: .inactive
         )
         let published = state.rows.flatMap {
-            [$0.title, $0.value, $0.detail, $0.accessibilityValue]
+            [
+                localized($0.title),
+                localized($0.value),
+                localized($0.detail),
+                localized($0.accessibilityValue)
+            ]
         }.joined(separator: " ")
         let forbidden = [
             "192.0.2.44",
@@ -193,11 +208,11 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
         XCTAssertEqual(state.render, .failed)
         XCTAssertEqual(state.rows.count, 8)
         for row in state.rows {
-            XCTAssertFalse(row.title.isEmpty)
-            XCTAssertFalse(row.value.isEmpty)
-            XCTAssertFalse(row.detail.isEmpty)
+            XCTAssertFalse(localized(row.title).isEmpty)
+            XCTAssertFalse(localized(row.value).isEmpty)
+            XCTAssertFalse(localized(row.detail).isEmpty)
             XCTAssertFalse(row.systemImage.isEmpty)
-            XCTAssertFalse(row.accessibilityValue.isEmpty)
+            XCTAssertFalse(localized(row.accessibilityValue).isEmpty)
         }
         for fragment in forbidden {
             XCTAssertFalse(published.contains(fragment))
@@ -256,16 +271,30 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
             ".focusSection()",
             ".accessibilitySortPriority(2)",
             ".accessibilitySortPriority(1)",
-            ".accessibilityLabel(row.title)",
-            ".accessibilityValue(row.accessibilityValue)",
+            ".accessibilityLabel(Text(row.title))",
+            ".accessibilityValue(Text(row.accessibilityValue))",
             "Text(\"Actual Stream State\")",
-            "Button(role: .destructive)"
+            "Button(role: .destructive)",
+            "TVVisionStreamControlsLayout(",
+            "ViewThatFits(in: .horizontal)",
+            "compactStatusRows(state)",
+            "wideStatusRows(state)"
         ]
         for contract in required {
             XCTAssertTrue(controls.contains(contract), "Missing \(contract)")
         }
         XCTAssertFalse(controls.contains(".onHover"))
         XCTAssertFalse(controls.contains("preferRelativeMouseMode"))
+        let hideControls = try XCTUnwrap(controls.range(
+            of: "Label(\"Hide Controls\", systemImage: \"eye.slash\")"
+        ))
+        let disconnect = try XCTUnwrap(controls.range(
+            of: "Label(\"Disconnect\", systemImage: \"xmark.circle\")"
+        ))
+        XCTAssertLessThan(
+            controls.distance(from: controls.startIndex, to: hideControls.lowerBound),
+            controls.distance(from: controls.startIndex, to: disconnect.lowerBound)
+        )
         XCTAssertTrue(appModel.contains(
             "var tvStreamControlPresentationState: TVStreamControlPresentationState"
         ))
@@ -275,6 +304,10 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
         XCTAssertTrue(generator.contains(
             "Tests/LuneXCoreTests/TVStreamControlPresentationStateTests.swift"
         ))
+    }
+
+    private func localized(_ resource: LocalizedStringResource) -> String {
+        String(localized: resource)
     }
 
     private func resolve(

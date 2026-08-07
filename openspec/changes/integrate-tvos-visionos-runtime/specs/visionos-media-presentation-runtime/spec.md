@@ -141,6 +141,14 @@ native accessible SwiftUI controls.
 - **WHEN** Settings displays fit/fill, HDR, spatial-audio, or head-tracking preferences
 - **THEN** LuneX SHALL label the persisted selection as desired behavior and separately show current render, typed HDR fallback, and actual visionOS spatial state from the current windowed presentation without claiming the preference is active
 
+#### Scenario: Localized windowed status adapts to available space
+- **WHEN** visionOS stream controls render in a compact window, at an accessibility text size, or where the wide status grid does not fit
+- **THEN** LuneX SHALL render the same localized actual-state resources in a stable compact vertical order with equivalent accessibility labels and values
+
+#### Scenario: Windowed media ownership is cleared
+- **WHEN** local stop, remote termination, or reconnect ends or replaces the current visionOS presentation
+- **THEN** stream controls and Settings SHALL clear actual render, HDR, spatial, immersive, and failure claims without changing the persisted desired policy
+
 ### Requirement: visionOS platform diagnostics SHALL be finite and owner scoped
 Current visionOS coordinator state SHALL enter the existing application
 diagnostics store only through a current presentation lease, monotonic source

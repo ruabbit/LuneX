@@ -19,15 +19,15 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
         )
 
         XCTAssertEqual(state.platform, .tvOS)
-        XCTAssertEqual(state.content(for: .input).desiredValue, "Automatic eligible remote capture")
-        XCTAssertEqual(state.content(for: .input).actualValue, "Remote")
-        XCTAssertEqual(state.content(for: .controllers).actualValue, "2 connected, 1 routed")
-        XCTAssertEqual(state.content(for: .render).desiredValue, "Fill")
-        XCTAssertEqual(state.content(for: .render).actualValue, "Presenting")
-        XCTAssertEqual(state.content(for: .hdr).desiredValue, "On")
-        XCTAssertEqual(state.content(for: .hdr).actualValue, "SDR fallback")
-        XCTAssertEqual(state.content(for: .spatial).desiredValue, "Head tracked when available")
-        XCTAssertEqual(state.content(for: .spatial).actualValue, "6 ch head tracked")
+        XCTAssertEqual(localized(state.content(for: .input).desiredValue), "Automatic eligible remote capture")
+        XCTAssertEqual(localized(state.content(for: .input).actualValue), "Remote")
+        XCTAssertEqual(localized(state.content(for: .controllers).actualValue), "2 connected, 1 routed")
+        XCTAssertEqual(localized(state.content(for: .render).desiredValue), "Fill")
+        XCTAssertEqual(localized(state.content(for: .render).actualValue), "Presenting")
+        XCTAssertEqual(localized(state.content(for: .hdr).desiredValue), "On")
+        XCTAssertEqual(localized(state.content(for: .hdr).actualValue), "SDR fallback")
+        XCTAssertEqual(localized(state.content(for: .spatial).desiredValue), "Head tracked when available")
+        XCTAssertEqual(localized(state.content(for: .spatial).actualValue), "6 ch head tracked")
     }
 
     func testVisionSettingsKeepDesiredAndActualStateDistinct() {
@@ -46,15 +46,15 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
         )
 
         XCTAssertEqual(state.platform, .visionOS)
-        XCTAssertEqual(state.content(for: .input).desiredValue, "Automatic supported hardware input")
-        XCTAssertEqual(state.content(for: .input).actualValue, "Captured")
-        XCTAssertEqual(state.content(for: .controllers).actualValue, "1 connected, 1 routed")
-        XCTAssertEqual(state.content(for: .render).desiredValue, "Fit")
-        XCTAssertEqual(state.content(for: .render).actualValue, "Presenting")
-        XCTAssertEqual(state.content(for: .hdr).desiredValue, "Off")
-        XCTAssertEqual(state.content(for: .hdr).actualValue, "SDR fallback")
-        XCTAssertEqual(state.content(for: .spatial).desiredValue, "Fixed spatial when available")
-        XCTAssertEqual(state.content(for: .spatial).actualValue, "6 ch fixed")
+        XCTAssertEqual(localized(state.content(for: .input).desiredValue), "Automatic supported hardware input")
+        XCTAssertEqual(localized(state.content(for: .input).actualValue), "Captured")
+        XCTAssertEqual(localized(state.content(for: .controllers).actualValue), "1 connected, 1 routed")
+        XCTAssertEqual(localized(state.content(for: .render).desiredValue), "Fit")
+        XCTAssertEqual(localized(state.content(for: .render).actualValue), "Presenting")
+        XCTAssertEqual(localized(state.content(for: .hdr).desiredValue), "Off")
+        XCTAssertEqual(localized(state.content(for: .hdr).actualValue), "SDR fallback")
+        XCTAssertEqual(localized(state.content(for: .spatial).desiredValue), "Fixed spatial when available")
+        XCTAssertEqual(localized(state.content(for: .spatial).actualValue), "6 ch fixed")
     }
 
     func testDisabledSpatialPreferenceDoesNotClaimActualPlaybackChanged() {
@@ -71,10 +71,10 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
         )
         let content = state.content(for: .spatial)
 
-        XCTAssertEqual(content.desiredValue, "Off")
-        XCTAssertEqual(content.actualValue, "6 ch fixed")
-        XCTAssertTrue(content.accessibilityValue.contains("Desired: Off"))
-        XCTAssertTrue(content.accessibilityValue.contains("Current: 6 ch fixed"))
+        XCTAssertEqual(localized(content.desiredValue), "Off")
+        XCTAssertEqual(localized(content.actualValue), "6 ch fixed")
+        XCTAssertTrue(localized(content.accessibilityValue).contains("Desired: Off"))
+        XCTAssertTrue(localized(content.accessibilityValue).contains("Current: 6 ch fixed"))
     }
 
     func testInputAndControllerBehaviorAreSystemManagedNotFakeToggles() {
@@ -103,7 +103,7 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
 
         for state in [foreign, mixed] {
             XCTAssertEqual(
-                state.items.map(\.actualValue),
+                state.items.map { localized($0.actualValue) },
                 Array(repeating: "Unavailable", count: 5)
             )
         }
@@ -116,11 +116,11 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
         )
         let published = state.items.flatMap {
             [
-                $0.title,
-                $0.desiredValue,
-                $0.actualValue,
-                $0.detail,
-                $0.accessibilityValue
+                localized($0.title),
+                localized($0.desiredValue),
+                localized($0.actualValue),
+                localized($0.detail),
+                localized($0.accessibilityValue)
             ]
         }.joined(separator: " ")
 
@@ -129,12 +129,12 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
             TVVisionPlatformSettingsItemKind.allCases
         )
         for content in state.items {
-            XCTAssertFalse(content.title.isEmpty)
-            XCTAssertFalse(content.desiredValue.isEmpty)
-            XCTAssertFalse(content.actualValue.isEmpty)
-            XCTAssertFalse(content.detail.isEmpty)
+            XCTAssertFalse(localized(content.title).isEmpty)
+            XCTAssertFalse(localized(content.desiredValue).isEmpty)
+            XCTAssertFalse(localized(content.actualValue).isEmpty)
+            XCTAssertFalse(localized(content.detail).isEmpty)
             XCTAssertFalse(content.systemImage.isEmpty)
-            XCTAssertFalse(content.accessibilityValue.isEmpty)
+            XCTAssertFalse(localized(content.accessibilityValue).isEmpty)
         }
         for forbidden in [
             "host-id", "session-id", "generation-id", "revision-id",
@@ -161,8 +161,9 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
             .tvOS
         )
         XCTAssertEqual(
-            tvModel.tvVisionPlatformSettingsPresentationState?
-                .content(for: .input).actualValue,
+            tvModel.tvVisionPlatformSettingsPresentationState.map {
+                localized($0.content(for: .input).actualValue)
+            },
             "Unavailable"
         )
         XCTAssertEqual(
@@ -170,8 +171,9 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
             .visionOS
         )
         XCTAssertEqual(
-            visionModel.tvVisionPlatformSettingsPresentationState?
-                .content(for: .render).actualValue,
+            visionModel.tvVisionPlatformSettingsPresentationState.map {
+                localized($0.content(for: .render).actualValue)
+            },
             "Inactive"
         )
     }
@@ -206,13 +208,42 @@ final class TVVisionPlatformSettingsPresentationStateTests: XCTestCase {
         XCTAssertTrue(settingsSource.contains("platformSettingStatusRow(.hdr)"))
         XCTAssertTrue(settingsSource.contains("platformSettingStatusRow(.spatial)"))
         XCTAssertTrue(settingsSource.contains("Desired behavior"))
+        XCTAssertTrue(settingsSource.contains("Text(content.desiredValue)"))
         XCTAssertTrue(settingsSource.contains("Current state"))
-        XCTAssertTrue(settingsSource.contains("accessibilityLabel(content.title)"))
-        XCTAssertTrue(settingsSource.contains("accessibilityValue(content.accessibilityValue)"))
+        XCTAssertTrue(settingsSource.contains("accessibilityLabel(Text(content.title))"))
+        XCTAssertTrue(settingsSource.contains("accessibilityValue(Text(content.accessibilityValue))"))
         XCTAssertFalse(settingsSource.contains("ImmersiveSpace"))
         XCTAssertFalse(settingsSource.contains("RealityView"))
         XCTAssertTrue(generator.contains("Sources/LuneXCore/TVVisionPlatformSettingsPresentationState.swift"))
         XCTAssertTrue(generator.contains("Tests/LuneXCoreTests/TVVisionPlatformSettingsPresentationStateTests.swift"))
+    }
+
+    func testStreamControlsLayoutUsesCompactForNarrowOrAccessibilityText() {
+        XCTAssertEqual(
+            TVVisionStreamControlsLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false
+            ),
+            .wide
+        )
+        XCTAssertEqual(
+            TVVisionStreamControlsLayout(
+                horizontalSizeClassIsCompact: true,
+                usesAccessibilityTextSize: false
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            TVVisionStreamControlsLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: true
+            ),
+            .compact
+        )
+    }
+
+    private func localized(_ resource: LocalizedStringResource) -> String {
+        String(localized: resource)
     }
 
     private func resolve(

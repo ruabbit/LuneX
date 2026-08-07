@@ -590,6 +590,40 @@ Simulator runtime, signed installation, physical input/HDR/spatial audio, live
 Sunshine, latency, performance, power, or thermal behavior. Tasks 7.5-8.8
 remain separate.
 
+### Verify localized, adaptive native product projections as connected state
+
+Task 7.5 keeps the task 7.1-7.4 runtime and projection owners. It changes the
+fixed tvOS and visionOS control and Settings copy from pre-resolved dynamic
+`String` values to `LocalizedStringResource`, including controller/channel
+count interpolation, and has SwiftUI consume those resources through localized
+`Text`, `Label`, and accessibility values. No runtime identity or arbitrary
+reason becomes localization input.
+
+The actual-state controls choose a compact vertical layout for a compact
+horizontal size class or an accessibility Dynamic Type size, and otherwise use
+the existing wide grid. `ViewThatFits` may fall back from wide to compact when
+the available width is smaller than the semantic policy predicts. The tvOS
+overlay retains Hide Controls before Disconnect and keeps Hide Controls as the
+default focus. visionOS retains one Disconnect command and creates no immersive
+runtime.
+
+The visionOS application projection uses only the synchronized scene and input
+presentation from the already validated current coordinator ownership. Source
+geometry revisions are not compared directly with the coordinator's unified
+semantic revision. Matching presentation ownership, revision, and surface
+generation are still required, actual capture still comes from the live input
+owner, and partial, stale, or replacement coordinator state fails closed.
+
+Connected tests cover focus and command order, compact/wide policy,
+localization and count interpolation, accessibility, current actual state,
+desired/actual Settings migration, and local stop, remote stop, and reconnect
+clearing. Focused, related, normal, fixed-platform, and five-platform unsigned
+Debug evidence proves deterministic application behavior and compilation only.
+The normal suite is retained as task 7.5 regression evidence and does not
+complete task 8.1. Simulator runtime, signed artifacts, physical HDR/input or
+spatial audio, live Sunshine, latency, performance, power, and thermal behavior
+remain tasks 8.1-8.8 as applicable.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

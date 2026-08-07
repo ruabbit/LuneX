@@ -10,18 +10,32 @@ enum TVVisionPlatformSettingsItemKind: String, CaseIterable, Sendable {
 
 struct TVVisionPlatformSettingsItemContent: Identifiable, Equatable, Sendable {
     let kind: TVVisionPlatformSettingsItemKind
-    let title: String
-    let desiredValue: String
-    let actualValue: String
-    let detail: String
+    let title: LocalizedStringResource
+    let desiredValue: LocalizedStringResource
+    let actualValue: LocalizedStringResource
+    let detail: LocalizedStringResource
     let systemImage: String
     let isEditablePreference: Bool
     let isFailure: Bool
 
     var id: TVVisionPlatformSettingsItemKind { kind }
 
-    var accessibilityValue: String {
+    var accessibilityValue: LocalizedStringResource {
         "Desired: \(desiredValue). Current: \(actualValue). \(detail)"
+    }
+}
+
+enum TVVisionStreamControlsLayout: Hashable, Sendable {
+    case compact
+    case wide
+
+    init(
+        horizontalSizeClassIsCompact: Bool,
+        usesAccessibilityTextSize: Bool
+    ) {
+        self = horizontalSizeClassIsCompact || usesAccessibilityTextSize
+            ? .compact
+            : .wide
     }
 }
 
@@ -55,8 +69,8 @@ struct TVVisionPlatformSettingsPresentationInput: Equatable, Sendable {
 
 enum TVVisionPlatformSettingsPresentationStateResolver {
     private struct ActualContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let systemImage: String
         let isFailure: Bool
     }
@@ -92,7 +106,7 @@ enum TVVisionPlatformSettingsPresentationStateResolver {
     private static func desiredValue(
         for kind: TVVisionPlatformSettingsItemKind,
         input: TVVisionPlatformSettingsPresentationInput
-    ) -> String {
+    ) -> LocalizedStringResource {
         switch kind {
         case .input:
             switch input.platform {
@@ -191,7 +205,7 @@ enum TVVisionPlatformSettingsPresentationStateResolver {
 }
 
 private extension TVVisionPlatformSettingsItemKind {
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .input: "Input"
         case .controllers: "Controllers"
@@ -201,7 +215,7 @@ private extension TVVisionPlatformSettingsItemKind {
         }
     }
 
-    var detailName: String {
+    var detailName: LocalizedStringResource {
         switch self {
         case .input: "input"
         case .controllers: "controller"

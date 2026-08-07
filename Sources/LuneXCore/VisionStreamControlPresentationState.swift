@@ -92,14 +92,14 @@ struct VisionStreamControlStatusContent: Identifiable, Equatable, Sendable {
     }
 
     let kind: Kind
-    let title: String
-    let value: String
-    let detail: String
+    let title: LocalizedStringResource
+    let value: LocalizedStringResource
+    let detail: LocalizedStringResource
     let systemImage: String
     let isFailure: Bool
 
     var id: Kind { kind }
-    var accessibilityValue: String { "\(value). \(detail)" }
+    var accessibilityValue: LocalizedStringResource { "\(value). \(detail)" }
 }
 
 struct VisionStreamControlPresentationState: Equatable, Sendable {
@@ -335,8 +335,8 @@ private extension VisionStreamWindowPresentationStatus {
     }
 
     private func content(
-        _ value: String,
-        _ detail: String,
+        _ value: LocalizedStringResource,
+        _ detail: LocalizedStringResource,
         _ systemImage: String
     ) -> VisionStreamControlStatusContent {
         VisionStreamControlStatusContent(
@@ -365,8 +365,8 @@ private extension VisionStreamInputPresentationStatus {
     }
 
     private func content(
-        _ value: String,
-        _ detail: String,
+        _ value: LocalizedStringResource,
+        _ detail: LocalizedStringResource,
         _ systemImage: String
     ) -> VisionStreamControlStatusContent {
         VisionStreamControlStatusContent(
@@ -381,7 +381,7 @@ private extension VisionStreamInputPresentationStatus {
 }
 
 private extension TVVisionFocusIneligibilityReason {
-    var visionDetail: String {
+    var visionDetail: LocalizedStringResource {
         switch self {
         case .detached: "The current stream surface is detached."
         case .sceneInactive: "The current window scene is inactive."
@@ -424,8 +424,8 @@ private extension VisionStreamControllerPresentationStatus {
 
 private extension VisionStreamRenderPresentationStatus {
     var content: VisionStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         switch self {
         case .inactive: (value, detail, image) = ("Inactive", "No active video presentation.", "play.slash")
@@ -451,8 +451,8 @@ private extension VisionStreamRenderPresentationStatus {
 
 private extension VisionStreamHDRPresentationStatus {
     var content: VisionStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         let failure: Bool
         switch self {
@@ -476,7 +476,7 @@ private extension VisionStreamHDRPresentationStatus {
 }
 
 private extension TVVisionDisplayHDRFallbackReason {
-    var visionDetail: String {
+    var visionDetail: LocalizedStringResource {
         switch self {
         case .outputUnavailable: "The current window output is unavailable."
         case .preferredDynamicRangeUnavailable: "The current layer cannot request direct HDR output."
@@ -492,8 +492,8 @@ private extension TVVisionDisplayHDRFallbackReason {
 
 private extension VisionStreamSpatialPresentationStatus {
     var content: VisionStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         let failure: Bool
         switch self {
@@ -543,7 +543,7 @@ private extension VisionStreamImmersivePresentationStatus {
 }
 
 private extension VisionPresentationUnavailableReason {
-    var detail: String {
+    var detail: LocalizedStringResource {
         switch self {
         case .stage18WindowedOnly: "This runtime supports windowed streaming only."
         case .runtimeUnavailable: "Immersive presentation runtime is unavailable."
@@ -554,8 +554,8 @@ private extension VisionPresentationUnavailableReason {
 
 private extension VisionStreamFailurePresentationStatus {
     var content: VisionStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         switch self {
         case .none: (value, detail) = ("None", "No current bounded platform failure.")
         case .session: (value, detail) = ("Session stopped", "The current stream session failed.")
@@ -576,7 +576,7 @@ private extension VisionStreamFailurePresentationStatus {
 }
 
 private extension TVVisionPlatformPresentationComponent {
-    var visionLabel: String {
+    var visionLabel: LocalizedStringResource {
         switch self {
         case .scene: "scene"
         case .input: "input"
@@ -588,7 +588,7 @@ private extension TVVisionPlatformPresentationComponent {
 }
 
 private extension TVVisionPlatformPresentationEffectKind {
-    var visionLabel: String {
+    var visionLabel: LocalizedStringResource {
         switch self {
         case .scene: "Scene"
         case .input: "Input"

@@ -96,15 +96,15 @@ struct TVStreamControlStatusContent: Identifiable, Equatable, Sendable {
     }
 
     let kind: Kind
-    let title: String
-    let value: String
-    let detail: String
+    let title: LocalizedStringResource
+    let value: LocalizedStringResource
+    let detail: LocalizedStringResource
     let systemImage: String
     let isFailure: Bool
 
     var id: Kind { kind }
 
-    var accessibilityValue: String {
+    var accessibilityValue: LocalizedStringResource {
         "\(value). \(detail)"
     }
 }
@@ -337,8 +337,8 @@ private extension TVStreamLocalFocusPresentationStatus {
     }
 
     private func content(
-        _ value: String,
-        _ detail: String,
+        _ value: LocalizedStringResource,
+        _ detail: LocalizedStringResource,
         _ systemImage: String
     ) -> TVStreamControlStatusContent {
         TVStreamControlStatusContent(
@@ -367,8 +367,8 @@ private extension TVStreamCapturePresentationStatus {
     }
 
     private func content(
-        _ value: String,
-        _ detail: String,
+        _ value: LocalizedStringResource,
+        _ detail: LocalizedStringResource,
         _ systemImage: String
     ) -> TVStreamControlStatusContent {
         TVStreamControlStatusContent(
@@ -395,7 +395,7 @@ private extension TVStreamControllerPresentationStatus {
                 isFailure: false
             )
         case let .active(connected, routed):
-            let value = connected == routed
+            let value: LocalizedStringResource = connected == routed
                 ? "\(connected) connected"
                 : "\(connected) connected, \(routed) routed"
             return TVStreamControlStatusContent(
@@ -414,8 +414,8 @@ private extension TVStreamControllerPresentationStatus {
 
 private extension TVStreamSurfacePresentationStatus {
     var content: TVStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         switch self {
         case .unavailable:
@@ -442,8 +442,8 @@ private extension TVStreamSurfacePresentationStatus {
 
 private extension TVStreamRenderPresentationStatus {
     var content: TVStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         switch self {
         case .inactive:
@@ -478,8 +478,8 @@ private extension TVStreamRenderPresentationStatus {
 
 private extension TVStreamHDRPresentationStatus {
     var content: TVStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         let failure: Bool
         switch self {
@@ -510,7 +510,7 @@ private extension TVStreamHDRPresentationStatus {
 }
 
 private extension TVOSDisplayHDRFallbackReason {
-    var detail: String {
+    var detail: LocalizedStringResource {
         switch self {
         case .outputUnavailable:
             "The current television output is unavailable."
@@ -534,8 +534,8 @@ private extension TVOSDisplayHDRFallbackReason {
 
 private extension TVStreamAudioPresentationStatus {
     var content: TVStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         let image: String
         let failure: Bool
         switch self {
@@ -546,7 +546,9 @@ private extension TVStreamAudioPresentationStatus {
         case let .standard(channelCount):
             (value, detail, image, failure) = ("\(channelCount) ch standard", "Current audio uses the active standard output route.", "speaker.wave.2", false)
         case let .spatial(channelCount, mode):
-            let modeLabel = mode == .headTracked ? "head tracked" : "fixed spatial"
+            let modeLabel: LocalizedStringResource = mode == .headTracked
+                ? "head tracked"
+                : "fixed spatial"
             (value, detail, image, failure) = ("\(channelCount) ch \(modeLabel)", "Current audio uses the active spatial output route.", mode == .headTracked ? "person.wave.2" : "wave.3.right.circle", false)
         case .recovering:
             (value, detail, image, failure) = ("Recovering", "Waiting for the current audio graph to resume.", "arrow.triangle.2.circlepath", false)
@@ -566,8 +568,8 @@ private extension TVStreamAudioPresentationStatus {
 
 private extension TVStreamFailurePresentationStatus {
     var content: TVStreamControlStatusContent {
-        let value: String
-        let detail: String
+        let value: LocalizedStringResource
+        let detail: LocalizedStringResource
         switch self {
         case .none:
             (value, detail) = ("None", "No current bounded platform failure.")
@@ -594,7 +596,7 @@ private extension TVStreamFailurePresentationStatus {
 }
 
 private extension TVVisionPlatformPresentationComponent {
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
         case .scene: "scene"
         case .input: "input"
@@ -606,7 +608,7 @@ private extension TVVisionPlatformPresentationComponent {
 }
 
 private extension TVVisionPlatformPresentationEffectKind {
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
         case .scene: "Scene"
         case .input: "Input"

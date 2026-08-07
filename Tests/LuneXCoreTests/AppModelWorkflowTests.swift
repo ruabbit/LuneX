@@ -3137,6 +3137,14 @@ final class AppModelWorkflowTests: XCTestCase {
             model.visionWindowedPresentationState
                 == first.snapshot.visionWindowedPresentation
         }
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.input,
+            .unavailable
+        )
         XCTAssertEqual(model.visionWindowedPresentationState?.mode, .windowed)
         XCTAssertEqual(
             model.visionWindowedPresentationState?
@@ -3156,12 +3164,24 @@ final class AppModelWorkflowTests: XCTestCase {
                 .currentTVVisionPlatformPresentationApplications().count == 6
                 && model.visionWindowedPresentationState == nil
         }
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.input,
+            .unavailable
+        )
         mediaEnvironment.yieldTVVisionPlatformPresentation(
             first,
             sessionID: record.sessionID
         )
         for _ in 0..<20 { await Task.yield() }
         XCTAssertNil(model.visionWindowedPresentationState)
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
 
         let replacement = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
@@ -3180,6 +3200,10 @@ final class AppModelWorkflowTests: XCTestCase {
                 == replacement.snapshot.visionWindowedPresentation
         }
         XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
+        XCTAssertEqual(
             model.visionWindowedPresentationState?.surfaceGeneration.rawValue,
             2
         )
@@ -3196,6 +3220,10 @@ final class AppModelWorkflowTests: XCTestCase {
             sessionID: record.sessionID
         )
         await waitUntil { model.visionWindowedPresentationState == nil }
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
 
         provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
         provider.finish(sessionID: record.sessionID)
@@ -3324,6 +3352,21 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil {
             model.tvVisionPlatformPresentationState == coordinated
         }
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .visible
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.input,
+            .captured(
+                capabilityCount: coordinatedSnapshot.presentation?
+                    .inputCapabilities.supported.count ?? 0
+            )
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.immersive,
+            .windowedOnly(.stage18WindowedOnly)
+        )
         XCTAssertEqual(model.visionWindowedPresentationState?.mode, .windowed)
         XCTAssertEqual(
             model.tvVisionPlatformPresentationSnapshot?.inputCapabilities,
@@ -3395,6 +3438,14 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.renderState.displaySnapshot)
         XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
         XCTAssertFalse(model.visionInputCaptureEnabled)
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.input,
+            .unavailable
+        )
         let reconnectApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
         XCTAssertEqual(reconnectApplications.last?.action, .stop(.reconnect))
@@ -3447,6 +3498,14 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
         XCTAssertFalse(model.visionInputCaptureEnabled)
         XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.input,
+            .unavailable
+        )
+        XCTAssertEqual(
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().last?.action,
             .stop(.remoteTermination)
@@ -3496,6 +3555,14 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.renderState.displaySnapshot)
         XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
         XCTAssertFalse(model.visionInputCaptureEnabled)
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.window,
+            .unavailable
+        )
+        XCTAssertEqual(
+            model.visionStreamControlPresentationState.input,
+            .unavailable
+        )
         XCTAssertEqual(
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().last?.action,
@@ -3558,6 +3625,9 @@ final class AppModelWorkflowTests: XCTestCase {
 
         XCTAssertNil(model.tvVisionPlatformPresentationState)
         XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
+        XCTAssertEqual(model.tvStreamControlPresentationState.focus, .unavailable)
+        XCTAssertEqual(model.tvStreamControlPresentationState.capture, .unavailable)
+        XCTAssertEqual(model.tvStreamControlPresentationState.render, .inactive)
         XCTAssertEqual(
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().last?.action,
@@ -4373,6 +4443,11 @@ final class AppModelWorkflowTests: XCTestCase {
                 + "applications=\(mediaEnvironment.currentTVVisionPlatformPresentationApplications().count)"
         )
         XCTAssertEqual(
+            model.tvStreamControlPresentationState.focus,
+            .streamSurface
+        )
+        XCTAssertEqual(model.tvStreamControlPresentationState.capture, .remote)
+        XCTAssertEqual(
             model.receiveTVRemoteSurfacePressEvent(
                 try makeTVRemoteSurfacePress(surface, 1, .select, .began)
             ),
@@ -4703,6 +4778,9 @@ final class AppModelWorkflowTests: XCTestCase {
         await stopTask.value
         XCTAssertFalse(model.tvRemoteInputReleasePending)
         XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertEqual(model.tvStreamControlPresentationState.focus, .unavailable)
+        XCTAssertEqual(model.tvStreamControlPresentationState.capture, .unavailable)
+        XCTAssertEqual(model.tvStreamControlPresentationState.render, .inactive)
         XCTAssertNil(model.tvControllerRosterState)
         XCTAssertNil(model.tvControllerRoutedRosterState)
         XCTAssertNil(model.tvControllerFeedbackDecisionState)

@@ -2953,6 +2953,112 @@ They do not prove app or Simulator runtime, signed installation, physical
 input/HDR/spatial audio, live Sunshine, latency, performance, power, or thermal
 behavior. Tasks 7.5-8.8 remain responsible for those layers.
 
+## Task 7.5 localized and adaptive application regression
+
+Task 7.5 retains the existing tvOS and visionOS runtime, presentation,
+Settings, and diagnostics owners. `TVStreamControlPresentationState`,
+`VisionStreamControlPresentationState`, and
+`TVVisionPlatformSettingsPresentationState` now expose fixed display fields as
+`LocalizedStringResource`. Controller counts, routed counts, and audio channel
+counts remain interpolated inside the localization resource path. SwiftUI uses
+localized `Text` and `Label` values, including explicit localized accessibility
+labels and values; no host, session, generation, revision, frame, controller,
+display, route, or arbitrary reason becomes user-visible copy.
+
+`TVVisionStreamControlsLayout` selects compact vertical status rows for a
+compact horizontal size class or an accessibility Dynamic Type size, and wide
+grid rows otherwise. `ViewThatFits(in: .horizontal)` provides a final compact
+fallback when the wide grid cannot fit. tvOS removes the old fixed minimum
+width that could defeat this fallback, retains Hide Controls before Disconnect,
+and keeps Hide Controls as default focus. visionOS keeps one Disconnect command
+and does not create `ImmersiveSpace` or `RealityView`.
+
+The application audit exposed one actual-state defect. The geometry input
+snapshot retains its source revision, while the platform coordinator rebrands
+scene, input, display, audio, and video under one current semantic revision.
+The old visionOS UI path compared the source presentation object with the
+coordinator's rebranded windowed presentation and therefore reported Window
+and Input unavailable for a complete current coordinator state. The corrected
+projection takes synchronized scene and input presentation only from the
+already validated current coordinator, requires matching presentation
+ownership, current revision, and surface generation, then assembles the
+read-only input snapshot used by the UI. Capture remains derived from the live
+input owner. Missing synchronized components, an old revision, a replacement
+surface, or foreign ownership still fails closed.
+
+Connected application tests cover:
+
+- tvOS default focus, focus section, Hide Controls-before-Disconnect order,
+  overlay/local/remote ownership, balanced remote commands, and clean clearing;
+- visionOS synchronized current Window/Input state, partial coordinator state,
+  stale and replacement ownership, compact/wide layout, and the single command;
+- localized resources, plural/count interpolation, accessibility label/value,
+  bounded privacy copy, desired/actual Settings separation, supported legacy
+  audio-settings migration, and the absence of unsupported toggles or
+  immersive runtime; and
+- local stop, remote termination, and reconnect clearing of application
+  projections without erasing persisted desired settings.
+
+Retained offline evidence:
+
+- focused `/tmp/LuneX-18-7_5-focused-r6.MlK4I5/Focused.xcresult`: `33/33`
+  passed, zero skips, failures, expected failures, or structured build
+  diagnostics, with one AIR and one metallib;
+- related `/tmp/LuneX-18-7_5-related.UQqYF6/Related.xcresult`: `217 total /
+  216 passed / 1` exact real-Keychain opt-in skip / zero failures and expected
+  failures, with zero structured build diagnostics, one AIR, and one metallib;
+- normal `/tmp/LuneX-18-7_5-normal.9MVpwm/Normal.xcresult`: `1123 total / 1122
+  passed / 1` exact real-Keychain opt-in skip / zero failures and expected
+  failures, with zero structured build diagnostics, one AIR, and one metallib;
+- fixed Apple TV and Vision Pro direct
+  `/tmp/LuneX-18-7_5-direct-r2.l0qZ4X`: unsigned Debug, zero structured
+  diagnostics, one AIR and one metallib each; and
+- five-platform `/tmp/LuneX-18-7_5-builds.g4vZQT`: macOS and fixed
+  iPhone/iPad/Apple TV/Vision Pro unsigned Debug all succeeded with zero
+  structured diagnostics, one AIR, and one metallib each.
+
+The generator was byte-stable before and after the task at SHA-256
+`aee5f8cb55fffe616537d30eb933012a068658cea6e67ac48d06c3b236d8ed5e`.
+The Keychain and live-host opt-ins remained unset, so normal and related tests
+used file fallback and the only skip was the explicit real-Keychain test. Fixed
+UUIDs were build destinations only; no Simulator inventory or lifecycle action
+was performed. The normal run is task 7.5 regression evidence and does not
+complete task 8.1. None of this proves Simulator runtime, signed artifacts,
+physical Siri Remote/controller/window/input behavior, television or headset
+HDR, audible spatial audio or head tracking, live Sunshine, comfort, latency,
+performance, power, or thermal behavior. Tasks 8.1-8.8 remain responsible for
+those separate acceptance layers.
+
+The corrected repository pre-gate
+`/tmp/LuneX-18-7_5-repository-pre-r3.1O8JBJ` passed fixture self/tree
+validation, OpenSpec strict `9/9`, pre-mark `41/50` with task 7.5 next, three
+identical generator hashes, exact 20-file scope, generated-project membership,
+localization, adaptive layout, focus, current visionOS projection, migration,
+accessibility, privacy, retained test/build/Metal, Keychain skip, clean-room,
+dependency, opt-in, process, and proof-tier gates. Only task 7.5 was then marked
+complete; task 8.1 and all later acceptance tasks remain pending.
+
+Post-mark final-state `/tmp/LuneX-18-7_5-final-state.cb0UO9` confirmed OpenSpec
+strict `9/9`, exact `42/50` with task 8.1 next, exact 21-file final scope, the
+single task 7.5 checkbox replacement, stable generated project and retained
+evidence, disabled opt-ins, no residual build process, and unchanged proof
+boundaries. It did not rerun the generator, tests, builds, or any Simulator
+lifecycle action.
+
+Corrected final diff audit `/tmp/LuneX-18-7_5-final-audit-r2.7dsVBW`
+confirmed the 21-file scope as five production, five test, six OpenSpec, two
+runtime-document, and three planning files. The test diff adds 69 assertions
+while replacing 37 direct String assertions with localized-resource
+equivalents, adds one test function, removes none, and introduces no skip or
+disable path. Production ownership, the single task 7.5 checkbox, generated
+project, reference, dependency, opt-in, process, and proof boundaries remain
+unchanged.
+
+Final record `/tmp/LuneX-18-7_5-final-record.fepytG` reconfirmed baseline remote
+parity, OpenSpec strict `9/9`, `42/50` with task 8.1 next, the final file
+classification, the only 7.5 checkbox change, stable project membership, all
+three final gates, retained evidence, disabled opt-ins, and proof boundaries.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

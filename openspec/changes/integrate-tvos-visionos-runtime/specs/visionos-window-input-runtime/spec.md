@@ -121,6 +121,14 @@ raw window, scene, controller, gesture, or host identity.
 - **WHEN** the visionOS stream overlay displays its Window, Input, and Controllers rows
 - **THEN** LuneX SHALL require matching presentation, surface, input, and controller ownership; distinguish visible, hidden, inactive, detached, local, captured, releasing, and unavailable bounded states; expose accessibility label/value content; and SHALL NOT persist raw scene, window, generation, revision, controller, route, or host identity
 
+#### Scenario: Coordinator normalizes source revisions
+- **WHEN** the current coordinator has synchronized scene and input state under its unified semantic revision while the source geometry snapshot retains an earlier source revision
+- **THEN** native controls SHALL project the validated synchronized coordinator presentation, require matching ownership, revision, and surface generation, and SHALL NOT reject it solely because the source revision differs
+
+#### Scenario: Windowed state is partial, stale, or replaced
+- **WHEN** scene or input presentation is missing, belongs to an old revision or surface generation, or arrives from a replaced coordinator ownership
+- **THEN** native controls SHALL report window and input unavailable and SHALL NOT combine the partial values into visible or captured actual state
+
 #### Scenario: visionOS Settings display input and controller policy
 - **WHEN** Settings displays visionOS input and controller behavior
 - **THEN** LuneX SHALL show supported automatic hardware-input and controller routing beside current bounded Input and Controllers state, SHALL NOT expose macOS relative-mouse or system-shortcut controls or the iOS virtual-controller control, and SHALL NOT synthesize a user preference that current runtime admission cannot enforce

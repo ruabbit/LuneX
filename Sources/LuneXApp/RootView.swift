@@ -887,6 +887,8 @@ private enum TVStreamControlFocusTarget: Hashable {
 
 private struct TVStreamControls: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var focusedControl: TVStreamControlFocusTarget?
 
     var body: some View {
@@ -929,35 +931,90 @@ private struct TVStreamControls: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Grid(
-                alignment: .leading,
-                horizontalSpacing: 26,
-                verticalSpacing: 12
-            ) {
-                ForEach(state.rows) { row in
-                    GridRow(alignment: .firstTextBaseline) {
-                        Label(row.title, systemImage: row.systemImage)
-                            .font(.callout.weight(.semibold))
-                            .frame(width: 170, alignment: .leading)
+            statusRows(state)
+        }
+        .frame(maxWidth: 980, alignment: .leading)
+        .defaultFocus($focusedControl, .hideControls)
+    }
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.value)
-                                .font(.callout.weight(.medium))
-                                .foregroundStyle(row.isFailure ? Color.red : Color.primary)
-                            Text(row.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(row.title)
-                    .accessibilityValue(row.accessibilityValue)
-                }
+    @ViewBuilder
+    private func statusRows(
+        _ state: TVStreamControlPresentationState
+    ) -> some View {
+        switch controlsLayout {
+        case .compact:
+            compactStatusRows(state)
+        case .wide:
+            ViewThatFits(in: .horizontal) {
+                wideStatusRows(state)
+                compactStatusRows(state)
             }
         }
-        .frame(minWidth: 720, maxWidth: 980, alignment: .leading)
-        .defaultFocus($focusedControl, .hideControls)
+    }
+
+    private var controlsLayout: TVVisionStreamControlsLayout {
+        TVVisionStreamControlsLayout(
+            horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
+            usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize
+        )
+    }
+
+    private func wideStatusRows(
+        _ state: TVStreamControlPresentationState
+    ) -> some View {
+        Grid(
+            alignment: .leading,
+            horizontalSpacing: 26,
+            verticalSpacing: 12
+        ) {
+            ForEach(state.rows) { row in
+                GridRow(alignment: .firstTextBaseline) {
+                    Label(row.title, systemImage: row.systemImage)
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 170, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.value)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(
+                                row.isFailure ? Color.red : Color.primary
+                            )
+                        Text(row.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(row.title))
+                .accessibilityValue(Text(row.accessibilityValue))
+            }
+        }
+    }
+
+    private func compactStatusRows(
+        _ state: TVStreamControlPresentationState
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(state.rows) { row in
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(row.title, systemImage: row.systemImage)
+                        .font(.callout.weight(.semibold))
+                    Text(row.value)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(
+                            row.isFailure ? Color.red : Color.primary
+                        )
+                    Text(row.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(row.title))
+                .accessibilityValue(Text(row.accessibilityValue))
+            }
+        }
     }
 }
 #endif
@@ -965,6 +1022,8 @@ private struct TVStreamControls: View {
 #if os(visionOS)
 private struct VisionStreamControls: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let state = appModel.visionStreamControlPresentationState
@@ -995,35 +1054,88 @@ private struct VisionStreamControls: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Grid(
-                alignment: .leading,
-                horizontalSpacing: 18,
-                verticalSpacing: 10
-            ) {
-                ForEach(state.rows) { row in
-                    GridRow(alignment: .firstTextBaseline) {
-                        Label(row.title, systemImage: row.systemImage)
-                            .font(.callout.weight(.semibold))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.value)
-                                .font(.callout.weight(.medium))
-                                .foregroundStyle(
-                                    row.isFailure ? Color.red : Color.primary
-                                )
-                            Text(row.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(row.title)
-                    .accessibilityValue(row.accessibilityValue)
-                }
-            }
+            statusRows(state)
         }
         .frame(maxWidth: 760, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func statusRows(
+        _ state: VisionStreamControlPresentationState
+    ) -> some View {
+        switch controlsLayout {
+        case .compact:
+            compactStatusRows(state)
+        case .wide:
+            ViewThatFits(in: .horizontal) {
+                wideStatusRows(state)
+                compactStatusRows(state)
+            }
+        }
+    }
+
+    private var controlsLayout: TVVisionStreamControlsLayout {
+        TVVisionStreamControlsLayout(
+            horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
+            usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize
+        )
+    }
+
+    private func wideStatusRows(
+        _ state: VisionStreamControlPresentationState
+    ) -> some View {
+        Grid(
+            alignment: .leading,
+            horizontalSpacing: 18,
+            verticalSpacing: 10
+        ) {
+            ForEach(state.rows) { row in
+                GridRow(alignment: .firstTextBaseline) {
+                    Label(row.title, systemImage: row.systemImage)
+                        .font(.callout.weight(.semibold))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.value)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(
+                                row.isFailure ? Color.red : Color.primary
+                            )
+                        Text(row.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(row.title))
+                .accessibilityValue(Text(row.accessibilityValue))
+            }
+        }
+    }
+
+    private func compactStatusRows(
+        _ state: VisionStreamControlPresentationState
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(state.rows) { row in
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(row.title, systemImage: row.systemImage)
+                        .font(.callout.weight(.semibold))
+                    Text(row.value)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(
+                            row.isFailure ? Color.red : Color.primary
+                        )
+                    Text(row.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(row.title))
+                .accessibilityValue(Text(row.accessibilityValue))
+            }
+        }
     }
 }
 #endif
@@ -1360,7 +1472,9 @@ private struct TVVisionPlatformSettingStatusRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            LabeledContent("Desired behavior", value: content.desiredValue)
+            LabeledContent("Desired behavior") {
+                Text(content.desiredValue)
+            }
             LabeledContent("Current state") {
                 Label(content.actualValue, systemImage: content.systemImage)
                     .foregroundStyle(content.isFailure ? Color.red : Color.primary)
@@ -1371,8 +1485,8 @@ private struct TVVisionPlatformSettingStatusRow: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(content.title)
-        .accessibilityValue(content.accessibilityValue)
+        .accessibilityLabel(Text(content.title))
+        .accessibilityValue(Text(content.accessibilityValue))
     }
 }
 

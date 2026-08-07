@@ -149,6 +149,14 @@ native focusable controls and privacy-safe text.
 - **WHEN** Settings displays fit/fill, HDR, spatial-audio, or head-tracking preferences
 - **THEN** LuneX SHALL label the persisted selection as desired behavior and separately show current render, typed HDR fallback, and actual audio/spatial state from the current tvOS presentation without claiming the preference is active
 
+#### Scenario: Localized tvOS status adapts to available space
+- **WHEN** tvOS stream controls render at a compact width, an accessibility text size, or a width that cannot fit the wide status grid
+- **THEN** LuneX SHALL render the same localized actual-state resources in a stable compact vertical order without truncating ownership semantics or substituting desired state
+
+#### Scenario: Audio settings migrate from a legacy schema
+- **WHEN** persisted tvOS audio preferences are migrated from the supported legacy settings schema
+- **THEN** localized Settings SHALL preserve the migrated desired spatial and head-tracking policy while separately reporting only current actual audio state
+
 ### Requirement: tvOS platform diagnostics SHALL be finite and owner scoped
 Current tvOS coordinator state SHALL enter the existing application diagnostics
 store only through a current presentation lease, monotonic source revision,

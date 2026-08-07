@@ -357,11 +357,22 @@ final class AppModel: ApplicationInputSink {
                 : nil
 
         let windowedPresentation = visionWindowedPresentationState
-        let candidateWindowInput = currentVisionWindowInputSnapshot
-        let windowInput = hasActiveSession
-            && candidateWindowInput?.presentation == windowedPresentation
-                ? candidateWindowInput
-                : nil
+        let windowInput: VisionWindowInputSnapshot?
+        if hasActiveSession,
+           let windowedPresentation,
+           let presentation = coordinator?.presentation,
+           presentation.ownership == windowedPresentation.ownership,
+           presentation.revision == windowedPresentation.revision,
+           presentation.sceneSurface.surfaceGeneration
+                == windowedPresentation.surfaceGeneration {
+            windowInput = try? VisionWindowInputSnapshot(
+                presentation: windowedPresentation,
+                sceneSurface: presentation.sceneSurface,
+                inputCapabilities: presentation.inputCapabilities
+            )
+        } else {
+            windowInput = nil
+        }
         let currentInputGeneration = windowInput?
             .inputCapabilities.inputGeneration
         let controllerRoster = tvControllerRosterState.flatMap { roster in

@@ -132,6 +132,35 @@ final class HostAndPersistenceTests: XCTestCase {
         XCTAssertTrue(
             persistedData.contains(Data(#""headTrackingEnabled""#.utf8))
         )
+
+        let tvSettings = TVVisionPlatformSettingsPresentationStateResolver.resolve(
+            TVVisionPlatformSettingsPresentationInput(
+                platform: .tvOS,
+                settings: reloaded,
+                tvActualState: nil,
+                visionActualState: nil
+            )
+        )
+        let visionSettings = TVVisionPlatformSettingsPresentationStateResolver.resolve(
+            TVVisionPlatformSettingsPresentationInput(
+                platform: .visionOS,
+                settings: reloaded,
+                tvActualState: nil,
+                visionActualState: nil
+            )
+        )
+        XCTAssertEqual(
+            String(localized: tvSettings.content(for: .spatial).desiredValue),
+            "Off"
+        )
+        XCTAssertEqual(
+            String(localized: visionSettings.content(for: .spatial).desiredValue),
+            "Off"
+        )
+        XCTAssertEqual(
+            String(localized: tvSettings.content(for: .render).desiredValue),
+            "Fit"
+        )
     }
 
     func testAudioSettingsMigrationRejectsMalformedStoredTypes() throws {

@@ -59,7 +59,7 @@
 - [x] 7.2 Add accessible native visionOS windowed stream controls and actual window/input/render/HDR/spatial status with typed immersive-unavailable state
 - [x] 7.3 Add platform Settings for supported input, controller, render, HDR, and spatial preferences while keeping desired and actual state distinct
 - [x] 7.4 Add privacy-bounded platform diagnostics, semantic deduplication, replacement ownership, finite history, export redaction, and recovery clearing
-- [ ] 7.5 Add tvOS focus/navigation, visionOS window/input, compact/wide layout, localization, accessibility, actual-state, command, migration, and clean-stop application tests
+- [x] 7.5 Add tvOS focus/navigation, visionOS window/input, compact/wide layout, localization, accessibility, actual-state, command, migration, and clean-stop application tests
 
 ## 8. Verification and acceptance
 

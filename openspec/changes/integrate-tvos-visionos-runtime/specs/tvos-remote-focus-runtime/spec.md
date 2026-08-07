@@ -78,6 +78,10 @@ controller object, vendor, host, and payload identities.
 - **WHEN** the overlay opens during a current stream
 - **THEN** native focus SHALL move predictably from Hide Controls to Disconnect while actual focus, capture, and controller count remain separately accessible
 
+#### Scenario: Localized controls preserve command order
+- **WHEN** localized tvOS stream controls use either the compact or wide status layout
+- **THEN** Hide Controls SHALL remain before Disconnect, Hide Controls SHALL remain the default focus, and status rows SHALL remain non-command accessible content
+
 #### Scenario: tvOS Settings display input and controller policy
 - **WHEN** Settings displays tvOS input capture and controller routing
 - **THEN** LuneX SHALL show the supported automatic behavior beside current bounded Capture and Controllers state, SHALL NOT expose macOS relative-mouse or system-shortcut controls or the iOS virtual-controller control, and SHALL NOT add a toggle that current runtime admission does not enforce
@@ -90,3 +94,7 @@ exists, even when deterministic and simulator ownership checks pass.
 #### Scenario: Offline tests pass
 - **WHEN** reducers, adapters, builds, and simulator navigation pass
 - **THEN** LuneX SHALL NOT report physical Siri Remote or controller acceptance complete
+
+#### Scenario: Current stream ownership ends
+- **WHEN** local stop, remote termination, or reconnect replaces the current tvOS presentation
+- **THEN** application controls and Settings SHALL clear actual focus, capture, controller, render, HDR, and audio claims without changing the persisted desired policy
