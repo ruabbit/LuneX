@@ -82,6 +82,7 @@ enum HDRExtendedRangeSurfaceSupport: String, Codable, Hashable, Sendable {
     case unavailable
     case intentOnly
     case intentAndMetadata
+    case preferredDynamicRangeAndHeadroom
 }
 
 enum HDROutputGamut: String, Codable, Hashable, Sendable {
@@ -164,11 +165,12 @@ enum HDRPlatformOutputCapabilityAdapter {
                 capabilities: HDRPlatformOutputCapabilities(
                     platform: .tvOS,
                     headroomSource: .currentAndPotential,
-                    extendedRangeSurfaceSupport: .unavailable,
-                    supportedEDRGamuts: [],
+                    extendedRangeSurfaceSupport:
+                        .preferredDynamicRangeAndHeadroom,
+                    supportedEDRGamuts: [.displayP3, .ituR2020],
                     supportsSDRToneMapping: true
                 ),
-                reason: .extendedRangeSurfaceUnavailable
+                reason: .currentHeadroomUnavailable
             )
         case .visionOS:
             return .sdrFallback(
@@ -218,13 +220,15 @@ struct HDRSurfaceContract: Hashable, Sendable {
     let outputGamut: HDROutputGamut
     let extendedRangeIntent: HDRExtendedRangeIntent
     let metadataMode: HDRSurfaceMetadataMode
+    let contentHeadroom: Double?
 
     init(
         drawablePixelFormat: HDRDrawablePixelFormat,
         outputColorSpace: HDROutputColorSpace,
         outputGamut: HDROutputGamut,
         extendedRangeIntent: HDRExtendedRangeIntent,
-        metadataMode: HDRSurfaceMetadataMode
+        metadataMode: HDRSurfaceMetadataMode,
+        contentHeadroom: Double? = nil
     ) throws {
         let isSDR = drawablePixelFormat == .bgra8UnormSRGB
             && outputColorSpace == .sRGB
@@ -244,11 +248,24 @@ struct HDRSurfaceContract: Hashable, Sendable {
         guard isSDR || isDisplayP3EDR || isITU2020EDR else {
             throw HDRRenderResolutionError.unsupportedSurfaceContract
         }
+        if isSDR {
+            guard contentHeadroom == nil else {
+                throw HDRRenderResolutionError.unsupportedSurfaceContract
+            }
+        } else if let contentHeadroom {
+            guard contentHeadroom.isFinite,
+                  contentHeadroom > 1,
+                  contentHeadroom
+                    <= HDRLuminanceMapping.maximumCurrentHeadroom else {
+                throw HDRRenderResolutionError.unsupportedSurfaceContract
+            }
+        }
         self.drawablePixelFormat = drawablePixelFormat
         self.outputColorSpace = outputColorSpace
         self.outputGamut = outputGamut
         self.extendedRangeIntent = extendedRangeIntent
         self.metadataMode = metadataMode
+        self.contentHeadroom = contentHeadroom
     }
 }
 

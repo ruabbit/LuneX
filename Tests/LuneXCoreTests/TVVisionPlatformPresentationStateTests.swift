@@ -274,6 +274,148 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
         ))
     }
 
+    func testTVOSDisplayHDRCapabilityRequiresCompletePublicContract() {
+        let capabilities = TVOSDisplayHDRCapabilities(
+            layerCapability: .preferredDynamicRange,
+            supportedEDRGamuts: [.displayP3, .ituR2020],
+            currentEDRHeadroom: 2.5,
+            potentialEDRHeadroom: 4
+        )
+
+        XCTAssertEqual(
+            TVOSDisplayHDRCapabilityResolver.resolve(
+                TVOSDisplayHDRCapabilityInputs(
+                    isOutputAvailable: true,
+                    layerCapability: .preferredDynamicRange,
+                    supportsToneMapControl: true,
+                    supportsContentsHeadroom: true,
+                    supportedEDRGamuts: [.displayP3, .ituR2020],
+                    currentEDRHeadroom: 2.5,
+                    potentialEDRHeadroom: 4
+                )
+            ),
+            .directEDR(capabilities)
+        )
+    }
+
+    func testTVOSDisplayHDRCapabilityReportsLayerAndColorFallbacks() {
+        func fallback(
+            output: Bool = true,
+            layer: TVVisionLayerDynamicRangeCapability = .preferredDynamicRange,
+            toneMap: Bool = true,
+            contentsHeadroom: Bool = true,
+            gamuts: Set<HDROutputGamut> = [.displayP3]
+        ) -> TVOSDisplayHDRFallbackReason? {
+            TVOSDisplayHDRCapabilityResolver.resolve(
+                TVOSDisplayHDRCapabilityInputs(
+                    isOutputAvailable: output,
+                    layerCapability: layer,
+                    supportsToneMapControl: toneMap,
+                    supportsContentsHeadroom: contentsHeadroom,
+                    supportedEDRGamuts: gamuts,
+                    currentEDRHeadroom: 2,
+                    potentialEDRHeadroom: 4
+                )
+            ).fallbackReason
+        }
+
+        XCTAssertEqual(fallback(output: false), .outputUnavailable)
+        XCTAssertEqual(
+            fallback(layer: .toneMappingOnly),
+            .preferredDynamicRangeUnavailable
+        )
+        XCTAssertEqual(fallback(toneMap: false), .toneMapControlUnavailable)
+        XCTAssertEqual(
+            fallback(contentsHeadroom: false),
+            .contentsHeadroomUnavailable
+        )
+        XCTAssertEqual(
+            fallback(gamuts: []),
+            .extendedColorSpaceUnavailable
+        )
+    }
+
+    func testTVOSDisplayHDRCapabilityRejectsMissingInvalidAndSDRHeadroom() {
+        func fallback(
+            current: Double?,
+            potential: Double?
+        ) -> TVOSDisplayHDRFallbackReason? {
+            TVOSDisplayHDRCapabilityResolver.resolve(
+                TVOSDisplayHDRCapabilityInputs(
+                    isOutputAvailable: true,
+                    layerCapability: .preferredDynamicRange,
+                    supportsToneMapControl: true,
+                    supportsContentsHeadroom: true,
+                    supportedEDRGamuts: [.ituR2020],
+                    currentEDRHeadroom: current,
+                    potentialEDRHeadroom: potential
+                )
+            ).fallbackReason
+        }
+
+        XCTAssertEqual(
+            fallback(current: nil, potential: 4),
+            .headroomUnavailable
+        )
+        XCTAssertEqual(
+            fallback(current: 2, potential: nil),
+            .headroomUnavailable
+        )
+        let invalid = TVOSDisplayHDRCapabilityResolver.resolve(
+            TVOSDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.ituR2020],
+                currentEDRHeadroom: .nan,
+                potentialEDRHeadroom: 4
+            )
+        )
+        XCTAssertEqual(invalid.fallbackReason, .invalidHeadroom)
+        XCTAssertNil(invalid.capabilities.currentEDRHeadroom)
+        XCTAssertEqual(invalid.capabilities.potentialEDRHeadroom, 4)
+        let nonfinitePotential = TVOSDisplayHDRCapabilityResolver.resolve(
+            TVOSDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.ituR2020],
+                currentEDRHeadroom: 2,
+                potentialEDRHeadroom: .infinity
+            )
+        )
+        XCTAssertEqual(nonfinitePotential.fallbackReason, .invalidHeadroom)
+        XCTAssertEqual(nonfinitePotential.capabilities.currentEDRHeadroom, 2)
+        XCTAssertNil(nonfinitePotential.capabilities.potentialEDRHeadroom)
+        let outOfRangePotential = TVOSDisplayHDRCapabilityResolver.resolve(
+            TVOSDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.ituR2020],
+                currentEDRHeadroom: 2,
+                potentialEDRHeadroom: 65
+            )
+        )
+        XCTAssertEqual(outOfRangePotential.fallbackReason, .invalidHeadroom)
+        XCTAssertNil(outOfRangePotential.capabilities.potentialEDRHeadroom)
+        XCTAssertEqual(
+            fallback(current: 4, potential: 2),
+            .invalidHeadroom
+        )
+        XCTAssertEqual(
+            fallback(current: 65, potential: 65),
+            .invalidHeadroom
+        )
+        XCTAssertEqual(
+            fallback(current: 1, potential: 4),
+            .insufficientHeadroom
+        )
+    }
+
     func testAudioRouteRequiresValidCountsAndPlatformStrategy() throws {
         let tvOS = try makeAudioRoute(platform: .tvOS)
         let visionOS = try makeAudioRoute(platform: .visionOS)

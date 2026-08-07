@@ -132,11 +132,26 @@ immersive streaming.
 Both platforms reuse `StreamVideoPresentationSource`,
 `HDRRenderConfigurationResolver`, `HDRSurfaceAdapter`, and
 `StreamMetalPresenter`. Direct SDK probes determine available screen/headroom,
-colorspace, layer, and display-mode APIs. If tvOS cannot configure the existing
-Metal layer for extended range, HDR input uses the established HDR-to-SDR path.
-If visionOS cannot provide current headroom, it also remains typed SDR fallback
-even when the layer accepts extended-range intent. No setting or stream
-metadata alone publishes active HDR.
+colorspace, layer, and display-mode APIs. On tvOS 26.4 the public layer contract
+uses `preferredDynamicRange`, `toneMapMode`, and `contentsHeadroom`, not the
+legacy extended-range intent/metadata properties that tvOS does not expose.
+Direct tvOS EDR requires an attached screen and Metal layer, both tone-map and
+content-headroom controls, an available extended-linear Display P3 or ITU-R
+2020 color space, and finite `1 < current <= potential <= 64` headroom. Missing,
+nonfinite, out-of-range, inverted, or SDR-only headroom remains a typed fallback.
+
+The preferred-dynamic-range surface contract carries the resolved current
+headroom and applies pixel format, color space, tone-map mode, content headroom,
+and dynamic-range preference as one rollback-capable transaction. Returning to
+SDR selects standard dynamic range, automatic tone mapping, zero content
+headroom, and the SDR surface. Legacy macOS, iOS, and visionOS intent/metadata
+transactions remain separate. Task 4.2 establishes this public capability and
+surface foundation; task 4.3 still owns actual display observation, semantic
+revision, coordinator/AppModel application, and bounded diagnostics. No setting
+or stream metadata alone publishes active HDR.
+
+If visionOS cannot provide current headroom, it remains typed SDR fallback even
+when the layer accepts extended-range intent.
 
 A separate platform decoder or an unverified private compositor API was
 rejected. Physical television/headset HDR remains a hardware gate.
@@ -171,9 +186,11 @@ actual presentation; a matching rebind or newer geometry revision may
 resubmit only the current admitted frame.
 
 An as-yet-unprobed display is intentionally sufficient only for baseline SDR
-video in task 4.1. It is not HDR capability or headroom proof. Tasks 4.2 and
-4.3 remain responsible for the public tvOS layer/display probe, render
-configuration, fallback diagnostics, and AppModel actual HDR state.
+video in task 4.1. It is not HDR capability or headroom proof. Task 4.2 defines
+the public tvOS layer/display capability and transactional render contract;
+task 4.3 remains responsible for observing the actual current screen, publishing
+semantic display revisions, applying render configuration, and exposing actual
+fallback state through the coordinator and AppModel.
 
 ### Preserve proof tiers and simulator discipline
 

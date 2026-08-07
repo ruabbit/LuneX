@@ -54,6 +54,18 @@ typed HDR-to-SDR pipeline and UI SHALL NOT claim HDR output.
 - **WHEN** decoded HDR metadata is valid but the current tvOS surface lacks required extended-range support
 - **THEN** LuneX SHALL present the existing bounded HDR-to-SDR result and report actual fallback
 
+#### Scenario: Complete public EDR capability is available
+- **WHEN** the current tvOS screen and Metal layer expose preferred dynamic range, tone-map control, content-headroom control, an extended-linear supported gamut, and finite `1 < current <= potential` headroom
+- **THEN** LuneX SHALL create a headroom-tagged EDR surface contract and apply the float drawable, extended-linear color space, disabled layer tone mapping, finite content headroom, and high dynamic-range preference transactionally
+
+#### Scenario: Display headroom is missing or invalid
+- **WHEN** current or potential headroom is missing, nonfinite, out of range, inverted, or current headroom is not greater than SDR reference white
+- **THEN** LuneX SHALL publish a stable typed fallback, normalize invalid stored headroom, and SHALL NOT claim direct HDR output
+
+#### Scenario: EDR surface mutation fails
+- **WHEN** any preferred-dynamic-range, tone-map, headroom, color-space, or drawable mutation fails
+- **THEN** LuneX SHALL restore every captured legacy and current layer field and SHALL NOT retain the failed surface contract as active
+
 ### Requirement: tvOS audio SHALL use the current route-owned graph
 The current media generation SHALL reuse canonical PCM, the session-owned
 audio graph, AVAudioSession route state, interruption/media-reset recovery, and

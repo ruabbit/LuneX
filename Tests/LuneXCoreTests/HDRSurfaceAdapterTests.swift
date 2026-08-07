@@ -86,7 +86,7 @@ final class HDRSurfaceAdapterTests: XCTestCase {
 
     @MainActor
     func testUnsupportedEDRReturnsTypedOutcomeWithoutTouchingBackend() throws {
-        let backend = RecordingHDRSurfaceBackend(capabilities: .tvOS)
+        let backend = RecordingHDRSurfaceBackend(capabilities: .unavailableTVOS)
         let adapter = HDRSurfaceTransactionAdapter(backend: backend)
         let contract = try makeEDRSurface()
 
@@ -100,7 +100,7 @@ final class HDRSurfaceAdapterTests: XCTestCase {
 
     @MainActor
     func testUnsupportedPlatformStillAppliesSDRFormatAndColorSpace() throws {
-        let backend = RecordingHDRSurfaceBackend(capabilities: .tvOS)
+        let backend = RecordingHDRSurfaceBackend(capabilities: .unavailableTVOS)
         let adapter = HDRSurfaceTransactionAdapter(backend: backend)
         let contract = try makeSDRSurface()
 
@@ -137,6 +137,82 @@ final class HDRSurfaceAdapterTests: XCTestCase {
             .mutation(.drawablePixelFormat(.rgba16Float)),
             .mutation(.outputColorSpace(.extendedLinearDisplayP3)),
             .mutation(.extendedRangeIntent(.enabled)),
+            .endTransaction
+        ])
+    }
+
+    @MainActor
+    func testPreferredDynamicRangeCapabilityRequiresAndTagsContentHeadroom()
+        throws
+    {
+        let unsupportedBackend = RecordingHDRSurfaceBackend(capabilities: .tvOS)
+        let unsupportedAdapter = HDRSurfaceTransactionAdapter(
+            backend: unsupportedBackend
+        )
+        let untagged = try makeEDRSurface()
+        XCTAssertEqual(
+            try unsupportedAdapter.apply(untagged),
+            .unsupported(platform: .tvOS, requested: untagged)
+        )
+        XCTAssertTrue(unsupportedBackend.calls.isEmpty)
+
+        let backend = RecordingHDRSurfaceBackend(capabilities: .tvOS)
+        let adapter = HDRSurfaceTransactionAdapter(backend: backend)
+        let tagged = try makeEDRSurface(contentHeadroom: 2.5)
+        _ = try adapter.apply(tagged)
+        XCTAssertEqual(backend.calls, [
+            .captureSnapshot,
+            .beginTransaction,
+            .mutation(.drawablePixelFormat(.rgba16Float)),
+            .mutation(.outputColorSpace(.extendedLinearDisplayP3)),
+            .mutation(.toneMapMode(.never)),
+            .mutation(.contentsHeadroom(2.5)),
+            .mutation(.extendedRangeIntent(.enabled)),
+            .endTransaction
+        ])
+
+        backend.calls.removeAll()
+        _ = try adapter.apply(makeSDRSurface())
+        XCTAssertEqual(backend.calls, [
+            .captureSnapshot,
+            .beginTransaction,
+            .mutation(.extendedRangeIntent(.disabled)),
+            .mutation(.toneMapMode(.automatic)),
+            .mutation(.contentsHeadroom(0)),
+            .mutation(.drawablePixelFormat(.bgra8UnormSRGB)),
+            .mutation(.outputColorSpace(.sRGB)),
+            .endTransaction
+        ])
+    }
+
+    @MainActor
+    func testPreferredDynamicRangeHeadroomFailureRollsBackPriorContract() throws {
+        let backend = RecordingHDRSurfaceBackend(capabilities: .tvOS)
+        let adapter = HDRSurfaceTransactionAdapter(backend: backend)
+        let sdr = try makeSDRSurface()
+        _ = try adapter.apply(sdr)
+        let priorState = backend.state
+        backend.calls.removeAll()
+        backend.failingMutation = .contentsHeadroom(2.5)
+
+        XCTAssertThrowsError(
+            try adapter.apply(makeEDRSurface(contentHeadroom: 2.5))
+        ) { error in
+            XCTAssertEqual(
+                error as? HDRSurfaceApplicationError,
+                .mutationFailed(.contentsHeadroom(2.5))
+            )
+        }
+        XCTAssertEqual(adapter.activeContract, sdr)
+        XCTAssertEqual(backend.state, priorState)
+        XCTAssertEqual(backend.calls, [
+            .captureSnapshot,
+            .beginTransaction,
+            .mutation(.drawablePixelFormat(.rgba16Float)),
+            .mutation(.outputColorSpace(.extendedLinearDisplayP3)),
+            .mutation(.toneMapMode(.never)),
+            .mutation(.contentsHeadroom(2.5)),
+            .restoreSnapshot,
             .endTransaction
         ])
     }
@@ -250,13 +326,16 @@ final class HDRSurfaceAdapterTests: XCTestCase {
         )
     }
 
-    private func makeEDRSurface() throws -> HDRSurfaceContract {
+    private func makeEDRSurface(
+        contentHeadroom: Double? = nil
+    ) throws -> HDRSurfaceContract {
         try HDRSurfaceContract(
             drawablePixelFormat: .rgba16Float,
             outputColorSpace: .extendedLinearDisplayP3,
             outputGamut: .displayP3,
             extendedRangeIntent: .enabled,
-            metadataMode: .hdr10
+            metadataMode: .hdr10,
+            contentHeadroom: contentHeadroom
         )
     }
 }
@@ -322,10 +401,16 @@ private extension HDRSurfaceAdapterCapabilities {
         supportedEDRGamuts: [.displayP3, .ituR2020]
     )
 
-    static let tvOS = Self(
+    static let unavailableTVOS = Self(
         platform: .tvOS,
         extendedRangeSurfaceSupport: .unavailable,
         supportedEDRGamuts: []
+    )
+
+    static let tvOS = Self(
+        platform: .tvOS,
+        extendedRangeSurfaceSupport: .preferredDynamicRangeAndHeadroom,
+        supportedEDRGamuts: [.displayP3, .ituR2020]
     )
 }
 

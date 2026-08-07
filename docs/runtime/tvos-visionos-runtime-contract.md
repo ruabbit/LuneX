@@ -1400,6 +1400,88 @@ task/source/test/docs semantics, all retained evidence, and the same repository
 boundaries without rerunning tests, builds, the generator, or simulator
 operations.
 
+## Task 4.2 public tvOS dynamic-range capability
+
+Task 4.2 establishes a public, injectable tvOS 26.4 display/layer/color
+capability and a rollback-capable Metal surface transaction. It does not yet
+observe the actual stream scene or publish an AppModel HDR revision; that
+application boundary remains task 4.3.
+
+The public tvOS path is distinct from the legacy macOS/iOS/visionOS
+`wantsExtendedDynamicRangeContent` and EDR metadata path. It uses:
+
+- `CALayer.preferredDynamicRange` with `.high` for admitted EDR and `.standard`
+  for SDR;
+- `CALayer.toneMapMode` with `.never` for admitted EDR and `.automatic` for
+  SDR;
+- `CALayer.contentsHeadroom`, carrying a finite admitted current headroom for
+  EDR and zero for SDR;
+- `UIScreen.currentEDRHeadroom` and `potentialEDRHeadroom`; and
+- constructible extended-linear Display P3 or ITU-R 2020 CoreGraphics color
+  spaces.
+
+`TVOSDisplayHDRCapabilityResolver` admits direct EDR only when the actual
+output and layer exist, all three layer controls are available, at least one
+extended-linear gamut is available, and headroom satisfies
+`1 < current <= potential <= 64`. Missing headroom is distinct from invalid
+headroom and from finite SDR-only headroom. Nonfinite and out-of-range values
+are normalized to `nil` before they enter the `Equatable` capability snapshot,
+while the resolution preserves its typed `.invalidHeadroom` reason. This keeps
+future semantic revision deduplication stable.
+
+The shared render capability now models this as
+`preferredDynamicRangeAndHeadroom`, rather than claiming the legacy
+`intentAndMetadata` contract. An EDR `HDRSurfaceContract` for this path must
+carry finite current content headroom greater than one; an untagged preferred
+EDR contract is unsupported, and SDR contracts cannot carry content headroom.
+The EDR transaction orders float drawable format, extended-linear color space,
+tone-map `.never`, finite content headroom, then preferred range `.high`.
+Returning to SDR first selects standard range, then automatic tone mapping,
+zero headroom, SDR format, and sRGB. Native snapshots and rollback cover view
+and layer pixel formats, color space, legacy intent/metadata, preferred dynamic
+range, tone-map mode, and content headroom.
+
+Fresh pre-mark evidence after the final headroom-normalization revision is:
+
+- focused `/tmp/LuneX-18-4_2-focused-r3.uUoogT`: `54/54 passed / 0 skipped /
+  0 failed / 0 expected failure`, with zero structured build diagnostics;
+- related `/tmp/LuneX-18-4_2-related-r2.X5RkJV`: `209/209 passed` across HDR
+  contract/resolver/surface, Metal pipeline/shader/renderer/status, frame
+  delivery, presenter, macOS/mobile display, and tvOS state/coordinator suites,
+  with zero structured and source diagnostics;
+- normal `/tmp/LuneX-18-4_2-normal-r2.q9nMOC`: `1040 total / 1039 passed / 1
+  exact real-Keychain opt-in skip / 0 failed / 0 expected failure`, with zero
+  structured and source diagnostics;
+- fixed Apple TV direct build `/tmp/LuneX-18-4_2-tvos-r2.gAirdH`: unsigned
+  Debug success with zero structured/source diagnostics and one AIR/metallib
+  pair; and
+- unsigned five-platform Debug matrix
+  `/tmp/LuneX-18-4_2-builds-r2.9ndfoH`: macOS, fixed iPhone, fixed iPad, fixed
+  Apple TV, and fixed Vision Pro all succeeded with zero structured/source
+  diagnostics and one AIR/metallib pair each.
+
+The fixed UUIDs were build destinations only. Task 4.2 did not query, create,
+clone, boot, install, launch, run, shut down, or delete a simulator. Real
+Keychain and live-host opt-ins remained unset. These results prove deterministic
+capability/fallback semantics, public SDK compilation, surface transaction and
+rollback behavior, and cross-platform source compatibility. They do not prove
+that an Apple TV compositor entered HDR, television panel brightness or color,
+HDMI mode negotiation, a signed install, physical hardware, live Sunshine HDR,
+latency, performance, power, or thermal behavior. Repository pre-gate
+`/tmp/LuneX-18-4_2-repository-pre.IRGscf` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `20/50 next 4.2`, four stable generator hashes, exact
+fifteen-file scope, generator/project membership, current capability/fallback/
+transaction/rollback semantics, every retained result, and privacy, clean-room,
+reference, opt-in, process, and diff boundaries. Task 4.2 is now marked complete;
+post-mark final-state `/tmp/LuneX-18-4_2-final-state-r2.l4fp0g` confirmed
+OpenSpec strict `9/9`, exact `21/50 next 4.3`, the stable project hash, exact
+sixteen-file scope, current source/task/docs and retained evidence, and the same
+repository boundaries without rerunning tests, builds, the generator, or
+simulator operations. Post-record
+`/tmp/LuneX-18-4_2-post-record.YjRjuV` then confirmed `21/50 next 4.3`, strict
+`9/9`, the same project hash and sixteen-file scope, all five authority records,
+retained evidence, and opt-in/process/reference/diff boundaries.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

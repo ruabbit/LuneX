@@ -2671,3 +2671,32 @@
 - post-mark `/tmp/LuneX-18-4_1-final-state-r2.BFSidM`在不重复执行门禁的前提下确认`20/50 next 4.2`、14文件scope、稳定project hash、current semantics与全部retained evidence/boundary一致。
 - post-record首轮 `/tmp/LuneX-18-4_1-post-record.mkvGtQ` 只验证current change并合法返回strict `1/1`，与包装器错误的repository `9/9`期望不符后提前退出；fresh `/tmp/LuneX-18-4_1-post-record-r2.AmeJ3m`改用`--all`后确认`20/50 next 4.2`、strict `9/9`、稳定project hash、14文件scope、五份权威记录、retained evidence与opt-in/process/reference/diff边界，且没有重跑test/build/generator或操作simulator。
 - 最终逐段审计确认production coordinator与actual surface使用AppModel创建的同一owner；presenter进入platform admission后不读shared latest frame，new frame推进draw fence；foreign session高generation、旧ownership/surface/sequence/platform/delivery/decoder/frame和late teardown/application均不能改变current presentation。同sessioninput-only replacement、同delivery的新geometry revision、matching surface rebind和unknown-display baseline SDR保持可用，显式display unavailable/scene loss/clear/unbind/stop均关闭呈现。没有把unknown display解释为HDR capability，也没有提前完成4.2–4.4。
+
+## 2026-08-07 阶段 18 任务 4.2 tvOS dynamic-range inventory
+
+- Xcode 26.4 public headers确认旧`CALayer.wantsExtendedDynamicRangeContent`在tvOS不可用，现有adapter排除tvOS是准确的旧路径；同一SDK公开tvOS 18+ `toneMapMode`与tvOS 26+ `preferredDynamicRange`、`contentsHeadroom`。
+- `preferredDynamicRange`控制接收layer的dynamic range，`contentsHeadroom`为CAMetalLayer drawable声明所需headroom；header明确0表示untagged，`0...1`之间为undefined，因此native mutation必须验证0或有限`>=1`。
+- actual tvOS scene已经持有`UIScreen`，current/potential EDR headroom可从该screen读取；4.2应先实现可注入screen/layer/color capability value与transactional surface mutation，4.3再订阅actual scene变化并发布coordinator/AppModel revision。
+- direct EDR不能仅由API存在推出：layer path、wide-gamut extended-linear color space、有限current/potential headroom且`current <= potential`必须同时成立；任何缺失都保持typed HDR-to-SDR，编译和注入测试不等于电视/compositor HDR证明。
+- 实现把新版path建模为独立`preferredDynamicRangeAndHeadroom`，没有冒充旧`intentAndMetadata`。platform static resolution仍以`currentHeadroomUnavailable`保留SDR fallback，但capabilities允许4.3在提供actual current headroom后进入EDR resolver。
+- pure capability resolver对output、preferred dynamic range、tone-map control、contents-headroom property、至少一个extended-linear gamut、current/potential存在性、有限范围、顺序和`current > 1`逐项给出稳定fallback reason；native probe只读取actual tvOS screen/layer/color APIs，不拥有observer或semantic revision。
+- surface contract只允许EDR content headroom为有限`1...64`内且严格大于1，SDR禁止携带headroom。preferred transaction进入EDR时按format/color/tone-map-never/headroom/preference-high执行，回到SDR先standard再automatic/0和SDR surface；snapshot rollback恢复所有新旧属性。
+- public API source在device SDK通过后，首次simulator typecheck因错误复用device SDK而无法加载simulator standard library；使用`appletvsimulator` SDK后通过。fixed Apple TV build `/tmp/LuneX-18-4_2-compile-tv.f3NC2P`进一步证明production tvOS条件分支可编译，但不证明compositor或电视HDR。
+- fresh focused `/tmp/LuneX-18-4_2-focused-r2.c7E7yZ`为`54/54`且零结构化诊断，覆盖direct/fallback、static matrix、surface contract、旧/新mutation与新版failure rollback、resolver content-headroom identity；首轮`53/53`因后来补测而只作中间证据。
+
+## 2026-08-07 Task 4.2 更新后续接发现
+
+- tvOS 26.4 public path保持为`CALayer.preferredDynamicRange`、`toneMapMode`、`contentsHeadroom`和`UIScreen.currentEDRHeadroom/potentialEDRHeadroom`；旧`wantsExtendedDynamicRangeContent`不用于tvOS。
+- 最新diff审计确认新preferred-dynamic-range路径没有改变legacy macOS/iOS/visionOS intent/metadata合同；native snapshot/rollback保存并恢复pixel format、color space、legacy intent/metadata、preferred dynamic range、tone-map mode和contents headroom。
+- 纯resolver必须在返回`Equatable` capabilities前把`NaN`、infinity及`1...64`外headroom归一化为`nil`，同时保留`.invalidHeadroom`原因，避免4.3 semantic dedup遇到非自等值。missing、invalid、insufficient三类fallback仍相互区分。
+- 4.2仍不连接screen observer、display semantic revision、AppModel actual HDR state或UI；这些属于4.3/7.x。unsigned SDK build只证明公开API/跨平台编译，不证明Apple TV compositor、电视面板、HDMI、真机或live Sunshine HDR。
+- 修订后fresh focused `/tmp/LuneX-18-4_2-focused-r3.uUoogT`结构化通过`54/54`且build结构化diagnostics为0；Xcode日志中的AppIntents metadata extraction skip是构建工具提示，不是Swift/Clang源码诊断。
+- fresh 13-suite related `/tmp/LuneX-18-4_2-related-r2.X5RkJV`结构化通过`209/209`且build/source diagnostics为0，确认新surface identity与mutation没有回归legacy HDR、Metal presenter、macOS/mobile display或tvOS coordinator合同。
+- fresh normal `/tmp/LuneX-18-4_2-normal-r2.q9nMOC`结构化为`1040/1039/1/0`且diagnostics为0；宽化日志核对确认唯一skip仍是显式真实Keychain round-trip，两个真实opt-in均未设置。
+- fresh fixed Apple TV direct `/tmp/LuneX-18-4_2-tvos-r2.gAirdH`结构化/source diagnostics为0且产出`1 AIR / 1 metallib`；这只证明tvOS simulator SDK公开API条件分支和Metal编译，不证明simulator运行或物理HDR输出。
+- fresh unsigned五平台Debug `/tmp/LuneX-18-4_2-builds-r2.9ndfoH`全部成功、结构化/source diagnostics为0且各产出`1 AIR / 1 metallib`；macOS/iOS/iPadOS/visionOS legacy分支继续编译，固定UUID只作destination，未启动或查询simulator。
+- OpenSpec与runtime/roadmap现明确区分4.2 public capability/transaction foundation和4.3 actual screen observation/semantic revision/coordinator/AppModel application；pre-mark scope为15文件，任务checkbox仍未改变。
+- repository pre-gate `/tmp/LuneX-18-4_2-repository-pre.IRGscf`验证strict `9/9`、稳定generator、精确scope/membership、current语义、retained evidence和全部repository边界后才允许勾选4.2；下一权威任务为4.3 actual display revision/AppModel application。
+- post-mark final-state `/tmp/LuneX-18-4_2-final-state-r2.l4fp0g`只读确认`21/50 next 4.3`、稳定project hash、16文件scope和全部证据/边界，没有重复执行任何行为门禁。
+- post-record `/tmp/LuneX-18-4_2-post-record.YjRjuV`进一步确认五份authority记录与pre/final证据引用一致；4.2只剩最终diff审计和Git checkpoint。
+- 最终审计 `/tmp/LuneX-18-4_2-final-audit-r2.8dYwRn`确认headroom normalization、preferred transaction/rollback、legacy路径、4.3所有权边界和物理证明边界一致；无新缺口。

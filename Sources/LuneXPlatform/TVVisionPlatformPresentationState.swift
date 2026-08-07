@@ -1,5 +1,11 @@
 import Foundation
 
+#if os(tvOS)
+import CoreGraphics
+import QuartzCore
+import UIKit
+#endif
+
 enum TVVisionPlatform: String, Codable, CaseIterable, Hashable, Sendable {
     case tvOS
     case visionOS
@@ -644,6 +650,153 @@ struct TVVisionDisplaySnapshot: Equatable, Hashable, Sendable {
         self.layerCapability = layerCapability
     }
 }
+
+enum TVOSDisplayHDRFallbackReason: String, Codable, Hashable, Sendable {
+    case outputUnavailable = "output-unavailable"
+    case preferredDynamicRangeUnavailable = "preferred-dynamic-range-unavailable"
+    case toneMapControlUnavailable = "tone-map-control-unavailable"
+    case contentsHeadroomUnavailable = "contents-headroom-unavailable"
+    case extendedColorSpaceUnavailable = "extended-color-space-unavailable"
+    case headroomUnavailable = "headroom-unavailable"
+    case invalidHeadroom = "invalid-headroom"
+    case insufficientHeadroom = "insufficient-headroom"
+}
+
+struct TVOSDisplayHDRCapabilityInputs: Equatable, Sendable {
+    let isOutputAvailable: Bool
+    let layerCapability: TVVisionLayerDynamicRangeCapability
+    let supportsToneMapControl: Bool
+    let supportsContentsHeadroom: Bool
+    let supportedEDRGamuts: Set<HDROutputGamut>
+    let currentEDRHeadroom: Double?
+    let potentialEDRHeadroom: Double?
+}
+
+struct TVOSDisplayHDRCapabilities: Equatable, Sendable {
+    let layerCapability: TVVisionLayerDynamicRangeCapability
+    let supportedEDRGamuts: Set<HDROutputGamut>
+    let currentEDRHeadroom: Double?
+    let potentialEDRHeadroom: Double?
+}
+
+enum TVOSDisplayHDRCapabilityResolution: Equatable, Sendable {
+    case directEDR(TVOSDisplayHDRCapabilities)
+    case sdrFallback(
+        capabilities: TVOSDisplayHDRCapabilities,
+        reason: TVOSDisplayHDRFallbackReason
+    )
+
+    var capabilities: TVOSDisplayHDRCapabilities {
+        switch self {
+        case let .directEDR(capabilities),
+             let .sdrFallback(capabilities, _):
+            capabilities
+        }
+    }
+
+    var fallbackReason: TVOSDisplayHDRFallbackReason? {
+        guard case let .sdrFallback(_, reason) = self else { return nil }
+        return reason
+    }
+}
+
+enum TVOSDisplayHDRCapabilityResolver {
+    static func resolve(
+        _ inputs: TVOSDisplayHDRCapabilityInputs
+    ) -> TVOSDisplayHDRCapabilityResolution {
+        func normalizedHeadroom(_ value: Double?) -> Double? {
+            guard let value,
+                  value.isFinite,
+                  (1...HDRLuminanceMapping.maximumCurrentHeadroom)
+                    .contains(value) else { return nil }
+            return value
+        }
+        let capabilities = TVOSDisplayHDRCapabilities(
+            layerCapability: inputs.layerCapability,
+            supportedEDRGamuts: inputs.supportedEDRGamuts,
+            currentEDRHeadroom: normalizedHeadroom(
+                inputs.currentEDRHeadroom
+            ),
+            potentialEDRHeadroom: normalizedHeadroom(
+                inputs.potentialEDRHeadroom
+            )
+        )
+        func fallback(
+            _ reason: TVOSDisplayHDRFallbackReason
+        ) -> TVOSDisplayHDRCapabilityResolution {
+            .sdrFallback(capabilities: capabilities, reason: reason)
+        }
+
+        guard inputs.isOutputAvailable else {
+            return fallback(.outputUnavailable)
+        }
+        guard inputs.layerCapability == .preferredDynamicRange else {
+            return fallback(.preferredDynamicRangeUnavailable)
+        }
+        guard inputs.supportsToneMapControl else {
+            return fallback(.toneMapControlUnavailable)
+        }
+        guard inputs.supportsContentsHeadroom else {
+            return fallback(.contentsHeadroomUnavailable)
+        }
+        guard !inputs.supportedEDRGamuts.isEmpty else {
+            return fallback(.extendedColorSpaceUnavailable)
+        }
+        guard let current = inputs.currentEDRHeadroom,
+              let potential = inputs.potentialEDRHeadroom else {
+            return fallback(.headroomUnavailable)
+        }
+        guard capabilities.currentEDRHeadroom != nil,
+              capabilities.potentialEDRHeadroom != nil,
+              current <= potential else {
+            return fallback(.invalidHeadroom)
+        }
+        guard current > 1 else {
+            return fallback(.insufficientHeadroom)
+        }
+        return .directEDR(capabilities)
+    }
+}
+
+#if os(tvOS)
+@MainActor
+enum TVOSNativeDisplayHDRCapabilityProbe {
+    static func resolve(
+        screen: UIScreen?,
+        layer: CAMetalLayer?
+    ) -> TVOSDisplayHDRCapabilityResolution {
+        if let layer {
+            _ = layer.preferredDynamicRange
+            _ = layer.toneMapMode
+            _ = layer.contentsHeadroom
+        }
+        var gamuts: Set<HDROutputGamut> = []
+        if CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3) != nil {
+            gamuts.insert(.displayP3)
+        }
+        if CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020) != nil {
+            gamuts.insert(.ituR2020)
+        }
+        return TVOSDisplayHDRCapabilityResolver.resolve(
+            TVOSDisplayHDRCapabilityInputs(
+                isOutputAvailable: screen != nil && layer != nil,
+                layerCapability: layer == nil
+                    ? .unavailable
+                    : .preferredDynamicRange,
+                supportsToneMapControl: layer != nil,
+                supportsContentsHeadroom: layer != nil,
+                supportedEDRGamuts: gamuts,
+                currentEDRHeadroom: screen.map {
+                    Double($0.currentEDRHeadroom)
+                },
+                potentialEDRHeadroom: screen.map {
+                    Double($0.potentialEDRHeadroom)
+                }
+            )
+        )
+    }
+}
+#endif
 
 enum TVVisionHeadTrackingCapability:
     String,

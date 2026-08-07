@@ -104,11 +104,12 @@ final class HDRRenderContractTests: XCTestCase {
                     capabilities: HDRPlatformOutputCapabilities(
                         platform: .tvOS,
                         headroomSource: .currentAndPotential,
-                        extendedRangeSurfaceSupport: .unavailable,
-                        supportedEDRGamuts: [],
+                        extendedRangeSurfaceSupport:
+                            .preferredDynamicRangeAndHeadroom,
+                        supportedEDRGamuts: [.displayP3, .ituR2020],
                         supportsSDRToneMapping: true
                     ),
-                    reason: .extendedRangeSurfaceUnavailable
+                    reason: .currentHeadroomUnavailable
                 )
             ),
             (
@@ -235,6 +236,39 @@ final class HDRRenderContractTests: XCTestCase {
                 .unsupportedSurfaceContract
             )
         }
+        XCTAssertThrowsError(try HDRSurfaceContract(
+            drawablePixelFormat: .bgra8UnormSRGB,
+            outputColorSpace: .sRGB,
+            outputGamut: .sRGB,
+            extendedRangeIntent: .disabled,
+            metadataMode: .none,
+            contentHeadroom: 2
+        ))
+        for invalidHeadroom in [
+            Double.nan,
+            Double.infinity,
+            -Double.infinity,
+            0,
+            1,
+            65,
+        ] {
+            XCTAssertThrowsError(try HDRSurfaceContract(
+                drawablePixelFormat: .rgba16Float,
+                outputColorSpace: .extendedLinearITUR2020,
+                outputGamut: .ituR2020,
+                extendedRangeIntent: .enabled,
+                metadataMode: .hdr10,
+                contentHeadroom: invalidHeadroom
+            ))
+        }
+        XCTAssertNoThrow(try HDRSurfaceContract(
+            drawablePixelFormat: .rgba16Float,
+            outputColorSpace: .extendedLinearITUR2020,
+            outputGamut: .ituR2020,
+            extendedRangeIntent: .enabled,
+            metadataMode: .hdr10,
+            contentHeadroom: 2
+        ))
     }
 
     func testConfigurationRejectsInactiveOwnershipAndSourceMappingMismatch() throws {

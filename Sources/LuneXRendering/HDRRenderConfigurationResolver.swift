@@ -213,7 +213,14 @@ enum HDRRenderConfigurationResolver {
                 decoderGeneration: input.decoderGeneration,
                 displayRevision: display.revision,
                 mappingMode: .hdrEDR,
-                surfaceContract: makeEDRSurface(gamut: gamut),
+                surfaceContract: makeEDRSurface(
+                    gamut: gamut,
+                    contentHeadroom: input.platformCapabilities
+                        .extendedRangeSurfaceSupport
+                        == .preferredDynamicRangeAndHeadroom
+                        ? currentHeadroom
+                        : nil
+                ),
                 luminanceMapping: mapping,
                 outputMode: .edr,
                 drawableState: input.drawableState
@@ -263,7 +270,9 @@ enum HDRRenderConfigurationResolver {
         guard capabilities.headroomSource != .unavailable else {
             return .ineligible(.currentHeadroomUnavailable)
         }
-        guard capabilities.extendedRangeSurfaceSupport == .intentAndMetadata else {
+        guard capabilities.extendedRangeSurfaceSupport == .intentAndMetadata
+                || capabilities.extendedRangeSurfaceSupport
+                    == .preferredDynamicRangeAndHeadroom else {
             return .ineligible(.platformOutputUnsupported(capabilities.platform))
         }
         let gamut: HDROutputGamut
@@ -343,7 +352,8 @@ enum HDRRenderConfigurationResolver {
     }
 
     private static func makeEDRSurface(
-        gamut: HDROutputGamut
+        gamut: HDROutputGamut,
+        contentHeadroom: Double?
     ) -> Result<HDRSurfaceContract, HDRRenderResolutionError> {
         let colorSpace: HDROutputColorSpace
         switch gamut {
@@ -360,7 +370,8 @@ enum HDRRenderConfigurationResolver {
                 outputColorSpace: colorSpace,
                 outputGamut: gamut,
                 extendedRangeIntent: .enabled,
-                metadataMode: .hdr10
+                metadataMode: .hdr10,
+                contentHeadroom: contentHeadroom
             )
         }.mapError { _ in .unsupportedSurfaceContract }
     }

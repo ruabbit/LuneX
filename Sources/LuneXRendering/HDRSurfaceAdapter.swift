@@ -29,8 +29,20 @@ struct HDRSurfaceAdapterCapabilities: Equatable, Sendable {
 
     func supports(_ contract: HDRSurfaceContract) -> Bool {
         guard contract.extendedRangeIntent == .enabled else { return true }
-        return extendedRangeSurfaceSupport != .unavailable
-            && supportedEDRGamuts.contains(contract.outputGamut)
+        guard supportedEDRGamuts.contains(contract.outputGamut) else {
+            return false
+        }
+        switch extendedRangeSurfaceSupport {
+        case .unavailable:
+            return false
+        case .intentOnly, .intentAndMetadata:
+            return true
+        case .preferredDynamicRangeAndHeadroom:
+            guard let headroom = contract.contentHeadroom else { return false }
+            return headroom.isFinite
+                && headroom > 1
+                && headroom <= HDRLuminanceMapping.maximumCurrentHeadroom
+        }
     }
 
     static var current: Self {
@@ -42,7 +54,14 @@ enum HDRSurfaceMutation: Equatable, Sendable {
     case drawablePixelFormat(HDRDrawablePixelFormat)
     case outputColorSpace(HDROutputColorSpace)
     case metadata(HDRSurfaceMetadataMode)
+    case toneMapMode(HDRSurfaceToneMapMode)
+    case contentsHeadroom(Double)
     case extendedRangeIntent(HDRExtendedRangeIntent)
+}
+
+enum HDRSurfaceToneMapMode: String, Equatable, Sendable {
+    case automatic
+    case never
 }
 
 enum HDRSurfaceApplicationOutcome: Equatable, Sendable {
@@ -164,6 +183,10 @@ final class HDRSurfaceTransactionAdapter<Backend: HDRSurfaceMutationBacking>:
             if support == .intentAndMetadata {
                 result.append(.metadata(.none))
             }
+            if support == .preferredDynamicRangeAndHeadroom {
+                result.append(.toneMapMode(.automatic))
+                result.append(.contentsHeadroom(0))
+            }
             result.append(.drawablePixelFormat(contract.drawablePixelFormat))
             result.append(.outputColorSpace(contract.outputColorSpace))
             return result
@@ -175,6 +198,11 @@ final class HDRSurfaceTransactionAdapter<Backend: HDRSurfaceMutationBacking>:
         ]
         if support == .intentAndMetadata {
             result.append(.metadata(contract.metadataMode))
+        }
+        if support == .preferredDynamicRangeAndHeadroom,
+           let contentHeadroom = contract.contentHeadroom {
+            result.append(.toneMapMode(.never))
+            result.append(.contentsHeadroom(contentHeadroom))
         }
         result.append(.extendedRangeIntent(contract.extendedRangeIntent))
         return result
@@ -211,6 +239,9 @@ private final class AppleMetalSurfaceMutationBackend: HDRSurfaceMutationBacking 
         let colorSpace: CGColorSpace?
         let wantsExtendedRange: Bool?
         let metadata: AnyObject?
+        let preferredDynamicRange: CALayer.DynamicRange
+        let toneMapMode: CALayer.ToneMapMode
+        let contentsHeadroom: CGFloat
     }
 
     let capabilities: HDRSurfaceAdapterCapabilities
@@ -229,7 +260,10 @@ private final class AppleMetalSurfaceMutationBackend: HDRSurfaceMutationBacking 
             layerPixelFormat: layer.pixelFormat,
             colorSpace: layer.colorspace,
             wantsExtendedRange: layer.wantsExtendedDynamicRangeContent,
-            metadata: layer.edrMetadata
+            metadata: layer.edrMetadata,
+            preferredDynamicRange: layer.preferredDynamicRange,
+            toneMapMode: layer.toneMapMode,
+            contentsHeadroom: layer.contentsHeadroom
         )
         #else
         return Snapshot(
@@ -237,7 +271,10 @@ private final class AppleMetalSurfaceMutationBackend: HDRSurfaceMutationBacking 
             layerPixelFormat: layer.pixelFormat,
             colorSpace: layer.colorspace,
             wantsExtendedRange: nil,
-            metadata: nil
+            metadata: nil,
+            preferredDynamicRange: layer.preferredDynamicRange,
+            toneMapMode: layer.toneMapMode,
+            contentsHeadroom: layer.contentsHeadroom
         )
         #endif
     }
@@ -279,7 +316,27 @@ private final class AppleMetalSurfaceMutationBackend: HDRSurfaceMutationBacking 
             _ = mode
             throw AppleMetalSurfaceBackendError.extendedRangeUnavailable
             #endif
+        case let .toneMapMode(mode):
+            layer.toneMapMode = switch mode {
+            case .automatic: .automatic
+            case .never: .never
+            }
+        case let .contentsHeadroom(headroom):
+            guard headroom.isFinite,
+                  headroom == 0
+                    || (1...HDRLuminanceMapping.maximumCurrentHeadroom)
+                        .contains(headroom) else {
+                throw AppleMetalSurfaceBackendError.invalidContentsHeadroom
+            }
+            layer.contentsHeadroom = CGFloat(headroom)
         case let .extendedRangeIntent(intent):
+            if capabilities.extendedRangeSurfaceSupport
+                == .preferredDynamicRangeAndHeadroom {
+                layer.preferredDynamicRange = intent == .enabled
+                    ? .high
+                    : .standard
+                return
+            }
             #if os(macOS) || os(iOS) || os(visionOS)
             layer.wantsExtendedDynamicRangeContent = intent == .enabled
             #else
@@ -291,6 +348,12 @@ private final class AppleMetalSurfaceMutationBackend: HDRSurfaceMutationBacking 
 
     func restore(_ snapshot: Snapshot) throws {
         let (view, layer) = try nativeSurface()
+        if capabilities.extendedRangeSurfaceSupport
+            == .preferredDynamicRangeAndHeadroom {
+            layer.preferredDynamicRange = .standard
+            layer.toneMapMode = .automatic
+            layer.contentsHeadroom = 0
+        }
         #if os(macOS) || os(iOS) || os(visionOS)
         layer.wantsExtendedDynamicRangeContent = false
         layer.edrMetadata = snapshot.metadata as? CAEDRMetadata
@@ -298,6 +361,9 @@ private final class AppleMetalSurfaceMutationBackend: HDRSurfaceMutationBacking 
         view.colorPixelFormat = snapshot.viewPixelFormat
         layer.pixelFormat = snapshot.layerPixelFormat
         layer.colorspace = snapshot.colorSpace
+        layer.toneMapMode = snapshot.toneMapMode
+        layer.contentsHeadroom = snapshot.contentsHeadroom
+        layer.preferredDynamicRange = snapshot.preferredDynamicRange
         #if os(macOS) || os(iOS) || os(visionOS)
         layer.wantsExtendedDynamicRangeContent = snapshot.wantsExtendedRange ?? false
         #endif
@@ -319,6 +385,7 @@ private enum AppleMetalSurfaceBackendError: Error {
     case surfaceUnavailable
     case colorSpaceUnavailable
     case extendedRangeUnavailable
+    case invalidContentsHeadroom
     case metadataUnavailable
 }
 
