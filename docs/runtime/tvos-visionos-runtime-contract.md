@@ -85,12 +85,12 @@ evidence only.
 |---|---|---|---|
 | App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application | Full platform input/display/audio actual-state ownership remains later work |
 | Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; the tvOS stream surface forwards supported eligible presses while local/Menu/unsupported presses continue through UIKit | Overlay-first focus handoff, full reserved-command behavior, and visionOS window/input capability state remain later tasks |
-| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry, then activates current media presentation ownership; tvOS additionally owns actual begin/end/cancel press identity | Controller, display/HDR, audio, and visionOS actual input component adapters remain later platform work |
-| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, and a bound presenter consumes only coordinator-admitted current frames | Actual display/HDR and audio graph effects remain later tvOS/visionOS work |
+| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry, then activates current media presentation ownership; tvOS additionally owns actual begin/end/cancel press identity and actual screen/layer HDR observation | Audio and visionOS actual input/display component adapters remain later platform work |
+| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and matching tvOS display components drive actual HDR resolution | Actual audio graph effects and visionOS HDR presentation remain later work |
 | Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated revision for drawable size, fit/fill, and supported input reference; tvOS admits remote presses only for that current eligible surface/input generation | tvOS controller and visionOS input adapters remain later tasks |
-| Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator now admits actual frames by checked ownership, action/platform/delivery revisions, decoder/frame identity, and surface generation, with clear/rebind/replacement fences | tvOS display/HDR integration remains 4.2/4.3; explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
+| Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator admits actual frames and tvOS display components by checked ownership, revisions, decoder/frame or display-source identity, and surface generation, with clear/rebind/replacement fences | Shared same-view reconnect replay remains 4.5; explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
 | Audio | `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph exists; immutable route state participates in the coordinator's shared ordered teardown | Actual route observer/graph effect application remains later tvOS/visionOS media work |
-| Application state | `AppModel` | Current/terminal tvOS/visionOS presentation state is admitted by media generation, platform, ownership, sequence, and highest surface ownership; tvOS geometry derives one `.tvRemote` capability snapshot and reuses the existing session input application path | Overlay/focus policy, controllers, display/HDR, audio route, and complete product UI projection remain later tasks |
+| Application state | `AppModel` | Current/terminal tvOS/visionOS presentation state is admitted by media generation, platform, ownership, sequence, and highest surface ownership; tvOS geometry derives one `.tvRemote` input capability, while current-source-gated display state drives render headroom/capability and typed fallback | Audio route, visionOS media/input, and complete product UI projection remain later tasks |
 
 The non-macOS UIKit surface configures the shared presenter, applies shared
 render scheduling, and stops the presenter on dismantle. iOS continues to use
@@ -160,10 +160,10 @@ game event merely because a SwiftUI focus item changed.
 
 | Concern | Current state | Required stage 18 direction |
 |---|---|---|
-| Scene and surface | Actual `TVVisionStreamMetalView` owns one surface generation, actual window/scene/tvOS screen, lifecycle, finite geometry, detach, invalid, and stale state; current geometry activates media-owned coordinator state and binds the same actual presenter owner through `AppModel` | Connect later actual display/HDR and audio components |
+| Scene and surface | Actual `TVVisionStreamMetalView` owns one surface generation, actual window/scene/tvOS screen, lifecycle, finite geometry, detach, invalid, stale state, and display observer invalidation; current geometry activates media-owned coordinator state and binds the same actual presenter owner through `AppModel` | Connect later audio and shared reconnect replay components |
 | Geometry | Surface-local owner publishes one deduplicated `TVVisionSemanticRevision` to actual drawable size, exact fit/fill coordinates, and supported input reference mapping | Keep future actual input adapters branded to this revision and reject incompatible frames |
-| Video | Shared decoder, bounded frame source, Metal presenter, and main-actor coordinator-to-surface owner are connected; platform admission disables latest-frame fallback and validates ownership/revisions/decoder/frame/surface identity | Keep 4.1 clear/rebind/replacement fences; add actual display/HDR policy in 4.2/4.3 without creating another decoder |
-| HDR | `HDRPlatformOutputCapabilityAdapter` currently returns typed SDR fallback because the old extended-range surface contract is unavailable | Probe the tvOS 26 dynamic-range layer path; retain HDR-to-SDR until actual public capability and current display state form a complete contract |
+| Video | Shared decoder, bounded frame source, Metal presenter, and main-actor coordinator-to-surface owner are connected; platform admission disables latest-frame fallback and validates ownership/revisions/decoder/frame/surface identity | Keep 4.1 clear/rebind/replacement fences and coordinate same-view media reconnect replay in 4.5 |
+| HDR | The actual attached tvOS screen and underlying Metal layer publish deduplicated, surface-owned display revisions; complete public preferred-range capability selects the headroom-tagged EDR contract, otherwise the existing bounded HDR-to-SDR path and typed fallback remain active | Physical compositor/HDMI/television HDR remains task 8.7; visionOS has its own 6.3 capability boundary |
 | Audio | Canonical PCM graph, tvOS AVAudioSession route handling, listener strategy, interruption, and media-reset foundations exist | Bind actual route/capability and graph recovery to the same current media presentation generation |
 | App/UI | Shared HDR and spatial status can render | Publish platform actual scene/input/render/HDR/audio state rather than preference-derived claims |
 
@@ -1481,6 +1481,67 @@ simulator operations. Post-record
 `/tmp/LuneX-18-4_2-post-record.YjRjuV` then confirmed `21/50 next 4.3`, strict
 `9/9`, the same project hash and sixteen-file scope, all five authority records,
 retained evidence, and opt-in/process/reference/diff boundaries.
+
+## Task 4.3 actual tvOS display application
+
+Task 4.3 connects the task 4.2 capability and surface contract to the actual
+stream surface and current media generation. `TVVisionStreamMetalView` samples
+only its own `window.windowScene.screen` and underlying `CAMetalLayer`. It
+observes `UIScreen.modeDidChangeNotification` and
+`UIScreen.brightnessDidChangeNotification` with a surface observation lease;
+detach, surface replacement, dismantle, and stop remove the handlers before an
+old callback can publish current state.
+
+`TVOSDisplayHDRSnapshotPublisher` owns a checked display generation and bounded
+semantic revision. Equivalent normalized capability snapshots deduplicate. A
+stale surface generation is rejected, unavailable output carries no current or
+potential headroom, and revision exhaustion closes publication. An available
+output with invalid or absent current headroom may retain valid potential
+headroom for truthful diagnostics, but the renderer still uses conservative
+`1/1` headroom and typed SDR fallback.
+
+The production coordinator publishes display independently from the later
+audio component and records only bounded `.displayDirectEDR` or
+`.displayFallback(reason)` diagnostics. `AppModel` serializes display
+application after activation, scene, and input eligibility. It accepts only a
+component whose platform, display generation, output availability, headroom
+source/values, layer capability, and tvOS resolution match the current surface
+source. The coordinator may rebrand semantic revision, so revision itself is
+not treated as source identity. A newly accepted source synchronously closes
+the previous render display and fallback before asynchronous application;
+surface replacement, application failure, semantic-revision exhaustion,
+reconnect, remote termination, and stop clear render headroom and capability.
+
+Fresh pre-mark evidence is:
+
+- focused `/tmp/LuneX-18-4_3-focused-final.BN6ZYp`: `190/190 passed / 0 skipped /
+  0 failed / 0 expected failure`, with zero structured build diagnostics;
+- related `/tmp/LuneX-18-4_3-related-final.ztmMov`: `361/361 passed / 0 skipped /
+  0 failed / 0 expected failure`, with zero structured build diagnostics;
+- normal `/tmp/LuneX-18-4_3-normal-final.kN6LiU`: `1047 total / 1046 passed / 1
+  exact real-Keychain opt-in skip / 0 failed / 0 expected failure`, with zero
+  structured build diagnostics;
+- fixed Apple TV direct build `/tmp/LuneX-18-4_3-tvos-final.UlXTWd`: unsigned
+  Debug success with zero structured diagnostics and one AIR/metallib pair; and
+- unsigned five-platform Debug matrix
+  `/tmp/LuneX-18-4_3-builds-final.u2xQ44`: macOS, fixed iPhone, fixed iPad,
+  fixed Apple TV, and fixed Vision Pro all succeeded with zero structured
+  Swift/Clang/Metal/analyzer diagnostics and one AIR/metallib pair each.
+
+The five raw build logs each contain only the AppIntents metadata-tool notice
+`Metadata extraction skipped. No AppIntents.framework dependency found.`; the
+corresponding structured warning count is zero. Fixed UUIDs were build
+destinations only. No simulator was queried, created, cloned, booted, installed,
+launched, run, shut down, or deleted during task 4.3, and real-Keychain and
+live-host opt-ins remained unset.
+
+These results prove static contracts, injected current-generation behavior,
+and unsigned SDK compilation/linking. They do not prove signed installation, a
+running simulator, physical Apple TV screen/compositor/HDMI HDR, television
+brightness or color, live Sunshine, latency, performance, power, or thermal
+behavior. The shared geometry replay needed when the same `MTKView` survives a
+media reconnect remains task 4.5; tvOS route, spatial audio, head tracking,
+interruption, media reset, and recovery remain task 4.4.
 
 ## Fixed simulator inventory
 

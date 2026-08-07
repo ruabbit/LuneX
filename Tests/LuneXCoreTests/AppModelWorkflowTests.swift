@@ -2411,6 +2411,300 @@ final class AppModelWorkflowTests: XCTestCase {
         await launchTask.value
     }
 
+    func testTVOSDisplayHDRAppliesInGeometryOrderAndFailsClosedAcrossReplacement()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 80,
+                    key: Data(repeating: 0x80, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let firstGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        let direct = try makeTVOSDisplaySnapshot(
+            revision: 1,
+            displayGeneration: 1,
+            current: 2.5,
+            potential: 4
+        )
+        model.receiveTVVisionGeometryUpdate(firstGeometry)
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: firstGeometry.surfaceGeneration,
+            snapshot: direct
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        let firstApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(firstApplications[0].action, .activate)
+        guard case .scene = firstApplications[1].action,
+              case .input = firstApplications[2].action,
+              case let .display(appliedDirect) = firstApplications[3].action else {
+            return XCTFail("Display must apply after scene and input geometry state.")
+        }
+        XCTAssertEqual(appliedDirect, direct)
+
+        let directState = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 4,
+            display: direct
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            directState,
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.renderState.displaySnapshot?.headroom.current == 2.5
+        }
+        XCTAssertEqual(model.renderState.headroom.potential, 4)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+
+        let fallback = try makeTVOSDisplaySnapshot(
+            revision: 2,
+            displayGeneration: 1,
+            current: .nan,
+            potential: 4
+        )
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: firstGeometry.surfaceGeneration,
+            snapshot: fallback
+        ))
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 5
+        }
+        let fallbackState = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .tvOS,
+            presentationGeneration: 1,
+            sequence: 5,
+            display: fallback
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            fallbackState,
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.tvOSDisplayHDRFallbackReason == .invalidHeadroom
+        }
+        XCTAssertEqual(model.renderState.displaySnapshot?.headroom, DisplayHeadroom())
+        XCTAssertEqual(model.renderState.headroom, DisplayHeadroom())
+
+        let applicationCount = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications().count
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: firstGeometry.surfaceGeneration,
+            snapshot: direct
+        ))
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: try TVVisionGeneration(
+                domain: .surface,
+                rawValue: 2
+            ),
+            snapshot: try makeTVOSDisplaySnapshot(
+                revision: 3,
+                displayGeneration: 1,
+                current: 3,
+                potential: 4
+            )
+        ))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentTVVisionPlatformPresentationApplications().count,
+            applicationCount
+        )
+
+        let replacementDisplay = try makeTVOSDisplaySnapshot(
+            revision: 1,
+            displayGeneration: 2,
+            current: 3,
+            potential: 4
+        )
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: firstGeometry.surfaceGeneration,
+            snapshot: replacementDisplay
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count
+                == applicationCount + 1
+        }
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: firstGeometry.surfaceGeneration,
+            snapshot: try makeTVOSDisplaySnapshot(
+                revision: 3,
+                displayGeneration: 1,
+                current: 3.5,
+                potential: 4
+            )
+        ))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentTVVisionPlatformPresentationApplications().count,
+            applicationCount + 1
+        )
+
+        let replacementGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 2,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(replacementGeometry)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count
+                == applicationCount + 4
+        }
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            try makeTVVisionPresentationState(
+                sessionID: record.sessionID,
+                mediaGeneration: 1,
+                platform: .tvOS,
+                presentationGeneration: 1,
+                sequence: 6,
+                display: replacementDisplay
+            ),
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: firstGeometry.surfaceGeneration,
+            snapshot: replacementDisplay
+        ))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentTVVisionPlatformPresentationApplications().count,
+            applicationCount + 4
+        )
+
+        model.receiveTVOSDisplayHDREvent(.revisionExhausted(
+            surfaceGeneration: replacementGeometry.surfaceGeneration
+        ))
+        XCTAssertTrue(model.renderState.isDisplayRevisionExhausted)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count
+                == applicationCount + 5
+        }
+        XCTAssertEqual(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().last?.action,
+            .fail(.semanticRevisionExhausted)
+        )
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: replacementGeometry.surfaceGeneration,
+            snapshot: try makeTVOSDisplaySnapshot(
+                revision: 1,
+                displayGeneration: 3,
+                current: 3,
+                potential: 4
+            )
+        ))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentTVVisionPlatformPresentationApplications().count,
+            applicationCount + 5
+        )
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertFalse(model.renderState.isDisplayRevisionExhausted)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+    }
+
+    func testTVOSDisplayApplicationFailureTerminatesCurrentPresentation()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            failsTVOSDisplayApplication: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 81,
+                    key: Data(repeating: 0x81, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        let geometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(geometry)
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: geometry.surfaceGeneration,
+            snapshot: try makeTVOSDisplaySnapshot(
+                revision: 1,
+                displayGeneration: 1,
+                current: 2.5,
+                potential: 4
+            )
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 5
+        }
+        let actions = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications().map(\.action)
+        guard case .display = actions[3] else {
+            return XCTFail("Expected the failing display application.")
+        }
+        XCTAssertEqual(actions[4], .fail(.actionFailed(.display)))
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
     func testTVRemoteSurfacePressesUseCurrentGeometryAndBalancedInput()
         async throws {
         let provider = ControlledSessionControlProvider()
@@ -4906,7 +5200,9 @@ final class AppModelWorkflowTests: XCTestCase {
         platform: TVVisionPlatform,
         presentationGeneration: UInt64,
         sequence: UInt64,
-        phase: TVVisionPlatformPresentationPhase = .active
+        phase: TVVisionPlatformPresentationPhase = .active,
+        display sourceDisplay: TVVisionDisplaySnapshot? = nil,
+        isSemanticRevisionExhausted: Bool = false
     ) throws -> SessionTVVisionPlatformPresentationState {
         let ownership = try TVVisionPresentationOwnership(
             platform: platform,
@@ -4921,15 +5217,30 @@ final class AppModelWorkflowTests: XCTestCase {
                 rawValue: mediaGeneration
             )
         )
+        let revision = try TVVisionSemanticRevision(rawValue: sequence)
+        let display = try sourceDisplay.map {
+            try TVVisionDisplaySnapshot(
+                platform: $0.platform,
+                revision: revision,
+                displayGeneration: $0.displayGeneration,
+                isOutputAvailable: $0.isOutputAvailable,
+                headroomSource: $0.headroomSource,
+                currentEDRHeadroom: $0.currentEDRHeadroom,
+                potentialEDRHeadroom: $0.potentialEDRHeadroom,
+                layerCapability: $0.layerCapability,
+                tvOSHDRCapabilityResolution: $0.tvOSHDRCapabilityResolution
+            )
+        }
         return SessionTVVisionPlatformPresentationState(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
             snapshot: TVVisionPlatformPresentationCoordinatorSnapshot(
                 ownership: ownership,
                 sequence: sequence,
-                revision: try TVVisionSemanticRevision(rawValue: sequence),
+                revision: revision,
                 phase: phase,
                 presentation: nil,
+                display: display,
                 video: TVVisionPlatformVideoSnapshot(
                     phase: .idle,
                     lastDeliveryRevision: nil,
@@ -4937,9 +5248,45 @@ final class AppModelWorkflowTests: XCTestCase {
                 ),
                 diagnostics: [],
                 teardownCount: 0,
-                isSemanticRevisionExhausted: false,
+                isSemanticRevisionExhausted: isSemanticRevisionExhausted,
                 isSequenceExhausted: false
             )
+        )
+    }
+
+    private func makeTVOSDisplaySnapshot(
+        revision: UInt64,
+        displayGeneration: UInt64,
+        current: Double?,
+        potential: Double?
+    ) throws -> TVVisionDisplaySnapshot {
+        let resolution = TVOSDisplayHDRCapabilityResolver.resolve(
+            TVOSDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.displayP3, .ituR2020],
+                currentEDRHeadroom: current,
+                potentialEDRHeadroom: potential
+            )
+        )
+        let capabilities = resolution.capabilities
+        return try TVVisionDisplaySnapshot(
+            platform: .tvOS,
+            revision: TVVisionSemanticRevision(rawValue: revision),
+            displayGeneration: TVVisionGeneration(
+                domain: .display,
+                rawValue: displayGeneration
+            ),
+            isOutputAvailable: true,
+            headroomSource: capabilities.currentEDRHeadroom == nil
+                ? .unavailable
+                : .platformReported,
+            currentEDRHeadroom: capabilities.currentEDRHeadroom,
+            potentialEDRHeadroom: capabilities.potentialEDRHeadroom,
+            layerCapability: capabilities.layerCapability,
+            tvOSHDRCapabilityResolution: resolution
         )
     }
 
@@ -6258,6 +6605,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private let automaticallyReady: Bool
     private let failsLifecycleApplication: Bool
     private let failsInputSend: Bool
+    private let failsTVOSDisplayApplication: Bool
     private let blocksFirstTVVisionActivation: Bool
     private let blocksFailingTVVisionActivationAfterTerminalEvent: Bool
     private var startRecords: [StartRecord] = []
@@ -6285,12 +6633,14 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         automaticallyReady: Bool = true,
         failsLifecycleApplication: Bool = false,
         failsInputSend: Bool = false,
+        failsTVOSDisplayApplication: Bool = false,
         blocksFirstTVVisionActivation: Bool = false,
         blocksFailingTVVisionActivationAfterTerminalEvent: Bool = false
     ) {
         self.automaticallyReady = automaticallyReady
         self.failsLifecycleApplication = failsLifecycleApplication
         self.failsInputSend = failsInputSend
+        self.failsTVOSDisplayApplication = failsTVOSDisplayApplication
         self.blocksFirstTVVisionActivation = blocksFirstTVVisionActivation
         shouldBlockTVVisionActivation = blocksFirstTVVisionActivation
         self.blocksFailingTVVisionActivationAfterTerminalEvent =
@@ -6392,6 +6742,10 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         withLock {
             tvVisionPlatformPresentationApplications.append(application)
         }
+        if failsTVOSDisplayApplication,
+           case .display = application.action {
+            throw MediaEnvironmentApplicationTestError.failed
+        }
         if blocksFirstTVVisionActivation,
            application.action == .activate,
            withLock({
@@ -6417,6 +6771,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
                     revision: revision,
                     phase: .failed(.invalidComponent(.video)),
                     presentation: nil,
+                    display: nil,
                     video: TVVisionPlatformVideoSnapshot(
                         phase: .idle,
                         lastDeliveryRevision: nil,

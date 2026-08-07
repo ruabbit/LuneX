@@ -53,7 +53,11 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持`20/50 ready`、next 4.2。1.1至3.7的platform ownership与tvOS input/focus/controller runtime已完成task级验收；4.1已把production coordinator准入的current decoded frame绑定到actual Metal presenter，关闭shared-latest bypass并覆盖scene/surface/revision/clear/rebind/replacement。fresh focused `8/8`、related `241/241`、normal `1035/1034/1/0`、direct tvOS、unsigned五平台Debug、repository pre-gate与只读final-state均通过。4.2开始实现actual public tvOS display/layer/color capability与typed HDR-to-SDR fallback；当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持`22/50 ready`、next 4.4。1.1至3.7的platform ownership与tvOS input/focus/controller runtime、4.1 actual Metal presentation、4.2 public tvOS display/layer/color capability和4.3 actual display revision/AppModel/render application均已完成task级验收。4.3 fresh focused `190/190`、related `361/361`、normal `1047/1046/1/0`、fixed Apple TV direct、unsigned五平台Debug及repository pre-gate均通过；下一步为4.4 actual tvOS AVAudioSession/canonical graph/spatial/head tracking/interruption/media reset/recovery。当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+
+4.3 post-mark final-state `/tmp/LuneX-18-4_3-final-state-r3.ShiHBj`只读确认OpenSpec strict `9/9`、`22/50 next 4.4`、task done、稳定generator SHA-256、精确16文件scope、权威文档、retained evidence及privacy/reference/dependency/opt-in/process/diff边界。4.3可独立提交推送，阶段18和长期goal继续保持`in_progress`。
+
+4.3 post-record `/tmp/LuneX-18-4_3-post-record.2zqnMO`和最终人工production/test/docs diff审计均通过；observer ownership、source identity、fallback/exhaustion/terminal state、proof tiers与4.4/4.5边界无新问题。提交只包含精确16文件scope。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -81,6 +85,12 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.4.3首次权威文档组合补丁的`design.md`换行锚点不精确 | 1 | `apply_patch`原子拒绝且无部分修改；读取真实片段后按文件拆分同步 |
+| 18.4.3 runtime contract章节插入误把行内`Post-record`当作段首 | 1 | `apply_patch`原子拒绝且无部分修改；改用稳定的下一章节标题作为插入锚点 |
+| 18.4.3首轮repository pre-gate以`! rg`配合`set -e`实现负向断言 | 1 | Bash不会在`!`上下文按预期退出，且一项平台import假设不成立；该轮不计验收，改用显式条件失败和真实`#if os(tvOS)`边界 |
+| 18.4.3 repository pre-gate r2平台header fixture遗漏`#endif`后的空行 | 1 | 门在diff处正确退出；改为比较精确前7行语义内容并fresh重跑 |
+| 18.4.3首个post-mark final-state包装器含未转义Markdown反引号 | 1 | JavaScript在shell启动前退出且无副作用；移除反引号模式并fresh运行只读门 |
+| 18.4.3 post-mark final-state r2把跨两行的same-MTKView/4.5合同写成单行正则 | 1 | 前置状态通过后退出；拆成两个独立短语断言并fresh只读重跑 |
 | 18.4.2首个`HDRRenderContract.swift`组合补丁假设了不精确的surface validation上下文 | 1 | `apply_patch`原子拒绝且无部分修改；读取实际短片段后把capability matrix与contract hunk按精确上下文应用 |
 | 18.4.2 API probe把device `appletvos` SDK用于`-simulator` target | 1 | device target先通过，simulator因标准库SDK不匹配退出；改用`appletvsimulator` SDK后同一public API source warnings-as-errors通过，未操作simulator生命周期 |
 | 18.4.1首轮post-record误用只验证当前change的`openspec validate integrate-tvos-visionos-runtime --strict --json`并期望仓库级`9/9` | 1 | `/tmp/LuneX-18-4_1-post-record.mkvGtQ`合法返回current change `1/1`后在首个断言退出；改用`openspec validate --all --strict --json`从fresh只读目录完整通过，不重复test/build/generator或simulator操作 |
@@ -1036,3 +1046,29 @@
 - **post-record：** `/tmp/LuneX-18-4_2-post-record.YjRjuV`只读通过`21/50 next 4.3`、strict `9/9`、稳定project hash、16文件scope、五份权威记录、retained evidence及opt-in/process/reference/diff边界。下一步最终diff审计与独立提交推送。
 - **final audit错误 1：** 首轮`/tmp/LuneX-18-4_2-final-audit.J9NbmM`通过diff/scope和strict状态后，静态包装器误匹配不存在的`contentHeadroom: normalizedHeadroom`字段而退出；production实际为`currentEDRHeadroom`/`potentialEDRHeadroom`。未运行test/build/generator/simulator，改用真实字段名fresh重跑。
 - **最终审计：** 修正后的fresh `/tmp/LuneX-18-4_2-final-audit-r2.8dYwRn`完整通过16文件diff、strict `9/9`与`21/50 next 4.3`、production/regression semantics、no-4.3-scope-creep、proof boundary及reference/opt-in/process门；未发现新问题，4.2进入独立提交推送。
+
+## 2026-08-07 阶段 18 任务 4.3 启动
+
+- **状态：** `in_progress`；系统更新后确认active goal、`HEAD == origin/main == a27b90f`、工作树clean、OpenSpec `21/50 ready`且next为4.3，工具链为Xcode 26.4、Swift 6.3、macOS 27.0。
+- **目标：** 从actual tvOS `TVVisionStreamMetalView`绑定的`UIScreen`和`CAMetalLayer`发布有限、可比较、current-generation的display/HDR semantic revision，经platform presentation coordinator串行应用到AppModel render state，并发布有界typed fallback diagnostic。
+- **实施顺序：** 先建立纯值observation/event/revision publisher及normalization/dedup/stale/exhaustion测试；再增加main-actor actual surface observer和identity-filtered notification；然后通过`MetalStreamSurface`/`RootView`接入AppModel FIFO；最后连接`renderState.displaySnapshot`、HDR resolver和diagnostic并做分层验收。
+- **边界：** 不实现4.4 AVAudioSession/spatial audio，不实现7.x UI/Settings，不操作simulator lifecycle，不触发真实Keychain/live host；unsigned build与注入测试不证明物理Apple TV、电视/compositor/HDMI HDR、signed install、live Sunshine、功耗或性能。
+- **编译检查错误 1：** 首次focused命令误用没有test action的`LuneX-macOS` scheme，`xcodebuild`在进入编译前以exit 66退出；没有源码诊断、测试执行、Keychain或simulator操作。改为读取scheme列表并使用仓库测试scheme。
+- **编译检查错误 2：** 正确test scheme首次Swift编译发现generic `Screen`被重复捕获进`@Sendable` notification closure；object-filtered observer与observation UUID已经提供identity/stale过滤，移除闭包内重复screen capture后重试。
+- **测试编译错误 1：** 新增publisher/observer回归首次编译只发现两处throwing generation helper漏写`try`；production和其余测试源码已编译，补上显式传播后继续，此候选不计最终证据。
+- **测试编译错误 2：** coordinator helper加入局部归一化变量后不再支持隐式单表达式返回，编译指出snapshot initializer结果未使用；改为显式`return try`，不涉及production。
+- **focused行为错误 1：** 恢复后增量focused已成功编译并执行37项，但publisher fallback与coordinator fallback测试各失败一次。根因是resolver正确保留有效potential headroom时，旧display snapshot合同仍要求`.unavailable`同时清空current/potential，导致合法invalid-current fallback被误判为revision exhaustion或直接抛出`invalidDisplaySnapshot`；修订为current必须为空、仅在output unavailable时potential也必须为空，并补合同回归后重跑。
+- **增量focused：** partial-headroom修订后相同两组测试通过`39/39`，该结果只用于推进AppModel测试，不作为最终fresh验收。新增AppModel跨层用例将锁定geometry先于display、direct/fallback实际状态、旧revision/generation/surface拒绝、replacement清理、revision exhaustion与stop复位。
+- **审计缺口 1：** AppModel对display application使用`try?`，异常时可能静默保留旧actual display；display revision exhaustion也没有取消pending application或终止current coordinator。修订为current admission/operation guard下清空本地render状态并发送typed `.fail(.actionFailed(.display))`或`.fail(.semanticRevisionExhausted)`，同时保证exhaustion期间任何late coordinator display仍保持closed；新增两条workflow路径验证。
+- **审计缺口 2：** `TVVisionDisplaySnapshot`原可携带跨平台或与自身output/headroom/layer字段不一致的tvOS resolution，导致AppModel平台能力与实际快照分叉；现从值对象入口拒绝不一致字段和不满足direct EDR完整条件的手工resolution，并补三类负向合同测试。
+- **系统更新后续接：** active长期goal仍在，`HEAD == origin/main == a27b90f`，预期11文件工作树修改完整，OpenSpec仍为`21/50 ready`、next 4.3；Xcode 26.4/Swift 6.3/macOS 27.0与暂停前一致，两个真实opt-in均为unset，`git diff --check`通过。下一步读取全部change context并完成production/test竞态审计，再从全新目录开始最终分层验收；未查询或操作simulator。
+- **跟踪错误 1：** 首次续接记录补丁假设三份planning尾部措辞一致，被`apply_patch`原子拒绝且无部分修改；已按各文件真实锚点分别追加。
+- **续接审计缺口 3：** surface replacement会先在AppModel清空display，但coordinator应用新scene时仍可能把旧display component按新coordinator revision回流；当前AppModel只校验ownership/sequence，可能在新surface actual observation前错误重开旧HDR/fallback。修复要求将回流display component identity与当前`tvOSDisplayHDRSourceSnapshot`绑定，并补旧component随新scene回流仍保持关闭的workflow测试。
+- **续接审计缺口 4：** capability resolver在output unavailable时仍可保留调用方传入的screen headroom，形成与snapshot合同冲突的`.outputUnavailable`并被误升为revision exhaustion。现将output-unavailable capabilities强制归一化为nil current/potential并增加回归，符合“输出本身不可用时禁止任何headroom”的合同。
+- **续接审计缺口 5：** 同surface的新display source被接受后，异步coordinator application完成前仍会保留旧render display/capability。现接受新source时立即关闭旧render display并清旧fallback，只有current-source component identity匹配的coordinator回流才能重开；HDR platform capabilities使用同一gate，避免旧component参与解析。
+- **4.5保留边界：** 同一actual view跨media reconnect时，platform runtime会清空AppModel geometry admission，而现有geometry owner对不变semantic state不重交；display单独replay也会因缺少current geometry admission被拒绝。该video/input/display共同的coordinator重建与replay属于4.5 shared-generation reconnect协调，4.3不建立display旁路或提前完成4.5。
+- **调查命令错误 1：** 审计时尝试读取推测路径`Sources/LuneXPlatform/TVVisionUIKitStreamSurface.swift`得到file not found；实际geometry owner位于`Sources/LuneXRendering/MetalStreamSurface.swift`，随后从真实路径读取，没有修改文件或重复错误命令。
+- **fresh focused：** `/tmp/LuneX-18-4_3-focused-final.BN6ZYp/focused.xcresult`结构化通过`190/190 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；覆盖两条AppModel display workflow、完整state/coordinator、presenter、HDR resolver/render contract/surface adapter和SessionMediaEnvironment。AppIntents metadata extraction skip仅为工具提示。下一步fresh related matrix。
+- **fresh related：** `/tmp/LuneX-18-4_3-related-final.ztmMov/related.xcresult`结构化通过`361/361 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；完整AppModel、tvOS focus/controller、共享HDR/Metal与SessionMediaEnvironment均通过。下一步fresh normal suite。
+- **fresh normal：** `/tmp/LuneX-18-4_3-normal-final.kN6LiU/normal.xcresult`结构化通过`1047 total / 1046 passed / 1 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；唯一skip精确为显式禁用的`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，两个真实opt-in unset。下一步fresh fixed Apple TV direct build。
+- **fresh direct tvOS：** `/tmp/LuneX-18-4_3-tvos-final.UlXTWd/tvos.xcresult`为fixed Apple TV UUID unsigned Debug `succeeded/0 warning/0 error/0 analyzer warning`，生成`1 AIR/1 metallib`；UUID仅作build destination，未查询、启动或操作simulator。下一步fresh unsigned五平台Debug。

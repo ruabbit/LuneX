@@ -3201,3 +3201,40 @@
 - post-record `/tmp/LuneX-18-4_2-post-record.YjRjuV`只读通过`21/50 next 4.3`、strict `9/9`、稳定project hash、16文件scope、五份权威记录、retained evidence及opt-in/process/reference/diff边界。下一步最终diff审计与独立提交推送。
 - 首轮final audit `/tmp/LuneX-18-4_2-final-audit.J9NbmM`在diff/scope与strict通过后因包装器误匹配不存在的`contentHeadroom: normalizedHeadroom`字段退出；production真实字段为current/potential EDR headroom。未执行行为门禁，已修正匹配准备fresh重跑。
 - 修正后的最终审计 `/tmp/LuneX-18-4_2-final-audit-r2.8dYwRn`完整通过16文件diff、strict `9/9`与`21/50 next 4.3`、production/regression semantics、no-4.3-scope-creep、proof boundary及reference/opt-in/process门；未发现新问题，4.2进入独立提交推送。
+
+## 2026-08-07 阶段 18 任务 4.3 启动
+
+- 系统更新后恢复active长期goal，确认`HEAD == origin/main == a27b90f`、工作树clean、Xcode 26.4/Swift 6.3/macOS 27.0；OpenSpec `integrate-tvos-visionos-runtime`为`21/50 ready`，next精确为4.3。
+- 重新读取planning-with-files、OpenSpec apply说明、proposal/design/spec/tasks以及actual surface/coordinator/environment/AppModel/HDR数据流；4.3限定为tvOS actual display observation、semantic revision、current-generation application和bounded fallback diagnostic。
+- `LUNEX_RUN_KEYCHAIN_TEST`与`LUNEX_RUN_LIVE_HOST_TEST`继续保持unset；固定UUID仅允许后续作为build destination，本项不查询、创建、启动、安装、关闭或删除simulator。
+- 首个小范围命令误用无test action的`LuneX-macOS` scheme，编译前exit 66；此结果只记录为命令错误，不是源码/test失败，也没有触发Keychain或simulator。下一次改用实际test scheme。
+- 正确`LuneXCoreTests` scheme进入Swift编译后只报generic `Screen`的`@Sendable`捕获；通知已按screen object注册并以observation UUID拒绝旧回调，删除重复identity捕获后准备增量重跑。
+- 新增publisher/observer/coordinator测试首次编译发现两处test helper调用漏写`try`；已定向修正，未改变production语义，该失败候选不作为验收证据。
+- coordinator display helper加入局部变量后需显式返回，第二次test编译准确发现unused initializer；已改为`return try`，production继续无新增编译错误。
+- 系统更新后从交接点重跑两组focused：production与测试全部编译，37项中35项通过；两项失败收敛到同一partial-headroom合同不一致。已保留output-available fallback的有效potential值、继续禁止不可用输出携带headroom，并新增构造回归；下一步重跑相同focused候选。
+- 修订后增量focused通过`39/39`。现已增加AppModel完整display workflow回归及可携带rebranded display/semantic-exhaustion的state helper，准备先单跑该用例收敛跨任务时序与状态断言。
+- 首条AppModel display workflow单测通过。随后production审计修复application error静默吞掉和revision exhaustion未终止coordinator的缺口，并在surface invalidation时释放display handler；现需重跑两条AppModel focused及相关两组display测试。
+- 修订后的41项增量display/AppModel focused全部通过。继续审计后收紧tvOS resolution与snapshot字段一致性，新增跨平台、字段不一致和invalid direct EDR负向测试；因此最终fresh验收仍未开始。
+- 系统更新完成后按planning-with-files catchup恢复：确认active goal、`HEAD == origin/main == a27b90f`、预期11文件scope、OpenSpec `21/50 next 4.3`、Xcode 26.4/Swift 6.3/macOS 27.0、两个opt-in unset及`git diff --check`通过；未查询或操作simulator。下一步完整读取change context并继续4.3生产代码审计。
+- 首次续接记录补丁因三份planning尾部锚点不一致被`apply_patch`原子拒绝，无部分修改；读取真实末尾后完成分文件追加。
+- 读取全部OpenSpec context并开始production/test竞态审计；发现新surface scene application可能携带旧display component回流、绕过AppModel replacement clear。准备增加current source component identity gate与对应workflow回归，production变化后此前增量`41/41`只作历史推进证据。
+- 已实现AppModel current-source display component identity gate：比较platform/display generation/output/headroom/layer/resolution并明确忽略coordinator重品牌revision；workflow新增surface replacement后旧display随新scene回流仍保持render/fallback关闭。下一步先单跑该用例，再继续application/terminal竞态审计。
+- replacement回流单测在fresh `/tmp/LuneX-18-4_3-replacement-check`通过。随后审计修复output-unavailable resolver仍携带screen headroom、可能触发snapshot构造失败并误报revision exhaustion的问题；新增输出不可用时强制清空headroom回归，下一步重跑display focused集合。
+- 审计进一步收紧source-to-coordinator窗口：新display source到达即同步关闭旧render状态，matching coordinator回流后才重开，HDR platform capability读取也受同一identity gate约束；现有AppModel用例增加异步application前立即关闭断言。下一步fresh focused必须覆盖这三处最终production变化。
+- reconnect调查确认同view不变geometry的统一replay缺口属于4.5，已记录但未在4.3建立display旁路。一次推测源文件路径读取失败后已定位真实owner在`MetalStreamSurface.swift`；该只读错误无代码副作用。继续4.3 focused验收前的最后diff/合同审计。
+- fresh focused `/tmp/LuneX-18-4_3-focused-final.BN6ZYp`结构化通过`190/190 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；两个真实opt-in unset且未操作simulator。下一步fresh related matrix。
+- fresh related `/tmp/LuneX-18-4_3-related-final.ztmMov`结构化通过`361/361 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；未操作simulator。下一步fresh normal suite。
+- fresh normal `/tmp/LuneX-18-4_3-normal-final.kN6LiU`结构化通过`1047 total / 1046 passed / 1 exact Keychain skip / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；两个真实opt-in unset，未操作simulator。下一步fresh fixed Apple TV direct build。
+- fresh fixed Apple TV direct `/tmp/LuneX-18-4_3-tvos-final.UlXTWd` unsigned Debug结构化通过`succeeded/0 warning/0 error/0 analyzer warning`且有`1 AIR/1 metallib`；固定UUID仅作destination，未操作simulator lifecycle。下一步fresh unsigned五平台Debug matrix。
+- 2026-08-07：macOS系统更新完成后按planning-with-files catchup恢复。读取active goal、OpenSpec context与工作树，确认`HEAD == origin/main == a27b90f`、预期11文件scope、Xcode 26.4/Swift 6.3/macOS 27.0，以及`integrate-tvos-visionos-runtime 21/50 ready, next 4.3`；未查询或操作Simulator，也未访问Keychain/live host。
+- 2026-08-07：只轮询系统更新前已有的五平台串行build session `38358`，收到`visionos=0`和最终`ALL_BUILDS_SUCCEEDED`；结合保留输出，macOS/iPhone/iPad/tvOS/visionOS均exit 0。未启动第二套矩阵，下一步逐个平台解析既有`/tmp/LuneX-18-4_3-builds-final.u2xQ44`中的`.xcresult`和Metal产物。
+- 2026-08-07：五个平台保留`build.xcresult`全部结构化通过`succeeded / 0 warning / 0 error / 0 analyzer warning`，每个平台各`1 AIR / 1 metallib`。raw log各自唯一文本`warning:`是无AppIntents依赖时的metadata extraction skipped提示；不计源码warning。下一步执行最终production/test diff审计并同步4.3权威文档。
+- 2026-08-07：首次4.3权威文档组合补丁因`design.md`换行锚点不精确被`apply_patch`原子拒绝，无部分修改；改为读取真实片段并按文件拆分补丁，不重复原命令。
+- 2026-08-07：runtime contract的4.3章节首次插入又因误把行内`Post-record`当作独立段首而被原子拒绝，无部分修改；改用稳定的`## Fixed simulator inventory`章节标题作为插入锚点。
+- 2026-08-07：首轮repository pre-gate `/tmp/LuneX-18-4_3-repository-pre.P3irNL`的正向fixture/OpenSpec/generator/scope/evidence检查均运行成功，但负向扫描错误使用`! rg`并依赖`set -e`退出；Bash会豁免该上下文，且state文件合法地在`#if os(tvOS)`内导入UIKit/QuartzCore，因此该轮即使打印PASSED也不计验收。改为显式`if rg; then exit 1; fi`并验证条件编译边界后从fresh目录完整重跑。
+- 2026-08-07：corrected pre-gate r2 `/tmp/LuneX-18-4_3-repository-pre-r2.3IjRdc`通过到platform header边界，随后仅因预期fixture未包含`#endif`后的空行而由`diff`退出；不是源码或边界失败。改为比较精确前7行并从fresh目录完整重跑。
+- 2026-08-07：fresh repository pre-gate r3 `/tmp/LuneX-18-4_3-repository-pre-r3.FVSiWy`完整通过fixture self/tree、OpenSpec strict `9/9`与pre-mark `21/50 next 4.3`、generator三次稳定SHA-256 `ef2e3e615f1dbd84b76bfe4c8681fab7d44291176f06324acd757fa1c1008353`、精确15文件scope、membership/privacy/reference/dependency/platform/opt-in/process/diff、focused/related/normal/direct tvOS及五平台保留证据。现勾选4.3，预期`22/50 next 4.4`，随后只读final-state/post-record和最终人工diff审计。
+- 2026-08-07：首个post-mark final-state包装器在shell启动前因JavaScript模板字符串内含Markdown反引号而解析失败；未执行门禁或修改仓库。移除该模式中的反引号后从fresh目录运行只读final-state。
+- 2026-08-07：post-mark final-state r2 `/tmp/LuneX-18-4_3-final-state-r2.F6VGG8`确认strict、`22/50 next 4.4`、16文件scope及前三项文档状态后，在把合同中跨两行的same-MTKView/4.5边界误写成单行正则处退出；改为两个独立短语断言后fresh重跑，不重复测试/build/generator。
+- 2026-08-07：post-mark final-state r3 `/tmp/LuneX-18-4_3-final-state-r3.ShiHBj`完整通过OpenSpec strict `9/9`、`22/50 next 4.4`、4.3 done、稳定generator SHA-256、精确16文件scope、权威文档、retained focused/related/normal/direct/five-platform evidence及privacy/reference/dependency/opt-in/process/diff边界。下一步只读post-record与最终人工diff审计，然后独立提交推送。
+- 2026-08-07：post-record `/tmp/LuneX-18-4_3-post-record.2zqnMO`完整通过`22/50 next 4.4`、authority records、稳定generator hash、16文件scope和全部边界。最终逐文件production diff审计未发现新问题；4.3准备独立提交并推送，阶段18/长期goal保持active。

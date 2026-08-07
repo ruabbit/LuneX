@@ -695,6 +695,9 @@ private struct StreamWorkspaceView: View {
                 geometryBindingUpdateHandler: { update in
                     appModel.receiveTVVisionGeometryUpdate(update)
                 },
+                displayHDREventHandler: { event in
+                    appModel.receiveTVOSDisplayHDREvent(event)
+                },
                 remotePressEventHandler: { event in
                     appModel.receiveTVRemoteSurfacePressEvent(event)
                 },

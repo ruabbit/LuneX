@@ -37,6 +37,8 @@ enum TVVisionPlatformPresentationFailure: Equatable, Sendable {
 enum TVVisionPlatformPresentationDiagnosticClass: Equatable, Sendable {
     case activated
     case sceneClosed
+    case displayDirectEDR
+    case displayFallback(TVOSDisplayHDRFallbackReason)
     case replaced
     case stopped(TVVisionPlatformPresentationStopReason)
     case failed(TVVisionPlatformPresentationFailure)
@@ -72,6 +74,7 @@ struct TVVisionPlatformPresentationCoordinatorSnapshot: Equatable, Sendable {
     let revision: TVVisionSemanticRevision
     let phase: TVVisionPlatformPresentationPhase
     let presentation: TVVisionPlatformPresentationSnapshot?
+    let display: TVVisionDisplaySnapshot?
     let video: TVVisionPlatformVideoSnapshot
     let diagnostics: [TVVisionPlatformPresentationDiagnostic]
     let teardownCount: UInt64
@@ -598,7 +601,16 @@ actor TVVisionPlatformPresentationCoordinator {
         }
         state.revision = revision
         state.display = candidate
-        return await commitComponentState(state)
+        let diagnostic: TVVisionPlatformPresentationDiagnosticClass?
+        switch snapshot.tvOSHDRCapabilityResolution {
+        case .directEDR:
+            diagnostic = .displayDirectEDR
+        case let .sdrFallback(_, reason):
+            diagnostic = .displayFallback(reason)
+        case nil:
+            diagnostic = nil
+        }
+        return await commitComponentState(state, diagnostic: diagnostic)
     }
 
     private func applyAudioLocked(
@@ -961,6 +973,7 @@ actor TVVisionPlatformPresentationCoordinator {
             revision: terminalRevision,
             phase: phase,
             presentation: nil,
+            display: nil,
             video: TVVisionPlatformVideoSnapshot(
                 phase: .cleared(decoderGeneration: decoderGeneration(state)),
                 lastDeliveryRevision: state.video.lastDeliveryRevision,
@@ -990,6 +1003,7 @@ actor TVVisionPlatformPresentationCoordinator {
                 revision: terminalRevision,
                 phase: phase,
                 presentation: nil,
+                display: nil,
                 video: terminal.video,
                 diagnostics: diagnostics,
                 teardownCount: teardownCount,
@@ -1206,7 +1220,8 @@ actor TVVisionPlatformPresentationCoordinator {
             headroomSource: value.headroomSource,
             currentEDRHeadroom: value.currentEDRHeadroom,
             potentialEDRHeadroom: value.potentialEDRHeadroom,
-            layerCapability: value.layerCapability
+            layerCapability: value.layerCapability,
+            tvOSHDRCapabilityResolution: value.tvOSHDRCapabilityResolution
         )
     }
 
@@ -1323,6 +1338,9 @@ actor TVVisionPlatformPresentationCoordinator {
             revision: state.revision,
             phase: phase,
             presentation: phase == .active ? state.presentation : nil,
+            display: phase == .active
+                ? rebrandDisplay(state.display, revision: state.revision)
+                : nil,
             video: state.video,
             diagnostics: diagnostics,
             teardownCount: teardownCount,

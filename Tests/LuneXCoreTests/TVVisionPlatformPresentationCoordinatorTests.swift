@@ -507,6 +507,82 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         )
     }
 
+    func testDisplayPublishesBeforeAudioAndFallbackDiagnosticsStayBounded()
+        async throws
+    {
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            diagnosticCapacity: 2
+        )
+        let ownership = try makeOwnership()
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: ownership),
+            ownership: ownership
+        )
+
+        let direct = TVOSDisplayHDRCapabilityResolver.resolve(
+            makeDisplayInputs(current: 2.5, potential: 4)
+        )
+        let first = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: ownership,
+                sourceRevision: 1,
+                resolution: direct
+            ),
+            ownership: ownership
+        )
+        guard case let .applied(firstSnapshot) = first else {
+            return XCTFail("Expected direct display state to apply")
+        }
+        XCTAssertNil(firstSnapshot.presentation)
+        XCTAssertEqual(
+            firstSnapshot.display?.tvOSHDRCapabilityResolution,
+            direct
+        )
+        XCTAssertEqual(
+            firstSnapshot.diagnostics.last?.classification,
+            .displayDirectEDR
+        )
+
+        let invalid = TVOSDisplayHDRCapabilityResolver.resolve(
+            makeDisplayInputs(current: .nan, potential: 4)
+        )
+        _ = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: ownership,
+                sourceRevision: 2,
+                resolution: invalid
+            ),
+            ownership: ownership
+        )
+        let insufficient = TVOSDisplayHDRCapabilityResolver.resolve(
+            makeDisplayInputs(current: 1, potential: 4)
+        )
+        let final = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: ownership,
+                sourceRevision: 3,
+                resolution: insufficient
+            ),
+            ownership: ownership
+        )
+        guard case let .applied(finalSnapshot) = final else {
+            return XCTFail("Expected fallback display state to apply")
+        }
+        XCTAssertEqual(finalSnapshot.diagnostics.count, 2)
+        XCTAssertEqual(
+            finalSnapshot.diagnostics.map(\.classification),
+            [
+                .displayFallback(.invalidHeadroom),
+                .displayFallback(.insufficientHeadroom)
+            ]
+        )
+        XCTAssertEqual(
+            finalSnapshot.display?.hdrRenderSnapshot?.headroom,
+            DisplayHeadroom()
+        )
+    }
+
     func testReplacementTearsDownOldOwnershipAndRejectsLateCallbacks()
         async throws
     {
@@ -843,21 +919,50 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
     private func makeDisplay(
         ownership: TVVisionPresentationOwnership,
         sourceRevision: UInt64 = 1,
-        outputAvailable: Bool = true
+        outputAvailable: Bool = true,
+        resolution: TVOSDisplayHDRCapabilityResolution? = nil
     ) throws -> TVVisionDisplaySnapshot {
-        try TVVisionDisplaySnapshot(
+        let capabilities = resolution?.capabilities
+        let actualOutputAvailable = resolution?.fallbackReason
+            != .outputUnavailable && outputAvailable
+        let currentHeadroom = actualOutputAvailable
+            ? (resolution == nil ? 1.5 : capabilities?.currentEDRHeadroom)
+            : nil
+        let potentialHeadroom = actualOutputAvailable
+            ? (resolution == nil ? 4 : capabilities?.potentialEDRHeadroom)
+            : nil
+        return try TVVisionDisplaySnapshot(
             platform: ownership.platform,
             revision: TVVisionSemanticRevision(rawValue: sourceRevision),
             displayGeneration: TVVisionGeneration(
                 domain: .display,
                 rawValue: 1
             ),
-            isOutputAvailable: outputAvailable,
-            headroomSource: outputAvailable ? .platformReported : .unavailable,
-            currentEDRHeadroom: outputAvailable ? 1.5 : nil,
-            potentialEDRHeadroom: outputAvailable ? 4 : nil,
-            layerCapability:
-                outputAvailable ? .preferredDynamicRange : .unavailable
+            isOutputAvailable: actualOutputAvailable,
+            headroomSource: currentHeadroom != nil
+                ? .platformReported
+                : .unavailable,
+            currentEDRHeadroom: currentHeadroom,
+            potentialEDRHeadroom: potentialHeadroom,
+            layerCapability: actualOutputAvailable
+                ? capabilities?.layerCapability ?? .preferredDynamicRange
+                : .unavailable,
+            tvOSHDRCapabilityResolution: resolution
+        )
+    }
+
+    private func makeDisplayInputs(
+        current: Double?,
+        potential: Double?
+    ) -> TVOSDisplayHDRCapabilityInputs {
+        TVOSDisplayHDRCapabilityInputs(
+            isOutputAvailable: true,
+            layerCapability: .preferredDynamicRange,
+            supportsToneMapControl: true,
+            supportsContentsHeadroom: true,
+            supportedEDRGamuts: [.displayP3, .ituR2020],
+            currentEDRHeadroom: current,
+            potentialEDRHeadroom: potential
         )
     }
 

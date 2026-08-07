@@ -3722,6 +3722,9 @@ final class TVVisionStreamMetalView: MTKView {
 #endif
     typealias SurfaceGenerationUpdateHandler = SurfaceGenerationOwner.Handler
     typealias GeometryBindingUpdateHandler = GeometryBindingOwner.Handler
+    typealias DisplayHDREventHandler = @MainActor (
+        TVOSDisplayHDRObserverEvent
+    ) -> Void
     typealias RemotePressEventHandler = @MainActor (
         TVRemoteSurfacePressEvent
     ) -> TVRemoteSurfacePressDisposition
@@ -3740,6 +3743,7 @@ final class TVVisionStreamMetalView: MTKView {
         SurfaceGenerationUpdateHandler = { _ in }
     private var geometryBindingUpdateHandler:
         GeometryBindingUpdateHandler = { _ in }
+    private var displayHDREventHandler: DisplayHDREventHandler = { _ in }
     private var remotePressEventHandler: RemotePressEventHandler = { _ in .local }
     private var reservedRemoteCommandHandler: ReservedRemoteCommandHandler = { _ in }
     private weak var observedWindowScene: UIWindowScene?
@@ -3747,6 +3751,10 @@ final class TVVisionStreamMetalView: MTKView {
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 #if os(tvOS)
+    private typealias DisplayHDRObserver =
+        TVOSDisplayHDRObserver<UIScreen, CAMetalLayer>
+    private var displayHDRObserver: DisplayHDRObserver?
+
     private struct ActiveUIKitPress {
         let surfaceGeneration: TVVisionGeneration
         let pressID: UInt64
@@ -3795,6 +3803,8 @@ final class TVVisionStreamMetalView: MTKView {
             @escaping SurfaceGenerationUpdateHandler = { _ in },
         geometryBindingUpdateHandler:
             @escaping GeometryBindingUpdateHandler = { _ in },
+        displayHDREventHandler:
+            @escaping DisplayHDREventHandler = { _ in },
         remotePressEventHandler:
             @escaping RemotePressEventHandler = { _ in .local },
         reservedRemoteCommandHandler:
@@ -3805,6 +3815,7 @@ final class TVVisionStreamMetalView: MTKView {
         self.surfaceGenerationUpdateHandler =
             surfaceGenerationUpdateHandler
         self.geometryBindingUpdateHandler = geometryBindingUpdateHandler
+        self.displayHDREventHandler = displayHDREventHandler
         self.remotePressEventHandler = remotePressEventHandler
         self.reservedRemoteCommandHandler = reservedRemoteCommandHandler
         surfaceRelay = SurfaceRelay(
@@ -3852,6 +3863,23 @@ final class TVVisionStreamMetalView: MTKView {
                     self?.handleSurfaceGenerationUpdate(update)
                 }
             )
+#if os(tvOS)
+            displayHDRObserver = try? DisplayHDRObserver(
+                surfaceGeneration: surfaceGeneration,
+                notificationCenter: .default,
+                names: .current,
+                generationProvider: TVOSDisplayGenerationSequence.next,
+                reader: { screen, layer in
+                    TVOSNativeDisplayHDRCapabilityProbe.resolve(
+                        screen: screen,
+                        layer: layer
+                    )
+                },
+                handler: { [weak self] event in
+                    self?.displayHDREventHandler(event)
+                }
+            )
+#endif
         }
         traitChangeRegistration = registerForTraitChanges([
             UITraitDisplayScale.self,
@@ -3993,6 +4021,12 @@ final class TVVisionStreamMetalView: MTKView {
         surfaceGenerationUpdateHandler = handler
     }
 
+    func updateDisplayHDREventHandler(
+        _ handler: @escaping DisplayHDREventHandler
+    ) {
+        displayHDREventHandler = handler
+    }
+
     func updateRemotePressEventHandler(
         _ handler: @escaping RemotePressEventHandler
     ) {
@@ -4033,6 +4067,12 @@ final class TVVisionStreamMetalView: MTKView {
     func invalidateSurfaceCallbacks() {
 #if os(tvOS)
         cancelCapturedPresses()
+        if let displayHDRObserver {
+            _ = displayHDRObserver.invalidate(
+                surfaceGeneration: displayHDRObserver.surfaceGeneration
+            )
+            self.displayHDRObserver = nil
+        }
 #endif
         if let traitChangeRegistration {
             unregisterForTraitChanges(traitChangeRegistration)
@@ -4055,6 +4095,7 @@ final class TVVisionStreamMetalView: MTKView {
         removeSceneLifecycleObservers()
         surfaceRelay?.invalidate()
         surfaceRelay = nil
+        displayHDREventHandler = { _ in }
         remotePressEventHandler = { _ in .local }
         reservedRemoteCommandHandler = { _ in }
     }
@@ -4148,7 +4189,33 @@ final class TVVisionStreamMetalView: MTKView {
                 )
             }
         }
+#if os(tvOS)
+        refreshDisplayHDRObservation(
+            callbacks.contains(.layout) ? .layout : .attachment
+        )
+#endif
     }
+
+#if os(tvOS)
+    private func refreshDisplayHDRObservation(
+        _ reason: TVOSDisplayHDRResampleReason
+    ) {
+        guard let displayHDRObserver else { return }
+        guard let windowScene = window?.windowScene,
+              let metalLayer = layer as? CAMetalLayer else {
+            _ = displayHDRObserver.detach(
+                surfaceGeneration: displayHDRObserver.surfaceGeneration
+            )
+            return
+        }
+        _ = displayHDRObserver.attach(
+            screen: windowScene.screen,
+            layer: metalLayer,
+            surfaceGeneration: displayHDRObserver.surfaceGeneration,
+            reason: reason
+        )
+    }
+#endif
 
     private func refreshSceneLifecycleObservation() {
         let currentScene = window?.windowScene
@@ -4978,6 +5045,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         TVVisionStreamMetalView.SurfaceGenerationUpdateHandler = { _ in }
     var geometryBindingUpdateHandler:
         TVVisionStreamMetalView.GeometryBindingUpdateHandler = { _ in }
+    var displayHDREventHandler:
+        TVVisionStreamMetalView.DisplayHDREventHandler = { _ in }
     var remotePressEventHandler:
         TVVisionStreamMetalView.RemotePressEventHandler = { _ in .local }
     var reservedRemoteCommandHandler:
@@ -5041,6 +5110,7 @@ struct MetalStreamSurface: UIViewRepresentable {
                 coordinator?.handleTVVisionGeometryUpdate(update)
                 externalGeometryBindingUpdateHandler(update)
             },
+            displayHDREventHandler: displayHDREventHandler,
             remotePressEventHandler: remotePressEventHandler,
             reservedRemoteCommandHandler: reservedRemoteCommandHandler
         )
@@ -5112,6 +5182,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateSurfaceGenerationUpdateHandler(
                 surfaceGenerationUpdateHandler
             )
+        (view as? TVVisionStreamMetalView)?
+            .updateDisplayHDREventHandler(displayHDREventHandler)
         (view as? TVVisionStreamMetalView)?
             .updateRemotePressEventHandler(remotePressEventHandler)
         (view as? TVVisionStreamMetalView)?

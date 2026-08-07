@@ -272,6 +272,75 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             potentialEDRHeadroom: 2,
             layerCapability: .preferredDynamicRange
         ))
+        let partialHeadroom = try TVVisionDisplaySnapshot(
+            platform: .tvOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: true,
+            headroomSource: .unavailable,
+            currentEDRHeadroom: nil,
+            potentialEDRHeadroom: 4,
+            layerCapability: .preferredDynamicRange
+        )
+        XCTAssertEqual(partialHeadroom.potentialEDRHeadroom, 4)
+        XCTAssertThrowsError(try TVVisionDisplaySnapshot(
+            platform: .tvOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: false,
+            headroomSource: .unavailable,
+            currentEDRHeadroom: nil,
+            potentialEDRHeadroom: 4,
+            layerCapability: .unavailable
+        ))
+        let directResolution = TVOSDisplayHDRCapabilityResolution.directEDR(
+            TVOSDisplayHDRCapabilities(
+                layerCapability: .preferredDynamicRange,
+                supportedEDRGamuts: [.displayP3],
+                currentEDRHeadroom: 2,
+                potentialEDRHeadroom: 4
+            )
+        )
+        XCTAssertThrowsError(try TVVisionDisplaySnapshot(
+            platform: .visionOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: true,
+            headroomSource: .platformReported,
+            currentEDRHeadroom: 2,
+            potentialEDRHeadroom: 4,
+            layerCapability: .preferredDynamicRange,
+            tvOSHDRCapabilityResolution: directResolution
+        ))
+        XCTAssertThrowsError(try TVVisionDisplaySnapshot(
+            platform: .tvOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: true,
+            headroomSource: .platformReported,
+            currentEDRHeadroom: 2,
+            potentialEDRHeadroom: 3,
+            layerCapability: .preferredDynamicRange,
+            tvOSHDRCapabilityResolution: directResolution
+        ))
+        XCTAssertThrowsError(try TVVisionDisplaySnapshot(
+            platform: .tvOS,
+            revision: revision,
+            displayGeneration: displayGeneration,
+            isOutputAvailable: true,
+            headroomSource: .unavailable,
+            currentEDRHeadroom: nil,
+            potentialEDRHeadroom: nil,
+            layerCapability: .preferredDynamicRange,
+            tvOSHDRCapabilityResolution: .directEDR(
+                TVOSDisplayHDRCapabilities(
+                    layerCapability: .preferredDynamicRange,
+                    supportedEDRGamuts: [.displayP3],
+                    currentEDRHeadroom: nil,
+                    potentialEDRHeadroom: nil
+                )
+            )
+        ))
     }
 
     func testTVOSDisplayHDRCapabilityRequiresCompletePublicContract() {
@@ -333,6 +402,24 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             fallback(gamuts: []),
             .extendedColorSpaceUnavailable
         )
+    }
+
+    func testTVOSDisplayHDRCapabilityClearsHeadroomWhenOutputIsUnavailable() {
+        let resolution = TVOSDisplayHDRCapabilityResolver.resolve(
+            TVOSDisplayHDRCapabilityInputs(
+                isOutputAvailable: false,
+                layerCapability: .unavailable,
+                supportsToneMapControl: false,
+                supportsContentsHeadroom: false,
+                supportedEDRGamuts: [.displayP3],
+                currentEDRHeadroom: 2.5,
+                potentialEDRHeadroom: 4
+            )
+        )
+
+        XCTAssertEqual(resolution.fallbackReason, .outputUnavailable)
+        XCTAssertNil(resolution.capabilities.currentEDRHeadroom)
+        XCTAssertNil(resolution.capabilities.potentialEDRHeadroom)
     }
 
     func testTVOSDisplayHDRCapabilityRejectsMissingInvalidAndSDRHeadroom() {
@@ -413,6 +500,206 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
         XCTAssertEqual(
             fallback(current: 1, potential: 4),
             .insufficientHeadroom
+        )
+    }
+
+    func testTVOSDisplayPublisherNormalizesFallbackAndSemanticRevisions()
+        throws
+    {
+        let surface = try generation(.surface, 7)
+        let display = try generation(.display, 11)
+        var publisher = try TVOSDisplayHDRSnapshotPublisher(
+            surfaceGeneration: surface
+        )
+        let direct = TVOSDisplayHDRCapabilityResolver.resolve(
+            makeTVOSDisplayInputs(current: 2.5, potential: 4)
+        )
+        let directObservation = try TVOSDisplayHDRObservation(
+            displayGeneration: display,
+            resolution: direct
+        )
+
+        guard case let .published(first) = publisher.update(
+            directObservation,
+            surfaceGeneration: surface
+        ) else {
+            return XCTFail("Expected the first display observation to publish")
+        }
+        XCTAssertEqual(first.revision.rawValue, 1)
+        XCTAssertEqual(first.hdrRenderSnapshot?.headroom.current, 2.5)
+        XCTAssertEqual(first.hdrRenderSnapshot?.headroom.potential, 4)
+        XCTAssertEqual(
+            first.hdrPlatformCapabilities.extendedRangeSurfaceSupport,
+            .preferredDynamicRangeAndHeadroom
+        )
+        XCTAssertEqual(
+            publisher.update(directObservation, surfaceGeneration: surface),
+            .unchanged
+        )
+
+        let invalid = TVOSDisplayHDRCapabilityResolver.resolve(
+            makeTVOSDisplayInputs(current: .nan, potential: 4)
+        )
+        guard case let .published(fallback) = publisher.update(
+            try TVOSDisplayHDRObservation(
+                displayGeneration: display,
+                resolution: invalid
+            ),
+            surfaceGeneration: surface
+        ) else {
+            return XCTFail("Expected the fallback observation to publish")
+        }
+        XCTAssertEqual(fallback.revision.rawValue, 2)
+        XCTAssertNil(fallback.currentEDRHeadroom)
+        XCTAssertEqual(fallback.potentialEDRHeadroom, 4)
+        XCTAssertEqual(fallback.hdrRenderSnapshot?.headroom, DisplayHeadroom())
+        XCTAssertEqual(
+            fallback.tvOSHDRCapabilityResolution?.fallbackReason,
+            .invalidHeadroom
+        )
+        XCTAssertEqual(
+            fallback.hdrPlatformCapabilities.headroomSource,
+            .unavailable
+        )
+    }
+
+    func testTVOSDisplayPublisherRejectsStaleSurfaceAndExhaustsRevision()
+        throws
+    {
+        let surface = try generation(.surface, 3)
+        let display = try generation(.display, 4)
+        let observation = try TVOSDisplayHDRObservation(
+            displayGeneration: display,
+            resolution: TVOSDisplayHDRCapabilityResolver.resolve(
+                makeTVOSDisplayInputs(current: 2, potential: 3)
+            )
+        )
+        var publisher = try TVOSDisplayHDRSnapshotPublisher(
+            surfaceGeneration: surface,
+            initialRevisionRawValue: UInt64.max
+        )
+
+        XCTAssertEqual(
+            publisher.update(
+                observation,
+                surfaceGeneration: try generation(.surface, 2)
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            publisher.update(observation, surfaceGeneration: surface),
+            .revisionExhausted
+        )
+        XCTAssertTrue(publisher.isRevisionExhausted)
+        XCTAssertNil(publisher.snapshot)
+        XCTAssertEqual(
+            publisher.update(observation, surfaceGeneration: surface),
+            .revisionExhausted
+        )
+    }
+
+    @MainActor
+    func testTVOSDisplayObserverFiltersScreenIdentityAndInvalidates() throws {
+        final class Screen: NSObject {}
+        final class Layer: NSObject {}
+        final class ResolutionBox {
+            var value: TVOSDisplayHDRCapabilityResolution
+
+            init(_ value: TVOSDisplayHDRCapabilityResolution) {
+                self.value = value
+            }
+        }
+
+        let center = NotificationCenter()
+        let names = TVOSDisplayHDRNotificationNames(
+            modeDidChange: Notification.Name("display-mode"),
+            brightnessDidChange: Notification.Name("display-brightness")
+        )
+        let surface = try generation(.surface, 9)
+        var nextDisplayGeneration: UInt64 = 1
+        let box = ResolutionBox(TVOSDisplayHDRCapabilityResolver.resolve(
+            makeTVOSDisplayInputs(current: 2, potential: 4)
+        ))
+        var events: [TVOSDisplayHDRObserverEvent] = []
+        let observer = try TVOSDisplayHDRObserver<Screen, Layer>(
+            surfaceGeneration: surface,
+            notificationCenter: center,
+            names: names,
+            generationProvider: {
+                defer { nextDisplayGeneration += 1 }
+                return try? TVVisionGeneration(
+                    domain: .display,
+                    rawValue: nextDisplayGeneration
+                )
+            },
+            reader: { _, _ in box.value },
+            handler: { events.append($0) }
+        )
+        let firstScreen = Screen()
+        let replacementScreen = Screen()
+        let layer = Layer()
+
+        XCTAssertEqual(
+            observer.attach(
+                screen: firstScreen,
+                layer: layer,
+                surfaceGeneration: surface,
+                reason: .attachment
+            ),
+            .published
+        )
+        XCTAssertEqual(events.count, 1)
+        center.post(name: names.modeDidChange, object: replacementScreen)
+        XCTAssertEqual(events.count, 1)
+
+        box.value = TVOSDisplayHDRCapabilityResolver.resolve(
+            makeTVOSDisplayInputs(current: 3, potential: 4)
+        )
+        center.post(name: names.modeDidChange, object: firstScreen)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        XCTAssertEqual(events.count, 2)
+
+        XCTAssertEqual(
+            observer.attach(
+                screen: replacementScreen,
+                layer: layer,
+                surfaceGeneration: surface,
+                reason: .attachment
+            ),
+            .published
+        )
+        guard case let .snapshot(_, replacement) = events.last else {
+            return XCTFail("Expected a replacement display snapshot")
+        }
+        XCTAssertEqual(replacement.displayGeneration.rawValue, 2)
+        XCTAssertEqual(
+            observer.detach(surfaceGeneration: surface),
+            .published
+        )
+        XCTAssertEqual(
+            observer.detach(surfaceGeneration: surface),
+            .unchanged
+        )
+        XCTAssertEqual(
+            observer.attach(
+                screen: firstScreen,
+                layer: layer,
+                surfaceGeneration: try generation(.surface, 8),
+                reason: .attachment
+            ),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: surface),
+            .invalidated
+        )
+        let eventCount = events.count
+        center.post(name: names.modeDidChange, object: replacementScreen)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        XCTAssertEqual(events.count, eventCount)
+        XCTAssertEqual(
+            observer.invalidate(surfaceGeneration: surface),
+            .alreadyInvalidated
         )
     }
 
@@ -927,6 +1214,21 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             headTrackingCapability: headTracking ?? (platform == .tvOS
                 ? .entitlementRequired
                 : .intendedSpatialExperience)
+        )
+    }
+
+    private func makeTVOSDisplayInputs(
+        current: Double?,
+        potential: Double?
+    ) -> TVOSDisplayHDRCapabilityInputs {
+        TVOSDisplayHDRCapabilityInputs(
+            isOutputAvailable: true,
+            layerCapability: .preferredDynamicRange,
+            supportsToneMapControl: true,
+            supportsContentsHeadroom: true,
+            supportedEDRGamuts: [.displayP3, .ituR2020],
+            currentEDRHeadroom: current,
+            potentialEDRHeadroom: potential
         )
     }
 

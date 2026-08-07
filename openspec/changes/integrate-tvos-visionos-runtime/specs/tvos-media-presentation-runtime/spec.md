@@ -62,6 +62,18 @@ typed HDR-to-SDR pipeline and UI SHALL NOT claim HDR output.
 - **WHEN** current or potential headroom is missing, nonfinite, out of range, inverted, or current headroom is not greater than SDR reference white
 - **THEN** LuneX SHALL publish a stable typed fallback, normalize invalid stored headroom, and SHALL NOT claim direct HDR output
 
+#### Scenario: Actual display capability changes
+- **WHEN** the actual current tvOS stream screen changes mode or brightness and its normalized output, layer, gamut, or headroom capability changes
+- **THEN** LuneX SHALL publish one deduplicated surface-owned display revision and apply only its matching current-generation coordinator component
+
+#### Scenario: Display source is replaced
+- **WHEN** a replacement surface or newer display source is accepted while an older display application or coordinator snapshot is pending
+- **THEN** LuneX SHALL close the old render display state immediately and SHALL reject any rebranded or late component whose source identity does not match
+
+#### Scenario: Display revision is exhausted
+- **WHEN** the bounded display semantic revision can no longer advance
+- **THEN** LuneX SHALL close display rendering, publish one bounded semantic-revision failure, and SHALL NOT recover until current ownership is replaced
+
 #### Scenario: EDR surface mutation fails
 - **WHEN** any preferred-dynamic-range, tone-map, headroom, color-space, or drawable mutation fails
 - **THEN** LuneX SHALL restore every captured legacy and current layer field and SHALL NOT retain the failed surface contract as active

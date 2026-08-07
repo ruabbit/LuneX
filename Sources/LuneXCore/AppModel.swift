@@ -174,6 +174,8 @@ final class AppModel: ApplicationInputSink {
     private(set) var mobileAudioSessionActive: Bool?
     private(set) var tvVisionPlatformPresentationState:
         SessionTVVisionPlatformPresentationState?
+    private(set) var tvOSDisplayHDRFallbackReason:
+        TVOSDisplayHDRFallbackReason?
     private(set) var tvRemoteFocusHandoffState =
         TVRemoteFocusHandoffState.localNavigation
     private(set) var tvRemoteReservedCommandState =
@@ -332,6 +334,13 @@ final class AppModel: ApplicationInputSink {
         UUID?
     @ObservationIgnored private var tvVisionPlatformGeometryAdmission:
         TVVisionPlatformGeometryAdmission?
+    @ObservationIgnored private var tvOSDisplayHDRSourceSnapshot:
+        TVVisionDisplaySnapshot?
+    @ObservationIgnored private var tvOSDisplayHDRApplicationTask:
+        Task<Void, Never>?
+    @ObservationIgnored private var tvOSDisplayHDRApplicationOperationID:
+        UUID?
+    @ObservationIgnored private var isTVOSDisplayHDRRevisionExhausted = false
     @ObservationIgnored private var tvRemoteSurfacePressCaptureOwner:
         TVRemoteSurfacePressCaptureOwner?
     @ObservationIgnored private var tvControllerRosterApplicationTask:
@@ -702,6 +711,10 @@ final class AppModel: ApplicationInputSink {
                     < current.presentationGeneration {
             return
         }
+        if previousAdmission?.update.surfaceGeneration
+            != update.surfaceGeneration {
+            clearTVOSDisplayHDRState(cancelApplication: true)
+        }
         tvVisionPlatformGeometryAdmission = TVVisionPlatformGeometryAdmission(
             ownership: ownership,
             update: update
@@ -729,6 +742,54 @@ final class AppModel: ApplicationInputSink {
         )
         if let roster = tvControllerRosterState {
             scheduleTVGameControllerRouting(roster)
+        }
+    }
+
+    func receiveTVOSDisplayHDREvent(
+        _ event: TVOSDisplayHDRObserverEvent
+    ) {
+        guard expectedTVVisionPlatform == .tvOS,
+              !isTVOSDisplayHDRRevisionExhausted,
+              event.surfaceGeneration.domain == .surface,
+              let admission = tvVisionPlatformGeometryAdmission,
+              admission.ownership.platform == .tvOS,
+              admission.update.surfaceGeneration == event.surfaceGeneration,
+              activeStreamSessionID == admission.ownership.sessionID,
+              activeMediaSessionID == admission.ownership.sessionID,
+              activeMediaGeneration == admission.ownership.mediaGeneration else {
+            return
+        }
+
+        switch event {
+        case let .snapshot(_, snapshot):
+            guard snapshot.platform == .tvOS,
+                  snapshot.displayGeneration.domain == .display else { return }
+            if let current = tvOSDisplayHDRSourceSnapshot {
+                if snapshot.displayGeneration == current.displayGeneration {
+                    guard snapshot.revision > current.revision else { return }
+                } else {
+                    guard snapshot.displayGeneration
+                        > current.displayGeneration else { return }
+                }
+            }
+            tvOSDisplayHDRSourceSnapshot = snapshot
+            tvOSDisplayHDRFallbackReason = nil
+            renderState.displaySnapshot = nil
+            renderState.headroom = DisplayHeadroom()
+            refreshHDRRenderResolution()
+            scheduleTVOSDisplayHDRApplication(snapshot, admission: admission)
+        case .revisionExhausted:
+            tvOSDisplayHDRSourceSnapshot = nil
+            isTVOSDisplayHDRRevisionExhausted = true
+            tvOSDisplayHDRFallbackReason = nil
+            renderState.displaySnapshot = nil
+            renderState.headroom = DisplayHeadroom()
+            renderState.isDisplayRevisionExhausted = true
+            refreshHDRRenderResolution()
+            scheduleTVOSDisplayHDRFailure(
+                .semanticRevisionExhausted,
+                admission: admission
+            )
         }
     }
 
@@ -2482,6 +2543,100 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
+    private func scheduleTVOSDisplayHDRApplication(
+        _ snapshot: TVVisionDisplaySnapshot,
+        admission: TVVisionPlatformGeometryAdmission
+    ) {
+        let geometryTask = tvVisionPlatformApplicationTask
+        let previous = tvOSDisplayHDRApplicationTask
+        let operationID = UUID()
+        tvOSDisplayHDRApplicationOperationID = operationID
+        tvOSDisplayHDRApplicationTask = Task { [weak self] in
+            await previous?.value
+            await geometryTask?.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.tvOSDisplayHDRApplicationOperationID == operationID,
+                  self.tvOSDisplayHDRSourceSnapshot == snapshot,
+                  self.tvVisionPlatformGeometryAdmission == admission,
+                  self.tvVisionPlatformPresentationOwnership
+                    == admission.ownership,
+                  self.activeStreamSessionID == admission.ownership.sessionID,
+                  self.activeMediaSessionID == admission.ownership.sessionID,
+                  self.activeMediaGeneration
+                    == admission.ownership.mediaGeneration else { return }
+            do {
+                try await self.sessionMediaEnvironment
+                    .applyTVVisionPlatformPresentation(
+                        SessionTVVisionPlatformPresentationApplication(
+                            ownership: admission.ownership,
+                            action: .display(snapshot)
+                        )
+                    )
+            } catch {
+                guard !Task.isCancelled,
+                      self.tvOSDisplayHDRApplicationOperationID == operationID,
+                      self.tvOSDisplayHDRSourceSnapshot == snapshot,
+                      self.tvVisionPlatformGeometryAdmission == admission,
+                      self.tvVisionPlatformPresentationOwnership
+                        == admission.ownership else { return }
+                self.tvOSDisplayHDRSourceSnapshot = nil
+                self.tvOSDisplayHDRFallbackReason = nil
+                self.renderState.displaySnapshot = nil
+                self.renderState.headroom = DisplayHeadroom()
+                self.refreshHDRRenderResolution()
+                _ = try? await self.sessionMediaEnvironment
+                    .applyTVVisionPlatformPresentation(
+                        SessionTVVisionPlatformPresentationApplication(
+                            ownership: admission.ownership,
+                            action: .fail(.actionFailed(.display))
+                        )
+                    )
+            }
+            if self.tvOSDisplayHDRApplicationOperationID == operationID {
+                self.tvOSDisplayHDRApplicationTask = nil
+                self.tvOSDisplayHDRApplicationOperationID = nil
+            }
+        }
+    }
+
+    private func scheduleTVOSDisplayHDRFailure(
+        _ failure: TVVisionPlatformPresentationFailure,
+        admission: TVVisionPlatformGeometryAdmission
+    ) {
+        let geometryTask = tvVisionPlatformApplicationTask
+        let previous = tvOSDisplayHDRApplicationTask
+        previous?.cancel()
+        let operationID = UUID()
+        tvOSDisplayHDRApplicationOperationID = operationID
+        tvOSDisplayHDRApplicationTask = Task { [weak self] in
+            await previous?.value
+            await geometryTask?.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.tvOSDisplayHDRApplicationOperationID == operationID,
+                  self.isTVOSDisplayHDRRevisionExhausted,
+                  self.tvVisionPlatformGeometryAdmission == admission,
+                  self.tvVisionPlatformPresentationOwnership
+                    == admission.ownership,
+                  self.activeStreamSessionID == admission.ownership.sessionID,
+                  self.activeMediaSessionID == admission.ownership.sessionID,
+                  self.activeMediaGeneration
+                    == admission.ownership.mediaGeneration else { return }
+            _ = try? await self.sessionMediaEnvironment
+                .applyTVVisionPlatformPresentation(
+                    SessionTVVisionPlatformPresentationApplication(
+                        ownership: admission.ownership,
+                        action: .fail(failure)
+                    )
+                )
+            if self.tvOSDisplayHDRApplicationOperationID == operationID {
+                self.tvOSDisplayHDRApplicationTask = nil
+                self.tvOSDisplayHDRApplicationOperationID = nil
+            }
+        }
+    }
+
     private func scheduleTVGameControllerRouting(
         _ roster: TVControllerRosterSnapshot
     ) {
@@ -2584,6 +2739,7 @@ final class AppModel: ApplicationInputSink {
             if state == current { return }
         }
         tvVisionPlatformPresentationState = state
+        applyTVOSDisplayHDRState(snapshot)
     }
 
     private func stopTVVisionPlatformPresentation(
@@ -2621,6 +2777,7 @@ final class AppModel: ApplicationInputSink {
         tvVisionPlatformApplicationTask?.cancel()
         tvVisionPlatformApplicationTask = nil
         tvVisionPlatformApplicationOperationID = nil
+        clearTVOSDisplayHDRState(cancelApplication: true)
         tvControllerRosterApplicationTask?.cancel()
         tvControllerRosterApplicationTask = nil
         tvControllerRosterApplicationOperationID = nil
@@ -2653,6 +2810,71 @@ final class AppModel: ApplicationInputSink {
         case .active, .stopped:
             tvVisionPlatformPresentationState = nil
         }
+    }
+
+    private func applyTVOSDisplayHDRState(
+        _ snapshot: TVVisionPlatformPresentationCoordinatorSnapshot
+    ) {
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        guard !isTVOSDisplayHDRRevisionExhausted,
+              snapshot.phase == .active,
+              let display = snapshot.display,
+              let source = tvOSDisplayHDRSourceSnapshot,
+              displayMatchesTVOSDisplayHDRSource(
+                display,
+                source: source
+              ) else {
+            renderState.displaySnapshot = nil
+            renderState.headroom = DisplayHeadroom()
+            renderState.isDisplayRevisionExhausted =
+                isTVOSDisplayHDRRevisionExhausted
+                    || snapshot.isSemanticRevisionExhausted
+            tvOSDisplayHDRFallbackReason = nil
+            refreshHDRRenderResolution()
+            return
+        }
+        let renderSnapshot = display.hdrRenderSnapshot
+        renderState.displaySnapshot = renderSnapshot
+        renderState.headroom = renderSnapshot?.headroom ?? DisplayHeadroom()
+        renderState.isDisplayRevisionExhausted =
+            isTVOSDisplayHDRRevisionExhausted
+                || snapshot.isSemanticRevisionExhausted
+        tvOSDisplayHDRFallbackReason =
+            display.tvOSHDRCapabilityResolution?.fallbackReason
+        refreshHDRRenderResolution()
+    }
+
+    private func displayMatchesTVOSDisplayHDRSource(
+        _ display: TVVisionDisplaySnapshot,
+        source: TVVisionDisplaySnapshot
+    ) -> Bool {
+        display.platform == source.platform
+            && display.displayGeneration == source.displayGeneration
+            && display.isOutputAvailable == source.isOutputAvailable
+            && display.headroomSource == source.headroomSource
+            && display.currentEDRHeadroom == source.currentEDRHeadroom
+            && display.potentialEDRHeadroom == source.potentialEDRHeadroom
+            && display.layerCapability == source.layerCapability
+            && display.tvOSHDRCapabilityResolution
+                == source.tvOSHDRCapabilityResolution
+    }
+
+    private func clearTVOSDisplayHDRState(
+        cancelApplication: Bool
+    ) {
+        if cancelApplication {
+            tvOSDisplayHDRApplicationTask?.cancel()
+            tvOSDisplayHDRApplicationTask = nil
+            tvOSDisplayHDRApplicationOperationID = nil
+        }
+        tvOSDisplayHDRSourceSnapshot = nil
+        isTVOSDisplayHDRRevisionExhausted = false
+        tvOSDisplayHDRFallbackReason = nil
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        renderState.displaySnapshot = nil
+        renderState.headroom = DisplayHeadroom()
+        renderState.isDisplayRevisionExhausted = false
+        refreshHDRRenderResolution()
     }
 
     private func makeTVRemoteInputSnapshot(
@@ -3642,7 +3864,7 @@ final class AppModel: ApplicationInputSink {
                     renderState.negotiatedVideoColorMetadata,
                 userAllowsHDR: settings.stream.hdrEnabled,
                 platformCapabilities:
-                    HDRPlatformOutputCapabilityAdapter.current.capabilities,
+                    currentHDRPlatformOutputCapabilities,
                 displaySnapshot: renderState.displaySnapshot,
                 isDisplayRevisionExhausted:
                     renderState.isDisplayRevisionExhausted,
@@ -3652,6 +3874,18 @@ final class AppModel: ApplicationInputSink {
                 )
             )
         ))
+    }
+
+    private var currentHDRPlatformOutputCapabilities:
+        HDRPlatformOutputCapabilities
+    {
+        if expectedTVVisionPlatform == .tvOS,
+           let display = tvVisionPlatformPresentationState?.snapshot.display,
+           let source = tvOSDisplayHDRSourceSnapshot,
+           displayMatchesTVOSDisplayHDRSource(display, source: source) {
+            return display.hdrPlatformCapabilities
+        }
+        return HDRPlatformOutputCapabilityAdapter.current.capabilities
     }
 
     private func applyHDRRenderResolution(

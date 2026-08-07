@@ -146,9 +146,12 @@ and dynamic-range preference as one rollback-capable transaction. Returning to
 SDR selects standard dynamic range, automatic tone mapping, zero content
 headroom, and the SDR surface. Legacy macOS, iOS, and visionOS intent/metadata
 transactions remain separate. Task 4.2 establishes this public capability and
-surface foundation; task 4.3 still owns actual display observation, semantic
-revision, coordinator/AppModel application, and bounded diagnostics. No setting
-or stream metadata alone publishes active HDR.
+surface foundation. Task 4.3 observes only the actual tvOS stream screen and
+Metal layer, publishes deduplicated surface-owned display revisions, and applies
+only a matching current component through the coordinator and AppModel. A new
+source closes old render state before asynchronous application, and surface
+replacement, revision exhaustion, failure, reconnect, and stop clear display
+ownership. No setting or stream metadata alone publishes active HDR.
 
 If visionOS cannot provide current headroom, it remains typed SDR fallback even
 when the layer accepts extended-range intent.
@@ -188,9 +191,12 @@ resubmit only the current admitted frame.
 An as-yet-unprobed display is intentionally sufficient only for baseline SDR
 video in task 4.1. It is not HDR capability or headroom proof. Task 4.2 defines
 the public tvOS layer/display capability and transactional render contract;
-task 4.3 remains responsible for observing the actual current screen, publishing
-semantic display revisions, applying render configuration, and exposing actual
-fallback state through the coordinator and AppModel.
+task 4.3 connects actual screen mode/brightness observation, checked semantic
+display revisions, current-source identity admission, render configuration,
+and privacy-bounded direct-EDR or typed fallback state through the coordinator
+and AppModel. The same-view geometry replay needed after a media-generation
+reconnect remains part of task 4.5's shared generation coordination rather than
+a display-specific bypass.
 
 ### Preserve proof tiers and simulator discipline
 
