@@ -242,6 +242,24 @@ when session, media generation, presentation ownership, embedded ownership,
 and revision are all current. This does not bind decoded frames or create a
 second media owner; those remain task 6.2.
 
+Task 6.2 keeps the task 4.1 shared decoder, frame source, platform coordinator,
+main-actor presentation owner, presenter, and actual SwiftUI Metal surface. A
+visionOS ownership matrix now connects decoder start, current frame, geometry
+revision, surface replacement, detach/resume, explicit clear, newer decoder,
+presentation replacement, stale surface/frame/ownership rejection, and stop.
+Replacement retains the presenter clear fence: the first draw clears the old
+drawable and only a later draw may present the replacement ownership.
+
+The media environment no longer creates one unstructured task per source
+delivery. Each current presentation ownership installs one cancellable FIFO
+delivery pump before its single source subscription. The pump admits at most
+64 pending deliveries, drains them through one consumer, and is cancelled with
+the subscription on replacement, failure, stop, or teardown. Overflow removes
+queued work and reaches the current coordinator as a typed video-component
+failure through that same consumer; an old pump identity cannot fail a
+replacement presentation. This closes decoder/frame/clear reordering and
+unbounded-task growth without adding a decoder, frame source, or media owner.
+
 This bounded scope provides a usable native visionOS client without hiding the
 additional comfort, recentering, depth, safety, and rendering work required for
 immersive streaming.

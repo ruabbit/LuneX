@@ -26,6 +26,18 @@ NOT create a second decoder or unbounded frame queue.
 - **WHEN** a frame from an old decoder or surface revision completes after replacement
 - **THEN** LuneX SHALL reject it and SHALL NOT present it in the current window
 
+#### Scenario: Current frame follows window geometry
+- **WHEN** the current decoder publishes a frame and the actual attached window advances its geometry revision
+- **THEN** LuneX SHALL present and resubmit that frame only through the matching current surface and platform revision
+
+#### Scenario: Presentation ownership is replaced
+- **WHEN** a newer presentation ownership replaces a window that still has an admitted frame
+- **THEN** LuneX SHALL clear the old drawable before presenting the replacement frame, cancel the old delivery ownership, and reject late old surface or frame callbacks
+
+#### Scenario: Pending frame delivery exceeds the bounded queue
+- **WHEN** more than 64 decoded-frame deliveries remain pending behind the current platform action
+- **THEN** LuneX SHALL discard queued work, fail the matching current video component through one ordered consumer, cancel its subscription, and SHALL NOT affect replacement ownership
+
 ### Requirement: visionOS HDR SHALL fail closed from actual capability
 LuneX SHALL use public visionOS surface/color capability and actual bounded
 headroom when available. Without current headroom proof, HDR input SHALL use a

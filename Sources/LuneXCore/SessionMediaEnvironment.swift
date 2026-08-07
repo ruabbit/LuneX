@@ -230,6 +230,104 @@ extension SessionMediaEnvironment {
     }
 }
 
+final class SessionTVVisionPlatformVideoDeliveryPump: @unchecked Sendable {
+    typealias Handler = @Sendable (StreamVideoPresentationDelivery) async -> Void
+    typealias OverflowHandler = @Sendable () async -> Void
+
+    static let maximumPendingDeliveryCount = 64
+
+    private enum Work: @unchecked Sendable {
+        case delivery(StreamVideoPresentationDelivery)
+        case overflow
+    }
+
+    private final class Storage: @unchecked Sendable {
+        private let lock = NSLock()
+        private var pending: [Work] = []
+        private var isAccepting = true
+        private var isCancelled = false
+
+        func submit(_ delivery: StreamVideoPresentationDelivery) -> Bool {
+            lock.withLock {
+                guard isAccepting, !isCancelled else { return false }
+                if pending.count >= SessionTVVisionPlatformVideoDeliveryPump
+                    .maximumPendingDeliveryCount {
+                    isAccepting = false
+                    pending.removeAll(keepingCapacity: false)
+                    pending.append(.overflow)
+                } else {
+                    pending.append(.delivery(delivery))
+                }
+                return true
+            }
+        }
+
+        func next() -> Work? {
+            lock.withLock {
+                guard !pending.isEmpty else { return nil }
+                return pending.removeFirst()
+            }
+        }
+
+        func cancel() -> Bool {
+            lock.withLock {
+                guard !isCancelled else { return false }
+                isCancelled = true
+                isAccepting = false
+                pending.removeAll(keepingCapacity: false)
+                return true
+            }
+        }
+    }
+
+    let id: UUID
+    private let storage: Storage
+    private let continuation: AsyncStream<Void>.Continuation
+    private let consumerTask: Task<Void, Never>
+
+    init(
+        id: UUID = UUID(),
+        handler: @escaping Handler,
+        overflowHandler: @escaping OverflowHandler = {}
+    ) {
+        self.id = id
+        let storage = Storage()
+        self.storage = storage
+        let pair = AsyncStream.makeStream(
+            of: Void.self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        continuation = pair.continuation
+        consumerTask = Task {
+            for await _ in pair.stream {
+                while !Task.isCancelled, let work = storage.next() {
+                    switch work {
+                    case let .delivery(delivery):
+                        await handler(delivery)
+                    case .overflow:
+                        await overflowHandler()
+                    }
+                }
+            }
+        }
+    }
+
+    func submit(_ delivery: StreamVideoPresentationDelivery) {
+        guard storage.submit(delivery) else { return }
+        continuation.yield()
+    }
+
+    func cancel() {
+        guard storage.cancel() else { return }
+        continuation.finish()
+        consumerTask.cancel()
+    }
+
+    deinit {
+        cancel()
+    }
+}
+
 actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
     private typealias EventContinuation = AsyncThrowingStream<
         SessionMediaEnvironmentEvent,
@@ -258,6 +356,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var tvVisionPlatformOwnership: TVVisionPresentationOwnership?
         var tvVisionPlatformSubscription:
             StreamVideoPresentationSubscription?
+        var tvVisionPlatformVideoDeliveryPump:
+            SessionTVVisionPlatformVideoDeliveryPump?
         var tvOSAudioRoutePublisher: TVOSAudioRouteSnapshotPublisher?
     }
 
@@ -491,6 +591,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 tvVisionPlatformPresentation: nil,
                 tvVisionPlatformOwnership: nil,
                 tvVisionPlatformSubscription: nil,
+                tvVisionPlatformVideoDeliveryPump: nil,
                 tvOSAudioRoutePublisher: nil
             )
             startingSession = nil
@@ -959,6 +1060,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             }
         }
         if current.tvVisionPlatformOwnership != expectedOwnership {
+            current.tvVisionPlatformVideoDeliveryPump?.cancel()
+            current.tvVisionPlatformVideoDeliveryPump = nil
             current.tvVisionPlatformSubscription?.cancel()
             current.tvVisionPlatformSubscription = nil
         }
@@ -981,18 +1084,30 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         }
         if current.tvVisionPlatformSubscription != nil { return }
         guard let videoPresentationSource else { return }
+        let deliveryPumpID = UUID()
+        let deliveryPump = SessionTVVisionPlatformVideoDeliveryPump(
+            id: deliveryPumpID,
+            handler: { [weak self] delivery in
+                await self?.receiveTVVisionPlatformVideo(
+                    delivery,
+                    ownership: ownership
+                )
+            },
+            overflowHandler: { [weak self] in
+                await self?.failTVVisionPlatformVideoDeliveryPump(
+                    id: deliveryPumpID,
+                    ownership: ownership
+                )
+            }
+        )
         guard let subscription = videoPresentationSource.subscribe(
             sessionID: ownership.sessionID,
             mediaGeneration: ownership.mediaGeneration,
-            handler: { [weak self] delivery in
-                Task {
-                    await self?.receiveTVVisionPlatformVideo(
-                        delivery,
-                        ownership: ownership
-                    )
-                }
+            handler: { delivery in
+                deliveryPump.submit(delivery)
             }
         ) else {
+            deliveryPump.cancel()
             let outcome = await current.tvVisionPlatformCoordinator.fail(
                 ownership: ownership,
                 failure: .invalidComponent(.video)
@@ -1008,12 +1123,14 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
               latest.sessionID == ownership.sessionID,
               latest.generation == ownership.mediaGeneration,
               latest.tvVisionPlatformOwnership == ownership else {
+            deliveryPump.cancel()
             subscription.cancel()
             throw SessionMediaEnvironmentError
                 .staleTVVisionPlatformPresentationApplication
         }
         current = latest
         current.tvVisionPlatformSubscription = subscription
+        current.tvVisionPlatformVideoDeliveryPump = deliveryPump
         self.active = current
     }
 
@@ -1038,6 +1155,26 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         }
     }
 
+    private func failTVVisionPlatformVideoDeliveryPump(
+        id: UUID,
+        ownership: TVVisionPresentationOwnership
+    ) async {
+        guard let current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership,
+              current.tvVisionPlatformVideoDeliveryPump?.id == id else { return }
+        let outcome = await current.tvVisionPlatformCoordinator.fail(
+            ownership: ownership,
+            failure: .invalidComponent(.video)
+        )
+        guard (try? await publishTVVisionPlatformOutcome(
+            outcome,
+            expectedOwnership: ownership
+        )) != nil else { return }
+        clearTVVisionPlatformSubscription(ownership: ownership)
+    }
+
     private func clearTVVisionPlatformSubscription(
         ownership: TVVisionPresentationOwnership
     ) {
@@ -1045,6 +1182,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
               current.sessionID == ownership.sessionID,
               current.generation == ownership.mediaGeneration,
               current.tvVisionPlatformOwnership == ownership else { return }
+        current.tvVisionPlatformVideoDeliveryPump?.cancel()
+        current.tvVisionPlatformVideoDeliveryPump = nil
         current.tvVisionPlatformSubscription?.cancel()
         current.tvVisionPlatformSubscription = nil
         self.active = current
@@ -1188,6 +1327,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard let current = self.active,
               current.sessionID == sessionID,
               current.generation == generation else { return }
+        current.tvVisionPlatformVideoDeliveryPump?.cancel()
         current.tvVisionPlatformSubscription?.cancel()
         let operation = makeTeardownOperation(for: current)
         self.active = nil
@@ -1471,6 +1611,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         guard let current = self.active,
               current.sessionID == sessionID,
               current.generation == generation else { return }
+        current.tvVisionPlatformVideoDeliveryPump?.cancel()
         current.tvVisionPlatformSubscription?.cancel()
         let operation = makeTeardownOperation(for: current)
         self.active = nil
@@ -1522,11 +1663,14 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         let tvVisionCoordinator = active.tvVisionPlatformCoordinator
         let tvVisionOwnership = active.tvVisionPlatformOwnership
         let tvVisionSubscription = active.tvVisionPlatformSubscription
+        let tvVisionVideoDeliveryPump =
+            active.tvVisionPlatformVideoDeliveryPump
         let tracker = active.tracker
         return TeardownOperation(
             sessionID: active.sessionID,
             generation: active.generation,
             task: Task {
+                tvVisionVideoDeliveryPump?.cancel()
                 tvVisionSubscription?.cancel()
                 if let tvVisionOwnership {
                     _ = await tvVisionCoordinator.stop(

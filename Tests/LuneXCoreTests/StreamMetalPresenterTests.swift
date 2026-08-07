@@ -4625,6 +4625,341 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testVisionWindowedFramesTrackRevisionReplacementClearAndResume()
+        async throws
+    {
+        let source = StreamVideoPresentationSource()
+        let firstHarness = try makeTVVisionPresenterHarness(source: source)
+        let replacementHarness = try makeTVVisionPresenterHarness(source: source)
+        let owner = TVVisionMetalPresentationOwner()
+        let first = try makeTVVisionPresentationOwnership(platform: .visionOS)
+        let firstSurface = try makeTVVisionSurfaceGeneration(1)
+        let replacementSurface = try makeTVVisionSurfaceGeneration(2)
+        let sharedFrame = try makeFrame(
+            generation: 8,
+            frameID: 40,
+            metadata: .rec709VideoRange()
+        )
+        source.beginSession(
+            sessionID: first.sessionID,
+            mediaGeneration: first.mediaGeneration
+        )
+        source.consume(
+            .sessionStarted(
+                generation: sharedFrame.generation,
+                colorMetadata: sharedFrame.colorMetadata
+            ),
+            sessionID: first.sessionID,
+            mediaGeneration: first.mediaGeneration
+        )
+        source.consume(
+            .frame(sharedFrame),
+            sessionID: first.sessionID,
+            mediaGeneration: first.mediaGeneration
+        )
+        owner.bind(
+            presenter: firstHarness.presenter,
+            surfaceGeneration: firstSurface
+        )
+        firstHarness.presenter.draw(in: firstHarness.view)
+        XCTAssertTrue(firstHarness.runtime.presentedFrameIDs.isEmpty)
+
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        guard case let .applied(activated) = await coordinator.activate(first) else {
+            return XCTFail("Expected visionOS presentation activation")
+        }
+        XCTAssertNil(activated.visionWindowedPresentation)
+        guard case let .applied(attached) = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: first,
+                surfaceGeneration: firstSurface,
+                sourceRevision: 1
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the first visionOS window surface")
+        }
+        XCTAssertEqual(
+            attached.visionWindowedPresentation?.surfaceGeneration,
+            firstSurface
+        )
+
+        let firstFrame = try makeFrame(
+            generation: 9,
+            frameID: 41,
+            metadata: .rec709VideoRange()
+        )
+        let decoderStarted = makeTVVisionDecoderStartedDelivery(
+            ownership: first,
+            revision: 1,
+            decoderGeneration: firstFrame.generation
+        )
+        guard case .applied = await coordinator.receiveVideo(
+            decoderStarted,
+            ownership: first
+        ) else {
+            return XCTFail("Expected the visionOS decoder contract")
+        }
+        guard case let .applied(presented) = await coordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: first,
+                revision: 2,
+                frame: firstFrame
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the first visionOS frame")
+        }
+        firstHarness.presenter.draw(in: firstHarness.view)
+        XCTAssertEqual(firstHarness.runtime.presentedFrameIDs, [41])
+        XCTAssertTrue(presented.video.isPresented)
+        XCTAssertEqual(owner.snapshot().frameID, 41)
+        let firstPlatformRevision = try XCTUnwrap(
+            owner.snapshot().platformRevision
+        )
+
+        guard case let .applied(resized) = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: first,
+                surfaceGeneration: firstSurface,
+                sourceRevision: 2
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected visionOS geometry revision")
+        }
+        firstHarness.presenter.draw(in: firstHarness.view)
+        XCTAssertEqual(firstHarness.runtime.presentedFrameIDs, [41, 41])
+        XCTAssertEqual(
+            resized.visionWindowedPresentation?.revision,
+            resized.revision
+        )
+        XCTAssertGreaterThan(
+            try XCTUnwrap(owner.snapshot().platformRevision).rawValue,
+            firstPlatformRevision.rawValue
+        )
+        XCTAssertEqual(owner.snapshot().deliveryRevision, 2)
+
+        owner.bind(
+            presenter: replacementHarness.presenter,
+            surfaceGeneration: replacementSurface
+        )
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertTrue(replacementHarness.runtime.presentedFrameIDs.isEmpty)
+        guard case let .applied(replacedSurface) = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: first,
+                surfaceGeneration: replacementSurface,
+                sourceRevision: 3
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the replacement visionOS surface")
+        }
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs, [41])
+        XCTAssertEqual(
+            replacedSurface.visionWindowedPresentation?.surfaceGeneration,
+            replacementSurface
+        )
+        XCTAssertEqual(
+            owner.snapshot().admittedFrameSurfaceGeneration,
+            replacementSurface
+        )
+        let staleSurface = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: first,
+                surfaceGeneration: firstSurface,
+                sourceRevision: 99
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(staleSurface, .staleRevision)
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs, [41, 41])
+
+        guard case let .applied(detached) = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: first,
+                surfaceGeneration: replacementSurface,
+                sourceRevision: 4,
+                attached: false
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the visionOS surface to detach")
+        }
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertNil(detached.visionWindowedPresentation)
+        XCTAssertNil(owner.snapshot().frameID)
+        let clearAfterDetach = replacementHarness.runtime.clearCount
+
+        guard case .applied = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: first,
+                surfaceGeneration: replacementSurface,
+                sourceRevision: 5
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the visionOS surface to resume")
+        }
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs.last, 41)
+        XCTAssertEqual(owner.snapshot().frameID, 41)
+        XCTAssertEqual(replacementHarness.runtime.clearCount, clearAfterDetach)
+
+        guard case .applied = await coordinator.receiveVideo(
+            makeTVVisionClearedDelivery(
+                ownership: first,
+                revision: 3,
+                decoderGeneration: firstFrame.generation
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the visionOS frame to clear")
+        }
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertNil(owner.snapshot().frameID)
+        let presentedBeforeStaleFrame =
+            replacementHarness.runtime.presentedFrameIDs
+        let staleFrame = try makeFrame(
+            generation: firstFrame.generation,
+            frameID: 42,
+            metadata: .rec709VideoRange()
+        )
+        let staleFrameOutcome = await coordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: first,
+                revision: 4,
+                frame: staleFrame
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(staleFrameOutcome, .staleRevision)
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(
+            replacementHarness.runtime.presentedFrameIDs,
+            presentedBeforeStaleFrame
+        )
+
+        let resumedFrame = try makeFrame(
+            generation: 10,
+            frameID: 43,
+            metadata: .rec709VideoRange()
+        )
+        guard case .applied = await coordinator.receiveVideo(
+            makeTVVisionDecoderStartedDelivery(
+                ownership: first,
+                revision: 5,
+                decoderGeneration: resumedFrame.generation
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the replacement visionOS decoder")
+        }
+        guard case .applied = await coordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: first,
+                revision: 6,
+                frame: resumedFrame
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected visionOS presentation to resume")
+        }
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs.last, 43)
+
+        let replacement = try makeTVVisionPresentationOwnership(
+            platform: .visionOS,
+            mediaGeneration: 2,
+            presentationGeneration: 2,
+            inputGeneration: 2
+        )
+        guard case let .applied(replacementActivation) = await coordinator
+            .activate(replacement) else {
+            return XCTFail("Expected replacement visionOS ownership")
+        }
+        XCTAssertNil(replacementActivation.visionWindowedPresentation)
+        XCTAssertNil(owner.snapshot().frameID)
+        let clearBeforeReplacement = replacementHarness.runtime.clearCount
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertGreaterThan(
+            replacementHarness.runtime.clearCount,
+            clearBeforeReplacement
+        )
+        guard case .applied = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: replacement,
+                surfaceGeneration: replacementSurface,
+                sourceRevision: 1
+            ),
+            ownership: replacement
+        ) else {
+            return XCTFail("Expected the replacement visionOS scene")
+        }
+        let replacementFrame = try makeFrame(
+            generation: 11,
+            frameID: 44,
+            metadata: .rec709VideoRange()
+        )
+        guard case .applied = await coordinator.receiveVideo(
+            makeTVVisionDecoderStartedDelivery(
+                ownership: replacement,
+                revision: 1,
+                decoderGeneration: replacementFrame.generation
+            ),
+            ownership: replacement
+        ) else {
+            return XCTFail("Expected the replacement decoder contract")
+        }
+        guard case .applied = await coordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: replacement,
+                revision: 2,
+                frame: replacementFrame
+            ),
+            ownership: replacement
+        ) else {
+            return XCTFail("Expected the replacement decoded frame")
+        }
+        XCTAssertEqual(owner.snapshot().ownership, replacement)
+        XCTAssertEqual(owner.snapshot().frameID, replacementFrame.frameID)
+        XCTAssertEqual(
+            owner.snapshot().admittedFrameSurfaceGeneration,
+            replacementSurface
+        )
+        XCTAssertTrue(owner.snapshot().isSceneEligible)
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs.last, 44)
+        let lateOldFrame = await coordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: first,
+                revision: 7,
+                frame: resumedFrame
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(lateOldFrame, .staleOwnership)
+
+        guard case let .applied(stopped) = await coordinator.stop(
+            ownership: replacement,
+            reason: .localStop
+        ) else {
+            return XCTFail("Expected visionOS presentation to stop")
+        }
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertNil(stopped.visionWindowedPresentation)
+        XCTAssertNil(owner.snapshot().ownership)
+        XCTAssertNil(owner.snapshot().frameID)
+        firstHarness.presenter.stop()
+        replacementHarness.presenter.stop()
+    }
+
+    @MainActor
     func testTVVisionOwnerPresentsCoordinatorFrameAndClearsSceneLoss()
         async throws
     {
@@ -5254,6 +5589,7 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     private func makeTVVisionPresentationOwnership(
+        platform: TVVisionPlatform = .tvOS,
         sessionID: UUID = UUID(
             uuidString: "00000000-0000-0000-0000-000000000441"
         )!,
@@ -5262,7 +5598,7 @@ final class StreamMetalPresenterTests: XCTestCase {
         inputGeneration: UInt64 = 1
     ) throws -> TVVisionPresentationOwnership {
         try TVVisionPresentationOwnership(
-            platform: .tvOS,
+            platform: platform,
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
             presentationGeneration: TVVisionGeneration(
@@ -5351,6 +5687,39 @@ final class StreamMetalPresenterTests: XCTestCase {
                 revision: revision
             ),
             frame: frame
+        )
+    }
+
+    private func makeTVVisionDecoderStartedDelivery(
+        ownership: TVVisionPresentationOwnership,
+        revision: UInt64,
+        decoderGeneration: UInt64
+    ) -> StreamVideoPresentationDelivery {
+        .decoderStarted(
+            ownership: StreamVideoPresentationDeliveryOwnership(
+                sessionID: ownership.sessionID,
+                mediaGeneration: ownership.mediaGeneration,
+                revision: revision
+            ),
+            contract: StreamVideoDecoderPresentationContract(
+                decoderGeneration: decoderGeneration,
+                colorMetadata: .rec709VideoRange()
+            )
+        )
+    }
+
+    private func makeTVVisionClearedDelivery(
+        ownership: TVVisionPresentationOwnership,
+        revision: UInt64,
+        decoderGeneration: UInt64?
+    ) -> StreamVideoPresentationDelivery {
+        .cleared(
+            ownership: StreamVideoPresentationDeliveryOwnership(
+                sessionID: ownership.sessionID,
+                mediaGeneration: ownership.mediaGeneration,
+                revision: revision
+            ),
+            decoderGeneration: decoderGeneration
         )
     }
 

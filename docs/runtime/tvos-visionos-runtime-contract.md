@@ -2315,6 +2315,82 @@ tvOS-nil semantics; and no weakened test, parallel visionOS media owner, early
 task 6.2 implementation, second checkbox, sensitive literal, reference,
 dependency, or generated-project drift. Task 6.1 is independently committable.
 
+## Task 6.2 current visionOS frame presentation
+
+Task 6.2 reuses the task 4.1 production path rather than creating a visionOS
+decoder or presenter. `StreamVideoPresentationSource` remains the one decoded
+frame source, `TVVisionPlatformPresentationCoordinator` the one checked media
+owner, `TVVisionMetalPresentationOwner` the one main-actor bridge, and the
+actual `TVVisionStreamMetalView`/`StreamMetalPresenter` the current window
+surface. The visionOS matrix covers windowed activation, decoder/frame
+delivery, geometry revision resubmission, surface replacement, stale surface,
+detach/resume, explicit clear, stale decoder frame, newer decoder recovery,
+presentation replacement, late old ownership, and stop.
+
+Replacement deliberately preserves `requiresClearBeforePresentation`. The
+first draw after replacement clears the old drawable; only a subsequent draw
+may present the replacement frame. The initial focused failure that expected
+frame 44 on the first draw was a test-order error, not evidence to remove this
+production fence.
+
+The resumed production audit found a separate ordering defect in
+`NativeSessionMediaEnvironment`: the single source subscription created an
+independent unstructured `Task` for every delivery. Task scheduling could
+therefore reorder decoder-start, frame, and clear operations even though the
+source revisions were ordered. The replacement is one ownership-scoped,
+cancellable FIFO pump with one consumer and at most 64 pending deliveries.
+Replacement, failure, stop, and teardown cancel both pump and subscription.
+Overflow clears pending work and, through the same consumer, publishes a typed
+`.invalidComponent(.video)` failure only for the matching current pump ID;
+late overflow from an old ownership is inert.
+
+Fresh retained post-audit evidence is:
+
+- focused `/tmp/LuneX-18-6_2-audit-focused-r4.vj6AKw/Focused.xcresult`:
+  `4/4 passed / 0 skipped / 0 failed / 0 expected failure`;
+- related `/tmp/LuneX-18-6_2-audit-related.xqXKjd/Related.xcresult`:
+  `255/255 passed / 0 skipped / 0 failed / 0 expected failure`;
+- normal `/tmp/LuneX-18-6_2-audit-normal.rwmq84/Normal.xcresult`:
+  `1078 total / 1077 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain test;
+- five-platform unsigned Debug `/tmp/LuneX-18-6_2-audit-builds.jvlO3v`: macOS
+  and the fixed iPhone, iPad, Apple TV, and Vision Pro destinations all
+  succeeded with zero warning, error, or analyzer-warning diagnostics and one
+  `CompileMetalFile` plus one `MetalLink` each.
+
+One combined diagnostic run was intentionally interrupted after an indefinite
+test wait, and one isolated run then proved that the test had waited for a
+video effect on decoder-start even though only decoded frames create that
+effect. Those bundles are not retained as passing evidence. The corrected
+test submits frame zero before blocking and uses bounded state waiting.
+
+Both real opt-ins remained unset. Fixed simulator UUIDs were build destinations
+only; no Simulator lifecycle command ran. These gates prove deterministic
+ownership, bounded FIFO delivery, replacement fences, stale rejection, typed
+overflow failure, complete normal regression, and unsigned SDK compilation.
+They do not prove Simulator runtime, signed installation, physical Vision Pro
+window/compositor behavior, HDR, spatial audio, live Sunshine, latency,
+comfort, performance, power, or thermal behavior. Tasks 6.3-8.x and
+physical/live acceptance remain pending.
+
+The fresh repository pre-gate
+`/tmp/LuneX-18-6_2-repository-pre-r2.qw8ka9` and post-mark final-state gate
+`/tmp/LuneX-18-6_2-final-state.Dx3op0` verify the transition from `32/50 next
+6.2` to `33/50 next 6.3`, the exact ten-file pre-mark and eleven-file post-mark
+scopes, the single task checkbox change, stable generated project membership,
+retained evidence, disabled opt-ins, and the same proof boundaries.
+
+The post-record gate `/tmp/LuneX-18-6_2-post-record.cDfHFy` and final diff audit
+`/tmp/LuneX-18-6_2-final-audit.k3rz0Z` verify the final one-production,
+two-test, eight-authority classification, complete authority indexing, the
+single bounded pump and cancellation semantics, unchanged tests, the one task
+checkbox transition, and repository privacy and dependency boundaries.
+
+The final record `/tmp/LuneX-18-6_2-final-record.Q9ZZvx` confirms the same
+`33/50 next 6.3` state, final scope and authority classification, retained
+evidence, implementation semantics, disabled opt-ins, and repository proof
+boundaries before the task-level commit.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

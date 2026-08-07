@@ -47,7 +47,7 @@
 ## 6. visionOS media presentation runtime
 
 - [x] 6.1 Implement an explicit current-generation windowed presentation mode and typed immersive/stereoscopic/volumetric unavailable states without creating an immersive runtime
-- [ ] 6.2 Bind visionOS decoded frames, Metal surface, presentation revision, replacement, clear/resume, and stale-frame rejection to the current actual window surface
+- [x] 6.2 Bind visionOS decoded frames, Metal surface, presentation revision, replacement, clear/resume, and stale-frame rejection to the current actual window surface
 - [ ] 6.3 Probe and implement public visionOS layer/color/headroom capability, retaining typed HDR-to-SDR fallback whenever current finite headroom is unavailable
 - [ ] 6.4 Connect canonical audio, public intended spatial experience, actual route capability, interruption/media reset recovery, graph replacement, and current-generation state
 - [ ] 6.5 Coordinate visionOS scene, video, HDR fallback, audio, input eligibility, diagnostics, failure, reconnect, remote termination, and clean stop through one presentation coordinator
