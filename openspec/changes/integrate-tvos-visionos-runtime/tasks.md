@@ -28,7 +28,7 @@
 
 ## 4. tvOS media presentation runtime
 
-- [ ] 4.1 Bind actual tvOS scene/surface lifecycle and geometry to `StreamMetalPresenter`, current decoded-frame delivery, stale-frame rejection, and clean clear/resume behavior
+- [x] 4.1 Bind actual tvOS scene/surface lifecycle and geometry to `StreamMetalPresenter`, current decoded-frame delivery, stale-frame rejection, and clean clear/resume behavior
 - [ ] 4.2 Probe and implement public tvOS display/layer/color capability, retaining typed HDR-to-SDR output whenever direct extended-range presentation is unavailable
 - [ ] 4.3 Connect tvOS actual display/HDR revisions and bounded fallback diagnostics to the current render configuration and AppModel state
 - [ ] 4.4 Connect the current tvOS AVAudioSession route, canonical audio graph, spatial/head-tracking capability, interruption, media reset, and recovery to the media generation

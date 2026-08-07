@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持pre-mark `18/50 ready`、next 3.7。1.1至3.6已完成task级验收；3.7候选已补齐focus/Menu本地边界、supported Siri Remote到existing keyboard wire的canonical mapping、held release和stale callback回归，并通过focused `7/7`、相关`236/236`、normal `1027/1026/1/0`、direct tvOS及五平台Debug。repository pre-gate通过前不勾选；当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持`20/50 ready`、next 4.2。1.1至3.7的platform ownership与tvOS input/focus/controller runtime已完成task级验收；4.1已把production coordinator准入的current decoded frame绑定到actual Metal presenter，关闭shared-latest bypass并覆盖scene/surface/revision/clear/rebind/replacement。fresh focused `8/8`、related `241/241`、normal `1035/1034/1/0`、direct tvOS、unsigned五平台Debug、repository pre-gate与只读final-state均通过。4.2开始实现actual public tvOS display/layer/color capability与typed HDR-to-SDR fallback；当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -81,6 +81,7 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.4.1首轮post-record误用只验证当前change的`openspec validate integrate-tvos-visionos-runtime --strict --json`并期望仓库级`9/9` | 1 | `/tmp/LuneX-18-4_1-post-record.mkvGtQ`合法返回current change `1/1`后在首个断言退出；改用`openspec validate --all --strict --json`从fresh只读目录完整通过，不重复test/build/generator或simulator操作 |
 | 18.3.6首轮repository pre-gate静态断言使用不存在的`.restoreLocalNavigation` case名 | 1 | fixtures、strict、generator与scope通过后退出，未读retained evidence且不计最终门；按实际`.restoreLocalFocus(reason)`修正后从fresh evidence目录完整通过 |
 | 18.3.3首个跨文件planning记录补丁使用了不匹配的runtime contract换行锚点 | 1 | `apply_patch`原子拒绝且无部分写入；改用稳定章节标题拆分文档补丁，并读取各文件真实EOF后分别追加 |
 | 18.3.3上轮跨文件planning补丁使用了不匹配的`findings.md`尾部锚点 | 1 | `apply_patch`原子拒绝且无部分写入；读取各文件真实EOF后分别追加，保留现有实现与证据不变 |
@@ -972,3 +973,31 @@
 - **repository/final-state：** `/tmp/LuneX-18-3_7-repository-pre-r3.QRSRb6`完整通过pre-mark门；勾选后的只读`/tmp/LuneX-18-3_7-final-state.fKKBFH`确认strict `9/9`、`19/50 next 4.1`、稳定project hash、13文件scope、current semantics、retained evidence与全部boundary，未重复test/build/generator/simulator操作。
 - **post-record/final audit：** `/tmp/LuneX-18-3_7-post-record.RaWllz`确认五份权威文档、pre/final路径、13文件scope、project hash与repository boundary；最终生产/测试/规范diff审计未发现新问题。
 - **下一步：** 运行只读post-record和最终diff审计，独立提交推送3.7后进入4.1 actual tvOS scene/surface/decoded-frame到`StreamMetalPresenter`接线。
+
+## 2026-08-07 阶段 18 任务 4.1 启动
+
+- **状态：** `in_progress`；3.7已提交推送为`685487d Complete tvOS input regression`，fetch确认`HEAD == origin/main`且工作树clean，OpenSpec为`19/50 ready`、next 4.1。
+- **范围：** 把actual tvOS scene/surface lifecycle与single normalized geometry绑定到既有`StreamMetalPresenter`和current decoded-frame source，确保旧generation/revision frame无效，并在detach/invalid/hidden/replacement/stop时清屏、恢复时只呈现current frame。
+- **边界：** 复用现有decoder、`StreamVideoPresentationSource`、Metal presenter和platform presentation coordinator；不在4.1提前完成4.2 HDR capability、4.3 AppModel HDR state、4.4 audio route或4.5 shared media teardown。
+- **验收计划：** 先盘点actual tvOS view/presenter/frame source现有接线，补focused lifecycle/geometry/frame/stale/clear-resume tests，再执行related、normal、fixed tvOS、五平台Debug和repository/final-state分层验收。
+- **续接实现审计：** owner此前未记录admitted frame所属surface generation与scene/display eligibility，A→B scene切换可在新`.video`准入前恢复A帧，防御性late video也可能绕过closed scene；presenter接受新platform frame时未推进presentation revision，进行中的旧draw缺少fence。已补frame-surface/scene/display状态、stale delivery守卫、present revision和幂等clear语义，并开始增加actual presenter执行级测试；4.1仍未勾选。
+- **focused命令错误：** `/tmp/LuneX-18-4_1-focused.U0uUni`误用没有test action的`LuneX-macOS` app scheme，Xcode在编译前以exit 66退出；该目录不计证据。已通过`xcodebuild -list`确认测试入口为`LuneXCoreTests`，从fresh DerivedData/result bundle重跑，app scheme仍只用于build。
+- **focused harness错误：** `/tmp/LuneX-18-4_1-focused-r2.4AqAen`中3/5通过，两个actual presenter断言因离屏`MTKView.draw()`未自动调用delegate而观察到`present/clear == 0`；xcresult精确定位后，在测试调度点显式驱动`presenter.draw(in:)`，不修改production调度，必须fresh重跑。
+- **stale测试预期错误：** `/tmp/LuneX-18-4_1-focused-r4.Dx4SoW`为6/7通过；唯一失败因测试主动draw后presenter合法重绘current frame 50，实际`[50,50]`中没有任何stale frame。断言改为保留两次current提交且display unavailable后不再增加，从fresh目录重跑。
+- **focused：** fresh `/tmp/LuneX-18-4_1-focused-r5.1gdLMC`结构化通过`7/7 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；覆盖shared-source防绕过、actual presenter frame/clear、surface与ownership replacement、stale frame维度、display unavailable、decoder-start与geometry resubmit。下一步related matrix。
+- **related matrix：** 系统更新前已完成的fresh `/tmp/LuneX-18-4_1-related.hqr5RJ`在macOS 27.0/Xcode 26.4下串行结构化读回为`240/240 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；覆盖presenter、platform coordinator/state、environment、AppModel、frame delivery及HDR renderer/surface既有回归。该门无需重跑，下一步完成production/test diff竞态审计。
+- **更新后恢复：** 重新确认Xcode `26.4` build `17E192`、Swift `6.3`、宿主macOS `27.0` build `26A5388g`、Keychain/live-host opt-in unset、`HEAD == origin/main == 685487d`及预期九文件scope；未查询或操作simulator。4.1仍为`in_progress`且未勾选、未提交、未推送。
+- **production diff审计修订：** owner的replacement比较在session ID前接受更大media generation，且遗漏input generation；不同session的高generation可错误接管，同session仅input replacement会被拒绝。现与coordinator顺序统一为exact platform/session后依次比较media/presentation/input，并补双向回归；此前focused/related降为中间证据，必须fresh重跑。
+- **修订后focused：** fresh `/tmp/LuneX-18-4_1-focused-r6.EoFPrA`结构化通过`8/8 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；包含foreign-session takeover inert与同session input-only replacement accepted。下一步fresh related matrix。
+- **修订后related：** fresh `/tmp/LuneX-18-4_1-related-r2.ymJCRP`结构化通过`241/241 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；production/test diff复核未再发现revision、clear/resume、geometry重交、unbind/rebind、stop或replacement问题。下一步fresh normal。
+- **normal：** fresh `/tmp/LuneX-18-4_1-normal.nHnZZj`结构化通过`1035 total / 1034 passed / 1 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；原始日志精确确认唯一skip为`HostAndPersistenceTests/testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，Keychain/live-host opt-in保持unset。
+- **normal只读解析错误：** Xcode 26.4对同一normal xcresult读取test-tree时再次出现已知`database.sqlite3` move冲突；未重复该失败子命令，改用结构化summary/build-results加retained原始日志确认唯一skip，测试本身无需重跑。下一步fixed Apple TV direct Debug build。
+- **direct tvOS：** fixed Apple TV `/tmp/LuneX-18-4_1-tvos.4dvUQ4`结构化为`succeeded/0 warning/0 error/0 analyzer warning`并生成`1 HDRVideoShaders.air / 1 default.metallib`；固定UUID仅作build destination，未执行simulator lifecycle。下一步fresh五平台Debug。
+- **五平台build错误 1：** 首轮`/tmp/LuneX-18-4_1-builds.nhyiEK`在macOS源码编译前因entitlement要求development certificate以exit 65停止，其余四平台未开始；该目录不计验收。离线编译门不应伪造signed artifact，改用`CODE_SIGNING_ALLOWED=NO`从fresh矩阵重跑。
+- **五平台build：** fresh unsigned `/tmp/LuneX-18-4_1-builds-r2.Pl3YcW`中macOS、fixed iPhone/iPad/Apple TV/Vision Pro均`succeeded/0 warning/0 error/0 analyzer warning`且各有`1 AIR/1 metallib`；UUID仅作build destination，未执行simulator lifecycle。下一步同步权威文档并运行repository pre-gate。
+- **repository pre-gate：** fresh `/tmp/LuneX-18-4_1-repository-pre.cIhA16`完整通过fixture self/tree、strict `9/9`、pre-mark `19/50 next 4.1`、四次稳定generator SHA-256 `ef2e3e615f1dbd84b76bfe4c8681fab7d44291176f06324acd757fa1c1008353`、精确13文件scope、membership与current owner/admission/revision/clear/replacement语义、全部retained tests/builds及privacy/clean-room/reference/opt-in/process/diff边界。
+- **状态：** `complete`；4.1已勾选，预期权威状态为`20/50 ready`、next 4.2。下一步只读post-mark final-state，不重复test/build/generator/simulator操作。
+- **final-state包装错误 1：** 首次调用在进入shell前被外层JavaScript template literal中的Markdown反引号截断并抛出`SyntaxError: Unexpected number`；未创建gate、未执行OpenSpec/xcresult/generator/test/build/simulator或修改工作区。移除命令内反引号后从fresh目录运行。
+- **post-mark final-state：** 修正后的fresh `/tmp/LuneX-18-4_1-final-state-r2.BFSidM`只读通过strict `9/9`、apply `20/50 next 4.2`、稳定project hash、精确14文件scope、current task/source/test/docs、全部retained evidence及privacy/clean-room/reference/opt-in/process/diff边界；未重复test/build/generator/simulator操作。下一步post-record与最终diff审计。
+- **post-record：** 首轮 `/tmp/LuneX-18-4_1-post-record.mkvGtQ` 因把current-change strict `1/1`误断言为repository strict `9/9`而提前退出；修正后的fresh `/tmp/LuneX-18-4_1-post-record-r2.AmeJ3m`通过`20/50 next 4.2`、repository strict `9/9`、稳定project hash、精确14文件scope、五份权威记录、retained evidence、opt-in/process/reference和diff门，未重复test/build/generator/simulator操作。下一步最终人工diff审计与独立提交推送。
+- **最终审计：** production coordinator与actual presenter共享同一个main-actor owner，platform admission关闭shared-latest bypass；platform/session与media/presentation/input replacement顺序、sequence/platform/delivery/decoder/frame/surface fence、scene/display关闭、clear、geometry重交、unbind/rebind、presenter stop及old teardown/application均成立。unknown display仅允许baseline SDR，4.2–4.4未提前完成；未发现新问题，4.1可独立提交推送。

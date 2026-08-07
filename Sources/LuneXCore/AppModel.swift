@@ -261,6 +261,7 @@ final class AppModel: ApplicationInputSink {
     }
 
     let videoPresentationSource: StreamVideoPresentationSource
+    let tvVisionMetalPresentationOwner: TVVisionMetalPresentationOwner
 
     private let hostLibraryManager: HostLibraryManager
     private let settingsRepository: AppSettingsRepository
@@ -388,6 +389,8 @@ final class AppModel: ApplicationInputSink {
         self.runtimeProviders = runtimeProviders
         let presentationSource = videoPresentationSource ?? StreamVideoPresentationSource()
         self.videoPresentationSource = presentationSource
+        let tvVisionMetalPresentationOwner = TVVisionMetalPresentationOwner()
+        self.tvVisionMetalPresentationOwner = tvVisionMetalPresentationOwner
 #if os(tvOS)
         configuredTVVisionPlatform = tvVisionPlatform ?? .tvOS
 #elseif os(visionOS)
@@ -404,7 +407,12 @@ final class AppModel: ApplicationInputSink {
                     presentationSource: presentationSource
                 ),
                 audioProcessorFactory: NativeSessionAudioProcessorFactory(),
-                videoPresentationSource: presentationSource
+                videoPresentationSource: presentationSource,
+                tvVisionPlatformCoordinatorFactory: {
+                    try TVVisionPlatformPresentationCoordinator(
+                        actionClient: tvVisionMetalPresentationOwner
+                    )
+                }
             )
         self.clientIdentityStore = clientIdentityStore
         self.clientIdentityProvisioner = clientIdentityProvisioner

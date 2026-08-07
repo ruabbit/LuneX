@@ -159,6 +159,22 @@ accepts only current-generation snapshots. Platform UI renders that actual
 state and commands the current coordinator rather than fabricating status from
 preferences.
 
+The actual Metal surface and the coordinator meet at one main-actor
+presentation owner. `AppModel` injects that same owner into the production
+coordinator and SwiftUI surface; once bound, `StreamMetalPresenter` accepts
+only coordinator-admitted frames and never falls back to the shared latest
+frame. The owner validates platform, session, media/presentation/input
+ownership, action sequence, platform and delivery revisions, decoder/frame
+identity, and surface generation. Scene loss, invalid geometry, explicit
+display unavailability, clear, teardown, unbind, and presenter stop close the
+actual presentation; a matching rebind or newer geometry revision may
+resubmit only the current admitted frame.
+
+An as-yet-unprobed display is intentionally sufficient only for baseline SDR
+video in task 4.1. It is not HDR capability or headroom proof. Tasks 4.2 and
+4.3 remain responsible for the public tvOS layer/display probe, render
+configuration, fallback diagnostics, and AppModel actual HDR state.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

@@ -86,9 +86,9 @@ evidence only.
 | App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application | Full platform input/display/audio actual-state ownership remains later work |
 | Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; the tvOS stream surface forwards supported eligible presses while local/Menu/unsupported presses continue through UIKit | Overlay-first focus handoff, full reserved-command behavior, and visionOS window/input capability state remain later tasks |
 | Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry, then activates current media presentation ownership; tvOS additionally owns actual begin/end/cancel press identity | Controller, display/HDR, audio, and visionOS actual input component adapters remain later platform work |
-| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle, one presenter consumes decoded frames, and one serialized coordinator publishes current/terminal application state | Coordinator effects are not yet bound to all actual presenter, input, display/HDR, and audio graph adapters |
+| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, and a bound presenter consumes only coordinator-admitted current frames | Actual display/HDR and audio graph effects remain later tvOS/visionOS work |
 | Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated revision for drawable size, fit/fill, and supported input reference; tvOS admits remote presses only for that current eligible surface/input generation | tvOS controller and visionOS input adapters remain later tasks |
-| Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; current media ownership subscribes to that source and the coordinator rejects stale ownership, delivery revision, and decoder generation | Actual coordinator-to-presenter effect application remains task 4.x/6.x |
+| Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator now admits actual frames by checked ownership, action/platform/delivery revisions, decoder/frame identity, and surface generation, with clear/rebind/replacement fences | tvOS display/HDR integration remains 4.2/4.3; explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
 | Audio | `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph exists; immutable route state participates in the coordinator's shared ordered teardown | Actual route observer/graph effect application remains later tvOS/visionOS media work |
 | Application state | `AppModel` | Current/terminal tvOS/visionOS presentation state is admitted by media generation, platform, ownership, sequence, and highest surface ownership; tvOS geometry derives one `.tvRemote` capability snapshot and reuses the existing session input application path | Overlay/focus policy, controllers, display/HDR, audio route, and complete product UI projection remain later tasks |
 
@@ -160,9 +160,9 @@ game event merely because a SwiftUI focus item changed.
 
 | Concern | Current state | Required stage 18 direction |
 |---|---|---|
-| Scene and surface | Actual `TVVisionStreamMetalView` owns one surface generation, actual window/scene/tvOS screen, lifecycle, finite geometry, detach, invalid, and stale state; current geometry activates media-owned coordinator state through `AppModel` | Connect later tvOS media/input actual component effects |
+| Scene and surface | Actual `TVVisionStreamMetalView` owns one surface generation, actual window/scene/tvOS screen, lifecycle, finite geometry, detach, invalid, and stale state; current geometry activates media-owned coordinator state and binds the same actual presenter owner through `AppModel` | Connect later actual display/HDR and audio components |
 | Geometry | Surface-local owner publishes one deduplicated `TVVisionSemanticRevision` to actual drawable size, exact fit/fill coordinates, and supported input reference mapping | Keep future actual input adapters branded to this revision and reject incompatible frames |
-| Video | Shared decoder, bounded frame source, and Metal presenter exist | Bind only matching current-generation frames; clear on detach, invalid geometry, replacement, or stop |
+| Video | Shared decoder, bounded frame source, Metal presenter, and main-actor coordinator-to-surface owner are connected; platform admission disables latest-frame fallback and validates ownership/revisions/decoder/frame/surface identity | Keep 4.1 clear/rebind/replacement fences; add actual display/HDR policy in 4.2/4.3 without creating another decoder |
 | HDR | `HDRPlatformOutputCapabilityAdapter` currently returns typed SDR fallback because the old extended-range surface contract is unavailable | Probe the tvOS 26 dynamic-range layer path; retain HDR-to-SDR until actual public capability and current display state form a complete contract |
 | Audio | Canonical PCM graph, tvOS AVAudioSession route handling, listener strategy, interruption, and media-reset foundations exist | Bind actual route/capability and graph recovery to the same current media presentation generation |
 | App/UI | Shared HDR and spatial status can render | Publish platform actual scene/input/render/HDR/audio state rather than preference-derived claims |
@@ -1326,6 +1326,79 @@ ownership, stale-callback rejection, and unsigned SDK compatibility. They do
 not prove Siri Remote feel, host receipt, a simulator callback, signed install,
 physical controller feedback, HDR, spatial audio, latency, performance, power,
 or thermal behavior.
+
+## Task 4.1 actual tvOS frame presentation
+
+The task 4.1 candidate connects the existing production coordinator to the
+actual Metal presenter without adding another decoder, frame source, queue, or
+platform transport. `AppModel` creates one `TVVisionMetalPresentationOwner`
+and injects it into the default `NativeSessionMediaEnvironment`. The actual
+SwiftUI tvOS/visionOS Metal surface binds that same owner to its presenter and
+checked surface generation.
+
+Once the owner binds a presenter, platform frame admission is closed by
+default. `StreamMetalPresenter` no longer reads
+`StreamVideoPresentationSource.currentFrame()` in that mode. Only a decoded
+frame application accepted by the coordinator owner becomes presentable. The
+owner checks exact platform and session identity, lexicographically newer
+media/presentation/input replacement ownership, nondecreasing action,
+platform and delivery revisions, consistent decoder/frame identity, and an
+exact coordinator/presenter/frame surface generation. A foreign session with
+a higher media generation remains inert; a same-session input-only replacement
+is valid when newer.
+
+Scene detach, inactivity, invisibility, invalid geometry, explicit display
+unavailability, clear, terminal teardown, surface unbind, and presenter stop
+all close actual presentation. Surface rebind restores a retained frame only
+when the presenter, scene, frame, and coordinator surface generations match.
+Geometry may resubmit the same current delivery under a newer platform
+revision; accepting a new platform frame advances the presenter's draw fence
+so an in-flight old frame cannot submit afterward. Repeated clear while
+already blank is idempotent.
+
+Display state may still be unknown in task 4.1 because the actual public tvOS
+probe belongs to 4.2. Unknown permits only the existing baseline SDR path; it
+does not publish HDR capability, EDR headroom, or active HDR. Explicitly
+unavailable display state clears video and suppresses a late frame.
+
+Retained pre-mark evidence is:
+
+- focused `/tmp/LuneX-18-4_1-focused-r6.EoFPrA`: `8/8` passed with zero
+  structured diagnostics;
+- related `/tmp/LuneX-18-4_1-related-r2.ymJCRP`: `241/241` passed across the
+  presenter, coordinator/state, environment, AppModel, frame, and HDR-related
+  suites with zero structured diagnostics;
+- normal `/tmp/LuneX-18-4_1-normal.nHnZZj`: `1035 total / 1034 passed / 1
+  exact real-Keychain opt-in skip / 0 failed`, with zero structured
+  diagnostics;
+- fixed Apple TV build `/tmp/LuneX-18-4_1-tvos.4dvUQ4`: zero structured
+  diagnostics and one AIR/metallib pair; and
+- unsigned five-platform Debug matrix
+  `/tmp/LuneX-18-4_1-builds-r2.Pl3YcW`: macOS, fixed iPhone, fixed iPad,
+  fixed Apple TV, and fixed Vision Pro all succeeded with zero structured
+  diagnostics and one AIR/metallib pair each.
+
+The first five-platform candidate stopped before source compilation because
+the macOS entitlement required a development certificate. The retained matrix
+uses `CODE_SIGNING_ALLOWED=NO` and is explicitly unsigned build proof, not a
+signed artifact. Fixed simulator UUIDs were build destinations only; task 4.1
+did not query, create, clone, boot, install, launch, run, shut down, or delete a
+simulator. Real Keychain and live-host opt-ins remained disabled. These gates
+do not prove an Apple TV drawable or television output, signed installation,
+live Sunshine, HDR/EDR, spatial audio, latency, performance, power, or thermal
+behavior. Repository pre-gate
+`/tmp/LuneX-18-4_1-repository-pre.cIhA16` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `19/50 next 4.1`, four stable generator hashes, exact
+thirteen-file scope, source/project membership, current owner/admission/
+revision/clear/replacement semantics, every retained result, and privacy,
+clean-room, reference, opt-in, process, and diff boundaries. Task 4.1 is now
+marked complete; the expected authoritative state is `20/50 next 4.2` pending
+read-only final-state verification. Post-mark final-state
+`/tmp/LuneX-18-4_1-final-state-r2.BFSidM` then confirmed strict `9/9`, exact
+`20/50 next 4.2`, the stable project hash, exact fourteen-file scope, current
+task/source/test/docs semantics, all retained evidence, and the same repository
+boundaries without rerunning tests, builds, the generator, or simulator
+operations.
 
 ## Fixed simulator inventory
 

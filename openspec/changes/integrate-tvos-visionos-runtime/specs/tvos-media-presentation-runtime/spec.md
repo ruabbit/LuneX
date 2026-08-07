@@ -22,6 +22,29 @@ SHALL fail closed.
 - **WHEN** scale or drawable geometry changes
 - **THEN** LuneX SHALL publish one semantic revision and reject stale incompatible frames
 
+### Requirement: tvOS decoded frames SHALL require current coordinator admission
+The actual tvOS Metal presenter SHALL consume the existing decoded-frame
+source only through the current platform presentation coordinator. It SHALL
+validate session, media, presentation, input, surface, decoder, frame,
+delivery-revision, and platform-revision ownership without creating a second
+decoder or frame queue.
+
+#### Scenario: Current decoded frame is admitted
+- **WHEN** the current active scene and matching surface receive a current decoded-frame delivery
+- **THEN** the coordinator-admitted frame SHALL be submitted to the actual presenter
+
+#### Scenario: Shared latest frame bypass is attempted
+- **WHEN** the shared source contains a frame that the platform coordinator has not admitted
+- **THEN** the bound tvOS presenter SHALL remain blank
+
+#### Scenario: Geometry rebrands the current frame
+- **WHEN** valid geometry changes without a newer decoded-frame delivery
+- **THEN** the coordinator MAY resubmit that same frame under the newer platform revision and the presenter SHALL reject the old draw fence
+
+#### Scenario: Presentation eligibility closes and resumes
+- **WHEN** the scene detaches, becomes inactive or hidden, geometry becomes invalid, the display is explicitly unavailable, or ownership is replaced
+- **THEN** the actual presenter SHALL clear and SHALL resume only a matching current-generation admitted frame
+
 ### Requirement: tvOS HDR output SHALL reflect actual public capability
 LuneX SHALL probe and consume public tvOS display and Metal-layer capability.
 When direct extended-range presentation is unavailable, HDR input SHALL use the

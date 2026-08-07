@@ -690,6 +690,8 @@ private struct StreamWorkspaceView: View {
                 presentationSource: appModel.videoPresentationSource,
                 userAllowsHDR: appModel.settings.stream.hdrEnabled,
                 diagnosticLease: hdrPresentationDiagnosticLease,
+                platformPresentationOwner:
+                    appModel.tvVisionMetalPresentationOwner,
                 geometryBindingUpdateHandler: { update in
                     appModel.receiveTVVisionGeometryUpdate(update)
                 },
@@ -709,6 +711,8 @@ private struct StreamWorkspaceView: View {
                 presentationSource: appModel.videoPresentationSource,
                 userAllowsHDR: appModel.settings.stream.hdrEnabled,
                 diagnosticLease: hdrPresentationDiagnosticLease,
+                platformPresentationOwner:
+                    appModel.tvVisionMetalPresentationOwner,
                 geometryBindingUpdateHandler: { update in
                     appModel.receiveTVVisionGeometryUpdate(update)
                 }

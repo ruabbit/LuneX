@@ -223,6 +223,102 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         XCTAssertEqual(recordsAfterDuplicate.count, recordCount)
     }
 
+    func testValidScenePresentsBaselineSDRBeforeDisplayAndAudioProbe()
+        async throws
+    {
+        let recorder = TVVisionPresentationActionRecorder()
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: recorder
+        )
+        let ownership = try makeOwnership()
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: ownership),
+            ownership: ownership
+        )
+
+        let decoderStarted = await coordinator.receiveVideo(
+            makeDecoderStartedDelivery(
+                ownership: ownership,
+                deliveryRevision: 1,
+                decoderGeneration: 7
+            ),
+            ownership: ownership
+        )
+        guard case let .applied(decoderSnapshot) = decoderStarted else {
+            return XCTFail("Expected decoder start to apply")
+        }
+        XCTAssertEqual(
+            decoderSnapshot.video.phase,
+            .decoderReady(decoderGeneration: 7)
+        )
+        XCTAssertFalse(decoderSnapshot.video.isPresented)
+        let decoderRecords = await recorder.records(
+            for: decoderSnapshot.sequence
+        )
+        XCTAssertEqual(decoderRecords.map(\.kind), [.snapshot])
+
+        let decoded = await coordinator.receiveVideo(
+            try makeFrameDelivery(
+                ownership: ownership,
+                deliveryRevision: 2,
+                frameID: 43,
+                decoderGeneration: 7
+            ),
+            ownership: ownership
+        )
+        guard case let .applied(frameSnapshot) = decoded else {
+            return XCTFail("Expected baseline SDR frame to apply")
+        }
+        XCTAssertNil(frameSnapshot.presentation)
+        XCTAssertTrue(frameSnapshot.video.isPresented)
+        XCTAssertEqual(
+            frameSnapshot.video.phase,
+            .frameReady(decoderGeneration: 7, frameID: 43)
+        )
+        let frameRecords = await recorder.records(for: frameSnapshot.sequence)
+        XCTAssertEqual(frameRecords.map(\.kind), [.video, .snapshot])
+    }
+
+    func testGeometryRevisionResubmitsCurrentDecodedFrame() async throws {
+        let recorder = TVVisionPresentationActionRecorder()
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: recorder
+        )
+        let ownership = try makeOwnership()
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: ownership, sourceRevision: 1),
+            ownership: ownership
+        )
+        _ = await coordinator.receiveVideo(
+            try makeFrameDelivery(
+                ownership: ownership,
+                deliveryRevision: 1,
+                frameID: 44
+            ),
+            ownership: ownership
+        )
+
+        let geometryChange = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: ownership, sourceRevision: 2),
+            ownership: ownership
+        )
+        guard case let .applied(snapshot) = geometryChange else {
+            return XCTFail("Expected semantic geometry change to apply")
+        }
+        XCTAssertTrue(snapshot.video.isPresented)
+        XCTAssertEqual(
+            snapshot.video.phase,
+            .frameReady(decoderGeneration: 7, frameID: 44)
+        )
+        let records = await recorder.records(for: snapshot.sequence)
+        XCTAssertEqual(
+            records.map(\.kind),
+            [.scene, .display, .audioRoute, .input, .video, .snapshot]
+        )
+    }
+
     func testCoordinatorRejectsOldDecoderAfterNewDecoderStarts() async throws {
         let recorder = TVVisionPresentationActionRecorder()
         let coordinator = try TVVisionPlatformPresentationCoordinator(

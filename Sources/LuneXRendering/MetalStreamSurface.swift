@@ -2206,6 +2206,8 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     private var appliedSurfaceContract: HDRSurfaceContract?
     private var lastRequestedResolution: HDRRenderConfigurationResolution?
     private var requiresClearBeforePresentation = false
+    private var usesPlatformFrameAdmission = false
+    private var platformAdmittedFrame: DecodedVideoFrame?
     private var presentationRevision: UInt64 = 0
     private var configurationTransitionCount: UInt64 = 0
     private var closedTransitionCount: UInt64 = 0
@@ -2288,6 +2290,8 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             appliedSurfaceContract = surface
             lastRequestedResolution = nil
             requiresClearBeforePresentation = false
+            usesPlatformFrameAdmission = false
+            platformAdmittedFrame = nil
             presentationRevision &+= 1
             return previous
         }
@@ -2328,6 +2332,48 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
         if StreamMetalViewScheduleResolver.resolve(renderState.policy).requestsImmediateDraw {
             surfaceView?.draw()
         }
+    }
+
+    @MainActor
+    func beginPlatformFrameAdmission() {
+        let shouldClear = withLock {
+            let shouldClear = !usesPlatformFrameAdmission
+                || platformAdmittedFrame != nil
+            usesPlatformFrameAdmission = true
+            platformAdmittedFrame = nil
+            if shouldClear {
+                requiresClearBeforePresentation = true
+                presentationRevision &+= 1
+            }
+            return shouldClear
+        }
+        if shouldClear { surfaceView?.draw() }
+    }
+
+    @MainActor
+    func presentPlatformAdmittedFrame(_ frame: DecodedVideoFrame) {
+        withLock {
+            usesPlatformFrameAdmission = true
+            platformAdmittedFrame = frame
+            presentationRevision &+= 1
+        }
+        surfaceView?.draw()
+    }
+
+    @MainActor
+    func clearPlatformFrameAdmission() {
+        let shouldClear = withLock {
+            let shouldClear = !usesPlatformFrameAdmission
+                || platformAdmittedFrame != nil
+            usesPlatformFrameAdmission = true
+            platformAdmittedFrame = nil
+            if shouldClear {
+                requiresClearBeforePresentation = true
+                presentationRevision &+= 1
+            }
+            return shouldClear
+        }
+        if shouldClear { surfaceView?.draw() }
     }
 
     @MainActor
@@ -2439,7 +2485,9 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                 runtime,
                 activeResolvedConfiguration,
                 requiresClearBeforePresentation,
-                presentationRevision
+                presentationRevision,
+                usesPlatformFrameAdmission,
+                platformAdmittedFrame
             )
         }
         guard let runtime = snapshot.2 else { return }
@@ -2458,7 +2506,9 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             }
             return
         }
-        let frame = presentationSource.currentFrame()
+        let frame = snapshot.6
+            ? snapshot.7
+            : presentationSource.currentFrame()
         let drawableMatchesCoordinates = snapshot.1.map { coordinates in
             coordinates.drawableSize.width == drawable?.texture.width
                 && coordinates.drawableSize.height == drawable?.texture.height
@@ -2539,6 +2589,8 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             activeResolvedConfiguration = nil
             lastRequestedResolution = nil
             requiresClearBeforePresentation = false
+            usesPlatformFrameAdmission = false
+            platformAdmittedFrame = nil
             presentationRevision &+= 1
             return previous
         }
@@ -2749,6 +2801,271 @@ private extension RenderPolicy {
     }
 }
 
+enum TVVisionMetalPresentationOwnerError: Error, Equatable, Sendable {
+    case invalidSnapshot
+    case invalidVideoApplication
+}
+
+struct TVVisionMetalPresentationOwnerSnapshot: Equatable, Sendable {
+    let surfaceGeneration: TVVisionGeneration?
+    let coordinatorSurfaceGeneration: TVVisionGeneration?
+    let admittedFrameSurfaceGeneration: TVVisionGeneration?
+    let ownership: TVVisionPresentationOwnership?
+    let sequence: UInt64?
+    let platformRevision: TVVisionSemanticRevision?
+    let deliveryRevision: UInt64?
+    let decoderGeneration: UInt64?
+    let frameID: UInt64?
+    let isSceneEligible: Bool
+    let isDisplayAvailable: Bool?
+    let acceptedFrameCount: UInt64
+    let clearCount: UInt64
+}
+
+@MainActor
+final class TVVisionMetalPresentationOwner:
+    TVVisionPlatformPresentationActionApplying
+{
+    private weak var presenter: StreamMetalPresenter?
+    private var surfaceGeneration: TVVisionGeneration?
+    private var coordinatorSurfaceGeneration: TVVisionGeneration?
+    private var admittedFrameSurfaceGeneration: TVVisionGeneration?
+    private var ownership: TVVisionPresentationOwnership?
+    private var sequence: UInt64?
+    private var platformRevision: TVVisionSemanticRevision?
+    private var deliveryRevision: UInt64?
+    private var decoderGeneration: UInt64?
+    private var frameID: UInt64?
+    private var admittedFrame: DecodedVideoFrame?
+    private var isSceneEligible = false
+    private var isDisplayAvailable: Bool?
+    private var acceptedFrameCount: UInt64 = 0
+    private var clearCount: UInt64 = 0
+
+    func bind(
+        presenter: StreamMetalPresenter,
+        surfaceGeneration: TVVisionGeneration
+    ) {
+        guard surfaceGeneration.domain == .surface else { return }
+        if self.presenter !== presenter
+            || self.surfaceGeneration != surfaceGeneration {
+            self.presenter?.clearPlatformFrameAdmission()
+        }
+        self.presenter = presenter
+        self.surfaceGeneration = surfaceGeneration
+        presenter.beginPlatformFrameAdmission()
+        applyCurrentFrameIfEligible()
+    }
+
+    func unbind(
+        presenter: StreamMetalPresenter,
+        surfaceGeneration: TVVisionGeneration
+    ) {
+        guard self.presenter === presenter,
+              self.surfaceGeneration == surfaceGeneration else { return }
+        presenter.clearPlatformFrameAdmission()
+        self.presenter = nil
+        self.surfaceGeneration = nil
+    }
+
+    func apply(
+        _ application: TVVisionPlatformPresentationActionApplication
+    ) async throws {
+        switch application.effect {
+        case let .snapshot(snapshot):
+            try applySnapshot(snapshot, application: application)
+        default:
+            guard ownership == application.ownership else { return }
+            guard admits(sequence: application.sequence) else { return }
+            switch application.effect {
+            case let .scene(scene):
+                coordinatorSurfaceGeneration = scene?.surfaceGeneration
+                isSceneEligible = scene?.attachment == .attached
+                    && scene?.activity == .active
+                    && scene?.isVisible == true
+                    && scene?.geometry != nil
+                guard isSceneEligible else {
+                    clearFrame()
+                    return
+                }
+                applyCurrentFrameIfEligible()
+            case let .video(video):
+                try applyVideo(video, application: application)
+            case .clearVideo, .teardown:
+                clearFrame()
+                if case .teardown = application.effect {
+                    coordinatorSurfaceGeneration = nil
+                    isSceneEligible = false
+                    isDisplayAvailable = nil
+                    ownership = nil
+                }
+            case let .display(display):
+                isDisplayAvailable = display?.isOutputAvailable
+                if isDisplayAvailable == false {
+                    clearFrame()
+                } else {
+                    applyCurrentFrameIfEligible()
+                }
+            case .input, .audioRoute:
+                break
+            case .snapshot:
+                break
+            }
+        }
+    }
+
+    func snapshot() -> TVVisionMetalPresentationOwnerSnapshot {
+        TVVisionMetalPresentationOwnerSnapshot(
+            surfaceGeneration: surfaceGeneration,
+            coordinatorSurfaceGeneration: coordinatorSurfaceGeneration,
+            admittedFrameSurfaceGeneration: admittedFrameSurfaceGeneration,
+            ownership: ownership,
+            sequence: sequence,
+            platformRevision: platformRevision,
+            deliveryRevision: deliveryRevision,
+            decoderGeneration: decoderGeneration,
+            frameID: frameID,
+            isSceneEligible: isSceneEligible,
+            isDisplayAvailable: isDisplayAvailable,
+            acceptedFrameCount: acceptedFrameCount,
+            clearCount: clearCount
+        )
+    }
+
+    private func applySnapshot(
+        _ snapshot: TVVisionPlatformPresentationCoordinatorSnapshot,
+        application: TVVisionPlatformPresentationActionApplication
+    ) throws {
+        guard snapshot.ownership == application.ownership,
+              snapshot.sequence == application.sequence else {
+            throw TVVisionMetalPresentationOwnerError.invalidSnapshot
+        }
+        switch snapshot.phase {
+        case .active:
+            if let ownership,
+               ownership != application.ownership,
+               !isNewer(application.ownership, than: ownership) {
+                return
+            }
+            if ownership != application.ownership {
+                clearFrame()
+                self.ownership = application.ownership
+                sequence = application.sequence
+                platformRevision = nil
+                deliveryRevision = nil
+                decoderGeneration = nil
+                frameID = nil
+                admittedFrame = nil
+                admittedFrameSurfaceGeneration = nil
+                coordinatorSurfaceGeneration = nil
+                isSceneEligible = false
+                isDisplayAvailable = nil
+            } else {
+                guard admits(sequence: application.sequence) else { return }
+            }
+        case .stopped, .failed:
+            guard ownership == application.ownership,
+                  admits(sequence: application.sequence) else { return }
+            clearFrame()
+            coordinatorSurfaceGeneration = nil
+            isSceneEligible = false
+            isDisplayAvailable = nil
+            ownership = nil
+        }
+    }
+
+    private func applyVideo(
+        _ video: TVVisionPlatformVideoPresentationApplication,
+        application: TVVisionPlatformPresentationActionApplication
+    ) throws {
+        guard video.ownership == application.ownership,
+              video.sequence == application.sequence,
+              video.surfaceGeneration.domain == .surface,
+              video.delivery.ownership.sessionID == video.ownership.sessionID,
+              video.delivery.ownership.mediaGeneration
+                == video.ownership.mediaGeneration,
+              case let .decodedFrame(_, frame) = video.delivery else {
+            throw TVVisionMetalPresentationOwnerError.invalidVideoApplication
+        }
+        guard video.surfaceGeneration == coordinatorSurfaceGeneration else { return }
+        let incomingDeliveryRevision = video.delivery.ownership.revision
+        if let deliveryRevision,
+           incomingDeliveryRevision < deliveryRevision { return }
+        if let platformRevision {
+            if video.platformRevision < platformRevision { return }
+            if video.platformRevision == platformRevision,
+               let deliveryRevision,
+               incomingDeliveryRevision <= deliveryRevision {
+                return
+            }
+        }
+        if incomingDeliveryRevision == deliveryRevision,
+           let decoderGeneration,
+           let frameID,
+           (frame.generation != decoderGeneration || frame.frameID != frameID) {
+            return
+        }
+        if let decoderGeneration {
+            if frame.generation < decoderGeneration { return }
+            if frame.generation == decoderGeneration,
+               let frameID,
+               frame.frameID <= frameID,
+               video.platformRevision == platformRevision {
+                return
+            }
+        }
+        platformRevision = video.platformRevision
+        deliveryRevision = incomingDeliveryRevision
+        decoderGeneration = frame.generation
+        frameID = frame.frameID
+        admittedFrame = frame
+        admittedFrameSurfaceGeneration = video.surfaceGeneration
+        if acceptedFrameCount < .max { acceptedFrameCount += 1 }
+        applyCurrentFrameIfEligible()
+    }
+
+    private func admits(sequence candidate: UInt64) -> Bool {
+        if let sequence, candidate < sequence { return false }
+        sequence = candidate
+        return true
+    }
+
+    private func applyCurrentFrameIfEligible() {
+        guard let presenter,
+              isSceneEligible,
+              isDisplayAvailable != false,
+              surfaceGeneration == coordinatorSurfaceGeneration,
+              admittedFrameSurfaceGeneration == surfaceGeneration,
+              let admittedFrame else { return }
+        presenter.presentPlatformAdmittedFrame(admittedFrame)
+    }
+
+    private func clearFrame() {
+        admittedFrame = nil
+        admittedFrameSurfaceGeneration = nil
+        decoderGeneration = nil
+        frameID = nil
+        presenter?.clearPlatformFrameAdmission()
+        if clearCount < .max { clearCount += 1 }
+    }
+
+    private func isNewer(
+        _ candidate: TVVisionPresentationOwnership,
+        than current: TVVisionPresentationOwnership
+    ) -> Bool {
+        guard candidate.platform == current.platform,
+              candidate.sessionID == current.sessionID else { return false }
+        if candidate.mediaGeneration != current.mediaGeneration {
+            return candidate.mediaGeneration > current.mediaGeneration
+        }
+        if candidate.presentationGeneration != current.presentationGeneration {
+            return candidate.presentationGeneration
+                > current.presentationGeneration
+        }
+        return candidate.inputGeneration > current.inputGeneration
+    }
+}
+
 enum MobileStreamDisplayBindingOutcome: Equatable, Sendable {
     case applied
     case unchanged
@@ -2786,6 +3103,8 @@ final class MobileStreamSurfaceCoordinator {
     private var ownsMobileGeometry = false
     private var ownsMobileDisplay = false
     private var ownsTVVisionGeometry = false
+    private weak var tvVisionPresentationOwner:
+        TVVisionMetalPresentationOwner?
 
     init(
         presentationSource: StreamVideoPresentationSource,
@@ -2871,6 +3190,17 @@ final class MobileStreamSurfaceCoordinator {
         applyCurrentState()
     }
 
+    func bindTVVisionPresentationOwner(
+        _ owner: TVVisionMetalPresentationOwner,
+        surfaceGeneration: TVVisionGeneration
+    ) {
+        tvVisionPresentationOwner = owner
+        owner.bind(
+            presenter: presenter,
+            surfaceGeneration: surfaceGeneration
+        )
+    }
+
     func deactivateTVVisionSurfaceGeneration(
         _ surfaceGeneration: TVVisionGeneration
     ) {
@@ -2880,6 +3210,10 @@ final class MobileStreamSurfaceCoordinator {
         currentTVVisionGeometryUpdate = nil
         ownsTVVisionGeometry = true
         applyCurrentState()
+        tvVisionPresentationOwner?.unbind(
+            presenter: presenter,
+            surfaceGeneration: surfaceGeneration
+        )
         currentTVVisionSurfaceGeneration = nil
         ownsTVVisionGeometry = false
     }
@@ -4637,6 +4971,7 @@ struct MetalStreamSurface: UIViewRepresentable {
     var displayEDREventHandler:
         MobileStreamMetalView.DisplayEDREventHandler = { _ in }
 #elseif os(tvOS) || os(visionOS)
+    var platformPresentationOwner: TVVisionMetalPresentationOwner?
     var surfaceCallbackHandler:
         TVVisionStreamMetalView.SurfaceCallbackHandler = { _, _, _ in }
     var surfaceGenerationUpdateHandler:
@@ -4721,6 +5056,15 @@ struct MetalStreamSurface: UIViewRepresentable {
         view.enableSetNeedsDisplay = false
         view.isPaused = true
         context.coordinator.presenter.configure(view)
+#if os(tvOS) || os(visionOS)
+        if let platformPresentationOwner,
+           let surfaceGeneration = view.surfaceGeneration {
+            context.coordinator.bindTVVisionPresentationOwner(
+                platformPresentationOwner,
+                surfaceGeneration: surfaceGeneration
+            )
+        }
+#endif
         return view
     }
 

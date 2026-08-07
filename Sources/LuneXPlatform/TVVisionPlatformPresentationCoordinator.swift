@@ -1122,8 +1122,9 @@ actor TVVisionPlatformPresentationCoordinator {
     ) -> TVVisionPlatformVideoPresentationApplication? {
         guard isRenderEligible(state),
               let delivery = state.latestVideoDelivery,
-              let surfaceGeneration = state.presentation?
-                .sceneSurface.surfaceGeneration else {
+              case .decodedFrame = delivery,
+              let surfaceGeneration = state.scene?
+                .snapshot.surfaceGeneration else {
             return nil
         }
         return TVVisionPlatformVideoPresentationApplication(
@@ -1136,12 +1137,15 @@ actor TVVisionPlatformPresentationCoordinator {
     }
 
     private func isRenderEligible(_ state: ActiveState) -> Bool {
-        guard let scene = state.presentation?.sceneSurface else { return false }
+        guard let scene = rebrandScene(
+            state.scene,
+            revision: state.revision
+        ) else { return false }
         return scene.attachment == .attached
             && scene.activity == .active
             && scene.isVisible
             && scene.geometry != nil
-            && state.presentation?.display.isOutputAvailable == true
+            && state.display?.snapshot.isOutputAvailable != false
     }
 
     private func rebrandScene(

@@ -4178,6 +4178,555 @@ final class StreamMetalPresenterTests: XCTestCase {
         ))
     }
 
+    @MainActor
+    func testTVVisionPlatformAdmissionDoesNotReadSharedLatestFrame() throws {
+        let source = StreamVideoPresentationSource()
+        let ownership = try makeTVVisionPresentationOwnership()
+        let sharedFrame = try makeFrame(
+            generation: 7,
+            frameID: 40,
+            metadata: .rec709VideoRange()
+        )
+        source.beginSession(
+            sessionID: ownership.sessionID,
+            mediaGeneration: ownership.mediaGeneration
+        )
+        source.consume(
+            .sessionStarted(
+                generation: sharedFrame.generation,
+                colorMetadata: sharedFrame.colorMetadata
+            ),
+            sessionID: ownership.sessionID,
+            mediaGeneration: ownership.mediaGeneration
+        )
+        source.consume(
+            .frame(sharedFrame),
+            sessionID: ownership.sessionID,
+            mediaGeneration: ownership.mediaGeneration
+        )
+        let harness = try makeTVVisionPresenterHarness(source: source)
+        let owner = TVVisionMetalPresentationOwner()
+        let surfaceGeneration = try makeTVVisionSurfaceGeneration(1)
+
+        owner.bind(
+            presenter: harness.presenter,
+            surfaceGeneration: surfaceGeneration
+        )
+        harness.presenter.draw(in: harness.view)
+
+        XCTAssertEqual(harness.runtime.presentedFrameIDs, [])
+        XCTAssertEqual(harness.runtime.clearCount, 1)
+        XCTAssertEqual(owner.snapshot().surfaceGeneration, surfaceGeneration)
+        harness.presenter.stop()
+    }
+
+    @MainActor
+    func testTVVisionOwnerPresentsCoordinatorFrameAndClearsSceneLoss()
+        async throws
+    {
+        let source = StreamVideoPresentationSource()
+        let harness = try makeTVVisionPresenterHarness(source: source)
+        let owner = TVVisionMetalPresentationOwner()
+        let ownership = try makeTVVisionPresentationOwnership()
+        let surfaceGeneration = try makeTVVisionSurfaceGeneration(1)
+        owner.bind(
+            presenter: harness.presenter,
+            surfaceGeneration: surfaceGeneration
+        )
+        harness.presenter.draw(in: harness.view)
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        guard case .applied = await coordinator.activate(ownership) else {
+            return XCTFail("Expected platform presentation activation")
+        }
+        guard case .applied = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: ownership,
+                surfaceGeneration: surfaceGeneration,
+                sourceRevision: 1
+            ),
+            ownership: ownership
+        ) else {
+            return XCTFail("Expected the actual scene to apply")
+        }
+        let frame = try makeFrame(
+            generation: 9,
+            frameID: 41,
+            metadata: .rec709VideoRange()
+        )
+        let delivery = makeTVVisionFrameDelivery(
+            ownership: ownership,
+            revision: 1,
+            frame: frame
+        )
+
+        guard case let .applied(presented) = await coordinator.receiveVideo(
+            delivery,
+            ownership: ownership
+        ) else {
+            return XCTFail("Expected the decoded frame to apply")
+        }
+        harness.presenter.draw(in: harness.view)
+        XCTAssertTrue(presented.video.isPresented)
+        XCTAssertEqual(harness.runtime.presentedFrameIDs, [frame.frameID])
+        XCTAssertEqual(owner.snapshot().frameID, frame.frameID)
+        XCTAssertTrue(owner.snapshot().isSceneEligible)
+        XCTAssertNil(owner.snapshot().isDisplayAvailable)
+
+        guard case .applied = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: ownership,
+                surfaceGeneration: surfaceGeneration,
+                sourceRevision: 2,
+                attached: false
+            ),
+            ownership: ownership
+        ) else {
+            return XCTFail("Expected scene loss to apply")
+        }
+        harness.presenter.draw(in: harness.view)
+        XCTAssertEqual(harness.runtime.clearCount, 2)
+        XCTAssertNil(owner.snapshot().frameID)
+        XCTAssertFalse(owner.snapshot().isSceneEligible)
+        harness.presenter.stop()
+    }
+
+    @MainActor
+    func testTVVisionOwnerRebindsOnlyMatchingSurfaceFrameAndRejectsStaleWork()
+        async throws
+    {
+        let source = StreamVideoPresentationSource()
+        let firstHarness = try makeTVVisionPresenterHarness(source: source)
+        let replacementHarness = try makeTVVisionPresenterHarness(source: source)
+        let owner = TVVisionMetalPresentationOwner()
+        let ownership = try makeTVVisionPresentationOwnership()
+        let firstSurface = try makeTVVisionSurfaceGeneration(1)
+        let replacementSurface = try makeTVVisionSurfaceGeneration(2)
+        owner.bind(
+            presenter: firstHarness.presenter,
+            surfaceGeneration: firstSurface
+        )
+        firstHarness.presenter.draw(in: firstHarness.view)
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: ownership,
+                surfaceGeneration: firstSurface,
+                sourceRevision: 1
+            ),
+            ownership: ownership
+        )
+        let frame = try makeFrame(
+            generation: 11,
+            frameID: 42,
+            metadata: .rec709VideoRange()
+        )
+        let delivery = makeTVVisionFrameDelivery(
+            ownership: ownership,
+            revision: 1,
+            frame: frame
+        )
+        _ = await coordinator.receiveVideo(delivery, ownership: ownership)
+        firstHarness.presenter.draw(in: firstHarness.view)
+        XCTAssertEqual(firstHarness.runtime.presentedFrameIDs, [frame.frameID])
+
+        owner.bind(
+            presenter: replacementHarness.presenter,
+            surfaceGeneration: replacementSurface
+        )
+        firstHarness.presenter.draw(in: firstHarness.view)
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs, [])
+        let current = owner.snapshot()
+        let nextSequence = try XCTUnwrap(current.sequence).addingReportingOverflow(1)
+        XCTAssertFalse(nextSequence.overflow)
+        let currentRevision = try XCTUnwrap(current.platformRevision)
+        let nextRevisionValue = currentRevision.rawValue.addingReportingOverflow(1)
+        XCTAssertFalse(nextRevisionValue.overflow)
+        let nextRevision = try TVVisionSemanticRevision(
+            rawValue: nextRevisionValue.partialValue
+        )
+        let replacementScene = try XCTUnwrap(
+            makeTVVisionSceneUpdate(
+                ownership: ownership,
+                surfaceGeneration: replacementSurface,
+                sourceRevision: 2
+            ).binding?.sceneSurfaceSnapshot
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: nextSequence.partialValue,
+            effect: .scene(replacementScene)
+        ))
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs, [])
+
+        let replacementVideo = TVVisionPlatformVideoPresentationApplication(
+            ownership: ownership,
+            sequence: nextSequence.partialValue,
+            platformRevision: nextRevision,
+            surfaceGeneration: replacementSurface,
+            delivery: delivery
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: nextSequence.partialValue,
+            effect: .video(replacementVideo)
+        ))
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs, [frame.frameID])
+        XCTAssertEqual(
+            owner.snapshot().admittedFrameSurfaceGeneration,
+            replacementSurface
+        )
+
+        let staleSurfaceVideo = TVVisionPlatformVideoPresentationApplication(
+            ownership: ownership,
+            sequence: nextSequence.partialValue,
+            platformRevision: nextRevision,
+            surfaceGeneration: firstSurface,
+            delivery: delivery
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: nextSequence.partialValue,
+            effect: .video(staleSurfaceVideo)
+        ))
+        XCTAssertEqual(replacementHarness.runtime.presentedFrameIDs, [frame.frameID])
+
+        owner.unbind(
+            presenter: firstHarness.presenter,
+            surfaceGeneration: firstSurface
+        )
+        XCTAssertEqual(owner.snapshot().surfaceGeneration, replacementSurface)
+
+        owner.unbind(
+            presenter: replacementHarness.presenter,
+            surfaceGeneration: replacementSurface
+        )
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertNil(owner.snapshot().surfaceGeneration)
+        owner.bind(
+            presenter: replacementHarness.presenter,
+            surfaceGeneration: replacementSurface
+        )
+        replacementHarness.presenter.draw(in: replacementHarness.view)
+        XCTAssertEqual(
+            replacementHarness.runtime.presentedFrameIDs,
+            [frame.frameID, frame.frameID]
+        )
+        firstHarness.presenter.stop()
+        replacementHarness.presenter.stop()
+    }
+
+    @MainActor
+    func testTVVisionOwnerRejectsStaleFrameDimensionsAndUnavailableDisplay()
+        async throws
+    {
+        let source = StreamVideoPresentationSource()
+        let harness = try makeTVVisionPresenterHarness(source: source)
+        let owner = TVVisionMetalPresentationOwner()
+        let ownership = try makeTVVisionPresentationOwnership()
+        let surfaceGeneration = try makeTVVisionSurfaceGeneration(1)
+        owner.bind(
+            presenter: harness.presenter,
+            surfaceGeneration: surfaceGeneration
+        )
+        harness.presenter.draw(in: harness.view)
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: ownership,
+                surfaceGeneration: surfaceGeneration,
+                sourceRevision: 1
+            ),
+            ownership: ownership
+        )
+        let currentFrame = try makeFrame(
+            generation: 20,
+            frameID: 50,
+            metadata: .rec709VideoRange()
+        )
+        let currentDelivery = makeTVVisionFrameDelivery(
+            ownership: ownership,
+            revision: 1,
+            frame: currentFrame
+        )
+        _ = await coordinator.receiveVideo(
+            currentDelivery,
+            ownership: ownership
+        )
+        harness.presenter.draw(in: harness.view)
+        XCTAssertEqual(harness.runtime.presentedFrameIDs, [currentFrame.frameID])
+        let current = owner.snapshot()
+        let sequence = try XCTUnwrap(current.sequence)
+        let revision = try XCTUnwrap(current.platformRevision)
+
+        let stalePlatformFrame = try makeFrame(
+            generation: 20,
+            frameID: 51,
+            metadata: .rec709VideoRange()
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: sequence,
+            effect: .video(TVVisionPlatformVideoPresentationApplication(
+                ownership: ownership,
+                sequence: sequence,
+                platformRevision: try TVVisionSemanticRevision(rawValue: 1),
+                surfaceGeneration: surfaceGeneration,
+                delivery: makeTVVisionFrameDelivery(
+                    ownership: ownership,
+                    revision: 2,
+                    frame: stalePlatformFrame
+                )
+            ))
+        ))
+        let inconsistentDeliveryFrame = try makeFrame(
+            generation: 20,
+            frameID: 49,
+            metadata: .rec709VideoRange()
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: sequence,
+            effect: .video(TVVisionPlatformVideoPresentationApplication(
+                ownership: ownership,
+                sequence: sequence,
+                platformRevision: try revision.advanced(),
+                surfaceGeneration: surfaceGeneration,
+                delivery: makeTVVisionFrameDelivery(
+                    ownership: ownership,
+                    revision: 1,
+                    frame: inconsistentDeliveryFrame
+                )
+            ))
+        ))
+        let staleDecoderFrame = try makeFrame(
+            generation: 19,
+            frameID: 52,
+            metadata: .rec709VideoRange()
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: sequence,
+            effect: .video(TVVisionPlatformVideoPresentationApplication(
+                ownership: ownership,
+                sequence: sequence,
+                platformRevision: try revision.advanced(),
+                surfaceGeneration: surfaceGeneration,
+                delivery: makeTVVisionFrameDelivery(
+                    ownership: ownership,
+                    revision: 2,
+                    frame: staleDecoderFrame
+                )
+            ))
+        ))
+        harness.presenter.draw(in: harness.view)
+        XCTAssertEqual(
+            harness.runtime.presentedFrameIDs,
+            [currentFrame.frameID, currentFrame.frameID]
+        )
+        XCTAssertEqual(owner.snapshot().acceptedFrameCount, 1)
+
+        let displayRevision = try revision.advanced()
+        let unavailableDisplay = try TVVisionDisplaySnapshot(
+            platform: ownership.platform,
+            revision: displayRevision,
+            displayGeneration: TVVisionGeneration(
+                domain: .display,
+                rawValue: 1
+            ),
+            isOutputAvailable: false,
+            headroomSource: .unavailable,
+            currentEDRHeadroom: nil,
+            potentialEDRHeadroom: nil,
+            layerCapability: .unavailable
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: sequence,
+            effect: .display(unavailableDisplay)
+        ))
+        let lateFrame = try makeFrame(
+            generation: 20,
+            frameID: 53,
+            metadata: .rec709VideoRange()
+        )
+        try await owner.apply(TVVisionPlatformPresentationActionApplication(
+            ownership: ownership,
+            sequence: sequence,
+            effect: .video(TVVisionPlatformVideoPresentationApplication(
+                ownership: ownership,
+                sequence: sequence,
+                platformRevision: displayRevision,
+                surfaceGeneration: surfaceGeneration,
+                delivery: makeTVVisionFrameDelivery(
+                    ownership: ownership,
+                    revision: 3,
+                    frame: lateFrame
+                )
+            ))
+        ))
+        harness.presenter.draw(in: harness.view)
+        XCTAssertEqual(
+            harness.runtime.presentedFrameIDs,
+            [currentFrame.frameID, currentFrame.frameID]
+        )
+        XCTAssertEqual(owner.snapshot().isDisplayAvailable, false)
+        harness.presenter.stop()
+    }
+
+    @MainActor
+    func testTVVisionOwnershipReplacementMakesOldVideoAndTeardownInert()
+        async throws
+    {
+        let source = StreamVideoPresentationSource()
+        let harness = try makeTVVisionPresenterHarness(source: source)
+        let owner = TVVisionMetalPresentationOwner()
+        let surfaceGeneration = try makeTVVisionSurfaceGeneration(1)
+        owner.bind(
+            presenter: harness.presenter,
+            surfaceGeneration: surfaceGeneration
+        )
+        harness.presenter.draw(in: harness.view)
+        let oldOwnership = try makeTVVisionPresentationOwnership()
+        let oldCoordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await oldCoordinator.activate(oldOwnership)
+        _ = await oldCoordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: oldOwnership,
+                surfaceGeneration: surfaceGeneration,
+                sourceRevision: 1
+            ),
+            ownership: oldOwnership
+        )
+        let oldFrame = try makeFrame(
+            generation: 30,
+            frameID: 60,
+            metadata: .rec709VideoRange()
+        )
+        _ = await oldCoordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: oldOwnership,
+                revision: 1,
+                frame: oldFrame
+            ),
+            ownership: oldOwnership
+        )
+        harness.presenter.draw(in: harness.view)
+
+        let replacementOwnership = try makeTVVisionPresentationOwnership(
+            mediaGeneration: 2,
+            presentationGeneration: 2,
+            inputGeneration: 2
+        )
+        let replacementCoordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await replacementCoordinator.activate(replacementOwnership)
+        harness.presenter.draw(in: harness.view)
+        _ = await replacementCoordinator.applyScene(
+            try makeTVVisionSceneUpdate(
+                ownership: replacementOwnership,
+                surfaceGeneration: surfaceGeneration,
+                sourceRevision: 1
+            ),
+            ownership: replacementOwnership
+        )
+        let replacementFrame = try makeFrame(
+            generation: 31,
+            frameID: 61,
+            metadata: .rec709VideoRange()
+        )
+        _ = await replacementCoordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: replacementOwnership,
+                revision: 1,
+                frame: replacementFrame
+            ),
+            ownership: replacementOwnership
+        )
+        harness.presenter.draw(in: harness.view)
+        XCTAssertEqual(
+            harness.runtime.presentedFrameIDs,
+            [oldFrame.frameID, replacementFrame.frameID]
+        )
+        let clearCount = harness.runtime.clearCount
+
+        let lateOldFrame = try makeFrame(
+            generation: 30,
+            frameID: 62,
+            metadata: .rec709VideoRange()
+        )
+        _ = await oldCoordinator.receiveVideo(
+            makeTVVisionFrameDelivery(
+                ownership: oldOwnership,
+                revision: 2,
+                frame: lateOldFrame
+            ),
+            ownership: oldOwnership
+        )
+        _ = await oldCoordinator.stop(
+            ownership: oldOwnership,
+            reason: .replacement
+        )
+        harness.presenter.draw(in: harness.view)
+
+        XCTAssertEqual(
+            harness.runtime.presentedFrameIDs,
+            [oldFrame.frameID, replacementFrame.frameID, replacementFrame.frameID]
+        )
+        XCTAssertEqual(harness.runtime.clearCount, clearCount)
+        XCTAssertEqual(owner.snapshot().ownership, replacementOwnership)
+        XCTAssertEqual(owner.snapshot().frameID, replacementFrame.frameID)
+        harness.presenter.stop()
+    }
+
+    @MainActor
+    func testTVVisionOwnershipReplacementRequiresSameSessionAndNewerGeneration()
+        async throws
+    {
+        let owner = TVVisionMetalPresentationOwner()
+        let initialOwnership = try makeTVVisionPresentationOwnership()
+        let initialCoordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await initialCoordinator.activate(initialOwnership)
+        XCTAssertEqual(owner.snapshot().ownership, initialOwnership)
+
+        let foreignOwnership = try makeTVVisionPresentationOwnership(
+            sessionID: UUID(
+                uuidString: "00000000-0000-0000-0000-000000000442"
+            )!,
+            mediaGeneration: 2,
+            presentationGeneration: 2,
+            inputGeneration: 2
+        )
+        let foreignCoordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await foreignCoordinator.activate(foreignOwnership)
+        XCTAssertEqual(owner.snapshot().ownership, initialOwnership)
+
+        let inputReplacement = try makeTVVisionPresentationOwnership(
+            inputGeneration: 2
+        )
+        let replacementCoordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: owner
+        )
+        _ = await replacementCoordinator.activate(inputReplacement)
+        XCTAssertEqual(owner.snapshot().ownership, inputReplacement)
+    }
+
     private func makeResolvedConfiguration(
         for frame: DecodedVideoFrame,
         displayRevision: UInt64,
@@ -4261,6 +4810,143 @@ final class StreamMetalPresenterTests: XCTestCase {
             duration: .invalid,
             infoFlags: [],
             colorMetadata: metadata
+        )
+    }
+
+    @MainActor
+    private func makeTVVisionPresenterHarness(
+        source: StreamVideoPresentationSource
+    ) throws -> (
+        presenter: StreamMetalPresenter,
+        runtime: RecordingStreamMetalPresenterRuntime,
+        view: MTKView
+    ) {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
+            device: device
+        )
+        let drawableLayer = CAMetalLayer()
+        drawableLayer.device = device
+        drawableLayer.pixelFormat = .bgra8Unorm_srgb
+        drawableLayer.drawableSize = CGSize(width: 64, height: 64)
+        let drawable = try XCTUnwrap(drawableLayer.nextDrawable())
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 64, height: 64),
+            drawableSize: PixelSize(width: 64, height: 64),
+            mode: .fit
+        ))
+        renderState.policy = .active
+        let runtime = RecordingStreamMetalPresenterRuntime()
+        let presenter = StreamMetalPresenter(
+            presentationSource: source,
+            renderState: renderState,
+            runtimeFactory: { _, _ in runtime },
+            surfaceAdapterFactory: { _ in RecordingPresenterSurfaceAdapter() },
+            drawableProvider: { _ in drawable }
+        )
+        presenter.configure(view)
+        return (presenter, runtime, view)
+    }
+
+    private func makeTVVisionPresentationOwnership(
+        sessionID: UUID = UUID(
+            uuidString: "00000000-0000-0000-0000-000000000441"
+        )!,
+        mediaGeneration: UInt64 = 1,
+        presentationGeneration: UInt64 = 1,
+        inputGeneration: UInt64 = 1
+    ) throws -> TVVisionPresentationOwnership {
+        try TVVisionPresentationOwnership(
+            platform: .tvOS,
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            presentationGeneration: TVVisionGeneration(
+                domain: .presentation,
+                rawValue: presentationGeneration
+            ),
+            inputGeneration: TVVisionGeneration(
+                domain: .input,
+                rawValue: inputGeneration
+            )
+        )
+    }
+
+    private func makeTVVisionSurfaceGeneration(
+        _ rawValue: UInt64
+    ) throws -> TVVisionGeneration {
+        try TVVisionGeneration(domain: .surface, rawValue: rawValue)
+    }
+
+    private func makeTVVisionSceneUpdate(
+        ownership: TVVisionPresentationOwnership,
+        surfaceGeneration: TVVisionGeneration,
+        sourceRevision: UInt64,
+        attached: Bool = true
+    ) throws -> TVVisionStreamGeometryBindingUpdate {
+        let revision = try TVVisionSemanticRevision(rawValue: sourceRevision)
+        guard attached else {
+            return TVVisionStreamGeometryBindingUpdate(
+                platform: ownership.platform,
+                surfaceGeneration: surfaceGeneration,
+                revision: revision,
+                status: .closed(.detached),
+                binding: nil
+            )
+        }
+        let geometry = try TVVisionSurfaceGeometry(
+            platform: ownership.platform,
+            surfaceGeneration: surfaceGeneration,
+            viewBounds: TVVisionRect(x: 0, y: 0, width: 64, height: 64),
+            windowBounds: TVVisionRect(x: 0, y: 0, width: 64, height: 64),
+            safeAreaInsets: .zero,
+            scale: 1
+        )
+        let scene = try TVVisionSceneSurfaceSnapshot(
+            platform: ownership.platform,
+            revision: revision,
+            surfaceGeneration: surfaceGeneration,
+            activity: .active,
+            attachment: .attached,
+            isVisible: true,
+            geometry: geometry
+        )
+        let sourceSize = PixelSize(width: 64, height: 64)
+        let coordinates = try XCTUnwrap(StreamCoordinateSnapshot.resolve(
+            revision: revision.rawValue,
+            sourceSize: sourceSize,
+            drawableSize: geometry.drawableSize,
+            mode: .fit
+        ))
+        return TVVisionStreamGeometryBindingUpdate(
+            platform: ownership.platform,
+            surfaceGeneration: surfaceGeneration,
+            revision: revision,
+            status: .active,
+            binding: TVVisionStreamGeometryBindingSnapshot(
+                platform: ownership.platform,
+                surfaceGeneration: surfaceGeneration,
+                revision: revision,
+                sceneSurfaceSnapshot: scene,
+                isFocusEligible: true,
+                coordinateSnapshot: coordinates,
+                inputReferenceSize: sourceSize
+            )
+        )
+    }
+
+    private func makeTVVisionFrameDelivery(
+        ownership: TVVisionPresentationOwnership,
+        revision: UInt64,
+        frame: DecodedVideoFrame
+    ) -> StreamVideoPresentationDelivery {
+        .decodedFrame(
+            ownership: StreamVideoPresentationDeliveryOwnership(
+                sessionID: ownership.sessionID,
+                mediaGeneration: ownership.mediaGeneration,
+                revision: revision
+            ),
+            frame: frame
         )
     }
 
@@ -4965,6 +5651,7 @@ final class RecordingStreamMetalPresenterRuntime:
     private var storedStopCount: UInt64 = 0
     private var storedInvalidationCount: UInt64 = 0
     private var storedPresentedConfigurations: [HDRRenderConfigurationIdentity] = []
+    private var storedPresentedFrameIDs: [UInt64] = []
 
     var clearCount: UInt64 { lock.withLock { storedClearCount } }
     var stopCount: UInt64 { lock.withLock { storedStopCount } }
@@ -4974,6 +5661,9 @@ final class RecordingStreamMetalPresenterRuntime:
     }
     var presentedConfigurations: [HDRRenderConfigurationIdentity] {
         lock.withLock { storedPresentedConfigurations }
+    }
+    var presentedFrameIDs: [UInt64] {
+        lock.withLock { storedPresentedFrameIDs }
     }
 
     func present(
@@ -4987,6 +5677,7 @@ final class RecordingStreamMetalPresenterRuntime:
         _ = completion
         lock.withLock {
             storedPresentedConfigurations.append(plan.configuration)
+            storedPresentedFrameIDs.append(frame.frameID)
         }
         return .submitted(
             frameID: frame.frameID,
