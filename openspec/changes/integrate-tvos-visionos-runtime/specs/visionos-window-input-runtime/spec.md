@@ -78,7 +78,19 @@ is active and focused.
 
 #### Scenario: Window loses focus
 - **WHEN** the stream window loses input eligibility
-- **THEN** LuneX SHALL close admission and release held input before local navigation resumes
+- **THEN** LuneX SHALL close admission, drain already accepted keyboard, pointer, and controller work, release held input exactly once, and only then restore local navigation
+
+#### Scenario: Input provider fails
+- **WHEN** a current keyboard, pointer, controller-roster, or controller-motion delivery fails
+- **THEN** LuneX SHALL latch terminal input closure, run the same ordered release barrier, restore a bounded input-unavailable local state, and reject late geometry from reopening capture
+
+#### Scenario: Held-input release provider fails
+- **WHEN** the current ordered held-input release attempt fails
+- **THEN** LuneX SHALL make only that one release attempt, latch terminal input closure, restore bounded input-unavailable local state, reject late geometry from reopening capture, and SHALL NOT ask the shared coordinator to issue a second release
+
+#### Scenario: Platform release precedes shared input termination
+- **WHEN** the visionOS ordered release barrier has completed before the shared input generation terminates
+- **THEN** the shared coordinator SHALL close its queue, capture, and generation without issuing a second held-input release, while non-visionOS callers retain the default release barrier
 
 ### Requirement: visionOS input ownership SHALL teardown deterministically
 LuneX SHALL cancel observer tokens, controller handlers, keyboard/pointer
@@ -87,6 +99,10 @@ monitors, held state, and surface leases idempotently on replacement and stop.
 #### Scenario: Stop repeats
 - **WHEN** stop or detach is requested more than once
 - **THEN** LuneX SHALL perform at most one release/teardown operation and leave no current input owner
+
+#### Scenario: Capture ownership closes and recovers
+- **WHEN** ordered release closes actual visionOS capture and a later current media generation becomes eligible
+- **THEN** the Metal surface SHALL clear local held key/button state, resign responder ownership, remove indirect recognizers, and reinstall them idempotently only for the new eligible capture
 
 ### Requirement: visionOS window/input UI SHALL expose actual bounded state
 Native UI SHALL distinguish window attached/detached, active/inactive, input

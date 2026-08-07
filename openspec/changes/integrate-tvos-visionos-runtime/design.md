@@ -177,6 +177,36 @@ source or synthetic Moonlight mapping. The only installed pointer recognizers
 remain explicitly `.indirectPointer`. Task 5.5 still owns held-state release
 and local-navigation restoration.
 
+Task 5.5 instantiates the task 1.4 `VisionWindowInputOwnershipState` release
+transition in `AppModel`. Focus, scene, input readiness, surface replacement,
+provider failure, remote termination, and stop synchronously close capture
+admission, then one main-actor reconciliation chain waits for accepted
+keyboard/pointer delivery, controller roster routing, and controller motion
+before applying the canonical held-input release effect. Local navigation is
+restored only after that barrier. A terminal latch remains closed until a new
+media runtime begins, so late geometry cannot reopen input after failure or
+stop. The actual Metal surface consumes the same capture-enabled state: closing
+capture clears active keys and pointer buttons, resigns first responder, and
+removes indirect hover/scroll recognizers; a current eligible window restores
+them idempotently.
+
+The release application is fail-closed as well as idempotent. If the checked
+release request cannot be constructed, the fallback still drains controller and
+keyboard/pointer work, attempts the shared held release once, and restores local
+ownership last. If that release provider attempt fails, `AppModel` latches
+terminal input-unavailable state and rejects later eligible geometry rather
+than reopening capture or using shared-coordinator termination as an implicit
+retry.
+
+The shared `MacSessionInputCoordinator` retains its release barrier by default.
+Its terminal API accepts an explicit externally-completed barrier only after
+the tvOS or visionOS ordered platform owner has run; that mode still drains an
+in-flight sample, drops queued samples, closes admission and generation, and
+releases local capture exactly once without sending a duplicate held-input
+release. macOS callers continue to use the default barrier. This avoids
+weakening macOS input ownership while preserving one host-visible release for
+platform terminal paths.
+
 ### Keep visionOS windowed streaming explicit
 
 Stage 18 supports the actual SwiftUI window containing the Metal stream

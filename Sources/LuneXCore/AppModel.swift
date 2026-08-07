@@ -129,6 +129,14 @@ final class AppModel: ApplicationInputSink {
         let update: TVVisionStreamGeometryBindingUpdate
     }
 
+    private enum VisionInputRuntimeTarget: Equatable {
+        case active(VisionWindowInputSnapshot)
+        case released(
+            scope: VisionInputReleaseScope,
+            reason: TVVisionFocusIneligibilityReason
+        )
+    }
+
     private let logger = Logger(subsystem: "dev.lunex.client", category: "app.model")
     var hosts: [MoonlightHost] = []
     var settings = AppSettings.defaults {
@@ -182,6 +190,12 @@ final class AppModel: ApplicationInputSink {
         TVRemoteReservedCommandRuntimeState.idle
     private(set) var visionSystemInteractionDecisionState:
         VisionSystemInteractionDecision?
+    private(set) var visionInputOwnershipState:
+        VisionWindowInputOwnershipState?
+    private(set) var visionInputReleaseEffects: [VisionInputReleaseEffect] = []
+    private(set) var visionLocalNavigationRestoreReason:
+        TVVisionFocusIneligibilityReason?
+    private(set) var visionInputReleasePending = false
     private(set) var tvControllerRosterState: TVControllerRosterSnapshot?
     private(set) var tvControllerRoutedRosterState: TVControllerRosterSnapshot?
     private(set) var tvControllerFeedbackDecisionState:
@@ -191,6 +205,18 @@ final class AppModel: ApplicationInputSink {
     var tvStreamOverlayVisible: Bool {
         tvRemoteFocusHandoffState.isOverlayVisible
             && !isTVRemoteInputReleasePending
+    }
+
+    var visionInputCaptureEnabled: Bool {
+        guard expectedTVVisionPlatform == .visionOS,
+              !visionInputReleasePending,
+              let snapshot = currentVisionWindowInputSnapshot,
+              snapshot.inputCapabilities.focusEligibility == .eligible,
+              visionInputOwnershipState
+                == VisionWindowInputOwnershipState(snapshot: snapshot) else {
+            return false
+        }
+        return true
     }
 
     var tvVisionPlatformPresentationSnapshot:
@@ -356,6 +382,16 @@ final class AppModel: ApplicationInputSink {
     @ObservationIgnored private var tvPendingControllerMotionSamples:
         [String: TVGameControllerMotionSample] = [:]
     @ObservationIgnored private var visionInputDeliveryTask: Task<Void, Never>?
+    @ObservationIgnored private var visionInputRuntimeTarget:
+        VisionInputRuntimeTarget?
+    @ObservationIgnored private var visionInputReconciliationTask:
+        Task<Void, Never>?
+    @ObservationIgnored private var visionInputReconciliationOperationID: UUID?
+    @ObservationIgnored private var visionInputPendingReleaseScope:
+        VisionInputReleaseScope?
+    @ObservationIgnored private var visionInputPendingRestoreReason:
+        TVVisionFocusIneligibilityReason?
+    @ObservationIgnored private var visionInputTerminalReleaseRequested = false
 #if os(tvOS) || os(visionOS)
     @ObservationIgnored private var tvGameControllerRuntimeOwner:
         TVGameControllerRuntimeOwner?
@@ -725,6 +761,12 @@ final class AppModel: ApplicationInputSink {
             ownership: ownership,
             update: update
         )
+        if platform == .visionOS {
+            updateVisionInputRuntimeTarget(
+                update: update,
+                ownership: ownership
+            )
+        }
         if platform == .tvOS,
            let stamp = try? TVRemoteSurfaceFocusStamp(
             surfaceGeneration: update.surfaceGeneration,
@@ -817,6 +859,7 @@ final class AppModel: ApplicationInputSink {
         _ event: VisionSurfaceSystemInteractionEvent
     ) {
         guard expectedTVVisionPlatform == .visionOS,
+              visionInputCaptureEnabled,
               let snapshot = currentVisionWindowInputSnapshot,
               snapshot.presentation.surfaceGeneration
                 == event.surfaceGeneration else { return }
@@ -827,6 +870,7 @@ final class AppModel: ApplicationInputSink {
         _ event: VisionSurfaceInputEvent
     ) -> VisionSurfaceInputDisposition {
         guard expectedTVVisionPlatform == .visionOS,
+              visionInputCaptureEnabled,
               let snapshot = currentVisionWindowInputSnapshot,
               let request = try? VisionInputAdmissionRequest(
                 presentationGeneration:
@@ -848,6 +892,7 @@ final class AppModel: ApplicationInputSink {
             await previous?.value
             guard !Task.isCancelled,
                   let self,
+                  self.visionInputCaptureEnabled,
                   let current = self.currentVisionWindowInputSnapshot,
                   current.presentation.ownership == expectedOwnership,
                   case .admit = VisionInputAdmissionResolver.resolve(
@@ -857,7 +902,9 @@ final class AppModel: ApplicationInputSink {
             do {
                 try await self.sendRemoteInput(event.event)
             } catch {
-                // The provider owns delivery failure and session teardown.
+                self.requestVisionInputTerminalRelease(
+                    reason: .inputUnavailable
+                )
             }
         }
         return .captured
@@ -867,7 +914,7 @@ final class AppModel: ApplicationInputSink {
         _ roster: TVControllerRosterSnapshot
     ) {
         guard let platform = expectedTVVisionPlatform,
-              !isTVRemoteInputReleasePending,
+              !isTVVisionInputReleasePending,
               activeMediaGeneration == roster.inputGeneration.rawValue,
               roster.controllers.allSatisfy({ $0.lease.platform == platform }),
               currentControllerInputSnapshot?.focusEligibility == .eligible else {
@@ -884,7 +931,7 @@ final class AppModel: ApplicationInputSink {
         _ sample: TVGameControllerMotionSample
     ) {
         guard let platform = expectedTVVisionPlatform,
-              !isTVRemoteInputReleasePending,
+              !isTVVisionInputReleasePending,
               sample.lease.platform == platform,
               activeMediaGeneration == sample.lease.inputGeneration.rawValue,
               tvControllerRosterState?.controllers.contains(where: {
@@ -1414,8 +1461,13 @@ final class AppModel: ApplicationInputSink {
               let sessionControlProvider = runtimeProviders.sessionControl else {
             return
         }
-        await releaseTVRemoteInputForTerminal()
-        await terminateMacInputGeneration(reason: .stop)
+        let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
+            reason: .stopped
+        )
+        await terminateMacInputGeneration(
+            reason: .stop,
+            requiresReleaseBarrier: !platformOwnsReleaseBarrier
+        )
         activeStreamSessionID = nil
         streamLaunchUI.isLaunching = false
         session.phase = .stopping
@@ -1729,7 +1781,6 @@ final class AppModel: ApplicationInputSink {
             }
 
         case .terminated:
-            await terminateMacInputGeneration(reason: .remoteTermination)
             let snapshot = try await streamSessionCoordinator.apply(
                 event,
                 sessionID: sessionID
@@ -1847,9 +1898,24 @@ final class AppModel: ApplicationInputSink {
             refreshHDRRenderResolution()
             if previousReadiness.contains(.input),
                !activeMediaReadiness.contains(.input) {
-                await terminateMacInputGeneration(reason: .inputChannelFailure)
+                let platformOwnsReleaseBarrier =
+                    await releasePlatformInputForTerminal(
+                        reason: .inputUnavailable
+                    )
+                await terminateMacInputGeneration(
+                    reason: .inputChannelFailure,
+                    requiresReleaseBarrier: !platformOwnsReleaseBarrier
+                )
             } else if activeMediaReadiness.contains(.input) {
                 await activateMacInputGenerationIfNeeded()
+            }
+            if expectedTVVisionPlatform == .visionOS,
+               let admission = tvVisionPlatformGeometryAdmission {
+                updateVisionInputRuntimeTarget(
+                    update: admission.update,
+                    ownership: admission.ownership
+                )
+                await visionInputReconciliationTask?.value
             }
             refreshTVRemoteSurfacePressOwnership()
             do {
@@ -1974,8 +2040,13 @@ final class AppModel: ApplicationInputSink {
         sessionControlProvider: any SessionControlProvider
     ) async {
         guard activeStreamSessionID == sessionID else { return }
-        await releaseTVRemoteInputForTerminal()
-        await terminateMacInputGeneration(reason: .inputChannelFailure)
+        let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
+            reason: .inputUnavailable
+        )
+        await terminateMacInputGeneration(
+            reason: .inputChannelFailure,
+            requiresReleaseBarrier: !platformOwnsReleaseBarrier
+        )
         invalidateLifecycleApplicationPump()
         clearTVVisionPlatformPresentationRuntime(
             preservingTerminalState: true
@@ -2000,8 +2071,13 @@ final class AppModel: ApplicationInputSink {
         sessionID: UUID,
         inputReason: MacSessionInputTerminationReason = .stop
     ) async {
-        await releaseTVRemoteInputForTerminal()
-        await terminateMacInputGeneration(reason: inputReason)
+        let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
+            reason: visionInputRestoreReason(for: inputReason)
+        )
+        await terminateMacInputGeneration(
+            reason: inputReason,
+            requiresReleaseBarrier: !platformOwnsReleaseBarrier
+        )
         invalidateLifecycleApplicationPump()
         await stopTVVisionPlatformPresentation(
             reason: tvVisionPlatformStopReason(for: inputReason)
@@ -2147,7 +2223,8 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func terminateMacInputGeneration(
-        reason: MacSessionInputTerminationReason
+        reason: MacSessionInputTerminationReason,
+        requiresReleaseBarrier: Bool = true
     ) async {
         guard let generation = activeMacInputGeneration else { return }
         activeMacInputGeneration = nil
@@ -2155,7 +2232,8 @@ final class AppModel: ApplicationInputSink {
         refreshMacInputSurfacePolicy()
         _ = await macSessionInputCoordinator.terminate(
             generation: generation,
-            reason: reason
+            reason: reason,
+            requiresReleaseBarrier: requiresReleaseBarrier
         )
     }
 
@@ -2293,6 +2371,10 @@ final class AppModel: ApplicationInputSink {
             || tvRemoteSurfacePressCaptureOwner?.isReleasePending == true
     }
 
+    private var isTVVisionInputReleasePending: Bool {
+        isTVRemoteInputReleasePending || visionInputReleasePending
+    }
+
     private func applyTVRemoteCaptureEffect(
         _ effect: TVRemoteCaptureEffect
     ) async throws {
@@ -2420,8 +2502,30 @@ final class AppModel: ApplicationInputSink {
         tvRemoteInputReleasePending = false
     }
 
+    private func releasePlatformInputForTerminal(
+        reason: TVVisionFocusIneligibilityReason
+    ) async -> Bool {
+        switch expectedTVVisionPlatform {
+        case .tvOS:
+            await releaseTVRemoteInputForTerminal()
+            return true
+        case .visionOS:
+            requestVisionInputTerminalRelease(reason: reason)
+            await visionInputReconciliationTask?.value
+            return true
+        case nil:
+            return false
+        }
+    }
+
     private func beginTVVisionPlatformPresentationRuntime() {
         clearTVVisionPlatformPresentationRuntime()
+        if expectedTVVisionPlatform == .visionOS {
+            visionInputTerminalReleaseRequested = false
+            visionLocalNavigationRestoreReason = nil
+            visionInputReleaseEffects = []
+            return
+        }
         guard expectedTVVisionPlatform == .tvOS else { return }
         tvRemoteReservedCommandState = .idle
         applyTVRemoteFocusHandoffState(
@@ -2545,7 +2649,9 @@ final class AppModel: ApplicationInputSink {
                 } else {
                     self.tvVisionPlatformPresentationState = nil
                 }
-                await self.releaseTVRemoteInputForTerminal()
+                _ = await self.releasePlatformInputForTerminal(
+                    reason: .inputUnavailable
+                )
             }
             if self.tvVisionPlatformApplicationOperationID == operationID {
                 self.tvVisionPlatformApplicationTask = nil
@@ -2557,7 +2663,7 @@ final class AppModel: ApplicationInputSink {
     private func scheduleTVGameControllerRosterApplication(
         _ roster: TVControllerRosterSnapshot
     ) {
-        guard !isTVRemoteInputReleasePending,
+        guard !isTVVisionInputReleasePending,
               let admission = tvVisionPlatformGeometryAdmission,
               admission.update.binding != nil,
               admission.ownership.platform == expectedTVVisionPlatform,
@@ -2702,7 +2808,7 @@ final class AppModel: ApplicationInputSink {
         _ roster: TVControllerRosterSnapshot
     ) {
         guard activeMediaGeneration == roster.inputGeneration.rawValue,
-              !isTVRemoteInputReleasePending,
+              !isTVVisionInputReleasePending,
               currentControllerInputSnapshot?.focusEligibility == .eligible,
               tvControllerRoutedRosterState != roster else { return }
         let previous = tvControllerRoutingTask
@@ -2716,7 +2822,7 @@ final class AppModel: ApplicationInputSink {
                   let self,
                   self.tvControllerRosterState == roster,
                   self.activeMediaGeneration == roster.inputGeneration.rawValue,
-                  !self.isTVRemoteInputReleasePending,
+                  !self.isTVVisionInputReleasePending,
                   self.currentControllerInputSnapshot?.focusEligibility
                     == .eligible else { return }
             let event = TVGameControllerRosterRouter.reconcile(
@@ -2728,12 +2834,16 @@ final class AppModel: ApplicationInputSink {
                 guard !Task.isCancelled,
                       self.activeMediaGeneration
                         == roster.inputGeneration.rawValue,
-                      !self.isTVRemoteInputReleasePending,
+                      !self.isTVVisionInputReleasePending,
                       self.currentControllerInputSnapshot?.focusEligibility
                         == .eligible else { return }
                 self.tvControllerRoutedRosterState = roster
             } catch {
-                // The input provider owns delivery failure and session teardown.
+                if self.expectedTVVisionPlatform == .visionOS {
+                    self.requestVisionInputTerminalRelease(
+                        reason: .inputUnavailable
+                    )
+                }
             }
             if self.tvControllerRoutingOperationID == operationID {
                 self.tvControllerRoutingTask = nil
@@ -2753,7 +2863,7 @@ final class AppModel: ApplicationInputSink {
                     .removeValue(forKey: key) {
                 guard self.activeMediaGeneration
                         == sample.lease.inputGeneration.rawValue,
-                      !self.isTVRemoteInputReleasePending,
+                      !self.isTVVisionInputReleasePending,
                       self.tvControllerRosterState?.controllers.contains(where: {
                           $0.lease == sample.lease
                       }) == true,
@@ -2763,6 +2873,11 @@ final class AppModel: ApplicationInputSink {
                     try await self.sendRemoteInput(sample.remoteEvent)
                 } catch {
                     self.tvPendingControllerMotionSamples.removeAll()
+                    if self.expectedTVVisionPlatform == .visionOS {
+                        self.requestVisionInputTerminalRelease(
+                            reason: .inputUnavailable
+                        )
+                    }
                     break
                 }
             }
@@ -2832,6 +2947,14 @@ final class AppModel: ApplicationInputSink {
         preservingTerminalState: Bool = false
     ) {
         visionSystemInteractionDecisionState = nil
+        visionInputRuntimeTarget = nil
+        visionInputReconciliationTask?.cancel()
+        visionInputReconciliationTask = nil
+        visionInputReconciliationOperationID = nil
+        visionInputPendingReleaseScope = nil
+        visionInputPendingRestoreReason = nil
+        visionInputOwnershipState = nil
+        visionInputReleasePending = false
         if expectedTVVisionPlatform == .tvOS {
             tvRemoteReservedCommandState = .idle
             tvRemoteFocusHandoffState = tvRemoteFocusHandoffState
@@ -3077,17 +3200,267 @@ final class AppModel: ApplicationInputSink {
         )
     }
 
-    private func refreshVisionGameControllerRuntime() {
+    private func updateVisionInputRuntimeTarget(
+        update: TVVisionStreamGeometryBindingUpdate,
+        ownership: TVVisionPresentationOwnership
+    ) {
+        guard expectedTVVisionPlatform == .visionOS,
+              !visionInputTerminalReleaseRequested else { return }
+        if let snapshot = makeVisionWindowInputSnapshot(
+            update: update,
+            ownership: ownership
+        ), snapshot.inputCapabilities.focusEligibility == .eligible {
+            let nextState = VisionWindowInputOwnershipState(snapshot: snapshot)
+            if let current = visionInputOwnershipState,
+               current.phase == .active,
+               current != nextState {
+                markVisionInputReleaseRequired(
+                    scope: .teardown,
+                    reason: .replacing
+                )
+            }
+            visionInputRuntimeTarget = .active(snapshot)
+        } else {
+            let reason = visionInputRestoreReason(
+                update: update,
+                ownership: ownership
+            )
+            if visionInputOwnershipState?.phase == .active {
+                markVisionInputReleaseRequired(
+                    scope: .focusLoss,
+                    reason: reason
+                )
+            }
+            visionInputRuntimeTarget = .released(
+                scope: .focusLoss,
+                reason: reason
+            )
+        }
+        scheduleVisionInputReconciliation()
+    }
+
+    private func visionInputRestoreReason(
+        update: TVVisionStreamGeometryBindingUpdate,
+        ownership: TVVisionPresentationOwnership
+    ) -> TVVisionFocusIneligibilityReason {
+        guard activeMediaReadiness.contains(.input) else {
+            return .inputUnavailable
+        }
+        guard let binding = update.binding else { return .detached }
+        guard binding.sceneSurfaceSnapshot.activity == .active else {
+            return .sceneInactive
+        }
+        guard binding.sceneSurfaceSnapshot.isVisible,
+              binding.isFocusEligible else {
+            return .notFocused
+        }
+        guard ownership == tvVisionPlatformGeometryAdmission?.ownership else {
+            return .replacing
+        }
+        return .inputUnavailable
+    }
+
+    private func markVisionInputReleaseRequired(
+        scope: VisionInputReleaseScope,
+        reason: TVVisionFocusIneligibilityReason
+    ) {
+        visionInputReleasePending = true
+        if visionInputPendingReleaseScope != .teardown {
+            visionInputPendingReleaseScope = scope
+        }
+        if scope == .teardown
+            || visionInputPendingRestoreReason == nil {
+            visionInputPendingRestoreReason = reason
+        }
+    }
+
+    private func requestVisionInputTerminalRelease(
+        reason: TVVisionFocusIneligibilityReason
+    ) {
         guard expectedTVVisionPlatform == .visionOS else { return }
-        guard let snapshot = currentVisionWindowInputSnapshot,
-              snapshot.inputCapabilities.focusEligibility == .eligible else {
-#if os(visionOS)
-            tvGameControllerRuntimeOwner?.stop()
-            tvGameControllerRuntimeOwner = nil
-#endif
+        visionInputTerminalReleaseRequested = true
+        markVisionInputReleaseRequired(scope: .teardown, reason: reason)
+        visionInputRuntimeTarget = .released(
+            scope: .teardown,
+            reason: reason
+        )
+        scheduleVisionInputReconciliation()
+    }
+
+    private func scheduleVisionInputReconciliation() {
+        let previous = visionInputReconciliationTask
+        let operationID = UUID()
+        visionInputReconciliationOperationID = operationID
+        visionInputReconciliationTask = Task { [weak self] in
+            await previous?.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.visionInputReconciliationOperationID
+                    == operationID else { return }
+            await self.reconcileVisionInputRuntime()
+            if self.visionInputReconciliationOperationID == operationID {
+                self.visionInputReconciliationTask = nil
+                self.visionInputReconciliationOperationID = nil
+            }
+        }
+    }
+
+    private func reconcileVisionInputRuntime() async {
+        guard expectedTVVisionPlatform == .visionOS,
+              let target = visionInputRuntimeTarget else { return }
+        if visionInputReleasePending,
+           visionInputOwnershipState?.phase == .active {
+            await performVisionInputRelease()
+        }
+        guard target == visionInputRuntimeTarget else { return }
+        switch target {
+        case let .active(snapshot):
+            guard currentVisionWindowInputSnapshot == snapshot,
+                  snapshot.inputCapabilities.focusEligibility == .eligible else {
+                return
+            }
+            visionInputOwnershipState = VisionWindowInputOwnershipState(
+                snapshot: snapshot
+            )
+            visionInputReleasePending = false
+            visionInputPendingReleaseScope = nil
+            visionInputPendingRestoreReason = nil
+            visionLocalNavigationRestoreReason = nil
+            refreshVisionGameControllerRuntime()
+
+        case let .released(_, reason):
+            if visionInputOwnershipState?.phase == .active {
+                markVisionInputReleaseRequired(
+                    scope: .focusLoss,
+                    reason: reason
+                )
+                await performVisionInputRelease()
+            } else if visionLocalNavigationRestoreReason != reason {
+                visionLocalNavigationRestoreReason = reason
+            }
+            visionInputReleasePending = false
+            visionInputPendingReleaseScope = nil
+            visionInputPendingRestoreReason = nil
+        }
+    }
+
+    private func performVisionInputRelease() async {
+        guard let state = visionInputOwnershipState,
+              state.phase == .active,
+              let scope = visionInputPendingReleaseScope,
+              let restoreReason = visionInputPendingRestoreReason else {
+            return
+        }
+        let controllerLeases = tvControllerRosterState?.controllers
+            .map(\.lease)
+            .filter {
+                $0.platform == .visionOS
+                    && $0.inputGeneration == state.inputGeneration
+            } ?? []
+        guard let request = try? VisionInputReleaseRequest(
+            presentationGeneration: state.presentationGeneration,
+            surfaceGeneration: state.surfaceGeneration,
+            inputGeneration: state.inputGeneration,
+            scope: scope,
+            controllerLeases: controllerLeases,
+            monitoredPaths: [.keyboard, .pointer, .indirectPointer],
+            restoreReason: restoreReason
+        ), let transition = try? state.releasing(request) else {
+            visionInputTerminalReleaseRequested = true
+            visionInputRuntimeTarget = .released(
+                scope: .teardown,
+                reason: .inputUnavailable
+            )
+            visionSystemInteractionDecisionState = nil
+            await quiesceTVGameControllerRuntime()
             tvControllerRosterState = nil
             tvControllerRoutedRosterState = nil
-            tvPendingControllerMotionSamples.removeAll()
+            await visionInputDeliveryTask?.value
+            visionInputDeliveryTask = nil
+            _ = try? await releaseRemoteInput()
+            visionInputOwnershipState = nil
+            visionInputReleasePending = false
+            visionLocalNavigationRestoreReason = .inputUnavailable
+            return
+        }
+        visionInputOwnershipState = transition.state
+        visionInputReleaseEffects = transition.effects
+        var releaseFailed = false
+        for effect in transition.effects {
+            let succeeded = await applyVisionInputReleaseEffect(effect)
+            if !succeeded {
+                releaseFailed = true
+            }
+        }
+        if releaseFailed {
+            visionInputTerminalReleaseRequested = true
+            visionInputRuntimeTarget = .released(
+                scope: .teardown,
+                reason: .inputUnavailable
+            )
+            visionSystemInteractionDecisionState = nil
+            visionLocalNavigationRestoreReason = .inputUnavailable
+        }
+        visionInputReleasePending = false
+    }
+
+    @discardableResult
+    private func applyVisionInputReleaseEffect(
+        _ effect: VisionInputReleaseEffect
+    ) async -> Bool {
+        switch effect {
+        case .closeAdmission:
+            return true
+
+        case .cancelSystemInteractionObservers:
+            visionSystemInteractionDecisionState = nil
+            return true
+
+        case .removeControllerHandlers:
+            await quiesceTVGameControllerRuntime()
+            tvControllerRosterState = nil
+            tvControllerRoutedRosterState = nil
+            return true
+
+        case .cancelInputMonitors:
+            await visionInputDeliveryTask?.value
+            visionInputDeliveryTask = nil
+            return true
+
+        case .awaitHeldInputRelease:
+            do {
+                try await releaseRemoteInput()
+                return true
+            } catch {
+                return false
+            }
+
+        case .releaseSurfaceLease:
+            return true
+
+        case let .restoreLocalNavigation(reason):
+            visionLocalNavigationRestoreReason = reason
+            return true
+        }
+    }
+
+    private func refreshVisionGameControllerRuntime() {
+        guard expectedTVVisionPlatform == .visionOS else { return }
+        guard !visionInputReleasePending,
+              visionInputCaptureEnabled,
+              let snapshot = currentVisionWindowInputSnapshot,
+              snapshot.inputCapabilities.focusEligibility == .eligible else {
+#if os(visionOS)
+            if !visionInputReleasePending {
+                tvGameControllerRuntimeOwner?.stop()
+                tvGameControllerRuntimeOwner = nil
+            }
+#endif
+            if !visionInputReleasePending {
+                tvControllerRosterState = nil
+                tvControllerRoutedRosterState = nil
+                tvPendingControllerMotionSamples.removeAll()
+            }
             return
         }
 #if os(visionOS)
@@ -3102,7 +3475,7 @@ final class AppModel: ApplicationInputSink {
         _ feedback: RemoteInputFeedback
     ) {
         guard let platform = expectedTVVisionPlatform,
-              !isTVRemoteInputReleasePending,
+              !isTVVisionInputReleasePending,
               let roster = tvControllerRosterState,
               roster.controllers.allSatisfy({ $0.lease.platform == platform }),
               currentControllerInputSnapshot?.focusEligibility == .eligible else {
@@ -3276,6 +3649,21 @@ final class AppModel: ApplicationInputSink {
             .failure
         case .stop, .detached:
             .localStop
+        }
+    }
+
+    private func visionInputRestoreReason(
+        for inputReason: MacSessionInputTerminationReason
+    ) -> TVVisionFocusIneligibilityReason {
+        switch inputReason {
+        case .replacement:
+            .replacing
+        case .remoteTermination, .stop:
+            .stopped
+        case .detached:
+            .detached
+        case .sendFailure, .inputChannelFailure:
+            .inputUnavailable
         }
     }
 

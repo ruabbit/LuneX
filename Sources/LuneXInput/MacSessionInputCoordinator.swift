@@ -312,7 +312,8 @@ final class MacSessionInputCoordinator {
 
     func terminate(
         generation: MacSessionInputGeneration,
-        reason: MacSessionInputTerminationReason
+        reason: MacSessionInputTerminationReason,
+        requiresReleaseBarrier: Bool = true
     ) async -> MacSessionInputTerminationResult {
         guard let currentGeneration = self.generation else {
             return .inactiveGeneration
@@ -321,7 +322,10 @@ final class MacSessionInputCoordinator {
             return .staleGeneration
         }
 
-        beginTermination(reason: reason, requiresReleaseBarrier: true)
+        beginTermination(
+            reason: reason,
+            requiresReleaseBarrier: requiresReleaseBarrier
+        )
         let task = consumerTask
         signalContinuation?.yield(())
         await task?.value

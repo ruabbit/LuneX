@@ -437,6 +437,64 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         }
     }
 
+    func testExternallyReleasedTerminationClosesGenerationWithoutSecondBarrier()
+        async throws
+    {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let cleanup = CaptureCleanupRecorder()
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            releaseCapture: { cleanup.releaseCapture() }
+        )
+        let generation = await coordinator.activate()
+        let sample = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 9,
+                characters: "v",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+
+        let stop = Task {
+            await coordinator.terminate(
+                generation: generation,
+                reason: .stop,
+                requiresReleaseBarrier: false
+            )
+        }
+        await waitUntil {
+            let state = coordinator.snapshot()
+            return state.terminationReason == .stop
+                && state.queuedSampleCount == 0
+        }
+        XCTAssertFalse(coordinator.snapshot().acceptsInput)
+        XCTAssertFalse(coordinator.snapshot().hasPendingReleaseBarrier)
+        XCTAssertFalse(coordinator.snapshot().hasInFlightReleaseBarrier)
+        XCTAssertEqual(coordinator.snapshot().captureCleanupCount, 1)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+        XCTAssertEqual(sink.releaseCallCount, 0)
+
+        sink.resumeFirstSend()
+        let stopResult = await stop.value
+        let duplicateStopResult = await coordinator.terminate(
+            generation: generation,
+            reason: .remoteTermination,
+            requiresReleaseBarrier: false
+        )
+        XCTAssertEqual(stopResult, .completed)
+        XCTAssertEqual(duplicateStopResult, .inactiveGeneration)
+        XCTAssertNil(coordinator.snapshot().generation)
+        XCTAssertEqual(sink.events.count, 1)
+        XCTAssertEqual(sink.releaseCallCount, 0)
+        XCTAssertEqual(cleanup.releaseCount, 1)
+    }
+
     func testFocusBarrierBypassesFullOutstandingCapacity() async throws {
         let sink = ControlledApplicationInputSink(blockFirstSend: true)
         let coordinator = MacSessionInputCoordinator(

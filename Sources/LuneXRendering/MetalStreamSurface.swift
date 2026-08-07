@@ -4039,6 +4039,7 @@ final class TVVisionStreamMetalView: MTKView {
     }
 
     private let visionInputAdapter = VisionNativeInputAdapter()
+    private var visionInputCaptureEnabled = false
     private var visionHoverGestureRecognizer: UIHoverGestureRecognizer?
     private var visionScrollGestureRecognizer: UIPanGestureRecognizer?
     private var activeVisionKeyPresses:
@@ -4095,6 +4096,7 @@ final class TVVisionStreamMetalView: MTKView {
             @escaping RemotePressEventHandler = { _ in .local },
         reservedRemoteCommandHandler:
             @escaping ReservedRemoteCommandHandler = { _ in },
+        visionInputCaptureEnabled: Bool = false,
         visionSurfaceInputEventHandler:
             @escaping VisionSurfaceInputEventHandler = { _ in .local },
         visionSystemInteractionEventHandler:
@@ -4108,6 +4110,11 @@ final class TVVisionStreamMetalView: MTKView {
         self.displayHDREventHandler = displayHDREventHandler
         self.remotePressEventHandler = remotePressEventHandler
         self.reservedRemoteCommandHandler = reservedRemoteCommandHandler
+#if os(visionOS)
+        self.visionInputCaptureEnabled = visionInputCaptureEnabled
+#else
+        _ = visionInputCaptureEnabled
+#endif
         self.visionSurfaceInputEventHandler = visionSurfaceInputEventHandler
         self.visionSystemInteractionEventHandler =
             visionSystemInteractionEventHandler
@@ -4193,7 +4200,9 @@ final class TVVisionStreamMetalView: MTKView {
 #endif
         }
 #if os(visionOS)
-        installVisionInputRecognizers()
+        if visionInputCaptureEnabled {
+            installVisionInputRecognizers()
+        }
 #endif
         traitChangeRegistration = registerForTraitChanges([
             UITraitDisplayScale.self,
@@ -4425,6 +4434,16 @@ final class TVVisionStreamMetalView: MTKView {
         visionSurfaceInputEventHandler = handler
     }
 
+    func updateVisionInputCaptureEnabled(_ enabled: Bool) {
+#if os(visionOS)
+        guard enabled != visionInputCaptureEnabled else { return }
+        visionInputCaptureEnabled = enabled
+        refreshVisionFirstResponder()
+#else
+        _ = enabled
+#endif
+    }
+
     func updateVisionSystemInteractionEventHandler(
         _ handler: @escaping VisionSystemInteractionEventHandler
     ) {
@@ -4585,6 +4604,8 @@ final class TVVisionStreamMetalView: MTKView {
     }
 #elseif os(visionOS)
     private func installVisionInputRecognizers() {
+        guard visionHoverGestureRecognizer == nil,
+              visionScrollGestureRecognizer == nil else { return }
         let allowedTouchTypes = [
             NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)
         ]
@@ -4609,6 +4630,11 @@ final class TVVisionStreamMetalView: MTKView {
     }
 
     private func invalidateVisionInputHandlers() {
+        visionInputCaptureEnabled = false
+        suspendVisionInputCapture()
+    }
+
+    private func suspendVisionInputCapture() {
         activeVisionKeyPresses.removeAll()
         visionPointerButtons = []
         if isFirstResponder { resignFirstResponder() }
@@ -4623,15 +4649,17 @@ final class TVVisionStreamMetalView: MTKView {
     }
 
     private func refreshVisionFirstResponder() {
-        let shouldOwnInput = VisionFirstResponderPolicy.shouldOwnInput(
+        let shouldOwnInput = visionInputCaptureEnabled
+            && VisionFirstResponderPolicy.shouldOwnInput(
             isKeyWindow: window?.isKeyWindow == true,
             isUserInteractionEnabled: isUserInteractionEnabled,
             isVisible: !isHidden && alpha > 0
         )
         guard shouldOwnInput else {
-            if isFirstResponder { resignFirstResponder() }
+            suspendVisionInputCapture()
             return
         }
+        installVisionInputRecognizers()
         if !isFirstResponder { becomeFirstResponder() }
     }
 
@@ -5665,6 +5693,7 @@ struct MetalStreamSurface: UIViewRepresentable {
         MobileStreamMetalView.DisplayEDREventHandler = { _ in }
 #elseif os(tvOS) || os(visionOS)
     var platformPresentationOwner: TVVisionMetalPresentationOwner?
+    var visionInputCaptureEnabled = false
     var surfaceCallbackHandler:
         TVVisionStreamMetalView.SurfaceCallbackHandler = { _, _, _ in }
     var surfaceGenerationUpdateHandler:
@@ -5743,6 +5772,7 @@ struct MetalStreamSurface: UIViewRepresentable {
             displayHDREventHandler: displayHDREventHandler,
             remotePressEventHandler: remotePressEventHandler,
             reservedRemoteCommandHandler: reservedRemoteCommandHandler,
+            visionInputCaptureEnabled: visionInputCaptureEnabled,
             visionSurfaceInputEventHandler: visionSurfaceInputEventHandler,
             visionSystemInteractionEventHandler:
                 visionSystemInteractionEventHandler
@@ -5821,6 +5851,8 @@ struct MetalStreamSurface: UIViewRepresentable {
             .updateRemotePressEventHandler(remotePressEventHandler)
         (view as? TVVisionStreamMetalView)?
             .updateReservedRemoteCommandHandler(reservedRemoteCommandHandler)
+        (view as? TVVisionStreamMetalView)?
+            .updateVisionInputCaptureEnabled(visionInputCaptureEnabled)
         (view as? TVVisionStreamMetalView)?
             .updateVisionSurfaceInputEventHandler(
                 visionSurfaceInputEventHandler

@@ -716,6 +716,8 @@ private struct StreamWorkspaceView: View {
                 diagnosticLease: hdrPresentationDiagnosticLease,
                 platformPresentationOwner:
                     appModel.tvVisionMetalPresentationOwner,
+                visionInputCaptureEnabled:
+                    appModel.visionInputCaptureEnabled,
                 geometryBindingUpdateHandler: { update in
                     appModel.receiveTVVisionGeometryUpdate(update)
                 },

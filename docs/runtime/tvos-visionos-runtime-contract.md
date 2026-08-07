@@ -84,13 +84,13 @@ evidence only.
 | Concern | Current source owner | Current behavior | Missing stage 18 ownership |
 |---|---|---|---|
 | App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application | visionOS display/audio actual-state ownership remains later work |
-| Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; tvOS forwards only eligible supported remote presses, while visionOS routes public hardware-key and indirect-pointer events through current input admission | Complete reserved-interaction policy, ordered local restoration, and visionOS input-status UI remain tasks 5.4, 5.5, and 7.x |
-| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; tvOS owns remote/HDR/audio adapters, while visionOS owns key-window first responder plus indirect hover/scroll adapters | visionOS complete held-state release, display, and audio adapters remain tasks 5.5 and 6.x |
+| Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; tvOS forwards only eligible supported remote presses, while visionOS routes admitted hardware-key/indirect-pointer input, keeps system interaction local, and restores local ownership only after ordered release | Dedicated visionOS input-status and product UI remain 7.x |
+| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; visionOS capture closure clears active key/button state, resigns first responder, and removes indirect recognizers before idempotent current-generation recovery | visionOS display and audio adapters remain 6.x |
 | Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and matching tvOS display/audio components drive actual HDR and route state | visionOS HDR/audio presentation remains later work |
-| Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware absolute pointer input are admitted only for the current eligible surface/input generation | visionOS ordered held-state release remains task 5.5 |
+| Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware input are admitted only for the current eligible generation, while focus/scene/provider/replacement/stop loss drains accepted work and performs one ordered held-state release | Multiwindow/resize/capability/stale callback matrix remains task 5.6 |
 | Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator admits actual frames and tvOS display components by checked ownership, revisions, decoder/frame or display-source identity, and surface generation, with clear/rebind/replacement fences | explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
 | Audio | `SpatialAudioPlatformNotificationSource`, `AudioEngineRouteCapabilityReader`, `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, `NativeSessionMediaEnvironment`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph publishes actual route/capability, entitlement, spatial readback, interruption/media-reset recovery, and graph generation; tvOS normalizes and applies only current ownership, replays on presentation replacement, and clears audio on terminal state | visionOS intended-spatial application remains 6.4 |
-| Application state | `AppModel` | Current tvOS/visionOS presentation is admitted by media generation, platform, ownership, sequence, and highest surface ownership; visionOS derives typed keyboard/pointer/controller capability and rechecks ownership/generation/focus both before capture and before delivery | visionOS media actual state, ordered release, and complete product UI projection remain later tasks |
+| Application state | `AppModel` | Current tvOS/visionOS presentation is admitted by media generation, platform, ownership, sequence, and highest surface ownership; visionOS rechecks input admission before capture/delivery and serializes terminal-latched ordered release plus bounded local restoration | visionOS media actual state and complete product UI projection remain 6.x/7.x |
 
 The non-macOS UIKit surface configures the shared presenter, applies shared
 render scheduling, and stops the presenter on dismantle. iOS continues to use
@@ -180,7 +180,7 @@ game event merely because a SwiftUI focus item changed.
   responder APIs compile, but their presence is not evidence that gaze, hand,
   indirect, or system gestures should be translated into Moonlight input.
 
-### Missing actual runtime
+### Current actual runtime and remaining gaps
 
 - The actual view now owns a checked surface generation, actual window/scene,
   current-scene lifecycle tokens, visibility, scale, drawable, layout, focus,
@@ -189,14 +189,18 @@ game event merely because a SwiftUI focus item changed.
 - One surface semantic revision now applies normalized geometry to drawable,
   fit/fill rendering, and supported absolute/indirect input reference mapping.
   The media environment and `AppModel` now admit that scene under current
-  presentation ownership. Actual input/display/audio component effects remain
-  unconnected.
-- Supported controller, keyboard, pointer, and indirect-input paths have not
-  been individually inventoried and admitted under typed capability.
-- System gestures, recentering, capture, safety, volume, escape, gaze, and hand
-  interactions do not yet have explicit local/reserved or unavailable results.
-- Focus/scene/provider loss is not connected to the existing ordered held-state
-  release barrier and local UI restoration.
+  presentation ownership. Input effects are connected; display/audio component
+  effects remain unconnected.
+- Public controller, hardware-key, pointer, and indirect-input paths are
+  individually typed and admitted under current generation, focus, and surface
+  ownership. Direct touch, gaze, and hand interaction do not become mouse input.
+- Observable reserved hardware keys publish bounded current-surface local state;
+  recentering, safety, system-owned capture/volume, gaze, and hand interactions
+  retain no synthetic Moonlight event source.
+- Focus, scene, provider, replacement, and stop loss close capture, drain
+  accepted input/controller work, execute one held-state release, and restore
+  bounded local ownership. Terminal closure rejects late geometry until a new
+  media runtime begins.
 - There is no actual-state UI for windowed mode, supported input, or explicit
   immersive/stereoscopic/volumetric unavailability.
 
@@ -2095,6 +2099,89 @@ Final diff audit `/tmp/LuneX-18-5_4-final-audit.CbmtKb` classified the exact
 scope as four production, two test, and eight authority files, verified that
 the task checkbox is the only task-list replacement, and found no issue that
 blocks the task 5.4 commit.
+
+## Task 5.5 ordered visionOS input release and local restoration
+
+`AppModel` now owns one serial `VisionInputRuntimeTarget` reconciliation chain
+around the task 1.4 `VisionWindowInputOwnershipState`. Losing focus, scene
+activity, input readiness, or the current surface closes capture admission
+synchronously. Provider failure, remote termination, and stop additionally
+latch terminal closure until a new media runtime begins. The canonical release
+effects cancel bounded system state, quiesce controller handlers, wait for the
+keyboard/pointer FIFO plus controller roster/motion delivery chains, call the
+shared held-input release once, release the surface lease when required, and
+only then publish a fixed local restoration reason.
+
+The internal inconsistency fallback preserves that safety order instead of
+restoring UI immediately: it drains controller and keyboard/pointer work,
+attempts one held-input release, and restores bounded local state last. A held
+release provider failure terminal-latches `inputUnavailable`, keeps capture
+closed across late eligible geometry, and does not ask the shared coordinator
+to retry the host release.
+
+`RootView` passes current capture eligibility only to the visionOS Metal
+surface. Closing it clears active key presses and pointer buttons, resigns first
+responder, and removes hover/scroll recognizers. A later current, visible,
+interactive key window reinstalls the `.indirectPointer` recognizers and
+responder idempotently. No direct, gaze, hand, or system-owned interaction is
+synthesized.
+
+The shared `MacSessionInputCoordinator.terminate` keeps
+`requiresReleaseBarrier: true` as its default. After a tvOS/visionOS platform
+owner has already completed its ordered barrier, `AppModel` passes `false` so
+the coordinator still drains one in-flight send, drops its queued samples,
+closes admission/generation, and runs capture cleanup exactly once without a
+second sink release. macOS termination paths retain the default barrier.
+
+Fresh post-audit retained evidence is:
+
+- focused
+  `/tmp/LuneX-18-5_5-audit-focused.7SdLvE/Focused.xcresult`:
+  `42/42 passed / 0 skipped / 0 failed / 0 expected failure`;
+- related
+  `/tmp/LuneX-18-5_5-audit-related.hmvlgf/Related.xcresult`:
+  `189/189 passed / 0 skipped / 0 failed / 0 expected failure`;
+- normal `/tmp/LuneX-18-5_5-audit-normal.4HpgIt/Normal.xcresult`:
+  `1069 total / 1068 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain test;
+- fresh five-platform unsigned Debug
+  `/tmp/LuneX-18-5_5-audit-builds.ccZsdc`, including the fixed Vision Pro
+  destination: every build
+  succeeded with zero warning, error, or analyzer-warning diagnostics and one
+  AIR plus one metallib.
+
+Both real opt-ins were unset. Fixed UUIDs were build destinations only; no
+Simulator lifecycle operation was performed. These results prove deterministic
+contract/application behavior and unsigned SDK compilation, not Simulator
+runtime, signed installation, physical Vision Pro input/focus behavior, live
+Sunshine host receipt, HDR, spatial audio, latency, comfort, performance,
+power, or thermal behavior. Task 5.5 remains pre-mark until the repository gate
+passes; task 5.6 and 6.x-8.x remain pending.
+
+Fresh repository pre-gate
+`/tmp/LuneX-18-5_5-repository-pre-r3.GP0fhH` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `29/50` with task 5.5 next, three byte-stable project
+generations, exact thirteen-file scope, membership and ordered-release
+semantics, all retained post-audit test/build evidence, the exact Keychain
+skip, and privacy, clean-room, reference, dependency, opt-in, process, and
+diff boundaries. Task 5.5 is therefore marked complete; task 5.6 remains
+pending and no proof tier is promoted.
+
+The read-only post-mark final-state at
+`/tmp/LuneX-18-5_5-final-state.QP2qUU` confirmed OpenSpec strict `9/9`,
+`30/50 ready`, task 5.5 done, task 5.6 next, exact fourteen-file scope, and the
+single task 5.5 checkbox replacement. It retained all post-audit evidence,
+disabled both real opt-ins, found no test process, and confirmed unchanged
+reference, dependency, and diff boundaries without rerunning tests, builds,
+the generator, Keychain, or any Simulator operation.
+
+Post-record `/tmp/LuneX-18-5_5-post-record.xbp4eR` and final audit
+`/tmp/LuneX-18-5_5-final-audit.7fk9HU` confirmed the five authority indexes,
+exact fourteen-file classification as four production, two test, and eight
+authority files, the single task 5.5 checkbox replacement, typed release
+effect order, release-failure terminal closure, no second shared-coordinator
+barrier, local surface capture suspension/recovery, and task 5.6 remaining
+pending. No issue blocks the independent task 5.5 commit.
 
 ## Fixed simulator inventory
 
