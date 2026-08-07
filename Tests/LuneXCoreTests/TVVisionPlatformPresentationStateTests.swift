@@ -649,15 +649,21 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             .published
         )
         XCTAssertEqual(events.count, 1)
+        XCTAssertTrue(observer.replayCurrentEvent(surfaceGeneration: surface))
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(events[0], events[1])
+        XCTAssertFalse(observer.replayCurrentEvent(
+            surfaceGeneration: try generation(.surface, 8)
+        ))
         center.post(name: names.modeDidChange, object: replacementScreen)
-        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.count, 2)
 
         box.value = TVOSDisplayHDRCapabilityResolver.resolve(
             makeTVOSDisplayInputs(current: 3, potential: 4)
         )
         center.post(name: names.modeDidChange, object: firstScreen)
         RunLoop.main.run(until: Date().addingTimeInterval(0.01))
-        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(events.count, 3)
 
         XCTAssertEqual(
             observer.attach(
@@ -693,6 +699,7 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             observer.invalidate(surfaceGeneration: surface),
             .invalidated
         )
+        XCTAssertFalse(observer.replayCurrentEvent(surfaceGeneration: surface))
         let eventCount = events.count
         center.post(name: names.modeDidChange, object: replacementScreen)
         RunLoop.main.run(until: Date().addingTimeInterval(0.01))

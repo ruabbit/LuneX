@@ -112,6 +112,18 @@ replacement, remote termination, or stop.
 - **WHEN** reconnect replaces the tvOS media generation
 - **THEN** old scene, frame, route, and presentation callbacks SHALL NOT mutate the replacement
 
+#### Scenario: Same surface survives reconnect
+- **WHEN** the actual tvOS stream view remains attached with semantically unchanged geometry and display capability while the media generation is replaced
+- **THEN** LuneX SHALL replay current geometry followed by current display into the replacement ownership without advancing either semantic revision or creating another surface owner, display observer, decoder, or audio graph
+
+#### Scenario: Current values rebuild replacement presentation
+- **WHEN** current geometry and display values are replayed for the replacement media generation
+- **THEN** current-generation application SHALL proceed as activation, scene, input eligibility, and display while audio remains owned by the single native audio publisher
+
+#### Scenario: Remote termination races local stop
+- **WHEN** remote termination and local environment stop concurrently target the same media generation
+- **THEN** LuneX SHALL preserve one terminal reason and snapshot, execute coordinator teardown once, release each owned video, audio, and input resource once, and keep late callbacks inert
+
 ### Requirement: tvOS media UI SHALL show actual state accessibly
 Stream controls and Settings SHALL expose actual scene, render, HDR fallback,
 audio route/spatial state, controller eligibility, and bounded failures using

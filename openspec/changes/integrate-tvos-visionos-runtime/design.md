@@ -180,7 +180,19 @@ snapshot when current tvOS presentation ownership activates or is replaced,
 then applies later events only to that ownership. Invalid runtime, revision
 exhaustion, or audio action failure closes the current coordinator; failed or
 stopped snapshots contain no audio route. visionOS application remains task
-6.4, and task 4.5 still owns cross-component reconnect and teardown replay.
+6.4.
+
+Task 4.5 keeps the existing surface owner, display observer, decoder, audio
+graph, input owner, coordinator, and resource teardown. When the same actual
+stream view survives a media-generation reconnect, it explicitly replays the
+current normalized geometry and then the current tvOS display event without
+advancing either semantic revision. `AppModel` admits those values only into
+the new current media ownership, preserving the application order `activate`,
+scene, input, then display; the latest audio route continues to replay through
+the single native media environment and audio publisher. Failure, replacement,
+remote termination, local stop, and concurrent terminal requests converge on
+the coordinator's one terminal snapshot and the environment's one five-resource
+teardown. Old-generation callbacks, state, frames, and completions remain inert.
 
 ### Integrate through one platform presentation coordinator
 
@@ -208,9 +220,9 @@ the public tvOS layer/display capability and transactional render contract;
 task 4.3 connects actual screen mode/brightness observation, checked semantic
 display revisions, current-source identity admission, render configuration,
 and privacy-bounded direct-EDR or typed fallback state through the coordinator
-and AppModel. The same-view geometry replay needed after a media-generation
-reconnect remains part of task 4.5's shared generation coordination rather than
-a display-specific bypass.
+and AppModel. Task 4.5 completes same-view reconnect through current-value
+geometry followed by display replay at unchanged semantic revisions; it does
+not create a display-specific bypass or a second platform runtime.
 
 ### Preserve proof tiers and simulator discipline
 

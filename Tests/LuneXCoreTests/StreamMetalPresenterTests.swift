@@ -660,6 +660,17 @@ final class StreamMetalPresenterTests: XCTestCase {
             .unchanged
         )
         XCTAssertEqual(updates.count, 1)
+        XCTAssertTrue(owner.replayCurrentUpdate(
+            surface: surface,
+            surfaceGeneration: generation
+        ))
+        XCTAssertEqual(updates.count, 2)
+        XCTAssertEqual(updates[0], updates[1])
+        XCTAssertEqual(updates[1].revision.rawValue, 1)
+        XCTAssertFalse(owner.replayCurrentUpdate(
+            surface: surface,
+            surfaceGeneration: try tvVisionSurfaceGeneration(260)
+        ))
 
         XCTAssertEqual(
             owner.updateRenderInputs(
@@ -679,7 +690,7 @@ final class StreamMetalPresenterTests: XCTestCase {
             ),
             .unchanged
         )
-        XCTAssertEqual(updates.count, 2)
+        XCTAssertEqual(updates.count, 3)
         let binding = try XCTUnwrap(updates.last?.binding)
         XCTAssertEqual(binding.revision.rawValue, 2)
         XCTAssertEqual(binding.coordinateSnapshot.mode, .fill)

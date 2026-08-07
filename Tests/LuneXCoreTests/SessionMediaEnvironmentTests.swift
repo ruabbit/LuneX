@@ -657,6 +657,93 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(values.filter { $0 == "audio.processor.stop" }.count, 1)
     }
 
+    func testTVVisionRemoteTerminationAndStopShareOneTerminalTeardown()
+        async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let source = StreamVideoPresentationSource()
+        let actionClient = SuspendingTVVisionPresentationActionClient(
+            suspending: .teardown
+        )
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: actionClient
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+        _ = try await iterator.next()
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 1)
+
+        let remoteTermination = Task {
+            try await environment.applyTVVisionPlatformPresentation(
+                SessionTVVisionPlatformPresentationApplication(
+                    ownership: ownership,
+                    action: .stop(.remoteTermination)
+                )
+            )
+        }
+        await actionClient.waitUntilSuspended()
+        let stop = Task { await environment.stop(sessionID: sessionID) }
+        for _ in 0..<20 { await Task.yield() }
+
+        await actionClient.resume()
+        try await remoteTermination.value
+        let optionalReport = await stop.value
+        let report = try XCTUnwrap(optionalReport)
+        XCTAssertTrue(report.isClean)
+        XCTAssertEqual(report.stoppedResourceCount, 5)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+
+        let optionalTerminal = await coordinator.snapshot()
+        let terminal = try XCTUnwrap(optionalTerminal)
+        XCTAssertEqual(terminal.phase, .stopped(.remoteTermination))
+        XCTAssertNil(terminal.presentation)
+        XCTAssertNil(terminal.display)
+        XCTAssertNil(terminal.audioRoute)
+        XCTAssertFalse(terminal.video.isPresented)
+        XCTAssertEqual(terminal.teardownCount, 1)
+        let effects = await actionClient.effectKinds()
+        XCTAssertEqual(effects.filter { $0 == .teardown }.count, 1)
+        let values = await calls.values()
+        XCTAssertEqual(values.filter { $0 == "video.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "input.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "video.processor.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.processor.stop" }.count, 1)
+
+        guard case let .tvVisionPlatformPresentation(terminalEvent)? =
+                try await iterator.next() else {
+            return XCTFail("Expected remote terminal presentation before stream end.")
+        }
+        XCTAssertEqual(terminalEvent.snapshot, terminal)
+        let ended = try await iterator.next()
+        XCTAssertNil(ended)
+    }
+
     func testDuplicateMobileRuntimeApplicationAwaitsOnePendingEffect()
         async throws {
         let calls = MediaEnvironmentCallRecorder()

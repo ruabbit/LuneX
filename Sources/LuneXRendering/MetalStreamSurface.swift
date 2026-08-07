@@ -664,6 +664,19 @@ final class TVVisionUIKitStreamGeometryBindingOwner<
         return resolveActiveBinding()
     }
 
+    @discardableResult
+    func replayCurrentUpdate(
+        surface candidate: Surface,
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> Bool {
+        guard candidateGeneration == surfaceGeneration,
+              !isInvalidated,
+              surface === candidate,
+              let currentUpdate else { return false }
+        handler?(currentUpdate)
+        return true
+    }
+
     func absoluteInputMapping(
         localPoint: RemotePoint
     ) -> TVVisionStreamAbsoluteInputMapping? {
@@ -4046,12 +4059,29 @@ final class TVVisionStreamMetalView: MTKView {
     ) {
         geometryBindingUpdateHandler = handler
         guard let geometryBindingOwner else { return }
-        geometryBindingOwner.updateRenderInputs(
+        let outcome = geometryBindingOwner.updateRenderInputs(
             sourceSize: sourceSize,
             mode: mode,
             surface: self,
             surfaceGeneration: geometryBindingOwner.surfaceGeneration
         )
+        switch outcome {
+        case .unchanged:
+            _ = geometryBindingOwner.replayCurrentUpdate(
+                surface: self,
+                surfaceGeneration: geometryBindingOwner.surfaceGeneration
+            )
+        case .published:
+            break
+        case .closed, .staleSurfaceGeneration, .staleSurface,
+             .revisionExhausted, .invalidated, .alreadyInvalidated:
+            return
+        }
+#if os(tvOS)
+        _ = displayHDRObserver?.replayCurrentEvent(
+            surfaceGeneration: geometryBindingOwner.surfaceGeneration
+        )
+#endif
     }
 
     func absoluteInputMapping(

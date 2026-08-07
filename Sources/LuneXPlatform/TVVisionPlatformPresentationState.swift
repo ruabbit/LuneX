@@ -1131,6 +1131,25 @@ final class TVOSDisplayHDRObserver<Screen: AnyObject, Layer: AnyObject> {
     }
 
     @discardableResult
+    func replayCurrentEvent(
+        surfaceGeneration candidateSurfaceGeneration: TVVisionGeneration
+    ) -> Bool {
+        guard candidateSurfaceGeneration == surfaceGeneration,
+              !isInvalidated,
+              let handler else { return false }
+        if publisher.isRevisionExhausted {
+            handler(.revisionExhausted(surfaceGeneration: surfaceGeneration))
+            return true
+        }
+        guard let snapshot = publisher.snapshot else { return false }
+        handler(.snapshot(
+            surfaceGeneration: surfaceGeneration,
+            snapshot: snapshot
+        ))
+        return true
+    }
+
+    @discardableResult
     func detach(
         surfaceGeneration candidateSurfaceGeneration: TVVisionGeneration
     ) -> TVOSDisplayHDRObserverOutcome {

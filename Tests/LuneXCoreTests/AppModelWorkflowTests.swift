@@ -2128,30 +2128,36 @@ final class AppModelWorkflowTests: XCTestCase {
         model.setTVStreamOverlayVisible(false)
         XCTAssertFalse(model.tvStreamOverlayVisible)
 
-        model.receiveTVVisionGeometryUpdate(
-            try makeTVVisionClosedGeometryUpdate(
-                platform: .tvOS,
-                surfaceGeneration: 1,
-                revision: 1
-            )
+        let currentGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 1,
+            revision: 1
         )
-        await waitUntil {
-            mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 2
-        }
-        let geometryApplications = mediaEnvironment
-            .currentTVVisionPlatformPresentationApplications()
-        XCTAssertEqual(geometryApplications[0].action, .activate)
-        guard case .scene = geometryApplications[1].action else {
-            return XCTFail("Expected geometry to follow activation.")
-        }
-
         let currentDisplay = try makeTVOSDisplaySnapshot(
             revision: 1,
             displayGeneration: 1,
             current: 2,
             potential: 4
         )
+        model.receiveTVVisionGeometryUpdate(currentGeometry)
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: currentGeometry.surfaceGeneration,
+            snapshot: currentDisplay
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        let geometryApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(geometryApplications[0].action, .activate)
+        guard case .scene = geometryApplications[1].action,
+              case .input = geometryApplications[2].action,
+              case let .display(appliedDisplay) = geometryApplications[3].action else {
+            return XCTFail("Expected geometry, input, then display after activation.")
+        }
+        XCTAssertEqual(appliedDisplay, currentDisplay)
+
         let currentAudio = try makeTVOSAudioRouteSnapshot(
             revision: 1,
             graphGeneration: 1,
@@ -2243,6 +2249,34 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil { model.session.isStreaming }
         model.setTVStreamOverlayVisible(false)
         XCTAssertFalse(model.tvStreamOverlayVisible)
+
+        model.receiveTVVisionGeometryUpdate(currentGeometry)
+        model.receiveTVOSDisplayHDREvent(.snapshot(
+            surfaceGeneration: currentGeometry.surfaceGeneration,
+            snapshot: currentDisplay
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count
+                == reconnectApplications.count + 4
+        }
+        let replayApplications = Array(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications()
+                .suffix(4)
+        )
+        XCTAssertEqual(
+            replayApplications.map(\.ownership.mediaGeneration),
+            [2, 2, 2, 2]
+        )
+        XCTAssertEqual(replayApplications[0].action, .activate)
+        guard case let .scene(replayedGeometry) = replayApplications[1].action,
+              case .input = replayApplications[2].action,
+              case let .display(replayedDisplay) = replayApplications[3].action else {
+            return XCTFail("Expected reconnect replay to restore scene, input, and display.")
+        }
+        XCTAssertEqual(replayedGeometry, currentGeometry)
+        XCTAssertEqual(replayedDisplay, currentDisplay)
 
         let replacementAudio = try makeTVOSAudioRouteSnapshot(
             revision: 1,

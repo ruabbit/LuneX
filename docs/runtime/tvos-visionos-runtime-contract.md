@@ -1625,6 +1625,87 @@ motion, live Sunshine, latency, performance, power, or thermal behavior.
 visionOS intended-spatial application remains task 6.4. Same-view reconnect
 replay and one shared video/audio/input teardown remain task 4.5.
 
+## Task 4.5 shared generation reconnect and teardown
+
+Task 4.5 closes the same-view reconnect gap without adding a parallel runtime.
+`TVVisionUIKitStreamGeometryBindingOwner.replayCurrentUpdate` requires the
+exact current surface identity and surface generation, rejects invalidated
+ownership, republishes only its current normalized update, and does not advance
+the geometry semantic revision. `TVOSDisplayHDRObserver.replayCurrentEvent`
+requires the same current surface generation, rejects invalidation, republishes
+the current display snapshot or the already-exhausted typed terminal event, and
+does not advance the display semantic revision.
+
+When `TVVisionStreamMetalView` receives a new application binding for unchanged
+render inputs, it replays geometry first and then the tvOS display event. A
+newly published geometry update already invokes the current handler and is not
+duplicated. Closed, stale, exhausted, or invalidated geometry stops the replay
+before display. This preserves one surface owner and one display observer and
+lets `AppModel`'s current session/media/ownership admission rebuild replacement
+application in the order `activate`, scene, input, display. The current audio
+route remains independently replayed by the existing single native media
+environment and bounded audio publisher; task 4.5 adds no decoder, frame queue,
+audio observer, or audio graph.
+
+The shared terminal path remains coordinator- and environment-owned. A remote
+termination racing local environment stop preserves `.remoteTermination`,
+publishes one terminal snapshot, runs one coordinator teardown effect, clears
+presentation/display/audio route and video presentation, cancels the decoded
+frame subscription, and stops each video receiver, audio receiver, input
+receiver, video processor, and audio processor exactly once. Provider failure,
+local/concurrent stop, replacement, and late frame/callback coverage continue
+to use that same bounded terminal and resource ownership.
+
+Final offline evidence is:
+
+- current-value replay `/tmp/LuneX-18-4_5-minimal.Jo7NGA`: `2/2 passed`;
+- AppModel reconnect `/tmp/LuneX-18-4_5-reconnect.fzySX5`: `1/1 passed`;
+- remote/local terminal race `/tmp/LuneX-18-4_5-remote-r2.MSafes`: `1/1
+  passed`;
+- focused `/tmp/LuneX-18-4_5-focused-final.EhLafe`: `248/248 passed / 0
+  skipped / 0 failed / 0 expected failure`, with zero structured diagnostics;
+- related `/tmp/LuneX-18-4_5-related-final.C3tjgy`: `474/474 passed / 0
+  skipped / 0 failed / 0 expected failure`, with zero structured diagnostics;
+- normal `/tmp/LuneX-18-4_5-normal-final.1mF6gc`: `1055 total / 1054 passed /
+  1 exact real-Keychain opt-in skip / 0 failed / 0 expected failure`, with zero
+  structured diagnostics;
+- fixed Apple TV direct `/tmp/LuneX-18-4_5-tvos-final.UNpi51`: unsigned Debug
+  success, zero structured diagnostics, and one AIR/metallib pair; and
+- unsigned five-platform Debug `/tmp/LuneX-18-4_5-builds-final.13Nwur`:
+  macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro all
+  succeeded with zero structured diagnostics and one AIR/metallib pair each.
+
+Repository pre-gate `/tmp/LuneX-18-4_5-repository-pre.4s9qBy` passed fixture
+self/tree validation, OpenSpec strict `9/9`, pre-mark `23/50 next 4.5`, three
+stable generator hashes, exact 13-file scope, source/test membership,
+current-value replay/order/generation/shared-teardown semantics, all retained
+test/build evidence, and privacy, clean-room, reference, dependency, opt-in,
+process, and diff boundaries. Task 4.5 is therefore marked complete; OpenSpec
+is `24/50 ready`, with task 4.6 next.
+
+The read-only post-mark final-state at
+`/tmp/LuneX-18-4_5-final-state.5ZgeJt` confirmed OpenSpec strict `9/9`,
+`24/50 next 4.6`, task 4.5 done, the stable project hash, exact 14-file scope,
+final authority records, all retained evidence, and repository boundaries
+without rerunning tests, builds, the generator, or any simulator operation.
+
+Post-record `/tmp/LuneX-18-4_5-post-record.5B9rw1` and final audit
+`/tmp/LuneX-18-4_5-final-audit.ASK927` confirmed the 14-file authority scope,
+the two production and four test files, replay identity/generation/revision
+ordering, replacement terminal/resource teardown, no second runtime, no new
+optional error suppression or privacy sink, retained evidence, and proof
+boundaries. No additional implementation issue was found.
+
+Real-Keychain and live-host opt-ins remained unset, so normal tests continued
+to use file or in-memory persistence. Fixed simulator UUIDs were destinations
+only; task 4.5 did not query, create, clone, boot, install, launch, run, shut
+down, or delete a simulator. These tests and unsigned builds prove deterministic
+replay, generation admission, terminal/resource idempotence, and SDK
+compatibility. They do not prove signed installation, Simulator runtime,
+physical Apple TV input/HDR/audio/head tracking, live Sunshine, latency,
+performance, power, or thermal behavior. Task 4.6 remains the consolidated
+tvOS media regression matrix, and visionOS work remains in tasks 5.x and 6.x.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the
