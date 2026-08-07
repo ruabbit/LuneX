@@ -3046,3 +3046,15 @@
 - post-mark `/tmp/LuneX-18-8_1-final-state.uybdfA`确认OpenSpec精确为`43/50 next 8.2`、最终7个authority文件与唯一8.1 checkbox，未重复normal/generator或操作Simulator；8.2五平台Debug/Release仍没有执行。
 - final audit `/tmp/LuneX-18-8_1-final-audit.fk0oho`确认8.1最终只有authority/task记录，无production/test变更，normal/pre/post证据与唯一checkbox完整；project/reference/dependency和proof tier没有漂移。
 - final-record `/tmp/LuneX-18-8_1-final-record.w4fV2U`再次确认8.1可独立提交；8.2五平台Debug/Release、8.3 repository/analyzer、8.4 sanitizer/resource及8.5-8.8 runtime/physical/final sync均未由此完成。
+
+## 2026-08-08 阶段 18 任务 8.2 五平台构建矩阵
+
+- 8.1已以`97e932a`提交推送并fetch对账clean；8.2必须对当前提交运行十项fresh isolated build，不能把7.5的五平台Debug矩阵扩称为Debug/Release完成证据。
+- 目标为macOS与fixed iPhone、iPad、Apple TV、Vision Pro各Debug/Release；全部使用`CODE_SIGNING_ALLOWED=NO`和Swift/Clang/Metal warnings-as-errors，每项独立DerivedData与xcresult，固定UUID只作destination且不执行Simulator lifecycle。
+- 成功条件是每项结构化status succeeded、warning/error/analyzer warning均为0，并各有恰好`1 AIR/1 metallib`；这仍是unsigned compile proof，不证明安装、启动、Simulator runtime、签名或物理设备输出。
+- fresh `/tmp/LuneX-18-8_2-builds.Dvqg9S`十项全部满足条件：macOS、iPhone、iPad、tvOS、visionOS Debug/Release均`succeeded/0/0/0/1 AIR/1 metallib`，每项使用独立DerivedData/log/xcresult。
+- 构建顺序执行，固定UUID仅出现在`xcodebuild -destination`，未调用`simctl`、安装或启动设备；当前矩阵严格是unsigned compile/Metal proof。authority保持8.3 repository/analyzer、8.4 sanitizer/resource、8.5/8.6 Simulator及8.7 physical/live分层，8.2在repository gate前未勾选。
+- repository pre-gate `/tmp/LuneX-18-8_2-repository-pre.GRQL3w`确认strict `9/9`、稳定project、精确6个authority文件、十项structured build和全部Metal/仓库/proof边界；不存在阻止只勾选8.2的离线问题，8.3-8.8未提前满足。
+- post-mark `/tmp/LuneX-18-8_2-final-state.tVJVek`确认OpenSpec精确为`44/50 next 8.3`、最终7个authority文件与唯一8.2 checkbox，未重复十项build/generator或操作Simulator；8.3 repository/analyzer gates仍未执行。
+- final audit `/tmp/LuneX-18-8_2-final-audit.WMG1HZ`确认8.2最终为authority-only、唯一checkbox，十项structured summary完整且project/reference/dependency/proof tier无漂移。
+- final-record `/tmp/LuneX-18-8_2-final-record.hv5iVY`再次确认8.2可独立提交；十项unsigned结果不替代8.3-8.8的analyzer/sanitizer/Simulator/signed/physical/live/final同步证明。

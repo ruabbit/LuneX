@@ -642,6 +642,17 @@ normal deterministic suite and build diagnostics only; it does not prove real
 Keychain access, live host behavior, Simulator runtime, signing, hardware, or
 performance and does not complete tasks 8.2-8.8.
 
+Task 8.2 builds macOS and the fixed iPhone, iPad, Apple TV, and Vision Pro
+destinations in both Debug and Release. Each of the ten actions has isolated
+DerivedData and result-bundle ownership, disables code signing, and treats
+Swift, Clang, and Metal warnings as errors. Fixed simulator UUIDs are only build
+destinations; this task does not inventory, boot, install, launch, or otherwise
+operate Simulator lifecycle. Success requires structured zero-warning,
+zero-error, zero-analyzer-warning results and the expected Metal AIR/metallib
+artifacts for every action. These are unsigned compilation results and do not
+prove signed artifacts, app runtime, physical output/input, live Sunshine, or
+performance; tasks 8.3-8.8 remain separate.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->

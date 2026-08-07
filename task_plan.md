@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `43/50 ready`；8.1 fresh complete normal与repository pre-gate已通过，下一项8.2五平台Debug/Release warnings-as-errors build矩阵 |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `44/50 ready`；8.2十项五平台Debug/Release warnings-as-errors矩阵与repository pre-gate已通过，下一项8.3 strict/fixture/generator/membership/license/config/privacy/API/analyzer/repository gates |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -1614,3 +1614,10 @@
 - **post-mark final-state：** `/tmp/LuneX-18-8_1-final-state.uybdfA`只读通过strict `9/9`、`43/50 next 8.2`、精确7个authority文件、唯一8.1 checkbox、稳定project/normal/pre-gate、disabled opt-ins与无残留构建进程；未重复generator/normal或操作Simulator。下一步final audit/record。
 - **final audit：** `/tmp/LuneX-18-8_1-final-audit.fk0oho`通过7个authority文件/零production-test diff、唯一8.1 checkbox、strict `9/9`、`43/50 next 8.2`、normal/pre/post证据、project/reference/dependency、disabled opt-ins/process及proof边界；下一步final-record。
 - **final-record：** `/tmp/LuneX-18-8_1-final-record.w4fV2U`通过基线remote parity、strict `9/9`、`43/50 next 8.2`、7个authority文件、唯一8.1 checkbox、fresh normal/pre/post/audit、稳定project/reference/dependency、disabled opt-ins和proof boundary；8.1进入独立提交推送。
+- **提交与8.2启动：** 8.1已以`97e932a Verify complete normal test suite`提交推送，fetch确认`HEAD == origin/main == 97e932af8857022f9df653536dd5b5981445e1f9`且工作树clean；OpenSpec为`43/50 next 8.2`。8.2顺序执行macOS、fixed iPhone/iPad/Apple TV/Vision Pro的Debug/Release十项isolated unsigned warnings-as-errors build，固定UUID只作destination，不查询或操作Simulator lifecycle。
+- **fresh十项矩阵：** `/tmp/LuneX-18-8_2-builds.Dvqg9S`中macOS、fixed iPhone/iPad/Apple TV/Vision Pro的Debug/Release全部结构化为`succeeded / 0 warning / 0 error / 0 analyzer warning`并各有`1 AIR/1 metallib`；每项独立DerivedData/log/xcresult，固定UUID只作destination，未执行Simulator lifecycle。
+- **authority同步：** design、阶段18runtime contract、completion roadmap与三份planning已记录十项isolated warnings-as-errors构建、当前commit、Metal工件和unsigned/proof边界；OpenSpec仍保持pre-mark`43/50 next 8.2`，下一步repository pre-gate。
+- **repository pre-gate：** `/tmp/LuneX-18-8_2-repository-pre.GRQL3w`完整通过fixtures、strict `9/9`、pre-mark`43/50 next 8.2`、三次稳定generator、精确6个authority文件、十项`succeeded/0/0/0`、`10 AIR/10 metallib`、disabled opt-ins/process及全部仓库/proof边界；现只勾选8.2，8.3+保持pending。
+- **post-mark final-state：** `/tmp/LuneX-18-8_2-final-state.tVJVek`只读通过strict `9/9`、`44/50 next 8.3`、7个authority文件、唯一8.2 checkbox、稳定project/build/pre-gate、disabled opt-ins与无残留构建进程；未重复generator/build或操作Simulator。下一步final audit/record。
+- **final audit：** `/tmp/LuneX-18-8_2-final-audit.WMG1HZ`通过7个authority文件/零production-test、唯一8.2 checkbox、strict `9/9`、`44/50 next 8.3`、十项build/pre/post、稳定project/reference/dependency、disabled opt-ins/process及proof边界；下一步final-record。
+- **final-record：** `/tmp/LuneX-18-8_2-final-record.hv5iVY`通过基线remote parity、strict `9/9`、`44/50 next 8.3`、7个authority文件、唯一8.2 checkbox、十项build/pre/post/audit、稳定project/reference/dependency、disabled opt-ins与proof boundary；8.2进入独立提交推送。

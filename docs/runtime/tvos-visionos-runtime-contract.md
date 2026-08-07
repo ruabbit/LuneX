@@ -3108,6 +3108,55 @@ authority-only scope, the only 8.1 checkbox change, fresh normal/pre/post/audit
 evidence, stable project/reference/dependency state, disabled opt-ins, and proof
 boundaries.
 
+## Task 8.2 five-platform Debug and Release builds
+
+Task 8.2 runs ten fresh isolated unsigned build actions from current commit
+`97e932af8857022f9df653536dd5b5981445e1f9`: macOS and the fixed iPhone, iPad,
+Apple TV, and Vision Pro destinations in both Debug and Release. Each action
+uses its own DerivedData, log, and `.xcresult`, sets
+`CODE_SIGNING_ALLOWED=NO`, and enables Swift, Clang, and Metal
+warnings-as-errors. The fixed UUIDs are passed only to `xcodebuild
+-destination`; no Simulator inventory or lifecycle command is executed.
+
+Fresh `/tmp/LuneX-18-8_2-builds.Dvqg9S` contains all ten results. Structured
+verification reports the following for every platform/configuration pair:
+`succeeded / 0 warnings / 0 errors / 0 analyzer warnings / 1 AIR / 1
+metallib`. This includes macOS, iPhone, iPad, tvOS, and visionOS Debug and
+Release without reusing task 7.5's Debug-only evidence.
+
+The matrix proves current unsigned SDK compilation, warnings-as-errors, and
+Metal artifact production. It does not prove code signing, provisioning,
+installation, launch, Simulator runtime, physical television/headset HDR,
+audible spatial audio or head tracking, remote/controller/window input, live
+Sunshine, latency, comfort, performance, power, or thermal behavior. Tasks
+8.3-8.8 remain responsible for those separate gates.
+
+Repository pre-gate `/tmp/LuneX-18-8_2-repository-pre.GRQL3w` passed fixture
+self/tree, OpenSpec strict `9/9`, pre-mark `43/50` with task 8.2 next, three
+identical generator hashes, exact six-file authority scope, all ten structured
+build results, ten AIR and ten metallib artifacts, disabled opt-ins, no residual
+process, and repository/proof-tier gates. Only task 8.2 was then marked
+complete; tasks 8.3-8.8 remain pending.
+
+Post-mark final-state `/tmp/LuneX-18-8_2-final-state.tVJVek` confirmed OpenSpec
+strict `9/9`, exact `44/50` with task 8.3 next, exact seven-file authority
+scope, the single task 8.2 checkbox replacement, stable project/build/pre-gate
+evidence, disabled opt-ins, no residual build process, and unchanged proof
+boundaries. It did not rerun the generator, builds, or any Simulator lifecycle
+action.
+
+Final audit `/tmp/LuneX-18-8_2-final-audit.WMG1HZ` confirmed the seven-file
+authority-only scope, no production or test diff, the single task 8.2 checkbox
+replacement, OpenSpec `44/50` with task 8.3 next, the complete ten-row build
+summary and pre/post evidence, stable project/reference/dependency state,
+disabled opt-ins, and unchanged proof boundaries.
+
+Final record `/tmp/LuneX-18-8_2-final-record.hv5iVY` reconfirmed baseline remote
+parity, OpenSpec strict `9/9`, `44/50` with task 8.3 next, the authority-only
+scope, the only 8.2 checkbox change, all ten builds and pre/post/audit evidence,
+stable project/reference/dependency state, disabled opt-ins, and proof
+boundaries.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the
