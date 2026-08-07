@@ -2185,6 +2185,13 @@ final class AppModelWorkflowTests: XCTestCase {
             model.tvVisionPlatformPresentationSnapshot,
             current.snapshot.presentation
         )
+        XCTAssertEqual(model.renderState.displaySnapshot?.headroom.current, 2)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.spatialPresentationMode,
+            .headTracked
+        )
 
         let regressive = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
@@ -2230,6 +2237,8 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil { mediaEnvironment.hasBlockedStop() }
         XCTAssertNil(model.tvVisionPlatformPresentationState)
         XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
         XCTAssertTrue(model.tvStreamOverlayVisible)
         let reconnectApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
@@ -2311,12 +2320,26 @@ final class AppModelWorkflowTests: XCTestCase {
             model.tvVisionPlatformPresentationSnapshot,
             replacement.snapshot.presentation
         )
+        XCTAssertEqual(model.renderState.displaySnapshot?.headroom.current, 2)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.routeGeneration.rawValue,
+            2
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.spatialPresentationMode,
+            .fixedSpatial
+        )
 
         provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
         provider.finish(sessionID: record.sessionID)
         await launchTask.value
         XCTAssertNil(model.tvVisionPlatformPresentationState)
         XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
         XCTAssertTrue(model.tvStreamOverlayVisible)
         let terminatedApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()

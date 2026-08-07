@@ -194,6 +194,19 @@ remote termination, local stop, and concurrent terminal requests converge on
 the coordinator's one terminal snapshot and the environment's one five-resource
 teardown. Old-generation callbacks, state, frames, and completions remain inert.
 
+Task 4.6 verifies that completed tvOS media behavior as one connected sequence,
+not as an inventory of isolated unit cases. One coordinator regression starts
+with invalid current headroom and typed HDR-to-SDR output, presents a current
+frame, resubmits it after geometry change, applies a direct-EDR display change,
+rejects an old decoder frame, then carries audio interruption, media-services
+loss, graph replacement on reset, and current-graph recovery into one clean
+local stop. The terminal snapshot clears presentation, display, audio route,
+and video state and runs the coordinator teardown effect once. Existing
+`AppModel` workflow coverage observes current direct headroom and spatial mode,
+replacement graph and route state, and reconnect or remote-termination
+clearing through public actual state. This task adds no production bypass or
+parallel runtime.
+
 ### Integrate through one platform presentation coordinator
 
 `NativeSessionMediaEnvironment` owns one platform presentation coordinator per

@@ -124,6 +124,10 @@ replacement, remote termination, or stop.
 - **WHEN** remote termination and local environment stop concurrently target the same media generation
 - **THEN** LuneX SHALL preserve one terminal reason and snapshot, execute coordinator teardown once, release each owned video, audio, and input resource once, and keep late callbacks inert
 
+#### Scenario: Connected media regression sequence completes
+- **WHEN** one current tvOS presentation moves from HDR-to-SDR fallback through geometry and direct-display changes, rejects an old decoder frame, processes interruption, media-service loss, graph reset, and recovery, and then stops locally
+- **THEN** LuneX SHALL retain only current display, frame, and graph ownership, expose matching actual AppModel state, clear all media presentation state on stop, and execute the coordinator teardown effect once
+
 ### Requirement: tvOS media UI SHALL show actual state accessibly
 Stream controls and Settings SHALL expose actual scene, render, HDR fallback,
 audio route/spatial state, controller eligibility, and bounded failures using

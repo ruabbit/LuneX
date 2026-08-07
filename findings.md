@@ -2759,3 +2759,19 @@
 - 4.5 repository pre-gate `/tmp/LuneX-18-4_5-repository-pre.4s9qBy`按当前OpenSpec/xcresult JSON schema一次完整通过，包含pre-mark `23/50 next 4.5`、stable generator、13文件scope、replay/order/generation/teardown静态合同及全部保留行为证据。勾选后apply为`24/50 next 4.6`；这仍是offline/unsigned证明，不提升物理或live层级。
 - 4.5 post-mark final-state `/tmp/LuneX-18-4_5-final-state.5ZgeJt`只读确认`24/50 next 4.6`、stable project hash、14文件scope、权威记录与全部保留证据一致；无需也不应为记录更新重复test/build/generator或Simulator操作。
 - 4.5 post-record `/tmp/LuneX-18-4_5-post-record.5B9rw1`与final audit `/tmp/LuneX-18-4_5-final-audit.ASK927`确认生产变化只在既有geometry/display owner、测试变化只在四个既有suite；没有第二runtime、裸`try?`、隐私sink、范围外visionOS实现或被删除的证明边界，未发现需阻止提交的问题。
+- 4.5提交`8295ae7`已推送并fetch确认与`origin/main`一致；4.6应作为测试矩阵任务独立推进，不能把4.1–4.5已有单项测试简单重复计数为新的组合覆盖，也不应为方便测试增加生产旁路。
+- 4.6最终新增的是一条真正跨display/frame/audio/terminal序列的coordinator综合测试，并在既有AppModel workflow中补公开actual-state断言；没有生产源码变化。修正版单项为`1/1`，cross-layer为`2/2`，正式六类focused为`249/249`，三份xcresult的结构化build diagnostics均为0。
+- 系统更新没有改变4.6权威边界：OpenSpec仍为pre-mark `24/50 next 4.6`，Git基线仍是`8295ae7`；测试只能证明离线序列、current-generation admission与清理，不证明物理Apple TV HDR、空间音频/head tracking、signed install、Simulator runtime或live Sunshine。
+- 从历史`xcodebuild.log`复用多个`-only-testing`参数时，zsh的`${(z)}`会把日志中的双引号作为字面内容保留到数组参数；必须用逐行匹配`"-only-testing:[^"]+"`后显式去引号，否则Xcode会把参数误判为unknown build action。
+- 4.6 related仍为`474/474`而不是预估`475/475`：新测试位于`TVVisionPlatformPresentationCoordinatorTests`，该class由focused覆盖，不在related的40个共享selector中；保留related selector集合不变可避免把focused用例重复计数为独立共享回归。
+- 新增一项coordinator综合测试使完整normal从4.5的`1055 total / 1054 passed`增长为`1056 total / 1055 passed`；唯一skip仍是显式真实Keychain round-trip，说明测试期文件/in-memory fallback边界没有被4.6改动。
+- 4.6 fixed Apple TV direct build在tvOS 26.4 simulator SDK上成功且结构化diagnostics为0、Metal产物为`1 AIR/1 metallib`；日志中的AppIntents metadata extraction skipped仍是无依赖工具提示，不是Swift/Clang/Metal源码warning，也不构成Simulator运行或物理HDR/音频证明。
+- fresh五平台unsigned Debug矩阵确认4.6纯测试变化不会破坏macOS/iOS/iPadOS/tvOS/visionOS 26.4 SDK的完整Swift/Clang/Metal编译链接；每个平台结构化diagnostics全零且各有`1 AIR/1 metallib`。这仍不提升到签名安装、Simulator runtime、物理设备或live host证明。
+- 最终test diff没有新增production seam：coordinator矩阵只调用既有scene/display/video/audio/stop合同，AppModel workflow只增加公开actual-state断言，`makeAudio`参数化仍以原固定值为默认。因而4.6的合理权威表述是“完成组合验证”，不是新增运行时能力。
+- 长repository gate通过`functions.exec`运行时，应使用`String.raw`模板承载多行shell并避免模板内部出现Markdown反引号；否则外层JavaScript会在任何shell副作用前解析失败。
+- 即使使用`String.raw`，模板内的shell `${...}`仍触发JavaScript插值解析；长门禁应使用`printenv`等无花括号形式，或显式转义并确认传给shell的最终文本。
+- 4.6 repository pre-gate `/tmp/LuneX-18-4_6-repository-pre.jpqOgA`按当前OpenSpec与xcresult schema完整通过，确认pre-mark `24/50 next 4.6`、四次稳定generator、9文件纯test/authority范围及全部行为/仓库边界；4.6可勾选并推进到`25/50 next 5.1`，但阶段18与物理/live证明仍未完成。
+- post-mark包装还必须避免raw template内部的Markdown反引号；它与shell `${...}`一样会在shell启动前破坏JavaScript解析。暂停前该错误没有产生final-state目录或仓库副作用，修正版应只读取OpenSpec、Git状态、保留pre-gate JSON与进程/opt-in边界。
+- 当前`xcresulttool get test-results summary`保存的JSON根即包含`totalTestCount/passedTests/skippedTests/failedTests/result`，不能再套`.result.metrics`；4.6 tvOS media spec的真实组合场景标题是`Connected media regression sequence completes`。final-state应断言这些真实字段和标题，避免格式假设掩盖已经通过的行为证据。
+- 修正后的4.6 post-mark final-state `/tmp/LuneX-18-4_6-final-state-r2.0Oe6dd`完整确认`25/50 next 5.1`、稳定project hash、精确10文件test/authority范围、production/project graph零diff及全部retained evidence/boundary；无需也不应为记录更新重跑行为门禁或操作Simulator。
+- 4.6最终审计没有发现阻止提交的问题：两份test diff只扩展现有coordinator/AppModel路径，`makeAudio`新增参数都保留旧默认值，异步结果在XCTest同步断言外先await，八份authority没有删除既有合同或提升offline/unsigned证据层级。post-record与审计路径分别为`/tmp/LuneX-18-4_6-post-record.4dFTZB`和`/tmp/LuneX-18-4_6-final-audit.mNUBR2`。

@@ -33,7 +33,7 @@
 - [x] 4.3 Connect tvOS actual display/HDR revisions and bounded fallback diagnostics to the current render configuration and AppModel state
 - [x] 4.4 Connect the current tvOS AVAudioSession route, canonical audio graph, spatial/head-tracking capability, interruption, media reset, and recovery to the media generation
 - [x] 4.5 Coordinate tvOS video, audio, input eligibility, app focus, failure, reconnect, remote termination, and stop through one shared generation teardown
-- [ ] 4.6 Add SDR/HDR fallback, geometry/display change, stale frame, route/interruption/reset, graph replacement, AppModel application, and clean teardown tests
+- [x] 4.6 Add SDR/HDR fallback, geometry/display change, stale frame, route/interruption/reset, graph replacement, AppModel application, and clean teardown tests
 
 ## 5. visionOS window and input runtime
 

@@ -1706,6 +1706,75 @@ physical Apple TV input/HDR/audio/head tracking, live Sunshine, latency,
 performance, power, or thermal behavior. Task 4.6 remains the consolidated
 tvOS media regression matrix, and visionOS work remains in tasks 5.x and 6.x.
 
+## Task 4.6 consolidated tvOS media regression matrix
+
+Task 4.6 adds no production source or alternate media path. The new coordinator
+regression uses the existing scene, display, frame, audio-route, and stop APIs
+as one ordered current-generation sequence. It begins with nonfinite current
+headroom and a typed HDR-to-SDR resolution, presents decoder generation 7 frame
+90, resubmits that frame after geometry revision 2, applies current direct EDR,
+starts decoder generation 8, and rejects a late generation 7 frame. It then
+applies interruption, media-services loss with unavailable output, graph
+generation 2 reset/head tracking, current-graph recovery, and one local stop.
+The terminal state has no presentation, display, or audio route, no presented
+video, teardown count one, and exactly one recorded coordinator teardown
+effect.
+
+The existing AppModel current/reconnect/replacement/remote-termination workflow
+now also observes public actual render and audio state: direct headroom `2`, no
+fallback diagnostic, current head-tracked presentation, replacement audio
+route generation `2` with fixed spatial presentation, and render/fallback
+clearing during reconnect and terminal teardown. Test helpers retain their old
+defaults, and no production seam or state was added for the tests.
+
+Fresh offline evidence is:
+
+- coordinator matrix `/tmp/LuneX-18-4_6-matrix-r2.v9KJoh`: `1/1 passed`;
+- cross-layer matrix `/tmp/LuneX-18-4_6-cross-layer.NGWR17`: `2/2 passed`;
+- focused `/tmp/LuneX-18-4_6-focused-final.snkyaA`: `249/249 passed / 0
+  skipped / 0 failed / 0 expected failure`, with zero structured diagnostics;
+- related `/tmp/LuneX-18-4_6-related-final-r2.gN1qLv`: `474/474 passed / 0
+  skipped / 0 failed / 0 expected failure`, with zero structured diagnostics;
+- normal `/tmp/LuneX-18-4_6-normal-final.FweI69`: `1056 total / 1055 passed /
+  1 exact real-Keychain opt-in skip / 0 failed / 0 expected failure`, with zero
+  structured diagnostics;
+- fixed Apple TV direct `/tmp/LuneX-18-4_6-tvos-final.bVvyiw`: unsigned Debug
+  success, zero structured diagnostics, and one AIR/metallib pair; and
+- unsigned five-platform Debug `/tmp/LuneX-18-4_6-builds-final.njC11Q`:
+  macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro all
+  succeeded with zero structured diagnostics and one AIR/metallib pair each.
+
+Real-Keychain and live-host opt-ins remained unset. The fixed device UUIDs were
+build destinations only; task 4.6 did not query, create, clone, boot, install,
+launch, run, shut down, or delete a simulator. This evidence proves deterministic
+offline sequencing, public-state projection, terminal clearing, and SDK
+compatibility only. It does not prove signed installation, Simulator runtime,
+physical Apple TV SDR/HDR, spatial audio or listener head tracking, live
+Sunshine, latency, performance, power, or thermal behavior. At this pre-mark
+checkpoint task 4.6 remained unchecked pending the fresh repository gate.
+
+Repository pre-gate `/tmp/LuneX-18-4_6-repository-pre.jpqOgA` passed fixture
+self/tree validation, OpenSpec strict `9/9`, pre-mark `24/50 next 4.6`, four
+stable generator hashes, exact nine-file test-and-authority scope, consolidated
+sequence and public-state semantics, all retained test/build evidence, and
+privacy, clean-room, reference, dependency, opt-in, process, and diff
+boundaries. Task 4.6 is therefore marked complete; OpenSpec is `25/50 ready`,
+with visionOS task 5.1 next.
+
+Post-mark final-state `/tmp/LuneX-18-4_6-final-state-r2.0Oe6dd` read-only
+confirmed OpenSpec strict `9/9`, `25/50 next 5.1`, task 4.6 done, the stable
+project SHA-256, exact ten-file test-and-authority scope, empty production and
+project-graph diff, all retained behavioral and build evidence, the exact
+Keychain skip, and privacy, reference, dependency, opt-in, process, and diff
+boundaries. It did not rerun tests, builds, the generator, or Simulator work.
+
+Post-record `/tmp/LuneX-18-4_6-post-record.4dFTZB` and final audit
+`/tmp/LuneX-18-4_6-final-audit.mNUBR2` confirmed the same ten-file scope,
+two test files and eight authority files, helper-default compatibility,
+connected matrix and public-state assertions, no async XCTest autoclosure,
+no production or project-graph change, no removed contract, and all proof
+boundaries. Task 4.6 is ready for its independent commit and push.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the
