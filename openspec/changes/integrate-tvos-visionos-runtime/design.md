@@ -711,6 +711,27 @@ remote/controller/window behavior, HDR brightness, audible spatial audio or
 head tracking, live Sunshine, latency, comfort, performance, power, or thermal
 behavior. Tasks 8.5-8.8 retain those separate proof tiers.
 
+Task 8.5 performs a new bounded inventory without using the generalized
+`simctl list` surface. It reads only the fixed device scalar fields, the default
+device mapping, and the corresponding installed 26.4 runtime bundle metadata,
+then asks the tvOS and visionOS schemes to show their available destinations.
+The fixed Apple TV and Vision Pro must match the recorded UUID, runtime, name,
+device type, non-deleted state, and persisted Shutdown state, and each
+runtime/name pair must occur exactly once. The same names under 27.0 remain
+distinct identities and cannot substitute for the fixed 26.4 devices.
+
+The current inventory preserves an already-booted iOS 26.4 iPhone 17 owned by
+the surrounding environment; it is a different device class and is neither
+shut down nor adopted by this task. Target device, device-set, runtime, and
+normalized all-device metadata are identical before and after the bounded
+queries. Task 8.5 does not create, clone, boot, bootstatus, install, launch,
+run, shut down, delete, upgrade, or otherwise mutate a Simulator. This proves
+fixed identity, installed-runtime availability, Shutdown state, and
+single-instance inventory only. It does not prove app launch/navigation,
+signed artifacts, physical devices, live Sunshine, HDR or spatial output,
+latency, performance, power, or thermal behavior; tasks 8.6-8.8 remain
+separate.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->

@@ -1652,3 +1652,17 @@
 - **final audit wrapper错误：** `/tmp/LuneX-18-8_4-final-audit.FMHcPD`通过scope后，`rg -c`对零个测试函数增删返回exit 1且不打印`0`，使空字符串与`0`比较误退出；helper声明/引用、唯一旧wait替换、timeout/sleep/XCTFail/return、零skip新增均已逐项确认。规范化零计数后fresh重跑完整audit。
 - **final diff audit通过：** corrected `/tmp/LuneX-18-8_4-final-audit-r2.5OLJiU`通过最终8文件`0 production / 1 test / 7 authority`、1个局部helper/1处等待替换/0测试函数增删/0 skip-disable、唯一8.4 checkbox、strict `9/9`与`46/50 next 8.5`、稳定project、retained pre/post gates及全部仓库/proof边界。下一步final-record后精确stage、独立commit/push/fetch。
 - **final-record通过：** `/tmp/LuneX-18-8_4-final-record.8Ps0cQ`通过strict `9/9`、`46/50 next 8.5`、8文件`0 production/1 test/7 authority`、pre/post/audit三道成功marker、全部retained sanitizer/malloc、稳定project及remote/opt-in/process/repository边界。8.4进入精确stage、独立提交与push/fetch。
+
+## 2026-08-08 阶段 18 任务 8.5 启动
+
+- **状态：** `in_progress`；8.4已以`82ccd30 Verify sanitizer and resource gates`提交推送，fetch确认`HEAD == origin/main == 82ccd305e1b75cf182a9b934b6b8bfbd7ea6d08d`且工作树clean。OpenSpec为`46/50 ready`、next 8.5。
+- **固定身份：** tvOS 26.4 Apple TV `6C0EC809-4C15-4AEC-9470-00F91480CAA7`；visionOS/xrOS 26.4 Apple Vision Pro `9BF41D0C-B423-4B3F-B75D-00B31E85FE18`。只按UUID+runtime+name核验，27.0同名设备不替代固定identity。
+- **执行边界：** 不执行泛化`simctl list`，不创建、克隆、启动、bootstatus、安装、launch、关闭、删除、升级或接管设备；直接只读`device.plist`、`device_set.plist`和固定26.4 runtime bundle metadata，验证存在、未删除、runtime可用、state=1 Shutdown及runtime/name单实例。
+- **现有实例：** 全局直接plist盘点为50个state=1与1个state=3；唯一Booted是iOS 26.4 `iPhone 17` `1864B6E2-2C29-4E4C-97AA-F1E137096F8D`，与tvOS/visionOS类别不冲突且必须保持原状。
+- **inventory wrapper错误1：** `/tmp/LuneX-18-8_5-inventory.0E7yIY`在首个固定device JSON转换处退出，因为Apple TV `device.plist`含`NSDate lastUsedAt`而`plutil -convert json`拒绝非JSON对象；尚未执行两项`xcodebuild -showdestinations`。源plist未修改、无Simulator/Xcode lifecycle副作用；改用逐字段`plutil -extract raw`与`jq -n`组装结构化记录。
+- **inventory验收：** corrected `/tmp/LuneX-18-8_5-inventory-r2.VXUoDR`通过固定device/default mapping/runtime profile、26.4 runtime/name唯一性、27.0同名隔离、两项scheme-bounded `showdestinations`、全局state及pre/post hash/normalized snapshot一致性；两个固定设备均available/non-deleted/state=1 Shutdown且各唯一。没有lifecycle命令，现有Booted iPhone保持不变。
+- **证明边界：** 8.5只证明identity/runtime availability/Shutdown/single-instance inventory，不完成8.6 App运行导航、8.7 signed physical/live或8.8最终同步。下一步运行authority/repository pre-gate，通过前不勾选8.5。
+- **repository pre-gate：** `/tmp/LuneX-18-8_5-repository-pre.azHeo5`一次通过fixture self/tree、strict `9/9`与pre-mark `46/50 next 8.5`、6文件authority-only scope、三次稳定generator、retained inventory/metadata/destination、authority及Git/remote/opt-in/process边界。现在只勾选8.5，预期`47/50 next 8.6`。
+- **post-mark final-state：** `/tmp/LuneX-18-8_5-final-state.E5JkFk`只读通过strict `9/9`、`47/50 next 8.6`、7文件authority-only scope、唯一8.5 checkbox、retained inventory/pre-gate、稳定project及repository/opt-in/process边界；未重复inventory/generator或操作Simulator。下一步final audit/record。
+- **final audit：** `/tmp/LuneX-18-8_5-final-audit.YnuqwB`通过最终7文件authority-only、唯一8.5 checkbox、current/historical inventory区分、existing iPhone preservation、27.0 identity隔离、strict `9/9`与`47/50 next 8.6`及全部仓库/proof边界。下一步final-record后精确stage、提交与push/fetch。
+- **final-record：** `/tmp/LuneX-18-8_5-final-record.fy4DMG`通过`47/50 next 8.6`、最终7文件、inventory/pre/post/audit四道成功marker、稳定project、零lifecycle mutation及remote/opt-in/process/repository边界。8.5进入独立提交推送。

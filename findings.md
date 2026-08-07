@@ -3108,3 +3108,18 @@
 - final audit首轮的唯一问题是`rg -c`零匹配输出为空而非字符`0`；实际test diff为1个helper声明、2个helper引用、1处旧wait替换、0个test function增删、0个skip/disable新增。应对零匹配计数使用默认值再比较。
 - corrected final audit `/tmp/LuneX-18-8_4-final-audit-r2.5OLJiU`未发现阻止提交的问题：无production变更，唯一test改动保持原测试语义并增加有界等待/诊断，authority与唯一checkbox准确，project/reference/dependency/artifact/opt-in/process边界均无漂移。
 - final-record `/tmp/LuneX-18-8_4-final-record.8Ps0cQ`再次确认8.4可独立提交；该提交仍只代表offline macOS sanitizer/resource与test synchronization证据，不替代8.5/8.6 Simulator、8.7 signed physical/live或8.8最终同步。
+
+## 2026-08-08 阶段 18 任务 8.5 固定 Simulator 盘点
+
+- 8.4提交推送并fetch后`HEAD == origin/main == 82ccd305e1b75cf182a9b934b6b8bfbd7ea6d08d`，OpenSpec精确为`46/50 next 8.5`。
+- 固定Apple TV与Vision Pro的`device.plist`仍分别绑定tvOS 26.4和xrOS 26.4、正确name/UDID、`isDeleted=false`、`state=1`；`device_set.plist`的对应default mapping也精确指向这两个UUID。
+- tvOS 26.4与xrOS 26.4 runtime bundle分别存在于`tvOS_23L243a`和`xrOS_23O243` volume，bundle identifier与device runtime一致，profile `defaultVersionString=26.4`且platform identifier分别为appletvsimulator/xrsimulator。
+- 当前51个device plist中50个state=1、1个state=3；唯一Booted是iOS 26.4 iPhone 17 `1864B6E2-2C29-4E4C-97AA-F1E137096F8D`。它不是目标类别，不得为8.5关闭或接管。
+- CoreSimulator device plist可能含`NSDate lastUsedAt`，因此整份`plutil -convert json`不是通用安全序列化路径；首轮wrapper在Apple TV记录处原地失败。盘点只需要UDID/name/runtime/deviceType/isDeleted/isEphemeral/state，后续逐字段解析这些标量并由jq构造JSON。
+- corrected inventory `/tmp/LuneX-18-8_5-inventory-r2.VXUoDR`完整通过：固定Apple TV与Vision Pro各自UUID/name/runtime/deviceType/default mapping正确，未删除/非ephemeral/state=1，固定runtime bundle/profile存在且版本/平台匹配，runtime+name计数各为1，Xcode scheme-bounded destinations各解析一次固定UUID。
+- 27.0同名Apple TV `BB97BA84-0359-4A56-B9C8-70EBEE2BCF1D`与Vision Pro `DECE1E89-CF92-4124-A26E-BB98955D68B9`也各唯一且state=1，但作为不同runtime identity明确不被选中。pre/post固定metadata hash与51-device normalized snapshot逐字一致。
+- 该证据没有运行泛化`simctl list`或任何create/clone/boot/bootstatus/install/launch/run/shutdown/delete/upgrade操作；它不证明8.6 UI/runtime、签名/物理设备、live Sunshine、HDR/空间音频、性能功耗或温度。
+- repository pre-gate `/tmp/LuneX-18-8_5-repository-pre.azHeo5`确认当前结果可独立完成8.5：OpenSpec/fixture/generator、精确authority scope、retained metadata与scheme destination、existing iPhone preservation及仓库边界全部通过，8.6-8.8未被提前满足。
+- post-mark `/tmp/LuneX-18-8_5-final-state.E5JkFk`确认OpenSpec精确推进到`47/50 next 8.6`且只有8.5 checkbox变化；inventory与仓库证据未漂移，没有重新读取或改变Simulator状态。
+- final audit `/tmp/LuneX-18-8_5-final-audit.YnuqwB`未发现阻止提交的问题：7个文件均为任务/authority记录，当前booted iPhone与固定Shutdown Apple TV/Vision Pro事实没有混淆，8.6-8.8和physical/live证明保持pending。
+- final-record `/tmp/LuneX-18-8_5-final-record.fy4DMG`再次确认8.5可独立提交；其结果不应扩称为App已安装/启动、UI导航、signed artifact、physical或live proof。

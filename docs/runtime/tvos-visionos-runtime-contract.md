@@ -3291,6 +3291,43 @@ class.
 The inventory command did not call `create`, `clone`, `boot`, `bootstatus`,
 `install`, `launch`, `run`, `shutdown`, or `delete`.
 
+### Task 8.5 current bounded inventory
+
+The current post-update inventory is retained at
+`/tmp/LuneX-18-8_5-inventory-r2.VXUoDR`. It does not repeat the generalized
+`simctl list` command. It parses only scalar fields from CoreSimulator device
+plists, the fixed default mappings from `device_set.plist`, and the installed
+tvOS/xrOS 26.4 runtime bundle identifiers and profiles. Scheme-bounded
+`xcodebuild -showdestinations` output independently confirms that the current
+Xcode resolves each fixed UUID as an available destination without building,
+installing, booting, or launching it.
+
+The current fixed result is:
+
+| Fixed class | Runtime | Name | UUID | Available | Persisted state | Matching runtime/name count |
+|---|---|---|---|---|---|---|
+| Apple TV | tvOS 26.4 | Apple TV 4K (3rd generation) | `6C0EC809-4C15-4AEC-9470-00F91480CAA7` | yes | `1` (`Shutdown`) | 1 |
+| Vision Pro | visionOS 26.4 | Apple Vision Pro | `9BF41D0C-B423-4B3F-B75D-00B31E85FE18` | yes | `1` (`Shutdown`) | 1 |
+
+The installed profiles report version 26.4 and the expected
+`appletvsimulator`/`xrsimulator` platform identifiers. The tvOS 27.0 Apple TV
+`BB97BA84-0359-4A56-B9C8-70EBEE2BCF1D` and visionOS 27.0 Vision Pro
+`DECE1E89-CF92-4124-A26E-BB98955D68B9` are distinct same-named Shutdown
+identities and were not selected.
+
+There are currently 51 persisted devices: 50 have state code 1 and one has
+state code 3. The sole Booted device is an existing iOS 26.4 iPhone 17,
+`1864B6E2-2C29-4E4C-97AA-F1E137096F8D`. Task 8.5 preserves it unchanged
+because it is outside the Apple TV and Vision Pro classes. Fixed device,
+device-set, runtime, and normalized all-device metadata match before and after
+the bounded queries. No `create`, `clone`, `boot`, `bootstatus`, `install`,
+`launch`, `run`, `shutdown`, `delete`, `upgrade`, or other Simulator mutation
+was issued.
+
+This is inventory and destination-availability proof. It is not task 8.6 app
+runtime/navigation proof and does not prove signing, physical hardware, HDR,
+spatial audio, live Sunshine, latency, performance, power, or thermal behavior.
+
 ## Physical and live acceptance boundary
 
 Task 8.7 remains pending until authorized signed Apple TV and Apple Vision Pro
