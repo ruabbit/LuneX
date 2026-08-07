@@ -790,18 +790,14 @@ private struct StreamStatusOverlay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            #if os(tvOS)
+            TVStreamControls()
+            #else
             HStack(spacing: 10) {
                 Label(appModel.session.phase.label, systemImage: appModel.session.isStreaming ? "dot.radiowaves.left.and.right" : "moon")
                     .font(.headline)
                 #if os(iOS)
                 MobilePictureInPictureCommandButton()
-                #endif
-                #if os(tvOS)
-                Button {
-                    appModel.setTVStreamOverlayVisible(false)
-                } label: {
-                    Label("Hide Controls", systemImage: "eye.slash")
-                }
                 #endif
                 Button {
                     Task {
@@ -828,6 +824,7 @@ private struct StreamStatusOverlay: View {
             )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            #endif
         }
         .padding(12)
         .background(.thinMaterial)
@@ -879,6 +876,89 @@ private struct StreamStatusOverlay: View {
         .accessibilityValue(spatialAudioAccessibilityValue(spatialContent))
     }
 }
+
+#if os(tvOS)
+private enum TVStreamControlFocusTarget: Hashable {
+    case hideControls
+    case disconnect
+}
+
+private struct TVStreamControls: View {
+    @Environment(AppModel.self) private var appModel
+    @FocusState private var focusedControl: TVStreamControlFocusTarget?
+
+    var body: some View {
+        let state = appModel.tvStreamControlPresentationState
+
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                Label(
+                    appModel.session.phase.label,
+                    systemImage: appModel.session.isStreaming
+                        ? "dot.radiowaves.left.and.right"
+                        : "moon"
+                )
+                    .font(.headline)
+
+                Spacer(minLength: 28)
+
+                Button {
+                    appModel.setTVStreamOverlayVisible(false)
+                } label: {
+                    Label("Hide Controls", systemImage: "eye.slash")
+                }
+                .focused($focusedControl, equals: .hideControls)
+                .accessibilitySortPriority(2)
+
+                Button(role: .destructive) {
+                    Task {
+                        await appModel.stopStream()
+                    }
+                } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
+                .focused($focusedControl, equals: .disconnect)
+                .accessibilitySortPriority(1)
+                .disabled(appModel.session.phase == .disconnected)
+            }
+            .focusSection()
+
+            Text("Actual Stream State")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Grid(
+                alignment: .leading,
+                horizontalSpacing: 26,
+                verticalSpacing: 12
+            ) {
+                ForEach(state.rows) { row in
+                    GridRow(alignment: .firstTextBaseline) {
+                        Label(row.title, systemImage: row.systemImage)
+                            .font(.callout.weight(.semibold))
+                            .frame(width: 170, alignment: .leading)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.value)
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(row.isFailure ? Color.red : Color.primary)
+                            Text(row.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(row.title)
+                    .accessibilityValue(row.accessibilityValue)
+                }
+            }
+        }
+        .frame(minWidth: 720, maxWidth: 980, alignment: .leading)
+        .defaultFocus($focusedControl, .hideControls)
+    }
+}
+#endif
 
 private struct VirtualControllerOverlay: View {
     var body: some View {

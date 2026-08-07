@@ -55,7 +55,7 @@
 
 ## 7. Native product integration
 
-- [ ] 7.1 Add accessible native tvOS stream controls and actual focus/capture/controller/render/HDR/audio status with predictable focus order and no hover dependency
+- [x] 7.1 Add accessible native tvOS stream controls and actual focus/capture/controller/render/HDR/audio status with predictable focus order and no hover dependency
 - [ ] 7.2 Add accessible native visionOS windowed stream controls and actual window/input/render/HDR/spatial status with typed immersive-unavailable state
 - [ ] 7.3 Add platform Settings for supported input, controller, render, HDR, and spatial preferences while keeping desired and actual state distinct
 - [ ] 7.4 Add privacy-bounded platform diagnostics, semantic deduplication, replacement ownership, finite history, export redaction, and recovery clearing

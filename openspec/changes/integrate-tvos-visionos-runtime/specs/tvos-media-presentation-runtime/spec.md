@@ -137,6 +137,14 @@ native focusable controls and privacy-safe text.
 - **WHEN** user preference requests HDR but actual tvOS output is SDR fallback
 - **THEN** UI SHALL report SDR fallback rather than active HDR
 
+#### Scenario: Stream controls are visible
+- **WHEN** the current tvOS stream overlay is visible
+- **THEN** UI SHALL expose actual surface, render, HDR, audio, controller, and bounded failure state in a stable accessible order without hover dependency
+
+#### Scenario: Actual media state is unavailable
+- **WHEN** no current tvOS media ownership can prove a scene, frame, HDR output, or audio route
+- **THEN** UI SHALL report inactive or unavailable state and SHALL NOT substitute the user's desired settings
+
 ### Requirement: tvOS media verification SHALL preserve physical proof boundaries
 Builds, injected tests, and simulator navigation SHALL NOT prove television HDR,
 spatial audio, long-run performance, signed installation, or live Sunshine.

@@ -460,6 +460,37 @@ related, normal, fixed Vision Pro, and five-platform unsigned Debug evidence
 does not complete the native controls, Settings, diagnostics, simulator
 runtime, signed installation, physical-device, or live-host tasks that follow.
 
+### Project one current tvOS state into native stream controls
+
+Task 7.1 adds no runtime owner. `TVStreamControlPresentationStateResolver`
+projects only the current `AppModel` session, focus handoff, surface press
+capture owner, controller rosters, geometry admission, platform coordinator,
+render policy, HDR resolution, and audio runtime into a privacy-bounded value.
+Its stable row order is Focus, Capture, Controllers, Surface, Render, HDR,
+Audio, and Failure. Invalid counts, foreign-platform state, inactive sessions,
+and stale coordinator ownership fail closed instead of manufacturing an active
+status.
+
+The tvOS overlay uses native SwiftUI buttons with a dedicated `@FocusState`.
+Its predictable command order and default focus are Hide Controls followed by
+Disconnect; showing the overlay restores local focus before either command is
+available, while hiding it lets the existing stream surface regain current
+capture. Status rows expose explicit accessibility labels and values but are
+not disguised as commands and do not depend on hover or a mouse preference.
+The HDR row publishes only actual direct EDR, SDR, or typed SDR fallback; task
+7.3 remains responsible for displaying and editing desired platform settings
+without conflating them with this actual state.
+
+All copy is fixed and bounded. The projection never includes host, session,
+generation, frame, controller lease/vendor, display, or audio-route identity,
+and it never publishes arbitrary lifecycle reasons. Focused value/source tests,
+a current-owner related matrix, full normal tests, a fixed Apple TV compile,
+and five-platform unsigned Debug builds prove offline projection and platform
+compilation only. They do not prove tvOS focus navigation, visual layout,
+remote feel, physical HDR, audible spatial audio, signed installation, or live
+Sunshine behavior. Task 7.2 and all later native-product and acceptance tasks
+remain separate.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

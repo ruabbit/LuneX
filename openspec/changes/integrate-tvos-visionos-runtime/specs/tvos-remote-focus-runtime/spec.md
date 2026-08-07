@@ -70,6 +70,10 @@ controller object, vendor, host, and payload identities.
 - **WHEN** a stale controller event is rejected
 - **THEN** diagnostics SHALL record a fixed stale-generation class without persisting controller identity
 
+#### Scenario: Stream controls receive local focus
+- **WHEN** the overlay opens during a current stream
+- **THEN** native focus SHALL move predictably from Hide Controls to Disconnect while actual focus, capture, and controller count remain separately accessible
+
 ### Requirement: tvOS input verification SHALL preserve hardware boundaries
 LuneX SHALL keep Siri Remote feel, physical controller mapping/feedback, and
 live host receipt incomplete until authorized Apple TV hardware evidence

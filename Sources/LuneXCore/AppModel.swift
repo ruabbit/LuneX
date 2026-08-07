@@ -258,6 +258,75 @@ final class AppModel: ApplicationInputSink {
         SpatialAudioPresentationStatus(audioRuntimeState)
     }
 
+    var tvStreamControlPresentationState: TVStreamControlPresentationState {
+        let hasActiveSession = expectedTVVisionPlatform == .tvOS
+            && session.isStreaming
+            && activeStreamSessionID != nil
+            && activeMediaSessionID == activeStreamSessionID
+            && activeMediaGeneration != nil
+
+        let hasSessionFailure: Bool
+        if case .failed = session.phase {
+            hasSessionFailure = true
+        } else {
+            hasSessionFailure = false
+        }
+
+        let storedCoordinator = tvVisionPlatformPresentationState?.snapshot
+        let coordinatorIsCurrent = expectedTVVisionPlatform == .tvOS
+            && tvVisionPlatformPresentationState?.sessionID == activeStreamSessionID
+            && tvVisionPlatformPresentationState?.sessionID == activeMediaSessionID
+            && tvVisionPlatformPresentationState?.mediaGeneration
+                == activeMediaGeneration
+            && storedCoordinator?.ownership.platform == .tvOS
+        let coordinator = coordinatorIsCurrent
+            || (hasSessionFailure && storedCoordinator?.ownership.platform == .tvOS)
+                ? storedCoordinator
+                : nil
+
+        let sceneSurface: TVVisionSceneSurfaceSnapshot?
+        if hasActiveSession,
+           let admission = tvVisionPlatformGeometryAdmission,
+           admission.ownership == tvVisionPlatformPresentationOwnership,
+           admission.ownership.platform == .tvOS {
+            sceneSurface = admission.update.binding?.sceneSurfaceSnapshot
+        } else {
+            sceneSurface = nil
+        }
+
+        let captureDisposition = sceneSurface.map {
+            tvRemoteSurfacePressDisposition(for: $0.surfaceGeneration)
+        } ?? .local
+        let presentationFailure: TVVisionPlatformPresentationFailure?
+        if case let .failed(failure) = coordinator?.phase {
+            presentationFailure = failure
+        } else {
+            presentationFailure = nil
+        }
+
+        return TVStreamControlPresentationStateResolver.resolve(
+            TVStreamControlPresentationInput(
+                hasActiveSession: hasActiveSession,
+                hasSessionFailure: hasSessionFailure,
+                focusHandoff: tvRemoteFocusHandoffState,
+                remoteCaptureDisposition: captureDisposition,
+                isRemoteReleasePending: isTVRemoteInputReleasePending,
+                sceneSurface: sceneSurface,
+                connectedControllerCount:
+                    tvControllerRosterState?.controllers.count ?? 0,
+                routedControllerCount:
+                    tvControllerRoutedRosterState?.controllers.count ?? 0,
+                renderPolicy: renderState.policy,
+                video: coordinatorIsCurrent ? coordinator?.video : nil,
+                hdrPresentation: hdrPresentationStatus,
+                hdrFallbackReason: tvOSDisplayHDRFallbackReason,
+                audioRoute: coordinatorIsCurrent ? coordinator?.audioRoute : nil,
+                spatialAudio: spatialAudioPresentationStatus,
+                presentationFailure: presentationFailure
+            )
+        )
+    }
+
     var mobileExperiencePresentationStatus: MobileExperiencePresentationStatus {
         MobileExperiencePresentationStatusResolver.resolve(
             hasActiveSession: activeStreamSessionID != nil

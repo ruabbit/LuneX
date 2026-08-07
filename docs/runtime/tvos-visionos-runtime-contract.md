@@ -2705,6 +2705,64 @@ offline test and unsigned build receipts, not simulator runtime, signed
 artifact, physical HDR/spatial/input, live Sunshine, latency, comfort,
 performance, power, or thermal proof.
 
+## Task 7.1 accessible tvOS actual-state controls
+
+Task 7.1 adds `TVStreamControlPresentationState` as a read-only value
+projection. It does not create another session, decoder, presenter, input
+owner, controller registry, HDR resolver, audio graph, or diagnostics store.
+`AppModel.tvStreamControlPresentationState` accepts an active tvOS stream only
+when stream/media ownership is current, accepts video and audio only from the
+matching platform coordinator, derives capture from the actual current surface
+press owner, and uses the current controller rosters, render policy, HDR
+fallback, and spatial presentation status.
+
+The projection always emits eight rows in this order:
+
+1. Focus
+2. Capture
+3. Controllers
+4. Surface
+5. Render
+6. HDR
+7. Audio
+8. Failure
+
+Foreign-platform state, invalid controller counts, missing current ownership,
+and inactive sessions fail closed. The projection does not expose host,
+session, generation, revision, frame, controller lease/vendor, display, or
+route identity, nor arbitrary runtime reason strings. Typed HDR fallback takes
+precedence over a generic EDR presentation status, so desired HDR cannot be
+misreported as actual direct HDR.
+
+`TVStreamControls` is compiled only for tvOS and uses native SwiftUI buttons.
+Its `@FocusState` order is Hide Controls followed by Disconnect, with Hide
+Controls as the default focus inside one focus section. Each status row has a
+dedicated accessibility label/value and no hover handler or mouse-preference
+dependency. Hiding the overlay returns control to the existing stream surface
+focus path; opening it continues to restore local focus before commands.
+
+Retained offline evidence:
+
+- focused `/tmp/LuneX-18-7_1-focused-r2.w2xsDG`: `8/8` passed with zero
+  structured build diagnostics;
+- related `/tmp/LuneX-18-7_1-related.xgCDkd`: 12 classes, `241/241` passed with
+  zero structured build diagnostics;
+- normal `/tmp/LuneX-18-7_1-normal.e5qCg3`: `1097 total / 1096 passed / 1`
+  exact real-Keychain opt-in skip / zero failures and expected failures;
+- fixed Apple TV direct `/tmp/LuneX-18-7_1-tvos-direct.Zs7dNK`: unsigned Debug,
+  zero structured diagnostics, one AIR, and one metallib;
+- five-platform `/tmp/LuneX-18-7_1-builds-r2.KWXQQF`: macOS and fixed
+  iPhone/iPad/Apple TV/Vision Pro unsigned Debug all have zero structured
+  diagnostics, one AIR, and one metallib each.
+
+The Keychain and live-host opt-ins remained unset. Fixed UUIDs were build
+destinations only; no Simulator lifecycle action was performed. These results
+prove deterministic projection, shared-owner regression, and target
+compilation. They do not prove simulator navigation, physical focus/remote
+behavior, television HDR, audible spatial audio, signed installation, live
+Sunshine, latency, performance, power, or thermal behavior. Tasks 7.2-8.8
+remain responsible for those separate product and acceptance layers.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the
