@@ -32,14 +32,7 @@ private enum SessionApplicationError: Error {
     case incompleteControlStream
 }
 
-struct AppCatalogUIState: Equatable {
-    var isRefreshing = false
-    var lastUpdatedAt: Date?
-    var errorMessage: String?
-}
-
 struct StreamLaunchUIState: Equatable {
-    var selectedAppID: RemoteApp.ID?
     var isLaunching = false
     var errorMessage: String?
     var actionMessage: String?
@@ -182,13 +175,17 @@ final class AppModel: ApplicationInputSink {
             updatePrimaryWorkspace { state in
                 guard state.selectedHostID != newValue else { return }
                 state.selectedHostID = newValue
-                state.selectedAppID = nil
+                applyCachedCatalog(to: &state)
             }
         }
     }
+    var selectedAppID: RemoteApp.ID? {
+        workspaceRegistry.state(for: primaryWorkspaceReference)?
+            .selectedAppID
+    }
     var appsByHostID: [MoonlightHost.ID: [RemoteApp]] = [:]
+    private var appCatalogUpdatedAtByHostID: [MoonlightHost.ID: Date] = [:]
     var pairingUI = PairingUIState()
-    var appCatalogUI = AppCatalogUIState()
     var streamLaunchUI = StreamLaunchUIState()
     var latestRemoteInputFeedback: RemoteInputFeedback?
     private(set) var macInputSurfacePolicy = MacInputSurfacePolicy.inactive
@@ -714,7 +711,7 @@ final class AppModel: ApplicationInputSink {
     }
 
     var selectedHost: MoonlightHost? {
-        guard let selectedHostID else { return hosts.first }
+        guard let selectedHostID else { return nil }
         return hosts.first { $0.id == selectedHostID }
     }
 
@@ -726,6 +723,16 @@ final class AppModel: ApplicationInputSink {
         for reference: ProductWorkspaceReference
     ) -> ProductWorkspaceState? {
         workspaceRegistry.state(for: reference)
+    }
+
+    var primaryCatalogState: ProductAppCatalogWorkspaceState? {
+        primaryWorkspaceState?.catalog
+    }
+
+    func catalogState(
+        for reference: ProductWorkspaceReference
+    ) -> ProductAppCatalogWorkspaceState? {
+        workspaceState(for: reference)?.catalog
     }
 
     private func updatePrimaryWorkspace(
@@ -752,13 +759,80 @@ final class AppModel: ApplicationInputSink {
         )
     }
 
+    private func applyCachedCatalog(
+        to state: inout ProductWorkspaceState
+    ) {
+        guard let owner = state.catalogOwner else {
+            state.catalog = ProductAppCatalogWorkspaceState()
+            return
+        }
+        let apps = appsByHostID[owner.hostID] ?? []
+        let updatedAt = appCatalogUpdatedAtByHostID[owner.hostID]
+        if let selectedAppID = state.selectedAppID,
+           !apps.contains(where: { $0.id == selectedAppID }) {
+            state.selectedAppID = nil
+        }
+        if state.selectedAppID == nil {
+            state.selectedAppID = apps.first?.id
+        }
+        let phase: ProductAppCatalogPhase
+        if updatedAt == nil {
+            phase = .idle
+        } else if apps.isEmpty {
+            phase = .empty(source: .cached)
+        } else {
+            phase = .cached
+        }
+        state.catalog = ProductAppCatalogWorkspaceState(
+            owner: owner,
+            phase: phase,
+            updatedAt: updatedAt
+        )
+    }
+
+    private func publishCatalogStateToWorkspaces(
+        currentOwner: ProductCatalogOwner? = nil
+    ) {
+        for workspace in workspaceRegistry.states {
+            _ = try? workspaceRegistry.update(workspace.reference) { state in
+                guard let owner = state.catalogOwner else {
+                    state.catalog = ProductAppCatalogWorkspaceState()
+                    return
+                }
+                if owner == currentOwner {
+                    let apps = appsByHostID[owner.hostID] ?? []
+                    if let selectedAppID = state.selectedAppID,
+                       !apps.contains(where: { $0.id == selectedAppID }) {
+                        state.selectedAppID = nil
+                    }
+                    if state.selectedAppID == nil {
+                        state.selectedAppID = apps.first?.id
+                    }
+                    state.catalog = ProductAppCatalogWorkspaceState(
+                        owner: owner,
+                        phase: apps.isEmpty
+                            ? .empty(source: .current)
+                            : .current,
+                        updatedAt: appCatalogUpdatedAtByHostID[owner.hostID]
+                    )
+                } else {
+                    applyCachedCatalog(to: &state)
+                }
+            }
+        }
+    }
+
+    private func catalogOwnerIsCurrent(_ owner: ProductCatalogOwner) -> Bool {
+        workspaceRegistry.state(for: owner.workspace)?.catalogOwner == owner
+    }
+
     var selectedApps: [RemoteApp] {
-        guard let hostID = selectedHost?.id else { return [] }
+        guard let hostID = selectedHostID else { return [] }
         return appsByHostID[hostID] ?? []
     }
 
     var selectedApp: RemoteApp? {
-        selectedApps.first { $0.id == streamLaunchUI.selectedAppID } ?? selectedApps.first
+        selectedApps.first { $0.id == selectedAppID } ?? selectedApps.first
     }
 
     var spatialAudioPreferences: SessionSpatialAudioPreferences {
@@ -1410,14 +1484,58 @@ final class AppModel: ApplicationInputSink {
     }
 
     func loadCachedApps() async {
+        await loadCachedApps(in: primaryWorkspaceReference)
+    }
+
+    func loadCachedApps(in workspace: ProductWorkspaceReference) async {
+        guard let initialState = workspaceRegistry.state(for: workspace) else { return }
+        let initialOwner = initialState.catalogOwner
+        if let owner = initialOwner {
+            _ = try? workspaceRegistry.update(workspace) { state in
+                state.catalog = ProductAppCatalogWorkspaceState(
+                    owner: owner,
+                    phase: .loading(
+                        hasCachedApps: !(appsByHostID[owner.hostID] ?? []).isEmpty
+                    ),
+                    updatedAt: appCatalogUpdatedAtByHostID[owner.hostID]
+                )
+            }
+        }
         do {
             let snapshots = try await appCatalogRepository.loadSnapshots()
-            appsByHostID = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.hostID, $0.apps) })
-            if let selectedHostID, streamLaunchUI.selectedAppID == nil {
-                streamLaunchUI.selectedAppID = appsByHostID[selectedHostID]?.first?.id
+            guard workspaceRegistry.state(for: workspace) != nil,
+                  initialOwner == nil || initialOwner.map(catalogOwnerIsCurrent) == true
+            else { return }
+            var loadedApps: [MoonlightHost.ID: [RemoteApp]] = [:]
+            var loadedDates: [MoonlightHost.ID: Date] = [:]
+            for snapshot in snapshots {
+                if let currentDate = loadedDates[snapshot.hostID],
+                   currentDate > snapshot.updatedAt {
+                    continue
+                }
+                loadedApps[snapshot.hostID] = snapshot.apps
+                loadedDates[snapshot.hostID] = snapshot.updatedAt
             }
+            appsByHostID = loadedApps
+            appCatalogUpdatedAtByHostID = loadedDates
+            reconcileWorkspaceSelections()
+            publishCatalogStateToWorkspaces()
             diagnostics.record("Loaded cached app lists for \(snapshots.count) hosts", subsystem: "apps")
         } catch {
+            guard let owner = initialOwner, catalogOwnerIsCurrent(owner) else { return }
+            _ = try? workspaceRegistry.update(workspace) { state in
+                state.catalog = ProductAppCatalogWorkspaceState(
+                    owner: owner,
+                    phase: .failed(
+                        hasCachedApps: !(appsByHostID[owner.hostID] ?? []).isEmpty
+                    ),
+                    updatedAt: appCatalogUpdatedAtByHostID[owner.hostID],
+                    issue: ProductIssue(
+                        code: .catalogRefreshFailed,
+                        actionScope: .catalog(owner)
+                    )
+                )
+            }
             diagnostics.record(
                 "Cached app lists could not be loaded.",
                 subsystem: "apps",
@@ -1705,33 +1823,87 @@ final class AppModel: ApplicationInputSink {
     }
 
     func refreshAppsForSelectedHost() async {
-        guard let host = selectedHost else { return }
+        await refreshAppsForSelectedHost(in: primaryWorkspaceReference)
+    }
+
+    func refreshAppsForSelectedHost(
+        in workspace: ProductWorkspaceReference
+    ) async {
+        guard let state = workspaceRegistry.state(for: workspace),
+              let owner = state.catalogOwner,
+              let host = hosts.first(where: { $0.id == owner.hostID }) else {
+            return
+        }
+        guard !state.catalog.phase.isRefreshing else { return }
         guard host.pairingState == .paired else {
-            appCatalogUI.errorMessage = "Pair the host before refreshing apps."
+            _ = try? workspaceRegistry.update(workspace) { current in
+                current.catalog = ProductAppCatalogWorkspaceState(
+                    owner: owner,
+                    phase: .failed(
+                        hasCachedApps: !(appsByHostID[owner.hostID] ?? []).isEmpty
+                    ),
+                    updatedAt: appCatalogUpdatedAtByHostID[owner.hostID],
+                    issue: ProductIssue(
+                        code: .catalogRequiresPairing,
+                        actionScope: .catalog(owner)
+                    )
+                )
+            }
             diagnostics.record("App refresh requires a paired host", subsystem: "apps")
             return
         }
 
-        appCatalogUI.isRefreshing = true
-        appCatalogUI.errorMessage = nil
-        defer { appCatalogUI.isRefreshing = false }
+        _ = try? workspaceRegistry.update(workspace) { current in
+            current.catalog = ProductAppCatalogWorkspaceState(
+                owner: owner,
+                phase: .loading(
+                    hasCachedApps: !(appsByHostID[owner.hostID] ?? []).isEmpty
+                ),
+                updatedAt: appCatalogUpdatedAtByHostID[owner.hostID]
+            )
+        }
 
         do {
             let snapshot = try await appCatalogManager.refreshApps(for: host, clientUniqueID: clientUniqueID)
-            appsByHostID[host.id] = snapshot.apps
-            let snapshots = appsByHostID.map { hostID, apps in
-                AppListSnapshot(hostID: hostID, apps: apps, updatedAt: hostID == host.id ? snapshot.updatedAt : Date())
+            guard snapshot.hostID == owner.hostID,
+                  catalogOwnerIsCurrent(owner) else { return }
+            var updatedApps = appsByHostID
+            var updatedDates = appCatalogUpdatedAtByHostID
+            updatedApps[owner.hostID] = snapshot.apps
+            updatedDates[owner.hostID] = snapshot.updatedAt
+            let snapshots = updatedApps.map { hostID, apps in
+                AppListSnapshot(
+                    hostID: hostID,
+                    apps: apps,
+                    updatedAt: updatedDates[hostID] ?? snapshot.updatedAt
+                )
             }
             try await appCatalogRepository.saveSnapshots(snapshots)
-            streamLaunchUI.selectedAppID = snapshot.apps.first?.id
-            appCatalogUI.lastUpdatedAt = snapshot.updatedAt
+            guard catalogOwnerIsCurrent(owner) else { return }
+            appsByHostID = updatedApps
+            appCatalogUpdatedAtByHostID = updatedDates
+            reconcileWorkspaceSelections()
+            publishCatalogStateToWorkspaces(currentOwner: owner)
             diagnostics.record(
                 "Loaded \(snapshot.apps.count) apps",
                 subsystem: "apps",
                 code: "app_catalog_refreshed"
             )
         } catch {
-            appCatalogUI.errorMessage = "The app catalog could not be refreshed."
+            guard catalogOwnerIsCurrent(owner) else { return }
+            _ = try? workspaceRegistry.update(workspace) { current in
+                current.catalog = ProductAppCatalogWorkspaceState(
+                    owner: owner,
+                    phase: .failed(
+                        hasCachedApps: !(appsByHostID[owner.hostID] ?? []).isEmpty
+                    ),
+                    updatedAt: appCatalogUpdatedAtByHostID[owner.hostID],
+                    issue: ProductIssue(
+                        code: .catalogRefreshFailed,
+                        actionScope: .catalog(owner)
+                    )
+                )
+            }
             diagnostics.record(
                 "The app catalog could not be refreshed.",
                 subsystem: "apps",
@@ -1743,11 +1915,25 @@ final class AppModel: ApplicationInputSink {
 
     func select(host: MoonlightHost) {
         selectedHostID = host.id
-        streamLaunchUI.selectedAppID = appsByHostID[host.id]?.first?.id
     }
 
     func select(app: RemoteApp) {
-        streamLaunchUI.selectedAppID = app.id
+        _ = select(app: app, in: primaryWorkspaceReference)
+    }
+
+    @discardableResult
+    func select(
+        app: RemoteApp,
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        guard let state = workspaceRegistry.state(for: workspace),
+              let owner = state.catalogOwner,
+              appsByHostID[owner.hostID]?.contains(where: { $0.id == app.id }) == true
+        else { return false }
+        _ = try? workspaceRegistry.update(workspace) {
+            $0.selectedAppID = app.id
+        }
+        return true
     }
 
     func launchSelectedApp() async {

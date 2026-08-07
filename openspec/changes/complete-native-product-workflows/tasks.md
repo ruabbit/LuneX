@@ -11,7 +11,7 @@
 
 - [x] 2.1 Migrate host selection, first-use presentation, refresh state, and manual-add draft/result state from global fields to the owning workspace.
 - [x] 2.2 Keep Add Host presentation open until awaited validation and persistence succeed, select the normalized host on success, and present field-safe correction on failure.
-- [ ] 2.3 Bind catalog loading, cached/empty/current/failure presentation, selection, and retry actions to workspace and selected-host generations.
+- [x] 2.3 Bind catalog loading, cached/empty/current/failure presentation, selection, and retry actions to workspace and selected-host generations.
 - [ ] 2.4 Bind pairing progress, PIN entry, cancellation, failure, retry, and late-event rejection to checked workspace, host, and attempt generations.
 - [ ] 2.5 Define typed host removal and trust-reset confirmation workflows that preserve unrelated hosts and require clean teardown before destructive mutation of an active owner.
 - [ ] 2.6 Recompose the SwiftUI host, pairing, and catalog surfaces for first-use, loading, empty, cached, failed, retry, confirmation, and completed states.

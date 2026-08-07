@@ -581,6 +581,10 @@ private struct AppCatalogPanel: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
+        let workspace = appModel.primaryWorkspaceReference
+        let catalog = appModel.catalogState(for: workspace)
+            ?? ProductAppCatalogWorkspaceState()
+
         Panel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -588,38 +592,114 @@ private struct AppCatalogPanel: View {
                     Spacer()
                     Button {
                         Task {
-                            await appModel.refreshAppsForSelectedHost()
+                            await appModel.refreshAppsForSelectedHost(in: workspace)
                         }
                     } label: {
                         Label("Refresh Apps", systemImage: "arrow.down.circle")
                     }
-                    .disabled(appModel.appCatalogUI.isRefreshing || appModel.selectedHost?.pairingState != .paired)
+                    .disabled(
+                        catalog.phase.isRefreshing || appModel.selectedHost == nil
+                    )
                 }
 
                 if appModel.selectedApps.isEmpty {
-                    ContentUnavailableView("No Apps", systemImage: "square.grid.3x3", description: Text(appModel.appCatalogUI.errorMessage ?? "Refresh a paired host to load apps."))
-                        .frame(minHeight: 240)
+                    emptyCatalogContent(catalog)
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                         ForEach(appModel.selectedApps) { app in
                             RemoteAppTile(
                                 app: app,
-                                isSelected: appModel.streamLaunchUI.selectedAppID == app.id
+                                isSelected: appModel.selectedAppID == app.id
                             )
                             .onTapGesture {
-                                appModel.select(app: app)
+                                appModel.select(app: app, in: workspace)
                             }
                         }
                     }
                     .frame(minHeight: 240, alignment: .top)
                 }
 
-                if let date = appModel.appCatalogUI.lastUpdatedAt {
+                catalogStatus(catalog)
+
+                if let date = catalog.updatedAt {
                     Text("Updated \(date.formatted(date: .omitted, time: .shortened))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func emptyCatalogContent(
+        _ catalog: ProductAppCatalogWorkspaceState
+    ) -> some View {
+        switch catalog.phase {
+        case .unavailable:
+            ContentUnavailableView("Select a Host", systemImage: "square.grid.3x3")
+                .frame(minHeight: 240)
+        case .loading:
+            ProgressView("Loading apps...")
+                .frame(maxWidth: .infinity, minHeight: 240)
+        case let .empty(source):
+            ContentUnavailableView(
+                source == .current ? "No Apps" : "No Saved Apps",
+                systemImage: "square.grid.3x3",
+                description: Text(
+                    source == .current
+                        ? "The host returned an empty app list."
+                        : "Refresh this host to load its apps."
+                )
+            )
+            .frame(minHeight: 240)
+        case .failed:
+            if let issue = catalog.issue {
+                ContentUnavailableView {
+                    Label {
+                        Text(issue.presentation.title)
+                    } icon: {
+                        Image(systemName: issue.presentation.systemImage)
+                    }
+                } description: {
+                    Text(issue.presentation.message)
+                }
+                .frame(minHeight: 240)
+            }
+        case .idle, .cached, .current:
+            ContentUnavailableView(
+                "No Apps",
+                systemImage: "square.grid.3x3",
+                description: Text("Refresh this host to load its apps.")
+            )
+            .frame(minHeight: 240)
+        }
+    }
+
+    @ViewBuilder
+    private func catalogStatus(
+        _ catalog: ProductAppCatalogWorkspaceState
+    ) -> some View {
+        switch catalog.phase {
+        case .loading where !appModel.selectedApps.isEmpty:
+            ProgressView("Updating apps...")
+                .controlSize(.small)
+        case .cached:
+            Label("Saved app list", systemImage: "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+        case .current:
+            Label("Current app list", systemImage: "checkmark.circle")
+                .foregroundStyle(.secondary)
+        case .failed where !appModel.selectedApps.isEmpty:
+            if let issue = catalog.issue {
+                Label {
+                    Text(issue.presentation.message)
+                } icon: {
+                    Image(systemName: issue.presentation.systemImage)
+                }
+                .foregroundStyle(.orange)
+            }
+        default:
+            EmptyView()
         }
     }
 }

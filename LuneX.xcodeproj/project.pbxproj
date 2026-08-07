@@ -58,6 +58,7 @@
 		0C07A99EEEE4CCEE19CE4FB2 /* AppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0F6C5CB6DF2843C71283CB /* AppCatalog.swift */; };
 		0C1EE4F9FB29A57EFBECCA0A /* RTSPBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13450D22D4C73E2DC264A069 /* RTSPBootstrap.swift */; };
 		0C3F03F70AC2151F909F15ED /* SpatialAudioPresentationStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F9C1B2D6BD04ABC9F14071 /* SpatialAudioPresentationStatus.swift */; };
+		0C98D8ED81E453E45881264C /* ProductCatalogWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ProductCatalogWorkspaceTests.swift"; sourceTree = "<group>"; };
 		0C9E315C1E954FFDAFB8B4E2 /* StreamMetalPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9190DD229B050AF1816197FD /* StreamMetalPresenterTests.swift */; };
 		0DB7571B8334F5E7680A9B20 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Resources/Assets.xcassets"; sourceTree = "<group>"; };
 		0DC64B33EE1DAF63F8E76516 /* host.c in Sources */ = {isa = PBXBuildFile; fileRef = 9D5A2F039AF5AC454CE4E1E0 /* host.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
@@ -1015,6 +1016,7 @@
 				F9BC23D6CCB8CC27D1E3C2EA /* PairingPersistenceTests.swift in Sources */,
 				A782524677725332827B575B /* PairingTransportTests.swift in Sources */,
 				90839AFF7B8B511A9A9192A2 /* ProductIssueTests.swift in Sources */,
+				83B8F481915A54959D22C057 /* ProductCatalogWorkspaceTests.swift in Sources */,
 				BB081FFB382A9ED7A150975B /* ProductHostWorkspaceTests.swift in Sources */,
 				448226712FAADF2A088D4998 /* ProductWorkspaceRegistryTests.swift in Sources */,
 				34C94E1980B1C5FD249A30C0 /* RTSPBootstrapTests.swift in Sources */,
@@ -1183,6 +1185,7 @@
 		82BEADFFDB29D8DE37D2FBC9 /* SpatialAudioRuntimeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXAudio/SpatialAudioRuntimeState.swift"; sourceTree = "<group>"; };
 		831F14496421DEFFAB0BA5C2 /* NativeSessionAudioProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBFFC2570824DF7539ACFD0 /* NativeSessionAudioProcessor.swift */; };
 		83ABFBC71A0D651358D1BF3F /* AppKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8CCA668D7435712B409156 /* AppKitLifecycleMonitor.swift */; };
+		83B8F481915A54959D22C057 /* ProductCatalogWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C98D8ED81E453E45881264C /* ProductCatalogWorkspaceTests.swift */; };
 		83F089BA83ABF26A3D3362B8 /* HostEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82820A094B73B5239F4F5C6F /* HostEndpoint.swift */; };
 		8421F2669098C6C58B3A7771 /* RuntimeDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CF15B10BE401A025E2333E /* RuntimeDiagnostics.swift */; };
 		84F3F42A5C92323E42E543DB /* MobilePictureInPictureDisplayLayerSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452691961F91D9D7CF5F5B15 /* MobilePictureInPictureDisplayLayerSink.swift */; };
@@ -1544,6 +1547,7 @@
 				06CE224A03FC7F5335F22344 /* PairingPersistenceTests.swift */,
 				1670130D50FF3FB4415ADCA6 /* PairingTransportTests.swift */,
 				C83DAA4B00855126BB5C2683 /* ProductIssueTests.swift */,
+				0C98D8ED81E453E45881264C /* ProductCatalogWorkspaceTests.swift */,
 				95624CEAD48AC534A89B8B13 /* ProductHostWorkspaceTests.swift */,
 				39E94E4EA6C479D697AC470D /* ProductWorkspaceRegistryTests.swift */,
 				265ED2A218A1036C56367315 /* RTSPBootstrapTests.swift */,

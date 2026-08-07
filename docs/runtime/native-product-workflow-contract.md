@@ -112,8 +112,9 @@ user-visible failure therefore requires an explicit code and reviewed
 presentation rather than copying a lower-level string.
 
 `ProductActionToken` carries an opaque identifier, a closed
-`ProductActionKind`, and one of three non-display scopes: application,
-workspace identity/generation, or session identity plus its owning workspace.
+`ProductActionKind`, and one of four non-display scopes: application,
+workspace identity/generation, catalog owner, or session identity plus its
+owning workspace.
 The value is an authorization claim, not authorization by itself. The action
 dispatcher must compare its scope with current checked owners at invocation and
 must return a `stale_action` issue without executing when they differ.
@@ -219,10 +220,45 @@ unrelated host.
 Opening or cancelling the current compatibility sheet clears only the primary
 workspace draft. Root presentation is still the existing Boolean SwiftUI sheet
 bound to `primaryWorkspaceReference`; direct per-scene sheet ownership remains
-task 4.2. Catalog, pairing, multiwindow, and active-session owner wiring remain
-tasks 2.3, 2.4, 4.x, and 3.x respectively. Deterministic tests and unsigned
-generic builds do not prove Simulator interaction, signed artifacts, physical
-devices, or live Sunshine behavior.
+task 4.2. Pairing, multiwindow, and active-session owner wiring remain tasks
+2.4, 4.x, and 3.x respectively. Deterministic tests and unsigned generic builds
+do not prove Simulator interaction, signed artifacts, physical devices, or live
+Sunshine behavior.
+
+### Catalog workspace and selected-host generation
+
+Every real host selection change now creates a new UUID-backed
+`ProductHostSelectionGeneration`. A `ProductCatalogOwner` combines that
+generation with the complete workspace reference and selected host ID. A
+same-host assignment is a no-op, while A-to-B-to-A creates a new owner for the
+second A selection. Workspace replacement also produces a new workspace and
+host-selection owner, so neither equality by host ID nor a later return to the
+same host can revive an older request.
+
+Catalog presentation is stored in `ProductWorkspaceState` as unavailable,
+idle, loading with or without cached apps, cached empty/nonempty, current
+empty/nonempty, or failed with or without cached apps. The state carries the
+checked owner, the snapshot timestamp, and only a typed product issue. Cached
+snapshot timestamps are preserved rather than synthesized during load;
+duplicate snapshots for a host resolve deterministically to the newest value.
+Failure leaves cached apps and selection available and exposes a
+`refreshCatalog` action scoped to the exact catalog owner.
+
+Cached load and network refresh entry points accept a complete workspace
+reference. Refresh captures its catalog owner before suspension, rejects
+duplicate in-flight work, and revalidates the complete owner after the network
+response, before persistence, and after persistence before publishing shared
+apps or any workspace presentation. A stale A response after A-to-B-to-A, or a
+cache load completing after workspace replacement, cannot publish into the
+replacement. Selection is admitted only when the requested app belongs to the
+current owner's host catalog; the compatibility `selectedAppID` projection is
+read-only so callers cannot bypass that check.
+
+The Apps panel reads the primary compatibility workspace catalog, invokes
+workspace-scoped refresh and selection, distinguishes saved/current/empty/
+loading/failure presentation, and keeps cached tiles visible on refresh
+failure. Direct scene-specific catalog bindings remain part of the broader
+multiwindow migration in task 4.2. Pairing ownership remains task 2.4.
 
 ## Compatibility Boundary
 

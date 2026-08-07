@@ -69,9 +69,24 @@ struct ProductWorkspaceReference: Hashable, Sendable {
     let generation: ProductWorkspaceGeneration
 }
 
+struct ProductHostSelectionGeneration: Hashable, Sendable {
+    let rawValue: UUID
+
+    init(rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+}
+
+struct ProductCatalogOwner: Hashable, Sendable {
+    let workspace: ProductWorkspaceReference
+    let hostID: MoonlightHost.ID
+    let hostSelectionGeneration: ProductHostSelectionGeneration
+}
+
 enum ProductActionScope: Hashable, Sendable {
     case application
     case workspace(ProductWorkspaceReference)
+    case catalog(ProductCatalogOwner)
     case session(
         workspace: ProductWorkspaceReference,
         sessionID: UUID
@@ -378,25 +393,100 @@ struct ProductWorkspacePresentationState: Equatable, Sendable {
 struct ProductWorkspaceState: Equatable, Sendable {
     let reference: ProductWorkspaceReference
     var navigationSelection: AppNavigationSelection
-    var selectedHostID: MoonlightHost.ID?
+    var selectedHostID: MoonlightHost.ID? {
+        didSet {
+            guard selectedHostID != oldValue else { return }
+            hostSelectionGeneration = ProductHostSelectionGeneration()
+            selectedAppID = nil
+            catalog = ProductAppCatalogWorkspaceState(
+                owner: catalogOwner,
+                phase: selectedHostID == nil ? .unavailable : .idle
+            )
+        }
+    }
+    private(set) var hostSelectionGeneration: ProductHostSelectionGeneration
     var selectedAppID: RemoteApp.ID?
     var presentation: ProductWorkspacePresentationState
     var hostLibrary: ProductHostLibraryWorkspaceState
+    var catalog: ProductAppCatalogWorkspaceState
 
     init(
         reference: ProductWorkspaceReference,
         navigationSelection: AppNavigationSelection = .library,
         selectedHostID: MoonlightHost.ID? = nil,
+        hostSelectionGeneration: ProductHostSelectionGeneration = .init(),
         selectedAppID: RemoteApp.ID? = nil,
         presentation: ProductWorkspacePresentationState = .init(),
-        hostLibrary: ProductHostLibraryWorkspaceState = .init()
+        hostLibrary: ProductHostLibraryWorkspaceState = .init(),
+        catalog: ProductAppCatalogWorkspaceState? = nil
     ) {
         self.reference = reference
         self.navigationSelection = navigationSelection
         self.selectedHostID = selectedHostID
+        self.hostSelectionGeneration = hostSelectionGeneration
         self.selectedAppID = selectedAppID
         self.presentation = presentation
         self.hostLibrary = hostLibrary
+        let owner = selectedHostID.map {
+            ProductCatalogOwner(
+                workspace: reference,
+                hostID: $0,
+                hostSelectionGeneration: hostSelectionGeneration
+            )
+        }
+        self.catalog = catalog ?? ProductAppCatalogWorkspaceState(
+            owner: owner,
+            phase: selectedHostID == nil ? .unavailable : .idle
+        )
+    }
+
+    var catalogOwner: ProductCatalogOwner? {
+        selectedHostID.map {
+            ProductCatalogOwner(
+                workspace: reference,
+                hostID: $0,
+                hostSelectionGeneration: hostSelectionGeneration
+            )
+        }
+    }
+}
+
+enum ProductCatalogContentSource: Equatable, Sendable {
+    case cached
+    case current
+}
+
+enum ProductAppCatalogPhase: Equatable, Sendable {
+    case unavailable
+    case idle
+    case loading(hasCachedApps: Bool)
+    case empty(source: ProductCatalogContentSource)
+    case cached
+    case current
+    case failed(hasCachedApps: Bool)
+
+    var isRefreshing: Bool {
+        guard case .loading = self else { return false }
+        return true
+    }
+}
+
+struct ProductAppCatalogWorkspaceState: Equatable, Sendable {
+    var owner: ProductCatalogOwner?
+    var phase: ProductAppCatalogPhase
+    var updatedAt: Date?
+    var issue: ProductIssue?
+
+    init(
+        owner: ProductCatalogOwner? = nil,
+        phase: ProductAppCatalogPhase = .unavailable,
+        updatedAt: Date? = nil,
+        issue: ProductIssue? = nil
+    ) {
+        self.owner = owner
+        self.phase = phase
+        self.updatedAt = updatedAt
+        self.issue = issue
     }
 }
 

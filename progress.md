@@ -3711,3 +3711,11 @@
 - 2026-08-08：2.2 focused `/tmp/LuneX-19-2_2-focused.WQaZkZ`为`41/41`，related `/tmp/LuneX-19-2_2-related.Pr0grt`为`106/106`，normal `/tmp/LuneX-19-2_2-normal.5tr9B2`为`1161/1160/1/0`；opt-in unset，raw/xcresult删除。
 - 2026-08-08：2.2 unsigned generic Debug builds `/tmp/LuneX-19-2_2-platform-builds.ySNAZ1`的macOS、iOS/iPadOS、tvOS、visionOS均通过；未调用Simulator lifecycle，不构成signed/physical/live proof。勾选OpenSpec至`8/48`，下一项2.3。
 - 2026-08-08：task 2.2 final gate `/tmp/LuneX-19-2_2-final.Q47MFp`通过9文件scope、strict、`8/48 next 2.3`、generator no drift、focused/related/normal、4/4 generic Debug build、opt-in unset及raw identity artifacts absent；准备独立提交推送。
+- 2026-08-08：恢复task 2.3并接回唯一normal session，确认候选实现为`1170/1169/1/0`且两个opt-in unset；未重复启动xcodebuild，raw/xcresult已删除。
+- 2026-08-08：final review将primary `selectedAppID` projection收紧为只读，并新增duplicate snapshot newest-wins与cache load期间workspace replacement stale rejection测试。
+- 2026-08-08：首个新增focused wrapper误用`LuneX-macOS` scheme，以exit 66、0 tests结束；通过project scheme元数据定位后改用`LuneXCoreTests` fresh运行，不原样重复错误命令。
+- 2026-08-08：corrected focused `/tmp/LuneX-19-2_3-focused-final-r2.qoZFcB`为`44/44`，related `/tmp/LuneX-19-2_3-related-final-r2.P2U0aA`为`117/117`，final serial normal `/tmp/LuneX-19-2_3-normal-final-r2.Q0xvUU`为`1172/1171/1/0`；Keychain/live-host opt-in均unset，raw/xcresult删除。
+- 2026-08-08：同步catalog generation ownership合同并勾选2.3至`9/48`；下一步复验generator、strict、四平台generic Debug、scope与最终证据门，再独立提交推送并进入2.4。
+- 2026-08-08：static final `/tmp/LuneX-19-2_3-static-final.lRAYqQ`通过generator双次稳定SHA-256、diff check、strict与apply精确`9/48 next 2.4`。
+- 2026-08-08：final generic Debug build `/tmp/LuneX-19-2_3-platform-builds-final-r2.hEc7xM`的macOS、iOS/iPadOS、tvOS、visionOS均通过；signing disabled、两个opt-in unset、未调用Simulator lifecycle，raw log和临时DerivedData删除。
+- 2026-08-08：task 2.3 final audit `/tmp/LuneX-19-2_3-final-audit.4wCcwh`通过精确11文件scope、diff check、strict/apply `9/48 next 2.4`、stable generator、focused/related/normal、4/4 generic Debug及artifact/opt-in/process/proof边界；准备final-record与独立提交推送。
