@@ -2472,6 +2472,111 @@ pre/final authority indexes, stable project and retained evidence, disabled
 opt-ins, and implementation, task, privacy, dependency, and proof boundaries
 before the task-level commit.
 
+## Task 6.4 current visionOS audio route application
+
+Task 6.4 generalizes the task 4.4 publisher at the platform-application edge;
+it does not add an audio graph, route observer, AVAudioSession notification
+source, PCM path, or event stream. `TVVisionAudioRouteSnapshotPublisher` fixes
+one `TVVisionPlatform` at initialization. `NativeSessionMediaEnvironment`
+creates or reuses that publisher only for matching current presentation
+ownership, replays the latest current-session route on activation or
+replacement, and consumes later events from the same canonical audio runtime.
+
+The publisher validates platform policy before creating checked coordinator
+state. tvOS accepts `.none` or `.environmentListener`, rejects vision output
+experience, and continues to require granted listener entitlement before
+reporting head tracking. visionOS accepts `.none` or
+`.visionOutputExperience`, rejects the tvOS environment-listener strategy, and
+does not apply listener entitlement. Matching visionOS fixed or head-tracked
+readback publishes `.intendedSpatialExperience`. Both platforms require the
+route and spatial runtime to share revision and route support, validate actual
+current and maximum output channel counts, reject duplicate event sequence or
+older graph generation, and normalize unavailable output without retaining a
+false spatial claim.
+
+Interruption keeps the checked current route with its runtime stage. Media
+services lost closes output and active spatial presentation. Reset accepts only
+the replacement graph generation and permits current fixed or head-tracked
+intended experience to recover. Presentation replacement replays current state
+into the new ownership without advancing a separate graph. Invalid runtime,
+publisher revision exhaustion, audio-route action failure, coordinator
+failure, remote termination, and stop clear current route/presentation state;
+late old-platform, old-ownership, old-sequence, or old-graph events remain
+inert.
+
+Fresh retained pre-mark evidence is:
+
+- focused `/tmp/LuneX-18-6_4-focused-r2.BZF9w4/Focused.xcresult`:
+  `5/5 passed / 0 skipped / 0 failed / 0 expected failure`, with zero warning,
+  error, or analyzer-warning diagnostics;
+- related `/tmp/LuneX-18-6_4-related.YQ4rA2/Related.xcresult`:
+  `182/182 passed / 0 skipped / 0 failed / 0 expected failure`, with zero
+  warning, error, or analyzer-warning diagnostics;
+- XROS 26.4 API probe `/tmp/LuneX-18-6_4-xros-probe.2UK3No`: public output-node
+  intended fixed, head-tracked, and bypassed experiences typecheck with
+  warnings as errors, while the expected negative probe reports the listener
+  head-tracking property unavailable on visionOS;
+- fixed Vision Pro unsigned Debug
+  `/tmp/LuneX-18-6_4-visionos-direct.6wtjPE/VisionOS.xcresult`: succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib;
+- normal `/tmp/LuneX-18-6_4-normal.9YKcpI/Normal.xcresult`:
+  `1084 total / 1083 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain round-trip and file fallback
+  tests passing; and
+- five-platform unsigned Debug `/tmp/LuneX-18-6_4-builds.Vi0CJb`: macOS and the
+  fixed iPhone, iPad, Apple TV, and Vision Pro destinations all succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib each.
+
+Both real opt-ins remained unset. Fixed UUIDs were used only as build
+destinations; no app was launched and no Simulator inventory or lifecycle
+operation ran. These results prove deterministic publisher/environment/current
+ownership behavior, recovery and replacement contracts, public SDK
+availability, and unsigned cross-platform compilation. They do not prove
+Simulator runtime, signed installation, physical receiver, speaker, or AirPods
+routes, audible fixed or head-tracked spatial audio, live Sunshine, latency,
+comfort, performance, power, or thermal behavior. Task 6.5 still owns complete
+scene/video/HDR/audio/input/diagnostics coordination and terminal orchestration,
+task 6.6 owns the connected regression, task 7.2 owns actual-state UI, and task
+8.7 owns signed physical/live acceptance.
+
+The fresh repository pre-gate
+`/tmp/LuneX-18-6_4-repository-pre-r4.8oI8VY` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `34/50 next 6.4`, three byte-stable project generations
+at SHA-256
+`e6a88cd00f4364b7e3a8011841abba9344a9ae3ac1c411e18d1ce426b9b739cb`, exact
+eleven-file scope, project membership, platform policy, route/runtime
+consistency, current ownership and replay semantics, all retained
+test/probe/build/Metal evidence, the exact Keychain skip, disabled opt-ins, no
+residual process, and clean-room, reference, dependency, privacy, diff, and
+proof-tier boundaries. Only task 6.4 may be checked after this gate.
+
+After that gate, only task 6.4 was checked. The read-only post-mark final-state
+`/tmp/LuneX-18-6_4-final-state.1Gh0gg` confirmed OpenSpec strict `9/9`, `35/50
+ready`, task 6.4 complete, task 6.5 next, exact twelve-file scope, the single
+checkbox replacement, stable generated project, retained evidence presence,
+disabled opt-ins, no residual process, and unchanged reference, dependency,
+configuration, diff, and proof boundaries. It did not repeat tests, builds,
+generation, Keychain, live-host, or Simulator operations.
+
+The corrected post-record
+`/tmp/LuneX-18-6_4-post-record-r4.onEV9k` confirmed `35/50 next 6.5`, strict
+`9/9`, final twelve-file classification as two production, two test, and eight
+authority files, both gate indexes in all five authority records, stable
+project and retained evidence, disabled opt-ins, and repository boundaries.
+The final diff audit `/tmp/LuneX-18-6_4-final-audit.ZathRe` then confirmed the
+fixed-platform publisher, mutually exclusive strategies, route/runtime
+consistency, current ownership replay, recovery/replacement/terminal behavior,
+both connected tests without weakening, the single task checkbox, and stable
+privacy, reference, dependency, configuration, opt-in, and proof boundaries.
+
+The final record `/tmp/LuneX-18-6_4-final-record.0FZsJc` confirmed the same
+`35/50 next 6.5` state, twelve-file `2/2/8` classification, complete
+pre/final/post-record/audit authority indexes, stable project and retained
+evidence, disabled opt-ins, and implementation, task, privacy, dependency, and
+proof boundaries before the task-level commit.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

@@ -2900,3 +2900,18 @@
 - post-mark `/tmp/LuneX-18-6_3-final-state.dySg9y`确认OpenSpec精确推进到`34/50 next 6.4`、13文件scope和唯一6.3 checkbox；6.4 visionOS audio、6.5 AppModel/RootView组合协调、6.6回归及physical/live证明均继续pending。
 - final audit `/tmp/LuneX-18-6_3-final-audit.c5MAQz`未发现阻止独立提交的问题：production/test/authority分类与实现语义一致，测试未弱化，只有6.3 checkbox变化，project、reference、dependency、privacy、opt-in和proof tier稳定。
 - final-record `/tmp/LuneX-18-6_3-final-record.7lzi44`确认6.3无剩余离线验收问题并可独立提交；它仍不替代6.4 audio、6.5组合接线、6.6回归或任何Simulator/signed/physical/live证据。
+- 6.4恢复盘点确认OpenSpec权威进度仍为`34/50`，下一任务精确为visionOS canonical audio。现有值合同已经允许visionOS的`.visionOutputExperience`与`.intendedSpatialExperience`，主要缺口位于publisher/environment仍以tvOS命名和固定ownership接线，而不是缺少新的audio graph或通知源。
+- 6.4应最小泛化现有audio route publisher为固定`TVVisionPlatform` ownership，并让`NativeSessionMediaEnvironment`按current presentation platform安装、replay、fail和替换同一个publisher。visionOS只能基于公开intended spatial experience与route capability报告实际状态，不得把listener property、编译或注入值当作物理head tracking证明。
+- 6.4实现现在让publisher在初始化时固定`TVVisionPlatform`，默认仍为tvOS；语义归一化按平台拒绝`.visionOutputExperience`或`.environmentListener`串台，visionOS的fixed/head-tracked只接受公开vision output experience，且不套用tvOS listener entitlement。route revision与runtime route-support也必须一致。
+- focused 5/5证明同一个environment audio event stream会在visionOS activation/replacement时replay current route，并在interruption、media-services lost/reset、graph generation replacement与stop时更新或清理current coordinator state；这仍是注入式/离线证明，不是物理Vision Pro空间音频或head tracking证明。
+- XROS 26.4 direct probe确认`AVAudioOutputNode.intendedSpatialExperience`、`HeadTrackedSpatialAudio`与`FixedSpatialAudio`为可用公开路径；对`AVAudioEnvironmentNode.isListenerHeadTrackingEnabled`的负向typecheck由SDK明确报visionOS unavailable。因此visionOS使用`.intendedSpatialExperience`不是偏好选择，而是当前公开API边界。
+- related 182/182把新增presentation接线与既有graph readback、vision experience resolver、route monitor、audio processor、interruption/media reset recovery、late completion rejection和tvOS路径一起执行；fixed Vision Pro build仅证明actual visionOS条件编译与Metal产物，不证明物理route/head tracking。
+- normal `1084/1083/1/0`确认完整回归无失败，唯一skip仍是按用户要求关闭的真实Keychain round-trip；文件fallback保持通过，不能把skip描述为Keychain当前实机重复验证。
+- 五平台 `/tmp/LuneX-18-6_4-builds.Vi0CJb`全部unsigned Debug通过且各有`1 AIR/1 metallib`，说明fixed-platform publisher和environment变更没有破坏macOS/iOS/iPadOS/tvOS/visionOS编译图；它不证明任何app runtime或物理音频结果。
+- 6.4的完成边界是audio route application到current platform coordinator：6.5仍需把scene、video、HDR fallback、audio、input eligibility、diagnostics和所有terminal入口作为一条组合序列验收；6.6再做完整跨层回归，7.2才交付visionOS actual-state UI。
+- repository pre-gate前三轮退出均为静态包装错误：一致性guard用`!=`而非测试脚本假设的`==`、xcresult test tree用`result`而非`testStatus`、进程正则自匹配当前shell。它们没有暴露production/test失败，也没有重复真实Keychain、运行app或操作Simulator。
+- fresh r4 `/tmp/LuneX-18-6_4-repository-pre-r4.8oI8VY`从头通过全部仓库门，稳定project哈希为`e6a88cd00f4364b7e3a8011841abba9344a9ae3ac1c411e18d1ce426b9b739cb`；不存在阻止只勾选6.4的离线问题。
+- post-mark `/tmp/LuneX-18-6_4-final-state.1Gh0gg`确认OpenSpec精确推进到`35/50 next 6.5`，tasks只有6.4一处替换；6.5组合协调、6.6回归、7.2 UI及signed/physical/live证明均继续pending，阶段18不能标记complete。
+- post-record前三轮只读失败来自跨行文本与pipefail/SIGPIPE包装假设，corrected `/tmp/LuneX-18-6_4-post-record-r4.onEV9k`最终确认五份authority索引和`2/2/8`分类完整。
+- final audit `/tmp/LuneX-18-6_4-final-audit.ZathRe`未发现实现或测试问题：平台策略、route一致性、ownership/recovery/terminal边界与任务范围相符，没有旧publisher源码引用、测试弱化、6.5提前实现、第二checkbox或仓库漂移。
+- final-record `/tmp/LuneX-18-6_4-final-record.0FZsJc`确认6.4无剩余离线验收问题并可独立提交；它不替代6.5组合协调、6.6回归、7.2 UI或任何Simulator/signed/physical/live证据。

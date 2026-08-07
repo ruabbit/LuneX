@@ -1595,7 +1595,7 @@ struct TVVisionAudioRouteSnapshot: Equatable, Hashable, Sendable {
     }
 }
 
-enum TVOSAudioRoutePublicationOutcome: Equatable, Sendable {
+enum TVVisionAudioRoutePublicationOutcome: Equatable, Sendable {
     case unchanged
     case published(TVVisionAudioRouteSnapshot)
     case staleEvent
@@ -1603,7 +1603,7 @@ enum TVOSAudioRoutePublicationOutcome: Equatable, Sendable {
     case revisionExhausted
 }
 
-struct TVOSAudioRouteSnapshotPublisher: Sendable {
+struct TVVisionAudioRouteSnapshotPublisher: Sendable {
     private struct SemanticState: Equatable, Sendable {
         let graphGeneration: UInt64
         let outputAvailable: Bool
@@ -1618,6 +1618,7 @@ struct TVOSAudioRouteSnapshotPublisher: Sendable {
         let spatialFallbackReason: SpatialAudioFallbackReason?
     }
 
+    let platform: TVVisionPlatform
     private(set) var revisionRawValue: UInt64
     private(set) var snapshot: TVVisionAudioRouteSnapshot?
     private(set) var isRevisionExhausted = false
@@ -1625,21 +1626,28 @@ struct TVOSAudioRouteSnapshotPublisher: Sendable {
     private var lastEventSequence: UInt64?
     private var semanticState: SemanticState?
 
-    init(initialRevisionRawValue: UInt64 = 0) {
+    init(
+        platform: TVVisionPlatform = .tvOS,
+        initialRevisionRawValue: UInt64 = 0
+    ) {
+        self.platform = platform
         revisionRawValue = initialRevisionRawValue
     }
 
     @discardableResult
     mutating func update(
         _ event: SessionAudioRuntimeEvent
-    ) -> TVOSAudioRoutePublicationOutcome {
+    ) -> TVVisionAudioRoutePublicationOutcome {
         if let lastEventSequence,
            event.sequence <= lastEventSequence {
             return .staleEvent
         }
         guard !isRevisionExhausted else { return .revisionExhausted }
         guard event.graphGeneration > 0,
-              let nextState = Self.semanticState(for: event) else {
+              let nextState = Self.semanticState(
+                  for: event,
+                  platform: platform
+              ) else {
             lastEventSequence = event.sequence
             return .invalidRuntime
         }
@@ -1669,7 +1677,7 @@ struct TVOSAudioRouteSnapshotPublisher: Sendable {
             return .revisionExhausted
         }
         guard let nextSnapshot = try? TVVisionAudioRouteSnapshot(
-                platform: .tvOS,
+                platform: platform,
                 revision: revision,
                 routeGeneration: routeGeneration,
                 outputAvailable: nextState.outputAvailable,
@@ -1696,11 +1704,13 @@ struct TVOSAudioRouteSnapshotPublisher: Sendable {
     }
 
     private static func semanticState(
-        for event: SessionAudioRuntimeEvent
+        for event: SessionAudioRuntimeEvent,
+        platform: TVVisionPlatform
     ) -> SemanticState? {
         let route = event.routeCapability
         if let spatialRuntime = event.spatialRuntime,
-           spatialRuntime.revision != route.revision {
+           (spatialRuntime.revision != route.revision
+               || spatialRuntime.routeSupport != route.systemSpatialSupport) {
             return nil
         }
         let countsAreValid = route.currentOutputChannelCount > 0
@@ -1741,21 +1751,40 @@ struct TVOSAudioRouteSnapshotPublisher: Sendable {
         let platformStrategy = event.spatialRuntime?.platformStrategy ?? .none
         let presentationMode = event.spatialRuntime?.presentationMode
             ?? .nonspatial
-        guard platformStrategy != .visionOutputExperience else { return nil }
+        switch (platform, platformStrategy) {
+        case (.tvOS, .visionOutputExperience),
+             (.visionOS, .environmentListener):
+            return nil
+        case (.tvOS, .none),
+             (.tvOS, .environmentListener),
+             (.visionOS, .none),
+             (.visionOS, .visionOutputExperience):
+            break
+        }
         switch presentationMode {
         case .inactive, .nonspatial:
             break
         case .fixedSpatial, .headTracked:
-            guard platformStrategy == .environmentListener else { return nil }
+            let requiredStrategy: SpatialAudioPlatformStrategy =
+                platform == .tvOS
+                    ? .environmentListener
+                    : .visionOutputExperience
+            guard platformStrategy == requiredStrategy else { return nil }
         }
-        if presentationMode == .headTracked,
+        if platform == .tvOS,
+           presentationMode == .headTracked,
            event.entitlement != .granted {
             return nil
         }
         let headTrackingCapability: TVVisionHeadTrackingCapability =
-            platformStrategy == .environmentListener
-                ? .entitlementRequired
-                : .unavailable
+            switch platformStrategy {
+            case .environmentListener:
+                .entitlementRequired
+            case .visionOutputExperience:
+                .intendedSpatialExperience
+            case .none:
+                .unavailable
+            }
         return SemanticState(
             graphGeneration: event.graphGeneration,
             outputAvailable: true,

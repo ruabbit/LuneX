@@ -326,15 +326,30 @@ Task 4.4 does not add another AVAudioSession observer or audio graph. The
 existing notification source, route-capability reader, entitlement reader,
 native audio processor, and canonical graph publish one checked runtime event
 containing actual route counts/support, graph generation, runtime stage, event
-cause, spatial presentation/readback, fallback, and entitlement. A bounded
+cause, spatial presentation/readback, fallback, and entitlement. Its original
 tvOS publisher rejects stale sequence or graph generation, semantically
 deduplicates equivalent state, and normalizes interruption, media-service loss,
 reset, and recovery. `NativeSessionMediaEnvironment` replays the latest valid
 snapshot when current tvOS presentation ownership activates or is replaced,
 then applies later events only to that ownership. Invalid runtime, revision
 exhaustion, or audio action failure closes the current coordinator; failed or
-stopped snapshots contain no audio route. visionOS application remains task
-6.4.
+stopped snapshots contain no audio route.
+
+Task 6.4 generalizes that publisher to the fixed-platform
+`TVVisionAudioRouteSnapshotPublisher` without adding a notification source,
+route observer, audio graph, or event stream. tvOS continues to accept only the
+public environment-listener strategy and requires granted listener entitlement
+for head tracking. visionOS accepts only public output-node intended spatial
+experience, publishes `.intendedSpatialExperience` capability for matching
+fixed or head-tracked readback, and never applies the listener entitlement or
+unavailable listener property. Both platforms require matching route/runtime
+revision and support, finite actual current/maximum channel counts, current
+graph generation, and current presentation ownership. Activation and
+replacement replay the latest route; interruption, media-service loss/reset,
+graph replacement, stale events, failure, and stop all flow through the same
+environment and coordinator cleanup. Task 6.5 still owns complete
+scene/video/HDR/audio/input/diagnostics orchestration, task 6.6 owns the
+connected regression, and task 7.2 owns actual-state visionOS UI.
 
 Task 4.5 keeps the existing surface owner, display observer, decoder, audio
 graph, input owner, coordinator, and resource teardown. When the same actual

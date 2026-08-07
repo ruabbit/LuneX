@@ -1331,6 +1331,210 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         _ = iterator
     }
 
+    func testVisionOSAudioRuntimeReplaysIntendedExperienceAndRecoversGraph()
+        async throws
+    {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let source = StreamVideoPresentationSource()
+        let coordinator = try TVVisionPlatformPresentationCoordinator()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory,
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let route1 = SpatialAudioRouteCapabilitySnapshot(
+            revision: .init(rawValue: 1),
+            outputAvailable: true,
+            systemSpatialSupport: .supported,
+            currentOutputChannelCount: 2,
+            maximumOutputChannelCount: 12
+        )
+        let initial = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 1,
+            graphGeneration: 1,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            ),
+            routeCapability: route1,
+            entitlement: .missing
+        )
+        await processor.emit(initial)
+        await waitUntil {
+            await environment.snapshot().audioRuntime?.runtime == initial
+        }
+
+        let first = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            presentationGeneration: 1,
+            platform: .visionOS
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: first,
+                action: .activate
+            )
+        )
+        let firstRoute = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(firstRoute?.platform, .visionOS)
+        XCTAssertEqual(firstRoute?.platformStrategy, .visionOutputExperience)
+        XCTAssertEqual(
+            firstRoute?.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+        XCTAssertEqual(firstRoute?.currentOutputChannelCount, 2)
+        XCTAssertEqual(firstRoute?.maximumOutputChannelCount, 12)
+        XCTAssertEqual(firstRoute?.spatialPresentationMode, .fixedSpatial)
+
+        let replacement = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            presentationGeneration: 2,
+            platform: .visionOS
+        )
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: replacement,
+                action: .activate
+            )
+        )
+        let replayed = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot
+        XCTAssertEqual(replayed?.ownership, replacement)
+        XCTAssertEqual(replayed?.audioRoute?.routeGeneration.rawValue, 1)
+        XCTAssertEqual(replayed?.audioRoute?.platform, .visionOS)
+
+        let interrupted = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 2,
+            graphGeneration: 1,
+            cause: .interruptionBegan,
+            stage: .interrupted,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            ),
+            routeCapability: route1,
+            entitlement: .missing
+        )
+        await processor.emit(interrupted)
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .audioRoute?.runtimeStage == .interrupted
+        }
+
+        let lost = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 3,
+            graphGeneration: 1,
+            cause: .mediaServicesLost,
+            stage: .interrupted,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            ),
+            routeCapability: route1,
+            entitlement: .missing
+        )
+        await processor.emit(lost)
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .audioRoute?.eventCause == .mediaServicesLost
+        }
+        let lostRoute = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(lostRoute?.outputAvailable, false)
+        XCTAssertEqual(
+            lostRoute?.platformStrategy,
+            SpatialAudioPlatformStrategy.none
+        )
+        XCTAssertEqual(lostRoute?.spatialPresentationMode, .inactive)
+
+        let route2 = SpatialAudioRouteCapabilitySnapshot(
+            revision: .init(rawValue: 2),
+            outputAvailable: true,
+            systemSpatialSupport: .supported,
+            currentOutputChannelCount: 6,
+            maximumOutputChannelCount: 12
+        )
+        let reset = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 4,
+            graphGeneration: 2,
+            cause: .mediaServicesReset,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 2,
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .headTracked
+            ),
+            routeCapability: route2,
+            entitlement: .missing
+        )
+        await processor.emit(reset)
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .audioRoute?.routeGeneration.rawValue == 2
+        }
+        let recovered = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(recovered?.eventCause, .mediaServicesReset)
+        XCTAssertEqual(recovered?.currentOutputChannelCount, 6)
+        XCTAssertEqual(recovered?.maximumOutputChannelCount, 12)
+        XCTAssertEqual(recovered?.spatialPresentationMode, .headTracked)
+        XCTAssertEqual(
+            recovered?.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 5,
+            graphGeneration: 1,
+            cause: .recovery,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            ),
+            routeCapability: route1,
+            entitlement: .missing
+        ))
+        for _ in 0..<20 { await Task.yield() }
+        let afterStale = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(afterStale, recovered)
+
+        _ = await environment.stop(sessionID: sessionID)
+        let terminal = await coordinator.snapshot()
+        let stopped = await environment.snapshot()
+        XCTAssertNil(terminal?.audioRoute)
+        XCTAssertNil(stopped.tvVisionPlatformPresentation)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+        _ = iterator
+    }
+
     func testTVOSInvalidAudioRuntimeFailsCurrentPresentation() async throws {
         let calls = MediaEnvironmentCallRecorder()
         let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)

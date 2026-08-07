@@ -1026,7 +1026,7 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
     func testTVOSAudioPublisherPublishesDirectFixedAndHeadTrackedRuntime()
         throws
     {
-        var publisher = TVOSAudioRouteSnapshotPublisher()
+        var publisher = TVVisionAudioRouteSnapshotPublisher()
 
         guard case let .published(direct) = publisher.update(
             makeTVOSAudioRuntimeEvent(sequence: 1, graphGeneration: 1)
@@ -1080,7 +1080,7 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
     }
 
     func testTVOSAudioPublisherNormalizesInterruptionLossAndReset() throws {
-        var publisher = TVOSAudioRouteSnapshotPublisher()
+        var publisher = TVVisionAudioRouteSnapshotPublisher()
         _ = publisher.update(makeTVOSAudioRuntimeEvent(
             sequence: 1,
             graphGeneration: 1,
@@ -1143,7 +1143,7 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
     }
 
     func testTVOSAudioPublisherRejectsStaleAndInvalidRuntime() throws {
-        var publisher = TVOSAudioRouteSnapshotPublisher()
+        var publisher = TVVisionAudioRouteSnapshotPublisher()
         guard case let .published(initial) = publisher.update(
             makeTVOSAudioRuntimeEvent(
                 sequence: 10,
@@ -1211,8 +1211,113 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
         }
     }
 
+    func testVisionOSAudioPublisherUsesIntendedExperienceAndRecoversGraph()
+        throws
+    {
+        var publisher = TVVisionAudioRouteSnapshotPublisher(
+            platform: .visionOS
+        )
+
+        guard case let .published(fixed) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 1,
+                graphGeneration: 1,
+                strategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial,
+                entitlement: .missing
+            )
+        ) else {
+            return XCTFail("Expected fixed visionOS spatial publication.")
+        }
+        XCTAssertEqual(fixed.platform, .visionOS)
+        XCTAssertEqual(fixed.platformStrategy, .visionOutputExperience)
+        XCTAssertEqual(
+            fixed.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+        XCTAssertEqual(fixed.spatialSupport, .supported)
+        XCTAssertEqual(fixed.currentOutputChannelCount, 2)
+        XCTAssertEqual(fixed.maximumOutputChannelCount, 8)
+        XCTAssertEqual(fixed.spatialPresentationMode, .fixedSpatial)
+
+        guard case let .published(interrupted) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 2,
+                graphGeneration: 1,
+                cause: .interruptionBegan,
+                stage: .interrupted,
+                strategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial,
+                entitlement: .missing
+            )
+        ) else {
+            return XCTFail("Expected visionOS interruption publication.")
+        }
+        XCTAssertTrue(interrupted.outputAvailable)
+        XCTAssertEqual(interrupted.runtimeStage, .interrupted)
+
+        guard case let .published(lost) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 3,
+                graphGeneration: 1,
+                cause: .mediaServicesLost,
+                stage: .interrupted,
+                strategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial,
+                entitlement: .missing
+            )
+        ) else {
+            return XCTFail("Expected visionOS media loss publication.")
+        }
+        XCTAssertFalse(lost.outputAvailable)
+        XCTAssertEqual(lost.platformStrategy, .none)
+        XCTAssertEqual(lost.headTrackingCapability, .unavailable)
+        XCTAssertEqual(lost.spatialPresentationMode, .inactive)
+
+        guard case let .published(reset) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 4,
+                graphGeneration: 2,
+                cause: .mediaServicesReset,
+                routeRevision: 2,
+                strategy: .visionOutputExperience,
+                presentationMode: .headTracked,
+                entitlement: .missing
+            )
+        ) else {
+            return XCTFail("Expected visionOS graph recovery publication.")
+        }
+        XCTAssertEqual(reset.routeGeneration.rawValue, 2)
+        XCTAssertEqual(reset.eventCause, .mediaServicesReset)
+        XCTAssertEqual(reset.spatialPresentationMode, .headTracked)
+        XCTAssertEqual(
+            reset.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 5,
+                graphGeneration: 1,
+                strategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            )),
+            .staleEvent
+        )
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 5,
+                graphGeneration: 2,
+                routeRevision: 2,
+                strategy: .environmentListener,
+                presentationMode: .headTracked
+            )),
+            .invalidRuntime
+        )
+        XCTAssertEqual(publisher.snapshot, reset)
+    }
+
     func testTVOSAudioPublisherFailsClosedOnRevisionExhaustion() {
-        var publisher = TVOSAudioRouteSnapshotPublisher(
+        var publisher = TVVisionAudioRouteSnapshotPublisher(
             initialRevisionRawValue: .max
         )
         XCTAssertEqual(

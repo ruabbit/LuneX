@@ -64,9 +64,25 @@ media-reset behavior without claiming unavailable listener head tracking.
 - **WHEN** a stereo or multichannel stream and supported visionOS route are active
 - **THEN** LuneX SHALL apply the public intended spatial experience and publish actual route state
 
+#### Scenario: Presentation activates after the audio runtime
+- **WHEN** a valid current-session audio runtime exists before visionOS presentation activation or replacement
+- **THEN** LuneX SHALL replay its normalized current route into that ownership without creating another graph, route observer, or notification source
+
+#### Scenario: Interruption or media-service loss occurs
+- **WHEN** the current visionOS audio runtime reports interruption or media services lost
+- **THEN** LuneX SHALL publish the checked runtime stage, retain or close output according to the event, and SHALL NOT preserve a false active spatial claim while output is unavailable
+
 #### Scenario: Media services reset
 - **WHEN** the audio service resets during the current stream
 - **THEN** LuneX SHALL rebuild one current graph and reject old scheduling completions
+
+#### Scenario: Audio runtime is stale or incompatible
+- **WHEN** an event has an old graph, duplicate sequence, inconsistent route/spatial revision or support, invalid channel count, tvOS-only environment-listener strategy, or spatial mode without matching intended experience
+- **THEN** LuneX SHALL reject stale state, fail current presentation on invalid state, and SHALL NOT apply listener entitlement semantics to visionOS
+
+#### Scenario: Audio ownership stops or fails
+- **WHEN** the current audio action fails, presentation terminates, ownership is replaced, or the session stops
+- **THEN** LuneX SHALL clear route and spatial state through the shared coordinator and make late old-generation events inert
 
 ### Requirement: visionOS media ownership SHALL be generation scoped
 LuneX SHALL bind window scene, surface, decoded frames, HDR policy, audio route,
