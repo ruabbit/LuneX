@@ -167,6 +167,93 @@ final class ProductWorkspaceRegistryTests: XCTestCase {
         XCTAssertEqual(secondState.presentation.streamOverlay, .visible)
     }
 
+    func testStaleUpdateAndCloseCannotMutateOrRemoveReplacement() throws {
+        let registry = ProductWorkspaceRegistry()
+        let original = try registry.create(id: workspaceID(9))
+        try registry.update(original) { $0.selectedAppID = "current" }
+        let replacement = try registry.replace(original)
+
+        XCTAssertThrowsError(try registry.update(original) { $0.selectedAppID = "stale" })
+        XCTAssertThrowsError(try registry.close(original))
+        XCTAssertEqual(registry.state(for: replacement)?.selectedAppID, "current")
+        XCTAssertEqual(registry.states.map(\.reference), [replacement])
+    }
+
+    func testReconcileEmptyHostsClearsSelectionsAcrossEveryWorkspace() throws {
+        let registry = ProductWorkspaceRegistry()
+        let hostID = UUID(uuidString: "4A000000-0000-0000-0000-000000000001")!
+        let first = try registry.create(id: workspaceID(10))
+        let second = try registry.create(id: workspaceID(11))
+        for reference in [first, second] {
+            try registry.update(reference) {
+                $0.selectedHostID = hostID
+                $0.selectedAppID = "app"
+            }
+        }
+
+        registry.reconcile(availableHostIDs: [])
+
+        for reference in [first, second] {
+            XCTAssertNil(registry.state(for: reference)?.selectedHostID)
+            XCTAssertNil(registry.state(for: reference)?.selectedAppID)
+        }
+    }
+
+    func testReconcileWithoutCatalogSnapshotPreservesCurrentAppSelection() throws {
+        let registry = ProductWorkspaceRegistry()
+        let hostID = UUID(uuidString: "4C000000-0000-0000-0000-000000000001")!
+        let reference = try registry.create(id: workspaceID(12))
+        try registry.update(reference) {
+            $0.selectedHostID = hostID
+            $0.selectedAppID = "cached-app"
+        }
+
+        registry.reconcile(availableHostIDs: [hostID])
+
+        XCTAssertEqual(registry.state(for: reference)?.selectedAppID, "cached-app")
+    }
+
+    func testRestoreAfterCloseAdvancesTombstoneAndClearsTransientState() throws {
+        let registry = ProductWorkspaceRegistry()
+        let id = workspaceID(13)
+        let first = try registry.create(id: id)
+        try registry.update(first) {
+            $0.presentation.issue = ProductIssue(code: .streamInterrupted)
+            $0.presentation.streamOverlay = .visible
+        }
+        _ = try registry.close(first)
+
+        let restored = try registry.restore(
+            id: id,
+            restoration: ProductWorkspaceRestorationState(
+                navigationSelection: .library,
+                selectedAppID: "restored-app"
+            )
+        )
+
+        XCTAssertEqual(restored.generation.rawValue, 2)
+        XCTAssertNil(registry.state(for: first))
+        XCTAssertEqual(registry.state(for: restored)?.selectedAppID, "restored-app")
+        XCTAssertEqual(
+            registry.state(for: restored)?.presentation,
+            ProductWorkspacePresentationState()
+        )
+    }
+
+    func testGeneratedIdentityCollisionFailsClosed() throws {
+        let id = workspaceID(14)
+        let registry = ProductWorkspaceRegistry(generateID: { id })
+        let first = try registry.create()
+
+        XCTAssertThrowsError(try registry.create()) {
+            XCTAssertEqual(
+                $0 as? ProductWorkspaceRegistryFailure,
+                .workspaceAlreadyOpen(id)
+            )
+        }
+        XCTAssertEqual(registry.states.map(\.reference), [first])
+    }
+
     private func workspaceID(_ suffix: UInt8) -> ProductWorkspaceID {
         ProductWorkspaceID(rawValue: UUID(uuidString: String(
             format: "40000000-0000-0000-0000-%012d",

@@ -3201,3 +3201,12 @@
 - reconcile只按shared host/app可用集合修复所有live workspace selection并保留其他local presentation，不实现session ownership transfer；真正repository publish wiring属于4.3。
 - generator双次SHA-256均为`f49017b3ea5ce0ed72bd458f2309aee3d88831ba5cfcaaea83f1ae9b4ed10777`；focused `/tmp/LuneX-19-1_5-focused.Ojn852`通过registry + issue + discovery `22/22`，raw Xcode log删除。
 - Task 1.5 final gate `/tmp/LuneX-19-1_5-workspace-registry-final.HLgR72`通过strict、`5/48`、9文件scope、generator/membership、registry contract/no runtime owner、focused `22/22`与opt-in unset；AppModel/scene wiring仍未完成。
+
+## 2026-08-08 阶段 19 Task 1.6 Foundation Regression
+
+- 新增adversarial storage-shape测试，确认ProductIssue/ProductActionToken没有String字段、ManualHostValidationFailure只持有issueCode，scoped ownership UUID不进入localized presentation。
+- endpoint扩展valid/invalid矩阵覆盖localhost、underscore/FQDN、IPv4 explicit port、http root、IPv6/zone以及oversized URL port、encoded credentials、double path、bracket trailing、zone whitespace、fragment/path。
+- registry补齐stale update+close不影响replacement、empty host清空所有selection、unknown catalog保留cached selection、close/restore tombstone与generated-ID collision fail-closed。
+- focused `/tmp/LuneX-19-1_6-focused.ubhIb2`通过三类foundation tests `30/30`；normal `/tmp/LuneX-19-1_6-normal.ZIvjnw`通过`1150 total / 1149 passed / 1 exact real-Keychain skip / 0 failed`。两轮raw Xcode log均删除。
+- 这些结果证明typed values/parser/registry和现有macOS application/unit regression；不证明AppModel/scene workspace接线、真实多窗口、signed artifact、physical assistive technology或live Sunshine。
+- Task 1.6 final gate `/tmp/LuneX-19-1_6-foundation-final.TDfp4H`通过strict、`6/48`、8文件test/docs scope、零production/project/config diff、adversarial matrix、focused `30/30`、normal `1150/1149/1/0`与exact Keychain skip。

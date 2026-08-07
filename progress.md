@@ -3694,3 +3694,6 @@
 - 2026-08-08：开始task 1.5，新增main-actor observable workspace registry、generation tombstone、checked create/restore/replace/update/reconcile/close与独立测试；不接线AppModel/scene/runtime。
 - 2026-08-08：task 1.5 generator双次hash稳定，focused `/tmp/LuneX-19-1_5-focused.Ojn852`为`22/22`；raw日志删除，勾选1.5后运行strict/scope/no-runtime-owner final gate。
 - 2026-08-08：task 1.5 final gate `/tmp/LuneX-19-1_5-workspace-registry-final.HLgR72`通过strict、`5/48`、9文件scope、generator/test membership、registry fail-closed/no-owner、focused `22/22`与proof boundary；准备独立提交推送。
+- 2026-08-08：开始task 1.6，仅扩充issue/action privacy、endpoint边界、workspace identity/replacement/reconciliation/close adversarial tests；focused通过后运行完整normal suite，预期真实Keychain仍为唯一skip。
+- 2026-08-08：task 1.6 focused `/tmp/LuneX-19-1_6-focused.ubhIb2`为`30/30`；normal `/tmp/LuneX-19-1_6-normal.ZIvjnw`为`1150/1149/1 exact Keychain skip/0`，raw日志删除。勾选1.6后运行foundation final gate。
+- 2026-08-08：task 1.6 final gate `/tmp/LuneX-19-1_6-foundation-final.TDfp4H`通过strict、`6/48`、8文件scope、no production/project/config diff、adversarial matrix、focused `30/30`与normal `1150/1149/1/0`；准备独立提交推送。

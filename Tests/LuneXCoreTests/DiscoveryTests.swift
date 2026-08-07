@@ -73,6 +73,37 @@ final class DiscoveryTests: XCTestCase {
         )
     }
 
+    func testEndpointParserExtendedBoundaryMatrix() throws {
+        let valid: [(String, String)] = [
+            ("localhost", "localhost"),
+            ("HOST_NAME.local.", "host_name.local"),
+            ("10.0.0.8:47990", "10.0.0.8:47990"),
+            ("http://moon.local/", "moon.local"),
+            ("[2001:DB8::10]:48000", "[2001:db8::10]:48000"),
+            ("fe80::2%EN1", "[fe80::2%en1]:47989")
+        ]
+        for (input, expected) in valid {
+            XCTAssertEqual(
+                try HostEndpointParser.parse(input).displayAddress,
+                expected,
+                input
+            )
+        }
+
+        let invalid: [(String, HostEndpointParseError)] = [
+            ("https://moon.local:70000", .invalidPort),
+            ("http://user%40name:password@moon.local", .credentialsNotAllowed),
+            ("http://moon.local//", .invalidAddress),
+            ("[fe80::1]trailing", .invalidAddress),
+            ("fe80::1%bad zone", .invalidAddress),
+            ("moon.local#fragment", .invalidAddress),
+            ("moon.local/path", .invalidAddress)
+        ]
+        for (input, expected) in invalid {
+            assertParseError(input, expected)
+        }
+    }
+
     func testServerInfoParserExtractsHostMetadata() {
         let xml = """
         <root>

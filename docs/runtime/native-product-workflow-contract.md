@@ -167,6 +167,14 @@ reconciliation repairs removed host and app selections in every live workspace
 while preserving unrelated local presentation; it contains no session-owner
 transfer behavior.
 
+The foundation regression must cover storage-shape privacy, ownership identity
+not entering localized presentation, rejected drafts not entering validation
+failures, accepted and rejected endpoint matrices, generation zero/max,
+replacement and close staleness, close/reopen tombstones, generated-ID
+collisions, empty-host reconciliation, known catalog pruning, and unknown
+catalog preservation. These tests prove deterministic value and registry
+semantics only; they do not prove scene wiring or native multiwindow behavior.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public

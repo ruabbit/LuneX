@@ -155,4 +155,66 @@ final class ProductIssueTests: XCTestCase {
             XCTAssertEqual(issue.action?.scope, code.defaultAction == nil ? nil : .application)
         }
     }
+
+    func testIssueActionAndValidationFailureStoreNoFreeTextOrRejectedDraft() throws {
+        let issue = ProductIssue(code: .pairingFailed)
+        XCTAssertEqual(
+            Set(Mirror(reflecting: issue).children.compactMap(\.label)),
+            ["id", "code", "action"]
+        )
+        let action = try XCTUnwrap(issue.action)
+        XCTAssertEqual(
+            Set(Mirror(reflecting: action).children.compactMap(\.label)),
+            ["id", "kind", "scope"]
+        )
+        XCTAssertFalse(Mirror(reflecting: issue).children.contains {
+            $0.value is String
+        })
+        XCTAssertFalse(Mirror(reflecting: action).children.contains {
+            $0.value is String
+        })
+
+        let rejected = "http://private-user:private-password@private-host.local"
+        let failure = try XCTUnwrap(ManualHostDraft(address: rejected).validate().failure)
+        XCTAssertEqual(
+            Set(Mirror(reflecting: failure).children.compactMap(\.label)),
+            ["issueCode"]
+        )
+        XCTAssertFalse(String(reflecting: failure).contains(rejected))
+        XCTAssertFalse(String(reflecting: failure).contains("private-password"))
+        XCTAssertFalse(String(reflecting: failure).contains("private-host"))
+    }
+
+    func testScopedIssuePresentationDoesNotExposeWorkspaceOrSessionIdentity() {
+        let workspaceUUID = UUID(uuidString: "50000000-0000-0000-0000-000000000001")!
+        let sessionUUID = UUID(uuidString: "50000000-0000-0000-0000-000000000002")!
+        let reference = ProductWorkspaceReference(
+            id: ProductWorkspaceID(rawValue: workspaceUUID),
+            generation: ProductWorkspaceGeneration(rawValue: 77)!
+        )
+        let issue = ProductIssue(
+            code: .streamInterrupted,
+            actionScope: .session(workspace: reference, sessionID: sessionUUID)
+        )
+        let presentation = [
+            String(localized: issue.presentation.title),
+            String(localized: issue.presentation.message),
+            issue.presentation.systemImage,
+            issue.code.rawValue
+        ].joined(separator: " ")
+
+        XCTAssertFalse(presentation.localizedCaseInsensitiveContains(workspaceUUID.uuidString))
+        XCTAssertFalse(presentation.localizedCaseInsensitiveContains(sessionUUID.uuidString))
+        XCTAssertEqual(
+            issue.action?.scope,
+            .session(workspace: reference, sessionID: sessionUUID)
+        )
+    }
+}
+
+private extension Result {
+    var failure: Failure? {
+        guard case let .failure(failure) = self else { return nil }
+        return failure
+    }
 }
