@@ -2763,6 +2763,80 @@ behavior, television HDR, audible spatial audio, signed installation, live
 Sunshine, latency, performance, power, or thermal behavior. Tasks 7.2-8.8
 remain responsible for those separate product and acceptance layers.
 
+## Task 7.2 accessible visionOS actual-state controls
+
+Task 7.2 adds `VisionStreamControlPresentationState` as a read-only value
+projection. It does not create another session, surface, decoder, presenter,
+input owner, controller registry, HDR resolver, audio graph, coordinator, or
+diagnostics store. `AppModel.visionStreamControlPresentationState` accepts an
+active visionOS stream only when stream/media ownership is current. Its
+window, input, controller, video, HDR, audio, spatial, immersive, and failure
+inputs come only from existing current owners.
+
+The projection always emits eight rows in this order:
+
+1. Window
+2. Input
+3. Controllers
+4. Render
+5. HDR
+6. Spatial
+7. Immersive
+8. Failure
+
+Window state requires matching visionOS windowed-presentation and scene-surface
+revision plus surface generation. Input requires the same presentation/input
+revision and input generation. Controller rosters must match the current input
+generation and contain only visionOS leases; routed count may not exceed the
+bounded connected count. Coordinator video/audio must match the current
+session, media generation, and platform. Any replacement or foreign-platform
+mismatch fails the affected row closed rather than combining two owners.
+
+Typed visionOS HDR fallback precedes the generic HDR presentation. Spatial
+state is active only for an actual available visionOS route with a bounded
+channel count and `.visionFixed` or `.visionHeadTracked` presentation.
+Immersive state reports windowed-only only when immersive, passthrough,
+stereoscopic, and volumetric unavailable features are all present. The
+projection exposes fixed bounded copy and never host, session, generation,
+revision, frame, controller lease/vendor, display, route, or arbitrary failure
+identity.
+
+`VisionStreamControls` is compiled only for visionOS. It uses native SwiftUI,
+one destructive Disconnect command, a stable responsive maximum width, and an
+accessibility label/value for each status row. It has no hover handler,
+relative-mouse preference, `ImmersiveSpace`, `RealityView`, or second media
+surface.
+
+Retained offline evidence:
+
+- focused `/tmp/LuneX-18-7_2-focused-r4.TEoRbz`: `10/10` passed with zero
+  structured build diagnostics;
+- related `/tmp/LuneX-18-7_2-related.uFebig`: 12 current-owner classes,
+  `235/235` passed with zero structured build diagnostics;
+- normal `/tmp/LuneX-18-7_2-normal.NqSJtS`: `1107 total / 1106 passed / 1`
+  exact real-Keychain opt-in skip / zero failures and expected failures;
+- fixed Vision Pro direct `/tmp/LuneX-18-7_2-vision-direct.DcmiIV`: unsigned
+  Debug, zero structured diagnostics, one AIR, and one metallib before the
+  final revision-coherence refinement;
+- final five-platform `/tmp/LuneX-18-7_2-builds.ewkEpO`: macOS and fixed
+  iPhone/iPad/Apple TV/Vision Pro unsigned Debug all have zero structured
+  diagnostics, one AIR, and one metallib each after that refinement.
+
+The Keychain and live-host opt-ins remained unset. Fixed UUIDs were build
+destinations only; no Simulator inventory or lifecycle action was performed.
+These results prove deterministic projection, current-owner regression, and
+target compilation. They do not prove simulator window/input behavior,
+physical Vision Pro HDR brightness, audible spatial audio or head tracking,
+signed installation, live Sunshine, comfort, latency, performance, power, or
+thermal behavior. Tasks 7.3-8.8 remain responsible for those layers.
+
+The repository pre-gate
+`/tmp/LuneX-18-7_2-repository-pre-r3.kVhSoZ` and post-mark final-state
+`/tmp/LuneX-18-7_2-final-state.McIoFj` confirm stable generated project
+membership, the complete retained evidence above, one 7.2 checkbox change,
+and OpenSpec `39/50` with 7.3 next. No test, build, Keychain, live-host, or
+Simulator lifecycle operation was repeated for the post-mark gate.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

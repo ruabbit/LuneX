@@ -491,6 +491,39 @@ remote feel, physical HDR, audible spatial audio, signed installation, or live
 Sunshine behavior. Task 7.2 and all later native-product and acceptance tasks
 remain separate.
 
+### Project one current visionOS windowed state into native stream controls
+
+Task 7.2 likewise adds no runtime owner. The read-only
+`VisionStreamControlPresentationStateResolver` accepts actual window, input,
+controller, render, HDR, spatial, immersive-unavailable, and failure state only
+when the current visionOS session and media generation agree. Windowed
+presentation, scene surface, input capability, controller roster, platform
+coordinator, and route state remain owned by their existing runtime objects.
+Presentation/surface/input revisions, surface generation, input generation,
+controller platform, and coordinator ownership must agree or the affected row
+fails closed. This prevents a replacement window from combining two
+generations into a plausible but false active status.
+
+The visionOS overlay uses one native destructive Disconnect command and a
+stable Window, Input, Controllers, Render, HDR, Spatial, Immersive, Failure row
+order. Every row exposes an accessibility label and value. The controls have no
+hover or relative-mouse preference, do not create an `ImmersiveSpace` or
+`RealityView`, and do not own another surface, decoder, renderer, input owner,
+HDR resolver, audio graph, or coordinator. Typed visionOS HDR fallback takes
+precedence over generic EDR, spatial state accepts only an actual visionOS
+route and vision-specific fixed/head-tracked mode, and immersive state is
+windowed-only only when the complete typed unavailable feature set is current.
+
+All displayed copy is fixed and bounded. It excludes host, session,
+generation, revision, frame, controller lease/vendor, display, route, and raw
+failure identities. Focused value/source tests, current-owner related tests,
+the full normal suite, a fixed Vision Pro compile, and five-platform unsigned
+Debug builds prove deterministic projection and platform compilation only.
+They do not prove simulator window/input behavior, signed installation,
+physical Vision Pro HDR brightness, audible spatial audio/head tracking,
+comfort, live Sunshine, latency, performance, power, or thermal behavior.
+Tasks 7.3-8.8 remain separate.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

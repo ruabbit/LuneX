@@ -113,6 +113,10 @@ raw window, scene, controller, gesture, or host identity.
 - **WHEN** a requested input path is unavailable on the current SDK or device
 - **THEN** UI and diagnostics SHALL expose a stable unavailable class and SHALL NOT claim capture
 
+#### Scenario: Native controls display current window and input
+- **WHEN** the visionOS stream overlay displays its Window, Input, and Controllers rows
+- **THEN** LuneX SHALL require matching presentation, surface, input, and controller ownership; distinguish visible, hidden, inactive, detached, local, captured, releasing, and unavailable bounded states; expose accessibility label/value content; and SHALL NOT persist raw scene, window, generation, revision, controller, route, or host identity
+
 ### Requirement: visionOS input verification SHALL preserve device boundaries
 Offline and simulator proof SHALL NOT be reported as physical gaze/hand,
 controller/keyboard, focus comfort, or live Sunshine acceptance.

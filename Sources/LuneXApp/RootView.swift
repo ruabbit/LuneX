@@ -792,6 +792,8 @@ private struct StreamStatusOverlay: View {
         VStack(alignment: .leading, spacing: 8) {
             #if os(tvOS)
             TVStreamControls()
+            #elseif os(visionOS)
+            VisionStreamControls()
             #else
             HStack(spacing: 10) {
                 Label(appModel.session.phase.label, systemImage: appModel.session.isStreaming ? "dot.radiowaves.left.and.right" : "moon")
@@ -956,6 +958,72 @@ private struct TVStreamControls: View {
         }
         .frame(minWidth: 720, maxWidth: 980, alignment: .leading)
         .defaultFocus($focusedControl, .hideControls)
+    }
+}
+#endif
+
+#if os(visionOS)
+private struct VisionStreamControls: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        let state = appModel.visionStreamControlPresentationState
+
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Label(
+                    appModel.session.phase.label,
+                    systemImage: appModel.session.isStreaming
+                        ? "dot.radiowaves.left.and.right"
+                        : "moon"
+                )
+                    .font(.headline)
+
+                Spacer(minLength: 12)
+
+                Button(role: .destructive) {
+                    Task {
+                        await appModel.stopStream()
+                    }
+                } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
+                .disabled(appModel.session.phase == .disconnected)
+            }
+
+            Text("Actual Windowed Stream State")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Grid(
+                alignment: .leading,
+                horizontalSpacing: 18,
+                verticalSpacing: 10
+            ) {
+                ForEach(state.rows) { row in
+                    GridRow(alignment: .firstTextBaseline) {
+                        Label(row.title, systemImage: row.systemImage)
+                            .font(.callout.weight(.semibold))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.value)
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(
+                                    row.isFailure ? Color.red : Color.primary
+                                )
+                            Text(row.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(row.title)
+                    .accessibilityValue(row.accessibilityValue)
+                }
+            }
+        }
+        .frame(maxWidth: 760, alignment: .leading)
     }
 }
 #endif

@@ -2972,3 +2972,17 @@
 - post-mark `/tmp/LuneX-18-7_1-final-state.1FO4Sy`确认OpenSpec精确推进为`38/50 next 7.2`，tasks只有7.1一处checkbox替换，最终15文件scope和project hash稳定；没有重跑test/build或操作任何真实opt-in/Simulator。
 - 最终diff审计未发现阻止提交的问题：3个production文件只增加read-only projection/AppModel接线/tvOS-only controls，单测试文件新增8项且无skip/disable，generator/project membership与五平台build一致，9份authority的任务/证据/proof tier同步。7.2及后续任务未提前实现。
 - final-record `/tmp/LuneX-18-7_1-final-record.8piyUo`再次确认7.1没有剩余离线验收问题并可独立提交；它不替代7.2-8.8或任何Simulator runtime、signed、physical、live与性能证明。
+
+## 2026-08-08 阶段 18 任务 7.2 visionOS controls 调查
+
+- `VisionWindowedPresentationState`只允许`.windowed`并强制包含immersive/passthrough/stereoscopic/volumetric四项typed unavailable；`AppModel.visionWindowedPresentationState`只接受current session/media/presentation ownership，因此可直接成为Immersive实际状态来源。
+- `currentVisionWindowInputSnapshot`同时绑定windowed presentation、actual scene surface与input capability；`visionInputCaptureEnabled`还要求current ownership且非release pending。UI应把capture/releasing/local eligibility与supported path count分开表达，不能只显示用户偏好。
+- coordinator snapshot已有current video、audio route和typed failure，`tvVisionDisplayHDRFallbackReason`是跨tvOS/visionOS的platform-applied typed fallback，`SpatialAudioPresentationStatus`区分`.visionFixed/.visionHeadTracked`。这些值足够投影actual render/HDR/spatial而无需新owner。
+- 当前visionOS仍走通用`StreamStatusOverlay`，只显示session、Disconnect、通用pointer/HDR/spatial pills和diagnostic摘要；缺actual window/input/controllers/render/immersive/failure统一状态。正确增量是visionOS-only controls，macOS/iOS路径保持原样。
+- 7.2 projection审计发现replacement窗口可能让coordinator windowed state与最新geometry/input admission跨revision混合；最终resolver同时校验presentation/surface/input revision、surface generation、input generation及vision controller roster generation/platform，任何不一致均对受影响actual状态fail closed。
+- 7.2最终五平台unsigned Debug矩阵 `/tmp/LuneX-18-7_2-builds.ewkEpO` 经五个独立`.xcresult`确认全部成功、四类diagnostics全零且每平台各`1 AIR/1 metallib`；这只证明条件编译与Metal工件，不证明Simulator已运行、签名、物理HDR/空间音频/输入、live Sunshine或性能体验。
+- 7.2 authority现明确投影只读取现有owner，固定八行/单Disconnect命令、accessibility与privacy文案边界，并把revision/generation/platform不一致规定为fail closed；direct Vision build是revision修订前辅助证据，最终五平台矩阵才覆盖修订后的production状态。
+- fresh repository pre-gate `/tmp/LuneX-18-7_2-repository-pre-r3.kVhSoZ`确认14文件pre-mark scope、稳定project、两项新文件membership、current replacement coherence、八行/accessibility/privacy实现、全部retained test/build与proof tier；不存在阻止仅勾选7.2的离线问题。
+- post-mark `/tmp/LuneX-18-7_2-final-state.McIoFj`确认OpenSpec精确推进为`39/50 next 7.3`，tasks仅7.2一处checkbox替换，最终15文件scope和project hash稳定；没有重跑generator/test/build或操作真实opt-in/Simulator。
+- corrected final diff audit `/tmp/LuneX-18-7_2-final-audit-r2.BWKb1R`未发现阻止提交的问题：3个production文件只增加read-only projection/AppModel接线/visionOS-only controls，单测试文件新增10项且无弱化，generator/project membership与五平台build一致，9份authority和唯一7.2 checkbox保持同一proof tier。
+- final-record `/tmp/LuneX-18-7_2-final-record.ucyqir`再次确认7.2没有剩余离线验收问题并可独立提交；它不替代7.3-8.8或任何Simulator runtime、signed、physical、live与性能证明。

@@ -327,6 +327,95 @@ final class AppModel: ApplicationInputSink {
         )
     }
 
+    var visionStreamControlPresentationState:
+        VisionStreamControlPresentationState
+    {
+        let hasActiveSession = expectedTVVisionPlatform == .visionOS
+            && session.isStreaming
+            && activeStreamSessionID != nil
+            && activeMediaSessionID == activeStreamSessionID
+            && activeMediaGeneration != nil
+
+        let hasSessionFailure: Bool
+        if case .failed = session.phase {
+            hasSessionFailure = true
+        } else {
+            hasSessionFailure = false
+        }
+
+        let storedCoordinator = tvVisionPlatformPresentationState?.snapshot
+        let coordinatorIsCurrent = expectedTVVisionPlatform == .visionOS
+            && tvVisionPlatformPresentationState?.sessionID == activeStreamSessionID
+            && tvVisionPlatformPresentationState?.sessionID == activeMediaSessionID
+            && tvVisionPlatformPresentationState?.mediaGeneration
+                == activeMediaGeneration
+            && storedCoordinator?.ownership.platform == .visionOS
+        let coordinator = coordinatorIsCurrent
+            || (hasSessionFailure
+                && storedCoordinator?.ownership.platform == .visionOS)
+                ? storedCoordinator
+                : nil
+
+        let windowedPresentation = visionWindowedPresentationState
+        let candidateWindowInput = currentVisionWindowInputSnapshot
+        let windowInput = hasActiveSession
+            && candidateWindowInput?.presentation == windowedPresentation
+                ? candidateWindowInput
+                : nil
+        let currentInputGeneration = windowInput?
+            .inputCapabilities.inputGeneration
+        let controllerRoster = tvControllerRosterState.flatMap { roster in
+            roster.inputGeneration == currentInputGeneration
+                && roster.controllers.allSatisfy {
+                    $0.lease.platform == .visionOS
+                }
+                    ? roster
+                    : nil
+        }
+        let routedControllerRoster = tvControllerRoutedRosterState.flatMap {
+            roster in
+            roster.inputGeneration == currentInputGeneration
+                && roster.controllers.allSatisfy {
+                    $0.lease.platform == .visionOS
+                }
+                    ? roster
+                    : nil
+        }
+        let presentationFailure: TVVisionPlatformPresentationFailure?
+        if case let .failed(failure) = coordinator?.phase {
+            presentationFailure = failure
+        } else {
+            presentationFailure = nil
+        }
+
+        return VisionStreamControlPresentationStateResolver.resolve(
+            VisionStreamControlPresentationInput(
+                hasActiveSession: hasActiveSession,
+                hasSessionFailure: hasSessionFailure,
+                windowedPresentation: windowedPresentation,
+                sceneSurface: windowInput?.sceneSurface,
+                inputCapabilities: windowInput?.inputCapabilities,
+                inputCaptureEnabled: visionInputCaptureEnabled,
+                inputReleasePending: visionInputReleasePending,
+                connectedControllerCount:
+                    controllerRoster?.controllers.count ?? 0,
+                routedControllerCount:
+                    routedControllerRoster?.controllers.count ?? 0,
+                renderPolicy: renderState.policy,
+                video: coordinatorIsCurrent ? coordinator?.video : nil,
+                hdrPresentation: hdrPresentationStatus,
+                hdrFallbackReason: expectedTVVisionPlatform == .visionOS
+                    ? tvVisionDisplayHDRFallbackReason
+                    : nil,
+                audioRoute: coordinatorIsCurrent
+                    ? coordinator?.audioRoute
+                    : nil,
+                spatialAudio: spatialAudioPresentationStatus,
+                presentationFailure: presentationFailure
+            )
+        )
+    }
+
     var mobileExperiencePresentationStatus: MobileExperiencePresentationStatus {
         MobileExperiencePresentationStatusResolver.resolve(
             hasActiveSession: activeStreamSessionID != nil

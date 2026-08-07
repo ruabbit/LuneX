@@ -129,6 +129,14 @@ native accessible SwiftUI controls.
 - **WHEN** HDR, immersive presentation, head tracking, or input is not actually available
 - **THEN** UI SHALL show typed fallback/unavailable state rather than the preference as active
 
+#### Scenario: Current windowed media state is displayed
+- **WHEN** the native visionOS stream controls display window, render, HDR, spatial, immersive, or failure state
+- **THEN** LuneX SHALL use one privacy-bounded current-generation projection, prefer typed HDR fallback over generic EDR, accept spatial state only from the matching actual visionOS route, and expose fixed accessibility label/value content without raw runtime identity or reason text
+
+#### Scenario: Windowed presentation ownership is mixed
+- **WHEN** presentation, surface, input, controller, coordinator, or route ownership belongs to a foreign platform, stale revision, or replacement generation
+- **THEN** the affected native UI state SHALL fail closed and SHALL NOT combine components into a false active window, render, HDR, spatial, or immersive claim
+
 ### Requirement: visionOS media verification SHALL preserve physical proof boundaries
 Builds, injected tests, and simulator windows SHALL NOT prove headset HDR,
 spatial audio, comfort, interaction latency, thermal behavior, signed install,
