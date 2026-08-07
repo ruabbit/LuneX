@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 enum ProductIssueDomain: String, CaseIterable, Hashable, Sendable {
     case host
@@ -386,5 +387,226 @@ struct ProductWorkspaceState: Equatable, Sendable {
         self.selectedHostID = selectedHostID
         self.selectedAppID = selectedAppID
         self.presentation = presentation
+    }
+}
+
+struct ProductWorkspaceRestorationState: Equatable, Sendable {
+    var navigationSelection: AppNavigationSelection
+    var selectedHostID: MoonlightHost.ID?
+    var selectedAppID: RemoteApp.ID?
+
+    init(
+        navigationSelection: AppNavigationSelection = .library,
+        selectedHostID: MoonlightHost.ID? = nil,
+        selectedAppID: RemoteApp.ID? = nil
+    ) {
+        self.navigationSelection = navigationSelection
+        self.selectedHostID = selectedHostID
+        self.selectedAppID = selectedAppID
+    }
+
+    init(_ state: ProductWorkspaceState) {
+        navigationSelection = state.navigationSelection
+        selectedHostID = state.selectedHostID
+        selectedAppID = state.selectedAppID
+    }
+}
+
+enum ProductWorkspaceRegistryFailure: Error, Equatable, Sendable {
+    case workspaceAlreadyOpen(ProductWorkspaceID)
+    case missingWorkspace(ProductWorkspaceID)
+    case staleReference(current: ProductWorkspaceReference?)
+    case generationExhausted(ProductWorkspaceID)
+    case duplicateRestoredWorkspace(ProductWorkspaceID)
+}
+
+@MainActor
+@Observable
+final class ProductWorkspaceRegistry {
+    private(set) var statesByID: [ProductWorkspaceID: ProductWorkspaceState]
+    @ObservationIgnored private var latestGenerationByID:
+        [ProductWorkspaceID: ProductWorkspaceGeneration]
+    @ObservationIgnored private let generateID: @MainActor () -> ProductWorkspaceID
+
+    init(
+        generateID: @escaping @MainActor () -> ProductWorkspaceID = {
+            ProductWorkspaceID()
+        }
+    ) {
+        statesByID = [:]
+        latestGenerationByID = [:]
+        self.generateID = generateID
+    }
+
+    init(
+        restoring states: [ProductWorkspaceState],
+        generateID: @escaping @MainActor () -> ProductWorkspaceID = {
+            ProductWorkspaceID()
+        }
+    ) throws {
+        var restored: [ProductWorkspaceID: ProductWorkspaceState] = [:]
+        var generations: [ProductWorkspaceID: ProductWorkspaceGeneration] = [:]
+        for state in states {
+            guard restored[state.reference.id] == nil else {
+                throw ProductWorkspaceRegistryFailure
+                    .duplicateRestoredWorkspace(state.reference.id)
+            }
+            restored[state.reference.id] = state
+            generations[state.reference.id] = state.reference.generation
+        }
+        statesByID = restored
+        latestGenerationByID = generations
+        self.generateID = generateID
+    }
+
+    var states: [ProductWorkspaceState] {
+        statesByID.values.sorted {
+            $0.reference.id.rawValue.uuidString
+                < $1.reference.id.rawValue.uuidString
+        }
+    }
+
+    @discardableResult
+    func create(
+        id: ProductWorkspaceID? = nil,
+        restoration: ProductWorkspaceRestorationState = .init()
+    ) throws -> ProductWorkspaceReference {
+        let id = id ?? generateID()
+        guard statesByID[id] == nil else {
+            throw ProductWorkspaceRegistryFailure.workspaceAlreadyOpen(id)
+        }
+        let generation = try nextGeneration(for: id)
+        let reference = ProductWorkspaceReference(id: id, generation: generation)
+        statesByID[id] = makeState(reference: reference, restoration: restoration)
+        latestGenerationByID[id] = generation
+        return reference
+    }
+
+    @discardableResult
+    func restore(
+        id: ProductWorkspaceID,
+        restoration: ProductWorkspaceRestorationState
+    ) throws -> ProductWorkspaceReference {
+        if statesByID[id] != nil {
+            let replacement = try nextGeneration(for: id)
+            let reference = ProductWorkspaceReference(id: id, generation: replacement)
+            statesByID[id] = makeState(reference: reference, restoration: restoration)
+            latestGenerationByID[id] = replacement
+            return reference
+        }
+        return try create(id: id, restoration: restoration)
+    }
+
+    @discardableResult
+    func replace(
+        _ reference: ProductWorkspaceReference
+    ) throws -> ProductWorkspaceReference {
+        let current = try checkedState(for: reference)
+        let replacement = try nextGeneration(for: reference.id)
+        let nextReference = ProductWorkspaceReference(
+            id: reference.id,
+            generation: replacement
+        )
+        statesByID[reference.id] = makeState(
+            reference: nextReference,
+            restoration: ProductWorkspaceRestorationState(current)
+        )
+        latestGenerationByID[reference.id] = replacement
+        return nextReference
+    }
+
+    func state(for reference: ProductWorkspaceReference) -> ProductWorkspaceState? {
+        guard let state = statesByID[reference.id], state.reference == reference else {
+            return nil
+        }
+        return state
+    }
+
+    func currentState(for id: ProductWorkspaceID) -> ProductWorkspaceState? {
+        statesByID[id]
+    }
+
+    @discardableResult
+    func update(
+        _ reference: ProductWorkspaceReference,
+        _ mutation: (inout ProductWorkspaceState) -> Void
+    ) throws -> ProductWorkspaceState {
+        var state = try checkedState(for: reference)
+        mutation(&state)
+        statesByID[reference.id] = state
+        return state
+    }
+
+    func reconcile(
+        availableHostIDs: [MoonlightHost.ID],
+        availableAppIDsByHostID: [MoonlightHost.ID: Set<RemoteApp.ID>] = [:]
+    ) {
+        let availableHosts = Set(availableHostIDs)
+        for id in Array(statesByID.keys) {
+            guard var state = statesByID[id] else { continue }
+            let priorHostID = state.selectedHostID
+            if let selectedHostID = state.selectedHostID,
+               !availableHosts.contains(selectedHostID) {
+                state.selectedHostID = availableHostIDs.first
+            } else if state.selectedHostID == nil {
+                state.selectedHostID = availableHostIDs.first
+            }
+            if state.selectedHostID != priorHostID {
+                state.selectedAppID = nil
+            } else if let hostID = state.selectedHostID,
+                      let availableApps = availableAppIDsByHostID[hostID],
+                      let selectedAppID = state.selectedAppID,
+                      !availableApps.contains(selectedAppID) {
+                state.selectedAppID = nil
+            }
+            statesByID[id] = state
+        }
+    }
+
+    @discardableResult
+    func close(
+        _ reference: ProductWorkspaceReference
+    ) throws -> ProductWorkspaceState {
+        let state = try checkedState(for: reference)
+        statesByID[reference.id] = nil
+        return state
+    }
+
+    private func checkedState(
+        for reference: ProductWorkspaceReference
+    ) throws -> ProductWorkspaceState {
+        guard let state = statesByID[reference.id] else {
+            if latestGenerationByID[reference.id] != nil {
+                throw ProductWorkspaceRegistryFailure.staleReference(current: nil)
+            }
+            throw ProductWorkspaceRegistryFailure.missingWorkspace(reference.id)
+        }
+        guard state.reference == reference else {
+            throw ProductWorkspaceRegistryFailure
+                .staleReference(current: state.reference)
+        }
+        return state
+    }
+
+    private func nextGeneration(
+        for id: ProductWorkspaceID
+    ) throws -> ProductWorkspaceGeneration {
+        guard let current = latestGenerationByID[id] else { return .initial }
+        guard let next = current.advanced() else {
+            throw ProductWorkspaceRegistryFailure.generationExhausted(id)
+        }
+        return next
+    }
+
+    private func makeState(
+        reference: ProductWorkspaceReference,
+        restoration: ProductWorkspaceRestorationState
+    ) -> ProductWorkspaceState {
+        ProductWorkspaceState(
+            reference: reference,
+            navigationSelection: restoration.navigationSelection,
+            selectedHostID: restoration.selectedHostID,
+            selectedAppID: restoration.selectedAppID
+        )
     }
 }

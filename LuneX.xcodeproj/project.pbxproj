@@ -504,6 +504,7 @@
 		3955E872C56C80C1B5835E0D /* callbacks.c in Sources */ = {isa = PBXBuildFile; fileRef = B315A2E144291C0C6E464F3E /* callbacks.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		39657BF8E5A5BB7530B4EDDE /* VideoCodecSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/VideoCodecSelection.swift"; sourceTree = "<group>"; };
 		39D1CB9323FAA340C52CA094 /* packet.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "ThirdParty/ENet/packet.c"; sourceTree = "<group>"; };
+		39E94E4EA6C479D697AC470D /* ProductWorkspaceRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ProductWorkspaceRegistryTests.swift"; sourceTree = "<group>"; };
 		3A561C66837F3E7DB6575CF1 /* AudioRuntimeRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDEA8393F4A6638D93FC0E7 /* AudioRuntimeRecoveryTests.swift */; };
 		3AB990EDF8496554BC8B7484 /* peer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "ThirdParty/ENet/peer.c"; sourceTree = "<group>"; };
 		3B08706951BEBFD00062312A /* VideoColorMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBAB368A6FAB0C315E232E56 /* VideoColorMetadata.swift */; };
@@ -550,6 +551,7 @@
 		4417D7482BF7BD33C31997DA /* VideoFormatDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCEB47FA125148AC58BAE31 /* VideoFormatDescription.swift */; };
 		441BC7D4D6F3439321516A3E /* AudioRouteState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF039666FCCB2021028835D /* AudioRouteState.swift */; };
 		44701714D5D2AAF8940B82D1 /* TVRemoteFocusCaptureContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B32FACE171353D64E41B3E /* TVRemoteFocusCaptureContract.swift */; };
+		448226712FAADF2A088D4998 /* ProductWorkspaceRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39E94E4EA6C479D697AC470D /* ProductWorkspaceRegistryTests.swift */; };
 		448BB4B0B0BD0A55E57FD493 /* RTSPMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA161CDCBA58595C0DFFB1DD /* RTSPMessage.swift */; };
 		44D72967546AD0BED06F04DA /* ENetControlTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXNetworking/ENetControlTransport.swift"; sourceTree = "<group>"; };
 		44F431D6B7165852FFA99DE7 /* SessionMobileRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/SessionMobileRuntime.swift"; sourceTree = "<group>"; };
@@ -1013,6 +1015,7 @@
 				F9BC23D6CCB8CC27D1E3C2EA /* PairingPersistenceTests.swift in Sources */,
 				A782524677725332827B575B /* PairingTransportTests.swift in Sources */,
 				90839AFF7B8B511A9A9192A2 /* ProductIssueTests.swift in Sources */,
+				448226712FAADF2A088D4998 /* ProductWorkspaceRegistryTests.swift in Sources */,
 				34C94E1980B1C5FD249A30C0 /* RTSPBootstrapTests.swift in Sources */,
 				75A65E7A995C54E2505DF2FD /* RTSPMessageTests.swift in Sources */,
 				68A3A4020701765AF7E8ED38 /* RTSPSessionDescriptionTests.swift in Sources */,
@@ -1539,6 +1542,7 @@
 				06CE224A03FC7F5335F22344 /* PairingPersistenceTests.swift */,
 				1670130D50FF3FB4415ADCA6 /* PairingTransportTests.swift */,
 				C83DAA4B00855126BB5C2683 /* ProductIssueTests.swift */,
+				39E94E4EA6C479D697AC470D /* ProductWorkspaceRegistryTests.swift */,
 				265ED2A218A1036C56367315 /* RTSPBootstrapTests.swift */,
 				4FF5B5DAD873E001E9585812 /* RTSPMessageTests.swift */,
 				551164683B50D9BFCCAB64FA /* RTSPSessionDescriptionTests.swift */,

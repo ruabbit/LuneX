@@ -3192,3 +3192,12 @@
 - 1.4只定义value semantics；process registry、AppModel wiring、repository reconciliation和session owner validation仍分别属于1.5、2.x、3.x、4.x。
 - focused evidence `/tmp/LuneX-19-1_4-focused.3BlrWl`通过`ProductIssueTests + DiscoveryTests = 14/14`，验证typed scope、generation zero/max、local state isolation与既有endpoint/issue回归；raw Xcode log删除。
 - Task 1.4 final gate `/tmp/LuneX-19-1_4-workspace-values-final.FogMa1`通过strict、`4/48`、8文件scope、stable project、no runtime-owner duplication、typed action scope、focused `14/14`与opt-in unset；registry/scene wiring仍明确未完成。
+
+## 2026-08-08 阶段 19 Task 1.5 Workspace Registry
+
+- registry为`@MainActor @Observable` process composition object，只持有workspace state与generation tombstone；不持有AppModel/runtime/provider/media/input/renderer/repository。
+- create/restore/replace/update/close均以完整reference校验；replace/restore清除sheet/dialog/issue/overlay等transient presentation，保留或显式恢复navigation/selection。
+- close后保留latest generation，same ID reopen递增，防止旧reference重新有效；max generation、duplicate open/restore、missing/stale均typed fail closed。
+- reconcile只按shared host/app可用集合修复所有live workspace selection并保留其他local presentation，不实现session ownership transfer；真正repository publish wiring属于4.3。
+- generator双次SHA-256均为`f49017b3ea5ce0ed72bd458f2309aee3d88831ba5cfcaaea83f1ae9b4ed10777`；focused `/tmp/LuneX-19-1_5-focused.Ojn852`通过registry + issue + discovery `22/22`，raw Xcode log删除。
+- Task 1.5 final gate `/tmp/LuneX-19-1_5-workspace-registry-final.HLgR72`通过strict、`5/48`、9文件scope、generator/membership、registry contract/no runtime owner、focused `22/22`与opt-in unset；AppModel/scene wiring仍未完成。

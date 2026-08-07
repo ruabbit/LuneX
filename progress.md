@@ -3691,3 +3691,6 @@
 - 2026-08-08：开始task 1.4，新增typed workspace ID/nonzero generation/reference及workspace-local navigation/selection/presentation value state；action token scope迁移为typed reference，不接线registry或AppModel。
 - 2026-08-08：task 1.4 focused `/tmp/LuneX-19-1_4-focused.3BlrWl`为`14/14`；raw日志删除，勾选1.4后运行strict/scope/ownership-shape final gate。
 - 2026-08-08：task 1.4 final gate `/tmp/LuneX-19-1_4-workspace-values-final.FogMa1`通过strict、`4/48`、8文件scope、typed action/no-runtime-owner、focused `14/14`与proof boundary；准备独立提交推送。
+- 2026-08-08：开始task 1.5，新增main-actor observable workspace registry、generation tombstone、checked create/restore/replace/update/reconcile/close与独立测试；不接线AppModel/scene/runtime。
+- 2026-08-08：task 1.5 generator双次hash稳定，focused `/tmp/LuneX-19-1_5-focused.Ojn852`为`22/22`；raw日志删除，勾选1.5后运行strict/scope/no-runtime-owner final gate。
+- 2026-08-08：task 1.5 final gate `/tmp/LuneX-19-1_5-workspace-registry-final.HLgR72`通过strict、`5/48`、9文件scope、generator/test membership、registry fail-closed/no-owner、focused `22/22`与proof boundary；准备独立提交推送。

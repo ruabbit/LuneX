@@ -340,6 +340,7 @@ test_sources = [
   "Tests/LuneXCoreTests/PairingPersistenceTests.swift",
   "Tests/LuneXCoreTests/PairingTransportTests.swift",
   "Tests/LuneXCoreTests/ProductIssueTests.swift",
+  "Tests/LuneXCoreTests/ProductWorkspaceRegistryTests.swift",
   "Tests/LuneXCoreTests/RTSPBootstrapTests.swift",
   "Tests/LuneXCoreTests/RTSPMessageTests.swift",
   "Tests/LuneXCoreTests/RTSPSessionDescriptionTests.swift",

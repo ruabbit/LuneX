@@ -153,6 +153,20 @@ media environment, renderer, decoder, audio graph, input transport,
 repository, or settings copy. The registry and `AppModel` remain responsible
 for checking references and reconciling shared data in later tasks.
 
+`ProductWorkspaceRegistry` is a main-actor observable composition object that
+owns only those values. It creates distinct workspaces, restores or replaces a
+workspace at the next generation, clears transient presentation on replacement,
+checks every mutation and close against the complete reference, and rejects
+duplicate restored IDs. Closed IDs retain a generation tombstone, so reopening
+the same ID advances instead of making a stale reference current again.
+
+Generation exhaustion leaves the current state unchanged. A missing ID, stale
+generation, duplicate open ID, duplicate restored ID, or exhausted generation
+is a typed registry failure and cannot mutate another workspace. Shared-data
+reconciliation repairs removed host and app selections in every live workspace
+while preserving unrelated local presentation; it contains no session-owner
+transfer behavior.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public
