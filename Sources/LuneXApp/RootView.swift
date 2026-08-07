@@ -1116,6 +1116,16 @@ private struct SettingsView: View {
                 NumberSettingRow(title: "Height", value: $appModel.settings.stream.height, range: 720...4320, step: 90, suffix: "px")
                 NumberSettingRow(title: "Frame rate", value: $appModel.settings.stream.frameRate, range: 30...240, step: 30, suffix: "fps")
                 NumberSettingRow(title: "Bitrate", value: $appModel.settings.stream.bitrateKbps, range: 10_000...200_000, step: 5_000, suffix: "Kbps")
+                #if os(tvOS) || os(visionOS)
+                Picker("Scale", selection: $appModel.settings.stream.scaleMode) {
+                    ForEach(RenderScaleMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue.capitalized).tag(mode)
+                    }
+                }
+                platformSettingStatusRow(.render)
+                Toggle("HDR / EDR", isOn: $appModel.settings.stream.hdrEnabled)
+                platformSettingStatusRow(.hdr)
+                #else
                 Toggle("HDR / EDR", isOn: $appModel.settings.stream.hdrEnabled)
                 HDRPresentationStatusRow(status: appModel.hdrPresentationStatus)
                 Picker("Scale", selection: $appModel.settings.stream.scaleMode) {
@@ -1123,12 +1133,18 @@ private struct SettingsView: View {
                         Text(mode.rawValue.capitalized).tag(mode)
                     }
                 }
+                #endif
             }
 
             Section("Input") {
+                #if os(tvOS) || os(visionOS)
+                platformSettingStatusRow(.input)
+                platformSettingStatusRow(.controllers)
+                #else
                 Toggle("Prefer relative mouse", isOn: $appModel.settings.input.preferRelativeMouseMode)
                 Toggle("Forward system shortcuts", isOn: $appModel.settings.input.captureSystemShortcuts)
                 Toggle("Virtual controller", isOn: $appModel.settings.input.showVirtualController)
+                #endif
             }
 
             Section("Spatial Audio") {
@@ -1175,9 +1191,7 @@ private struct SettingsView: View {
     private var compactSpatialAudioSettings: some View {
         VStack(alignment: .leading, spacing: 12) {
             spatialAudioPreferenceControls
-            SpatialAudioPresentationStatusRow(
-                status: appModel.spatialAudioPresentationStatus
-            )
+            spatialAudioActualStatus
         }
     }
 
@@ -1186,9 +1200,7 @@ private struct SettingsView: View {
             spatialAudioPreferenceControls
                 .frame(minWidth: 220, maxWidth: .infinity, alignment: .leading)
             Divider()
-            SpatialAudioPresentationStatusRow(
-                status: appModel.spatialAudioPresentationStatus
-            )
+            spatialAudioActualStatus
             .frame(minWidth: 280, maxWidth: .infinity, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -1203,6 +1215,26 @@ private struct SettingsView: View {
                 Label("Head tracking", systemImage: "person.wave.2")
             }
             .disabled(!appModel.settings.audio.spatialAudioEnabled)
+        }
+    }
+
+    @ViewBuilder
+    private var spatialAudioActualStatus: some View {
+        #if os(tvOS) || os(visionOS)
+        platformSettingStatusRow(.spatial)
+        #else
+        SpatialAudioPresentationStatusRow(
+            status: appModel.spatialAudioPresentationStatus
+        )
+        #endif
+    }
+
+    @ViewBuilder
+    private func platformSettingStatusRow(
+        _ kind: TVVisionPlatformSettingsItemKind
+    ) -> some View {
+        if let state = appModel.tvVisionPlatformSettingsPresentationState {
+            TVVisionPlatformSettingStatusRow(content: state.content(for: kind))
         }
     }
 
@@ -1301,6 +1333,27 @@ private struct SettingsView: View {
                 )
             }
         }
+    }
+}
+
+private struct TVVisionPlatformSettingStatusRow: View {
+    let content: TVVisionPlatformSettingsItemContent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent("Desired behavior", value: content.desiredValue)
+            LabeledContent("Current state") {
+                Label(content.actualValue, systemImage: content.systemImage)
+                    .foregroundStyle(content.isFailure ? Color.red : Color.primary)
+            }
+            Text(content.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(content.title)
+        .accessibilityValue(content.accessibilityValue)
     }
 }
 

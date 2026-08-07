@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `39/50 ready`；7.2 visionOS原生windowed stream controls与actual state UI已完成task级验收，下一项7.3平台Settings |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `40/50 ready`；7.3平台Settings与desired/actual分离已完成task级验收，下一项7.4隐私有界diagnostics |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持`39/50 ready`、next 7.3。1.1至6.6的platform foundation/runtime、7.1 tvOS controls及7.2 visionOS windowed controls/actual window-input-controller-render-HDR-spatial-immersive-failure UI均完成task级验收。7.2 focused `10/10`、related `235/235`、normal `1107/1106/1/0`、unsigned五平台Debug、repository pre-gate `/tmp/LuneX-18-7_2-repository-pre-r3.kVhSoZ`及post-mark final-state `/tmp/LuneX-18-7_2-final-state.McIoFj`均通过；下一步为7.3平台Settings并保持desired/actual分离。当前证据仍不是Simulator runtime、signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持`40/50 ready`、next 7.4。1.1至6.6的platform foundation/runtime、7.1/7.2原生actual-state controls及7.3平台Settings五项desired/actual分离均完成task级验收。7.3 focused `8/8`、related `164/163/1/0`、normal `1115/1114/1/0`、fixed Apple TV/Vision Pro direct、unsigned五平台Debug、repository pre-gate `/tmp/LuneX-18-7_3-repository-pre.gu3Wdy`及post-mark `/tmp/LuneX-18-7_3-final-state.8JTYco`均通过；下一步为7.4 privacy-bounded platform diagnostics。当前证据仍不是Simulator runtime、signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 5.6 post-record `/tmp/LuneX-18-5_6-post-record-r2.omtl07`与final audit `/tmp/LuneX-18-5_6-final-audit.cNq2is`确认五份authority含pre/final双门索引、精确11文件3 test/8 authority分类、三条矩阵断言未弱化或禁用、tasks仅5.6 checkbox变化、production/reference/dependency零diff及证明分层准确；无阻止独立提交的问题。
 
@@ -332,6 +332,8 @@
 | 18.7.2首轮repository pre-gate对换行表达式与测试函数名使用过窄文本模式 | 1 | fixture/strict/generator/scope均已通过且测试读取尚未开始；改用源码真实稳定符号，从fresh证据目录完整复核 |
 | 18.7.2 repository pre-gate r2在zsh中使用特殊变量名`path` | 1 | 赋值覆盖zsh绑定的`PATH`数组并导致`xcrun`不可见；无测试/build重跑或设备副作用，r3显式使用Bash及`result_path` |
 | 18.7.2首轮final diff audit把unified diff的`---`文件头计为删除行 | 1 | 分类和任务门已通过且实现语义尚未检查；删除断言改为`^-[^-]`排除header，从fresh目录完整重跑 |
+| 18.7.3首轮focused fixture使用不存在的`VisionPresentationUnavailableReason.publicAPIUnavailable` | 1 | production无诊断；改用现有typed `.stage18WindowedOnly`，从fresh DerivedData/result bundle重跑 |
+| 18.7.3首次authority组合补丁假定tvOS media requirement的旧措辞 | 1 | `apply_patch`整体拒绝且无部分修改；读取四份spec真实场景后按稳定标题拆分补丁 |
 | 7.3首次focused compile把outbound packet数组直接传给plaintext delta decoder | 1 | 显式从每个`RemoteInputOutboundPacket.plaintext`提取后再解码，保留类型边界并重跑同一门禁 |
 | 8.4首次跟踪文件补丁误用`findings.md`中不存在的二级标题 | 1 | 读取实际文件尾部，按现有三级OpenSpec主题和progress精确追加；生产与测试补丁未受影响 |
 | 8.4 readiness首轮定向测试的4包5ms音频夹具在`.closed`前未越过jitter budget | 1 | 将`.closed`时成功flush并schedule的返回纳入ready断言；保留production jitter策略和4个有序buffer验证 |
@@ -1530,3 +1532,22 @@
 - **post-mark final-state：** `/tmp/LuneX-18-7_2-final-state.McIoFj`只读通过strict、OpenSpec `39/50 ready`、next 7.3、精确15文件scope、唯一7.2 checkbox、稳定project/retained evidence、disabled opt-ins及仓库/proof边界；未重跑generator/test/build或操作Keychain、live host、Simulator。
 - **final diff audit：** corrected `/tmp/LuneX-18-7_2-final-audit-r2.BWKb1R`通过最终15文件`3 production / 1 test / 2 project-generator / 9 authority`分类、production零删除、10项新增测试无skip/disable、current ownership/revision/platform fail-closed、八行顺序、accessibility/privacy、唯一7.2 checkbox及reference/dependency/opt-in/process/project/proof边界。下一步final-record。
 - **final-record：** `/tmp/LuneX-18-7_2-final-record.ucyqir`通过基线`HEAD == origin/main == 8551620`、strict、OpenSpec `39/50 next 7.3`、最终15文件分类、唯一7.2 checkbox、稳定project、pre/final/audit三门、全部retained evidence及disabled opt-in/proof边界。7.2进入精确stage、独立提交与push/fetch；阶段18保持`in_progress`。
+
+## 2026-08-08 阶段 18 任务 7.3 启动
+
+- **恢复状态：** 7.2已以`534c68a Add accessible visionOS stream controls`独立提交推送，fetch确认`HEAD == origin/main == 534c68ae45ef3ac7587872ce86ff897ae39c8634`且工作树clean；OpenSpec为`39/50 ready`、next精确7.3。
+- **盘点结论：** 现有Settings已持久化render fit/fill、HDR enabled、spatial enabled/head tracking及macOS/iOS专用input选项，并显示通用actual HDR/spatial；tvOS/visionOS缺平台能力投影，且不能新增runtime不执行的input/controller伪开关。
+- **实现边界：** 新增只读`TVVisionPlatformSettingsPresentationState`固定投影Input、Controllers、Render、HDR、Spatial五项。Input/Controllers显示现有自动current-generation行为与actual state，Render/HDR/Spatial复用已有可编辑偏好并并列实际状态；不新增runtime owner、设置字段、诊断owner或7.4/7.5行为。
+- **UI合同：** tvOS/visionOS Settings使用`Desired behavior`与`Current state`分栏语义、逐项accessibility label/value和平台actual row；不显示unsupported relative-mouse/system-shortcut/virtual-controller开关。macOS/iOS路径保持现有控件。
+- **验收顺序：** 纯值/AppModel/source-contract focused测试，随后related、normal、fixed tvOS/visionOS direct及五平台unsigned Debug，再同步authority与repository pre/post-mark/final gates。真实opt-in保持unset，8.5/8.6前不操作Simulator lifecycle。
+- **首轮focused：** `/tmp/LuneX-18-7_3-focused.C9Bsu5`在测试执行前因fixture引用不存在的`VisionPresentationUnavailableReason.publicAPIUnavailable`编译失败；production无诊断。改为已有typed `.stage18WindowedOnly`并从fresh bundle重跑，该失败bundle不计验收。
+- **focused验收：** fresh `/tmp/LuneX-18-7_3-focused-r2.bz5JHc/Focused.xcresult`结构化通过`8/8 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`。
+- **平台编译：** fixed Apple TV与Vision Pro direct `/tmp/LuneX-18-7_3-direct.J396Zs`两个unsigned Debug均结构化零诊断成功且各有`1 AIR / 1 metallib`；固定UUID仅作build destination，未查询或操作Simulator lifecycle。下一步related矩阵。
+- **related验收：** fresh `/tmp/LuneX-18-7_3-related.borVj3/Related.xcresult`覆盖8类platform settings、tv/vision actual controls、AppModel、设置迁移、HDR、spatial与media preference测试，结构化为`164 total / 163 passed / 1 skipped / 0 failed / 0 expected failure`且build四类diagnostics为0；唯一skip精确为显式真实Keychain round-trip。下一步fresh normal。
+- **normal验收：** fresh `/tmp/LuneX-18-7_3-normal.nbTbVF/Normal.xcresult`结构化通过`1115 total / 1114 passed / 1 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`；唯一skip精确为显式真实Keychain round-trip，两个真实opt-in均unset。下一步五平台unsigned Debug。
+- **五平台build：** fresh `/tmp/LuneX-18-7_3-builds.1DhVeP`中macOS、fixed iPhone/iPad/Apple TV/Vision Pro unsigned Debug全部结构化为`succeeded / 0 warning / 0 error / 0 analyzer warning`且各有`1 AIR / 1 metallib`；固定UUID仅作destination，未查询或操作Simulator lifecycle。下一步authority与repository门。
+- **authority同步：** OpenSpec design及tvOS/visionOS四份media/input specs、阶段18runtime contract、completion roadmap与三份planning已记录automatic input/controller policy、现有editable preference复用、desired/actual分离、五项固定顺序、accessibility/privacy、fresh evidence与proof boundary。OpenSpec保持pre-mark `39/50 next 7.3`，7.4-8.x继续pending。
+- **repository pre-gate：** fresh `/tmp/LuneX-18-7_3-repository-pre.gu3Wdy`一次完整通过fixture self/tree、strict、pre-mark `39/50 next 7.3`、稳定project SHA-256 `aee5f8cb55fffe616537d30eb933012a068658cea6e67ac48d06c3b236d8ed5e`、精确16文件scope、membership/desired-actual/platform/accessibility/privacy语义、retained `8/164/1115`测试、direct+五平台Metal及reference/dependency/opt-in/process/diff/proof边界。现仅勾选7.3。
+- **post-mark final-state：** `/tmp/LuneX-18-7_3-final-state.8JTYco`只读通过strict、OpenSpec `40/50 ready`、next 7.4、精确17文件scope、唯一7.3 checkbox、稳定project/retained evidence、disabled opt-ins及仓库/proof边界；未重跑generator/test/build或操作Keychain、live host、Simulator。
+- **final diff audit：** `/tmp/LuneX-18-7_3-final-audit.MXE9J2`一次通过最终17文件`3 production / 1 test / 2 project-generator / 11 authority`分类、production零删除、8项测试无弱化、AppSettings schema不变、mixed-platform fail-closed、automatic policy/desired-actual/UI accessibility、唯一7.3 checkbox及全部仓库/proof边界。下一步final-record。
+- **final-record：** `/tmp/LuneX-18-7_3-final-record.oIJ6c8`通过基线`HEAD == origin/main == 534c68a`、strict、OpenSpec `40/50 next 7.4`、最终17文件分类、唯一7.3 checkbox、稳定project、三道gate、retained evidence及disabled opt-in/proof边界。7.3进入精确stage、独立提交与push/fetch。

@@ -2986,3 +2986,18 @@
 - post-mark `/tmp/LuneX-18-7_2-final-state.McIoFj`确认OpenSpec精确推进为`39/50 next 7.3`，tasks仅7.2一处checkbox替换，最终15文件scope和project hash稳定；没有重跑generator/test/build或操作真实opt-in/Simulator。
 - corrected final diff audit `/tmp/LuneX-18-7_2-final-audit-r2.BWKb1R`未发现阻止提交的问题：3个production文件只增加read-only projection/AppModel接线/visionOS-only controls，单测试文件新增10项且无弱化，generator/project membership与五平台build一致，9份authority和唯一7.2 checkbox保持同一proof tier。
 - final-record `/tmp/LuneX-18-7_2-final-record.ucyqir`再次确认7.2没有剩余离线验收问题并可独立提交；它不替代7.3-8.8或任何Simulator runtime、signed、physical、live与性能证明。
+
+## 2026-08-08 阶段 18 任务 7.3 platform Settings 调查
+
+- 共享Settings已有`scaleMode`、`hdrEnabled`、`spatialAudioEnabled`与`headTrackingEnabled`持久化偏好；relative mouse/system shortcut/virtual controller分别是既有macOS/iOS行为，直接在tvOS/visionOS显示会制造不适用设置。
+- tvOS/visionOS input和controller runtime当前按能力、focus和current generation自动路由，没有用户禁用策略；7.3应显示desired automatic behavior与actual state，而不是增加不被runtime执行的开关。
+- 7.1/7.2固定有界actual rows已包含capture/input、controller、render、typed HDR fallback与actual audio/spatial，可由新Settings projection复用，避免第二套状态推断和identity泄漏。
+- fresh focused `/tmp/LuneX-18-7_3-focused-r2.bz5JHc`为`8/8`且build diagnostics全零；fixed Apple TV/Vision Pro direct `/tmp/LuneX-18-7_3-direct.J396Zs`均零诊断并各生成`1 AIR/1 metallib`，证明两个平台条件UI可编译但不是Simulator runtime或物理设备证明。
+- related `/tmp/LuneX-18-7_3-related.borVj3`为`164/163/1/0`且结构化build diagnostics全零；唯一skip来自主动纳入的设置持久化测试类中的真实Keychain opt-in，实际设置迁移与platform projection/HDR/spatial/media preference均通过。
+- fresh normal `/tmp/LuneX-18-7_3-normal.nbTbVF`为`1115/1114/1/0`且build diagnostics全零，唯一skip精确是显式真实Keychain测试；文件fallback和全部既有回归继续通过。
+- fresh五平台 `/tmp/LuneX-18-7_3-builds.1DhVeP`全部结构化零诊断成功且每项各有`1 AIR/1 metallib`；固定UUID只作build destination，未触发Simulator inventory/boot/install/launch/shutdown/delete。
+- 7.3 authority明确禁止“runtime不执行的设置”：input/controller保持automatic policy与actual并列，render/HDR/spatial使用既有持久化偏好；foreign/mixed platform actual全部fail closed，Settings固定五项并保留identity/redaction与physical proof边界。
+- fresh repository pre-gate `/tmp/LuneX-18-7_3-repository-pre.gu3Wdy`确认16文件pre-mark scope、稳定project、两项新文件membership、五项顺序/platform fail-closed/无伪开关/accessibility/privacy实现与全部retained证据；不存在阻止仅勾选7.3的离线问题。
+- post-mark `/tmp/LuneX-18-7_3-final-state.8JTYco`确认OpenSpec精确推进为`40/50 next 7.4`，tasks仅7.3一处checkbox替换，最终17文件scope和project hash稳定；没有重跑generator/test/build或操作真实opt-in/Simulator。
+- final diff audit `/tmp/LuneX-18-7_3-final-audit.MXE9J2`未发现阻止提交的问题：3个production文件只增加platform Settings projection/AppModel/条件UI，单测试文件8项无弱化，AppSettings/依赖/reference不变，11份authority与唯一7.3 checkbox一致。
+- final-record `/tmp/LuneX-18-7_3-final-record.oIJ6c8`再次确认7.3没有剩余离线验收问题并可独立提交；它不替代7.4-8.8或任何Simulator runtime、signed、physical、live与性能证明。

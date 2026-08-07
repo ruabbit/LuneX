@@ -416,6 +416,24 @@ final class AppModel: ApplicationInputSink {
         )
     }
 
+    var tvVisionPlatformSettingsPresentationState:
+        TVVisionPlatformSettingsPresentationState?
+    {
+        guard let platform = expectedTVVisionPlatform else { return nil }
+        return TVVisionPlatformSettingsPresentationStateResolver.resolve(
+            TVVisionPlatformSettingsPresentationInput(
+                platform: platform,
+                settings: settings,
+                tvActualState: platform == .tvOS
+                    ? tvStreamControlPresentationState
+                    : nil,
+                visionActualState: platform == .visionOS
+                    ? visionStreamControlPresentationState
+                    : nil
+            )
+        )
+    }
+
     var mobileExperiencePresentationStatus: MobileExperiencePresentationStatus {
         MobileExperiencePresentationStatusResolver.resolve(
             hasActiveSession: activeStreamSessionID != nil

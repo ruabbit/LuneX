@@ -2837,6 +2837,69 @@ membership, the complete retained evidence above, one 7.2 checkbox change,
 and OpenSpec `39/50` with 7.3 next. No test, build, Keychain, live-host, or
 Simulator lifecycle operation was repeated for the post-mark gate.
 
+## Task 7.3 platform Settings with desired and actual state
+
+Task 7.3 adds `TVVisionPlatformSettingsPresentationState` as a read-only value
+projection. It creates no runtime owner, diagnostics store, or new persisted
+field. Input capture and controller routing remain the existing automatic
+capability-, focus-, platform-, and generation-gated behavior. tvOS and
+visionOS Settings show this desired automatic behavior next to current bounded
+Capture/Input and Controllers state; they do not show macOS relative-mouse or
+system-shortcut controls, the iOS virtual-controller control, or a new toggle
+that runtime admission does not enforce.
+
+The projection always emits five rows in this order:
+
+1. Input
+2. Controllers
+3. Render
+4. HDR
+5. Spatial Audio
+
+Render desired state comes from the existing fit/fill preference, HDR from the
+existing enabled preference, and Spatial Audio from the existing spatial and
+head-tracking preferences. Current values come only from the 7.1 tvOS or 7.2
+visionOS actual-state projection. A tvOS Settings projection rejects a visionOS
+actual state, a visionOS projection rejects a tvOS state, and mixed state fails
+all actual values closed. The result never exposes host, session, generation,
+revision, frame, controller, display, or route identity.
+
+`SettingsView` keeps macOS/iOS controls on their prior branch. On tvOS and
+visionOS, each platform item uses native `LabeledContent` for `Desired
+behavior` and `Current state`, fixed bounded detail, and one accessibility
+label/value. Render, HDR, and spatial controls continue to mutate and save the
+same `AppSettings`; input and controller automatic behavior is read-only.
+
+Retained offline evidence:
+
+- focused `/tmp/LuneX-18-7_3-focused-r2.bz5JHc`: `8/8` passed with zero
+  structured build diagnostics;
+- related `/tmp/LuneX-18-7_3-related.borVj3`: `164 total / 163 passed / 1`
+  exact real-Keychain opt-in skip / zero failures and expected failures;
+- normal `/tmp/LuneX-18-7_3-normal.nbTbVF`: `1115 total / 1114 passed / 1`
+  exact real-Keychain opt-in skip / zero failures and expected failures;
+- fixed Apple TV and Vision Pro direct `/tmp/LuneX-18-7_3-direct.J396Zs`:
+  unsigned Debug, zero structured diagnostics, one AIR and one metallib each;
+- five-platform `/tmp/LuneX-18-7_3-builds.1DhVeP`: macOS and fixed
+  iPhone/iPad/Apple TV/Vision Pro unsigned Debug all have zero structured
+  diagnostics, one AIR, and one metallib each.
+
+The Keychain and live-host opt-ins remained unset. Fixed UUIDs were build
+destinations only; no Simulator inventory or lifecycle action was performed.
+These results prove deterministic Settings projection, persisted-preference
+reuse, related migration/runtime behavior, and target compilation. They do not
+prove Simulator navigation, signed installation, physical input/controller,
+HDR, audible spatial audio/head tracking, live Sunshine, comfort, latency,
+performance, power, or thermal behavior. Tasks 7.4-8.8 remain responsible for
+those layers.
+
+The repository pre-gate `/tmp/LuneX-18-7_3-repository-pre.gu3Wdy` and
+post-mark final-state `/tmp/LuneX-18-7_3-final-state.8JTYco` confirm stable
+generated project membership, the retained evidence above, one 7.3 checkbox
+change, and OpenSpec `40/50` with 7.4 next. No test, build, Keychain,
+live-host, or Simulator lifecycle operation was repeated for the post-mark
+gate.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

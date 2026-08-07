@@ -74,6 +74,10 @@ controller object, vendor, host, and payload identities.
 - **WHEN** the overlay opens during a current stream
 - **THEN** native focus SHALL move predictably from Hide Controls to Disconnect while actual focus, capture, and controller count remain separately accessible
 
+#### Scenario: tvOS Settings display input and controller policy
+- **WHEN** Settings displays tvOS input capture and controller routing
+- **THEN** LuneX SHALL show the supported automatic behavior beside current bounded Capture and Controllers state, SHALL NOT expose macOS relative-mouse or system-shortcut controls or the iOS virtual-controller control, and SHALL NOT add a toggle that current runtime admission does not enforce
+
 ### Requirement: tvOS input verification SHALL preserve hardware boundaries
 LuneX SHALL keep Siri Remote feel, physical controller mapping/feedback, and
 live host receipt incomplete until authorized Apple TV hardware evidence

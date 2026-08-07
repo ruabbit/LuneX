@@ -145,6 +145,10 @@ native focusable controls and privacy-safe text.
 - **WHEN** no current tvOS media ownership can prove a scene, frame, HDR output, or audio route
 - **THEN** UI SHALL report inactive or unavailable state and SHALL NOT substitute the user's desired settings
 
+#### Scenario: tvOS Settings display media preferences
+- **WHEN** Settings displays fit/fill, HDR, spatial-audio, or head-tracking preferences
+- **THEN** LuneX SHALL label the persisted selection as desired behavior and separately show current render, typed HDR fallback, and actual audio/spatial state from the current tvOS presentation without claiming the preference is active
+
 ### Requirement: tvOS media verification SHALL preserve physical proof boundaries
 Builds, injected tests, and simulator navigation SHALL NOT prove television HDR,
 spatial audio, long-run performance, signed installation, or live Sunshine.

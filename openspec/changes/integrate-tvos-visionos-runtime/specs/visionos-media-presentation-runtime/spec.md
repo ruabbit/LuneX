@@ -137,6 +137,10 @@ native accessible SwiftUI controls.
 - **WHEN** presentation, surface, input, controller, coordinator, or route ownership belongs to a foreign platform, stale revision, or replacement generation
 - **THEN** the affected native UI state SHALL fail closed and SHALL NOT combine components into a false active window, render, HDR, spatial, or immersive claim
 
+#### Scenario: visionOS Settings display media preferences
+- **WHEN** Settings displays fit/fill, HDR, spatial-audio, or head-tracking preferences
+- **THEN** LuneX SHALL label the persisted selection as desired behavior and separately show current render, typed HDR fallback, and actual visionOS spatial state from the current windowed presentation without claiming the preference is active
+
 ### Requirement: visionOS media verification SHALL preserve physical proof boundaries
 Builds, injected tests, and simulator windows SHALL NOT prove headset HDR,
 spatial audio, comfort, interaction latency, thermal behavior, signed install,

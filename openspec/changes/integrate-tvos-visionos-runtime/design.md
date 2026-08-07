@@ -524,6 +524,36 @@ physical Vision Pro HDR brightness, audible spatial audio/head tracking,
 comfort, live Sunshine, latency, performance, power, or thermal behavior.
 Tasks 7.3-8.8 remain separate.
 
+### Separate supported platform preferences from actual state
+
+Task 7.3 adds one read-only
+`TVVisionPlatformSettingsPresentationStateResolver`. It does not add a runtime
+owner or a setting that the runtime cannot enforce. On tvOS and visionOS,
+input capture and controller routing remain capability-, focus-, and
+generation-gated automatic behavior. Settings therefore show their desired
+automatic policy beside the bounded current Capture/Input and Controllers rows
+instead of presenting unsupported toggles. macOS relative mouse/system
+shortcut controls and the iOS virtual-controller control remain on their
+existing platform path.
+
+Render fit/fill, HDR enabled, spatial enabled, and head-tracking enabled keep
+using the existing persisted `AppSettings` values. Each tvOS/visionOS Settings
+row labels this value as desired behavior and separately projects actual
+render, typed HDR fallback, and actual audio/spatial route state from the 7.1
+or 7.2 current-state owner. Foreign or mixed tvOS/visionOS actual projections
+fail all current values closed. Input, Controllers, Render, HDR, and Spatial
+Audio remain in fixed order with bounded copy and accessibility label/value;
+no host, session, generation, revision, controller, display, route, or frame
+identity is persisted or displayed.
+
+Focused resolver/source tests, related persistence/runtime tests, the full
+normal suite, fixed Apple TV and Vision Pro compilation, and five-platform
+unsigned Debug builds prove deterministic Settings projection, existing
+preference reuse, and conditional compilation only. They do not prove runtime
+navigation, signed installation, physical input/controller behavior, HDR,
+audible spatial audio/head tracking, live Sunshine, latency, comfort,
+performance, power, or thermal behavior. Tasks 7.4-8.8 remain separate.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

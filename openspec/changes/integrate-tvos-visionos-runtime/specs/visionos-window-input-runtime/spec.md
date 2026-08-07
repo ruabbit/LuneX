@@ -117,6 +117,10 @@ raw window, scene, controller, gesture, or host identity.
 - **WHEN** the visionOS stream overlay displays its Window, Input, and Controllers rows
 - **THEN** LuneX SHALL require matching presentation, surface, input, and controller ownership; distinguish visible, hidden, inactive, detached, local, captured, releasing, and unavailable bounded states; expose accessibility label/value content; and SHALL NOT persist raw scene, window, generation, revision, controller, route, or host identity
 
+#### Scenario: visionOS Settings display input and controller policy
+- **WHEN** Settings displays visionOS input and controller behavior
+- **THEN** LuneX SHALL show supported automatic hardware-input and controller routing beside current bounded Input and Controllers state, SHALL NOT expose macOS relative-mouse or system-shortcut controls or the iOS virtual-controller control, and SHALL NOT synthesize a user preference that current runtime admission cannot enforce
+
 ### Requirement: visionOS input verification SHALL preserve device boundaries
 Offline and simulator proof SHALL NOT be reported as physical gaze/hand,
 controller/keyboard, focus comfort, or live Sunshine acceptance.
