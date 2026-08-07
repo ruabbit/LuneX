@@ -3204,6 +3204,73 @@ window behavior, HDR brightness, audible spatial audio or head tracking, live
 Sunshine, latency, comfort, performance, power, or thermal behavior. Tasks
 8.4-8.8 remain separate.
 
+## Task 8.4 sanitizer and resource gates
+
+The first fresh complete AddressSanitizer run at
+`/tmp/LuneX-18-8_4-asan.x8oZgs` completed 1,123 tests as 1,121 passed, one
+explicit real-Keychain skip, and one failed application integration test. Its
+structured build result succeeded with zero warnings, errors, and analyzer
+warnings, and its log contained no AddressSanitizer or LeakSanitizer error or
+summary. The failure occurred before the initial spatial-audio runtime state was
+observed because the test helper allowed only one hundred `Task.yield()` calls;
+it was a scheduling assumption, not a finite wall-clock wait or a reported
+memory error.
+
+Fresh isolated AddressSanitizer evidence at
+`/tmp/LuneX-18-8_4-asan-isolated.bEFRLG` passed the same test in 0.027 seconds.
+The correction is test-only: the initial video receiver, audio receiver, audio
+engine, and AppModel audio-runtime wait in that integration test now uses a
+two-second `ContinuousClock` deadline with one-millisecond cooperative sleep.
+On timeout it records all four sub-states plus the session phase and returns
+before producing a secondary unwrap failure. Production state, the shared test
+helper, and all other call sites remain unchanged. Post-fix targeted ASan at
+`/tmp/LuneX-18-8_4-asan-targeted.Cgh65F` passed 1/1 with zero build and sanitizer
+diagnostics.
+
+The new complete ASan result at
+`/tmp/LuneX-18-8_4-asan-complete.kglBGp/Complete-ASan.xcresult` is `1123 total /
+1122 passed / 1 skipped / 0 failed / 0 expected failure`. The only skip is
+`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`.
+Structured build results are `succeeded / 0 warnings / 0 errors / 0 analyzer
+warnings`; the log contains zero AddressSanitizer errors, LeakSanitizer errors,
+or sanitizer summaries. Both real-Keychain and live-host opt-ins were unset.
+
+The independent complete TSan result at
+`/tmp/LuneX-18-8_4-tsan-complete.SlgWeu/Complete-TSan.xcresult` has the same
+`1123 / 1122 / 1 / 0 / 0` result and exact skip. Its structured build results
+are also zero-diagnostic, and the log contains zero ThreadSanitizer warning,
+error, or summary and no data-race mention. ASan and TSan use separate fresh
+DerivedData and result-bundle ownership.
+
+The first 413-test malloc selection at
+`/tmp/LuneX-18-8_4-malloc-resource.qymDw4` passed, but it was not accepted as
+the resource proof because its stack-logging messages came from build tools and
+did not directly establish the `xctest` environment. The corrected evidence at
+`/tmp/LuneX-18-8_4-malloc-explicit.DYbtJZ` first completes a fresh
+`build-for-testing`, then explicitly places `MallocScribble=1`,
+`MallocPreScribble=1`, `MallocGuardEdges=1`, and `MallocStackLogging=1` in the
+generated test target `EnvironmentVariables` and disables parallelization. The
+saved and executed `.xctestrun` SHA-256 is
+`e7b6593d35cc29e65cba00edd8a7776d08a9699208960610cffe2807cc6ccd81`.
+
+The actual `xctest` process reports guard pages, freed-block scribbling, and
+MallocStackLogging lite mode. `Explicit-Malloc.xcresult` contains exactly the
+thirteen selected suites and reports `413/413 passed`, zero skips, failures, or
+expected failures. The test-without-building action requests no build and has
+zero structured warning, error, and analyzer-warning diagnostics; the log has
+no malloc corruption, invalid or double free, abort, segmentation fault, or
+`EXC_BAD_ACCESS`. Of those tests, 226 identifiers directly match observer or
+handler cancellation, held release, frame/audio completion, replacement, late
+callback, resource, stop, or teardown behavior.
+
+This is bounded offline macOS sanitizer/resource evidence. It means the tested
+paths passed under the named diagnostics without a corresponding report; it is
+not proof that every process allocation is leak-free. No Simulator inventory or
+lifecycle command was used for task 8.4. These results do not prove a signed
+artifact, physical remote/controller/window behavior, HDR brightness, audible
+spatial audio or head tracking, live Sunshine, latency, comfort, performance,
+power, or thermal behavior. Tasks 8.5-8.8 remain separate.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

@@ -66,7 +66,7 @@
 - [x] 8.1 Run complete normal tests with real-Keychain and live-host opt-ins disabled and verify the only permitted skip remains the explicit real-Keychain test
 - [x] 8.2 Build macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Apple Vision Pro Debug/Release with Swift, Clang, and Metal warnings as errors using isolated evidence
 - [x] 8.3 Run OpenSpec strict, fixture, generator stability, membership, clean-room/reference/license, entitlement/configuration, privacy, API availability, analyzer, and repository-boundary gates
-- [ ] 8.4 Run complete ASan, TSan, malloc scribble/guard, observer/controller handler cancellation, held-release, frame/audio completion, replacement, and teardown resource gates
+- [x] 8.4 Run complete ASan, TSan, malloc scribble/guard, observer/controller handler cancellation, held-release, frame/audio completion, replacement, and teardown resource gates
 - [ ] 8.5 Verify fixed simulator runtime/name/UUID identity, availability, shutdown, and single-instance inventory without creating, cloning, or duplicating device classes
 - [ ] 8.6 Run only existing bounded tvOS/visionOS simulator navigation or UI targets required by this change, never launching more than one simulator per device class and never treating simulator behavior as physical proof
 - [ ] 8.7 On authorized signed Apple TV and Apple Vision Pro hardware, verify remote/controller/keyboard input, focus/window behavior, SDR/HDR, spatial audio/routes, interruptions, live Sunshine, latency, power/thermal/comfort, and clean teardown

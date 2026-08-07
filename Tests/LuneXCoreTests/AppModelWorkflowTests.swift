@@ -5670,12 +5670,21 @@ final class AppModelWorkflowTests: XCTestCase {
         control.yield(.rtspReady, sessionID: record.sessionID)
         control.yield(.negotiated(configuration), sessionID: record.sessionID)
         control.yield(.channelsReady(.all), sessionID: record.sessionID)
-        await waitUntil {
-            videoReceive.startCount() == 1
-                && audioReceive.startCount() == 1
-                && audioRegistry.engineCount() == 1
-                && model.audioRuntimeState != nil
-        }
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "videoStarts=\(videoReceive.startCount()) "
+                    + "audioStarts=\(audioReceive.startCount()) "
+                    + "audioEngines=\(audioRegistry.engineCount()) "
+                    + "hasAudioRuntime=\(model.audioRuntimeState != nil) "
+                    + "sessionPhase=\(model.session.phase.label)"
+            },
+            condition: {
+                videoReceive.startCount() == 1
+                    && audioReceive.startCount() == 1
+                    && audioRegistry.engineCount() == 1
+                    && model.audioRuntimeState != nil
+            }
+        ) else { return }
 
         let firstState = try XCTUnwrap(model.audioRuntimeState)
         let firstSpatial = try XCTUnwrap(firstState.runtime.spatialRuntime)
@@ -7157,6 +7166,27 @@ final class AppModelWorkflowTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    private func waitForApplicationIntegrationState(
+        timeout: Duration = .seconds(2),
+        diagnostic: () -> String,
+        condition: () -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        if condition() { return true }
+        XCTFail(
+            "Timed out waiting for native application integration state: \(diagnostic())",
+            file: file,
+            line: line
+        )
+        return false
     }
 
     private func waitForEnvironmentTeardown(

@@ -674,6 +674,43 @@ lifecycle and does not prove signing, runtime behavior, physical HDR or spatial
 audio, live Sunshine, performance, power, or thermal behavior. Tasks 8.4-8.8
 remain responsible for those separate tiers.
 
+Task 8.4 runs the complete macOS test suite once under AddressSanitizer and once
+under ThreadSanitizer, with independent DerivedData and result bundles,
+parallel testing disabled, warnings as errors, and both real-Keychain and
+live-host opt-ins removed. Completion requires all non-opt-in tests to pass,
+the sole skip to remain the explicit real-Keychain round trip, zero structured
+build diagnostics, and no sanitizer report in the corresponding log.
+
+The first complete AddressSanitizer run exposed a test synchronization defect,
+not a sanitizer report: the native spatial-audio application integration test
+used one hundred `Task.yield()` calls as if they were a time budget and could
+reach its unwrap before the media event consumer was scheduled. The production
+state machine remained unchanged. That test's initial readiness wait now uses
+a local two-second `ContinuousClock` boundary with one-millisecond cooperative
+sleeps, reports the video/audio start counts, engine count, audio-runtime
+presence, and session phase on failure, and exits before a secondary unwrap
+failure. Isolated and post-fix targeted AddressSanitizer runs, followed by a
+new complete AddressSanitizer run, verify the correction rather than accepting
+a blind retry.
+
+The malloc resource gate uses `build-for-testing` and an auditable generated
+`.xctestrun` instead of assuming that the `xcodebuild` parent environment
+reaches the test process. The test target environment explicitly sets
+`MallocScribble`, `MallocPreScribble`, `MallocGuardEdges`, and
+`MallocStackLogging` to `1` and disables parallelization. The actual `xctest`
+process must report guard pages, scribbling, and stack logging before a fixed
+thirteen-suite set covers platform observers, surface and controller handlers,
+ordered held release, frame and audio completion, generation replacement, late
+callbacks, shared teardown, repeated stop, and bounded resources. Success
+means those selected tests complete without a reported malloc corruption or
+crash; it is not a whole-process leak proof.
+
+These are offline macOS sanitizer and resource results. They do not inventory
+or operate Simulator lifecycle and do not prove a signed artifact, physical
+remote/controller/window behavior, HDR brightness, audible spatial audio or
+head tracking, live Sunshine, latency, comfort, performance, power, or thermal
+behavior. Tasks 8.5-8.8 retain those separate proof tiers.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->
