@@ -109,13 +109,22 @@ final class ProductIssueTests: XCTestCase {
         )
         let hostID = UUID(uuidString: "30000000-0000-0000-0000-000000000003")!
         var first = ProductWorkspaceState(reference: firstReference)
-        var second = ProductWorkspaceState(reference: secondReference)
+        let second = ProductWorkspaceState(reference: secondReference)
 
         first.navigationSelection = .stream
         first.selectedHostID = hostID
         first.selectedAppID = "app-1"
         first.presentation.sheet = .pairing(hostID: hostID)
-        first.presentation.dialog = .removeHost(hostID: hostID)
+        let removalConfirmation = ProductHostDestructiveConfirmation(
+            owner: ProductHostActionOwner(
+                workspace: firstReference,
+                hostID: hostID,
+                hostSelectionGeneration: first.hostSelectionGeneration
+            ),
+            kind: .remove,
+            requiresSessionStop: false
+        )
+        first.presentation.dialog = .removeHost(removalConfirmation)
         first.presentation.issue = ProductIssue(code: .pairingFailed)
         first.presentation.streamOverlay = .visible
 
@@ -124,7 +133,10 @@ final class ProductIssueTests: XCTestCase {
         XCTAssertEqual(first.selectedHostID, hostID)
         XCTAssertEqual(first.selectedAppID, "app-1")
         XCTAssertEqual(first.presentation.sheet, .pairing(hostID: hostID))
-        XCTAssertEqual(first.presentation.dialog, .removeHost(hostID: hostID))
+        XCTAssertEqual(
+            first.presentation.dialog,
+            .removeHost(removalConfirmation)
+        )
         XCTAssertEqual(first.presentation.issue?.code, .pairingFailed)
         XCTAssertEqual(first.presentation.streamOverlay, .visible)
 

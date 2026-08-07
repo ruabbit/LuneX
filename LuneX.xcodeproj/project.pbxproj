@@ -1018,6 +1018,7 @@
 				A782524677725332827B575B /* PairingTransportTests.swift in Sources */,
 				90839AFF7B8B511A9A9192A2 /* ProductIssueTests.swift in Sources */,
 				83B8F481915A54959D22C057 /* ProductCatalogWorkspaceTests.swift in Sources */,
+				EE74F7F05464CCC37054201D /* ProductHostDestructiveWorkspaceTests.swift in Sources */,
 				BB081FFB382A9ED7A150975B /* ProductHostWorkspaceTests.swift in Sources */,
 				FB909213A9045EE1CD459B06 /* ProductPairingWorkspaceTests.swift in Sources */,
 				448226712FAADF2A088D4998 /* ProductWorkspaceRegistryTests.swift in Sources */,
@@ -1550,6 +1551,7 @@
 				1670130D50FF3FB4415ADCA6 /* PairingTransportTests.swift */,
 				C83DAA4B00855126BB5C2683 /* ProductIssueTests.swift */,
 				0C98D8ED81E453E45881264C /* ProductCatalogWorkspaceTests.swift */,
+				E71A0ECCF05DE198E57D1E0C /* ProductHostDestructiveWorkspaceTests.swift */,
 				95624CEAD48AC534A89B8B13 /* ProductHostWorkspaceTests.swift */,
 				505FE125EDD4E4B09A5E8B6E /* ProductPairingWorkspaceTests.swift */,
 				39E94E4EA6C479D697AC470D /* ProductWorkspaceRegistryTests.swift */,
@@ -1901,6 +1903,7 @@
 		E62DBDA5EFD8D4C8EF78475B /* ApplicationDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC7F7BAF41E28D7F93292D /* ApplicationDiagnostics.swift */; };
 		E646CD0D17BBE4B88BDC4983 /* MacCursorCaptureOwner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABED38FF12DCB714ED141DB6 /* MacCursorCaptureOwner.swift */; };
 		E65E4F08101FA02275D810C7 /* ClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B249D70217EBBA15751AAF /* ClientIdentity.swift */; };
+		E71A0ECCF05DE198E57D1E0C /* ProductHostDestructiveWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/ProductHostDestructiveWorkspaceTests.swift"; sourceTree = "<group>"; };
 		E73D3EB5F82780456117BFDE /* SpatialAudioPresentationStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F9C1B2D6BD04ABC9F14071 /* SpatialAudioPresentationStatus.swift */; };
 		E750CEB84733E203CA3E6E48 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/Models.swift"; sourceTree = "<group>"; };
 		E75F2F7390AA0C5DFEB26C59 /* MacAudioOutputCapabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A1776CDBB94C8994CD0B0A /* MacAudioOutputCapabilityTests.swift */; };
@@ -1958,6 +1961,7 @@
 				TARGETED_DEVICE_FAMILY = "3";
 			}; name = Release; };
 		EE25BBB09C926202AB9A992D /* StreamNegotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A23316507D7A90A11E218 /* StreamNegotiation.swift */; };
+		EE74F7F05464CCC37054201D /* ProductHostDestructiveWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71A0ECCF05DE198E57D1E0C /* ProductHostDestructiveWorkspaceTests.swift */; };
 		EE8AF1825C3FA507B23E91EA /* MacSessionInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213FADD9BB6C09AEE90F9AA1 /* MacSessionInputCoordinator.swift */; };
 		EEDB496A321112D7ACF567DC /* MobileAudioSessionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B33E9A01E18921BA3E12223 /* MobileAudioSessionAdapter.swift */; };
 		EEFB62DC61EC0F754114C07E /* HostEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82820A094B73B5239F4F5C6F /* HostEndpoint.swift */; };

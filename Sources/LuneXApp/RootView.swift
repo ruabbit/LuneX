@@ -408,6 +408,10 @@ private struct HostLibraryPanel: View {
     @Binding var selectedHostID: MoonlightHost.ID?
 
     var body: some View {
+        let workspace = appModel.primaryWorkspaceReference
+        let destructiveState = appModel.hostDestructiveState(for: workspace)
+            ?? .idle
+
         Panel {
             VStack(alignment: .leading, spacing: 12) {
                 PanelHeader(title: "Hosts", systemImage: "desktopcomputer")
@@ -435,16 +439,124 @@ private struct HostLibraryPanel: View {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
 
+                    Button {
+                        appModel.requestHostTrustReset(in: workspace)
+                    } label: {
+                        Label("Reset Trust", systemImage: "checkmark.shield")
+                    }
+                    .disabled(
+                        destructiveState.isPerforming
+                            || appModel.selectedHost?.pairingState != .paired
+                    )
+
                     Button(role: .destructive) {
-                        Task {
-                            await appModel.removeSelectedHost()
-                        }
+                        appModel.requestHostRemoval(in: workspace)
                     } label: {
                         Label("Remove", systemImage: "trash")
                     }
-                    .disabled(appModel.selectedHost == nil)
+                    .disabled(
+                        destructiveState.isPerforming
+                            || appModel.selectedHost == nil
+                    )
+                }
+
+                if let issue = destructiveState.issue {
+                    Label {
+                        Text(issue.presentation.message)
+                    } icon: {
+                        Image(systemName: issue.presentation.systemImage)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+
+                    if issue.action != nil {
+                        Button {
+                            appModel.retryHostDestructiveAction(in: workspace)
+                        } label: {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                        }
+                    }
                 }
             }
+        }
+        .confirmationDialog(
+            "Confirm Host Action",
+            isPresented: hostConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            if let confirmation = currentHostConfirmation {
+                Button(
+                    destructiveActionLabel(confirmation),
+                    role: .destructive
+                ) {
+                    guard let admitted = appModel.beginHostDestructiveAction(
+                        in: workspace
+                    ) else { return }
+                    Task {
+                        await appModel.performHostDestructiveAction(admitted)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                appModel.cancelHostDestructiveAction(in: workspace)
+            }
+        } message: {
+            if let confirmation = currentHostConfirmation {
+                Text(destructiveActionMessage(confirmation))
+            }
+        }
+    }
+
+    private var currentHostConfirmation: ProductHostDestructiveConfirmation? {
+        guard case let .awaitingConfirmation(confirmation) =
+            appModel.hostDestructiveState(
+                for: appModel.primaryWorkspaceReference
+            ) else { return nil }
+        return confirmation
+    }
+
+    private var hostConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { currentHostConfirmation != nil },
+            set: { isPresented in
+                guard !isPresented,
+                      appModel.hostDestructiveState(
+                        for: appModel.primaryWorkspaceReference
+                      )?.isPerforming != true else { return }
+                appModel.cancelHostDestructiveAction(
+                    in: appModel.primaryWorkspaceReference
+                )
+            }
+        )
+    }
+
+    private func destructiveActionLabel(
+        _ confirmation: ProductHostDestructiveConfirmation
+    ) -> String {
+        switch (confirmation.kind, confirmation.requiresSessionStop) {
+        case (.remove, true):
+            "Stop and Remove"
+        case (.remove, false):
+            "Remove Host"
+        case (.resetTrust, true):
+            "Stop and Reset Trust"
+        case (.resetTrust, false):
+            "Reset Trust"
+        }
+    }
+
+    private func destructiveActionMessage(
+        _ confirmation: ProductHostDestructiveConfirmation
+    ) -> String {
+        switch confirmation.kind {
+        case .remove:
+            confirmation.requiresSessionStop
+                ? "The active stream will stop before this host, saved trust, and cached apps are removed."
+                : "This removes the host, saved trust, and cached apps from this device."
+        case .resetTrust:
+            confirmation.requiresSessionStop
+                ? "The active stream will stop before saved trust is cleared. The host remains in the library."
+                : "Saved trust will be cleared. The host remains in the library."
         }
     }
 }

@@ -533,6 +533,8 @@ final class AppModel: ApplicationInputSink {
     private var clientUniqueID: String
     private var activePairingOwner: ProductPairingOwner?
     private var preparedPairingIdentity: PreparedPairingIdentity?
+    private var activeHostDestructiveOwner: ProductHostActionOwner?
+    private var hostDestructiveOperationInFlight = false
     private var activeStreamSessionID: UUID?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
@@ -745,6 +747,12 @@ final class AppModel: ApplicationInputSink {
         workspaceState(for: reference)?.pairing
     }
 
+    func hostDestructiveState(
+        for reference: ProductWorkspaceReference
+    ) -> ProductHostDestructiveState? {
+        workspaceState(for: reference)?.hostLibrary.destructiveAction
+    }
+
     private func updatePrimaryWorkspace(
         _ mutation: (inout ProductWorkspaceState) -> Void
     ) {
@@ -849,6 +857,29 @@ final class AppModel: ApplicationInputSink {
             hostSelectionGeneration: state.hostSelectionGeneration,
             attemptGeneration: ProductPairingAttemptGeneration()
         )
+    }
+
+    private func makeHostActionOwner(
+        in workspace: ProductWorkspaceReference,
+        hostID: MoonlightHost.ID
+    ) -> ProductHostActionOwner? {
+        guard let state = workspaceRegistry.state(for: workspace),
+              state.selectedHostID == hostID else { return nil }
+        return ProductHostActionOwner(
+            workspace: workspace,
+            hostID: hostID,
+            hostSelectionGeneration: state.hostSelectionGeneration
+        )
+    }
+
+    private func hostActionOwnerIsCurrent(
+        _ owner: ProductHostActionOwner
+    ) -> Bool {
+        guard let state = workspaceRegistry.state(for: owner.workspace) else {
+            return false
+        }
+        return state.selectedHostID == owner.hostID
+            && state.hostSelectionGeneration == owner.hostSelectionGeneration
     }
 
     private func pairingOwnerMatchesCurrentSelection(
@@ -1758,22 +1789,335 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
-    func removeSelectedHost() async {
-        guard let hostID = selectedHost?.id else { return }
-        do {
-            hosts = try await hostLibraryManager.removeHost(id: hostID)
-            appsByHostID[hostID] = nil
-            if selectedHostID == hostID {
-                selectedHostID = hosts.first?.id
+    @discardableResult
+    func requestHostRemoval(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductHostDestructiveConfirmation? {
+        requestHostDestructiveAction(.remove, in: workspace)
+    }
+
+    @discardableResult
+    func requestHostTrustReset(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductHostDestructiveConfirmation? {
+        guard let hostID = workspaceRegistry.state(for: workspace)?.selectedHostID,
+              let host = hosts.first(where: { $0.id == hostID }),
+              host.pairingState == .paired || host.pinnedIdentity != nil else {
+            return nil
+        }
+        return requestHostDestructiveAction(.resetTrust, in: workspace)
+    }
+
+    func cancelHostDestructiveAction(
+        in workspace: ProductWorkspaceReference
+    ) {
+        _ = try? workspaceRegistry.update(workspace) { state in
+            switch state.hostLibrary.destructiveAction {
+            case .performing:
+                guard !hostDestructiveOperationInFlight,
+                      activeHostDestructiveOwner?.workspace == workspace else {
+                    return
+                }
+                activeHostDestructiveOwner = nil
+            case .awaitingConfirmation, .failed:
+                break
+            case .idle, .succeeded:
+                return
             }
-            diagnostics.record("Removed host", subsystem: "hosts")
+            state.hostLibrary.destructiveAction = .idle
+            switch state.presentation.dialog {
+            case .removeHost, .resetHostTrust:
+                state.presentation.dialog = nil
+            case .stopStream, nil:
+                break
+            }
+        }
+    }
+
+    @discardableResult
+    func retryHostDestructiveAction(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductHostDestructiveConfirmation? {
+        guard let state = workspaceRegistry.state(for: workspace),
+              case let .failed(confirmation, issue) =
+                state.hostLibrary.destructiveAction,
+              hostActionOwnerIsCurrent(confirmation.owner),
+              issue.action?.scope == .host(confirmation.owner) else {
+            return nil
+        }
+        return requestHostDestructiveAction(
+            confirmation.kind,
+            in: workspace
+        )
+    }
+
+    @discardableResult
+    func beginHostDestructiveAction(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductHostDestructiveConfirmation? {
+        guard let state = workspaceRegistry.state(for: workspace),
+              case let .awaitingConfirmation(confirmation) =
+                state.hostLibrary.destructiveAction,
+              activeHostDestructiveOwner == nil,
+              confirmation.owner.workspace == workspace,
+              hostActionOwnerIsCurrent(confirmation.owner),
+              hosts.contains(where: { $0.id == confirmation.owner.hostID }) else {
+            return nil
+        }
+
+        do {
+            try workspaceRegistry.update(workspace) { current in
+                current.hostLibrary.destructiveAction = .performing(confirmation)
+                current.presentation.dialog = nil
+            }
         } catch {
-            diagnostics.record(
-                "The selected host could not be removed.",
-                subsystem: "hosts",
-                severity: .error,
-                code: "host_remove_failed"
+            return nil
+        }
+        activeHostDestructiveOwner = confirmation.owner
+        hostDestructiveOperationInFlight = false
+        return confirmation
+    }
+
+    @discardableResult
+    func confirmHostDestructiveAction(
+        in workspace: ProductWorkspaceReference
+    ) async -> ProductHostDestructiveState {
+        guard let confirmation = beginHostDestructiveAction(in: workspace) else {
+            return .idle
+        }
+        return await performHostDestructiveAction(confirmation)
+    }
+
+    @discardableResult
+    func performHostDestructiveAction(
+        _ confirmation: ProductHostDestructiveConfirmation
+    ) async -> ProductHostDestructiveState {
+        guard workspaceRegistry.state(for: confirmation.owner.workspace)?
+            .hostLibrary.destructiveAction == .performing(confirmation),
+              activeHostDestructiveOwner == confirmation.owner,
+              !hostDestructiveOperationInFlight else {
+            return .idle
+        }
+        hostDestructiveOperationInFlight = true
+        defer {
+            if activeHostDestructiveOwner == confirmation.owner {
+                activeHostDestructiveOwner = nil
+            }
+            hostDestructiveOperationInFlight = false
+        }
+
+        let sessionIsActive = session.activeHostID == confirmation.owner.hostID
+        if sessionIsActive && !confirmation.requiresSessionStop {
+            return failHostDestructiveAction(
+                confirmation,
+                code: destructiveFailureCode(for: confirmation.kind)
             )
+        }
+        if sessionIsActive {
+            await stopStream()
+            guard hostDestructiveOwnerCanMutate(confirmation.owner) else {
+                return failHostDestructiveAction(
+                    confirmation,
+                    code: destructiveFailureCode(for: confirmation.kind)
+                )
+            }
+        }
+
+        guard hostDestructiveOwnerCanMutate(confirmation.owner) else {
+            return failHostDestructiveAction(
+                confirmation,
+                code: .staleAction
+            )
+        }
+
+        if let pairingOwner = activePairingOwner,
+           pairingOwner.hostID == confirmation.owner.hostID {
+            await cancelPairing(owner: pairingOwner, showCancelledState: false)
+            guard hostDestructiveOwnerCanMutate(confirmation.owner),
+                  activePairingOwner?.hostID != confirmation.owner.hostID else {
+                return failHostDestructiveAction(
+                    confirmation,
+                    code: destructiveFailureCode(for: confirmation.kind)
+                )
+            }
+        }
+
+        do {
+            switch confirmation.kind {
+            case .remove:
+                try await removeHostAndCatalog(owner: confirmation.owner)
+            case .resetTrust:
+                try await resetHostTrust(owner: confirmation.owner)
+            }
+            let result = ProductHostDestructiveState.succeeded(
+                kind: confirmation.kind,
+                hostID: confirmation.owner.hostID
+            )
+            _ = try? workspaceRegistry.update(
+                confirmation.owner.workspace
+            ) { current in
+                current.hostLibrary.destructiveAction = result
+                current.presentation.dialog = nil
+            }
+            return result
+        } catch HostDestructiveApplicationError.staleOwner {
+            return failHostDestructiveAction(
+                confirmation,
+                code: .staleAction
+            )
+        } catch {
+            return failHostDestructiveAction(
+                confirmation,
+                code: destructiveFailureCode(for: confirmation.kind)
+            )
+        }
+    }
+
+    private func requestHostDestructiveAction(
+        _ kind: ProductHostDestructiveKind,
+        in workspace: ProductWorkspaceReference
+    ) -> ProductHostDestructiveConfirmation? {
+        guard activeHostDestructiveOwner == nil,
+              let state = workspaceRegistry.state(for: workspace),
+              let hostID = state.selectedHostID,
+              hosts.contains(where: { $0.id == hostID }),
+              let owner = makeHostActionOwner(in: workspace, hostID: hostID) else {
+            return nil
+        }
+        if case let .awaitingConfirmation(existing) =
+            state.hostLibrary.destructiveAction,
+           existing.owner == owner,
+           existing.kind == kind {
+            return existing
+        }
+        let confirmation = ProductHostDestructiveConfirmation(
+            owner: owner,
+            kind: kind,
+            requiresSessionStop: session.activeHostID == hostID
+        )
+        _ = try? workspaceRegistry.update(workspace) { state in
+            state.hostLibrary.destructiveAction = .awaitingConfirmation(
+                confirmation
+            )
+            state.presentation.dialog = switch kind {
+            case .remove:
+                .removeHost(confirmation)
+            case .resetTrust:
+                .resetHostTrust(confirmation)
+            }
+        }
+        return confirmation
+    }
+
+    private func removeHostAndCatalog(
+        owner: ProductHostActionOwner
+    ) async throws {
+        guard let originalHost = hosts.first(where: { $0.id == owner.hostID }),
+              hostDestructiveOwnerCanMutate(owner) else {
+            throw HostDestructiveApplicationError.staleOwner
+        }
+        let originalSnapshots = try await appCatalogRepository.loadSnapshots()
+        guard hostDestructiveOwnerCanMutate(owner) else {
+            throw HostDestructiveApplicationError.staleOwner
+        }
+        let retainedSnapshots = originalSnapshots.filter { $0.hostID != owner.hostID }
+        try await appCatalogRepository.saveSnapshots(retainedSnapshots)
+        guard hostDestructiveOwnerCanMutate(owner) else {
+            try? await appCatalogRepository.saveSnapshots(originalSnapshots)
+            throw HostDestructiveApplicationError.staleOwner
+        }
+        let updatedHosts: [MoonlightHost]
+        do {
+            updatedHosts = try await hostLibraryManager.removeHost(id: owner.hostID)
+        } catch {
+            try? await appCatalogRepository.saveSnapshots(originalSnapshots)
+            throw error
+        }
+        guard hostDestructiveOwnerCanMutate(owner) else {
+            _ = try? await hostLibraryManager.replaceHost(originalHost)
+            try? await appCatalogRepository.saveSnapshots(originalSnapshots)
+            throw HostDestructiveApplicationError.staleOwner
+        }
+        hosts = updatedHosts
+        appsByHostID[owner.hostID] = nil
+        appCatalogUpdatedAtByHostID[owner.hostID] = nil
+        reconcileWorkspaceSelections()
+        publishCatalogStateToWorkspaces()
+        diagnostics.record("Removed host", subsystem: "hosts", code: "host_removed")
+    }
+
+    private func resetHostTrust(
+        owner: ProductHostActionOwner
+    ) async throws {
+        guard let originalHost = hosts.first(where: { $0.id == owner.hostID }),
+              hostDestructiveOwnerCanMutate(owner) else {
+            throw HostDestructiveApplicationError.missingHost
+        }
+        var host = originalHost
+        host.pairingState = .unpaired
+        host.pinnedIdentity = nil
+        let updatedHosts = try await hostLibraryManager.replaceHost(host)
+        guard hostDestructiveOwnerCanMutate(owner) else {
+            _ = try? await hostLibraryManager.replaceHost(originalHost)
+            throw HostDestructiveApplicationError.staleOwner
+        }
+        hosts = updatedHosts
+        reconcileWorkspaceSelections()
+        diagnostics.record(
+            "Reset host trust",
+            subsystem: "hosts",
+            code: "host_trust_reset"
+        )
+    }
+
+    private enum HostDestructiveApplicationError: Error {
+        case missingHost
+        case staleOwner
+    }
+
+    private func hostDestructiveOwnerCanMutate(
+        _ owner: ProductHostActionOwner
+    ) -> Bool {
+        activeHostDestructiveOwner == owner
+            && hostActionOwnerIsCurrent(owner)
+            && session.activeHostID != owner.hostID
+    }
+
+    private func failHostDestructiveAction(
+        _ confirmation: ProductHostDestructiveConfirmation,
+        code: ProductIssueCode
+    ) -> ProductHostDestructiveState {
+        let issue = ProductIssue(
+            code: code,
+            actionScope: .host(confirmation.owner)
+        )
+        let result = ProductHostDestructiveState.failed(confirmation, issue)
+        _ = try? workspaceRegistry.update(confirmation.owner.workspace) { state in
+            guard state.hostLibrary.destructiveAction.confirmation == confirmation else {
+                return
+            }
+            state.hostLibrary.destructiveAction = result
+            state.presentation.dialog = nil
+        }
+        diagnostics.record(
+            confirmation.kind == .remove
+                ? "The selected host could not be removed."
+                : "The selected host trust could not be reset.",
+            subsystem: "hosts",
+            severity: .error,
+            code: code.rawValue
+        )
+        return result
+    }
+
+    private func destructiveFailureCode(
+        for kind: ProductHostDestructiveKind
+    ) -> ProductIssueCode {
+        switch kind {
+        case .remove:
+            .hostRemoveFailed
+        case .resetTrust:
+            .hostTrustResetFailed
         }
     }
 
@@ -1786,6 +2130,7 @@ final class AppModel: ApplicationInputSink {
         in workspace: ProductWorkspaceReference
     ) async {
         guard workspaceRegistry.state(for: workspace)?.selectedHostID == host.id,
+              activeHostDestructiveOwner?.hostID != host.id,
               hosts.contains(where: { $0.id == host.id }) else { return }
         if let activePairingOwner {
             await cancelPairing(owner: activePairingOwner, showCancelledState: false)
@@ -2135,6 +2480,10 @@ final class AppModel: ApplicationInputSink {
     func launchSelectedApp() async {
         guard let host = selectedHost, let app = selectedApp else {
             streamLaunchUI.errorMessage = "Select a host and app first."
+            return
+        }
+
+        guard activeHostDestructiveOwner?.hostID != host.id else {
             return
         }
 

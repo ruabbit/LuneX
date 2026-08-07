@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`8/48`；host library与awaited Add Host presentation完成，继续catalog generation ownership |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`11/48`；typed host removal/trust reset与active owner clean teardown完成，继续host/pairing/catalog surface recomposition |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`10/48`。Group 1与2.1至2.4完成：host library、catalog和pairing presentation属于checked workspace；pairing owner同时携带workspace、host selection与attempt generation，取消先失效owner再await provider，late identity/progress/completion、A-to-B-to-A、replacement与non-owner action均fail closed。focused `71/71`、related `135/135`、normal `1178/1177/1 exact Keychain skip/0`、四application target generic Debug `4/4`通过。root UI仍是primary compatibility binding；下一项2.5实现typed host removal/trust reset与active owner teardown。
+阶段19当前权威进度`11/48`。Group 1与2.1至2.5完成：host library、catalog、pairing及destructive confirmation属于checked workspace；remove/reset trust要求显式确认，target active session必须使用stop consent并await clean teardown，target pairing先取消，所有await边界重验owner。focused `12/12`、related `127/127`、normal `1190/1189/1 exact Keychain skip/0`、四application target generic Debug `4/4`通过。host/catalog跨repository rollback为best-effort而非原子事务；root UI仍是primary compatibility binding，session workspace owner留给3.1。下一项2.6重组host/pairing/catalog完整状态surface。
 
 ### 阶段19错误记录
 
@@ -60,6 +60,9 @@
 - Task 2.1首个final scope gate把新测试文件在generated pbxproj中的引用数假设为3，实际稳定结构为4而提前退出；其余scope/OpenSpec/generator/test/artifact断言均通过。corrected gate只修正精确计数，不重复测试或运行时操作。
 - Task 2.3新增回归后的首个focused wrapper误用无test action的`LuneX-macOS` scheme并以退出码66、0 tests结束，同时过早删除失败raw log；通过`xcodebuild -list`确认scheme后改用`LuneXCoreTests`，保留结构化失败摘要的corrected wrapper从fresh目录通过，不原样重试。
 - Task 2.4首轮新focused为`6/5/0/1`，唯一失败是测试误要求无默认action的`pairingCancelled` issue携带action scope；terminal state已保留checked owner，修正断言为nil action后fresh focused通过`6/6`，production无需回退。
+- Task 2.5恢复后的前三轮compile分别定位未定义workspace回写、旧dialog测试签名和Xcode 26.4未修改`var`诊断；均在0 tests阶段逐项修复，final warnings-as-errors compile通过。
+- Task 2.5首轮新测试compile仅报3处XCTest autoclosure内直接`await`；改为局部值后通过。首轮focused为`12/11/0/1`，唯一失败是测试误把第二次retry的nil拒绝当作应返回同一confirmation；按“不创建第二操作”的幂等合同修正断言后fresh `12/12`通过。
+- Task 2.5最终四平台build wrapper在macOS成功后再次误用zsh只读变量`status`而退出；读回macOS structured success后改用`build_state`，只补跑缺失的iOS/tvOS/visionOS三项并全部通过，没有重复已成功build。
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 

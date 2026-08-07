@@ -68,7 +68,17 @@ final class ProductWorkspaceRegistryTests: XCTestCase {
             $0.navigationSelection = .diagnostics
             $0.selectedHostID = hostID
             $0.selectedAppID = "app-3"
-            $0.presentation.dialog = .removeHost(hostID: hostID)
+            $0.presentation.dialog = .removeHost(
+                ProductHostDestructiveConfirmation(
+                    owner: ProductHostActionOwner(
+                        workspace: $0.reference,
+                        hostID: hostID,
+                        hostSelectionGeneration: $0.hostSelectionGeneration
+                    ),
+                    kind: .remove,
+                    requiresSessionStop: false
+                )
+            )
         }
 
         let replacement = try registry.replace(first)

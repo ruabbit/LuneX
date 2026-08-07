@@ -3249,3 +3249,13 @@
 - terminal failure/cancelled保留historical owner但清runtime attempt ID；retryable failure有scoped action，cancelled按合同无action。成功只更新shared authenticated host与发起workspace pairing presentation。
 - corrected new focused `/tmp/LuneX-19-2_4-focused-r2.X9h9Nm`为`6/6`；expanded focused `/tmp/LuneX-19-2_4-focused-r3.KwsLsn`为`71/71`；related `/tmp/LuneX-19-2_4-related.XTst2Q`为`135/135`；serial normal `/tmp/LuneX-19-2_4-normal.LWChiM`为`1178/1177/1/0`。
 - final generic Debug build `/tmp/LuneX-19-2_4-platform-builds.CeubCP`为macOS、iOS/iPadOS、tvOS、visionOS `4/4`，signing disabled、Simulator lifecycle未调用。所有test/build raw log、xcresult和临时DerivedData均已删除，两个opt-in unset。
+
+## 2026-08-08 阶段 19 Task 2.5 Host Destructive Workflows
+
+- `ProductHostActionOwner`绑定完整workspace reference、host ID和host-selection generation；remove/reset confirmation、performing、failed与success都属于owner workspace，A-to-B-to-A、replacement及non-owner invocation fail closed。
+- Remove与Reset Trust只创建typed confirmation；Cancel在mutation前保持host/trust/catalog/session/pairing不变。single-operation admission阻止duplicate request/begin/retry/perform造成第二次repository mutation，并在操作期间阻止target host通过当前入口启动新pairing或stream。
+- active target session需要confirmation携带stop consent；perform await现有`stopStream()`完整teardown后才允许repository mutation。confirmation后新出现的session不会被擅自stop，而是typed failure并要求重新确认。target pairing同样在mutation前先失效owner并await provider cancellation。
+- remove只删除target host及其catalog snapshots；reset trust保留host但清pairing state与pinned identity；unrelated hosts保持原值。catalog先过滤、host后删除，host failure会恢复catalog；workspace在await期间失效时对已提交host/trust/catalog做best-effort restoration。
+- host与catalog repository没有共同transaction，best-effort rollback不能宣称原子性；进程中断或rollback自身失败仍可能留下部分提交。session仍按existing host/session owner检查，initiating workspace session ownership属于3.1。
+- focused `/tmp/LuneX-19-2_5-focused-r2.JG3oGI`为`12/12`，related `/tmp/LuneX-19-2_5-related.SVlXIR`为`127/127`，serial normal `/tmp/LuneX-19-2_5-normal.AopzR5`为`1190/1189/1/0`；唯一skip是opt-in unset真实Keychain测试。
+- final generic Debug build `/private/tmp/LuneX-19-2_5-platform-builds-final.MdqHEC`在最终RootView上覆盖macOS、iOS/iPadOS、tvOS、visionOS，均`succeeded`且结构化build errors/warnings/analyzer warnings全零；signing disabled，未调用Simulator lifecycle，不证明signed、physical或live-host行为。

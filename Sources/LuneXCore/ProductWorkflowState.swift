@@ -98,11 +98,18 @@ struct ProductPairingOwner: Hashable, Sendable {
     let attemptGeneration: ProductPairingAttemptGeneration
 }
 
+struct ProductHostActionOwner: Hashable, Sendable {
+    let workspace: ProductWorkspaceReference
+    let hostID: MoonlightHost.ID
+    let hostSelectionGeneration: ProductHostSelectionGeneration
+}
+
 enum ProductActionScope: Hashable, Sendable {
     case application
     case workspace(ProductWorkspaceReference)
     case catalog(ProductCatalogOwner)
     case pairing(ProductPairingOwner)
+    case host(ProductHostActionOwner)
     case session(
         workspace: ProductWorkspaceReference,
         sessionID: UUID
@@ -377,8 +384,8 @@ enum ProductWorkspaceSheet: Equatable, Sendable {
 }
 
 enum ProductWorkspaceDialog: Equatable, Sendable {
-    case removeHost(hostID: MoonlightHost.ID)
-    case resetHostTrust(hostID: MoonlightHost.ID)
+    case removeHost(ProductHostDestructiveConfirmation)
+    case resetHostTrust(ProductHostDestructiveConfirmation)
     case stopStream(sessionID: UUID)
 }
 
@@ -441,6 +448,46 @@ struct PairingUIState: Equatable, Sendable {
     }
 }
 
+enum ProductHostDestructiveKind: Equatable, Sendable {
+    case remove
+    case resetTrust
+}
+
+struct ProductHostDestructiveConfirmation: Equatable, Sendable {
+    let owner: ProductHostActionOwner
+    let kind: ProductHostDestructiveKind
+    let requiresSessionStop: Bool
+}
+
+enum ProductHostDestructiveState: Equatable, Sendable {
+    case idle
+    case awaitingConfirmation(ProductHostDestructiveConfirmation)
+    case performing(ProductHostDestructiveConfirmation)
+    case failed(ProductHostDestructiveConfirmation, ProductIssue)
+    case succeeded(kind: ProductHostDestructiveKind, hostID: MoonlightHost.ID)
+
+    var confirmation: ProductHostDestructiveConfirmation? {
+        switch self {
+        case let .awaitingConfirmation(confirmation),
+             let .performing(confirmation),
+             let .failed(confirmation, _):
+            confirmation
+        case .idle, .succeeded:
+            nil
+        }
+    }
+
+    var isPerforming: Bool {
+        guard case .performing = self else { return false }
+        return true
+    }
+
+    var issue: ProductIssue? {
+        guard case let .failed(_, issue) = self else { return nil }
+        return issue
+    }
+}
+
 struct ProductWorkspaceState: Equatable, Sendable {
     let reference: ProductWorkspaceReference
     var navigationSelection: AppNavigationSelection
@@ -454,6 +501,13 @@ struct ProductWorkspaceState: Equatable, Sendable {
                 phase: selectedHostID == nil ? .unavailable : .idle
             )
             pairing = PairingUIState()
+            hostLibrary.destructiveAction = .idle
+            switch presentation.dialog {
+            case .removeHost, .resetHostTrust:
+                presentation.dialog = nil
+            case .stopStream, nil:
+                break
+            }
         }
     }
     private(set) var hostSelectionGeneration: ProductHostSelectionGeneration
@@ -585,19 +639,22 @@ struct ProductHostLibraryWorkspaceState: Equatable, Sendable {
     var refreshIssue: ProductIssue?
     var manualHostDraft: ManualHostDraft
     var manualHostSubmission: ManualHostSubmissionState
+    var destructiveAction: ProductHostDestructiveState
 
     init(
         phase: ProductHostLibraryPhase = .loading,
         isRefreshing: Bool = false,
         refreshIssue: ProductIssue? = nil,
         manualHostDraft: ManualHostDraft = .init(),
-        manualHostSubmission: ManualHostSubmissionState = .idle
+        manualHostSubmission: ManualHostSubmissionState = .idle,
+        destructiveAction: ProductHostDestructiveState = .idle
     ) {
         self.phase = phase
         self.isRefreshing = isRefreshing
         self.refreshIssue = refreshIssue
         self.manualHostDraft = manualHostDraft
         self.manualHostSubmission = manualHostSubmission
+        self.destructiveAction = destructiveAction
     }
 }
 

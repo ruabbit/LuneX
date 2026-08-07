@@ -112,9 +112,9 @@ user-visible failure therefore requires an explicit code and reviewed
 presentation rather than copying a lower-level string.
 
 `ProductActionToken` carries an opaque identifier, a closed
-`ProductActionKind`, and one of five non-display scopes: application,
-workspace identity/generation, catalog owner, pairing owner, or session
-identity plus its owning workspace.
+`ProductActionKind`, and one of six non-display scopes: application,
+workspace identity/generation, catalog owner, pairing owner, host-action owner,
+or session identity plus its owning workspace.
 The value is an authorization claim, not authorization by itself. The action
 dispatcher must compare its scope with current checked owners at invocation and
 must return a `stale_action` issue without executing when they differ.
@@ -303,6 +303,59 @@ PIN, submit, cancel, retry, progress, and typed failure presentation. Direct
 scene-specific panel injection remains part of task 4.2. The retained progress
 messages and other legacy workflow strings are removed or mapped in tasks 6.1
 and 6.2; task 2.4 does not claim that later privacy migration is complete.
+
+### Confirmed host removal and trust reset
+
+Host removal and trust reset now use a `ProductHostActionOwner` containing the
+complete workspace reference, selected host ID, and selected-host generation.
+The workspace stores a typed destructive state: idle, awaiting confirmation,
+performing, failed with a closed product issue, or succeeded. Host selection
+changes, A-to-B-to-A, and workspace replacement invalidate the confirmation.
+A non-owning workspace cannot begin, perform, cancel, or retry another
+workspace's action.
+
+Requesting either operation only creates a confirmation. Cancel before
+repository mutation returns the workspace to idle and leaves host, trust,
+catalog, pairing, and session state unchanged. Duplicate requests return the
+existing confirmation; only one admitted destructive operation can run in the
+process. A duplicate begin, retry, or perform does not create another
+repository mutation. While an operation is admitted, the target host cannot
+start a new pairing attempt or stream through the current compatibility entry
+points.
+
+If the target host owns an active session when confirmation is created, the
+confirmation explicitly records stop consent. Perform awaits the existing
+idempotent `stopStream()` teardown and verifies that the target session owner
+is clear before any repository mutation. If a target session appears after a
+non-stop confirmation, the action fails and a retry creates a new stop-aware
+confirmation; it does not silently stop the session. A target pairing owner is
+invalidated and its provider cancellation is awaited before mutation. Owner,
+selection, pairing, and target-session eligibility are rechecked after each
+await boundary.
+
+Removal deletes only the target host and its persisted catalog snapshots,
+clears only that host's in-memory catalog, and reconciles every workspace
+against the remaining shared hosts. Trust reset retains the host and unrelated
+hosts but persists the target as unpaired with no pinned server identity.
+Failures expose only `hostRemoveFailed`, `hostTrustResetFailed`, or
+`staleAction`; their retry token is scoped to the checked host owner when the
+issue is retryable.
+
+The host and catalog repositories do not provide a cross-repository
+transaction. Removal saves the filtered catalog before deleting the host and
+restores the original catalog if host deletion fails. If workspace ownership
+changes after a repository call has begun, LuneX revalidates and makes a
+best-effort restoration of the original host/trust and catalog before
+returning stale. A process interruption or rollback failure can still leave a
+partially committed repository state; this task does not claim atomicity.
+
+The SwiftUI host panel requests confirmation rather than calling immediate
+mutation. Its labels distinguish remove/reset from stop-and-remove/
+stop-and-reset, disables duplicate performing actions, and exposes typed retry
+presentation. The panel still uses the primary compatibility workspace; full
+per-scene injection and state-surface recomposition remain tasks 4.2 and 2.6.
+The active session is checked by the existing host/session runtime owner;
+recording the initiating workspace as session owner remains task 3.1.
 
 ## Compatibility Boundary
 
