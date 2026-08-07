@@ -95,6 +95,10 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.7.4 normal `.xcresult`的summary/build/tests三项并行读取时，tests子命令报告内部`database.sqlite3`同名移动冲突 | 1 | summary与build读取已完成且测试成功；停止并行访问同一bundle，串行只读skipped节点，不重跑测试 |
+| 18.7.4记录normal结果的首个组合补丁误判错误表与7.4段落相邻 | 1 | `apply_patch`原子拒绝且无部分写入；读取真实锚点后拆分精确补丁 |
+| 18.7.4记录tvOS修复的首个多文件补丁含无效空hunk标记，第二个补丁又沿用不精确toolbar文本 | 2 | 两次`apply_patch`均原子拒绝且无部分写入；读取真实toolbar后使用精确上下文拆分补丁 |
+| 18.7.4首轮fixed Apple TV direct编译发现SwiftUI `ShareLink`在tvOS unavailable | 1 | 保留非tvOS原生ShareLink；tvOS使用可访问的typed unavailable toolbar状态，不伪造分享通道，补source-contract后fresh重跑 |
 | 18.7.1首轮五平台build包装器在zsh中用Bash的0-based数组索引 | 1 | 在首个`xcodebuild`前因`names[$i]`未设置退出，仓库/设备无副作用；改用显式`/bin/bash`和fresh目录执行相同矩阵 |
 | 18.7.1首轮focused源码合同从`TVStreamControls` struct起截取，却断言其前方focus enum的`hideControls`/`disconnect` cases | 1 | production焦点enum和按钮接线均存在；将测试切片起点前移到`TVStreamControlFocusTarget`，从fresh bundle重跑8项focused |
 | 18.7.1恢复时使用`find .. -name AGENTS.md`导致仓库父目录遍历超出必要范围 | 1 | 主动中止只读进程；改用仓库内`rg --files -g 'AGENTS.md'`，确认没有额外AGENTS约束且无仓库副作用 |
@@ -1551,3 +1555,31 @@
 - **post-mark final-state：** `/tmp/LuneX-18-7_3-final-state.8JTYco`只读通过strict、OpenSpec `40/50 ready`、next 7.4、精确17文件scope、唯一7.3 checkbox、稳定project/retained evidence、disabled opt-ins及仓库/proof边界；未重跑generator/test/build或操作Keychain、live host、Simulator。
 - **final diff audit：** `/tmp/LuneX-18-7_3-final-audit.MXE9J2`一次通过最终17文件`3 production / 1 test / 2 project-generator / 11 authority`分类、production零删除、8项测试无弱化、AppSettings schema不变、mixed-platform fail-closed、automatic policy/desired-actual/UI accessibility、唯一7.3 checkbox及全部仓库/proof边界。下一步final-record。
 - **final-record：** `/tmp/LuneX-18-7_3-final-record.oIJ6c8`通过基线`HEAD == origin/main == 534c68a`、strict、OpenSpec `40/50 next 7.4`、最终17文件分类、唯一7.3 checkbox、稳定project、三道gate、retained evidence及disabled opt-in/proof边界。7.3进入精确stage、独立提交与push/fetch。
+
+## 2026-08-08 阶段 18 任务 7.4 启动
+
+- **恢复状态：** 7.3已以`7d4452f Add platform-aware stream settings`独立提交推送，当前`HEAD == origin/main`且工作树clean；系统更新后工具链为macOS 27.0、Xcode 26.4、Swift 6.3，OpenSpec为`40/50 ready`、next精确7.4。
+- **实现边界：** 复用唯一`DiagnosticsStore`，增加opaque replacement lease、单调revision与语义去重、同revision冲突/低revision/旧owner fail-closed、lease-owned actionable recovery、全局有限history及安全export；不复制coordinator、session UUID或generation ownership。
+- **接线路径：** `AppModel`只在current coordinator state通过既有session/media/platform/ownership检查后记录固定platform diagnostic，并在replacement/failure/stop runtime clear时失效lease；Diagnostics页面只导出二次脱敏文本。
+- **验收顺序：** 先补store值合同、AppModel/application与UI source测试并跑fresh focused，再跑related、normal、fixed Apple TV/Vision Pro direct和五平台unsigned Debug，随后同步authority与repository pre/post-mark/final gates；通过前不得勾选7.4或实现7.5+。
+- **证明边界：** 本项只证明确定性diagnostic ownership/dedup/redaction、应用接线、SwiftUI条件编译和unsigned build；不证明Simulator runtime、signed artifact、物理输入/HDR/空间音频、live Sunshine、性能、功耗或温度。真实opt-in保持unset且不操作Simulator lifecycle。
+- **首轮focused错误：** `/tmp/LuneX-18-7_4-focused.j34RyA`编译成功并通过全部新增行为测试，唯一失败是source-contract三条完整字符串不容忍Swift自动换行；同时指定的AppModel测试名不存在，因此未执行。修正为稳定token及真实`testVisionPresentationCoordinatesCurrentMediaReconnectAndRemoteStop`后必须从fresh evidence目录重跑，失败bundle不作为验收证据。
+- **第二轮focused错误：** `/tmp/LuneX-18-7_4-focused-r2.XeVLuB`为`30 total / 29 passed / 1 failed`；实际AppModel测试和全部行为测试通过，唯一source-contract失败发现Export toolbar因宽泛`List`锚点误挂Host Library。精确移到`DiagnosticsView`后第三次fresh重跑，前两份bundle均不作为最终验收。
+- **focused验收：** 修正toolbar归属后的fresh `/tmp/LuneX-18-7_4-focused-r3.Dyv0SO/Focused.xcresult`由当前Xcode结构化确认`31/31 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`。下一步逐函数审计production ownership/redaction，再运行related矩阵。
+- **审计修复：** production审计发现非平台runtime后来重申完全相同action时，current事件虽正确去重但平台lease ownership未撤销，后续平台recovery可能误清该action。增量修复仅撤销相同非平台重申事件的lease ownership并补精确回归；修复后需fresh重跑focused，r3降为修复前辅助证据。
+- **最终focused：** fresh `/tmp/LuneX-18-7_4-focused-r4.1USmAU/Focused.xcresult`结构化通过`32/32 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`且生成`1 AIR / 1 metallib`。修复后的store/AppModel/UI合同成立，下一步8类related矩阵。
+- **related验收：** fresh `/tmp/LuneX-18-7_4-related.9efE6X/Related.xcresult`覆盖diagnostics、完整AppModel workflow、platform coordinator/control/settings、HDR与spatial八类，结构化通过`152/152 passed / 0 skipped / 0 failed / 0 expected failure`，build diagnostics全零且有`1 AIR / 1 metallib`。下一步fresh normal suite。
+- **normal验收：** fresh `/tmp/LuneX-18-7_4-normal.AHM4Rr/Normal.xcresult`结构化通过`1122 total / 1121 passed / 1 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`且有`1 AIR / 1 metallib`。并行读取skipped节点时`xcresulttool`发生内部临时数据库同名移动冲突；测试bundle本身完整，改为串行只读确认唯一skip，不重跑测试。
+- **Keychain边界：** 串行读取normal tests tree确认唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，failure message要求显式`LUNEX_RUN_KEYCHAIN_TEST=1`；本轮保持unset并继续使用文件fallback，live-host opt-in同样unset。
+- **tvOS API修复：** 首轮fixed Apple TV direct `/tmp/LuneX-18-7_4-direct.VH3uKS/tvOS.xcresult`在RootView以2个Swift error失败，精确为`ShareLink`和initializer在tvOS unavailable；Metal已生成但该bundle不作验收，串行脚本因此未开始visionOS。修复为tvOS可访问disabled unavailable状态，其他平台保留真实ShareLink，并补source-contract后从fresh目录重跑focused与direct。
+- **修复后focused：** fresh `/tmp/LuneX-18-7_4-focused-r5.wyn9qr/Focused.xcresult`结构化通过`32/32`、零skip/failure/expected failure，build diagnostics全零且有`1 AIR/1 metallib`；source contract现同时锁定tvOS unavailable状态和非tvOS真实ShareLink。下一步fresh direct双平台。
+- **direct验收：** fresh `/tmp/LuneX-18-7_4-direct-r2.2mQR5s`中的fixed Apple TV与Vision Pro unsigned Debug均结构化为`succeeded / 0 warning / 0 error / 0 analyzer warning`且各生成`1 AIR / 1 metallib`；固定UUID只作build destination，未查询或操作Simulator lifecycle。首次Metal计数误用了不存在的`tvOS-derived`/`visionOS-derived`路径，随后改读实际`*-DerivedData`目录并确认产物，无需重跑成功构建。下一步fresh五平台unsigned Debug。
+- **五平台build：** fresh `/tmp/LuneX-18-7_4-builds.HlcDxq`中的macOS、fixed iPhone/iPad/Apple TV/Vision Pro unsigned Debug全部结构化为`succeeded / 0 warning / 0 error / 0 analyzer warning`且各生成`1 AIR / 1 metallib`；固定UUID只作destination，未查询或操作Simulator lifecycle。下一步最终production/test diff审计、authority同步与repository pre-gate。
+- **authority同步：** OpenSpec design及tvOS/visionOS四份media/input specs、阶段18runtime contract、completion roadmap与三份planning已记录单store、opaque lease、revision/semantic dedup、replacement、non-platform ownership preservation、finite history、二次脱敏export、tvOS unavailable状态、fresh证据与严格proof boundary。7.4保持pre-mark `40/50 next 7.4`，下一步repository pre-gate，通过前不得勾选。
+- **repository包装错误：** 首个编排脚本在shell执行前因JavaScript局部变量使用严格模式保留字`package`而拒绝；随后partial `/tmp/LuneX-18-7_4-repository-pre.0bdh5m`通过fixture、strict/apply与三次稳定generator，但scope门使用macOS Bash 3.2不支持的`mapfile`而退出。两次均无源码、测试、构建、Keychain或Simulator副作用；改用兼容数组语法从fresh目录完整重跑，partial不计最终验收。
+- **repository收尾错误：** corrected r2 `/tmp/LuneX-18-7_4-repository-pre-r2.UzOB0F`已通过fixtures、strict/apply、三次稳定generator、15文件scope、membership/static、retained test/build/Metal/固定UUID；最终文档边界断言因Markdown反引号在shell双引号内触发命令替换而退出。不是实现或证据失败；改为不依赖格式字符的只读收尾，不重复generator/test/build。
+- **repository收尾错误 2：** 修正格式断言后的只读收尾通过parity/opt-in/process并确认changed reference/dependency边界为空，随后因使用不存在的ENet许可摘要短语退出；实际vendored MIT文件包含`Permission is hereby granted`。改为校验真实license文本继续收尾，不重复已通过门。
+- **repository pre-gate：** corrected `/tmp/LuneX-18-7_4-repository-pre-r2.UzOB0F`完整通过fixture self/tree、OpenSpec strict `9/9`、pre-mark `40/50 next 7.4`、三次稳定generator SHA-256 `aee5f8cb55fffe616537d30eb933012a068658cea6e67ac48d06c3b236d8ed5e`、精确15文件scope、membership/lease/dedup/recovery/export/tvOS availability语义、retained `32/152/1122`测试、direct/五平台build与Metal、唯一Keychain skip及privacy/reference/dependency/opt-in/process/diff/proof边界。现在仅勾选7.4，7.5+继续pending。
+- **post-mark final-state：** `/tmp/LuneX-18-7_4-final-state.VaTcq9`只读通过strict、OpenSpec `41/50 ready`、next 7.5、精确16文件scope、唯一7.4 checkbox、稳定project/retained evidence、disabled opt-ins与无LuneX残留构建进程；未重跑generator/test/build或操作Keychain、live host、Simulator。下一步final diff audit与final-record。
+- **final diff audit：** `/tmp/LuneX-18-7_4-final-audit.p2Anhn`通过最终16文件`3 production / 2 test / 11 authority`分类、production唯一删除仅为原`append`签名替换、7项新增测试及AppModel现有workflow扩展无弱化、lease/revision/non-platform ownership/history/export/tvOS availability语义、唯一7.4 checkbox及仓库/proof边界。下一步final-record后精确stage、提交和push/fetch。
+- **final-record：** `/tmp/LuneX-18-7_4-final-record.k0tqwb`通过基线`HEAD == origin/main == 7d4452f`、strict、OpenSpec `41/50 next 7.5`、最终16文件分类、唯一7.4 checkbox、稳定project、三道final gate、全部retained evidence及disabled opt-in/process/proof边界。7.4进入精确stage、独立提交与push/fetch。

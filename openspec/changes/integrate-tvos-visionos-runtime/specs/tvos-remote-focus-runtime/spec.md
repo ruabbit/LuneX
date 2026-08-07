@@ -70,6 +70,10 @@ controller object, vendor, host, and payload identities.
 - **WHEN** a stale controller event is rejected
 - **THEN** diagnostics SHALL record a fixed stale-generation class without persisting controller identity
 
+#### Scenario: Platform diagnostics are exported on a supported Apple platform
+- **WHEN** a diagnostics report contains tvOS focus, input, controller, presentation, or recovery state
+- **THEN** the export SHALL omit event and runtime ownership identities and re-redact secrets, UUIDs, network locations, and host, session, generation, revision, frame, controller, display, and route assignments
+
 #### Scenario: Stream controls receive local focus
 - **WHEN** the overlay opens during a current stream
 - **THEN** native focus SHALL move predictably from Hide Controls to Disconnect while actual focus, capture, and controller count remain separately accessible

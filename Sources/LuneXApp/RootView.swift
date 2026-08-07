@@ -1091,6 +1091,25 @@ private struct DiagnosticsView: View {
                 }
             }
         }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                #if os(tvOS)
+                Button(action: {}) {
+                    Label("Export Unavailable", systemImage: "square.and.arrow.up")
+                }
+                .disabled(true)
+                .accessibilityLabel("Diagnostics export unavailable")
+                .accessibilityHint("Diagnostics export is unavailable on Apple TV.")
+                #else
+                ShareLink(item: appModel.diagnostics.exportText) {
+                    Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+                }
+                .disabled(appModel.diagnostics.events.isEmpty)
+                .accessibilityLabel("Export Diagnostics")
+                .accessibilityHint("Shares a privacy-redacted diagnostics report.")
+                #endif
+            }
+        }
     }
 
     private func color(for severity: RuntimeDiagnosticSeverity) -> Color {

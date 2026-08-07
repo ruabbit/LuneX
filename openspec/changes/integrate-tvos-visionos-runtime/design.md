@@ -554,6 +554,42 @@ navigation, signed installation, physical input/controller behavior, HDR,
 audible spatial audio/head tracking, live Sunshine, latency, comfort,
 performance, power, or thermal behavior. Tasks 7.4-8.8 remain separate.
 
+### Keep platform diagnostics finite, owned, and export-safe
+
+Task 7.4 extends the existing application `DiagnosticsStore`; it does not add a
+second coordinator log or persist a session, media generation, surface,
+controller, display, or route identity. `AppModel` begins one opaque diagnostic
+lease only after the existing current session, media generation, platform,
+presentation ownership, and sequence checks accept a coordinator snapshot.
+Presentation replacement ends the prior lease before the replacement can
+record, and failure, reconnect, remote termination, or stop uses the same
+runtime clear path to invalidate it.
+
+Within a lease, source revision is monotonic and a later revision with the same
+platform and semantic state advances the source fence without appending a
+duplicate event. An older revision, a conflicting value at the same revision,
+or an old lease is inert. Actionable state carries its lease ownership so a
+healthy platform state or lease end clears only actions still owned by that
+lease. If another runtime records a newer action, or reasserts the identical
+current action, that non-platform ownership is preserved. Event history remains
+append-only within the store's single global finite capacity.
+
+Platform records use only fixed category, severity, code, summary, and recovery
+action values. Export projects no event UUID or runtime owner and applies a
+second redaction pass to every textual column for embedded secrets, UUIDs,
+network locations, and host/address/endpoint/session/generation/revision/frame/
+controller/display/route assignments. macOS, iOS/iPadOS, and visionOS use the
+native `ShareLink`; tvOS 26.4 exposes an accessible disabled typed unavailable
+toolbar state because `ShareLink` is unavailable there. No clipboard, Files, or
+parallel export transport is synthesized.
+
+Focused, related, and full normal tests plus fixed Apple TV/Vision Pro and
+five-platform unsigned Debug builds prove deterministic ownership, redaction,
+application wiring, and conditional compilation only. They do not prove app or
+Simulator runtime, signed installation, physical input/HDR/spatial audio, live
+Sunshine, latency, performance, power, or thermal behavior. Tasks 7.5-8.8
+remain separate.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

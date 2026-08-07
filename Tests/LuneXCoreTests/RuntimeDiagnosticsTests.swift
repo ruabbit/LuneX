@@ -710,6 +710,318 @@ final class RuntimeDiagnosticsTests: XCTestCase {
         XCTAssertFalse(diagnostic.summary.contains("private-controller-id"))
         XCTAssertFalse(diagnostic.code.contains("3"))
     }
+
+    @MainActor
+    func testPlatformDiagnosticsDeduplicateSemanticStateAndRejectConflicts() {
+        let store = DiagnosticsStore(capacity: 2)
+        let owner = store.beginTVVisionPlatformDiagnosticOwnership()
+
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(.active, revision: 1),
+                owner: owner,
+                date: Date(timeIntervalSince1970: 1)
+            ),
+            .recorded
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(.active, revision: 1),
+                owner: owner
+            ),
+            .deduplicated
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(.active, revision: 2),
+                owner: owner
+            ),
+            .deduplicated
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(
+                    .displayFallback(.headroomUnavailable),
+                    revision: 2
+                ),
+                owner: owner
+            ),
+            .conflictingRevision
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(
+                    .displayFallback(.headroomUnavailable),
+                    revision: 1
+                ),
+                owner: owner
+            ),
+            .staleRevision
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(
+                    .displayFallback(.headroomUnavailable),
+                    revision: 3
+                ),
+                owner: owner,
+                date: Date(timeIntervalSince1970: 3)
+            ),
+            .recorded
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(
+                    .failed(.invalidComponent(.video)),
+                    revision: 4
+                ),
+                owner: owner,
+                date: Date(timeIntervalSince1970: 4)
+            ),
+            .recorded
+        )
+
+        XCTAssertEqual(store.events.count, 2)
+        XCTAssertEqual(store.events.map(\.code), [
+            "platform_tvos_display_fallback",
+            "platform_tvos_failed_invalid_video"
+        ])
+    }
+
+    @MainActor
+    func testPlatformDiagnosticReplacementMakesOldRecordAndClearInert() {
+        let store = DiagnosticsStore()
+        let oldOwner = store.beginTVVisionPlatformDiagnosticOwnership()
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(
+                    .failed(.invalidComponent(.input)),
+                    revision: 1
+                ),
+                owner: oldOwner
+            ),
+            .recorded
+        )
+        XCTAssertEqual(store.currentActionableEvent(in: .input)?.action, .reconnectInput)
+
+        let replacementOwner = store.beginTVVisionPlatformDiagnosticOwnership()
+        XCTAssertNil(store.currentActionableEvent(in: .input))
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(.sceneClosed, revision: 2),
+                owner: oldOwner
+            ),
+            .staleOwner
+        )
+        XCTAssertEqual(
+            store.record(
+                tvVisionPlatform: platformDiagnostic(
+                    .failed(.invalidComponent(.audioRoute)),
+                    revision: 1
+                ),
+                owner: replacementOwner
+            ),
+            .recorded
+        )
+
+        store.endTVVisionPlatformDiagnosticOwnership(oldOwner)
+        XCTAssertEqual(store.currentActionableEvent(in: .audio)?.action, .checkAudioOutput)
+        store.endTVVisionPlatformDiagnosticOwnership(replacementOwner)
+        XCTAssertNil(store.currentActionableEvent(in: .audio))
+        XCTAssertEqual(store.events.count, 2)
+    }
+
+    @MainActor
+    func testPlatformRecoveryClearsOnlyItsOwnedActionAndPreservesHistory() {
+        let store = DiagnosticsStore()
+        store.record(
+            ApplicationDiagnosticFactory.streamFailure(VideoDecoderError.noActiveSession),
+            date: Date(timeIntervalSince1970: 1)
+        )
+        let owner = store.beginTVVisionPlatformDiagnosticOwnership()
+        store.record(
+            tvVisionPlatform: platformDiagnostic(
+                .displayFallback(.headroomUnavailable),
+                revision: 1
+            ),
+            owner: owner,
+            date: Date(timeIntervalSince1970: 2)
+        )
+        store.record(
+            tvVisionPlatform: platformDiagnostic(.displayDirectEDR, revision: 2),
+            owner: owner,
+            date: Date(timeIntervalSince1970: 3)
+        )
+
+        XCTAssertNil(store.currentActionableEvent(in: .hdr))
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .decoder)?.code,
+            "video_pipeline_failed"
+        )
+
+        store.record(
+            tvVisionPlatform: platformDiagnostic(
+                .displayFallback(.headroomUnavailable),
+                revision: 3
+            ),
+            owner: owner,
+            date: Date(timeIntervalSince1970: 4)
+        )
+        store.record(
+            ApplicationDiagnosticFactory.hdrPresentationState(.pipelineFailure)!,
+            date: Date(timeIntervalSince1970: 5)
+        )
+        store.record(
+            tvVisionPlatform: platformDiagnostic(.displayDirectEDR, revision: 4),
+            owner: owner,
+            date: Date(timeIntervalSince1970: 6)
+        )
+
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .hdr)?.code,
+            "hdr_pipeline_failure"
+        )
+        XCTAssertEqual(store.events.count, 6)
+    }
+
+    @MainActor
+    func testIdenticalNonPlatformActionReclaimsCurrentOwnershipWithoutHistoryDeduplication() {
+        let store = DiagnosticsStore()
+        let owner = store.beginTVVisionPlatformDiagnosticOwnership()
+        let fallback = platformDiagnostic(
+            .displayFallback(.headroomUnavailable),
+            revision: 1
+        )
+
+        store.record(tvVisionPlatform: fallback, owner: owner)
+        let platformEvent = try? XCTUnwrap(store.currentActionableEvent(in: .hdr))
+        XCTAssertNotNil(platformEvent)
+
+        store.record(fallback.applicationDiagnosticForTesting)
+        XCTAssertEqual(store.events.count, 2)
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .hdr)?.id,
+            platformEvent?.id
+        )
+
+        store.record(
+            tvVisionPlatform: platformDiagnostic(.displayDirectEDR, revision: 2),
+            owner: owner
+        )
+
+        XCTAssertEqual(
+            store.currentActionableEvent(in: .hdr)?.id,
+            platformEvent?.id
+        )
+        XCTAssertEqual(store.events.count, 3)
+    }
+
+    @MainActor
+    func testDiagnosticsExportRedactsIdentityFieldsAgain() {
+        let store = DiagnosticsStore(capacity: 2)
+        let privateUUID = "4D02BF54-C9ED-4D69-9068-39FD083BD146"
+        store.record("safe", subsystem: "app", code: "safe")
+        store.record(
+            "session=\(privateUUID) host=private.local endpoint=10.0.0.4:47984 "
+                + "generation=9 revision=10 frameID=11 controllerID=pad-1 "
+                + "displayID=panel-1 routeID=route-1",
+            subsystem: "routeID=private-route",
+            code: "session=private-session"
+        )
+
+        XCTAssertEqual(store.events.count, 2)
+        XCTAssertTrue(store.events[1].message.contains(privateUUID))
+        let export = store.exportText
+        for privateValue in [
+            privateUUID,
+            "private.local",
+            "10.0.0.4",
+            "private-session",
+            "pad-1",
+            "panel-1",
+            "route-1",
+            "private-route"
+        ] {
+            XCTAssertFalse(export.contains(privateValue), privateValue)
+        }
+        XCTAssertTrue(export.contains("<private>"))
+        XCTAssertFalse(export.contains(store.events[1].id.uuidString))
+        XCTAssertEqual(store.exportRecords.count, 2)
+    }
+
+    func testPlatformDiagnosticProjectionUsesFixedSnapshotState() throws {
+        let fallbackSnapshot = try makePlatformDiagnosticSnapshot(
+            sequence: 4,
+            phase: .active,
+            diagnostic: .displayFallback(.headroomUnavailable)
+        )
+        let failedSnapshot = try makePlatformDiagnosticSnapshot(
+            sequence: 5,
+            phase: .failed(.actionFailed(.audioRoute)),
+            diagnostic: .activated
+        )
+
+        XCTAssertEqual(
+            TVVisionPlatformDiagnosticValue(snapshot: fallbackSnapshot),
+            platformDiagnostic(
+                .displayFallback(.headroomUnavailable),
+                revision: 4
+            )
+        )
+        XCTAssertEqual(
+            TVVisionPlatformDiagnosticValue(snapshot: failedSnapshot),
+            platformDiagnostic(
+                .failed(.actionFailed(.audioRoute)),
+                revision: 5
+            )
+        )
+    }
+
+    func testPlatformDiagnosticsAppAndExportSourceContract() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let rootView = try String(
+            contentsOf: repositoryRoot
+                .appendingPathComponent("Sources/LuneXApp/RootView.swift"),
+            encoding: .utf8
+        )
+        let appModel = try String(
+            contentsOf: repositoryRoot
+                .appendingPathComponent("Sources/LuneXCore/AppModel.swift"),
+            encoding: .utf8
+        )
+        let store = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "Sources/LuneXDiagnostics/DiagnosticsStore.swift"
+            ),
+            encoding: .utf8
+        )
+        let diagnosticsStart = try XCTUnwrap(
+            rootView.range(of: "private struct DiagnosticsView")
+        )
+        let settingsStart = try XCTUnwrap(
+            rootView.range(of: "private struct SettingsView")
+        )
+        let diagnosticsView = String(
+            rootView[diagnosticsStart.lowerBound..<settingsStart.lowerBound]
+        )
+
+        XCTAssertTrue(diagnosticsView.contains("#if os(tvOS)"))
+        XCTAssertTrue(diagnosticsView.contains("Export Unavailable"))
+        XCTAssertTrue(diagnosticsView.contains("ShareLink(item:"))
+        XCTAssertTrue(diagnosticsView.contains("appModel.diagnostics.exportText"))
+        XCTAssertTrue(diagnosticsView.contains("square.and.arrow.up"))
+        XCTAssertTrue(diagnosticsView.contains("privacy-redacted"))
+        XCTAssertTrue(appModel.contains("publishTVVisionPlatformDiagnostic"))
+        XCTAssertTrue(appModel.contains("clearTVVisionPlatformDiagnostics"))
+        XCTAssertTrue(appModel.contains("beginTVVisionPlatformDiagnosticOwnership"))
+        XCTAssertTrue(store.contains("case staleOwner"))
+        XCTAssertTrue(store.contains("case conflictingRevision"))
+        XCTAssertTrue(store.contains("DiagnosticExportRedactor.redact"))
+        XCTAssertFalse(store.contains("struct DiagnosticExportRecord: Identifiable"))
+    }
 }
 
 private extension MacLifecycleDiagnosticState {
@@ -779,4 +1091,72 @@ private struct SecretBearingDiagnosticError: Error, CustomStringConvertible {
     var description: String {
         "Authorization: Basic secret; PIN=1234"
     }
+}
+
+private func platformDiagnostic(
+    _ state: TVVisionPlatformDiagnosticState,
+    revision: UInt64
+) -> TVVisionPlatformDiagnosticValue {
+    TVVisionPlatformDiagnosticValue(
+        platform: .tvOS,
+        sourceRevision: revision,
+        state: state
+    )
+}
+
+private extension TVVisionPlatformDiagnosticValue {
+    var applicationDiagnosticForTesting: ApplicationDiagnostic {
+        switch state {
+        case .displayFallback:
+            return ApplicationDiagnostic(
+                category: .hdr,
+                severity: .warning,
+                code: "platform_tvos_display_fallback",
+                summary: "Apple TV is using HDR-to-SDR fallback.",
+                action: .reviewHDRSettings
+            )
+        default:
+            preconditionFailure("This helper only recreates the fallback diagnostic")
+        }
+    }
+}
+
+private func makePlatformDiagnosticSnapshot(
+    sequence: UInt64,
+    phase: TVVisionPlatformPresentationPhase,
+    diagnostic: TVVisionPlatformPresentationDiagnosticClass
+) throws -> TVVisionPlatformPresentationCoordinatorSnapshot {
+    let sessionID = UUID(uuidString: "7CF12CF8-DA94-49A0-81E2-7AC22A322799")!
+    let ownership = try TVVisionPresentationOwnership(
+        platform: .tvOS,
+        sessionID: sessionID,
+        mediaGeneration: 1,
+        presentationGeneration: TVVisionGeneration(
+            domain: .presentation,
+            rawValue: 1
+        ),
+        inputGeneration: TVVisionGeneration(domain: .input, rawValue: 1)
+    )
+    return TVVisionPlatformPresentationCoordinatorSnapshot(
+        ownership: ownership,
+        sequence: sequence,
+        revision: try TVVisionSemanticRevision(rawValue: sequence),
+        phase: phase,
+        presentation: nil,
+        visionWindowedPresentation: nil,
+        display: nil,
+        audioRoute: nil,
+        video: TVVisionPlatformVideoSnapshot(
+            phase: .idle,
+            lastDeliveryRevision: nil,
+            isPresented: false
+        ),
+        diagnostics: [TVVisionPlatformPresentationDiagnostic(
+            sequence: sequence,
+            classification: diagnostic
+        )],
+        teardownCount: 0,
+        isSemanticRevisionExhausted: false,
+        isSequenceExhausted: false
+    )
 }

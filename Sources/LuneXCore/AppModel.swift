@@ -556,6 +556,10 @@ final class AppModel: ApplicationInputSink {
     @ObservationIgnored private var lastMobileDiagnosticCodes: [String: String] = [:]
     @ObservationIgnored private var tvVisionPlatformPresentationOwnership:
         TVVisionPresentationOwnership?
+    @ObservationIgnored private var tvVisionPlatformDiagnosticOwnership:
+        TVVisionPresentationOwnership?
+    @ObservationIgnored private var tvVisionPlatformDiagnosticLease:
+        TVVisionPlatformDiagnosticLease?
     @ObservationIgnored private var tvVisionPlatformApplicationTask:
         Task<Void, Never>?
     @ObservationIgnored private var tvVisionPlatformApplicationOperationID:
@@ -3134,6 +3138,7 @@ final class AppModel: ApplicationInputSink {
             guard snapshot.sequence >= current.snapshot.sequence else { return }
             if state == current { return }
         }
+        publishTVVisionPlatformDiagnostic(snapshot)
         tvVisionPlatformPresentationState = state
         applyTVVisionDisplayHDRState(snapshot)
     }
@@ -3162,6 +3167,7 @@ final class AppModel: ApplicationInputSink {
     private func clearTVVisionPlatformPresentationRuntime(
         preservingTerminalState: Bool = false
     ) {
+        clearTVVisionPlatformDiagnostics()
         visionSystemInteractionDecisionState = nil
         visionInputRuntimeTarget = nil
         visionInputReconciliationTask?.cancel()
@@ -3217,6 +3223,33 @@ final class AppModel: ApplicationInputSink {
         case .active, .stopped:
             tvVisionPlatformPresentationState = nil
         }
+    }
+
+    private func publishTVVisionPlatformDiagnostic(
+        _ snapshot: TVVisionPlatformPresentationCoordinatorSnapshot
+    ) {
+        if tvVisionPlatformDiagnosticOwnership != snapshot.ownership
+            || tvVisionPlatformDiagnosticLease == nil {
+            if let lease = tvVisionPlatformDiagnosticLease {
+                diagnostics.endTVVisionPlatformDiagnosticOwnership(lease)
+            }
+            tvVisionPlatformDiagnosticOwnership = snapshot.ownership
+            tvVisionPlatformDiagnosticLease = diagnostics
+                .beginTVVisionPlatformDiagnosticOwnership()
+        }
+        guard let lease = tvVisionPlatformDiagnosticLease else { return }
+        diagnostics.record(
+            tvVisionPlatform: TVVisionPlatformDiagnosticValue(snapshot: snapshot),
+            owner: lease
+        )
+    }
+
+    private func clearTVVisionPlatformDiagnostics() {
+        if let lease = tvVisionPlatformDiagnosticLease {
+            diagnostics.endTVVisionPlatformDiagnosticOwnership(lease)
+        }
+        tvVisionPlatformDiagnosticLease = nil
+        tvVisionPlatformDiagnosticOwnership = nil
     }
 
     private func applyTVVisionDisplayHDRState(

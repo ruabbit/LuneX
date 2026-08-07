@@ -141,6 +141,28 @@ native accessible SwiftUI controls.
 - **WHEN** Settings displays fit/fill, HDR, spatial-audio, or head-tracking preferences
 - **THEN** LuneX SHALL label the persisted selection as desired behavior and separately show current render, typed HDR fallback, and actual visionOS spatial state from the current windowed presentation without claiming the preference is active
 
+### Requirement: visionOS platform diagnostics SHALL be finite and owner scoped
+Current visionOS coordinator state SHALL enter the existing application
+diagnostics store only through a current presentation lease, monotonic source
+revision, fixed privacy-bounded values, and the store's single finite history
+capacity.
+
+#### Scenario: A semantic state repeats at a newer revision
+- **WHEN** the current visionOS diagnostic lease receives the same platform and semantic state at a later source revision
+- **THEN** LuneX SHALL advance the revision fence without appending a duplicate event
+
+#### Scenario: Diagnostic ownership is replaced
+- **WHEN** a replacement presentation begins or an old lease records or clears after replacement
+- **THEN** LuneX SHALL invalidate the old lease, preserve history, and make every old record and recovery operation inert
+
+#### Scenario: Another runtime owns the current recovery
+- **WHEN** a non-platform runtime replaces or reasserts an actionable diagnostic in the same category
+- **THEN** later visionOS recovery SHALL NOT clear that non-platform current action
+
+#### Scenario: Diagnostics export is shared
+- **WHEN** a supported Apple platform shares the diagnostics report
+- **THEN** LuneX SHALL export only the finite history projection after a second identity and secret redaction pass, without event UUID or runtime owner fields
+
 ### Requirement: visionOS media verification SHALL preserve physical proof boundaries
 Builds, injected tests, and simulator windows SHALL NOT prove headset HDR,
 spatial audio, comfort, interaction latency, thermal behavior, signed install,

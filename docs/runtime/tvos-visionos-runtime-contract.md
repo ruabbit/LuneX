@@ -2900,6 +2900,59 @@ change, and OpenSpec `40/50` with 7.4 next. No test, build, Keychain,
 live-host, or Simulator lifecycle operation was repeated for the post-mark
 gate.
 
+## Task 7.4 privacy-bounded platform diagnostics
+
+Task 7.4 extends the existing `DiagnosticsStore`; it does not create another
+coordinator log, export store, or runtime owner. `AppModel` publishes a platform
+value only after the existing current session, media generation, platform,
+presentation ownership, and sequence checks accept the coordinator snapshot.
+It begins one opaque lease per accepted presentation ownership and ends that
+lease through the same replacement, failure, reconnect, remote-termination,
+and stop clear path.
+
+The lease enforces monotonic source revisions. A later revision with the same
+platform and semantic state advances the fence without appending an event; an
+older revision, a conflicting value at the same revision, or an old lease is
+inert. Actionable current state also records its lease. Recovery or lease end
+clears only actions still owned by that lease. A different runtime action, and
+an identical current action reasserted by a non-platform runtime, both remove
+platform ownership so later platform recovery cannot clear them. History is
+never removed by recovery and remains bounded by the store's single global
+capacity.
+
+Every platform diagnostic is fixed category, severity, code, summary, and
+recovery action text. It contains no host, session, generation, revision,
+frame, controller, display, or route identity. Export omits `DiagnosticEvent.id`
+and all runtime ownership fields, then re-redacts every textual column for
+embedded secrets, UUIDs, URLs/network locations, and identity assignments.
+macOS, iOS/iPadOS, and visionOS use native `ShareLink`. tvOS 26.4, where
+`ShareLink` is unavailable, displays an accessible disabled `Export
+Unavailable` toolbar state and does not synthesize another transport.
+
+Retained offline evidence:
+
+- focused `/tmp/LuneX-18-7_4-focused-r5.wyn9qr`: `32/32` passed with zero
+  structured build diagnostics, one AIR, and one metallib;
+- related `/tmp/LuneX-18-7_4-related.9efE6X`: `152/152` passed with zero
+  skips, failures, expected failures, or structured build diagnostics;
+- normal `/tmp/LuneX-18-7_4-normal.AHM4Rr`: `1122 total / 1121 passed / 1`
+  exact real-Keychain opt-in skip / zero failures and expected failures;
+- fixed Apple TV and Vision Pro direct
+  `/tmp/LuneX-18-7_4-direct-r2.2mQR5s`: unsigned Debug, zero structured
+  diagnostics, one AIR and one metallib each;
+- five-platform `/tmp/LuneX-18-7_4-builds.HlcDxq`: macOS and fixed
+  iPhone/iPad/Apple TV/Vision Pro unsigned Debug all have zero structured
+  diagnostics, one AIR, and one metallib each.
+
+The Keychain and live-host opt-ins remained unset, so the permitted Keychain
+test was skipped and normal tests continued to use file fallback. Fixed UUIDs
+were build destinations only; no Simulator inventory or lifecycle action was
+performed. These results prove deterministic ownership, deduplication,
+replacement, recovery, redaction, application wiring, and target compilation.
+They do not prove app or Simulator runtime, signed installation, physical
+input/HDR/spatial audio, live Sunshine, latency, performance, power, or thermal
+behavior. Tasks 7.5-8.8 remain responsible for those layers.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

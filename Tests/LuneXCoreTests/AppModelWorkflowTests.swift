@@ -3367,6 +3367,22 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertTrue(coordinatedSnapshot.diagnostics.contains {
             $0.classification == .displayFallback(.headroomUnavailable)
         })
+        await waitUntil {
+            model.diagnostics.events.contains {
+                $0.code == "platform_visionos_display_fallback"
+            }
+        }
+        let platformDiagnostic = try XCTUnwrap(
+            model.diagnostics.events.last {
+                $0.code == "platform_visionos_display_fallback"
+            }
+        )
+        XCTAssertEqual(
+            platformDiagnostic.message,
+            "Vision Pro is using HDR-to-SDR fallback."
+        )
+        XCTAssertFalse(platformDiagnostic.message.contains(record.sessionID.uuidString))
+        XCTAssertFalse(platformDiagnostic.code.contains(String(ownership.mediaGeneration)))
 
         mediaEnvironment.blockNextStop()
         provider.yield(

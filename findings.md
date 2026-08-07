@@ -3001,3 +3001,21 @@
 - post-mark `/tmp/LuneX-18-7_3-final-state.8JTYco`确认OpenSpec精确推进为`40/50 next 7.4`，tasks仅7.3一处checkbox替换，最终17文件scope和project hash稳定；没有重跑generator/test/build或操作真实opt-in/Simulator。
 - final diff audit `/tmp/LuneX-18-7_3-final-audit.MXE9J2`未发现阻止提交的问题：3个production文件只增加platform Settings projection/AppModel/条件UI，单测试文件8项无弱化，AppSettings/依赖/reference不变，11份authority与唯一7.3 checkbox一致。
 - final-record `/tmp/LuneX-18-7_3-final-record.oIJ6c8`再次确认7.3没有剩余离线验收问题并可独立提交；它不替代7.4-8.8或任何Simulator runtime、signed、physical、live与性能证明。
+
+## 2026-08-08 阶段 18 任务 7.4 platform diagnostics 调查
+
+- coordinator内部已有最多64条、只含固定分类与sequence的短期诊断，应用层`DiagnosticsStore`已有总容量、消息redactor和category current-action ownership；7.4应扩展现有store，不创建第二套UI日志或复制runtime owner。
+- 最小合同为opaque platform diagnostic lease、单调source revision、固定语义状态和record outcome：同owner同语义去重并推进revision，同revision冲突与低revision fail closed，replacement先失效旧lease且旧owner后续record/clear均无效。
+- platform actionable state必须带lease ownership；健康/recovery只能清除同lease创建的current action，不能清除同category中后来由其他runtime记录的action，历史继续受store全局capacity约束。
+- export不包含`DiagnosticEvent.id`或任何runtime ownership字段，并对message/code/subsystem/action再次执行secret/private、UUID、网络位置及identity assignment脱敏；platform诊断本身只使用固定code/summary，不持久化host/session/generation/revision/frame/controller/display/route identity。
+- `AppModel`只在已通过current session/media/platform/presentation ownership检查的coordinator state上创建或复用lease，并在runtime clear/replacement/stop时结束lease；Diagnostics SwiftUI只消费同一store的安全export文本。
+- 系统更新后恢复确认`HEAD == origin/main == 7d4452f`，仅有7.4预期八文件dirty，OpenSpec仍为`40/50 ready next 7.4`，macOS 27.0/Xcode 26.4/Swift 6.3；真实Keychain/live-host opt-in继续unset，且未查询或操作Simulator lifecycle。
+- 修正Export toolbar归属后的fresh focused `/tmp/LuneX-18-7_4-focused-r3.Dyv0SO/Focused.xcresult`通过`31/31`且无skip/failure；它覆盖store lease/revision/dedup/recovery/export、AppModel current vision presentation/reconnect/remote-stop和UI source contract。仍需结构化核对build diagnostics与Metal工件，并完成related、normal及平台build门。
+- 逐函数审计发现相同action语义的非平台事件会被既有current-action dedup保留，但新增ownership map仍保留旧平台lease，导致平台恢复可能清除后来由其他runtime重新声明的同一action。修复应只在相同事件由非平台来源重申时撤销平台ownership，既不追加第二个current action，也不改变历史记录与既有dedup。
+- 修复后的fresh focused `/tmp/LuneX-18-7_4-focused-r4.1USmAU/Focused.xcresult`结构化为`32/32 passed / 0 skipped / 0 failed / 0 expected failure`，build diagnostics全零且有`1 AIR/1 metallib`；新增精确回归证明相同非平台action重申后，平台direct-EDR recovery不会清除该current action，历史仍保留三条事件。
+- fresh related `/tmp/LuneX-18-7_4-related.9efE6X/Related.xcresult`结构化通过`152/152`且无skip/failure/expected failure，build diagnostics全零并生成`1 AIR/1 metallib`；八类矩阵覆盖store与export、完整AppModel workflow、coordinator、tvOS/visionOS controls和settings投影、HDR与spatial状态，没有发现相邻所有权回归。
+- fresh normal `/tmp/LuneX-18-7_4-normal.AHM4Rr/Normal.xcresult`结构化通过`1122 total / 1121 passed / 1 skipped / 0 failed / 0 expected failure`且build diagnostics全零、有`1 AIR/1 metallib`；唯一skip串行确认是显式真实Keychain round-trip，文件fallback与全部正常测试继续通过。
+- fixed Apple TV direct首次真实暴露SwiftUI availability：tvOS 26.4明确禁用`ShareLink`与其initializer。正确产品边界是macOS/iOS/iPadOS/visionOS继续使用原生ShareLink，tvOS显示可访问的typed unavailable toolbar状态；不应为通过编译而假造clipboard/files/export transport。
+- 修复后的direct `/tmp/LuneX-18-7_4-direct-r2.2mQR5s`确认fixed Apple TV与Vision Pro均为unsigned Debug结构化零诊断成功，并分别生成`1 HDRVideoShaders.air / 1 default.metallib`。这证明两个平台条件编译成立，不构成Simulator运行、签名制品或物理输出证明。
+- fresh五平台 `/tmp/LuneX-18-7_4-builds.HlcDxq`全部结构化零诊断成功且每项各有`1 AIR/1 metallib`；macOS和四个固定destination只验证当前源码的unsigned Debug编译，不包含应用启动、Simulator lifecycle、signed install、物理HDR/空间音频、live Sunshine或性能/功耗证明。
+- 7.4 authority现明确：平台诊断只扩展既有store；AppModel current ownership才可开始opaque lease；semantic duplicate只推进revision fence；replacement/stale/conflict fail closed；恢复仅清lease仍拥有的action，非平台相同action重申会夺回所有权；history使用现有全局capacity；export不含event/runtime owner并二次脱敏。tvOS 26.4只显示typed unavailable，不伪造export transport。
