@@ -437,6 +437,29 @@ experience, bounded diagnostics, and then exercises reconnect, late old state,
 remote termination, local stop, display failure, and the same-surface resize
 race.
 
+Task 6.6 closes the visionOS media tranche with connected regression rather
+than another production owner. One coordinator sequence now begins in the
+explicit windowed mode with the complete typed immersive, passthrough,
+stereoscopic, and volumetric unavailable set; presents and resubmits a decoded
+frame after same-surface geometry revision; retains `.headroomUnavailable`
+HDR-to-SDR output; applies the public vision output and intended spatial
+experience; processes interruption, media-service loss, graph reset, and
+current-graph recovery; and then replaces every media/presentation/input
+ownership. Old audio and frame callbacks remain inert, the replacement resumes
+only on its own surface and frame, and local plus repeated stop leave one
+teardown per owner.
+
+A separate media-environment resource gate binds that replacement to the
+delivery pump and source subscription. Exactly one frame subscription and four
+consumer tasks remain active after rebind. Terminal stop cancels all four
+tasks, clears the subscription and coordinator window/display/audio/video
+state, and stops the video receiver, audio receiver, video processor, audio
+processor, and input provider exactly once. Source audit found no production
+ownership defect, so task 6.6 changes tests and authority only. Its focused,
+related, normal, fixed Vision Pro, and five-platform unsigned Debug evidence
+does not complete the native controls, Settings, diagnostics, simulator
+runtime, signed installation, physical-device, or live-host tasks that follow.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

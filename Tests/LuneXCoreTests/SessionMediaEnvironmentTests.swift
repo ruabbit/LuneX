@@ -1716,17 +1716,19 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
     }
 
-    func testVisionPresentationRebindsSingleFrameSubscriptionOnReplacement()
+    func testVisionPresentationRebindsSubscriptionAndReleasesResourcesOnStop()
         async throws
     {
         let calls = MediaEnvironmentCallRecorder()
         let source = StreamVideoPresentationSource()
+        let coordinator = try TVVisionPlatformPresentationCoordinator()
         let environment = makeEnvironment(
             calls: calls,
             video: ControlledVideoReceiveProvider(calls: calls),
             audio: ControlledAudioReceiveProvider(calls: calls),
             input: ControlledRemoteInputProvider(calls: calls),
-            videoPresentationSource: source
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
         )
         let sessionID = UUID()
         let stream = try await environment.start(
@@ -1871,10 +1873,38 @@ final class SessionMediaEnvironmentTests: XCTestCase {
             .frameReady(decoderGeneration: 7, frameID: 71)
         )
 
-        _ = await environment.stop(sessionID: sessionID)
+        let active = await environment.snapshot()
+        XCTAssertEqual(active.activeTaskCount, 4)
+        XCTAssertEqual(active.activeResourceCount, 5)
+
+        let optionalReport = await environment.stop(sessionID: sessionID)
+        let report = try XCTUnwrap(optionalReport)
+        XCTAssertTrue(report.isClean)
+        XCTAssertEqual(report.cancelledTaskCount, 4)
+        XCTAssertEqual(report.stoppedResourceCount, 5)
         XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
         let stopped = await environment.snapshot()
         XCTAssertNil(stopped.tvVisionPlatformPresentation)
+        XCTAssertEqual(stopped.activeTaskCount, 0)
+        XCTAssertEqual(stopped.activeResourceCount, 0)
+        XCTAssertEqual(stopped.lastTeardownReport, report)
+
+        let optionalTerminal = await coordinator.snapshot()
+        let terminal = try XCTUnwrap(optionalTerminal)
+        XCTAssertEqual(terminal.phase, .stopped(.localStop))
+        XCTAssertNil(terminal.visionWindowedPresentation)
+        XCTAssertNil(terminal.presentation)
+        XCTAssertNil(terminal.display)
+        XCTAssertNil(terminal.audioRoute)
+        XCTAssertFalse(terminal.video.isPresented)
+        XCTAssertEqual(terminal.teardownCount, 2)
+
+        let values = await calls.values()
+        XCTAssertEqual(values.filter { $0 == "video.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.receiver.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "input.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "video.processor.stop" }.count, 1)
+        XCTAssertEqual(values.filter { $0 == "audio.processor.stop" }.count, 1)
     }
 
     func testTVVisionVideoDeliveryPumpPreservesFIFOAndFailsClosedWhenBounded()

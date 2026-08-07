@@ -83,14 +83,14 @@ evidence only.
 
 | Concern | Current source owner | Current behavior | Missing stage 18 ownership |
 |---|---|---|---|
-| App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application | visionOS AppModel display coordination and audio actual-state ownership remain 6.4-6.5 |
+| App scene | `LuneXApp`, `TVVisionUIKitSurfaceGenerationOwner`, and `AppModel` | tvOS and visionOS create a SwiftUI `WindowGroup`; the actual stream view publishes current surface/window-scene state into the current media application, including current visionOS display and audio actual state | Dedicated platform actual-state controls remain 7.x |
 | Product navigation | `RootView` | Shared native host, app, stream, Settings, and diagnostics flows compile; tvOS forwards only eligible supported remote presses, while visionOS routes admitted hardware-key/indirect-pointer input, keeps system interaction local, and restores local ownership only after ordered release | Dedicated visionOS input-status and product UI remain 7.x |
-| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; visionOS capture closure clears active input handlers and its layer-only HDR observer samples actual attachment/layout/trait state and clears on detach/invalidation | visionOS display application and audio adapters remain 6.4-6.5 |
-| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and platform-branded display resolution retains typed HDR-to-SDR whenever current finite headroom is absent | visionOS AppModel HDR application is 6.5 and audio presentation is 6.4 |
-| Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware input are admitted only for the current eligible generation, while focus/scene/provider/replacement/stop loss drains accepted work and performs one ordered held-state release; task 5.6 connects multiwindow, resize, capability, stale, replacement, and teardown behavior in three deterministic matrices | Explicit visionOS media modes and actual display/audio application remain 6.x |
-| Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; the production coordinator admits actual frames and tvOS display components by checked ownership, revisions, decoder/frame or display-source identity, and surface generation, with clear/rebind/replacement fences | explicit visionOS media-mode and presentation closure remains 6.1/6.2 |
-| Audio | `SpatialAudioPlatformNotificationSource`, `AudioEngineRouteCapabilityReader`, `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, `NativeSessionMediaEnvironment`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph publishes actual route/capability, entitlement, spatial readback, interruption/media-reset recovery, and graph generation; tvOS normalizes and applies only current ownership, replays on presentation replacement, and clears audio on terminal state | visionOS intended-spatial application remains 6.4 |
-| Application state | `AppModel` | Current tvOS/visionOS presentation is admitted by media generation, platform, ownership, sequence, and highest surface ownership; visionOS rechecks input admission before capture/delivery and serializes terminal-latched ordered release plus bounded local restoration | visionOS media actual state and complete product UI projection remain 6.x/7.x |
+| Stream surface | `StreamWorkspaceView`, `MetalStreamSurface`, `NativeSessionMediaEnvironment`, and `AppModel` | tvOS and visionOS use `TVVisionStreamMetalView`; one checked surface generation owns actual view/window/scene activity and normalized geometry; visionOS capture closure clears active input handlers and its layer-only HDR observer samples actual attachment/layout/trait state and clears on detach/invalidation | Platform controls and signed physical acceptance remain 7.x/8.7 |
+| Render scheduling | `PlatformLifecycleState`, `StreamMetalPresenter`, `StreamMetalViewScheduleResolver`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | Shared value policy can pause/throttle; the actual tvOS/visionOS surface and production coordinator share one main-actor owner, a bound presenter consumes only coordinator-admitted current frames, and platform-branded display resolution retains typed HDR-to-SDR whenever current finite headroom is absent | Physical headset/television output remains 8.7 |
+| Geometry and input mapping | `TVVisionUIKitStreamGeometryBindingOwner`, `TVRemoteSurfacePressCaptureOwner`, `VisionNativeInputAdapter`, `StreamVideoRectangleResolver`, and `InputMapper` | Actual view/window bounds, safe area, and scale publish one deduplicated drawable/render/input revision; tvOS remote capture and visionOS crop-aware input are admitted only for the current eligible generation, while focus/scene/provider/replacement/stop loss drains accepted work and performs one ordered held-state release; task 5.6 connects multiwindow, resize, capability, stale, replacement, and teardown behavior in three deterministic matrices | Dedicated actual-state UI remains 7.x |
+| Video | `NativeSessionMediaEnvironment`, `NativeSessionVideoProcessor`, `StreamVideoPresentationSource`, `StreamMetalPresenter`, `TVVisionMetalPresentationOwner`, and `TVVisionPlatformPresentationCoordinator` | One decoder/frame source/presenter path exists; current tvOS and visionOS frames and displays are admitted by checked ownership, revisions, source identity, and surface generation, with bounded FIFO delivery plus clear/rebind/replacement fences | Physical rendering, latency, and long-run acceptance remain 8.7/phase 20 |
+| Audio | `SpatialAudioPlatformNotificationSource`, `AudioEngineRouteCapabilityReader`, `NativeSessionAudioProcessor`, `SessionAudioRuntime`, `AVAudioEngineClient`, `NativeSessionMediaEnvironment`, and `TVVisionPlatformPresentationCoordinator` | One canonical PCM graph publishes actual route/capability, entitlement, spatial readback, interruption/media-reset recovery, and graph generation; tvOS and visionOS normalize and apply only current platform strategy, replay on presentation replacement, and clear audio on terminal state | Audible signed physical route acceptance remains 8.7 |
+| Application state | `AppModel` | Current tvOS/visionOS presentation is admitted by media generation, platform, ownership, sequence, and highest surface ownership; visionOS rechecks input admission before capture/delivery, publishes current window/render/HDR/audio state, and serializes terminal-latched ordered release plus bounded local restoration | Complete product UI projection remains 7.x |
 
 The non-macOS UIKit surface configures the shared presenter, applies shared
 render scheduling, and stops the presenter on dismantle. iOS continues to use
@@ -212,11 +212,11 @@ resolution as window geometry is prohibited.
 
 | Concern | Current state | Required stage 18 direction |
 |---|---|---|
-| Presentation mode | Shared `WindowGroup`; current attached visionOS scene publishes checked `.windowed` state through `TVVisionPlatformPresentationCoordinator` and `AppModel`, with immersive/passthrough/stereoscopic/volumetric all typed unavailable | Bind current decoded frames to that actual window surface in 6.2; native actual-state UI remains 7.2 |
-| Surface and video | Actual `TVVisionStreamMetalView` publishes finite geometry and one revision to drawable/fit/fill/input reference; current media ownership subscribes to the single frame source and rejects stale decoder/revision state | Connect actual coordinator render effects in visionOS media work |
-| HDR | The actual Metal layer is observed without a screen token; XROS 26.4 layer/color capabilities compile, but `UIScreen` and current headroom are unavailable, so the native resolver publishes platform-branded `.headroomUnavailable` HDR-to-SDR and clears output on detach | Connect the current display event through AppModel in 6.5; physical compositor/headset HDR remains 8.7 |
-| Spatial audio | Output-node `intendedSpatialExperience` applies `.fixed` or `.headTracked` and resets to `.bypassed`; listener property is unavailable | Bind actual route, preference, typed readback, interruption/reset recovery, graph generation, and AppModel state |
-| Teardown | Shared media teardown and the platform coordinator now share current-generation terminal admission; repeated stop and provider-failure races retain one first terminal reason and one resource report | Extend the same ownership to actual visionOS component observers in 6.x |
+| Presentation mode | Shared `WindowGroup`; current attached visionOS scene publishes checked `.windowed` state through `TVVisionPlatformPresentationCoordinator` and `AppModel`, with immersive/passthrough/stereoscopic/volumetric all typed unavailable | Native actual-state UI remains 7.2 |
+| Surface and video | Actual `TVVisionStreamMetalView` publishes finite geometry and one revision to drawable/fit/fill/input reference; current media ownership uses one bounded FIFO frame subscription, resubmits only current frames, and rejects stale decoder/surface/revision state | Physical window rendering and performance remain 8.7/phase 20 |
+| HDR | The actual Metal layer is observed without a screen token; XROS 26.4 layer/color capabilities compile, but `UIScreen` and current headroom are unavailable, so the native resolver publishes platform-branded `.headroomUnavailable` HDR-to-SDR through AppModel and clears output on detach | Physical compositor/headset HDR remains 8.7 |
+| Spatial audio | Output-node `intendedSpatialExperience` applies `.fixed` or `.headTracked` and resets to `.bypassed`; listener property is unavailable; current route, interruption/loss/reset/recovery and graph replacement flow through the single canonical graph | Audible signed physical route acceptance remains 8.7 |
+| Teardown | Shared media teardown and the platform coordinator share current-generation terminal admission; replacement keeps one subscription and bounded pump, while stop cancels four tasks and stops five media resources exactly once | Sanitizer/resource tools remain 8.4 and signed physical teardown remains 8.7 |
 
 ## Xcode 26.4 public API inventory
 
@@ -2682,6 +2682,28 @@ The final record `/tmp/LuneX-18-6_5-final-record.7HghDO` confirmed the same
 pre-mark/final-state/audit authority indexes, stable project and retained
 evidence, disabled opt-ins, and implementation, task, privacy, dependency,
 process, and proof boundaries before the task-level commit.
+
+Task 6.6 adds no production owner. Its connected coordinator matrix covers
+windowed mode and all typed immersive-unavailable values, current frame
+presentation and same-surface resubmission, visionOS headroom-unavailable HDR
+fallback, public intended spatial experience, interruption/media-service
+loss/reset/recovery, full ownership replacement, stale callback rejection, and
+idempotent owner teardown. The media-environment gate separately proves one
+active replacement subscription, four cancelled consumer tasks, five stopped
+resources, cleared terminal coordinator state, and zero active task/resource
+counts after stop.
+
+The final focused `/tmp/LuneX-18-6_6-focused-final.0pDNP0` passed `3/3`; the
+related `/tmp/LuneX-18-6_6-related.PwaltL` passed `325/325`; fresh normal
+`/tmp/LuneX-18-6_6-normal.dnnNlV` passed `1089/1088/1/0` with only the explicit
+real-Keychain opt-in skipped. Fixed Vision Pro direct
+`/tmp/LuneX-18-6_6-visionos-direct.8Muuwq` and five-platform unsigned Debug
+`/tmp/LuneX-18-6_6-builds.SOVzea` all succeeded with zero structured
+diagnostics and one AIR/metallib per build. The UUIDs were build destinations
+only: no simulator inventory or lifecycle operation was performed. These are
+offline test and unsigned build receipts, not simulator runtime, signed
+artifact, physical HDR/spatial/input, live Sunshine, latency, comfort,
+performance, power, or thermal proof.
 
 ## Fixed simulator inventory
 

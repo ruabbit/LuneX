@@ -51,7 +51,7 @@
 - [x] 6.3 Probe and implement public visionOS layer/color/headroom capability, retaining typed HDR-to-SDR fallback whenever current finite headroom is unavailable
 - [x] 6.4 Connect canonical audio, public intended spatial experience, actual route capability, interruption/media reset recovery, graph replacement, and current-generation state
 - [x] 6.5 Coordinate visionOS scene, video, HDR fallback, audio, input eligibility, diagnostics, failure, reconnect, remote termination, and clean stop through one presentation coordinator
-- [ ] 6.6 Add windowed-mode, immersive-unavailable, frame/render, HDR fallback, spatial route/recovery, AppModel application, replacement, resource release, and teardown tests
+- [x] 6.6 Add windowed-mode, immersive-unavailable, frame/render, HDR fallback, spatial route/recovery, AppModel application, replacement, resource release, and teardown tests
 
 ## 7. Native product integration
 

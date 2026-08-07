@@ -1010,6 +1010,317 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         XCTAssertEqual(teardownEffects.count, 1)
     }
 
+    func testVisionOSMediaRegressionMatrixCoordinatesWindowFrameHDRSpatialAndTeardown()
+        async throws
+    {
+        let recorder = TVVisionPresentationActionRecorder()
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: recorder,
+            diagnosticCapacity: 4
+        )
+        let first = try makeOwnership(platform: .visionOS)
+        _ = await coordinator.activate(first)
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: first, sourceRevision: 1),
+            ownership: first
+        )
+        _ = await coordinator.applyInput(
+            try makeInput(ownership: first),
+            controllerLeases: [],
+            ownership: first
+        )
+
+        let fallback = TVVisionDisplayHDRCapabilityResolver.resolve(
+            makeDisplayInputs(current: nil, potential: nil)
+        )
+        _ = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: first,
+                sourceRevision: 1,
+                resolution: fallback
+            ),
+            ownership: first
+        )
+        _ = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: first,
+                sourceRevision: 1,
+                graphGeneration: 1,
+                presentationMode: .headTracked
+            ),
+            ownership: first
+        )
+        _ = await coordinator.receiveVideo(
+            makeDecoderStartedDelivery(
+                ownership: first,
+                deliveryRevision: 1,
+                decoderGeneration: 7
+            ),
+            ownership: first
+        )
+        guard case let .applied(initial) = await coordinator.receiveVideo(
+            try makeFrameDelivery(
+                ownership: first,
+                deliveryRevision: 2,
+                frameID: 90,
+                decoderGeneration: 7
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected the initial visionOS frame to present")
+        }
+        let initialWindowed = try XCTUnwrap(
+            initial.visionWindowedPresentation
+        )
+        XCTAssertEqual(initialWindowed.mode, .windowed)
+        XCTAssertEqual(initialWindowed.surfaceGeneration.rawValue, 1)
+        XCTAssertEqual(
+            initialWindowed.unavailableFeatures.map(\.feature),
+            VisionUnavailablePresentationFeature.allCases.sorted()
+        )
+        XCTAssertTrue(initial.video.isPresented)
+        XCTAssertEqual(
+            initial.display?.visionOSHDRCapabilityResolution,
+            fallback
+        )
+        XCTAssertEqual(
+            initial.display?.hdrRenderSnapshot?.headroom,
+            DisplayHeadroom()
+        )
+        XCTAssertEqual(
+            initial.audioRoute?.platformStrategy,
+            .visionOutputExperience
+        )
+        XCTAssertEqual(
+            initial.audioRoute?.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+        XCTAssertEqual(
+            initial.audioRoute?.spatialPresentationMode,
+            .headTracked
+        )
+        XCTAssertTrue(initial.diagnostics.contains {
+            $0.classification == .displayFallback(.headroomUnavailable)
+        })
+        XCTAssertLessThanOrEqual(initial.diagnostics.count, 4)
+
+        guard case let .applied(resized) = await coordinator.applyScene(
+            try makeSceneUpdate(ownership: first, sourceRevision: 2),
+            ownership: first
+        ) else {
+            return XCTFail("Expected resize to resubmit the current frame")
+        }
+        XCTAssertEqual(
+            resized.video.phase,
+            .frameReady(decoderGeneration: 7, frameID: 90)
+        )
+        XCTAssertTrue(resized.video.isPresented)
+        XCTAssertEqual(
+            resized.visionWindowedPresentation?.surfaceGeneration,
+            initialWindowed.surfaceGeneration
+        )
+        XCTAssertEqual(
+            resized.visionWindowedPresentation?.revision,
+            resized.revision
+        )
+
+        guard case let .applied(interrupted) = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: first,
+                sourceRevision: 2,
+                graphGeneration: 1,
+                runtimeStage: .interrupted,
+                eventCause: .interruptionBegan,
+                presentationMode: .headTracked
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected visionOS interruption state")
+        }
+        XCTAssertEqual(interrupted.audioRoute?.runtimeStage, .interrupted)
+        XCTAssertEqual(interrupted.audioRoute?.eventCause, .interruptionBegan)
+
+        guard case let .applied(lost) = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: first,
+                sourceRevision: 3,
+                graphGeneration: 1,
+                outputAvailable: false,
+                runtimeStage: .interrupted,
+                eventCause: .mediaServicesLost,
+                presentationMode: .inactive
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected visionOS media-services loss")
+        }
+        XCTAssertFalse(try XCTUnwrap(lost.audioRoute).outputAvailable)
+        XCTAssertEqual(
+            lost.audioRoute?.platformStrategy,
+            SpatialAudioPlatformStrategy.none
+        )
+        XCTAssertEqual(
+            lost.audioRoute?.spatialFallbackReason,
+            .outputUnavailable
+        )
+
+        guard case let .applied(reset) = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: first,
+                sourceRevision: 4,
+                graphGeneration: 2,
+                eventCause: .mediaServicesReset,
+                presentationMode: .headTracked
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected one replacement audio graph")
+        }
+        XCTAssertEqual(reset.audioRoute?.routeGeneration.rawValue, 2)
+        XCTAssertEqual(reset.audioRoute?.eventCause, .mediaServicesReset)
+        XCTAssertEqual(
+            reset.audioRoute?.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+
+        guard case let .applied(recovered) = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: first,
+                sourceRevision: 5,
+                graphGeneration: 2,
+                eventCause: .recovery,
+                presentationMode: .headTracked
+            ),
+            ownership: first
+        ) else {
+            return XCTFail("Expected current graph recovery")
+        }
+        XCTAssertEqual(recovered.audioRoute?.routeGeneration.rawValue, 2)
+        XCTAssertEqual(recovered.audioRoute?.eventCause, .recovery)
+        XCTAssertEqual(recovered.visionWindowedPresentation?.mode, .windowed)
+
+        let replacement = try makeOwnership(
+            platform: .visionOS,
+            mediaGeneration: 2,
+            presentationGeneration: 2,
+            inputGeneration: 2
+        )
+        guard case let .applied(replacementActivated) = await coordinator.activate(
+            replacement
+        ) else {
+            return XCTFail("Expected replacement visionOS ownership")
+        }
+        XCTAssertNil(replacementActivated.visionWindowedPresentation)
+        XCTAssertNil(replacementActivated.presentation)
+        XCTAssertNil(replacementActivated.display)
+        XCTAssertNil(replacementActivated.audioRoute)
+        XCTAssertFalse(replacementActivated.video.isPresented)
+        XCTAssertEqual(replacementActivated.teardownCount, 1)
+
+        let lateAudio = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: first,
+                sourceRevision: 6,
+                graphGeneration: 2,
+                eventCause: .recovery,
+                presentationMode: .headTracked
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(lateAudio, .staleOwnership)
+        let lateFrame = await coordinator.receiveVideo(
+            try makeFrameDelivery(
+                ownership: first,
+                deliveryRevision: 3,
+                frameID: 91,
+                decoderGeneration: 7
+            ),
+            ownership: first
+        )
+        XCTAssertEqual(lateFrame, .staleOwnership)
+
+        _ = await coordinator.applyScene(
+            try makeSceneUpdate(
+                ownership: replacement,
+                sourceRevision: 1,
+                surfaceGeneration: 2
+            ),
+            ownership: replacement
+        )
+        _ = await coordinator.applyInput(
+            try makeInput(ownership: replacement),
+            controllerLeases: [],
+            ownership: replacement
+        )
+        _ = await coordinator.applyDisplay(
+            try makeDisplay(
+                ownership: replacement,
+                sourceRevision: 1,
+                resolution: fallback
+            ),
+            ownership: replacement
+        )
+        _ = await coordinator.applyAudioRoute(
+            try makeAudio(
+                ownership: replacement,
+                sourceRevision: 1,
+                graphGeneration: 2,
+                presentationMode: .headTracked
+            ),
+            ownership: replacement
+        )
+        _ = await coordinator.receiveVideo(
+            makeDecoderStartedDelivery(
+                ownership: replacement,
+                deliveryRevision: 1,
+                decoderGeneration: 8
+            ),
+            ownership: replacement
+        )
+        guard case let .applied(replacementFrame) = await coordinator.receiveVideo(
+            try makeFrameDelivery(
+                ownership: replacement,
+                deliveryRevision: 2,
+                frameID: 92,
+                decoderGeneration: 8
+            ),
+            ownership: replacement
+        ) else {
+            return XCTFail("Expected the replacement frame to present")
+        }
+        XCTAssertEqual(
+            replacementFrame.visionWindowedPresentation?.surfaceGeneration
+                .rawValue,
+            2
+        )
+        XCTAssertTrue(replacementFrame.video.isPresented)
+
+        guard case let .applied(stopped) = await coordinator.stop(
+            ownership: replacement,
+            reason: .localStop
+        ) else {
+            return XCTFail("Expected clean replacement stop")
+        }
+        XCTAssertEqual(stopped.phase, .stopped(.localStop))
+        XCTAssertNil(stopped.visionWindowedPresentation)
+        XCTAssertNil(stopped.presentation)
+        XCTAssertNil(stopped.display)
+        XCTAssertNil(stopped.audioRoute)
+        XCTAssertFalse(stopped.video.isPresented)
+        XCTAssertEqual(stopped.teardownCount, 2)
+        let repeatedStop = await coordinator.stop(
+            ownership: replacement,
+            reason: .localStop
+        )
+        XCTAssertEqual(repeatedStop, .unchanged(stopped))
+
+        let teardownRecords = await recorder.records.filter {
+            $0.kind == .teardown
+        }
+        XCTAssertEqual(teardownRecords.count, 2)
+        XCTAssertEqual(teardownRecords.map(\.ownership), [first, replacement])
+    }
+
     func testReplacementTearsDownOldOwnershipAndRejectsLateCallbacks()
         async throws
     {
@@ -1417,7 +1728,22 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         eventCause: SessionAudioRuntimeEventCause = .initial,
         presentationMode: SpatialAudioPresentationMode = .fixedSpatial
     ) throws -> TVVisionAudioRouteSnapshot {
-        try TVVisionAudioRouteSnapshot(
+        let platformStrategy: SpatialAudioPlatformStrategy
+        let headTrackingCapability: TVVisionHeadTrackingCapability
+        if outputAvailable {
+            switch ownership.platform {
+            case .tvOS:
+                platformStrategy = .environmentListener
+                headTrackingCapability = .entitlementRequired
+            case .visionOS:
+                platformStrategy = .visionOutputExperience
+                headTrackingCapability = .intendedSpatialExperience
+            }
+        } else {
+            platformStrategy = .none
+            headTrackingCapability = .unavailable
+        }
+        return try TVVisionAudioRouteSnapshot(
             platform: ownership.platform,
             revision: TVVisionSemanticRevision(rawValue: sourceRevision),
             routeGeneration: TVVisionGeneration(
@@ -1428,10 +1754,8 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
             currentOutputChannelCount: outputAvailable ? 2 : 0,
             maximumOutputChannelCount: outputAvailable ? 8 : 0,
             spatialSupport: outputAvailable ? .supported : .unknown,
-            platformStrategy: outputAvailable ? .environmentListener : .none,
-            headTrackingCapability: outputAvailable
-                ? .entitlementRequired
-                : .unavailable,
+            platformStrategy: platformStrategy,
+            headTrackingCapability: headTrackingCapability,
             runtimeStage: runtimeStage,
             eventCause: eventCause,
             spatialPresentationMode: presentationMode,

@@ -112,6 +112,14 @@ diagnostics, and teardown to one current media presentation coordinator.
 - **WHEN** local or remote stop completes
 - **THEN** LuneX SHALL apply the matching typed stop reason, clear windowed, input, display, render, frame, audio, observer, and coordinator ownership, and make late state inert
 
+#### Scenario: Connected media regression sequence completes
+- **WHEN** one current visionOS presentation exercises windowed and complete immersive-unavailable state, frame presentation and same-surface resubmission, typed HDR fallback, spatial route interruption/loss/reset/recovery, full ownership replacement, late old callbacks, and repeated local stop
+- **THEN** LuneX SHALL retain only current scene, surface, frame, display, graph, and input ownership, resume only the replacement, clear every terminal component, and execute each owner teardown exactly once
+
+#### Scenario: Presentation subscription is replaced and stopped
+- **WHEN** the current visionOS media environment replaces its frame subscription and later stops
+- **THEN** LuneX SHALL retain exactly one active subscription and bounded delivery pump, cancel every consumer task, clear coordinator component state, and stop each owned video receiver, audio receiver, video processor, audio processor, and input provider exactly once
+
 ### Requirement: visionOS media UI SHALL expose actual state accessibly
 Stream controls and Settings SHALL show actual windowed mode, render state, HDR
 fallback, spatial-audio route, input capability, and bounded failures using

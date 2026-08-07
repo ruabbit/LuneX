@@ -3345,6 +3345,16 @@ final class AppModelWorkflowTests: XCTestCase {
             .headTracked
         )
         XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.routeGeneration.rawValue,
+            1
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .display.visionOSHDRCapabilityResolution?.fallbackReason,
+            .headroomUnavailable
+        )
+        XCTAssertEqual(
             model.tvVisionDisplayHDRFallbackReason,
             .headroomUnavailable
         )
