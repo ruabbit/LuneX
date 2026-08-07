@@ -3,7 +3,7 @@
 - [x] 1.1 Audit the existing `AppModel`, root scenes, workflow views, endpoint parser, diagnostics, tests, and platform targets; record the exact compatibility and proof boundaries before production edits.
 - [x] 1.2 Define stable product issue, presentation, severity, and checked action-token value contracts with no arbitrary provider strings or private host context.
 - [x] 1.3 Add manual-host draft normalization and typed validation through `HostEndpointParser`, including whitespace, hostname, IPv4, bracketed IPv6, explicit port, credential, and invalid-input cases.
-- [ ] 1.4 Define `ProductWorkspaceID`, generation, workspace-local navigation/presentation state, and checked workspace references without duplicating runtime owners.
+- [x] 1.4 Define `ProductWorkspaceID`, generation, workspace-local navigation/presentation state, and checked workspace references without duplicating runtime owners.
 - [ ] 1.5 Add a process-level workspace registry that creates, restores, replaces, reconciles, and closes workspaces with monotonic generation and fail-closed stale references.
 - [ ] 1.6 Add focused deterministic tests for issue/action privacy, endpoint validation, workspace identity, replacement, reconciliation, and close behavior.
 

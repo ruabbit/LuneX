@@ -3688,3 +3688,6 @@
 - 2026-08-08：task 1.3首个focused wrapper因zsh只读`status`变量在测试后退出；xcresult为`11/1/0`，唯一失败是`[not-ipv6]`被当作hostname接受。修复bracketed IPv6入口并改用`test_exit` fresh重跑，identity-bearing raw log删除。
 - 2026-08-08：task 1.3 corrected focused `/tmp/LuneX-19-1_3-focused-r2.Oxw4ZF`为`12/12`；typed draft/parser矩阵通过，raw日志删除。勾选1.3后运行final scope/privacy/OpenSpec gate。
 - 2026-08-08：task 1.3 final gate `/tmp/LuneX-19-1_3-host-validation-final.vF8FAE`通过strict、`3/48`、8文件scope、stable project、failure privacy shape、focused `12/12`与proof boundary；准备独立提交推送。
+- 2026-08-08：开始task 1.4，新增typed workspace ID/nonzero generation/reference及workspace-local navigation/selection/presentation value state；action token scope迁移为typed reference，不接线registry或AppModel。
+- 2026-08-08：task 1.4 focused `/tmp/LuneX-19-1_4-focused.3BlrWl`为`14/14`；raw日志删除，勾选1.4后运行strict/scope/ownership-shape final gate。
+- 2026-08-08：task 1.4 final gate `/tmp/LuneX-19-1_4-workspace-values-final.FogMa1`通过strict、`4/48`、8文件scope、typed action/no-runtime-owner、focused `14/14`与proof boundary；准备独立提交推送。

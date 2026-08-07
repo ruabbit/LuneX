@@ -34,12 +34,44 @@ enum ProductActionKind: String, CaseIterable, Hashable, Sendable {
     case exportDiagnostics
 }
 
+struct ProductWorkspaceID: Hashable, Sendable {
+    let rawValue: UUID
+
+    init(rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+}
+
+struct ProductWorkspaceGeneration: Hashable, Sendable {
+    static let initial = ProductWorkspaceGeneration(uncheckedRawValue: 1)
+
+    let rawValue: UInt64
+
+    init?(rawValue: UInt64) {
+        guard rawValue > 0 else { return nil }
+        self.rawValue = rawValue
+    }
+
+    func advanced() -> ProductWorkspaceGeneration? {
+        guard rawValue < UInt64.max else { return nil }
+        return ProductWorkspaceGeneration(uncheckedRawValue: rawValue + 1)
+    }
+
+    private init(uncheckedRawValue: UInt64) {
+        rawValue = uncheckedRawValue
+    }
+}
+
+struct ProductWorkspaceReference: Hashable, Sendable {
+    let id: ProductWorkspaceID
+    let generation: ProductWorkspaceGeneration
+}
+
 enum ProductActionScope: Hashable, Sendable {
     case application
-    case workspace(id: UUID, generation: UInt64)
+    case workspace(ProductWorkspaceReference)
     case session(
-        workspaceID: UUID,
-        workspaceGeneration: UInt64,
+        workspace: ProductWorkspaceReference,
         sessionID: UUID
     )
 }
@@ -297,5 +329,62 @@ struct ManualHostDraft: Equatable, Sendable {
         } catch {
             return .failure(ManualHostValidationFailure(issueCode: .hostAddressInvalid))
         }
+    }
+}
+
+enum ProductWorkspaceSheet: Equatable, Sendable {
+    case addHost
+    case pairing(hostID: MoonlightHost.ID)
+}
+
+enum ProductWorkspaceDialog: Equatable, Sendable {
+    case removeHost(hostID: MoonlightHost.ID)
+    case resetHostTrust(hostID: MoonlightHost.ID)
+    case stopStream(sessionID: UUID)
+}
+
+enum ProductStreamOverlayVisibility: Equatable, Sendable {
+    case hidden
+    case visible
+}
+
+struct ProductWorkspacePresentationState: Equatable, Sendable {
+    var sheet: ProductWorkspaceSheet?
+    var dialog: ProductWorkspaceDialog?
+    var issue: ProductIssue?
+    var streamOverlay: ProductStreamOverlayVisibility
+
+    init(
+        sheet: ProductWorkspaceSheet? = nil,
+        dialog: ProductWorkspaceDialog? = nil,
+        issue: ProductIssue? = nil,
+        streamOverlay: ProductStreamOverlayVisibility = .hidden
+    ) {
+        self.sheet = sheet
+        self.dialog = dialog
+        self.issue = issue
+        self.streamOverlay = streamOverlay
+    }
+}
+
+struct ProductWorkspaceState: Equatable, Sendable {
+    let reference: ProductWorkspaceReference
+    var navigationSelection: AppNavigationSelection
+    var selectedHostID: MoonlightHost.ID?
+    var selectedAppID: RemoteApp.ID?
+    var presentation: ProductWorkspacePresentationState
+
+    init(
+        reference: ProductWorkspaceReference,
+        navigationSelection: AppNavigationSelection = .library,
+        selectedHostID: MoonlightHost.ID? = nil,
+        selectedAppID: RemoteApp.ID? = nil,
+        presentation: ProductWorkspacePresentationState = .init()
+    ) {
+        self.reference = reference
+        self.navigationSelection = navigationSelection
+        self.selectedHostID = selectedHostID
+        self.selectedAppID = selectedAppID
+        self.presentation = presentation
     }
 }

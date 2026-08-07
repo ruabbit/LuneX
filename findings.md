@@ -3183,3 +3183,12 @@
 - `ManualHostDraft`只返回typed normalized submission或`host_address_required`/`host_address_invalid`，不会把原draft、credentials或parser内部细节写入issue。Add Host sheet的await/dismiss接线保留给2.2。
 - corrected focused evidence `/tmp/LuneX-19-1_3-focused-r2.Oxw4ZF`通过`DiscoveryTests + ProductIssueTests = 12/12`；raw Xcode log成功后删除，未触发真实Keychain/live host或Simulator lifecycle。
 - Task 1.3 final gate `/tmp/LuneX-19-1_3-host-validation-final.vF8FAE`通过strict、`3/48`、精确8文件scope、stable project、parser/draft contract、failure redaction shape、focused `12/12`与opt-in unset；UI integration明确未完成。
+
+## 2026-08-08 阶段 19 Task 1.4 Workspace 值合同
+
+- `ProductWorkspaceID`与nonzero monotonic generation组成不可拆的`ProductWorkspaceReference`；generation从1开始、max后返回nil，禁止回绕复用旧引用。
+- action scope改为直接携带typed workspace reference；session scope额外携带session UUID，避免裸workspace ID/generation并列参数错配。
+- `ProductWorkspaceState`只持有window-local navigation、host/app selection、sheet/dialog、typed issue与overlay visibility；不持有provider、media、renderer、decoder、audio、input、repository或settings副本。
+- 1.4只定义value semantics；process registry、AppModel wiring、repository reconciliation和session owner validation仍分别属于1.5、2.x、3.x、4.x。
+- focused evidence `/tmp/LuneX-19-1_4-focused.3BlrWl`通过`ProductIssueTests + DiscoveryTests = 14/14`，验证typed scope、generation zero/max、local state isolation与既有endpoint/issue回归；raw Xcode log删除。
+- Task 1.4 final gate `/tmp/LuneX-19-1_4-workspace-values-final.FogMa1`通过strict、`4/48`、8文件scope、stable project、no runtime-owner duplication、typed action scope、focused `14/14`与opt-in unset；registry/scene wiring仍明确未完成。

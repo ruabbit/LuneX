@@ -43,7 +43,7 @@
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`3/48`。1.1静态基线、1.2 typed issue/action与1.3 manual host normalization/validation合同完成；1.3 corrected focused `12/12`。Add Host sheet的await/dismiss与workspace state尚未接线，下一项1.4定义workspace identity/generation及local state。
+阶段19当前权威进度`4/48`。1.1静态基线、1.2 typed issue/action、1.3 manual host validation与1.4 workspace ID/generation/reference/local value state完成；1.4 focused `14/14`。registry与AppModel scene wiring尚未完成，下一项1.5实现process-level registry。
 
 ### 阶段19错误记录
 

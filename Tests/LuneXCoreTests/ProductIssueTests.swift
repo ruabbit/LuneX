@@ -51,37 +51,91 @@ final class ProductIssueTests: XCTestCase {
     }
 
     func testActionTokenCarriesCheckedWorkspaceAndSessionScopesWithoutDisplayText() {
-        let workspaceID = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
+        let workspaceID = ProductWorkspaceID(
+            rawValue: UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
+        )
         let sessionID = UUID(uuidString: "20000000-0000-0000-0000-000000000002")!
         let tokenID = UUID(uuidString: "20000000-0000-0000-0000-000000000003")!
+        let reference = ProductWorkspaceReference(
+            id: workspaceID,
+            generation: ProductWorkspaceGeneration(rawValue: 7)!
+        )
         let workspace = ProductActionToken(
             id: tokenID,
             kind: .retryPairing,
-            scope: .workspace(id: workspaceID, generation: 7)
+            scope: .workspace(reference)
         )
         let session = ProductActionToken(
             id: tokenID,
             kind: .reconnectStream,
             scope: .session(
-                workspaceID: workspaceID,
-                workspaceGeneration: 7,
+                workspace: reference,
                 sessionID: sessionID
             )
         )
 
-        XCTAssertEqual(
-            workspace.scope,
-            .workspace(id: workspaceID, generation: 7)
-        )
+        XCTAssertEqual(workspace.scope, .workspace(reference))
         XCTAssertEqual(
             session.scope,
             .session(
-                workspaceID: workspaceID,
-                workspaceGeneration: 7,
+                workspace: reference,
                 sessionID: sessionID
             )
         )
         XCTAssertNotEqual(workspace, session)
+    }
+
+    func testWorkspaceGenerationStartsAtOneAdvancesAndNeverWraps() throws {
+        XCTAssertNil(ProductWorkspaceGeneration(rawValue: 0))
+        XCTAssertEqual(ProductWorkspaceGeneration.initial.rawValue, 1)
+        XCTAssertEqual(ProductWorkspaceGeneration.initial.advanced()?.rawValue, 2)
+
+        let maximum = try XCTUnwrap(ProductWorkspaceGeneration(rawValue: UInt64.max))
+        XCTAssertNil(maximum.advanced())
+    }
+
+    func testWorkspaceStateKeepsNavigationSelectionAndPresentationLocal() throws {
+        let firstReference = ProductWorkspaceReference(
+            id: ProductWorkspaceID(
+                rawValue: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!
+            ),
+            generation: .initial
+        )
+        let secondReference = ProductWorkspaceReference(
+            id: ProductWorkspaceID(
+                rawValue: UUID(uuidString: "30000000-0000-0000-0000-000000000002")!
+            ),
+            generation: .initial
+        )
+        let hostID = UUID(uuidString: "30000000-0000-0000-0000-000000000003")!
+        var first = ProductWorkspaceState(reference: firstReference)
+        var second = ProductWorkspaceState(reference: secondReference)
+
+        first.navigationSelection = .stream
+        first.selectedHostID = hostID
+        first.selectedAppID = "app-1"
+        first.presentation.sheet = .pairing(hostID: hostID)
+        first.presentation.dialog = .removeHost(hostID: hostID)
+        first.presentation.issue = ProductIssue(code: .pairingFailed)
+        first.presentation.streamOverlay = .visible
+
+        XCTAssertEqual(first.reference, firstReference)
+        XCTAssertEqual(first.navigationSelection, .stream)
+        XCTAssertEqual(first.selectedHostID, hostID)
+        XCTAssertEqual(first.selectedAppID, "app-1")
+        XCTAssertEqual(first.presentation.sheet, .pairing(hostID: hostID))
+        XCTAssertEqual(first.presentation.dialog, .removeHost(hostID: hostID))
+        XCTAssertEqual(first.presentation.issue?.code, .pairingFailed)
+        XCTAssertEqual(first.presentation.streamOverlay, .visible)
+
+        XCTAssertEqual(second.reference, secondReference)
+        XCTAssertEqual(second.navigationSelection, .library)
+        XCTAssertNil(second.selectedHostID)
+        XCTAssertNil(second.selectedAppID)
+        XCTAssertNil(second.presentation.sheet)
+        XCTAssertNil(second.presentation.dialog)
+        XCTAssertNil(second.presentation.issue)
+        XCTAssertEqual(second.presentation.streamOverlay, .hidden)
     }
 
     func testInformationalAndStaleIssuesDoNotInventRecoveryActions() {

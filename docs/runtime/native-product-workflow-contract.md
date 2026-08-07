@@ -136,6 +136,23 @@ failure to `host_address_invalid`; neither issue contains or echoes the draft.
 `ManualHostSubmission` carries the normalized optional display name and typed
 endpoint for the later awaited persistence workflow.
 
+### Workspace identity and local presentation
+
+`ProductWorkspaceID` is a UUID-backed typed value. A
+`ProductWorkspaceGeneration` is nonzero, begins at 1, advances monotonically,
+and returns no successor at `UInt64.max`; callers must fail closed instead of
+wrapping. `ProductWorkspaceReference` always carries the ID and generation
+together, and product action scopes use that reference directly. A session
+action scope adds the current session UUID to its owning workspace reference.
+
+`ProductWorkspaceState` is a value containing an immutable reference and
+workspace-local navigation selection, selected host, selected app, sheet,
+dialog, product issue, and stream-overlay visibility. Copying or mutating one
+state does not mutate another. It deliberately contains no session provider,
+media environment, renderer, decoder, audio graph, input transport,
+repository, or settings copy. The registry and `AppModel` remain responsible
+for checking references and reconciling shared data in later tasks.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public

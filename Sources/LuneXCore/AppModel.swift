@@ -6,7 +6,7 @@ import AVKit
 import UIKit
 #endif
 
-enum AppNavigationSelection: Hashable {
+enum AppNavigationSelection: Hashable, Sendable {
     case library
     case stream
     case diagnostics
