@@ -3677,3 +3677,7 @@
 - 2026-08-07：阶段19 `complete-native-product-workflows`进入`in_progress`，先生成proposal/spec/design/tasks，再按任务逐项实现与自验收；阶段13–18 live/signed/physical pending边界保持不变。
 - 2026-08-07：完成阶段19 proposal、五份ADDED capability specs与design草案；合同覆盖host/pairing、session recovery/overlay、checked multiwindow workspace、accessibility和privacy-bounded diagnostics，明确复用现有runtime owner及五级proof boundary。
 - 2026-08-07：生成阶段19 `tasks.md`共48项，按8组覆盖基础、host/pairing/catalog、session、multiwindow、accessibility、diagnostics、集成验证和阶段证明；strict `1/1`与apply `0/48 ready`通过，路线图同步为in_progress，下一步建立独立OpenSpec checkpoint。
+- 2026-08-08：task 1.1完成只读产品状态/target/test/proof审计并写入`docs/runtime/native-product-workflow-contract.md`；确认单一全局AppModel产品状态、4 App + 1 macOS unit-test、Swift 6.0、65 workflow/1123 total tests、0 UI-test harness及关键workflow缺口。未运行build/test/Keychain/live host/Simulator lifecycle。
+- 2026-08-08：task 1.1首个验收编排因`git diff --name-only`不列未跟踪合同文档而在scope comparison退出；strict通过且无运行时副作用。改用porcelain status纳入untracked文件后fresh重跑。
+- 2026-08-08：task 1.1 corrected gate的scope已通过，随后因proof关键句在Markdown跨行而被单行全文断言误判；逐项诊断确认其他边界成立，final gate改用稳定短token和显式marker。
+- 2026-08-08：task 1.1 final gate `/tmp/LuneX-19-1_1-audit-final.F3Muuj`通过strict、`1/48`、五文件scope、唯一checkbox、零production/test/project diff、opt-ins unset与无Simulator/build/test边界；准备独立提交推送。

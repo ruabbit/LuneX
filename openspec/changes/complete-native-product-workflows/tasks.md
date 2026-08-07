@@ -1,6 +1,6 @@
 ## 1. Product State Foundations
 
-- [ ] 1.1 Audit the existing `AppModel`, root scenes, workflow views, endpoint parser, diagnostics, tests, and platform targets; record the exact compatibility and proof boundaries before production edits.
+- [x] 1.1 Audit the existing `AppModel`, root scenes, workflow views, endpoint parser, diagnostics, tests, and platform targets; record the exact compatibility and proof boundaries before production edits.
 - [ ] 1.2 Define stable product issue, presentation, severity, and checked action-token value contracts with no arbitrary provider strings or private host context.
 - [ ] 1.3 Add manual-host draft normalization and typed validation through `HostEndpointParser`, including whitespace, hostname, IPv4, bracketed IPv6, explicit port, credential, and invalid-input cases.
 - [ ] 1.4 Define `ProductWorkspaceID`, generation, workspace-local navigation/presentation state, and checked workspace references without duplicating runtime owners.

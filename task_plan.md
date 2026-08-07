@@ -43,6 +43,14 @@
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
+阶段19当前权威进度`1/48`。Task 1.1完成pre-change静态基线：单一process-level AppModel、全局产品presentation、4 App + 1 macOS unit-test、Swift 6.0、0 UI-test harness与现有workflow/diagnostics保护边界已记录到`docs/runtime/native-product-workflow-contract.md`。下一项1.2定义typed product issue/action token；不在该任务提前迁移UI。
+
+### 阶段19错误记录
+
+- Task 1.1首轮项目元数据读取假设存在`project.yml`，命令返回`No such file or directory`；无文件或运行时副作用。已确认本仓库权威生成器为`Tools/generate_xcodeproj.rb`，后续直接审计生成器与pbxproj，不重复错误路径。
+- Task 1.1首个验收编排使用`git diff --name-only`比较范围，未包含未跟踪的新合同文档而退出；OpenSpec strict已通过，无production/test/device/Keychain副作用。corrected gate改用`git status --porcelain`解析tracked与untracked精确集合，并从fresh evidence目录完整重跑。
+- Task 1.1 corrected scope gate通过后，单行全文断言因合同中的proof句跨两行而退出；逐项诊断确认production diff为0、checkbox精确2行、opt-in unset，其余token均通过。final gate改为两个稳定短token并给每项断言显式marker。
+
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
 当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。

@@ -3157,3 +3157,12 @@
 - 阶段19 UI入口集中在`Sources/LuneXApp/RootView.swift`，application owner位于`Sources/LuneXCore/AppModel.swift`。现有基础覆盖host列表、手动添加、pairing、app catalog、stream状态/overlay、settings与diagnostics，但仍需把首次使用、信任重置、失败/重试、恢复/停止、多窗口所有权、无障碍与privacy-bounded错误合同系统化。
 - 新change建议拆分五项新capability：`native-host-pairing-workflows`、`native-session-recovery-controls`、`native-multiwindow-workspaces`、`native-accessibility-interaction`、`privacy-bounded-product-diagnostics`。不修改或复制GPL上游实现，只将Moonlight iOS/Qt作为只读行为参考。
 - OpenSpec确认项目当前没有`openspec/specs/`全局capability；阶段19五项均为ADDED requirements。架构选择是在单一process/runtime `AppModel`上增加checked workspace identity/generation，而不是每窗口复制一个AppModel或第二套session/media/input owner。
+
+## 2026-08-08 阶段 19 Task 1.1 产品状态基线
+
+- `LuneXApp`只创建一个process-level `@State AppModel`并注入所有`WindowGroup`；navigation、selected host、pairing/catalog/launch presentation当前均为全局值，已有session/media/input generation并不能替代window workspace identity。
+- `AddHostSheet`同步回调后立即dismiss，异步持久化失败不能保留表单；remove host没有确认或active-session stop sequencing；catalog await前没有selected-host/workspace reservation；pairing已有attempt/host隔离但没有workspace owner。
+- 权威项目生成器是`Tools/generate_xcodeproj.rb`，不存在`project.yml`。4个application target和1个macOS unit-test bundle均deployment 26.0；实际`SWIFT_VERSION=6.0`。当前`AppModelWorkflowTests`有65个test method，全test target有1123个，UI-test product与`XCUIApplication`为0。
+- diagnostics已有capacity 500、category-specific actionable state和redacted export；阶段19应复用并增强typed product issue/action，不能另建诊断栈或继续把裸字符串带入observable workflow state。
+- task 1.1只读执行source/project metadata scan；没有build/test/install/launch/signing/Keychain/live host或Simulator lifecycle命令。`xcodebuild -list`在macOS更新后发出非致命DVTDeviceOperation空build-number warning但正常返回完整inventory。
+- Task 1.1 final gate `/tmp/LuneX-19-1_1-audit-final.F3Muuj`通过strict、`1/48`、精确五文件scope、唯一1.1 checkbox、零production/test/project diff与opt-in unset断言；该证据仍只属于static repository/Xcode metadata层级。
