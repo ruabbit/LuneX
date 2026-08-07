@@ -372,20 +372,48 @@ final class ControllerAndDiagnosticsTests: XCTestCase {
     func testTVRemoteReservesInputUntilStreamIsActive() {
         let adapter = TVRemoteFocusInputAdapter(isStreamActive: false)
 
-        let output = adapter.remoteButton(TVRemoteSample(button: .menu, isDown: true))
+        let output = adapter.remoteButton(TVRemoteSample(button: .select, isDown: true))
 
         XCTAssertEqual(output.policy, .reserveLocally(reason: "tvOS remote input remains local until a stream is active"))
         XCTAssertNil(output.event)
     }
 
-    func testTVRemoteAndFocusEventsDeliverWhenStreaming() {
+    func testTVRemoteDeliversSupportedPressButKeepsMenuLocalWhenStreaming() {
         let adapter = TVRemoteFocusInputAdapter(isStreamActive: true)
 
         let remoteOutput = adapter.remoteButton(TVRemoteSample(button: .playPause, isDown: true))
-        let focusOutput = adapter.focus(FocusSample(focusedItemID: "host-row", movement: .next, isFocused: true))
+        let menuOutput = adapter.remoteButton(TVRemoteSample(
+            button: .menu,
+            isDown: true
+        ))
 
         XCTAssertEqual(remoteOutput.event, .tvRemote(TVRemoteInputEvent(button: .playPause, isDown: true)))
-        XCTAssertEqual(focusOutput.event, .focus(FocusInputEvent(focusedItemID: "host-row", movement: .next, isFocused: true)))
+        XCTAssertEqual(remoteOutput.policy, .deliver)
+        XCTAssertNil(menuOutput.event)
+        XCTAssertEqual(
+            menuOutput.policy,
+            .reserveLocally(reason: "tvOS Menu remains local for native escape")
+        )
+    }
+
+    func testTVFocusIdentityNeverLeavesLocalNavigation() {
+        let sample = FocusSample(
+            focusedItemID: "private-focus-identity",
+            movement: .next,
+            isFocused: true
+        )
+
+        for isStreamActive in [false, true] {
+            let output = TVRemoteFocusInputAdapter(
+                isStreamActive: isStreamActive
+            ).focus(sample)
+
+            XCTAssertNil(output.event)
+            XCTAssertEqual(
+                output.policy,
+                .reserveLocally(reason: "tvOS focus identity remains local")
+            )
+        }
     }
 
     func testInputDiagnosticsRecordsReservedDroppedAndControllerStatus() async {

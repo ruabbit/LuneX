@@ -1263,6 +1263,70 @@ Siri Remote callbacks, a signed install, physical controller/remote behavior,
 host receipt, television HDR, spatial audio, live Sunshine, latency,
 performance, power, or thermal acceptance.
 
+## Task 3.7 complete tvOS input regression and provider wire closure
+
+Task 3.7 audits every tvOS input behavior from Tasks 3.1 through 3.6 across
+the reducer, actual surface owner, AppModel, controller runtime, and existing
+Moonlight input provider. The audit found that the application and fake media
+environment preserved balanced `.tvRemote` order, but the production provider
+still passed that UI event to `RemoteInputWireCodec`, where it was explicitly
+unsupported.
+
+The provider now resolves admitted tvOS presses before encoding:
+
+- directional presses become the corresponding Win32 arrow virtual keys;
+- Select becomes Return;
+- Play/Pause becomes the media Play/Pause virtual key; and
+- Menu and SwiftUI focus identity remain unsupported at the provider boundary.
+
+The resolved keyboard event, rather than the UI-specific source event, enters
+the existing held-key registry and Moonlight keyboard wire codec. This reuses
+the existing reliable channel and ordered release barrier, produces reverse
+admission-order key-up packets exactly once, and introduces no tvOS-specific
+protocol packet. The legacy value adapter also reserves Menu locally in every
+stream state and never serializes SwiftUI focus item identity.
+
+Final retained evidence is:
+
+- focused `/tmp/LuneX-18-3_7-focused-r3.g0X36e`: `7/7` passed;
+- related `/tmp/LuneX-18-3_7-related-r2.2QaiwN`: `236/236` passed across the
+  eight actual tvOS input-related test suites;
+- normal `/tmp/LuneX-18-3_7-normal.WCovl0`: `1027 total / 1026 passed / 1
+  exact real-Keychain opt-in skip / 0 failed`;
+- fixed Apple TV build `/tmp/LuneX-18-3_7-tvos.PwAk1O`: zero structured
+  diagnostics and one AIR/metallib pair; and
+- five-platform Debug builds `/tmp/LuneX-18-3_7-builds.N3IHzH`: macOS, fixed
+  iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro all have zero
+  structured diagnostics and one AIR/metallib pair each.
+
+The first focused wire candidate stopped during test compilation because an
+expected key-code array inferred `Int` instead of `UInt16`. The first related
+candidate then showed that an old inactive-stream test used Menu to assert a
+generic inactive reason; it now uses supported Select, preserving both the
+inactive-stream and always-local Menu contracts. Neither candidate is final
+evidence.
+
+Repository acceptance is retained in:
+
+- pre-mark `/tmp/LuneX-18-3_7-repository-pre-r3.QRSRb6`, which passed fixture
+  self/tree, strict `9/9`, `18/50 next 3.7`, four stable generator hashes,
+  exact twelve-file scope, membership, current input semantics, all retained
+  results, and repository boundaries; and
+- post-mark `/tmp/LuneX-18-3_7-final-state.fKKBFH`, which read back strict
+  `9/9`, `19/50 next 4.1`, the unchanged project hash, exact thirteen-file
+  scope, current source/task/tests, all retained results, and the same
+  boundaries without rerunning tests, builds, the generator, or simulator
+  operations.
+
+The fixed UUIDs were build destinations only. Task 3.7 did not query, create,
+clone, boot, install, launch, run, shut down, or delete a simulator. Real
+Keychain and live-host opt-ins remained disabled. These results prove local
+focus privacy, provider-side canonical packet order, deterministic controller
+ownership, stale-callback rejection, and unsigned SDK compatibility. They do
+not prove Siri Remote feel, host receipt, a simulator callback, signed install,
+physical controller feedback, HDR, spatial audio, latency, performance, power,
+or thermal behavior.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

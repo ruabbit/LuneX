@@ -18,6 +18,11 @@ Supported Siri Remote press begin, end, and cancellation events SHALL be
 forwarded only while the current stream/input generation owns an eligible
 surface and local focus UI is dismissed.
 
+The provider SHALL resolve directional presses to canonical remote arrow keys,
+Select to remote Return, and Play/Pause to remote media Play/Pause before using
+the existing Moonlight keyboard wire and held-state release path. It SHALL NOT
+add a tvOS-specific wire packet type.
+
 #### Scenario: Supported press is completed
 - **WHEN** an admitted play/pause, select, or directional press begins and ends
 - **THEN** LuneX SHALL deliver one balanced current-generation remote press sequence

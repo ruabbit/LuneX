@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`18/50 ready`、next 3.7。1.1至3.6已完成task级验收；3.6完整effect FIFO、per-operation UUID release accounting、UUID admission intent fence、controller quiesce、existing provider barrier、local restoration与terminal join已通过focused `37/37`、相关矩阵`233/233`、normal `1024/1023/1/0`、direct tvOS、五平台Debug和repository pre-gate。下一项3.7补齐remote event order、focus/overlay、reserved command、controller profile/slot/capacity/feedback/disconnect、stale callback、release/replacement/teardown回归；当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`保持pre-mark `18/50 ready`、next 3.7。1.1至3.6已完成task级验收；3.7候选已补齐focus/Menu本地边界、supported Siri Remote到existing keyboard wire的canonical mapping、held release和stale callback回归，并通过focused `7/7`、相关`236/236`、normal `1027/1026/1/0`、direct tvOS及五平台Debug。repository pre-gate通过前不勾选；当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -960,3 +960,15 @@
 - **post-mark final-state：** `/tmp/LuneX-18-3_6-final-state.a7qNA6`只读通过strict `9/9`、OpenSpec `18/50 next 3.7`、稳定project hash、精确十文件scope、current ordered-release语义、全部retained evidence及privacy/clean-room/reference/opt-in/process/diff边界；未重复test/build/generator/simulator操作。下一步post-record和最终diff审计。
 - **post-record：** `/tmp/LuneX-18-3_6-post-record.dHIyHe`通过`18/50 next 3.7`、稳定project hash、十文件scope、pre/final记录、retained evidence、opt-in/process/reference和diff门。
 - **最终审计：** per-operation UUID accounting、actual admission generation、effect FIFO、controller task quiesce、existing provider barrier、local restoration、A→B→C intent fence、provider failure同代fail-closed及terminal idempotent join均成立；未发现新的正确性、隐私或跨平台隔离问题，Task 3.6可独立提交推送。
+- **提交：** 3.6已提交推送为`bfe4e10 Order tvOS held input release`；fetch确认`HEAD == origin/main`且工作树clean，OpenSpec为`18/50 ready`、next 3.7。
+
+## 2026-08-07 阶段 18 任务 3.7 启动
+
+- **状态：** `complete`；OpenSpec已勾选3.7，权威进度为`19/50 ready`、next 4.1，post-record与最终diff审计已通过，等待独立提交推送。
+- **范围：** remote event order、local focus、overlay handoff、reserved command、controller profile/slot/capacity、feedback、disconnect、stale callback、release、replacement与teardown；不借3.7新增display/HDR/audio production，也不把编译或注入测试表述为物理remote/controller证明。
+- **验收：** focused 3.7新增/关键回归、完整tvOS input相关矩阵、fresh normal、direct fixed tvOS与五平台Debug，随后repository pre-gate、post-mark final-state、post-record和独立提交推送。
+- **wire修复：** `.tvRemote`不得直接进入不支持它的wire codec；provider将方向键映射Win32 arrows、Select映射Return、Play/Pause映射media Play/Pause，并让归约事件进入既有held-key registry与ordered release barrier。Menu/focus继续fail closed。
+- **最终证据：** focused `/tmp/LuneX-18-3_7-focused-r3.g0X36e`为`7/7`，related `/tmp/LuneX-18-3_7-related-r2.2QaiwN`为`236/236`，normal `/tmp/LuneX-18-3_7-normal.WCovl0`为`1027/1026/1 exact Keychain skip/0`；direct fixed tvOS与五平台Debug均零结构化诊断且各有AIR/metallib。
+- **repository/final-state：** `/tmp/LuneX-18-3_7-repository-pre-r3.QRSRb6`完整通过pre-mark门；勾选后的只读`/tmp/LuneX-18-3_7-final-state.fKKBFH`确认strict `9/9`、`19/50 next 4.1`、稳定project hash、13文件scope、current semantics、retained evidence与全部boundary，未重复test/build/generator/simulator操作。
+- **post-record/final audit：** `/tmp/LuneX-18-3_7-post-record.RaWllz`确认五份权威文档、pre/final路径、13文件scope、project hash与repository boundary；最终生产/测试/规范diff审计未发现新问题。
+- **下一步：** 运行只读post-record和最终diff审计，独立提交推送3.7后进入4.1 actual tvOS scene/surface/decoded-frame到`StreamMetalPresenter`接线。

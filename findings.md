@@ -2634,3 +2634,16 @@
 - 首轮repository pre-gate只因静态断言使用不存在的`.restoreLocalNavigation` case名，在retained evidence前退出；实际实现使用`.restoreLocalFocus(reason)`。修正后的fresh `/tmp/LuneX-18-3_6-repository-pre.w3TVP6`完整通过strict `9/9`、pre-mark `17/50 next 3.6`、四次稳定generator、精确九文件scope、current ordered-release语义、全部retained evidence以及privacy/clean-room/reference/opt-in/process/diff边界。3.6可以勾选，3.7完整回归仍未完成。
 - post-mark final-state `/tmp/LuneX-18-3_6-final-state.a7qNA6`确认OpenSpec `18/50 next 3.7`、稳定project hash、十文件scope、current semantics与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
 - post-record `/tmp/LuneX-18-3_6-post-record.dHIyHe`再次确认`18/50 next 3.7`、pre/final记录、retained evidence与repository boundary。最终人工diff审计未发现新问题；3.6可独立提交，3.7仍只代表待补的完整回归任务。
+
+## 2026-08-07 阶段 18 任务 3.7 coverage inventory
+
+- existing reducer/owner/provider/AppModel tests已分别覆盖balanced remote order、local overlay/focus handoff、全部reserved command、extended/micro profile、stable 0...15 slots/capacity、current-lease feedback、disconnect replacement、old surface/generation callback、ordered release、A→B→C replacement与stop teardown。
+- 盘点发现legacy `TVRemoteFocusInputAdapter.focus()`仍把SwiftUI focus item identity包装为`.focus`远端事件，直接违反本change的local-only focus合同；同一adapter在active stream也未显式保留Menu。当前production实际surface走generation-owned capture owner而非该legacy adapter，但共享API仍必须fail closed。
+- 修订adapter使Menu始终native-local、focus identity在stream active/inactive均只返回local reservation且不产生event；测试分别验证supported play/pause仍可交付、Menu和带私有identity的focus不会离开本地。
+- AppModel现有全链路tvOS input测试新增scene release pending与stop后的stale roster、旧/current lease motion和feedback注入，要求roster/feedback保持清空或current不变、remote send count不增加，从跨层证明controller callbacks不能绕过release/teardown fence。
+- 真实provider过去将`.tvRemote`直接交给`RemoteInputWireCodec`并得到`unsupportedEvent`，fake environment无法揭示该缺口。provider resolver现将Select/PlayPause/四方向分别归约为Return/media PlayPause/Win32 arrows，并对归约后的键盘事件执行held-state accounting；Menu和focus identity仍明确拒绝，不新增tvOS私有wire packet。
+- provider mapping修订后的focused `7/7`与完整tvOS input related matrix `236/236`均结构化零诊断通过。related首轮唯一失败是旧inactive-stream adapter测试用Menu期待通用inactive原因；测试改用supported Select后同时保留Menu强制native-escape原因和inactive supported-button原因两条合同。
+- 最终normal `1027/1026/1 exact Keychain skip/0`、fixed tvOS direct build与macOS/fixed iPhone/iPad/Apple TV/Vision Pro五平台Debug均结构化零诊断通过，每个build有AIR/metallib。所有UUID仅作build destination，未查询或操作simulator lifecycle；这些证据仍不证明host receipt、物理Siri Remote/controller、signed install、HDR、空间音频或性能功耗。
+- fresh repository pre-gate `/tmp/LuneX-18-3_7-repository-pre-r3.QRSRb6`完整通过strict `9/9`、pre-mark `18/50 next 3.7`、四次稳定generator、精确12文件scope、current mapping/local-only/resolved-held-state/release语义、全部retained evidence以及privacy/clean-room/reference/opt-in/process/diff边界。
+- post-mark final-state `/tmp/LuneX-18-3_7-final-state.fKKBFH`只读确认OpenSpec `19/50 next 4.1`、稳定project hash、精确13文件scope、current source/task/tests与全部retained evidence/boundary；没有重复test/build/generator/simulator操作。3.7离线实现和回归验收完成，但物理Siri Remote/host receipt/signed/HDR/spatial/performance证据仍保持未证明。
+- post-record `/tmp/LuneX-18-3_7-post-record.RaWllz`与最终人工diff审计确认权威文档、pre/final证据、scope、project hash及repository boundary一致，未发现需要推翻3.7实现的新问题。

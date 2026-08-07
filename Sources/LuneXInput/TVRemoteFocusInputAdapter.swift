@@ -15,6 +15,14 @@ struct TVRemoteFocusInputAdapter: Sendable {
     var isStreamActive: Bool
 
     func remoteButton(_ sample: TVRemoteSample) -> InputAdapterOutput {
+        guard sample.button != .menu else {
+            return InputAdapterOutput(
+                event: nil,
+                policy: .reserveLocally(
+                    reason: "tvOS Menu remains local for native escape"
+                )
+            )
+        }
         guard isStreamActive else {
             return InputAdapterOutput(
                 event: nil,
@@ -29,13 +37,12 @@ struct TVRemoteFocusInputAdapter: Sendable {
     }
 
     func focus(_ sample: FocusSample) -> InputAdapterOutput {
-        InputAdapterOutput(
-            event: .focus(FocusInputEvent(
-                focusedItemID: sample.focusedItemID,
-                movement: sample.movement,
-                isFocused: sample.isFocused
-            )),
-            policy: .deliver
+        _ = sample
+        return InputAdapterOutput(
+            event: nil,
+            policy: .reserveLocally(
+                reason: "tvOS focus identity remains local"
+            )
         )
     }
 }

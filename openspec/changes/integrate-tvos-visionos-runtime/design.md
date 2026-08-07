@@ -78,6 +78,13 @@ returns directional/select ownership to local focus. Back/Menu and other
 system-reserved commands always remain local and may stop capture or reveal the
 overlay through native behavior.
 
+At the existing remote-input provider boundary, admitted directional presses
+resolve to the corresponding Win32 arrow virtual keys, Select resolves to
+Return, and Play/Pause resolves to the media Play/Pause virtual key. The
+resulting canonical keyboard events use the existing Moonlight keyboard wire
+codec and held-key registry. UI-specific remote and focus identities never
+become new protocol packet types.
+
 Globally intercepting all remote presses was rejected because it breaks tvOS
 navigation and system escape semantics. Mapping SwiftUI focus movement itself
 to host input was rejected because focus identity is local UI state, not a

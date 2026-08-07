@@ -168,7 +168,9 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         var nextRegistry = controllerRegistry
         var nextHeldInputState = heldInputState
         let resolution = try nextRegistry.resolve(event)
-        try nextHeldInputState.apply(event)
+        for resolvedEvent in resolution.events {
+            try nextHeldInputState.apply(resolvedEvent)
+        }
         let packets = try resolution.events.flatMap(RemoteInputWireCodec.outboundPackets)
         guard !packets.isEmpty else { return }
         let affectsHeldState = Self.affectsHeldState(event, resolvedEvents: resolution.events)
@@ -545,12 +547,12 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         _ event: RemoteInputEvent,
         resolvedEvents: [RemoteInputEvent]
     ) -> Bool {
-        switch event {
-        case .keyboard, .pointer(.button):
-            return true
-        default:
-            return resolvedEvents.contains { resolved in
-                if case .controllerState = resolved { return true }
+        _ = event
+        return resolvedEvents.contains { resolved in
+            switch resolved {
+            case .keyboard, .pointer(.button), .controllerState:
+                return true
+            default:
                 return false
             }
         }
@@ -661,6 +663,35 @@ private struct ResolvedRemoteInputEvent: Sendable {
     var event: RemoteInputEvent
     var events: [RemoteInputEvent]
     var allowsCoalescing: Bool
+}
+
+private enum TVRemoteHostInputResolver {
+    static func resolve(_ event: TVRemoteInputEvent) throws -> RemoteInputEvent {
+        let keyCode: UInt16
+        switch event.button {
+        case .select:
+            keyCode = 0x0D
+        case .playPause:
+            keyCode = 0xB3
+        case .up:
+            keyCode = 0x26
+        case .down:
+            keyCode = 0x28
+        case .left:
+            keyCode = 0x25
+        case .right:
+            keyCode = 0x27
+        case .menu:
+            throw RemoteInputCodecError.unsupportedEvent
+        }
+        return .keyboard(KeyboardInputEvent(
+            rawKeyCode: keyCode,
+            characters: nil,
+            isDown: event.isDown,
+            modifiers: [],
+            isRepeat: false
+        ))
+    }
 }
 
 private struct RemoteControllerRegistry: Sendable {
@@ -815,7 +846,14 @@ private struct RemoteControllerRegistry: Sendable {
                 events: [event],
                 allowsCoalescing: Self.isCoalescible(event)
             )
-        case .keyboard, .pointer, .touch, .clipboard, .tvRemote, .focus:
+        case let .tvRemote(remote):
+            let wireEvent = try TVRemoteHostInputResolver.resolve(remote)
+            return ResolvedRemoteInputEvent(
+                event: wireEvent,
+                events: [wireEvent],
+                allowsCoalescing: false
+            )
+        case .keyboard, .pointer, .touch, .clipboard, .focus:
             return ResolvedRemoteInputEvent(
                 event: event,
                 events: [event],

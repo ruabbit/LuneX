@@ -2945,6 +2945,36 @@ final class AppModelWorkflowTests: XCTestCase {
             model.tvRemoteSurfacePressDisposition(for: replacementSurface),
             .local
         )
+        let inputCountBeforeStaleSceneCallbacks = mediaEnvironment
+            .currentSentInputApplications().count
+        model.receiveTVGameControllerRoster(controllerRoster)
+        model.receiveTVGameControllerMotion(try TVGameControllerMotionSample(
+            lease: lease,
+            type: .accelerometer,
+            x: 13,
+            y: 14,
+            z: 15
+        ))
+        model.receiveTVGameControllerMotion(try TVGameControllerMotionSample(
+            lease: currentLease,
+            type: .accelerometer,
+            x: 16,
+            y: 17,
+            z: 18
+        ))
+        mediaEnvironment.yieldFeedback(.led(ControllerLEDFeedback(
+            controllerID: currentControllerID,
+            red: 7,
+            green: 8,
+            blue: 9
+        )), sessionID: record.sessionID)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(model.tvControllerRosterState, thirdRoster)
+        XCTAssertNil(model.tvControllerFeedbackDecisionState)
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().count,
+            inputCountBeforeStaleSceneCallbacks
+        )
         model.receiveTVVisionGeometryUpdate(sceneLoss)
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(
@@ -2990,6 +3020,30 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.tvControllerRosterState)
         XCTAssertNil(model.tvControllerRoutedRosterState)
         XCTAssertNil(model.tvControllerFeedbackDecisionState)
+        let inputCountAfterStop = mediaEnvironment
+            .currentSentInputApplications().count
+        model.receiveTVGameControllerRoster(thirdRoster)
+        model.receiveTVGameControllerMotion(try TVGameControllerMotionSample(
+            lease: currentLease,
+            type: .accelerometer,
+            x: 19,
+            y: 20,
+            z: 21
+        ))
+        mediaEnvironment.yieldFeedback(.led(ControllerLEDFeedback(
+            controllerID: currentControllerID,
+            red: 10,
+            green: 11,
+            blue: 12
+        )), sessionID: record.sessionID)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.tvControllerRosterState)
+        XCTAssertNil(model.tvControllerRoutedRosterState)
+        XCTAssertNil(model.tvControllerFeedbackDecisionState)
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().count,
+            inputCountAfterStop
+        )
         await launchTask.value
     }
 

@@ -787,7 +787,7 @@ final class RemoteInputDeliveryTests: XCTestCase {
         XCTAssertEqual(deactivateCount, 1)
     }
 
-    func testProviderRejectsSendBeforeStartAndStillUnsupportedEventWithoutDeactivating() async throws {
+    func testProviderRejectsSendBeforeStartAndKeepsMenuAndFocusOffWire() async throws {
         let sender = InputSenderStub()
         let provider = MoonlightRemoteInputProvider(sender: sender)
         let sessionID = UUID()
@@ -799,19 +799,112 @@ final class RemoteInputDeliveryTests: XCTestCase {
             endpoint: inputEndpoint(),
             configuration: inputConfiguration(key: Data(repeating: 3, count: 16))
         )
-        do {
-            try await provider.send(.tvRemote(TVRemoteInputEvent(
-                button: .playPause,
-                isDown: true
-            )), sessionID: sessionID)
-            XCTFail("Expected unsupported TV remote input to fail.")
-        } catch let error as RemoteInputCodecError {
-            XCTAssertEqual(error, .unsupportedEvent)
+        let localOnlyEvents: [RemoteInputEvent] = [
+            .tvRemote(TVRemoteInputEvent(button: .menu, isDown: true)),
+            .focus(FocusInputEvent(
+                focusedItemID: "private-focus-identity",
+                movement: .next,
+                isFocused: true
+            ))
+        ]
+        for event in localOnlyEvents {
+            do {
+                try await provider.send(event, sessionID: sessionID)
+                XCTFail("Expected local-only input to fail before wire delivery.")
+            } catch let error as RemoteInputCodecError {
+                XCTAssertEqual(error, .unsupportedEvent)
+            }
         }
         try await provider.send(.clipboard(ClipboardInputEvent(text: "A")), sessionID: sessionID)
         let sendCount = await sender.recordedSends().count
         XCTAssertEqual(sendCount, 1)
         await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testProviderMapsSupportedTVRemotePressesToBalancedCanonicalKeyboardWireOrder() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x71, count: 16))
+        )
+
+        let mappings: [(TVRemoteButton, UInt16)] = [
+            (.select, 0x0D),
+            (.playPause, 0xB3),
+            (.up, 0x26),
+            (.down, 0x28),
+            (.left, 0x25),
+            (.right, 0x27)
+        ]
+        for (button, _) in mappings {
+            try await provider.send(
+                .tvRemote(TVRemoteInputEvent(button: button, isDown: true)),
+                sessionID: sessionID
+            )
+            try await provider.send(
+                .tvRemote(TVRemoteInputEvent(button: button, isDown: false)),
+                sessionID: sessionID
+            )
+        }
+
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, mappings.count * 2)
+        XCTAssertTrue(sends.allSatisfy {
+            $0.channelID == RemoteInputWireCodec.keyboardChannel && $0.reliable
+        })
+        for (mappingIndex, mapping) in mappings.enumerated() {
+            let down = [UInt8](sends[mappingIndex * 2].packet.bytes)
+            let up = [UInt8](sends[mappingIndex * 2 + 1].packet.bytes)
+            XCTAssertEqual(down[4], 0x03)
+            XCTAssertEqual(up[4], 0x04)
+            XCTAssertEqual(UInt16(down[9]) | UInt16(down[10]) << 8, mapping.1)
+            XCTAssertEqual(UInt16(up[9]) | UInt16(up[10]) << 8, mapping.1)
+        }
+
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testReleaseAllRaisesMappedTVRemoteKeysOnceInReverseAdmissionOrder() async throws {
+        let sender = InputSenderStub()
+        let provider = MoonlightRemoteInputProvider(sender: sender)
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x72, count: 16))
+        )
+        for button in [TVRemoteButton.select, .playPause, .up] {
+            try await provider.send(
+                .tvRemote(TVRemoteInputEvent(button: button, isDown: true)),
+                sessionID: sessionID
+            )
+        }
+
+        let countBeforeRelease = await sender.recordedSends().count
+        await provider.releaseAll(sessionID: sessionID)
+        let sendsAfterRelease = await sender.recordedSends()
+        let releases = Array(sendsAfterRelease.dropFirst(countBeforeRelease))
+        XCTAssertEqual(releases.count, 3)
+        XCTAssertEqual(releases.map(\.channelID), Array(
+            repeating: RemoteInputWireCodec.keyboardChannel,
+            count: 3
+        ))
+        let releasedKeyCodes: [UInt16] = releases.map { record in
+            let bytes = [UInt8](record.packet.bytes)
+            return UInt16(bytes[9]) | UInt16(bytes[10]) << 8
+        }
+        XCTAssertEqual(releasedKeyCodes, [0x26, 0xB3, 0x0D])
+        XCTAssertTrue(releases.allSatisfy { [UInt8]($0.packet.bytes)[4] == 0x04 })
+
+        await provider.releaseAll(sessionID: sessionID)
+        let countAfterRepeatedRelease = await sender.recordedSends().count
+        XCTAssertEqual(countAfterRepeatedRelease, sendsAfterRelease.count)
+        await provider.stopInput(sessionID: sessionID)
+        let countAfterStop = await sender.recordedSends().count
+        XCTAssertEqual(countAfterStop, sendsAfterRelease.count)
     }
 
     func testProviderRegistersControllerAccumulatesFullStateAndDisconnectsWithMask() async throws {
