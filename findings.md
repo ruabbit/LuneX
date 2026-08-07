@@ -2542,3 +2542,23 @@
 - terminal修订后的fresh `5/5` focused明确包含reconnect和remote termination overlay恢复；`43/43`相关矩阵、`1006/1005/1/0` normal与五平台Debug再次通过。最终证据不再复用修订前direct/pre/final路径，fixed Apple TV/Vision Pro由修订五平台build覆盖actual/隔离分支。
 - 修订repository pre-gate `/tmp/LuneX-18-3_2-repository-pre-r3.rICtus`通过pre-mark `13/50 next 3.2`及当前terminal semantics与全部修订证据/边界；3.2可重新勾选并进入post-mark只读验证。
 - 修订final-state `/tmp/LuneX-18-3_2-final-state-r2.dFJcBe`确认`14/50 next 3.3`、十一文件scope、current terminal/focus semantics与全部修订evidence/boundary一致，未重复测试、构建、generator或simulator操作。
+
+## 2026-08-07 阶段 18 任务 3.3 调查
+
+- 更新后的本机环境为macOS 27.0、Xcode 26.4、Swift 6.3；恢复时`HEAD == origin/main == b027b3c`且工作树clean，OpenSpec权威进度`14/50 next 3.3`。本轮没有查询或操作simulator inventory/lifecycle，真实Keychain与live-host opt-in继续禁用。
+- tvOS 26.4公开`UIPressType`只有方向、Select、Menu、Play/Pause、Page Up/Down、123与Four Colors；Home、volume、system capture和power没有公开app-responder press case，必须保持system-owned/deferred，不能伪造actual callback或Moonlight事件。
+- UIKit明确要求接收到`pressesBegan`的自定义responder最终收到并平衡处理`pressesEnded`或`pressesCancelled`。因此Menu/Back可以在began时发出framework-free local command intent，但began/end/cancel都必须继续传给`super`，不能消费native escape。
+- 当前pure reducer已有`backMenu -> showOverlayOrExitCapture`、Home/volume/capture/power -> defer-to-system和unsupported -> ignore-locally，但actual surface只把Menu当普通local press交给UIKit，没有通知AppModel显示controls，也没有稳定typed bounded unavailable application state；这正是3.3的production缺口。
+- actual tvOS首次编译后的responder生命周期审计发现既有surface没有覆写`pressesChanged`：captured press的began未交给UIKit，却可能让changed进入`super`。3.3必须按began时记录的disposition继续分流changed，reserved/local交给UIKit，captured抑制，避免不平衡的native responder序列。
+- 修订后人工审计确认actual tvOS分流完整：Menu和unsupported在begin时进入`activeReservedPresses`并同步交给纯值handler，同时begin/change/end/cancel全部继续交给UIKit；captured press的changed不进入UIKit，local/unknown press保持native responder链。
+- Home、音量、系统截图和电源在公开tvOS 26.4 app responder中没有可观察`UIPressType`入口，因此production没有伪造callback；它们只存在于finite typed unavailable state并明确`.deferToSystem/.systemOwned`。reserved状态不持有`UIPress`、focus item、controller、host或payload identity。
+- Back/Menu application只在expected tvOS平台生效，先发布handled-local state，再显示overlay；overlay复用3.2已有handoff关闭admission并释放held remote press。unsupported/system-owned状态不调用Moonlight delivery。
+
+## 2026-08-07 阶段 18 任务 3.3 验收准备
+
+- 修订focused `3/3`、direct tvOS/visionOS、相关矩阵`44/44`、normal `1007/1006/1/0`与五平台Debug均通过且零结构化诊断；五平台每个build均保留一份AIR和metallib。
+- 首轮focused/direct发生在`pressesChanged` ownership修订前，明确失效；最终门只读取修订后证据，不混用证明层级。
+- actual source审计确认Menu/unsupported从不进入remote handler，began/changed/ended/cancelled完整交给UIKit；captured changed不进入UIKit；Back/Menu overlay沿已有owner产生balanced release；typed state无raw identity；公开SDK没有Home/volume/capture/power callback，因此不存在伪造delivery。
+- 当前OpenSpec仍为pre-mark `14/50 next 3.3`。runtime contract、roadmap和三份planning已同步到待门禁状态；repository pre-gate通过前不得勾选。
+- repository pre-gate `/tmp/LuneX-18-3_3-repository-pre.y7lh71`完整通过strict `9/9`、pre-mark `14/50 next 3.3`、四次稳定generator、十二文件scope、current semantics、全部retained evidence与privacy/reference/opt-in/process/diff边界；3.3可勾选并进入post-mark只读验证。
+- post-mark final-state `/tmp/LuneX-18-3_3-final-state.ZREyZa`确认`15/50 next 3.4`、十三文件scope、project hash、current responder/no-delivery semantics与全部retained evidence/boundary一致；未重复test/build/generator/simulator操作。

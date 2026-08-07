@@ -952,6 +952,73 @@ compatibility. They do not prove actual tvOS focus-engine behavior, physical
 Siri Remote feel, signed installation, host receipt, HDR/spatial output, live
 Sunshine, latency, performance, power, or thermal acceptance.
 
+## Task 3.3 local system-reserved commands and native escape
+
+The actual tvOS stream surface now separates public UIKit presses into three
+lifecycles at `pressesBegan`: captured Moonlight input, ordinary local UIKit
+input, and reserved or unsupported local input. Menu maps to the finite
+`backMenu` command; Page Up, Page Down, TV Remote 123, TV Remote Four Colors,
+and any future unmapped public press type map to `unsupported`. Reserved and
+unsupported presses publish one framework-object-free command intent while
+their begin, change, end, and cancel callbacks continue through UIKit. Captured
+press changes remain with the Moonlight owner and do not enter a native
+responder sequence that never received their begin.
+
+Back/Menu application is admitted only on the tvOS product path. It publishes
+a bounded handled-local state and reveals the native controls overlay. The
+existing task 3.2 handoff closes remote admission and releases any held remote
+press before local controls regain focus. Neither Back/Menu nor unsupported
+presses enter the Moonlight remote event handler. The runtime retains only
+finite enums and transient `ObjectIdentifier` membership; it does not retain or
+diagnose `UIPress`, focus item, controller, host, or payload identity.
+
+The public tvOS 26.4 application responder surface does not expose Home,
+volume, system capture, or power as `UIPress.PressType` cases. LuneX therefore
+does not fabricate callbacks for them. Their finite contract states remain
+`deferToSystem/systemOwned`; unsupported interactions remain
+`ignoreLocally/unsupportedInteraction`. These typed unavailable values prove
+policy and application behavior only, not that an app observed a physical
+system command.
+
+Task 3.3 verification retains:
+
+- revised focused evidence `/tmp/LuneX-18-3_3-focused-r2.BKpneI` with `3/3`
+  passed, no skips, failures, or expected failures, and zero structured build
+  diagnostics;
+- revised direct Apple TV evidence `/tmp/LuneX-18-3_3-tvos-r2.m8QkzS` and
+  fresh direct Vision Pro evidence `/tmp/LuneX-18-3_3-vision-r2.fmO2Sl`, both
+  `succeeded/0/0/0` with one AIR and one metallib;
+- related evidence `/tmp/LuneX-18-3_3-related.PgiNcV` with `44/44` passed and
+  zero structured diagnostics across the complete remote/focus contract,
+  surface owner/geometry, and relevant AppModel lifecycle paths;
+- normal evidence `/tmp/LuneX-18-3_3-normal.5ChBp1` with
+  `1007 total / 1006 passed / 1 skipped / 0 failed`, where the sole skip is the
+  explicitly disabled real-Keychain round trip; and
+- macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro Debug
+  evidence `/tmp/LuneX-18-3_3-builds.K29Tfl`, all `succeeded/0/0/0` with one
+  AIR/metallib pair per platform. The fixed UUIDs were build destinations only;
+  and
+- repository pre-gate `/tmp/LuneX-18-3_3-repository-pre.y7lh71`, which passed
+  fixture self/tree, OpenSpec strict `9/9`, pre-mark `14/50 next 3.3`, four
+  identical generator hashes, exact 12-file scope, source/membership and
+  no-delivery semantics, all retained test/build evidence, privacy,
+  clean-room/reference, disabled opt-ins, process checks, and
+  `git diff --check`; and
+- post-mark final-state `/tmp/LuneX-18-3_3-final-state.ZREyZa`, which confirmed
+  OpenSpec `15/50 next 3.4`, exact 13-file scope, stable project hash, current
+  task/source semantics, all retained test/build evidence, and every boundary
+  without rerunning tests, builds, the generator, or simulator operations.
+
+The earlier focused and direct-build evidence predating the `pressesChanged`
+ownership split is superseded and is not final task evidence. No simulator
+inventory or lifecycle command ran, and all tests removed real-Keychain and
+live-host opt-ins. These results prove the finite contract, AppModel
+application, checked no-delivery paths, and unsigned tvOS/visionOS SDK branch
+compatibility. They do not prove physical Siri Remote feel, physical
+Home/volume/capture/power behavior, actual focus-engine execution, signed
+installation, host receipt, controller behavior, HDR/spatial output, live
+Sunshine, latency, performance, power, or thermal acceptance.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

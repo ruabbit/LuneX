@@ -2556,7 +2556,24 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             .captured
         )
-        model.setTVStreamOverlayVisible(true)
+        model.receiveTVRemoteReservedCommand(.backMenu)
+        XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteReservedCommandState,
+            .handledLocally(
+                command: .backMenu,
+                disposition: .showOverlayOrExitCapture
+            )
+        )
+        model.receiveTVRemoteReservedCommand(.unsupported)
+        XCTAssertEqual(
+            model.tvRemoteReservedCommandState,
+            .unavailable(
+                command: .unsupported,
+                disposition: .ignoreLocally,
+                reason: .unsupportedInteraction
+            )
+        )
         await waitUntil {
             mediaEnvironment.currentSentInputApplications().count == 6
         }

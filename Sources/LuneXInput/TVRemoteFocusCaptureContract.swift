@@ -225,6 +225,49 @@ enum TVRemoteReservedDisposition: String, Codable, Hashable, Sendable {
     }
 }
 
+enum TVRemoteReservedCommandUnavailableReason: String, Codable, Hashable, Sendable {
+    case systemOwned = "system-owned"
+    case unsupportedInteraction = "unsupported-interaction"
+}
+
+enum TVRemoteReservedCommandRuntimeState: Equatable, Sendable {
+    case idle
+    case handledLocally(
+        command: TVRemoteReservedCommand,
+        disposition: TVRemoteReservedDisposition
+    )
+    case unavailable(
+        command: TVRemoteReservedCommand,
+        disposition: TVRemoteReservedDisposition,
+        reason: TVRemoteReservedCommandUnavailableReason
+    )
+
+    static func resolve(
+        _ command: TVRemoteReservedCommand
+    ) -> TVRemoteReservedCommandRuntimeState {
+        let disposition = TVRemoteReservedDisposition.resolve(command)
+        switch command {
+        case .backMenu:
+            return .handledLocally(
+                command: command,
+                disposition: disposition
+            )
+        case .home, .volumeUp, .volumeDown, .capture, .power:
+            return .unavailable(
+                command: command,
+                disposition: disposition,
+                reason: .systemOwned
+            )
+        case .unsupported:
+            return .unavailable(
+                command: command,
+                disposition: disposition,
+                reason: .unsupportedInteraction
+            )
+        }
+    }
+}
+
 struct TVRemotePressToken: Equatable, Hashable, Sendable {
     let inputGeneration: TVVisionGeneration
     let rawValue: UInt64

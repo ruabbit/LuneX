@@ -3055,3 +3055,18 @@
 - 修订repository pre-gate `/tmp/LuneX-18-3_2-repository-pre-r3.rICtus`从头通过fixtures、strict/pre-mark、四次generator、十文件scope、terminal/source/test semantics、修订retained evidence与全部边界；已重新勾选3.2并推进为预期`14/50 next 3.3`。下一步只读final-state。
 - 修订final-state `/tmp/LuneX-18-3_2-final-state-r2.dFJcBe`只读通过`14/50 next 3.3`、十一文件scope、project hash、terminal/current semantics、修订retained tests/五平台build和全部边界；没有重复test/build/generator/simulator操作，3.2可提交推送。
 - 修订post-record `/tmp/LuneX-18-3_2-post-record-r2.CzhtnJ`通过`14/50 next 3.3`、project hash、十一文件scope、修订pre/final引用、retained counts、opt-in/process/reference和diff门；进入最终diff审计与独立提交推送。
+- 系统更新后恢复确认macOS 27.0、Xcode 26.4、Swift 6.3可用，`HEAD == origin/main == b027b3c`、工作树clean、OpenSpec为`14/50 next 3.3`；未查询或操作simulator，Keychain/live-host opt-in继续禁用。
+- 已完成3.3首轮SDK/合同审计：公开tvOS press responder可见方向、Select、Menu、Play/Pause、Page Up/Down、123和Four Colors，Home/volume/capture/power不具公开`UIPressType`入口；下一步实现纯值reserved-command owner回调、Menu/Back overlay application和typed bounded unavailable state，同时保持完整UIKit native escape lifecycle。
+- 3.3首版focused `/tmp/LuneX-18-3_3-focused.PBeaEZ`通过`3/3`，direct tvOS `/tmp/LuneX-18-3_3-tvos.NVQQWx`与visionOS `/tmp/LuneX-18-3_3-vision.zGhsAR`均零结构化诊断成功；随后人工审计发现captured `pressesChanged`仍会落入UIKit，已补ownership分流，因此上述证据不作为最终验收，下一步从fresh目录重跑。
+- 系统更新后恢复并等待既有修订focused会话明确退出；`/tmp/LuneX-18-3_3-focused-r2.BKpneI`终端结果为`TEST SUCCEEDED`，三个目标用例均通过。下一步串行读取该`.xcresult`及修订tvOS build，再运行fresh visionOS build；尚未勾选OpenSpec 3.3。
+- 修订focused `/tmp/LuneX-18-3_3-focused-r2.BKpneI`已串行结构化确认为`3/3 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`。
+- 修订direct tvOS `/tmp/LuneX-18-3_3-tvos-r2.m8QkzS`和fresh visionOS `/tmp/LuneX-18-3_3-vision-r2.fmO2Sl`均结构化`succeeded/0/0/0`且各有一份AIR与一份metallib；固定UUID只作build destination，没有查询或操作simulator lifecycle，Keychain/live-host opt-in保持unset。
+- 人工语义审计确认Menu/unsupported不进入remote handler且完整返回UIKit begin/change/end/cancel，captured changed不进入UIKit；Back/Menu overlay复用既有held release，typed state无raw identity，Home/volume/capture/power没有伪造callback。下一步扩大3.1/3.2/3.3相关矩阵。
+- 扩大相关矩阵`/tmp/LuneX-18-3_3-related.PgiNcV`结构化通过`44/44 passed / 0 skipped / 0 failed / 0 expected failure`且build零诊断，覆盖完整remote/focus contract、surface owner/geometry及AppModel current/replacement/terminal路径。下一步fresh normal suite。
+- fresh normal `/tmp/LuneX-18-3_3-normal.5ChBp1`结构化通过`1007 total / 1006 passed / 1 skipped / 0 failed / 0 expected failure`且build零诊断；唯一skip精确为显式真实Keychain round trip，Keychain/live-host opt-in均unset。下一步五平台fresh Debug builds。
+- 五平台fresh Debug `/tmp/LuneX-18-3_3-builds.K29Tfl`中macOS、固定iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 error/0 warning/0 analyzer warning`且各有AIR/metallib；固定UUID仅作build destination，没有查询或操作simulator lifecycle。
+- 系统更新后恢复核对`HEAD == origin/main == b027b3c`、OpenSpec `14/50 next 3.3`、十个预期修改文件与六组保留证据目录一致；没有运行中的LuneX `xcodebuild`，真实Keychain/live-host opt-in仍unset。
+- 已同步Task 3.3 runtime contract、roadmap和三份planning到pre-mark状态；首个组合文档补丁因runtime contract换行锚点不匹配被原子拒绝，无部分修改，随后使用稳定章节标题和真实EOF完成。下一步运行fresh repository pre-gate，3.3仍未勾选。
+- repository pre-gate `/tmp/LuneX-18-3_3-repository-pre.y7lh71`从头通过fixtures、strict `9/9`、pre-mark `14/50 next 3.3`、generator四次稳定、精确十二文件scope、source/membership/no-delivery、retained tests/builds及全部边界；OpenSpec 3.3已勾选并同步为预期`15/50 next 3.4`。下一步仅运行只读final-state。
+- post-mark只读final-state `/tmp/LuneX-18-3_3-final-state.ZREyZa`通过strict `9/9`、apply `15/50 next 3.4`、稳定project hash、精确十三文件scope、current source/task、retained tests/builds及全部边界；没有重复test/build/generator/simulator操作。下一步post-record与最终diff审计。
+- post-record `/tmp/LuneX-18-3_3-post-record.igbLBj`通过`15/50 next 3.4`、project hash、十三文件scope、pre/final记录、retained counts、opt-in/process/reference和diff门；最终diff/UIKit lifecycle审计无新问题，Task 3.3进入独立提交推送。

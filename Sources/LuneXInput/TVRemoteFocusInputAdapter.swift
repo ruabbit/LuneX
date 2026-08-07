@@ -327,9 +327,15 @@ final class TVRemoteSurfacePressCaptureOwner {
 import UIKit
 
 enum TVRemotePressMapper {
+    static func reservedCommand(
+        for pressType: UIPress.PressType
+    ) -> TVRemoteReservedCommand? {
+        if pressType == .menu { return .backMenu }
+        return button(for: pressType) == nil ? .unsupported : nil
+    }
+
     static func button(for pressType: UIPress.PressType) -> TVRemoteButton? {
         switch pressType {
-        case .menu: .menu
         case .select: .select
         case .playPause: .playPause
         case .upArrow: .up

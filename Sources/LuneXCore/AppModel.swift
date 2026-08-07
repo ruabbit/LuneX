@@ -176,6 +176,8 @@ final class AppModel: ApplicationInputSink {
         SessionTVVisionPlatformPresentationState?
     private(set) var tvRemoteFocusHandoffState =
         TVRemoteFocusHandoffState.localNavigation
+    private(set) var tvRemoteReservedCommandState =
+        TVRemoteReservedCommandRuntimeState.idle
 
     var tvStreamOverlayVisible: Bool {
         tvRemoteFocusHandoffState.isOverlayVisible
@@ -697,6 +699,13 @@ final class AppModel: ApplicationInputSink {
         _ event: TVRemoteSurfacePressEvent
     ) -> TVRemoteSurfacePressDisposition {
         tvRemoteSurfacePressCaptureOwner?.handle(event) ?? .local
+    }
+
+    func receiveTVRemoteReservedCommand(_ command: TVRemoteReservedCommand) {
+        guard expectedTVVisionPlatform == .tvOS else { return }
+        tvRemoteReservedCommandState = .resolve(command)
+        guard command == .backMenu else { return }
+        setTVStreamOverlayVisible(true)
     }
 
     func tvRemoteSurfacePressDisposition(
@@ -2083,6 +2092,7 @@ final class AppModel: ApplicationInputSink {
     private func beginTVVisionPlatformPresentationRuntime() {
         clearTVVisionPlatformPresentationRuntime()
         guard expectedTVVisionPlatform == .tvOS else { return }
+        tvRemoteReservedCommandState = .idle
         applyTVRemoteFocusHandoffState(
             tvRemoteFocusHandoffState.settingOverlayVisible(
                 true,
@@ -2256,6 +2266,7 @@ final class AppModel: ApplicationInputSink {
         preservingTerminalState: Bool = false
     ) {
         if expectedTVVisionPlatform == .tvOS {
+            tvRemoteReservedCommandState = .idle
             tvRemoteFocusHandoffState = tvRemoteFocusHandoffState
                 .settingOverlayVisible(
                     true,

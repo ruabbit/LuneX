@@ -695,6 +695,9 @@ private struct StreamWorkspaceView: View {
                 },
                 remotePressEventHandler: { event in
                     appModel.receiveTVRemoteSurfacePressEvent(event)
+                },
+                reservedRemoteCommandHandler: { command in
+                    appModel.receiveTVRemoteReservedCommand(command)
                 }
             )
                 .ignoresSafeArea()

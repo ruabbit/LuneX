@@ -145,6 +145,40 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
         XCTAssertTrue(state.activePresses.isEmpty)
     }
 
+    func testReservedCommandRuntimeStateIsTypedAndBounded() {
+        XCTAssertEqual(
+            TVRemoteReservedCommandRuntimeState.resolve(.backMenu),
+            .handledLocally(
+                command: .backMenu,
+                disposition: .showOverlayOrExitCapture
+            )
+        )
+        for command in [
+            TVRemoteReservedCommand.home,
+            .volumeUp,
+            .volumeDown,
+            .capture,
+            .power
+        ] {
+            XCTAssertEqual(
+                TVRemoteReservedCommandRuntimeState.resolve(command),
+                .unavailable(
+                    command: command,
+                    disposition: .deferToSystem,
+                    reason: .systemOwned
+                )
+            )
+        }
+        XCTAssertEqual(
+            TVRemoteReservedCommandRuntimeState.resolve(.unsupported),
+            .unavailable(
+                command: .unsupported,
+                disposition: .ignoreLocally,
+                reason: .unsupportedInteraction
+            )
+        )
+    }
+
     func testFocusLossClosesAdmissionReleasesReverseAndRestoresFocus() throws {
         let input = try inputSnapshot()
         let first = try pressToken(input.inputGeneration, 1)

@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`13/50 ready`；1.1–3.1已完成task级验收，下一项3.2 overlay/local-focus handoff |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`14/50 ready`；1.1–3.2已完成task级验收，下一项3.3 reserved-command/native-escape handoff |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`13/50 ready`、next 3.2。1.1至3.1已完成task级验收；3.1把actual tvOS press begin/end/cancel接到current surface/input generation与既有session input application，fresh focused `5/5`、相关矩阵`41/41`、normal `1004/1003/1/0`、五平台Debug和repository pre-gate通过。3.2将协调overlay与SwiftUI local focus ownership；actual display/HDR/audio adapters仍后置，当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`15/50 ready`、next 3.4。1.1至3.3已完成task级验收，3.2基线已推送到`b027b3c`。3.3的actual tvOS Menu/unsupported UIKit全生命周期分流、Back/Menu overlay handoff、finite typed unavailable state和Moonlight no-delivery边界已通过修订focused `3/3`、相关矩阵`44/44`、normal `1007/1006/1/0`、direct tvOS/visionOS、五平台Debug与repository pre-gate。下一项3.4实现generation-owned controller handlers与deterministic bounded slots；display/HDR/audio adapters仍后置，当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -81,6 +81,8 @@
 
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 18.3.3首个跨文件planning记录补丁使用了不匹配的runtime contract换行锚点 | 1 | `apply_patch`原子拒绝且无部分写入；改用稳定章节标题拆分文档补丁，并读取各文件真实EOF后分别追加 |
+| 18.3.3上轮跨文件planning补丁使用了不匹配的`findings.md`尾部锚点 | 1 | `apply_patch`原子拒绝且无部分写入；读取各文件真实EOF后分别追加，保留现有实现与证据不变 |
 | 18.2.5首轮final-state的`jq`管道优先级让第二个`.items`作用于数组 | 1 | 在任何xcresult读回前退出；为两个子表达式加括号后从fresh只读目录完整通过，不重复test/build/generator |
 | 18.2.5首轮repository pre-gate误把fixture根设为仓库`.` | 1 | validator按设计报告既有build/reference/docs内容；改用默认`Tests/Fixtures/Moonlight`后从fresh目录完整通过 |
 | 18.2.5首轮normal误用不存在的`LuneX` scheme | 1 | 在测试与编译前退出；从`xcodebuild -list`确认`LuneXCoreTests`并用fresh DerivedData/result bundle重跑 |
@@ -854,3 +856,17 @@
 - **修订repository pre-gate：** `/tmp/LuneX-18-3_2-repository-pre-r3.rICtus`完整通过fixtures、strict `9/9`、pre-mark `13/50 next 3.2`、generator四次稳定、精确十文件scope、terminal/current source/test semantics、修订retained tests/五平台build、privacy/reference/opt-in/process/diff门。3.2已重新勾选，下一步只读final-state。
 - **修订final-state：** `/tmp/LuneX-18-3_2-final-state-r2.dFJcBe`只读通过strict `9/9`、apply `14/50 next 3.3`、稳定project hash、十一文件scope、current terminal/focus semantics、修订`5/5`、`43/43`、`1006/1005/1/0`与五平台build及全部边界；没有重复test/build/generator/simulator操作。3.2可提交推送。
 - **修订post-record：** `/tmp/LuneX-18-3_2-post-record-r2.CzhtnJ`通过`14/50 next 3.3`、project hash、十一文件scope、修订pre/final引用、retained counts、opt-in/process/reference和diff门；进入最终diff审计与独立提交推送。
+
+## 2026-08-07 阶段 18 任务 3.3 收口
+
+- **状态：** `complete`；repository pre-gate通过后OpenSpec已勾选3.3，预期`15/50 ready`、next 3.4，等待只读final-state与独立提交推送。
+- **实现：** actual tvOS surface把Menu映射为`backMenu`，把公开但不支持的Page Up/Down、123、Four Colors及未来未知press映射为`unsupported`；reserved/local begin/change/end/cancel完整返回UIKit，captured changed留在Moonlight owner。AppModel只在expected tvOS应用typed command state，Back/Menu显示overlay并复用3.2 handoff释放held press，其他reserved命令不进入Moonlight delivery。
+- **公开API边界：** tvOS 26.4 app responder没有Home、volume、system capture或power的公开`UIPressType`，因此不伪造runtime callback；finite state仅报告`.deferToSystem/.systemOwned`。状态和诊断不保存`UIPress`、focus item、controller、host或payload identity。
+- **修订证据：** focused `/tmp/LuneX-18-3_3-focused-r2.BKpneI`为`3/3`；direct tvOS `/tmp/LuneX-18-3_3-tvos-r2.m8QkzS`与visionOS `/tmp/LuneX-18-3_3-vision-r2.fmO2Sl`均`succeeded/0/0/0`；相关矩阵`/tmp/LuneX-18-3_3-related.PgiNcV`为`44/44`；normal `/tmp/LuneX-18-3_3-normal.5ChBp1`为`1007/1006/1 exact Keychain skip/0`；五平台Debug `/tmp/LuneX-18-3_3-builds.K29Tfl`全部`succeeded/0/0/0`且各有AIR/metallib。
+- **失效证据：** 补`pressesChanged` ownership分流前的首轮focused/direct证据只作为中间记录，不作为最终验收。
+- **证明边界：** 只证明finite contract、AppModel application、检查路径无synthetic Moonlight delivery和unsigned SDK branch compatibility；不证明物理Siri Remote、Home/volume/capture/power、focus engine、signed Apple TV/Vision Pro、live Sunshine、HDR/空间音频、延迟、性能、功耗或热状态。
+- **恢复约束：** 系统更新后未查询simulator inventory，也未执行create/clone/boot/install/launch/run/shutdown/delete；固定UUID仅用于已完成build destination。真实Keychain与live-host opt-in继续禁用。
+- **repository pre-gate：** `/tmp/LuneX-18-3_3-repository-pre.y7lh71`完整通过fixture self/tree、OpenSpec strict `9/9`与pre-mark `14/50 next 3.3`、generator四次稳定SHA-256 `ef2e3e615f1dbd84b76bfe4c8681fab7d44291176f06324acd757fa1c1008353`、精确十二文件scope、source/membership/no-delivery semantics、全部retained tests/builds、privacy/clean-room/reference、opt-in、process和diff门。
+- **final-state：** `/tmp/LuneX-18-3_3-final-state.ZREyZa`只读通过OpenSpec strict `9/9`、apply `15/50 next 3.4`、稳定project hash、精确十三文件scope、current source/task semantics、修订`3/3`、`44/44`、`1007/1006/1/0`、direct/五平台build与全部边界；没有重复test/build/generator/simulator操作。
+- **post-record：** `/tmp/LuneX-18-3_3-post-record.igbLBj`通过`15/50 next 3.4`、稳定project hash、十三文件scope、pre/final记录、retained counts、opt-in/process/reference和diff门。
+- **最终审计：** Menu/unsupported每个press identity只发布一次local intent且完整交回UIKit，captured lifecycle保持Moonlight ownership；Back/Menu无input transport调用，typed state无raw identity，Home/volume/capture/power没有伪造callback。Task 3.3可独立提交推送。
