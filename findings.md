@@ -2562,3 +2562,19 @@
 - 当前OpenSpec仍为pre-mark `14/50 next 3.3`。runtime contract、roadmap和三份planning已同步到待门禁状态；repository pre-gate通过前不得勾选。
 - repository pre-gate `/tmp/LuneX-18-3_3-repository-pre.y7lh71`完整通过strict `9/9`、pre-mark `14/50 next 3.3`、四次稳定generator、十二文件scope、current semantics、全部retained evidence与privacy/reference/opt-in/process/diff边界；3.3可勾选并进入post-mark只读验证。
 - post-mark final-state `/tmp/LuneX-18-3_3-final-state.ZREyZa`确认`15/50 next 3.4`、十三文件scope、project hash、current responder/no-delivery semantics与全部retained evidence/boundary一致；未重复test/build/generator/simulator操作。
+
+## 2026-08-07 阶段 18 任务 3.4 调查
+
+- 当前`GameControllerPlatformMonitor`从未接入production，仅在start/connect/disconnect时重建带vendor-derived字符串ID的连接列表；没有profile handler、complete state、generation lease、bounded slot或handler cleanup，不能满足3.4。
+- 现有remote input registry已经负责controller connection/delta到wire slot与held state，但3.5才负责把tvOS roster/state路由进去；3.4应生成current finite roster和leases，不创建第二个wire registry。
+- AppModel current geometry input action固定`controllerLeases: []`且input capability只声明`.tvRemote`。actual controller owner接入后应声明extended/micro adapter支持，并在geometry application与独立roster change application中使用current leases。
+- coordinator目前把同一input source revision的任何不同candidate判为conflicting；controller连接变化通常没有geometry revision，必须区分“相同input snapshot、仅leases变化”并允许其推进内部semantic revision，同时保留same-revision snapshot冲突拒绝。
+- actual GameController handler应固定在main queue，main-actor持有`GCController`与`ObjectIdentifier`；跨边界只发布opaque nonzero token、checked lease/profile/capabilities/supported buttons和complete state，不能持久化vendor name或framework identity。
+- slot规则采用最低空闲0...15和同input generation内单调controller lease generation；disconnect移除handler与token后重建所有remaining state的active mask，replacement可复用slot但必须取得新lease，late old token保持inert。
+- Swift 6不接受把NotificationCenter block的非Sendable`Notification`直接捕获到main-actor closure；actual tvOS observer保持`queue: .main`并在入口检查主线程，只用私有unchecked reference跨越编译器无法推断的主队列隔离边界，跨层snapshot仍不包含framework identity。
+- 3.4人工审计确认handler清理/原queue恢复、最低空闲slot、fresh replacement lease、完整roster状态、AppModel current-generation admission和same-revision lease-only更新成立；production没有controller registry或remote transport调用，3.5 routing和feedback、3.6 ordered release均未被提前实现。
+- retained focused `/tmp/LuneX-18-3_4-focused-r2.MyATKc`为`5/5`，related `/tmp/LuneX-18-3_4-related.USzkjv`为`85/85`，normal `/tmp/LuneX-18-3_4-normal.PblBXf`为`1011/1010/1 exact Keychain skip/0`；三者build均为零结构化诊断。
+- 五平台Debug `/tmp/LuneX-18-3_4-builds.ygHyOW`逐份结构化为`succeeded/0/0/0`且各有一份AIR和一份metallib；固定simulator UUID只作build destination，没有执行inventory或lifecycle操作。该证据证明确定性runtime合同与unsigned SDK branch compatibility，不证明物理controller mapping、host receipt、feedback、signed install、HDR/spatial、性能、功耗或热状态。
+- corrected repository pre-gate `/tmp/LuneX-18-3_4-repository-pre-r2.cKwJoH`通过strict `9/9`、pre-mark `15/50 next 3.4`、四次稳定generator、精确十一文件scope、production/test/no-delivery semantics、全部retained evidence以及privacy/reference/opt-in/process/diff边界。3.4可以勾选；3.5 registry routing/current-lease feedback与3.6 ordered release仍不得视为完成。
+- post-mark final-state `/tmp/LuneX-18-3_4-final-state.0GVsGm`确认OpenSpec `16/50 next 3.5`、十二文件scope、稳定project hash、current semantics与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
+- post-record `/tmp/LuneX-18-3_4-post-record.8PiBxS`和最终人工diff审计确认pre/final证据、scope、project hash、opt-in/reference/process/diff边界一致；未发现需要推翻3.4实现的新问题。

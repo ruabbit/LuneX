@@ -1276,7 +1276,12 @@ actor TVVisionPlatformPresentationCoordinator {
         guard let current else { return .changed }
         if candidate.sourceRevision < current.sourceRevision { return .stale }
         if candidate.sourceRevision == current.sourceRevision {
-            return candidate == current ? .unchanged : .conflicting
+            guard candidate.snapshot == current.snapshot else {
+                return .conflicting
+            }
+            return candidate.controllerLeases == current.controllerLeases
+                ? .unchanged
+                : .changed
         }
         return .changed
     }

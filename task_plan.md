@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`14/50 ready`；1.1–3.2已完成task级验收，下一项3.3 reserved-command/native-escape handoff |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`16/50 ready`；1.1–3.4已完成task级验收，下一项3.5 controller registry routing与current-lease feedback |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`15/50 ready`、next 3.4。1.1至3.3已完成task级验收，3.2基线已推送到`b027b3c`。3.3的actual tvOS Menu/unsupported UIKit全生命周期分流、Back/Menu overlay handoff、finite typed unavailable state和Moonlight no-delivery边界已通过修订focused `3/3`、相关矩阵`44/44`、normal `1007/1006/1/0`、direct tvOS/visionOS、五平台Debug与repository pre-gate。下一项3.4实现generation-owned controller handlers与deterministic bounded slots；display/HDR/audio adapters仍后置，当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`16/50 ready`、next 3.5。1.1至3.4已完成task级验收；3.4 actual tvOS generation-owned extended/micro handlers、deterministic 16-slot/fresh lease、complete roster、disconnect replacement、AppModel current-generation application与same-revision lease-only update已通过focused `5/5`、相关矩阵`85/85`、normal `1011/1010/1/0`、direct tvOS/visionOS、五平台Debug和repository pre-gate。下一项3.5把controller state路由到现有remote registry并只对current matching lease应用supported feedback；3.6 ordered release、display/HDR/audio adapters仍后置，当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -870,3 +870,29 @@
 - **final-state：** `/tmp/LuneX-18-3_3-final-state.ZREyZa`只读通过OpenSpec strict `9/9`、apply `15/50 next 3.4`、稳定project hash、精确十三文件scope、current source/task semantics、修订`3/3`、`44/44`、`1007/1006/1/0`、direct/五平台build与全部边界；没有重复test/build/generator/simulator操作。
 - **post-record：** `/tmp/LuneX-18-3_3-post-record.igbLBj`通过`15/50 next 3.4`、稳定project hash、十三文件scope、pre/final记录、retained counts、opt-in/process/reference和diff门。
 - **最终审计：** Menu/unsupported每个press identity只发布一次local intent且完整交回UIKit，captured lifecycle保持Moonlight ownership；Back/Menu无input transport调用，typed state无raw identity，Home/volume/capture/power没有伪造callback。Task 3.3可独立提交推送。
+
+## 2026-08-07 阶段 18 任务 3.4 启动
+
+- **状态：** `in_progress`；3.3已提交推送为`e600f6d Keep tvOS system commands local`，fetch确认`HEAD == origin/main`且工作树clean，OpenSpec为`15/50 ready`、next 3.4。
+- **现有缺口：** `GameControllerPlatformMonitor`只读取`GCController.controllers()`并发布vendor/player/profile连接列表，没有安装extended/micro value handlers，没有session/input generation、slot lease、complete state、stale callback或disconnect replacement ownership；AppModel向platform coordinator固定发送空controller leases。
+- **复用合同：** 现有`TVVisionControllerSlot/Lease`、`TVControllerInputSnapshot/RosterSnapshot`已经验证16-slot、input generation、profile、mask、supported buttons、完整state与stable slot ordering；3.4不复制remote registry。
+- **实现范围：** 新增framework-free generation-owned slot runtime与finite normalized complete state；actual tvOS main-actor owner使用`GCControllerDidConnect/Disconnect`、extended/micro `valueChangedHandler`和main handler queue，最低空闲slot、单调lease generation、旧token拒绝、断开释放slot和新lease replacement。AppModel保存current roster并把leases应用到current presentation input。
+- **coordinator修订：** 同一geometry/input source revision下，仅当input snapshot相同而controller leases变化时允许component更新；同revision capability/focus变化继续conflicting fail-closed，避免为controller变化伪造geometry revision。
+- **边界：** 3.4只建立actual handler/roster/lease/state ownership，不向host发送controller events，不应用rumble/LED/motion feedback，也不提前完成3.5 registry routing或3.6 focus/scene/provider ordered release。unsigned build不证明物理controller mapping。
+- **验收计划：** pure normalizer/slot/capacity/disconnect replacement/stale token；coordinator lease-only same-revision；AppModel current-generation roster application/clear；actual tvOS和visionOS隔离build；扩大相关矩阵、fresh normal、五平台Debug、repository/final-state。
+- **验收错误 1：** 首轮focused `/tmp/LuneX-18-3_4-focused.hyTeNM`在0 tests时仅因测试对临时`TVGameControllerSlotRuntime(...)`调用mutating helper而编译失败；production macOS分支没有报告编译错误。已改为局部`var` runtime，失败bundle不作为验收证据，下一轮使用fresh DerivedData和result bundle。
+- **focused：** fresh `/tmp/LuneX-18-3_4-focused-r2.MyATKc`结构化通过`5/5 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；下一步编译fixed Apple TV actual GameController分支。
+- **验收错误 2：** 首轮fixed Apple TV `/tmp/LuneX-18-3_4-tvos.Czp0Ks`结构化失败为`2 errors / 0 warnings`；两个错误都是NotificationCenter block把task-isolated`Notification`直接捕获进main-actor closure，Swift 6报告`Sending 'notification' risks causing data races`。保持`queue: .main`并检查主线程，在隔离边界内通过私有unchecked controller reference传递framework对象，不跨层发布identity；下一轮使用fresh tvOS bundle。
+- **actual tvOS编译：** 修订fresh `/tmp/LuneX-18-3_4-tvos-r2.9WJTuS`结构化为`succeeded/0 warning/0 error/0 analyzer warning`且有一份AIR和一份metallib；固定UUID只作build destination，下一步构建Vision Pro隔离分支。
+- **visionOS隔离编译：** fresh `/tmp/LuneX-18-3_4-vision.uUQVaS`结构化为`succeeded/0 warning/0 error/0 analyzer warning`且有一份AIR和一份metallib；下一步人工审计handler cleanup、replacement、roster application竞态和3.4 no-delivery边界。
+- **人工审计：** actual owner仅在main queue/main actor内持有`GCController` identity，stop/disconnect先清value handler并恢复原`handlerQueue`；slot最低空闲、lease单调且replacement取得新lease；AppModel只保存完整roster并向presentation提交leases，没有调用controller input transport；same-revision仅放行完全相同input snapshot的lease变化，capability/focus冲突继续fail closed。
+- **相关矩阵：** fresh `/tmp/LuneX-18-3_4-related.USzkjv`结构化通过`85/85 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded/0 warning/0 error/0 analyzer warning`；下一步fresh normal suite。
+- **normal：** fresh `/tmp/LuneX-18-3_4-normal.PblBXf`结构化通过`1011 total / 1010 passed / 1 skipped / 0 failed / 0 expected failure`，唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，build零诊断；真实Keychain/live-host opt-in均unset，下一步五平台Debug。
+- **五平台Debug：** `/tmp/LuneX-18-3_4-builds.ygHyOW`中的macOS、fixed iPhone、fixed iPad、fixed Apple TV和fixed Vision Pro均串行结构化读回为`succeeded / 0 warning / 0 error / 0 analyzer warning`，每个平台各有一份AIR和一份metallib。固定UUID仅作build destination，本任务未查询、创建、启动或运行simulator。
+- **待完成：** 已同步runtime contract、roadmap和三份planning；下一步从fresh目录运行repository pre-gate。只有该门通过后才允许勾选3.4并进入只读post-mark final-state。
+- **验收错误 3：** 首轮repository pre-gate `/tmp/LuneX-18-3_4-repository-pre.IydUi3`在fixture self/tree通过后，因包装器误断言不存在的`summary.totals.total`而退出；保存的strict JSON实际为`items 9 / passed 9 / failed 0`且每项`valid=true`。该轮未进入generator、retained evidence或后续门禁，不作最终验收；改用`summary.totals.items`并从fresh目录完整重跑。
+- **repository pre-gate：** 修正后的fresh `/tmp/LuneX-18-3_4-repository-pre-r2.cKwJoH`从头通过fixture self/tree、OpenSpec strict `9/9`、pre-mark `15/50 next 3.4`、四次稳定generator hash、精确十一文件scope、source/test/no-delivery semantics、全部retained test/build证据、privacy/reference/opt-in/process与diff门。3.4已勾选，预期为`16/50 next 3.5`。
+- **状态：** `complete`；下一步只读post-mark final-state，不重复test/build/generator/simulator操作。
+- **post-mark final-state：** `/tmp/LuneX-18-3_4-final-state.0GVsGm`只读通过strict `9/9`、OpenSpec `16/50 next 3.5`、稳定project hash、精确十二文件scope、current semantics、全部retained evidence及privacy/reference/opt-in/process/diff边界；没有重复test/build/generator/simulator操作。下一步post-record和最终diff审计。
+- **post-record：** `/tmp/LuneX-18-3_4-post-record.8PiBxS`通过`16/50 next 3.5`、稳定project hash、十二文件scope、pre/final记录、retained evidence、opt-in/process/reference和diff门。
+- **最终审计：** slot candidate commit、active mask重建、handler清理与queue恢复、replacement fresh lease、current roster application及no-delivery边界均成立；未发现新的正确性、隐私或跨平台隔离问题。Task 3.4可独立提交推送。

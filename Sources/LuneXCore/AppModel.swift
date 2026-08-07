@@ -178,6 +178,7 @@ final class AppModel: ApplicationInputSink {
         TVRemoteFocusHandoffState.localNavigation
     private(set) var tvRemoteReservedCommandState =
         TVRemoteReservedCommandRuntimeState.idle
+    private(set) var tvControllerRosterState: TVControllerRosterSnapshot?
 
     var tvStreamOverlayVisible: Bool {
         tvRemoteFocusHandoffState.isOverlayVisible
@@ -327,6 +328,14 @@ final class AppModel: ApplicationInputSink {
         TVVisionPlatformGeometryAdmission?
     @ObservationIgnored private var tvRemoteSurfacePressCaptureOwner:
         TVRemoteSurfacePressCaptureOwner?
+    @ObservationIgnored private var tvControllerRosterApplicationTask:
+        Task<Void, Never>?
+    @ObservationIgnored private var tvControllerRosterApplicationOperationID:
+        UUID?
+#if os(tvOS)
+    @ObservationIgnored private var tvGameControllerRuntimeOwner:
+        TVGameControllerRuntimeOwner?
+#endif
 #if os(iOS)
     @ObservationIgnored private var mobilePictureInPictureCoordinator:
         MobilePictureInPicturePresentationCoordinator?
@@ -706,6 +715,19 @@ final class AppModel: ApplicationInputSink {
         tvRemoteReservedCommandState = .resolve(command)
         guard command == .backMenu else { return }
         setTVStreamOverlayVisible(true)
+    }
+
+    func receiveTVGameControllerRoster(
+        _ roster: TVControllerRosterSnapshot
+    ) {
+        guard expectedTVVisionPlatform == .tvOS,
+              activeMediaGeneration == roster.inputGeneration.rawValue,
+              roster.controllers.allSatisfy({ $0.lease.platform == .tvOS }) else {
+            return
+        }
+        guard roster != tvControllerRosterState else { return }
+        tvControllerRosterState = roster
+        scheduleTVGameControllerRosterApplication(roster)
     }
 
     func tvRemoteSurfacePressDisposition(
@@ -2109,6 +2131,25 @@ final class AppModel: ApplicationInputSink {
                 try await self.sendRemoteInput(.tvRemote(event))
             }
         )
+#if os(tvOS)
+        guard let mediaGeneration = activeMediaGeneration,
+              let inputGeneration = try? TVVisionGeneration(
+                domain: .input,
+                rawValue: mediaGeneration
+              ) else { return }
+        let controllerOwner = TVGameControllerRuntimeOwner()
+        tvGameControllerRuntimeOwner = controllerOwner
+        do {
+            try controllerOwner.start(
+                inputGeneration: inputGeneration,
+                rosterHandler: { [weak self] roster in
+                    self?.receiveTVGameControllerRoster(roster)
+                }
+            )
+        } catch {
+            tvGameControllerRuntimeOwner = nil
+        }
+#endif
     }
 
     private func scheduleTVVisionPlatformGeometryApplication(
@@ -2168,7 +2209,11 @@ final class AppModel: ApplicationInputSink {
                                     ownership: ownership,
                                     action: .input(
                                         snapshot: input,
-                                        controllerLeases: []
+                                        controllerLeases:
+                                            self.currentTVControllerLeases(
+                                                inputGeneration:
+                                                    input.inputGeneration
+                                            )
                                     )
                                 )
                             )
@@ -2205,6 +2250,55 @@ final class AppModel: ApplicationInputSink {
             if self.tvVisionPlatformApplicationOperationID == operationID {
                 self.tvVisionPlatformApplicationTask = nil
                 self.tvVisionPlatformApplicationOperationID = nil
+            }
+        }
+    }
+
+    private func scheduleTVGameControllerRosterApplication(
+        _ roster: TVControllerRosterSnapshot
+    ) {
+        guard let admission = tvVisionPlatformGeometryAdmission,
+              admission.update.binding != nil,
+              admission.ownership.platform == .tvOS,
+              admission.ownership.inputGeneration == roster.inputGeneration,
+              let input = makeTVRemoteInputSnapshot(
+                update: admission.update,
+                ownership: admission.ownership
+              ) else { return }
+        let expectedAdmission = admission
+        let geometryTask = tvVisionPlatformApplicationTask
+        let previous = tvControllerRosterApplicationTask
+        let operationID = UUID()
+        tvControllerRosterApplicationOperationID = operationID
+        tvControllerRosterApplicationTask = Task { [weak self] in
+            await previous?.value
+            await geometryTask?.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.tvControllerRosterApplicationOperationID == operationID,
+                  self.tvControllerRosterState == roster,
+                  self.tvVisionPlatformGeometryAdmission == expectedAdmission,
+                  self.tvVisionPlatformPresentationOwnership
+                    == expectedAdmission.ownership,
+                  self.activeMediaGeneration
+                    == roster.inputGeneration.rawValue,
+                  self.makeTVRemoteInputSnapshot(
+                    update: expectedAdmission.update,
+                    ownership: expectedAdmission.ownership
+                  ) == input else { return }
+            _ = try? await self.sessionMediaEnvironment
+                .applyTVVisionPlatformPresentation(
+                    SessionTVVisionPlatformPresentationApplication(
+                        ownership: expectedAdmission.ownership,
+                        action: .input(
+                            snapshot: input,
+                            controllerLeases: roster.controllers.map(\.lease)
+                        )
+                    )
+                )
+            if self.tvControllerRosterApplicationOperationID == operationID {
+                self.tvControllerRosterApplicationTask = nil
+                self.tvControllerRosterApplicationOperationID = nil
             }
         }
     }
@@ -2276,9 +2370,17 @@ final class AppModel: ApplicationInputSink {
         tvVisionPlatformApplicationTask?.cancel()
         tvVisionPlatformApplicationTask = nil
         tvVisionPlatformApplicationOperationID = nil
+        tvControllerRosterApplicationTask?.cancel()
+        tvControllerRosterApplicationTask = nil
+        tvControllerRosterApplicationOperationID = nil
         tvVisionPlatformGeometryAdmission = nil
         tvRemoteSurfacePressCaptureOwner?.invalidate()
         tvRemoteSurfacePressCaptureOwner = nil
+        tvControllerRosterState = nil
+#if os(tvOS)
+        tvGameControllerRuntimeOwner?.stop()
+        tvGameControllerRuntimeOwner = nil
+#endif
         tvVisionPlatformPresentationOwnership = nil
         guard preservingTerminalState,
               let phase = tvVisionPlatformPresentationState?.snapshot.phase else {
@@ -2318,11 +2420,19 @@ final class AppModel: ApplicationInputSink {
             platform: .tvOS,
             revision: update.revision,
             inputGeneration: ownership.inputGeneration,
-            supported: [.tvRemote],
+            supported: [.tvRemote, .extendedGamepad, .microGamepad],
             focusEligibility: tvRemoteFocusHandoffState.resolving(
                 actualEligibility: actualEligibility
             )
         )
+    }
+
+    private func currentTVControllerLeases(
+        inputGeneration: TVVisionGeneration
+    ) -> [TVVisionControllerLease] {
+        guard let roster = tvControllerRosterState,
+              roster.inputGeneration == inputGeneration else { return [] }
+        return roster.controllers.map(\.lease)
     }
 
     private var currentTVVisionGeometryStamp: TVRemoteSurfaceFocusStamp? {

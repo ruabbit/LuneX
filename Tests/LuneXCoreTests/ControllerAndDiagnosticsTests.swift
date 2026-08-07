@@ -120,6 +120,154 @@ final class ControllerAndDiagnosticsTests: XCTestCase {
         XCTAssertEqual(snapshot.remoteControllersBitmap, 0b11)
     }
 
+    func testTVGameControllerRuntimeNormalizesOneCompleteState() throws {
+        let inputGeneration = try TVVisionGeneration(
+            domain: .input,
+            rawValue: 1
+        )
+        var runtime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        let roster = try runtime.connect(
+            token: TVGameControllerDeviceToken(1),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers],
+            supportedButtons: [.a, .dpadUp],
+            completeState: TVGameControllerCompleteState(
+                buttons: [.a],
+                leftTrigger: 2,
+                rightTrigger: -1,
+                leftStickX: -2,
+                leftStickY: 0.5,
+                rightStickX: 2,
+                rightStickY: -0.5
+            )
+        )
+
+        let controller = try XCTUnwrap(roster.controllers.first)
+        XCTAssertEqual(controller.lease.slot.rawValue, 0)
+        XCTAssertEqual(controller.state.activeGamepadMask, 1)
+        XCTAssertEqual(controller.state.buttons, [.a])
+        XCTAssertEqual(controller.state.leftTrigger, .max)
+        XCTAssertEqual(controller.state.rightTrigger, 0)
+        XCTAssertEqual(controller.state.leftStickX, -Int16.max)
+        XCTAssertEqual(controller.state.leftStickY, 16_384)
+        XCTAssertEqual(controller.state.rightStickX, .max)
+        XCTAssertEqual(controller.state.rightStickY, -16_384)
+
+        XCTAssertThrowsError(try TVGameControllerCompleteState(
+            leftStickX: .nan
+        )) { error in
+            XCTAssertEqual(
+                error as? TVGameControllerRuntimeError,
+                .invalidCompleteState
+            )
+        }
+        var microRuntime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        XCTAssertThrowsError(
+            try microRuntime.connectingMicroStateWithNonzeroAxisForTest()
+        )
+    }
+
+    func testTVGameControllerRuntimeUsesStableSlotsAndFreshReplacementLease()
+        throws {
+        let inputGeneration = try TVVisionGeneration(
+            domain: .input,
+            rawValue: 7
+        )
+        var runtime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        let firstToken = try TVGameControllerDeviceToken(10)
+        let secondToken = try TVGameControllerDeviceToken(20)
+        let replacementToken = try TVGameControllerDeviceToken(30)
+        _ = try runtime.connect(
+            token: firstToken,
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.a])
+        )
+        var roster = try runtime.connect(
+            token: secondToken,
+            profile: .microGamepad,
+            capabilities: [],
+            supportedButtons: [.a, .x, .dpadUp, .dpadDown, .dpadLeft, .dpadRight],
+            completeState: TVGameControllerCompleteState(buttons: [.x])
+        )
+        XCTAssertEqual(roster.controllers.map(\.lease.slot.rawValue), [0, 1])
+        XCTAssertEqual(
+            roster.controllers.map(\.lease.leaseGeneration.rawValue),
+            [1, 2]
+        )
+        XCTAssertEqual(roster.activeGamepadMask, 0b11)
+        XCTAssertTrue(roster.controllers.allSatisfy {
+            $0.state.activeGamepadMask == 0b11
+        })
+
+        roster = try runtime.disconnect(token: firstToken)
+        XCTAssertEqual(roster.controllers.map(\.lease.slot.rawValue), [1])
+        XCTAssertEqual(roster.activeGamepadMask, 0b10)
+        XCTAssertEqual(roster.controllers[0].state.activeGamepadMask, 0b10)
+
+        roster = try runtime.connect(
+            token: replacementToken,
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.b])
+        )
+        XCTAssertEqual(roster.controllers.map(\.lease.slot.rawValue), [0, 1])
+        XCTAssertEqual(
+            roster.controllers.map(\.lease.leaseGeneration.rawValue),
+            [3, 2]
+        )
+        XCTAssertThrowsError(try runtime.update(
+            token: firstToken,
+            completeState: TVGameControllerCompleteState(buttons: [.y])
+        )) { error in
+            XCTAssertEqual(
+                error as? TVGameControllerRuntimeError,
+                .deviceUnavailable(10)
+            )
+        }
+    }
+
+    func testTVGameControllerRuntimeEnforcesSixteenControllerCapacity() throws {
+        let inputGeneration = try TVVisionGeneration(
+            domain: .input,
+            rawValue: 1
+        )
+        var runtime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        for index in 0..<TVVisionControllerSlot.maximumCount {
+            _ = try runtime.connect(
+                token: TVGameControllerDeviceToken(UInt64(index + 1)),
+                profile: .extendedGamepad,
+                capabilities: [.analogTriggers],
+                supportedButtons: .standard,
+                completeState: TVGameControllerCompleteState()
+            )
+        }
+        XCTAssertEqual(try runtime.roster.controllers.count, 16)
+        XCTAssertEqual(try runtime.roster.activeGamepadMask, .max)
+        XCTAssertThrowsError(try runtime.connect(
+            token: TVGameControllerDeviceToken(17),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState()
+        )) { error in
+            XCTAssertEqual(
+                error as? TVGameControllerRuntimeError,
+                .controllerCapacityExceeded
+            )
+        }
+    }
+
     func testTVRemoteReservesInputUntilStreamIsActive() {
         let adapter = TVRemoteFocusInputAdapter(isStreamActive: false)
 
@@ -162,5 +310,21 @@ final class ControllerAndDiagnosticsTests: XCTestCase {
         XCTAssertEqual(records.map(\.severity), [.info, .warning, .info])
         XCTAssertEqual(records.map(\.subsystem), ["input.keyboard", "input.controller", "input.controller"])
         XCTAssertEqual(records[2].message, "1 controller connected; bitmap=1")
+    }
+}
+
+private extension TVGameControllerSlotRuntime {
+    mutating func connectingMicroStateWithNonzeroAxisForTest()
+        throws -> TVControllerRosterSnapshot {
+        try connect(
+            token: TVGameControllerDeviceToken(2),
+            profile: .microGamepad,
+            capabilities: [],
+            supportedButtons: [.a],
+            completeState: TVGameControllerCompleteState(
+                buttons: [.a],
+                leftStickX: 1
+            )
+        )
     }
 }

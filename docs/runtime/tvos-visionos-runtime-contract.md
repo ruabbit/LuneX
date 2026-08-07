@@ -1019,6 +1019,76 @@ Home/volume/capture/power behavior, actual focus-engine execution, signed
 installation, host receipt, controller behavior, HDR/spatial output, live
 Sunshine, latency, performance, power, or thermal acceptance.
 
+## Task 3.4 generation-owned tvOS controller runtime
+
+The tvOS product path replaces the unused connection-list monitor with a
+main-actor runtime owner for actual `GCController` instances. Connect and
+disconnect notifications run on the main queue. Extended and micro profiles
+install complete-state `valueChangedHandler` callbacks on the controller's
+main handler queue. Stop and disconnect clear those callbacks before restoring
+the previous queue. Framework controller identity remains transient inside the
+owner; cross-layer state contains only checked opaque device tokens, leases,
+profiles, capabilities, supported-button masks, and complete finite state.
+
+The framework-free slot runtime is owned by one current input generation. It
+assigns the lowest free slot in `0...15`, issues monotonically increasing
+controller-generation leases, rejects duplicate or stale device tokens, and
+normalizes all triggers and sticks after rejecting nonfinite input. Disconnect
+rebuilds every remaining controller's exact active-gamepad mask. A replacement
+may reuse the released slot but must receive a fresh lease, so a late callback
+from the old controller remains inert.
+
+`AppModel` starts and stops the actual owner with the current tvOS media/input
+generation, retains only the complete current roster, and includes its leases
+in both geometry-driven and independent roster-driven platform input
+applications. Reconnect, failure, remote termination, and local stop cancel the
+application task, stop the owner, and clear the roster. The presentation
+coordinator permits a same-source-revision update only when the normalized
+input snapshot is identical and controller leases alone changed; a capability
+or focus change at the same revision remains a fail-closed conflict.
+
+Task 3.4 intentionally does not route controller state into the remote
+controller registry or input transport, and it does not apply rumble, trigger,
+LED, or motion feedback. Those remain task 3.5. Focus-, scene-, provider-,
+replacement-, and stop-owned ordered held-state release remains task 3.6.
+
+Retained verification before the repository pre-gate consists of:
+
+- focused evidence `/tmp/LuneX-18-3_4-focused-r2.MyATKc` with `5/5` passed,
+  no skips, failures, or expected failures, and zero structured build
+  diagnostics;
+- related evidence `/tmp/LuneX-18-3_4-related.USzkjv` with `85/85` passed and
+  zero structured diagnostics across controller, coordinator, and AppModel
+  ownership paths;
+- normal evidence `/tmp/LuneX-18-3_4-normal.PblBXf` with
+  `1011 total / 1010 passed / 1 skipped / 0 failed`, where the sole skip is the
+  explicitly disabled real-Keychain round trip;
+- direct actual tvOS evidence `/tmp/LuneX-18-3_4-tvos-r2.9WJTuS` and isolated
+  visionOS evidence `/tmp/LuneX-18-3_4-vision.uUQVaS`, both
+  `succeeded/0 warning/0 error/0 analyzer warning` with one AIR and one
+  metallib; and
+- macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro Debug
+  evidence `/tmp/LuneX-18-3_4-builds.ygHyOW`, all `succeeded/0/0/0` with one
+  AIR/metallib pair per platform; and
+- repository pre-gate `/tmp/LuneX-18-3_4-repository-pre-r2.cKwJoH`, which
+  passed fixture self/tree, OpenSpec strict `9/9`, pre-mark `15/50 next 3.4`,
+  four identical generator hashes, exact 11-file scope, current source/test
+  and no-delivery semantics, all retained evidence, privacy, reference,
+  disabled opt-ins, process checks, and `git diff --check`; and
+- post-mark final-state `/tmp/LuneX-18-3_4-final-state.0GVsGm`, which confirmed
+  OpenSpec `16/50 next 3.5`, exact 12-file scope, the stable project hash,
+  current task/source/documentation semantics, all retained evidence, and all
+  proof boundaries without rerunning tests, builds, the generator, or any
+  simulator operation.
+
+The fixed UUIDs were build destinations only. Task 3.4 did not query, create,
+clone, boot, install, launch, run, shut down, or delete a simulator. Real
+Keychain and live-host opt-ins remained disabled. These results prove the
+deterministic controller ownership contract and unsigned SDK branch
+compatibility. They do not prove physical controller mapping, host receipt,
+feedback behavior, signed installation, HDR or spatial output, live Sunshine,
+latency, performance, power, or thermal acceptance.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

@@ -82,6 +82,57 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         )
     }
 
+    func testSameInputRevisionAcceptsOnlyControllerLeaseChanges() async throws {
+        let recorder = TVVisionPresentationActionRecorder()
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: recorder
+        )
+        let ownership = try makeOwnership()
+        let input = try makeInput(ownership: ownership)
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyInput(
+            input,
+            controllerLeases: [],
+            ownership: ownership
+        )
+        let lease = try TVVisionControllerLease(
+            platform: .tvOS,
+            leaseGeneration: TVVisionGeneration(
+                domain: .controller,
+                rawValue: 1
+            ),
+            inputGeneration: ownership.inputGeneration,
+            slot: TVVisionControllerSlot(0),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers]
+        )
+
+        guard case let .applied(updated) = await coordinator.applyInput(
+            input,
+            controllerLeases: [lease],
+            ownership: ownership
+        ) else {
+            return XCTFail("Expected a lease-only input update to apply")
+        }
+        XCTAssertEqual(updated.revision.rawValue, 3)
+
+        let conflictingInput = try TVVisionInputCapabilitySnapshot(
+            platform: .tvOS,
+            revision: input.revision,
+            inputGeneration: input.inputGeneration,
+            supported: [.tvRemote],
+            focusEligibility: .eligible
+        )
+        guard case let .failed(failed) = await coordinator.applyInput(
+            conflictingInput,
+            controllerLeases: [lease],
+            ownership: ownership
+        ) else {
+            return XCTFail("Expected same-revision input conflict to fail closed")
+        }
+        XCTAssertEqual(failed.phase, .failed(.invalidComponent(.input)))
+    }
+
     func testCoordinatorSerializesCallbacksWhileAnEffectIsSuspended()
         async throws
     {

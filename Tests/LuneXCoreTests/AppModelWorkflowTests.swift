@@ -2453,7 +2453,10 @@ final class AppModelWorkflowTests: XCTestCase {
         guard case let .input(input, leases) = platformApplications[2].action else {
             return XCTFail("Expected current tvOS input admission.")
         }
-        XCTAssertEqual(input.supported, [.tvRemote])
+        XCTAssertEqual(
+            input.supported,
+            [.tvRemote, .extendedGamepad, .microGamepad]
+        )
         XCTAssertEqual(
             input.focusEligibility,
             .ineligible(.overlayVisible)
@@ -2492,6 +2495,30 @@ final class AppModelWorkflowTests: XCTestCase {
         }
         XCTAssertEqual(focusedInput.focusEligibility, .eligible)
         XCTAssertTrue(focusedLeases.isEmpty)
+
+        var controllerRuntime = try TVGameControllerSlotRuntime(
+            inputGeneration: focusedInput.inputGeneration
+        )
+        let controllerRoster = try controllerRuntime.connect(
+            token: TVGameControllerDeviceToken(1),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.a])
+        )
+        model.receiveTVGameControllerRoster(controllerRoster)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 6
+        }
+        guard case let .input(rosterInput, rosterLeases) = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications().last?.action else {
+            return XCTFail("Expected current controller roster input application.")
+        }
+        XCTAssertEqual(rosterInput, focusedInput)
+        XCTAssertEqual(rosterLeases, controllerRoster.controllers.map(\.lease))
+        XCTAssertEqual(model.tvControllerRosterState, controllerRoster)
+        XCTAssertTrue(mediaEnvironment.currentSentInputApplications().isEmpty)
 
         await waitUntil {
             model.tvRemoteSurfacePressDisposition(for: surface) == .captured
@@ -2603,7 +2630,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 7
+                .currentTVVisionPlatformPresentationApplications().count == 8
                 && model.tvRemoteSurfacePressDisposition(for: surface)
                     == .captured
         }
@@ -2629,7 +2656,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 8
+                .currentTVVisionPlatformPresentationApplications().count == 9
         }
         await waitUntil {
             model.tvRemoteSurfacePressDisposition(for: surface) == .local
@@ -2642,6 +2669,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
 
         await model.stopStream()
+        XCTAssertNil(model.tvControllerRosterState)
         await launchTask.value
     }
 
