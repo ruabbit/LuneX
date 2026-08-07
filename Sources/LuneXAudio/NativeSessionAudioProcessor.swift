@@ -35,6 +35,8 @@ struct SessionAudioRuntimeEvent: Equatable, Sendable {
     let cause: SessionAudioRuntimeEventCause
     let stage: SessionAudioRuntimeStage
     let spatialRuntime: SpatialAudioRuntimeSnapshot?
+    let routeCapability: SpatialAudioRouteCapabilitySnapshot
+    let entitlement: SpatialAudioEntitlementState
     let preferences: SessionSpatialAudioPreferences
     let concealedFrameCount: UInt64
     let lastAction: AudioRuntimeRecoveryAction
@@ -47,6 +49,8 @@ struct SessionAudioRuntimeEvent: Equatable, Sendable {
         cause: SessionAudioRuntimeEventCause,
         stage: SessionAudioRuntimeStage,
         spatialRuntime: SpatialAudioRuntimeSnapshot?,
+        routeCapability: SpatialAudioRouteCapabilitySnapshot,
+        entitlement: SpatialAudioEntitlementState,
         preferences: SessionSpatialAudioPreferences,
         concealedFrameCount: UInt64,
         lastAction: AudioRuntimeRecoveryAction,
@@ -58,6 +62,8 @@ struct SessionAudioRuntimeEvent: Equatable, Sendable {
         self.cause = cause
         self.stage = stage
         self.spatialRuntime = spatialRuntime
+        self.routeCapability = routeCapability
+        self.entitlement = entitlement
         self.preferences = preferences
         self.concealedFrameCount = concealedFrameCount
         self.lastAction = lastAction
@@ -355,6 +361,8 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
             cause: .initial,
             stage: initialRuntime.stage,
             spatialRuntime: initialRuntime.pipeline.spatialRuntime,
+            routeCapability: initialIntent.route,
+            entitlement: initialEntitlement,
             preferences: initialPreferences,
             concealedFrameCount: initialRuntime.concealedFrameCount,
             lastAction: initialRuntime.lastAction,
@@ -822,6 +830,8 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
             cause: cause,
             stage: snapshot.stage,
             spatialRuntime: snapshot.pipeline.spatialRuntime,
+            routeCapability: currentIntent.route,
+            entitlement: currentEntitlement,
             preferences: currentPreferences,
             concealedFrameCount: snapshot.concealedFrameCount,
             lastAction: snapshot.lastAction,
@@ -848,6 +858,8 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
                 cause: .failed,
                 stage: snapshot.stage,
                 spatialRuntime: snapshot.pipeline.spatialRuntime,
+                routeCapability: currentIntent.route,
+                entitlement: currentEntitlement,
                 preferences: currentPreferences,
                 concealedFrameCount: snapshot.concealedFrameCount,
                 lastAction: snapshot.lastAction,

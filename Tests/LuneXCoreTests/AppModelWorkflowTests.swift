@@ -2146,18 +2146,39 @@ final class AppModelWorkflowTests: XCTestCase {
             return XCTFail("Expected geometry to follow activation.")
         }
 
+        let currentDisplay = try makeTVOSDisplaySnapshot(
+            revision: 1,
+            displayGeneration: 1,
+            current: 2,
+            potential: 4
+        )
+        let currentAudio = try makeTVOSAudioRouteSnapshot(
+            revision: 1,
+            graphGeneration: 1,
+            presentationMode: .headTracked
+        )
         let current = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
             mediaGeneration: 1,
             platform: .tvOS,
             presentationGeneration: 1,
-            sequence: 2
+            sequence: 2,
+            display: currentDisplay,
+            audioRoute: currentAudio
         )
         mediaEnvironment.yieldTVVisionPlatformPresentation(
             current,
             sessionID: record.sessionID
         )
         await waitUntil { model.tvVisionPlatformPresentationState == current }
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationState?.snapshot.audioRoute,
+            current.snapshot.audioRoute
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot,
+            current.snapshot.presentation
+        )
 
         let regressive = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
@@ -2202,6 +2223,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil { mediaEnvironment.hasBlockedStop() }
         XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
         XCTAssertTrue(model.tvStreamOverlayVisible)
         let reconnectApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
@@ -2222,12 +2244,19 @@ final class AppModelWorkflowTests: XCTestCase {
         model.setTVStreamOverlayVisible(false)
         XCTAssertFalse(model.tvStreamOverlayVisible)
 
+        let replacementAudio = try makeTVOSAudioRouteSnapshot(
+            revision: 1,
+            graphGeneration: 2,
+            presentationMode: .fixedSpatial
+        )
         let replacement = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
             mediaGeneration: 2,
             platform: .tvOS,
             presentationGeneration: 1,
-            sequence: 1
+            sequence: 1,
+            display: currentDisplay,
+            audioRoute: replacementAudio
         )
         mediaEnvironment.yieldTVVisionPlatformPresentation(
             current,
@@ -2240,11 +2269,20 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil {
             model.tvVisionPlatformPresentationState == replacement
         }
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationState?.snapshot.audioRoute,
+            replacement.snapshot.audioRoute
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot,
+            replacement.snapshot.presentation
+        )
 
         provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
         provider.finish(sessionID: record.sessionID)
         await launchTask.value
         XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
         XCTAssertTrue(model.tvStreamOverlayVisible)
         let terminatedApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
@@ -2281,18 +2319,34 @@ final class AppModelWorkflowTests: XCTestCase {
             mediaGeneration: 1,
             platform: .tvOS,
             presentationGeneration: 1,
-            sequence: 1
+            sequence: 1,
+            display: makeTVOSDisplaySnapshot(
+                revision: 1,
+                displayGeneration: 1,
+                current: 2,
+                potential: 4
+            ),
+            audioRoute: makeTVOSAudioRouteSnapshot(
+                revision: 1,
+                graphGeneration: 1,
+                presentationMode: .fixedSpatial
+            )
         )
         mediaEnvironment.yieldTVVisionPlatformPresentation(
             current,
             sessionID: record.sessionID
         )
         await waitUntil { model.tvVisionPlatformPresentationState == current }
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot,
+            current.snapshot.presentation
+        )
 
         await model.stopStream()
         await launchTask.value
 
         XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
         XCTAssertEqual(
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().last?.action,
@@ -5202,6 +5256,7 @@ final class AppModelWorkflowTests: XCTestCase {
         sequence: UInt64,
         phase: TVVisionPlatformPresentationPhase = .active,
         display sourceDisplay: TVVisionDisplaySnapshot? = nil,
+        audioRoute sourceAudioRoute: TVVisionAudioRouteSnapshot? = nil,
         isSemanticRevisionExhausted: Bool = false
     ) throws -> SessionTVVisionPlatformPresentationState {
         let ownership = try TVVisionPresentationOwnership(
@@ -5231,6 +5286,55 @@ final class AppModelWorkflowTests: XCTestCase {
                 tvOSHDRCapabilityResolution: $0.tvOSHDRCapabilityResolution
             )
         }
+        let audioRoute = try sourceAudioRoute.map {
+            try TVVisionAudioRouteSnapshot(
+                platform: $0.platform,
+                revision: revision,
+                routeGeneration: $0.routeGeneration,
+                outputAvailable: $0.outputAvailable,
+                currentOutputChannelCount: $0.currentOutputChannelCount,
+                maximumOutputChannelCount: $0.maximumOutputChannelCount,
+                spatialSupport: $0.spatialSupport,
+                platformStrategy: $0.platformStrategy,
+                headTrackingCapability: $0.headTrackingCapability,
+                runtimeStage: $0.runtimeStage,
+                eventCause: $0.eventCause,
+                spatialPresentationMode: $0.spatialPresentationMode,
+                spatialFallbackReason: $0.spatialFallbackReason
+            )
+        }
+        let presentation = try display.flatMap { display in
+            try audioRoute.map { audioRoute in
+                let scene = try TVVisionSceneSurfaceSnapshot(
+                    platform: platform,
+                    revision: revision,
+                    surfaceGeneration: TVVisionGeneration(
+                        domain: .surface,
+                        rawValue: presentationGeneration
+                    ),
+                    activity: .inactive,
+                    attachment: .detached,
+                    isVisible: false,
+                    geometry: nil
+                )
+                let input = try TVVisionInputCapabilitySnapshot(
+                    platform: platform,
+                    revision: revision,
+                    inputGeneration: ownership.inputGeneration,
+                    supported: [],
+                    focusEligibility: .ineligible(.detached)
+                )
+                return try TVVisionPlatformPresentationSnapshot(
+                    ownership: ownership,
+                    revision: revision,
+                    sceneSurface: scene,
+                    inputCapabilities: input,
+                    controllerLeases: [],
+                    display: display,
+                    audioRoute: audioRoute
+                )
+            }
+        }
         return SessionTVVisionPlatformPresentationState(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
@@ -5239,8 +5343,9 @@ final class AppModelWorkflowTests: XCTestCase {
                 sequence: sequence,
                 revision: revision,
                 phase: phase,
-                presentation: nil,
-                display: display,
+                presentation: phase == .active ? presentation : nil,
+                display: phase == .active ? display : nil,
+                audioRoute: phase == .active ? audioRoute : nil,
                 video: TVVisionPlatformVideoSnapshot(
                     phase: .idle,
                     lastDeliveryRevision: nil,
@@ -5290,6 +5395,31 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func makeTVOSAudioRouteSnapshot(
+        revision: UInt64,
+        graphGeneration: UInt64,
+        presentationMode: SpatialAudioPresentationMode
+    ) throws -> TVVisionAudioRouteSnapshot {
+        try TVVisionAudioRouteSnapshot(
+            platform: .tvOS,
+            revision: TVVisionSemanticRevision(rawValue: revision),
+            routeGeneration: TVVisionGeneration(
+                domain: .audioRoute,
+                rawValue: graphGeneration
+            ),
+            outputAvailable: true,
+            currentOutputChannelCount: 2,
+            maximumOutputChannelCount: 8,
+            spatialSupport: .supported,
+            platformStrategy: .environmentListener,
+            headTrackingCapability: .entitlementRequired,
+            runtimeStage: .running,
+            eventCause: .initial,
+            spatialPresentationMode: presentationMode,
+            spatialFallbackReason: nil
+        )
+    }
+
     private func makeAudioRuntimeState(
         sessionID: UUID,
         mediaGeneration: UInt64,
@@ -5308,6 +5438,14 @@ final class AppModelWorkflowTests: XCTestCase {
                 cause: .initial,
                 stage: .running,
                 spatialRuntime: spatialRuntime,
+                routeCapability: SpatialAudioRouteCapabilitySnapshot(
+                    revision: spatialRuntime?.revision ?? .init(rawValue: 0),
+                    outputAvailable: true,
+                    systemSpatialSupport: .supported,
+                    currentOutputChannelCount: 2,
+                    maximumOutputChannelCount: 8
+                ),
+                entitlement: .granted,
                 preferences: preferences,
                 concealedFrameCount: 0,
                 lastAction: .none
@@ -6772,6 +6910,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
                     phase: .failed(.invalidComponent(.video)),
                     presentation: nil,
                     display: nil,
+                    audioRoute: nil,
                     video: TVVisionPlatformVideoSnapshot(
                         phase: .idle,
                         lastDeliveryRevision: nil,

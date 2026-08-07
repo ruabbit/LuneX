@@ -44,6 +44,7 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(presentation.display.revision, snapshot.revision)
         XCTAssertEqual(presentation.audioRoute.revision, snapshot.revision)
+        XCTAssertEqual(snapshot.audioRoute, presentation.audioRoute)
         XCTAssertEqual(
             presentation.inputCapabilities.focusEligibility,
             .eligible
@@ -675,6 +676,7 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         }
         XCTAssertEqual(snapshot.phase, .failed(.actionFailed(.audioRoute)))
         XCTAssertNil(snapshot.presentation)
+        XCTAssertNil(snapshot.audioRoute)
         XCTAssertEqual(snapshot.teardownCount, 1)
         XCTAssertFalse(snapshot.video.isPresented)
         let failureRecords = await recorder.records
@@ -744,6 +746,7 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
             return XCTFail("Expected the first stop to apply")
         }
         XCTAssertEqual(snapshot.phase, .stopped(.remoteTermination))
+        XCTAssertNil(snapshot.audioRoute)
         XCTAssertEqual(snapshot.teardownCount, 1)
         XCTAssertLessThanOrEqual(snapshot.diagnostics.count, 2)
         let teardownEffects = await recorder.records.filter {
@@ -982,7 +985,11 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
             maximumOutputChannelCount: 8,
             spatialSupport: .supported,
             platformStrategy: .environmentListener,
-            headTrackingCapability: .entitlementRequired
+            headTrackingCapability: .entitlementRequired,
+            runtimeStage: .running,
+            eventCause: .initial,
+            spatialPresentationMode: .fixedSpatial,
+            spatialFallbackReason: nil
         )
     }
 

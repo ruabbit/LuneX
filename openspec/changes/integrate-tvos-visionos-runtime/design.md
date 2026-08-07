@@ -168,6 +168,20 @@ visionOS uses the public intended-spatial-experience path and does not claim the
 listener head-tracking property that its SDK does not expose. Route or media
 reset rebuilds the current graph once and makes old completions inert.
 
+Task 4.4 does not add another AVAudioSession observer or audio graph. The
+existing notification source, route-capability reader, entitlement reader,
+native audio processor, and canonical graph publish one checked runtime event
+containing actual route counts/support, graph generation, runtime stage, event
+cause, spatial presentation/readback, fallback, and entitlement. A bounded
+tvOS publisher rejects stale sequence or graph generation, semantically
+deduplicates equivalent state, and normalizes interruption, media-service loss,
+reset, and recovery. `NativeSessionMediaEnvironment` replays the latest valid
+snapshot when current tvOS presentation ownership activates or is replaced,
+then applies later events only to that ownership. Invalid runtime, revision
+exhaustion, or audio action failure closes the current coordinator; failed or
+stopped snapshots contain no audio route. visionOS application remains task
+6.4, and task 4.5 still owns cross-component reconnect and teardown replay.
+
 ### Integrate through one platform presentation coordinator
 
 `NativeSessionMediaEnvironment` owns one platform presentation coordinator per

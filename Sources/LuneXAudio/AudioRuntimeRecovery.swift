@@ -1,6 +1,6 @@
 import Foundation
 
-enum SessionAudioRuntimeStage: String, Equatable, Sendable {
+enum SessionAudioRuntimeStage: String, Equatable, Hashable, Sendable {
     case idle
     case running
     case interrupted

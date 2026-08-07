@@ -1080,6 +1080,298 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         _ = stream
     }
 
+    func testTVOSAudioRuntimeReplaysAcrossActivationAndReplacementAndRecovers()
+        async throws
+    {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let source = StreamVideoPresentationSource()
+        let coordinator = try TVVisionPlatformPresentationCoordinator()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory,
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+        let initial = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 1,
+            graphGeneration: 1,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                presentationMode: .fixedSpatial
+            )
+        )
+        await processor.emit(initial)
+        await waitUntil {
+            await environment.snapshot().audioRuntime?.runtime == initial
+        }
+
+        let first = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            presentationGeneration: 1
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: first,
+                action: .activate
+            )
+        )
+        let firstSnapshot = await environment.snapshot()
+        XCTAssertEqual(
+            firstSnapshot.tvVisionPlatformPresentation?.snapshot.audioRoute?
+                .spatialPresentationMode,
+            .fixedSpatial
+        )
+        XCTAssertNil(
+            firstSnapshot.tvVisionPlatformPresentation?.snapshot.presentation
+        )
+
+        let replacement = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation,
+            presentationGeneration: 2
+        )
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: replacement,
+                action: .activate
+            )
+        )
+        let replacementSnapshot = await environment.snapshot()
+        XCTAssertEqual(
+            replacementSnapshot.tvVisionPlatformPresentation?.snapshot.ownership,
+            replacement
+        )
+        XCTAssertEqual(
+            replacementSnapshot.tvVisionPlatformPresentation?.snapshot.audioRoute?
+                .routeGeneration.rawValue,
+            1
+        )
+
+        let interrupted = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 2,
+            graphGeneration: 1,
+            cause: .interruptionBegan,
+            stage: .interrupted,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                presentationMode: .fixedSpatial
+            )
+        )
+        await processor.emit(interrupted)
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .audioRoute?.runtimeStage == .interrupted
+        }
+        let interruptionRoute = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(interruptionRoute?.eventCause, .interruptionBegan)
+
+        let lost = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 3,
+            graphGeneration: 1,
+            cause: .mediaServicesLost,
+            stage: .interrupted,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                presentationMode: .fixedSpatial
+            )
+        )
+        await processor.emit(lost)
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .audioRoute?.eventCause == .mediaServicesLost
+        }
+        let lostRoute = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(lostRoute?.outputAvailable, false)
+        XCTAssertEqual(lostRoute?.spatialPresentationMode, .inactive)
+
+        let reset = audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 4,
+            graphGeneration: 2,
+            cause: .mediaServicesReset,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 2,
+                presentationMode: .headTracked
+            )
+        )
+        await processor.emit(reset)
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .audioRoute?.routeGeneration.rawValue == 2
+        }
+        let resetRoute = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(resetRoute?.eventCause, .mediaServicesReset)
+        XCTAssertEqual(resetRoute?.spatialPresentationMode, .headTracked)
+
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 5,
+            graphGeneration: 1,
+            cause: .recovery
+        ))
+        for _ in 0..<20 { await Task.yield() }
+        let afterStale = await environment.snapshot()
+            .tvVisionPlatformPresentation?.snapshot.audioRoute
+        XCTAssertEqual(afterStale, resetRoute)
+
+        _ = await environment.stop(sessionID: sessionID)
+        let terminal = await coordinator.snapshot()
+        let stopped = await environment.snapshot()
+        XCTAssertNil(terminal?.audioRoute)
+        XCTAssertNil(stopped.tvVisionPlatformPresentation)
+        _ = iterator
+    }
+
+    func testTVOSInvalidAudioRuntimeFailsCurrentPresentation() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let source = StreamVideoPresentationSource()
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory,
+            videoPresentationSource: source
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 1,
+            graphGeneration: 1,
+            spatialRuntime: spatialAudioRuntime(
+                revision: 1,
+                platformStrategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            )
+        ))
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .phase == .failed(.invalidComponent(.audioRoute))
+        }
+        let failed = await environment.snapshot()
+        XCTAssertNil(failed.tvVisionPlatformPresentation?.snapshot.audioRoute)
+        XCTAssertNil(failed.tvVisionPlatformPresentation?.snapshot.presentation)
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+
+        _ = await environment.stop(sessionID: sessionID)
+        _ = iterator
+    }
+
+    func testTVOSAudioRouteActionFailurePublishesTerminalState() async throws {
+        let calls = MediaEnvironmentCallRecorder()
+        let audioProcessorFactory = ControlledAudioProcessorFactory(calls: calls)
+        let source = StreamVideoPresentationSource()
+        let actionClient = FailingTVVisionPresentationActionClient(
+            failing: .audioRoute
+        )
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            actionClient: actionClient
+        )
+        let environment = makeEnvironment(
+            calls: calls,
+            video: ControlledVideoReceiveProvider(calls: calls),
+            audio: ControlledAudioReceiveProvider(calls: calls),
+            input: ControlledRemoteInputProvider(calls: calls),
+            audioProcessorFactory: audioProcessorFactory,
+            videoPresentationSource: source,
+            tvVisionPlatformCoordinatorFactory: { coordinator }
+        )
+        let sessionID = UUID()
+        let stream = try await environment.start(
+            sessionID: sessionID,
+            configuration: makeConfiguration(sessionID: sessionID),
+            controlProvider: MediaEnvironmentControlProvider()
+        )
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        let generation = await environment.snapshot().generation
+        let ownership = try tvVisionPresentationOwnership(
+            sessionID: sessionID,
+            mediaGeneration: generation
+        )
+        source.beginSession(sessionID: sessionID, mediaGeneration: generation)
+        try await environment.applyTVVisionPlatformPresentation(
+            SessionTVVisionPlatformPresentationApplication(
+                ownership: ownership,
+                action: .activate
+            )
+        )
+        let processor = try XCTUnwrap(audioProcessorFactory.processor(at: 0))
+
+        await processor.emit(audioRuntimeEvent(
+            sessionID: sessionID,
+            sequence: 1,
+            graphGeneration: 1
+        ))
+        await waitUntil {
+            await environment.snapshot().tvVisionPlatformPresentation?.snapshot
+                .phase == .failed(.actionFailed(.audioRoute))
+        }
+        let effectKinds = await actionClient.effectKinds()
+        XCTAssertEqual(effectKinds, [
+            .snapshot,
+            .input,
+            .scene,
+            .display,
+            .audioRoute,
+            .input,
+            .clearVideo,
+            .display,
+            .audioRoute,
+            .scene,
+            .teardown,
+            .snapshot
+        ])
+        XCTAssertEqual(source.snapshot().activeSubscriptionCount, 0)
+
+        _ = await environment.stop(sessionID: sessionID)
+        _ = iterator
+    }
+
     func testTVVisionProviderFailurePublishesTerminalStateBeforeStreamError()
         async throws {
         let calls = MediaEnvironmentCallRecorder()
@@ -2920,18 +3212,48 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         sessionID: UUID,
         sequence: UInt64,
         graphGeneration: UInt64,
-        cause: SessionAudioRuntimeEventCause = .initial
+        cause: SessionAudioRuntimeEventCause = .initial,
+        stage: SessionAudioRuntimeStage = .running,
+        spatialRuntime: SpatialAudioRuntimeSnapshot? = nil,
+        routeCapability: SpatialAudioRouteCapabilitySnapshot? = nil,
+        entitlement: SpatialAudioEntitlementState = .granted
     ) -> SessionAudioRuntimeEvent {
-        SessionAudioRuntimeEvent(
+        let routeCapability = routeCapability
+            ?? SpatialAudioRouteCapabilitySnapshot(
+                revision: spatialRuntime?.revision ?? .init(rawValue: 0),
+                outputAvailable: true,
+                systemSpatialSupport: .supported,
+                currentOutputChannelCount: 2,
+                maximumOutputChannelCount: 8
+            )
+        return SessionAudioRuntimeEvent(
             sessionID: sessionID,
             sequence: sequence,
             graphGeneration: graphGeneration,
             cause: cause,
-            stage: .running,
-            spatialRuntime: nil,
+            stage: stage,
+            spatialRuntime: spatialRuntime,
+            routeCapability: routeCapability,
+            entitlement: entitlement,
             preferences: .nativeDefault,
             concealedFrameCount: 0,
             lastAction: .none
+        )
+    }
+
+    private func spatialAudioRuntime(
+        revision: UInt64,
+        platformStrategy: SpatialAudioPlatformStrategy = .environmentListener,
+        presentationMode: SpatialAudioPresentationMode
+    ) -> SpatialAudioRuntimeSnapshot {
+        SpatialAudioRuntimeSnapshot(
+            revision: SpatialAudioSemanticRevision(rawValue: revision),
+            layoutSignature: StreamAudioChannelLayout.stereo.signature,
+            graphMode: .environmentAmbienceBed,
+            platformStrategy: platformStrategy,
+            routeSupport: .supported,
+            presentationMode: presentationMode,
+            fallbackReason: nil
         )
     }
 
@@ -3209,6 +3531,30 @@ private actor SuspendingTVVisionPresentationActionClient:
     func resume() {
         resumeContinuation?.resume()
         resumeContinuation = nil
+    }
+
+    func effectKinds() -> [TVVisionPlatformPresentationEffectKind] {
+        applications.map(\.effect.kind)
+    }
+}
+
+private actor FailingTVVisionPresentationActionClient:
+    TVVisionPlatformPresentationActionApplying
+{
+    private let failingKind: TVVisionPlatformPresentationEffectKind
+    private var applications: [TVVisionPlatformPresentationActionApplication] = []
+
+    init(failing kind: TVVisionPlatformPresentationEffectKind) {
+        failingKind = kind
+    }
+
+    func apply(
+        _ application: TVVisionPlatformPresentationActionApplication
+    ) async throws {
+        applications.append(application)
+        if application.effect.kind == failingKind {
+            throw MediaEnvironmentTestError.receiverFailure
+        }
     }
 
     func effectKinds() -> [TVVisionPlatformPresentationEffectKind] {

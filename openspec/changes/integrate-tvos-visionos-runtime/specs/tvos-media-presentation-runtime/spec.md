@@ -87,6 +87,22 @@ typed spatial/head-tracking capability.
 - **WHEN** the active tvOS route changes during playback
 - **THEN** LuneX SHALL serialize one graph reconfiguration and make old scheduled completions inert
 
+#### Scenario: Presentation ownership activates after audio runtime
+- **WHEN** a valid current-session audio runtime exists before tvOS presentation activation or presentation replacement
+- **THEN** LuneX SHALL replay one normalized current route snapshot into that ownership without creating another graph or observer
+
+#### Scenario: Interruption and media services recovery
+- **WHEN** the current AVAudioSession reports interruption begin/end, media services lost, or media services reset
+- **THEN** LuneX SHALL publish checked runtime stage and cause, normalize unavailable output while services are lost, and accept recovery only from the current graph generation
+
+#### Scenario: Audio runtime is stale or invalid
+- **WHEN** route state has a duplicate sequence, older graph generation, inconsistent route/spatial revision, invalid channel count, incompatible tvOS strategy, or unauthorized head tracking
+- **THEN** LuneX SHALL reject stale state, fail the current presentation on invalid state, and SHALL NOT preserve a false active spatial claim
+
+#### Scenario: Audio application fails or terminates
+- **WHEN** the current audio-route effect fails, semantic revision exhausts, presentation fails, or the session stops
+- **THEN** LuneX SHALL run bounded shared teardown, clear the platform audio route from terminal snapshots, and prevent late events from reopening it
+
 ### Requirement: tvOS media integration SHALL be generation scoped
 Scene, video, display, audio, input eligibility, diagnostics, and teardown SHALL
 belong to one current media presentation coordinator and clear on failure,

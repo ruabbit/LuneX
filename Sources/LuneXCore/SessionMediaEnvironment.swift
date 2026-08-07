@@ -258,6 +258,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         var tvVisionPlatformOwnership: TVVisionPresentationOwnership?
         var tvVisionPlatformSubscription:
             StreamVideoPresentationSubscription?
+        var tvOSAudioRoutePublisher: TVOSAudioRouteSnapshotPublisher?
     }
 
     private struct TeardownOperation {
@@ -489,7 +490,8 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
                 tvVisionPlatformCoordinator: tvVisionPlatformCoordinator,
                 tvVisionPlatformPresentation: nil,
                 tvVisionPlatformOwnership: nil,
-                tvVisionPlatformSubscription: nil
+                tvVisionPlatformSubscription: nil,
+                tvOSAudioRoutePublisher: nil
             )
             startingSession = nil
             cancelledStartingGenerations.remove(mediaGeneration)
@@ -904,6 +906,9 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             try await installTVVisionPlatformSubscription(
                 ownership: application.ownership
             )
+            try await applyLatestTVOSAudioRuntime(
+                ownership: application.ownership
+            )
         case .fail, .stop:
             clearTVVisionPlatformSubscription(
                 ownership: application.ownership
@@ -1250,7 +1255,7 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         _ event: SessionAudioRuntimeEvent,
         sessionID: UUID,
         generation: UInt64
-    ) {
+    ) async {
         guard var active,
               active.sessionID == sessionID,
               active.generation == generation,
@@ -1269,6 +1274,119 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
         active.audioRuntime = state
         self.active = active
         active.continuation.yield(.audioRuntime(state))
+        guard let ownership = active.tvVisionPlatformOwnership,
+              ownership.platform == .tvOS else { return }
+        do {
+            try await applyTVOSAudioRuntime(
+                event,
+                ownership: ownership,
+                replayCurrent: false
+            )
+        } catch {
+            await failCurrentTVOSAudioRoute(
+                ownership: ownership,
+                failure: .actionFailed(.audioRoute)
+            )
+        }
+    }
+
+    private func applyLatestTVOSAudioRuntime(
+        ownership: TVVisionPresentationOwnership
+    ) async throws {
+        guard ownership.platform == .tvOS,
+              let current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership,
+              let event = current.audioRuntime?.runtime else { return }
+        try await applyTVOSAudioRuntime(
+            event,
+            ownership: ownership,
+            replayCurrent: true
+        )
+    }
+
+    private func applyTVOSAudioRuntime(
+        _ event: SessionAudioRuntimeEvent,
+        ownership: TVVisionPresentationOwnership,
+        replayCurrent: Bool
+    ) async throws {
+        guard var current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership,
+              ownership.platform == .tvOS,
+              event.sessionID == ownership.sessionID else {
+            throw SessionMediaEnvironmentError
+                .staleTVVisionPlatformPresentationApplication
+        }
+
+        var publisher = current.tvOSAudioRoutePublisher
+            ?? TVOSAudioRouteSnapshotPublisher()
+        let publication = publisher.update(event)
+        current.tvOSAudioRoutePublisher = publisher
+        self.active = current
+
+        let outcome: TVVisionPlatformPresentationCoordinatorOutcome
+        switch publication {
+        case let .published(snapshot):
+            outcome = await current.tvVisionPlatformCoordinator.applyAudioRoute(
+                snapshot,
+                ownership: ownership
+            )
+        case .unchanged, .staleEvent:
+            guard replayCurrent, let snapshot = publisher.snapshot else {
+                return
+            }
+            outcome = await current.tvVisionPlatformCoordinator.applyAudioRoute(
+                snapshot,
+                ownership: ownership
+            )
+        case .invalidRuntime:
+            outcome = await current.tvVisionPlatformCoordinator.fail(
+                ownership: ownership,
+                failure: .invalidComponent(.audioRoute)
+            )
+        case .revisionExhausted:
+            outcome = await current.tvVisionPlatformCoordinator.fail(
+                ownership: ownership,
+                failure: .semanticRevisionExhausted
+            )
+        }
+        let state = try await publishTVVisionPlatformOutcome(
+            outcome,
+            expectedOwnership: ownership
+        )
+        if case .failed = state.snapshot.phase {
+            clearTVVisionPlatformSubscription(ownership: ownership)
+        }
+    }
+
+    private func failCurrentTVOSAudioRoute(
+        ownership: TVVisionPresentationOwnership,
+        failure: TVVisionPlatformPresentationFailure
+    ) async {
+        guard let current = active,
+              current.sessionID == ownership.sessionID,
+              current.generation == ownership.mediaGeneration,
+              current.tvVisionPlatformOwnership == ownership else { return }
+        let outcome = await current.tvVisionPlatformCoordinator.fail(
+            ownership: ownership,
+            failure: failure
+        )
+        do {
+            _ = try await publishTVVisionPlatformOutcome(
+                outcome,
+                expectedOwnership: ownership
+            )
+            clearTVVisionPlatformSubscription(ownership: ownership)
+        } catch {
+            guard let latest = active,
+                  latest.sessionID == ownership.sessionID,
+                  latest.generation == ownership.mediaGeneration,
+                  latest.tvVisionPlatformOwnership == ownership else { return }
+            clearTVVisionPlatformSubscription(ownership: ownership)
+        }
     }
 
     private func publishFeedback(

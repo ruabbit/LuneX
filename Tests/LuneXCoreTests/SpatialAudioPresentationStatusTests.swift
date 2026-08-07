@@ -274,6 +274,14 @@ final class SpatialAudioPresentationStatusTests: XCTestCase {
             cause: cause,
             stage: stage,
             spatialRuntime: snapshot,
+            routeCapability: SpatialAudioRouteCapabilitySnapshot(
+                revision: snapshot?.revision ?? .init(rawValue: 0),
+                outputAvailable: true,
+                systemSpatialSupport: .supported,
+                currentOutputChannelCount: 2,
+                maximumOutputChannelCount: 8
+            ),
+            entitlement: .granted,
             preferences: .nativeDefault,
             concealedFrameCount: 0,
             lastAction: .none

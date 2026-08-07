@@ -75,6 +75,7 @@ struct TVVisionPlatformPresentationCoordinatorSnapshot: Equatable, Sendable {
     let phase: TVVisionPlatformPresentationPhase
     let presentation: TVVisionPlatformPresentationSnapshot?
     let display: TVVisionDisplaySnapshot?
+    let audioRoute: TVVisionAudioRouteSnapshot?
     let video: TVVisionPlatformVideoSnapshot
     let diagnostics: [TVVisionPlatformPresentationDiagnostic]
     let teardownCount: UInt64
@@ -974,6 +975,7 @@ actor TVVisionPlatformPresentationCoordinator {
             phase: phase,
             presentation: nil,
             display: nil,
+            audioRoute: nil,
             video: TVVisionPlatformVideoSnapshot(
                 phase: .cleared(decoderGeneration: decoderGeneration(state)),
                 lastDeliveryRevision: state.video.lastDeliveryRevision,
@@ -1004,6 +1006,7 @@ actor TVVisionPlatformPresentationCoordinator {
                 phase: phase,
                 presentation: nil,
                 display: nil,
+                audioRoute: nil,
                 video: terminal.video,
                 diagnostics: diagnostics,
                 teardownCount: teardownCount,
@@ -1239,7 +1242,11 @@ actor TVVisionPlatformPresentationCoordinator {
             maximumOutputChannelCount: value.maximumOutputChannelCount,
             spatialSupport: value.spatialSupport,
             platformStrategy: value.platformStrategy,
-            headTrackingCapability: value.headTrackingCapability
+            headTrackingCapability: value.headTrackingCapability,
+            runtimeStage: value.runtimeStage,
+            eventCause: value.eventCause,
+            spatialPresentationMode: value.spatialPresentationMode,
+            spatialFallbackReason: value.spatialFallbackReason
         )
     }
 
@@ -1340,6 +1347,9 @@ actor TVVisionPlatformPresentationCoordinator {
             presentation: phase == .active ? state.presentation : nil,
             display: phase == .active
                 ? rebrandDisplay(state.display, revision: state.revision)
+                : nil,
+            audioRoute: phase == .active
+                ? rebrandAudio(state.audio, revision: state.revision)
                 : nil,
             video: state.video,
             diagnostics: diagnostics,

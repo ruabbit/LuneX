@@ -1346,6 +1346,10 @@ struct TVVisionAudioRouteSnapshot: Equatable, Hashable, Sendable {
     let spatialSupport: SpatialAudioRouteSupport
     let platformStrategy: SpatialAudioPlatformStrategy
     let headTrackingCapability: TVVisionHeadTrackingCapability
+    let runtimeStage: SessionAudioRuntimeStage
+    let eventCause: SessionAudioRuntimeEventCause
+    let spatialPresentationMode: SpatialAudioPresentationMode
+    let spatialFallbackReason: SpatialAudioFallbackReason?
 
     init(
         platform: TVVisionPlatform,
@@ -1356,7 +1360,11 @@ struct TVVisionAudioRouteSnapshot: Equatable, Hashable, Sendable {
         maximumOutputChannelCount: Int,
         spatialSupport: SpatialAudioRouteSupport,
         platformStrategy: SpatialAudioPlatformStrategy,
-        headTrackingCapability: TVVisionHeadTrackingCapability
+        headTrackingCapability: TVVisionHeadTrackingCapability,
+        runtimeStage: SessionAudioRuntimeStage,
+        eventCause: SessionAudioRuntimeEventCause,
+        spatialPresentationMode: SpatialAudioPresentationMode,
+        spatialFallbackReason: SpatialAudioFallbackReason?
     ) throws {
         try routeGeneration.require(.audioRoute)
         if outputAvailable {
@@ -1391,6 +1399,40 @@ struct TVVisionAudioRouteSnapshot: Equatable, Hashable, Sendable {
            headTrackingCapability != .unavailable {
             throw TVVisionPlatformContractError.incompatibleAudioStrategy
         }
+        let runtimeForcesUnavailable: Bool
+        switch runtimeStage {
+        case .idle, .stopped, .failed:
+            runtimeForcesUnavailable = true
+        case .running, .interrupted:
+            runtimeForcesUnavailable = false
+        }
+        let causeForcesUnavailable = eventCause == .mediaServicesLost
+            || eventCause == .failed
+            || eventCause == .stopped
+        if runtimeForcesUnavailable || causeForcesUnavailable {
+            guard !outputAvailable else {
+                throw TVVisionPlatformContractError.invalidAudioRouteSnapshot
+            }
+        }
+        switch spatialPresentationMode {
+        case .inactive:
+            break
+        case .nonspatial:
+            guard outputAvailable else {
+                throw TVVisionPlatformContractError.invalidAudioRouteSnapshot
+            }
+        case .fixedSpatial:
+            guard outputAvailable,
+                  platformStrategy != .none else {
+                throw TVVisionPlatformContractError.incompatibleAudioStrategy
+            }
+        case .headTracked:
+            guard outputAvailable,
+                  platformStrategy != .none,
+                  headTrackingCapability != .unavailable else {
+                throw TVVisionPlatformContractError.incompatibleAudioStrategy
+            }
+        }
         self.platform = platform
         self.revision = revision
         self.routeGeneration = routeGeneration
@@ -1400,6 +1442,187 @@ struct TVVisionAudioRouteSnapshot: Equatable, Hashable, Sendable {
         self.spatialSupport = spatialSupport
         self.platformStrategy = platformStrategy
         self.headTrackingCapability = headTrackingCapability
+        self.runtimeStage = runtimeStage
+        self.eventCause = eventCause
+        self.spatialPresentationMode = spatialPresentationMode
+        self.spatialFallbackReason = spatialFallbackReason
+    }
+}
+
+enum TVOSAudioRoutePublicationOutcome: Equatable, Sendable {
+    case unchanged
+    case published(TVVisionAudioRouteSnapshot)
+    case staleEvent
+    case invalidRuntime
+    case revisionExhausted
+}
+
+struct TVOSAudioRouteSnapshotPublisher: Sendable {
+    private struct SemanticState: Equatable, Sendable {
+        let graphGeneration: UInt64
+        let outputAvailable: Bool
+        let currentOutputChannelCount: Int
+        let maximumOutputChannelCount: Int
+        let spatialSupport: SpatialAudioRouteSupport
+        let platformStrategy: SpatialAudioPlatformStrategy
+        let headTrackingCapability: TVVisionHeadTrackingCapability
+        let runtimeStage: SessionAudioRuntimeStage
+        let eventCause: SessionAudioRuntimeEventCause
+        let spatialPresentationMode: SpatialAudioPresentationMode
+        let spatialFallbackReason: SpatialAudioFallbackReason?
+    }
+
+    private(set) var revisionRawValue: UInt64
+    private(set) var snapshot: TVVisionAudioRouteSnapshot?
+    private(set) var isRevisionExhausted = false
+
+    private var lastEventSequence: UInt64?
+    private var semanticState: SemanticState?
+
+    init(initialRevisionRawValue: UInt64 = 0) {
+        revisionRawValue = initialRevisionRawValue
+    }
+
+    @discardableResult
+    mutating func update(
+        _ event: SessionAudioRuntimeEvent
+    ) -> TVOSAudioRoutePublicationOutcome {
+        if let lastEventSequence,
+           event.sequence <= lastEventSequence {
+            return .staleEvent
+        }
+        guard !isRevisionExhausted else { return .revisionExhausted }
+        guard event.graphGeneration > 0,
+              let nextState = Self.semanticState(for: event) else {
+            lastEventSequence = event.sequence
+            return .invalidRuntime
+        }
+        if let semanticState,
+           nextState.graphGeneration < semanticState.graphGeneration {
+            return .staleEvent
+        }
+        lastEventSequence = event.sequence
+        guard nextState != semanticState else { return .unchanged }
+
+        let nextRevision = revisionRawValue.addingReportingOverflow(1)
+        guard !nextRevision.overflow else {
+            semanticState = nil
+            snapshot = nil
+            isRevisionExhausted = true
+            return .revisionExhausted
+        }
+        guard let revision = try? TVVisionSemanticRevision(
+            rawValue: nextRevision.partialValue
+        ), let routeGeneration = try? TVVisionGeneration(
+            domain: .audioRoute,
+            rawValue: nextState.graphGeneration
+        ) else {
+            semanticState = nil
+            snapshot = nil
+            isRevisionExhausted = true
+            return .revisionExhausted
+        }
+        guard let nextSnapshot = try? TVVisionAudioRouteSnapshot(
+                platform: .tvOS,
+                revision: revision,
+                routeGeneration: routeGeneration,
+                outputAvailable: nextState.outputAvailable,
+                currentOutputChannelCount:
+                    nextState.currentOutputChannelCount,
+                maximumOutputChannelCount:
+                    nextState.maximumOutputChannelCount,
+                spatialSupport: nextState.spatialSupport,
+                platformStrategy: nextState.platformStrategy,
+                headTrackingCapability: nextState.headTrackingCapability,
+                runtimeStage: nextState.runtimeStage,
+                eventCause: nextState.eventCause,
+                spatialPresentationMode:
+                    nextState.spatialPresentationMode,
+                spatialFallbackReason: nextState.spatialFallbackReason
+        ) else {
+            return .invalidRuntime
+        }
+
+        revisionRawValue = nextRevision.partialValue
+        semanticState = nextState
+        snapshot = nextSnapshot
+        return .published(nextSnapshot)
+    }
+
+    private static func semanticState(
+        for event: SessionAudioRuntimeEvent
+    ) -> SemanticState? {
+        let route = event.routeCapability
+        if let spatialRuntime = event.spatialRuntime,
+           spatialRuntime.revision != route.revision {
+            return nil
+        }
+        let countsAreValid = route.currentOutputChannelCount > 0
+            && route.maximumOutputChannelCount > 0
+            && route.currentOutputChannelCount
+                <= route.maximumOutputChannelCount
+            && route.maximumOutputChannelCount <= 64
+        guard !route.outputAvailable || countsAreValid else { return nil }
+        let runtimeAllowsOutput: Bool
+        switch event.stage {
+        case .running, .interrupted:
+            runtimeAllowsOutput = true
+        case .idle, .stopped, .failed:
+            runtimeAllowsOutput = false
+        }
+        let causeAllowsOutput = event.cause != .mediaServicesLost
+            && event.cause != .failed
+            && event.cause != .stopped
+        let outputAvailable = route.outputAvailable
+            && runtimeAllowsOutput
+            && causeAllowsOutput
+        guard outputAvailable else {
+            return SemanticState(
+                graphGeneration: event.graphGeneration,
+                outputAvailable: false,
+                currentOutputChannelCount: 0,
+                maximumOutputChannelCount: 0,
+                spatialSupport: .unknown,
+                platformStrategy: .none,
+                headTrackingCapability: .unavailable,
+                runtimeStage: event.stage,
+                eventCause: event.cause,
+                spatialPresentationMode: .inactive,
+                spatialFallbackReason: .outputUnavailable
+            )
+        }
+
+        let platformStrategy = event.spatialRuntime?.platformStrategy ?? .none
+        let presentationMode = event.spatialRuntime?.presentationMode
+            ?? .nonspatial
+        guard platformStrategy != .visionOutputExperience else { return nil }
+        switch presentationMode {
+        case .inactive, .nonspatial:
+            break
+        case .fixedSpatial, .headTracked:
+            guard platformStrategy == .environmentListener else { return nil }
+        }
+        if presentationMode == .headTracked,
+           event.entitlement != .granted {
+            return nil
+        }
+        let headTrackingCapability: TVVisionHeadTrackingCapability =
+            platformStrategy == .environmentListener
+                ? .entitlementRequired
+                : .unavailable
+        return SemanticState(
+            graphGeneration: event.graphGeneration,
+            outputAvailable: true,
+            currentOutputChannelCount: route.currentOutputChannelCount,
+            maximumOutputChannelCount: route.maximumOutputChannelCount,
+            spatialSupport: route.systemSpatialSupport,
+            platformStrategy: platformStrategy,
+            headTrackingCapability: headTrackingCapability,
+            runtimeStage: event.stage,
+            eventCause: event.cause,
+            spatialPresentationMode: presentationMode,
+            spatialFallbackReason: event.spatialRuntime?.fallbackReason
+        )
     }
 }
 

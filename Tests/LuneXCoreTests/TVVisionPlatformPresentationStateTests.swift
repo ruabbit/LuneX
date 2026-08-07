@@ -743,8 +743,222 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
             maximumOutputChannelCount: 0,
             spatialSupport: .unknown,
             platformStrategy: .none,
-            headTrackingCapability: .unavailable
+            headTrackingCapability: .unavailable,
+            runtimeStage: .stopped,
+            eventCause: .stopped,
+            spatialPresentationMode: .inactive,
+            spatialFallbackReason: .outputUnavailable
         ))
+    }
+
+    func testTVOSAudioPublisherPublishesDirectFixedAndHeadTrackedRuntime()
+        throws
+    {
+        var publisher = TVOSAudioRouteSnapshotPublisher()
+
+        guard case let .published(direct) = publisher.update(
+            makeTVOSAudioRuntimeEvent(sequence: 1, graphGeneration: 1)
+        ) else {
+            return XCTFail("Expected initial direct audio publication.")
+        }
+        XCTAssertEqual(direct.revision.rawValue, 1)
+        XCTAssertEqual(direct.routeGeneration.rawValue, 1)
+        XCTAssertEqual(direct.platformStrategy, .none)
+        XCTAssertEqual(direct.spatialPresentationMode, .nonspatial)
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 2,
+                graphGeneration: 1
+            )),
+            .unchanged
+        )
+
+        guard case let .published(fixed) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 3,
+                graphGeneration: 2,
+                routeRevision: 2,
+                strategy: .environmentListener,
+                presentationMode: .fixedSpatial
+            )
+        ) else {
+            return XCTFail("Expected fixed spatial audio publication.")
+        }
+        XCTAssertEqual(fixed.revision.rawValue, 2)
+        XCTAssertEqual(fixed.routeGeneration.rawValue, 2)
+        XCTAssertEqual(fixed.headTrackingCapability, .entitlementRequired)
+        XCTAssertEqual(fixed.spatialPresentationMode, .fixedSpatial)
+
+        guard case let .published(headTracked) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 4,
+                graphGeneration: 3,
+                routeRevision: 3,
+                strategy: .environmentListener,
+                presentationMode: .headTracked,
+                entitlement: .granted
+            )
+        ) else {
+            return XCTFail("Expected head-tracked audio publication.")
+        }
+        XCTAssertEqual(headTracked.revision.rawValue, 3)
+        XCTAssertEqual(headTracked.routeGeneration.rawValue, 3)
+        XCTAssertEqual(headTracked.spatialPresentationMode, .headTracked)
+        XCTAssertNil(headTracked.spatialFallbackReason)
+    }
+
+    func testTVOSAudioPublisherNormalizesInterruptionLossAndReset() throws {
+        var publisher = TVOSAudioRouteSnapshotPublisher()
+        _ = publisher.update(makeTVOSAudioRuntimeEvent(
+            sequence: 1,
+            graphGeneration: 1,
+            strategy: .environmentListener,
+            presentationMode: .fixedSpatial
+        ))
+
+        guard case let .published(interrupted) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 2,
+                graphGeneration: 1,
+                cause: .interruptionBegan,
+                stage: .interrupted,
+                strategy: .environmentListener,
+                presentationMode: .fixedSpatial
+            )
+        ) else {
+            return XCTFail("Expected interrupted audio publication.")
+        }
+        XCTAssertTrue(interrupted.outputAvailable)
+        XCTAssertEqual(interrupted.runtimeStage, .interrupted)
+        XCTAssertEqual(interrupted.eventCause, .interruptionBegan)
+
+        guard case let .published(lost) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 3,
+                graphGeneration: 1,
+                cause: .mediaServicesLost,
+                stage: .interrupted,
+                strategy: .environmentListener,
+                presentationMode: .fixedSpatial
+            )
+        ) else {
+            return XCTFail("Expected media-services-lost publication.")
+        }
+        XCTAssertFalse(lost.outputAvailable)
+        XCTAssertEqual(lost.currentOutputChannelCount, 0)
+        XCTAssertEqual(lost.maximumOutputChannelCount, 0)
+        XCTAssertEqual(lost.platformStrategy, .none)
+        XCTAssertEqual(lost.spatialPresentationMode, .inactive)
+        XCTAssertEqual(lost.spatialFallbackReason, .outputUnavailable)
+
+        guard case let .published(reset) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 4,
+                graphGeneration: 2,
+                cause: .mediaServicesReset,
+                routeRevision: 2,
+                strategy: .environmentListener,
+                presentationMode: .headTracked
+            )
+        ) else {
+            return XCTFail("Expected media-services-reset recovery publication.")
+        }
+        XCTAssertTrue(reset.outputAvailable)
+        XCTAssertEqual(reset.routeGeneration.rawValue, 2)
+        XCTAssertEqual(reset.runtimeStage, .running)
+        XCTAssertEqual(reset.eventCause, .mediaServicesReset)
+        XCTAssertEqual(reset.spatialPresentationMode, .headTracked)
+    }
+
+    func testTVOSAudioPublisherRejectsStaleAndInvalidRuntime() throws {
+        var publisher = TVOSAudioRouteSnapshotPublisher()
+        guard case let .published(initial) = publisher.update(
+            makeTVOSAudioRuntimeEvent(
+                sequence: 10,
+                graphGeneration: 3,
+                routeRevision: 3
+            )
+        ) else {
+            return XCTFail("Expected initial audio publication.")
+        }
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 10,
+                graphGeneration: 4,
+                routeRevision: 4
+            )),
+            .staleEvent
+        )
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 11,
+                graphGeneration: 2,
+                routeRevision: 2
+            )),
+            .staleEvent
+        )
+
+        let invalidEvents = [
+            makeTVOSAudioRuntimeEvent(
+                sequence: 11,
+                graphGeneration: 3,
+                currentChannels: 9,
+                maximumChannels: 8
+            ),
+            makeTVOSAudioRuntimeEvent(
+                sequence: 12,
+                graphGeneration: 3,
+                strategy: .visionOutputExperience,
+                presentationMode: .fixedSpatial
+            ),
+            makeTVOSAudioRuntimeEvent(
+                sequence: 13,
+                graphGeneration: 3,
+                strategy: .none,
+                presentationMode: .fixedSpatial
+            ),
+            makeTVOSAudioRuntimeEvent(
+                sequence: 14,
+                graphGeneration: 3,
+                strategy: .environmentListener,
+                presentationMode: .headTracked,
+                entitlement: .missing
+            ),
+            makeTVOSAudioRuntimeEvent(
+                sequence: 15,
+                graphGeneration: 3,
+                routeRevision: 1,
+                runtimeRevision: 2
+            ),
+            makeTVOSAudioRuntimeEvent(sequence: 16, graphGeneration: 0)
+        ]
+        for event in invalidEvents {
+            XCTAssertEqual(publisher.update(event), .invalidRuntime)
+            XCTAssertEqual(publisher.snapshot, initial)
+            XCTAssertFalse(publisher.isRevisionExhausted)
+        }
+    }
+
+    func testTVOSAudioPublisherFailsClosedOnRevisionExhaustion() {
+        var publisher = TVOSAudioRouteSnapshotPublisher(
+            initialRevisionRawValue: .max
+        )
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 1,
+                graphGeneration: 1
+            )),
+            .revisionExhausted
+        )
+        XCTAssertTrue(publisher.isRevisionExhausted)
+        XCTAssertNil(publisher.snapshot)
+        XCTAssertEqual(
+            publisher.update(makeTVOSAudioRuntimeEvent(
+                sequence: 2,
+                graphGeneration: 2
+            )),
+            .revisionExhausted
+        )
     }
 
     func testPresentationSnapshotAcceptsOneConsistentGeneration() throws {
@@ -1213,7 +1427,60 @@ final class TVVisionPlatformPresentationStateTests: XCTestCase {
                 : .visionOutputExperience),
             headTrackingCapability: headTracking ?? (platform == .tvOS
                 ? .entitlementRequired
-                : .intendedSpatialExperience)
+                : .intendedSpatialExperience),
+            runtimeStage: .running,
+            eventCause: .initial,
+            spatialPresentationMode: .fixedSpatial,
+            spatialFallbackReason: nil
+        )
+    }
+
+    private func makeTVOSAudioRuntimeEvent(
+        sequence: UInt64,
+        graphGeneration: UInt64,
+        cause: SessionAudioRuntimeEventCause = .initial,
+        stage: SessionAudioRuntimeStage = .running,
+        outputAvailable: Bool = true,
+        currentChannels: Int = 2,
+        maximumChannels: Int = 8,
+        routeRevision: UInt64 = 1,
+        runtimeRevision: UInt64? = nil,
+        strategy: SpatialAudioPlatformStrategy = .none,
+        presentationMode: SpatialAudioPresentationMode = .nonspatial,
+        entitlement: SpatialAudioEntitlementState = .granted
+    ) -> SessionAudioRuntimeEvent {
+        let routeRevision = SpatialAudioSemanticRevision(rawValue: routeRevision)
+        let runtimeRevision = SpatialAudioSemanticRevision(
+            rawValue: runtimeRevision ?? routeRevision.rawValue
+        )
+        return SessionAudioRuntimeEvent(
+            sessionID: UUID(),
+            sequence: sequence,
+            graphGeneration: graphGeneration,
+            cause: cause,
+            stage: stage,
+            spatialRuntime: SpatialAudioRuntimeSnapshot(
+                revision: runtimeRevision,
+                layoutSignature: StreamAudioChannelLayout.stereo.signature,
+                graphMode: strategy == .none
+                    ? .nonspatialMixer
+                    : .environmentAmbienceBed,
+                platformStrategy: strategy,
+                routeSupport: .supported,
+                presentationMode: presentationMode,
+                fallbackReason: nil
+            ),
+            routeCapability: SpatialAudioRouteCapabilitySnapshot(
+                revision: routeRevision,
+                outputAvailable: outputAvailable,
+                systemSpatialSupport: .supported,
+                currentOutputChannelCount: currentChannels,
+                maximumOutputChannelCount: maximumChannels
+            ),
+            entitlement: entitlement,
+            preferences: .nativeDefault,
+            concealedFrameCount: 0,
+            lastAction: .none
         )
     }
 

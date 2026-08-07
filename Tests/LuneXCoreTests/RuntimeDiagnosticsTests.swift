@@ -743,6 +743,14 @@ private func makeSpatialRuntimeEvent(
         cause: cause,
         stage: stage,
         spatialRuntime: spatialRuntime,
+        routeCapability: SpatialAudioRouteCapabilitySnapshot(
+            revision: spatialRuntime?.revision ?? .init(rawValue: 0),
+            outputAvailable: true,
+            systemSpatialSupport: .supported,
+            currentOutputChannelCount: 2,
+            maximumOutputChannelCount: 8
+        ),
+        entitlement: .granted,
         preferences: .nativeDefault,
         concealedFrameCount: 0,
         lastAction: .none
