@@ -9,6 +9,14 @@ passthrough presentation without a separately owned runtime.
 - **WHEN** a valid media generation starts in the windowed product path
 - **THEN** LuneX SHALL create one current-generation Metal presentation owner and report windowed mode
 
+#### Scenario: Current component revision advances
+- **WHEN** current input, display, audio, or video state advances the platform coordinator semantic revision after an attached visionOS scene reported windowed mode
+- **THEN** LuneX SHALL retain the same surface generation and rebrand the complete typed windowed state to the new current revision
+
+#### Scenario: Window ownership is replaced or terminated
+- **WHEN** replacement activation begins, the current scene detaches, or the current coordinator terminates
+- **THEN** LuneX SHALL clear windowed mode immediately and SHALL NOT restore it from an old ownership callback
+
 ### Requirement: visionOS frames SHALL use the shared decoder and render identity
 visionOS SHALL consume the existing decoded-frame source and validate decoder,
 color, surface, display, and presentation revisions before presenting. It SHALL

@@ -4,6 +4,134 @@ import Foundation
 import XCTest
 
 final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
+    func testVisionWindowedModeTracksCurrentSceneReplacementAndStop()
+        async throws
+    {
+        let coordinator = try TVVisionPlatformPresentationCoordinator()
+        let first = try makeOwnership(platform: .visionOS)
+
+        guard case let .applied(activated) = await coordinator.activate(first) else {
+            return XCTFail("Expected visionOS ownership to activate")
+        }
+        XCTAssertNil(activated.visionWindowedPresentation)
+
+        let firstScene = try makeSceneUpdate(
+            ownership: first,
+            surfaceGeneration: 1
+        )
+        guard case let .applied(firstSnapshot) = await coordinator.applyScene(
+            firstScene,
+            ownership: first
+        ) else {
+            return XCTFail("Expected the first visionOS scene to apply")
+        }
+        let firstWindowed = try XCTUnwrap(
+            firstSnapshot.visionWindowedPresentation
+        )
+        XCTAssertEqual(firstWindowed.ownership, first)
+        XCTAssertEqual(firstWindowed.revision, firstSnapshot.revision)
+        XCTAssertEqual(firstWindowed.surfaceGeneration.rawValue, 1)
+        XCTAssertEqual(firstWindowed.mode, .windowed)
+        XCTAssertEqual(
+            firstWindowed.unavailableFeatures.map(\.feature),
+            VisionUnavailablePresentationFeature.allCases.sorted()
+        )
+        XCTAssertEqual(
+            Set(firstWindowed.unavailableFeatures.map(\.reason)),
+            [.stage18WindowedOnly]
+        )
+
+        guard case let .unchanged(duplicate) = await coordinator.applyScene(
+            firstScene,
+            ownership: first
+        ) else {
+            return XCTFail("Expected duplicate scene to remain unchanged")
+        }
+        XCTAssertEqual(
+            duplicate.visionWindowedPresentation,
+            firstWindowed
+        )
+
+        guard case let .applied(inputSnapshot) = await coordinator.applyInput(
+            try makeInput(ownership: first),
+            controllerLeases: [],
+            ownership: first
+        ) else {
+            return XCTFail("Expected visionOS input state to apply")
+        }
+        let inputWindowed = try XCTUnwrap(
+            inputSnapshot.visionWindowedPresentation
+        )
+        XCTAssertEqual(inputWindowed.ownership, first)
+        XCTAssertEqual(inputWindowed.revision, inputSnapshot.revision)
+        XCTAssertNotEqual(inputWindowed.revision, firstWindowed.revision)
+        XCTAssertEqual(
+            inputWindowed.surfaceGeneration,
+            firstWindowed.surfaceGeneration
+        )
+        XCTAssertEqual(
+            inputWindowed.unavailableFeatures,
+            firstWindowed.unavailableFeatures
+        )
+
+        let replacement = try makeOwnership(
+            platform: .visionOS,
+            presentationGeneration: 2,
+            inputGeneration: 2
+        )
+        guard case let .applied(replacementActivation) = await coordinator
+            .activate(replacement) else {
+            return XCTFail("Expected replacement ownership to activate")
+        }
+        XCTAssertNil(replacementActivation.visionWindowedPresentation)
+        let staleOutcome = await coordinator.applyScene(
+            firstScene,
+            ownership: first
+        )
+        XCTAssertEqual(staleOutcome, .staleOwnership)
+
+        guard case let .applied(replacementSnapshot) = await coordinator
+            .applyScene(
+                try makeSceneUpdate(
+                    ownership: replacement,
+                    surfaceGeneration: 2
+                ),
+                ownership: replacement
+            ) else {
+            return XCTFail("Expected replacement visionOS scene to apply")
+        }
+        let replacementWindowed = try XCTUnwrap(
+            replacementSnapshot.visionWindowedPresentation
+        )
+        XCTAssertEqual(replacementWindowed.ownership, replacement)
+        XCTAssertEqual(
+            replacementWindowed.revision,
+            replacementSnapshot.revision
+        )
+        XCTAssertEqual(replacementWindowed.surfaceGeneration.rawValue, 2)
+
+        guard case let .applied(detached) = await coordinator.applyScene(
+            try makeSceneUpdate(
+                ownership: replacement,
+                sourceRevision: 2,
+                surfaceGeneration: 2,
+                attached: false
+            ),
+            ownership: replacement
+        ) else {
+            return XCTFail("Expected detached scene to apply")
+        }
+        XCTAssertNil(detached.visionWindowedPresentation)
+
+        guard case let .applied(stopped) = await coordinator.stop(
+            ownership: replacement,
+            reason: .localStop
+        ) else {
+            return XCTFail("Expected current ownership to stop")
+        }
+        XCTAssertNil(stopped.visionWindowedPresentation)
+    }
+
     func testCoordinatorPublishesOneRebrandedCompleteSnapshot() async throws {
         let recorder = TVVisionPresentationActionRecorder()
         let coordinator = try TVVisionPlatformPresentationCoordinator(
@@ -35,6 +163,7 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         }
         let presentation = try XCTUnwrap(snapshot.presentation)
         XCTAssertEqual(snapshot.phase, .active)
+        XCTAssertNil(snapshot.visionWindowedPresentation)
         XCTAssertEqual(snapshot.revision.rawValue, 5)
         XCTAssertEqual(presentation.revision, snapshot.revision)
         XCTAssertEqual(presentation.sceneSurface.revision, snapshot.revision)
@@ -1016,6 +1145,7 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
     }
 
     private func makeOwnership(
+        platform: TVVisionPlatform = .tvOS,
         sessionID: UUID = UUID(
             uuidString: "00000000-0000-0000-0000-000000000123"
         )!,
@@ -1024,7 +1154,7 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         inputGeneration: UInt64 = 1
     ) throws -> TVVisionPresentationOwnership {
         try TVVisionPresentationOwnership(
-            platform: .tvOS,
+            platform: platform,
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
             presentationGeneration: TVVisionGeneration(
@@ -1041,12 +1171,13 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
     private func makeSceneUpdate(
         ownership: TVVisionPresentationOwnership,
         sourceRevision: UInt64 = 1,
+        surfaceGeneration rawSurfaceGeneration: UInt64 = 1,
         attached: Bool = true
     ) throws -> TVVisionStreamGeometryBindingUpdate {
         let revision = try TVVisionSemanticRevision(rawValue: sourceRevision)
         let surfaceGeneration = try TVVisionGeneration(
             domain: .surface,
-            rawValue: 1
+            rawValue: rawSurfaceGeneration
         )
         guard attached else {
             return TVVisionStreamGeometryBindingUpdate(
@@ -1103,11 +1234,17 @@ final class TVVisionPlatformPresentationCoordinatorTests: XCTestCase {
         ownership: TVVisionPresentationOwnership,
         sourceRevision: UInt64 = 1
     ) throws -> TVVisionInputCapabilitySnapshot {
-        try TVVisionInputCapabilitySnapshot(
+        let supported: Set<TVVisionInputCapability> = switch ownership.platform {
+        case .tvOS:
+            [.tvRemote, .extendedGamepad]
+        case .visionOS:
+            [.keyboard, .pointer]
+        }
+        return try TVVisionInputCapabilitySnapshot(
             platform: ownership.platform,
             revision: TVVisionSemanticRevision(rawValue: sourceRevision),
             inputGeneration: ownership.inputGeneration,
-            supported: [.tvRemote, .extendedGamepad],
+            supported: supported,
             focusEligibility: .eligible
         )
     }

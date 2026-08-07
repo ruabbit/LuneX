@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`31/50 ready`；1.1–5.6已完成task级验收，下一项6.1 visionOS显式windowed mode与typed unavailable states |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `32/50 ready`；6.1 current visionOS windowed actual state已实现并通过fresh test/build/repository/final-state验收，下一项6.2 actual window surface frame/Metal绑定 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -58,6 +58,10 @@
 5.6 post-record `/tmp/LuneX-18-5_6-post-record-r2.omtl07`与final audit `/tmp/LuneX-18-5_6-final-audit.cNq2is`确认五份authority含pre/final双门索引、精确11文件3 test/8 authority分类、三条矩阵断言未弱化或禁用、tasks仅5.6 checkbox变化、production/reference/dependency零diff及证明分层准确；无阻止独立提交的问题。
 
 5.6 final-record `/tmp/LuneX-18-5_6-final-record.qI7nfQ`再次确认strict `9/9`、OpenSpec `31/50 next 6.1`、精确11文件分类、五份authority四门索引、稳定project、retained evidence、disabled opt-ins、no-process与diff边界；可精确stage并独立提交推送。
+
+6.1进入`in_progress`。1.4已有`VisionWindowedPresentationState`、唯一`.windowed`模式及immersive/passthrough/stereoscopic/volumetric全量typed unavailable值合同，但production仅在私有vision input snapshot中临时构造，shared coordinator snapshot与AppModel尚无显式actual windowed状态。6.1将把actual attached scene派生的状态纳入当前coordinator snapshot，按ownership/revision/surface replacement/closed/stop fail-closed，并由AppModel只读投影；不创建`ImmersiveSpace`、`RealityView`、第二decoder/frame queue或7.x UI。
+
+6.1首个production/test组合补丁因AppModel长测试函数名的换行锚点不精确被`apply_patch`原子拒绝，无部分写入；改为按文件与稳定相邻标题拆分，不重复错误锚点。
 
 4.3 post-mark final-state `/tmp/LuneX-18-4_3-final-state-r3.ShiHBj`只读确认OpenSpec strict `9/9`、`22/50 next 4.4`、task done、稳定generator SHA-256、精确16文件scope、权威文档、retained evidence及privacy/reference/dependency/opt-in/process/diff边界。4.3可独立提交推送，阶段18和长期goal继续保持`in_progress`。
 
@@ -1328,3 +1332,23 @@
 - **五平台build：** fresh `/tmp/LuneX-18-5_6-builds.ijxOfl`中macOS、fixed iPhone/iPad/Apple TV/Vision Pro unsigned Debug全部结构化为`succeeded / 0 warning / 0 error / 0 analyzer warning`且各有`1 AIR/1 metallib`；固定UUID仅作destination，未查询或操作Simulator lifecycle。
 - **权威同步：** 已同步OpenSpec design/visionOS input spec、阶段18runtime contract、completion roadmap与三份planning，记录三条连接矩阵、fresh focused/related/normal/五平台证据和6.x/7.x/physical/live边界。5.6继续保持pre-mark `30/50 next 5.6`。
 - **下一步：** 逐文件test/docs diff审计、fixture/OpenSpec/generator/membership/privacy/reference/dependency/retained-evidence repository pre-gate；通过后才勾选5.6。
+
+## 2026-08-07 阶段 18 任务 6.1 推进
+
+- **状态：** `in_progress`；OpenSpec保持pre-mark `31/50 ready`、next 6.1。已将1.4既有typed windowed/unavailable值合同接入current platform presentation coordinator snapshot与AppModel actual-state投影，不创建immersive runtime，也不提前实现6.2 frame、6.3 HDR、6.4 audio或7.x UI。
+- **focused验收：** fresh `/tmp/LuneX-18-6_1-focused.XQEqfy/Focused.xcresult`结构化通过`4/4 passed / 0 skipped / 0 failed / 0 expected failure`，build为`succeeded / 0 warning / 0 error / 0 analyzer warning`。覆盖coordinator scene/replacement/stale/detach/stop、AppModel current ownership和两个既有windowed/unavailable值合同。
+- **related验收：** fresh `/tmp/LuneX-18-6_1-related.dmWvOh/Related.xcresult`结构化通过`251/251 passed / 0 skipped / 0 failed / 0 expected failure`，build四类diagnostics为0；完整AppModel、coordinator/state、session media environment、vision input合同与Metal presenter无回归。
+- **normal验收：** fresh `/tmp/LuneX-18-6_1-normal.pJMQ2K/Normal.xcresult`结构化通过`1074 total / 1073 passed / 1 skipped / 0 failed / 0 expected failure`，build四类diagnostics为0；唯一skip精确为显式真实Keychain round-trip，两个真实opt-in均unset。
+- **五平台build：** fresh `/tmp/LuneX-18-6_1-builds.APF2yT`中macOS、fixed iPhone/iPad/Apple TV/Vision Pro unsigned Debug全部结构化为`succeeded / 0 warning / 0 error / 0 analyzer warning`且各有`1 AIR/1 metallib`；固定UUID只作destination，未操作Simulator lifecycle。
+- **审计补强：** production复核确认windowed state会随input/display/audio/video更新重标到coordinator current revision；新增跨组件revision回归，visionOS测试fixture使用平台合法keyboard/pointer capability。production无需修订。
+- **审计后验收：** fresh focused `/tmp/LuneX-18-6_1-audit-focused.u9HXzp`为`1/1`，related `/tmp/LuneX-18-6_1-audit-related.3Whib6`为`251/251`，normal `/tmp/LuneX-18-6_1-audit-normal.VXSI3H`为`1074/1073/1 exact Keychain skip/0`；全部build diagnostics为0。
+- **权威同步：** 已同步OpenSpec design/visionOS media spec、阶段18runtime contract、completion roadmap与三份planning；记录actual scene派生、跨组件revision、replacement/terminal清理、fresh证据和proof boundary。6.1仍为pre-mark pending。
+- **下一步：** 逐文件production/test/docs diff审计并运行fresh repository pre-gate；通过后才勾选6.1。固定UUID只作build destination，不操作Simulator lifecycle。
+- **repository pre-gate包装错误 1：** `/tmp/LuneX-18-6_1-repository-pre.a54Ef7`已通过fixture/OpenSpec/generator/scope/membership/语义/test/build部分，最后因边界断言误要求小写`do not prove`和大写`Tasks`字面量而退出；真实spec/contract分别为`SHALL NOT prove`和`6.2-8.x`。这是检查器字面假设，不是源码、测试或边界失败；修正为真实权威文本后从fresh目录完整重跑。
+- **repository pre-gate：** fresh `/tmp/LuneX-18-6_1-repository-pre-r2.nZ4iKX`完整通过fixture self/tree、strict `9/9`、pre-mark `31/50 next 6.1`、三次稳定project SHA-256、精确11文件scope、membership、windowed/current ownership/revision/replacement/terminal/tvOS nil语义、全部retained test/build/Metal证据、唯一Keychain skip及privacy/clean-room/reference/dependency/opt-in/process/diff/proof边界。
+- **状态：** 6.1已有独立实现、审计、行为、build和repository证据，现已勾选为`complete`。只读post-mark final-state `/tmp/LuneX-18-6_1-final-state.D3kVOH`确认OpenSpec `32/50 ready`、next 6.2、精确12文件scope及唯一6.1 checkbox替换；没有重复test/build/generator、访问Keychain/live host或操作Simulator lifecycle。阶段18与长期目标保持`in_progress/active`。
+- **post-record包装错误 1：** 首个post-record命令中的Markdown反引号截断JavaScript模板，脚本在解析阶段以`SyntaxError: Unexpected number`退出，shell和任何仓库/测试/build/设备操作均未启动；移除反引号字面依赖后从fresh目录重跑。
+- **post-record：** fresh `/tmp/LuneX-18-6_1-post-record-r2.aMya2c`通过strict `9/9`、OpenSpec `32/50 next 6.2`、精确12文件`2 production / 2 test / 8 authority`分类、五份authority证据索引、retained test/build、稳定project及opt-in/process/reference/dependency/diff边界。下一步最终diff审计与final-record。
+- **final audit包装错误 1：** 首个最终审计命令再次因stage行中的Markdown反引号截断JavaScript模板，以`SyntaxError: Unexpected identifier 'in_progress'`在shell启动前退出；无副作用。改为按无反引号字段组合检查后从fresh目录重跑。
+- **final diff audit：** fresh `/tmp/LuneX-18-6_1-final-audit-r2.nVb6kC`通过精确12文件`2 production / 2 test / 8 authority`分类、actual scene/current ownership/revision/surface/replacement/terminal/tvOS nil语义、完整typed unavailable与AppModel current投影；确认无弱化测试、并行media owner、6.2提前实现、第二checkbox、敏感字面量或reference/dependency/project漂移。无阻止6.1独立提交的问题。
+- **final-record：** `/tmp/LuneX-18-6_1-final-record.cA8Upm`确认strict `9/9`、OpenSpec `32/50 next 6.2`、精确12文件分类、五份authority各四道门索引、retained test/build、稳定project及全部仓库边界；6.1进入精确stage、独立提交与推送。

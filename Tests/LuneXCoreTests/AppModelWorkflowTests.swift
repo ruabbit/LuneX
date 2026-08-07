@@ -3071,6 +3071,124 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    func testVisionWindowedPresentationReportsOnlyCurrentOwnership()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 76,
+                    key: Data(repeating: 0x76, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .visionOS,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+        )
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 2
+        }
+        let first = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .visionOS,
+            presentationGeneration: 1,
+            sequence: 2,
+            visionSurfaceGeneration: 1
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            first,
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.visionWindowedPresentationState
+                == first.snapshot.visionWindowedPresentation
+        }
+        XCTAssertEqual(model.visionWindowedPresentationState?.mode, .windowed)
+        XCTAssertEqual(
+            model.visionWindowedPresentationState?
+                .unavailableFeatures.map(\.feature),
+            VisionUnavailablePresentationFeature.allCases.sorted()
+        )
+
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .visionOS,
+                surfaceGeneration: 2,
+                revision: 1
+            )
+        )
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+                && model.visionWindowedPresentationState == nil
+        }
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            first,
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.visionWindowedPresentationState)
+
+        let replacement = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .visionOS,
+            presentationGeneration: 2,
+            sequence: 2,
+            visionSurfaceGeneration: 2
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            replacement,
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.visionWindowedPresentationState
+                == replacement.snapshot.visionWindowedPresentation
+        }
+        XCTAssertEqual(
+            model.visionWindowedPresentationState?.surfaceGeneration.rawValue,
+            2
+        )
+
+        let detached = try makeTVVisionPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: 1,
+            platform: .visionOS,
+            presentationGeneration: 2,
+            sequence: 3
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            detached,
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.visionWindowedPresentationState == nil }
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertNil(model.visionWindowedPresentationState)
+    }
+
     func testTVVisionPresentationClearsAndAppliesLocalStop() async throws {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment()
@@ -6051,6 +6169,7 @@ final class AppModelWorkflowTests: XCTestCase {
         phase: TVVisionPlatformPresentationPhase = .active,
         display sourceDisplay: TVVisionDisplaySnapshot? = nil,
         audioRoute sourceAudioRoute: TVVisionAudioRouteSnapshot? = nil,
+        visionSurfaceGeneration: UInt64? = nil,
         isSemanticRevisionExhausted: Bool = false
     ) throws -> SessionTVVisionPlatformPresentationState {
         let ownership = try TVVisionPresentationOwnership(
@@ -6129,6 +6248,16 @@ final class AppModelWorkflowTests: XCTestCase {
                 )
             }
         }
+        let visionWindowedPresentation = try visionSurfaceGeneration.map {
+            try VisionWindowedPresentationState.windowedOnly(
+                ownership: ownership,
+                revision: revision,
+                surfaceGeneration: TVVisionGeneration(
+                    domain: .surface,
+                    rawValue: $0
+                )
+            )
+        }
         return SessionTVVisionPlatformPresentationState(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
@@ -6138,6 +6267,9 @@ final class AppModelWorkflowTests: XCTestCase {
                 revision: revision,
                 phase: phase,
                 presentation: phase == .active ? presentation : nil,
+                visionWindowedPresentation: phase == .active
+                    ? visionWindowedPresentation
+                    : nil,
                 display: phase == .active ? display : nil,
                 audioRoute: phase == .active ? audioRoute : nil,
                 video: TVVisionPlatformVideoSnapshot(
@@ -7703,6 +7835,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
                     revision: revision,
                     phase: .failed(.invalidComponent(.video)),
                     presentation: nil,
+                    visionWindowedPresentation: nil,
                     display: nil,
                     audioRoute: nil,
                     video: TVVisionPlatformVideoSnapshot(

@@ -212,7 +212,7 @@ resolution as window geometry is prohibited.
 
 | Concern | Current state | Required stage 18 direction |
 |---|---|---|
-| Presentation mode | Shared `WindowGroup`; no explicit runtime value | Publish current-generation windowed mode and typed unavailable immersive/stereoscopic/volumetric states |
+| Presentation mode | Shared `WindowGroup`; current attached visionOS scene publishes checked `.windowed` state through `TVVisionPlatformPresentationCoordinator` and `AppModel`, with immersive/passthrough/stereoscopic/volumetric all typed unavailable | Bind current decoded frames to that actual window surface in 6.2; native actual-state UI remains 7.2 |
 | Surface and video | Actual `TVVisionStreamMetalView` publishes finite geometry and one revision to drawable/fit/fill/input reference; current media ownership subscribes to the single frame source and rejects stale decoder/revision state | Connect actual coordinator render effects in visionOS media work |
 | HDR | Layer intent/metadata foundation compiles, but `UIScreen` and current headroom are unavailable; capability resolver returns typed SDR fallback | Probe public layer/color/dynamic-range APIs and keep SDR fallback whenever a finite current output bound cannot be established |
 | Spatial audio | Output-node `intendedSpatialExperience` applies `.fixed` or `.headTracked` and resets to `.bypassed`; listener property is unavailable | Bind actual route, preference, typed readback, interruption/reset recovery, graph generation, and AppModel state |
@@ -2246,6 +2246,74 @@ and repository boundaries. Final diff audit
 `/tmp/LuneX-18-5_6-final-audit.cNq2is` found no weakened/disabled test path,
 sensitive test literal, production change, second checkbox, or proof-tier
 promotion. No issue blocks the independent task 5.6 commit.
+
+## Task 6.1 current visionOS windowed presentation state
+
+Task 6.1 reuses the checked value contract from task 1.4 and adds no immersive
+runtime. `TVVisionPlatformPresentationCoordinator` now derives one actual
+`VisionWindowedPresentationState` only after the current visionOS scene is
+attached. The value owns the current presentation and surface generations,
+reports only `.windowed`, and carries the exact typed unavailable set for
+immersive, passthrough, stereoscopic, and volumetric presentation.
+
+The coordinator rebrands this value to its single semantic revision whenever a
+current input, display, audio, or video component advances. Replacement
+activation publishes no inherited window state; old ownership callbacks remain
+stale, and detach, failure, remote termination, or stop clears the state. tvOS
+snapshots always publish `nil`. `AppModel.visionWindowedPresentationState`
+further requires the current stream/media session, media generation,
+presentation ownership, embedded ownership, active phase, and matching
+revision before exposing the value.
+
+Fresh retained evidence after audit is:
+
+- focused `/tmp/LuneX-18-6_1-audit-focused.u9HXzp/Focused.xcresult`:
+  `1/1 passed / 0 skipped / 0 failed / 0 expected failure`, including
+  cross-component semantic-revision rebranding;
+- related `/tmp/LuneX-18-6_1-audit-related.3Whib6/Related.xcresult`:
+  `251/251 passed / 0 skipped / 0 failed / 0 expected failure`;
+- normal `/tmp/LuneX-18-6_1-audit-normal.VXSI3H/Normal.xcresult`:
+  `1074 total / 1073 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain test;
+- five-platform unsigned Debug `/tmp/LuneX-18-6_1-builds.APF2yT`: macOS and the
+  fixed iPhone, iPad, Apple TV, and Vision Pro destinations all succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib.
+
+Both real opt-ins remained unset and fixed UUIDs were build destinations only;
+no Simulator lifecycle operation occurred. These results prove deterministic
+state ownership, replacement/terminal clearing, cross-component revision
+coherence, AppModel admission, and unsigned SDK compilation. They do not prove
+Simulator runtime, signed installation, an actual immersive runtime, decoded
+frame presentation on Vision Pro, physical HDR/spatial audio/input, live
+Sunshine, latency, comfort, performance, power, or thermal behavior. Tasks
+6.2-8.x and physical/live acceptance remain pending.
+
+The fresh repository pre-gate
+`/tmp/LuneX-18-6_1-repository-pre-r2.nZ4iKX` additionally passed the protocol
+fixture self-test and complete fixture tree, OpenSpec strict `9/9`, pre-mark
+`31/50 next 6.1`, three byte-stable project generations at SHA-256
+`e6a88cd00f4364b7e3a8011841abba9344a9ae3ac1c411e18d1ce426b9b739cb`, exact
+eleven-file scope, generator/project membership, retained structured test and
+five-platform Metal evidence, the exact Keychain skip, and privacy,
+clean-room, dependency, opt-in, idle-process, diff, and proof boundaries. An
+earlier boundary wrapper exited only because it expected different prose
+capitalization and a different `tasks` prefix; the corrected fresh gate reran
+from the beginning and passed without rerunning tests or builds.
+
+After that gate, only task 6.1 was checked. The read-only post-mark final-state
+`/tmp/LuneX-18-6_1-final-state.D3kVOH` confirmed OpenSpec strict `9/9`,
+`32/50 ready`, task 6.1 complete, task 6.2 next, exact twelve-file scope, and
+one checkbox replacement. No test, build, generator, Keychain, live-host, or
+Simulator lifecycle operation was repeated by that final-state check.
+
+Post-record `/tmp/LuneX-18-6_1-post-record-r2.aMya2c` and final diff audit
+`/tmp/LuneX-18-6_1-final-audit-r2.nVb6kC` confirmed the exact two-production,
+two-test, eight-authority classification; all five authority evidence indexes;
+the current ownership, cross-component revision, replacement, terminal, and
+tvOS-nil semantics; and no weakened test, parallel visionOS media owner, early
+task 6.2 implementation, second checkbox, sensitive literal, reference,
+dependency, or generated-project drift. Task 6.1 is independently committable.
 
 ## Fixed simulator inventory
 

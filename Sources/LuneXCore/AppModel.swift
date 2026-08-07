@@ -230,6 +230,25 @@ final class AppModel: ApplicationInputSink {
         return state.snapshot.presentation
     }
 
+    var visionWindowedPresentationState:
+        VisionWindowedPresentationState?
+    {
+        guard expectedTVVisionPlatform == .visionOS,
+              let state = tvVisionPlatformPresentationState,
+              state.sessionID == activeStreamSessionID,
+              state.sessionID == activeMediaSessionID,
+              state.mediaGeneration == activeMediaGeneration,
+              state.snapshot.phase == .active,
+              state.snapshot.ownership
+                == tvVisionPlatformPresentationOwnership,
+              let windowed = state.snapshot.visionWindowedPresentation,
+              windowed.ownership == state.snapshot.ownership,
+              windowed.revision == state.snapshot.revision else {
+            return nil
+        }
+        return windowed
+    }
+
     var spatialAudioPresentationStatus: SpatialAudioPresentationStatus {
         SpatialAudioPresentationStatus(audioRuntimeState)
     }

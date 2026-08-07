@@ -74,6 +74,7 @@ struct TVVisionPlatformPresentationCoordinatorSnapshot: Equatable, Sendable {
     let revision: TVVisionSemanticRevision
     let phase: TVVisionPlatformPresentationPhase
     let presentation: TVVisionPlatformPresentationSnapshot?
+    let visionWindowedPresentation: VisionWindowedPresentationState?
     let display: TVVisionDisplaySnapshot?
     let audioRoute: TVVisionAudioRouteSnapshot?
     let video: TVVisionPlatformVideoSnapshot
@@ -204,6 +205,7 @@ actor TVVisionPlatformPresentationCoordinator {
         let ownership: TVVisionPresentationOwnership
         var revision: TVVisionSemanticRevision
         var scene: SceneComponent?
+        var visionWindowedPresentation: VisionWindowedPresentationState?
         var input: InputComponent?
         var display: DisplayComponent?
         var audio: AudioComponent?
@@ -396,6 +398,7 @@ actor TVVisionPlatformPresentationCoordinator {
             ownership: ownership,
             revision: revision,
             scene: nil,
+            visionWindowedPresentation: nil,
             input: nil,
             display: nil,
             audio: nil,
@@ -441,6 +444,7 @@ actor TVVisionPlatformPresentationCoordinator {
         }
 
         let candidate: SceneComponent
+        let visionWindowedPresentation: VisionWindowedPresentationState?
         switch update.status {
         case .active:
             guard let binding = update.binding,
@@ -460,6 +464,22 @@ actor TVVisionPlatformPresentationCoordinator {
                 snapshot: binding.sceneSurfaceSnapshot,
                 isFocusEligible: binding.isFocusEligible
             )
+            if ownership.platform == .visionOS {
+                guard let windowed = try? VisionWindowedPresentationState
+                    .windowedOnly(
+                        ownership: ownership,
+                        revision: update.revision,
+                        surfaceGeneration: update.surfaceGeneration
+                    ) else {
+                    return await failState(
+                        state,
+                        failure: .invalidComponent(.scene)
+                    )
+                }
+                visionWindowedPresentation = windowed
+            } else {
+                visionWindowedPresentation = nil
+            }
         case .closed:
             guard update.binding == nil,
                   let detached = try? TVVisionSceneSurfaceSnapshot(
@@ -482,6 +502,7 @@ actor TVVisionPlatformPresentationCoordinator {
                 snapshot: detached,
                 isFocusEligible: false
             )
+            visionWindowedPresentation = nil
         }
 
         switch componentDecision(current: state.scene, candidate: candidate) {
@@ -505,6 +526,7 @@ actor TVVisionPlatformPresentationCoordinator {
         }
         state.revision = revision
         state.scene = candidate
+        state.visionWindowedPresentation = visionWindowedPresentation
         let diagnostic: TVVisionPlatformPresentationDiagnosticClass? =
             if case .closed = update.status { .sceneClosed } else { nil }
         return await commitComponentState(state, diagnostic: diagnostic)
@@ -974,6 +996,7 @@ actor TVVisionPlatformPresentationCoordinator {
             revision: terminalRevision,
             phase: phase,
             presentation: nil,
+            visionWindowedPresentation: nil,
             display: nil,
             audioRoute: nil,
             video: TVVisionPlatformVideoSnapshot(
@@ -1005,6 +1028,7 @@ actor TVVisionPlatformPresentationCoordinator {
                 revision: terminalRevision,
                 phase: phase,
                 presentation: nil,
+                visionWindowedPresentation: nil,
                 display: nil,
                 audioRoute: nil,
                 video: terminal.video,
@@ -1345,6 +1369,9 @@ actor TVVisionPlatformPresentationCoordinator {
             revision: state.revision,
             phase: phase,
             presentation: phase == .active ? state.presentation : nil,
+            visionWindowedPresentation: phase == .active
+                ? rebrandVisionWindowedPresentation(state)
+                : nil,
             display: phase == .active
                 ? rebrandDisplay(state.display, revision: state.revision)
                 : nil,
@@ -1356,6 +1383,21 @@ actor TVVisionPlatformPresentationCoordinator {
             teardownCount: teardownCount,
             isSemanticRevisionExhausted: isSemanticRevisionExhausted,
             isSequenceExhausted: isSequenceExhausted
+        )
+    }
+
+    private func rebrandVisionWindowedPresentation(
+        _ state: ActiveState
+    ) -> VisionWindowedPresentationState? {
+        guard state.ownership.platform == .visionOS,
+              let current = state.visionWindowedPresentation else {
+            return nil
+        }
+        return try? VisionWindowedPresentationState(
+            ownership: state.ownership,
+            revision: state.revision,
+            surfaceGeneration: current.surfaceGeneration,
+            unavailableFeatures: current.unavailableFeatures
         )
     }
 

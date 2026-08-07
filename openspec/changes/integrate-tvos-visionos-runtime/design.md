@@ -229,6 +229,19 @@ reservations, and admits only SDK-supported controller, keyboard, pointer, or
 indirect events. No `ImmersiveSpace`, `RealityView`, stereoscopic surface, or
 volumetric promise is created by this change.
 
+Task 6.1 promotes the existing checked `VisionWindowedPresentationState` into
+the shared platform coordinator snapshot. Activation alone reports no mode;
+only the current attached visionOS scene creates `.windowed` with its actual
+surface generation and the complete, duplicate-free immersive, passthrough,
+stereoscopic, and volumetric unavailable set. Every later current input,
+display, audio, or video component revision rebrands that state to the one
+coordinator semantic revision without changing its surface identity. Scene
+detach, ownership replacement, failure, remote termination, and stop clear it,
+and tvOS snapshots always leave it absent. `AppModel` exposes the value only
+when session, media generation, presentation ownership, embedded ownership,
+and revision are all current. This does not bind decoded frames or create a
+second media owner; those remain task 6.2.
+
 This bounded scope provides a usable native visionOS client without hiding the
 additional comfort, recentering, depth, safety, and rendering work required for
 immersive streaming.
