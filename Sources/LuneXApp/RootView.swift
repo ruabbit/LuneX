@@ -721,6 +721,9 @@ private struct StreamWorkspaceView: View {
                 },
                 visionSurfaceInputEventHandler: { event in
                     appModel.receiveVisionSurfaceInputEvent(event)
+                },
+                visionSystemInteractionEventHandler: { event in
+                    appModel.receiveVisionSystemInteractionEvent(event)
                 }
             )
                 .ignoresSafeArea()

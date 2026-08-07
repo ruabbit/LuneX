@@ -165,6 +165,18 @@ release admission closure, or focus loss. Task 5.3 cancels surface handlers and
 current deliveries on replacement, but task 5.5 still owns the complete ordered
 held-state release barrier and restoration of local UI ownership.
 
+Task 5.4 reuses the task 1.4 bounded system-interaction decision instead of
+intercepting platform-owned behavior. Public hardware-key input classifies
+Escape, keyboard mute/volume, Print Screen, Command-Shift-3/4/5 capture, and
+Command-Q/H/Tab as canonical local reservations. The actual stream surface
+publishes only that typed decision with its current surface generation;
+`AppModel` rejects an old surface and clears the bounded state on replacement
+or stop. Digital Crown recentering, safety behavior, system-owned capture or
+volume buttons, gaze, and hand interaction have no selected application event
+source or synthetic Moonlight mapping. The only installed pointer recognizers
+remain explicitly `.indirectPointer`. Task 5.5 still owns held-state release
+and local-navigation restoration.
+
 ### Keep visionOS windowed streaming explicit
 
 Stage 18 supports the actual SwiftUI window containing the Metal stream

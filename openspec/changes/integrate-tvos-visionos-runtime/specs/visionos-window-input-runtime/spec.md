@@ -47,6 +47,14 @@ unsupported gaze, hand, or system gesture as Moonlight input.
 - **WHEN** the platform reports interaction that has no public supported LuneX mapping
 - **THEN** LuneX SHALL reserve or drop it locally with typed bounded state
 
+#### Scenario: Public reserved hardware key occurs
+- **WHEN** the current stream surface receives Escape, keyboard volume, capture, or another declared system shortcut through `UIPress.key`
+- **THEN** LuneX SHALL publish only a canonical current-surface local decision and SHALL emit no Moonlight input event
+
+#### Scenario: Interaction is owned by visionOS
+- **WHEN** recentering, safety, system capture or volume, gaze, or hand behavior has no selected public LuneX event source
+- **THEN** LuneX SHALL install no synthetic source or direct spatial recognizer and SHALL leave the interaction to the system
+
 ### Requirement: Supported visionOS input SHALL be capability gated
 Controller, keyboard, pointer, and indirect input SHALL be admitted only when a
 public adapter reports support and the current session/input/surface generation

@@ -180,6 +180,8 @@ final class AppModel: ApplicationInputSink {
         TVRemoteFocusHandoffState.localNavigation
     private(set) var tvRemoteReservedCommandState =
         TVRemoteReservedCommandRuntimeState.idle
+    private(set) var visionSystemInteractionDecisionState:
+        VisionSystemInteractionDecision?
     private(set) var tvControllerRosterState: TVControllerRosterSnapshot?
     private(set) var tvControllerRoutedRosterState: TVControllerRosterSnapshot?
     private(set) var tvControllerFeedbackDecisionState:
@@ -715,6 +717,9 @@ final class AppModel: ApplicationInputSink {
         if previousAdmission?.update.surfaceGeneration
             != update.surfaceGeneration {
             clearTVOSDisplayHDRState(cancelApplication: true)
+            if platform == .visionOS {
+                visionSystemInteractionDecisionState = nil
+            }
         }
         tvVisionPlatformGeometryAdmission = TVVisionPlatformGeometryAdmission(
             ownership: ownership,
@@ -806,6 +811,16 @@ final class AppModel: ApplicationInputSink {
         tvRemoteReservedCommandState = .resolve(command)
         guard command == .backMenu else { return }
         setTVStreamOverlayVisible(true)
+    }
+
+    func receiveVisionSystemInteractionEvent(
+        _ event: VisionSurfaceSystemInteractionEvent
+    ) {
+        guard expectedTVVisionPlatform == .visionOS,
+              let snapshot = currentVisionWindowInputSnapshot,
+              snapshot.presentation.surfaceGeneration
+                == event.surfaceGeneration else { return }
+        visionSystemInteractionDecisionState = event.decision
     }
 
     func receiveVisionSurfaceInputEvent(
@@ -2816,6 +2831,7 @@ final class AppModel: ApplicationInputSink {
     private func clearTVVisionPlatformPresentationRuntime(
         preservingTerminalState: Bool = false
     ) {
+        visionSystemInteractionDecisionState = nil
         if expectedTVVisionPlatform == .tvOS {
             tvRemoteReservedCommandState = .idle
             tvRemoteFocusHandoffState = tvRemoteFocusHandoffState

@@ -548,6 +548,48 @@ final class VisionWindowInputContractTests: XCTestCase {
         }
     }
 
+    func testVisionKeyboardReservationResolverKeepsSystemInputLocal() {
+        let cases: [(UInt16, InputModifiers, VisionSystemReservedInteraction)] = [
+            (0x29, [], .escape),
+            (0x46, [], .capture),
+            (0x7F, [], .volume),
+            (0x80, [], .volume),
+            (0x81, [], .volume),
+            (0x20, [.command, .shift], .capture),
+            (0x21, [.command, .shift], .capture),
+            (0x22, [.command, .shift], .capture),
+            (0x14, [.command], .systemGesture),
+            (0x0B, [.command], .systemGesture),
+            (0x2B, [.command], .systemGesture)
+        ]
+        let adapter = VisionNativeInputAdapter()
+        for (usage, modifiers, interaction) in cases {
+            XCTAssertEqual(
+                VisionKeyboardHIDTranslator.reservedInteraction(
+                    usage: usage,
+                    modifiers: modifiers
+                ),
+                interaction
+            )
+            let output = adapter.keyboard(VisionKeyboardSample(
+                hidUsage: usage,
+                characters: nil,
+                isDown: true,
+                modifiers: modifiers,
+                isRepeat: false
+            ))
+            XCTAssertNil(output.event)
+            XCTAssertEqual(
+                output.policy,
+                .reserveLocally(reason: interaction.rawValue)
+            )
+        }
+        XCTAssertNil(VisionKeyboardHIDTranslator.reservedInteraction(
+            usage: 0x14,
+            modifiers: []
+        ))
+    }
+
     func testVisionFirstResponderPolicyRequiresKeyInteractiveVisibleWindow() {
         XCTAssertTrue(VisionFirstResponderPolicy.shouldOwnInput(
             isKeyWindow: true,
@@ -655,6 +697,35 @@ final class VisionWindowInputContractTests: XCTestCase {
             XCTAssertEqual(
                 error as? VisionNativeInputAdapterError,
                 .invalidSurfaceGeneration
+            )
+        }
+
+        let decision = VisionSystemInteractionDecision.resolve(.escape)
+        let systemEvent = try VisionSurfaceSystemInteractionEvent(
+            surfaceGeneration: surface,
+            decision: decision
+        )
+        XCTAssertEqual(systemEvent.surfaceGeneration, surface)
+        XCTAssertEqual(systemEvent.decision, decision)
+        XCTAssertThrowsError(try VisionSurfaceSystemInteractionEvent(
+            surfaceGeneration: generation(.input, 7),
+            decision: decision
+        )) { error in
+            XCTAssertEqual(
+                error as? VisionNativeInputAdapterError,
+                .invalidSurfaceGeneration
+            )
+        }
+        XCTAssertThrowsError(try VisionSurfaceSystemInteractionEvent(
+            surfaceGeneration: surface,
+            decision: VisionSystemInteractionDecision(
+                interaction: .gaze,
+                disposition: .reserveLocally
+            )
+        )) { error in
+            XCTAssertEqual(
+                error as? VisionNativeInputAdapterError,
+                .invalidSystemInteractionDecision
             )
         }
     }

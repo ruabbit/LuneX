@@ -2262,6 +2262,16 @@ final class AppModelWorkflowTests: XCTestCase {
             domain: .surface,
             rawValue: 1
         )
+        let currentSystemInteraction = try VisionSurfaceSystemInteractionEvent(
+            surfaceGeneration: currentSurface,
+            decision: VisionSystemInteractionDecision.resolve(.escape)
+        )
+        model.receiveVisionSystemInteractionEvent(currentSystemInteraction)
+        XCTAssertEqual(
+            model.visionSystemInteractionDecisionState,
+            .resolve(.escape)
+        )
+        XCTAssertTrue(mediaEnvironment.currentSentInputApplications().isEmpty)
         let firstEvent = try VisionSurfaceInputEvent(
             surfaceGeneration: currentSurface,
             path: .keyboard,
@@ -2288,6 +2298,23 @@ final class AppModelWorkflowTests: XCTestCase {
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().count == 4
         }
+        XCTAssertNil(model.visionSystemInteractionDecisionState)
+        model.receiveVisionSystemInteractionEvent(currentSystemInteraction)
+        XCTAssertNil(model.visionSystemInteractionDecisionState)
+        let replacementSurface = try TVVisionGeneration(
+            domain: .surface,
+            rawValue: 2
+        )
+        let replacementSystemInteraction =
+            try VisionSurfaceSystemInteractionEvent(
+                surfaceGeneration: replacementSurface,
+                decision: VisionSystemInteractionDecision.resolve(.capture)
+            )
+        model.receiveVisionSystemInteractionEvent(replacementSystemInteraction)
+        XCTAssertEqual(
+            model.visionSystemInteractionDecisionState,
+            .resolve(.capture)
+        )
         mediaEnvironment.resumeBlockedInputSend()
         await waitUntil {
             mediaEnvironment.currentSentInputApplications().count == 1
@@ -2299,10 +2326,6 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         XCTAssertEqual(model.receiveVisionSurfaceInputEvent(secondEvent), .local)
 
-        let replacementSurface = try TVVisionGeneration(
-            domain: .surface,
-            rawValue: 2
-        )
         let replacementEvent = try VisionSurfaceInputEvent(
             surfaceGeneration: replacementSurface,
             path: .keyboard,
@@ -2425,6 +2448,7 @@ final class AppModelWorkflowTests: XCTestCase {
         provider.finish(sessionID: record.sessionID)
         await launchTask.value
         XCTAssertEqual(model.session.phase, .disconnected)
+        XCTAssertNil(model.visionSystemInteractionDecisionState)
     }
 
     func testTVVisionPresentationAcceptsCurrentGenerationAndClearsOnReconnectAndRemoteTermination()

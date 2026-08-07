@@ -2,6 +2,7 @@ import Foundation
 
 enum VisionNativeInputAdapterError: Error, Equatable, Sendable {
     case invalidSurfaceGeneration
+    case invalidSystemInteractionDecision
     case unsupportedSurfacePath(VisionInputPath)
     case pathEventMismatch(VisionInputPath)
 }
@@ -39,6 +40,29 @@ struct VisionSurfaceInputEvent: Equatable, Sendable {
         self.surfaceGeneration = surfaceGeneration
         self.path = path
         self.event = event
+    }
+}
+
+struct VisionSurfaceSystemInteractionEvent: Equatable, Sendable {
+    let surfaceGeneration: TVVisionGeneration
+    let decision: VisionSystemInteractionDecision
+
+    init(
+        surfaceGeneration: TVVisionGeneration,
+        decision: VisionSystemInteractionDecision
+    ) throws {
+        do {
+            try surfaceGeneration.require(.surface)
+        } catch {
+            throw VisionNativeInputAdapterError.invalidSurfaceGeneration
+        }
+        guard decision == VisionSystemInteractionDecision.resolve(
+            decision.interaction
+        ) else {
+            throw VisionNativeInputAdapterError.invalidSystemInteractionDecision
+        }
+        self.surfaceGeneration = surfaceGeneration
+        self.decision = decision
     }
 }
 
@@ -116,13 +140,29 @@ enum VisionKeyboardHIDTranslator {
         }
     }
 
-    static func isReservedLocally(
+    static func reservedInteraction(
         usage: UInt16,
         modifiers: InputModifiers
-    ) -> Bool {
-        if usage == 0x29 { return true }
-        guard modifiers.contains(.command) else { return false }
-        return usage == 0x14 || usage == 0x0B || usage == 0x2B
+    ) -> VisionSystemReservedInteraction? {
+        switch usage {
+        case 0x29:
+            return .escape
+        case 0x46:
+            return .capture
+        case 0x7F...0x81:
+            return .volume
+        default:
+            break
+        }
+        if modifiers.contains([.command, .shift]),
+           (0x20...0x22).contains(usage) {
+            return .capture
+        }
+        guard modifiers.contains(.command) else { return nil }
+        if usage == 0x14 || usage == 0x0B || usage == 0x2B {
+            return .systemGesture
+        }
+        return nil
     }
 }
 
@@ -138,14 +178,15 @@ enum VisionFirstResponderPolicy {
 
 struct VisionNativeInputAdapter: Sendable {
     func keyboard(_ sample: VisionKeyboardSample) -> InputAdapterOutput {
-        if VisionKeyboardHIDTranslator.isReservedLocally(
+        if let interaction = VisionKeyboardHIDTranslator.reservedInteraction(
             usage: sample.hidUsage,
             modifiers: sample.modifiers
         ) {
+            let decision = VisionSystemInteractionDecision.resolve(interaction)
             return InputAdapterOutput(
                 event: nil,
                 policy: .reserveLocally(
-                    reason: "The visionOS system keyboard command remains local"
+                    reason: decision.interaction.rawValue
                 )
             )
         }

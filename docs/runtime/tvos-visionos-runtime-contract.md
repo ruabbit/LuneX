@@ -2029,6 +2029,73 @@ source, first-responder/teardown, double-admission, host-visible controller
 routing, tvOS-only release guard, test/project membership, pending-task, and
 repository-boundary checks. No finding blocks the task 5.3 commit.
 
+## Task 5.4 reserved visionOS system interaction
+
+The existing bounded `VisionSystemInteractionDecision` remains the single
+policy for system gesture, recenter, capture, safety, volume, escape, gaze,
+hand, and unsupported interaction classes. Task 5.4 does not intercept
+platform-owned behavior. The only actual event source added to this policy is
+the public hardware-key path already owned by the current Metal surface:
+Escape, keyboard mute/volume HID usages, Print Screen,
+Command-Shift-3/4/5 capture, and Command-Q/H/Tab resolve to canonical local
+decisions and produce no `RemoteInputEvent`.
+
+The surface event carries its checked surface generation. `AppModel` records
+the bounded decision only for the current visionOS surface, rejects an old
+surface after replacement, and clears state on replacement or stop. Digital
+Crown recentering, safety behavior, system-owned capture and volume buttons,
+gaze, and hand interaction have no selected LuneX event source. No ARKit,
+direct-touch, spatial-event, or gaze/hand recognizer was added; hover and
+scroll remain restricted to `.indirectPointer`. This task does not implement
+task 5.5 held-state release or local-navigation restoration.
+
+Fresh retained evidence is:
+
+- focused `/tmp/LuneX-18-5_4-focused-r2.oBJfvC/Focused.xcresult`:
+  `24/24 passed / 0 skipped / 0 failed / 0 expected failure`;
+- related `/tmp/LuneX-18-5_4-related.KdKMLz/Related.xcresult`:
+  `101/101 passed / 0 skipped / 0 failed / 0 expected failure`;
+- normal `/tmp/LuneX-18-5_4-normal.2eEluq/Normal.xcresult`:
+  `1066 total / 1065 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain test;
+- fixed Vision Pro direct
+  `/tmp/LuneX-18-5_4-visionos-direct.CsJwFj/VisionOS.xcresult` and fresh
+  five-platform unsigned Debug `/tmp/LuneX-18-5_4-builds.pGfMJ3`: every build
+  succeeded with zero warning, error, or analyzer-warning diagnostics and one
+  AIR plus one metallib.
+
+Both real opt-ins were unset and fixed UUIDs were only build destinations. No
+Simulator lifecycle operation was performed. These results prove deterministic
+policy/application behavior and unsigned SDK compatibility, not Simulator
+runtime, signed install, physical recenter/capture/volume/safety behavior,
+gaze/hand behavior, live Sunshine, latency, comfort, performance, power, or
+thermal acceptance. Task 5.4 remains pre-mark until the repository gate passes.
+
+The fresh repository pre-gate at
+`/tmp/LuneX-18-5_4-repository-pre.sSXJDF` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `28/50 next 5.4`, three byte-stable generator runs with
+project SHA-256
+`e6a88cd00f4364b7e3a8011841abba9344a9ae3ac1c411e18d1ce426b9b739cb`,
+the exact thirteen-file scope, current source/test/document semantics, retained
+test/build/Metal evidence, the single disabled real-Keychain skip, and the
+privacy, clean-room, dependency, reference, opt-in, process, and diff
+boundaries. Task 5.4 is now checked complete.
+
+The read-only post-mark final-state at
+`/tmp/LuneX-18-5_4-final-state.GcQmvO` confirmed OpenSpec `29/50 ready`, task
+5.4 done, task 5.5 next, the same stable project hash, and the exact
+fourteen-file scope. It did not repeat generator, test, build, Keychain, or
+Simulator lifecycle work. Ordered held-state release and local-navigation
+restoration remain task 5.5.
+
+Post-record `/tmp/LuneX-18-5_4-post-record.7WByk7` confirmed that all five
+authority records reference both gates and preserve the same current state,
+scope, implementation semantics, retained evidence, and repository boundaries.
+Final diff audit `/tmp/LuneX-18-5_4-final-audit.CbmtKb` classified the exact
+scope as four production, two test, and eight authority files, verified that
+the task checkbox is the only task-list replacement, and found no issue that
+blocks the task 5.4 commit.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

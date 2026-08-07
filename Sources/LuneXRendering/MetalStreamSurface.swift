@@ -3988,6 +3988,9 @@ final class TVVisionStreamMetalView: MTKView {
     typealias VisionSurfaceInputEventHandler = @MainActor (
         VisionSurfaceInputEvent
     ) -> VisionSurfaceInputDisposition
+    typealias VisionSystemInteractionEventHandler = @MainActor (
+        VisionSurfaceSystemInteractionEvent
+    ) -> Void
 
     var surfaceGeneration: TVVisionGeneration? {
         surfaceGenerationOwner?.surfaceGeneration
@@ -4006,6 +4009,8 @@ final class TVVisionStreamMetalView: MTKView {
     private var reservedRemoteCommandHandler: ReservedRemoteCommandHandler = { _ in }
     private var visionSurfaceInputEventHandler:
         VisionSurfaceInputEventHandler = { _ in .local }
+    private var visionSystemInteractionEventHandler:
+        VisionSystemInteractionEventHandler = { _ in }
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 #if os(tvOS)
@@ -4091,7 +4096,9 @@ final class TVVisionStreamMetalView: MTKView {
         reservedRemoteCommandHandler:
             @escaping ReservedRemoteCommandHandler = { _ in },
         visionSurfaceInputEventHandler:
-            @escaping VisionSurfaceInputEventHandler = { _ in .local }
+            @escaping VisionSurfaceInputEventHandler = { _ in .local },
+        visionSystemInteractionEventHandler:
+            @escaping VisionSystemInteractionEventHandler = { _ in }
     ) {
         super.init(frame: frameRect, device: device)
         autoResizeDrawable = false
@@ -4102,6 +4109,8 @@ final class TVVisionStreamMetalView: MTKView {
         self.remotePressEventHandler = remotePressEventHandler
         self.reservedRemoteCommandHandler = reservedRemoteCommandHandler
         self.visionSurfaceInputEventHandler = visionSurfaceInputEventHandler
+        self.visionSystemInteractionEventHandler =
+            visionSystemInteractionEventHandler
         surfaceRelay = SurfaceRelay(
             surface: self,
             stateReader: { surface in
@@ -4332,6 +4341,12 @@ final class TVVisionStreamMetalView: MTKView {
                 continue
             }
             let output = visionInputAdapter.keyboard(sample)
+            if let interaction = VisionKeyboardHIDTranslator.reservedInteraction(
+                usage: sample.hidUsage,
+                modifiers: sample.modifiers
+            ) {
+                emitVisionSystemInteraction(interaction)
+            }
             let disposition = emitVisionSurfaceInput(
                 output,
                 path: .keyboard
@@ -4408,6 +4423,12 @@ final class TVVisionStreamMetalView: MTKView {
         _ handler: @escaping VisionSurfaceInputEventHandler
     ) {
         visionSurfaceInputEventHandler = handler
+    }
+
+    func updateVisionSystemInteractionEventHandler(
+        _ handler: @escaping VisionSystemInteractionEventHandler
+    ) {
+        visionSystemInteractionEventHandler = handler
     }
 
     func updateGeometryBinding(
@@ -4494,6 +4515,7 @@ final class TVVisionStreamMetalView: MTKView {
         remotePressEventHandler = { _ in .local }
         reservedRemoteCommandHandler = { _ in }
         visionSurfaceInputEventHandler = { _ in .local }
+        visionSystemInteractionEventHandler = { _ in }
     }
 
 #if os(tvOS)
@@ -4747,6 +4769,17 @@ final class TVVisionStreamMetalView: MTKView {
             return .local
         }
         return visionSurfaceInputEventHandler(surfaceEvent)
+    }
+
+    private func emitVisionSystemInteraction(
+        _ interaction: VisionSystemReservedInteraction
+    ) {
+        guard let surfaceGeneration,
+              let event = try? VisionSurfaceSystemInteractionEvent(
+                surfaceGeneration: surfaceGeneration,
+                decision: VisionSystemInteractionDecision.resolve(interaction)
+              ) else { return }
+        visionSystemInteractionEventHandler(event)
     }
 
     private static func visionKeyboardSample(
@@ -5646,6 +5679,8 @@ struct MetalStreamSurface: UIViewRepresentable {
         TVVisionStreamMetalView.ReservedRemoteCommandHandler = { _ in }
     var visionSurfaceInputEventHandler:
         TVVisionStreamMetalView.VisionSurfaceInputEventHandler = { _ in .local }
+    var visionSystemInteractionEventHandler:
+        TVVisionStreamMetalView.VisionSystemInteractionEventHandler = { _ in }
 #endif
 
     func makeCoordinator() -> MobileStreamSurfaceCoordinator {
@@ -5708,7 +5743,9 @@ struct MetalStreamSurface: UIViewRepresentable {
             displayHDREventHandler: displayHDREventHandler,
             remotePressEventHandler: remotePressEventHandler,
             reservedRemoteCommandHandler: reservedRemoteCommandHandler,
-            visionSurfaceInputEventHandler: visionSurfaceInputEventHandler
+            visionSurfaceInputEventHandler: visionSurfaceInputEventHandler,
+            visionSystemInteractionEventHandler:
+                visionSystemInteractionEventHandler
         )
         if let surfaceGeneration = view.surfaceGeneration {
             context.coordinator.activateTVVisionSurfaceGeneration(
@@ -5787,6 +5824,10 @@ struct MetalStreamSurface: UIViewRepresentable {
         (view as? TVVisionStreamMetalView)?
             .updateVisionSurfaceInputEventHandler(
                 visionSurfaceInputEventHandler
+            )
+        (view as? TVVisionStreamMetalView)?
+            .updateVisionSystemInteractionEventHandler(
+                visionSystemInteractionEventHandler
             )
         (view as? TVVisionStreamMetalView)?
             .updateGeometryBinding(
