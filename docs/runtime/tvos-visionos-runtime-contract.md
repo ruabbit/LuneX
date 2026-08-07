@@ -3328,6 +3328,38 @@ This is inventory and destination-availability proof. It is not task 8.6 app
 runtime/navigation proof and does not prove signing, physical hardware, HDR,
 spatial audio, live Sunshine, latency, performance, power, or thermal behavior.
 
+### Task 8.6 bounded UI target boundary
+
+The bounded audit is retained at
+`/tmp/LuneX-18-8_6-bounded-target-r3.VTe8DU`. The generated project and current
+pbxproj contain exactly four application targets and one macOS-only unit-test
+bundle. They contain zero UI-testing products, zero shared test schemes, zero
+`XCUIApplication`/`XCUITest` harnesses in source, tests, tools, or project
+membership, and zero tvOS or visionOS test bundles. The set of existing bounded
+tvOS/visionOS Simulator UI or navigation targets required by this change is
+therefore zero, and the number executed is zero.
+
+Task 8.6 does not add a launch-only target or treat Xcode's automatically
+displayed scheme/test-plan label as a runnable UI harness. It re-reads the
+retained task 7.5 focused result (`33/33`), related result
+(`217 total / 216 passed / 1 explicit real-Keychain skip / 0 failed`), task 7.5
+normal result, and task 8.1 normal result (both
+`1123 total / 1122 passed / 1 explicit real-Keychain skip / 0 failed`). The
+covered focus, command, window/input, compact/wide, localization,
+accessibility, actual-state, migration, and clean-stop paths remain macOS
+offline deterministic application evidence, not Simulator UI execution.
+
+The fixed tvOS 26.4 Apple TV and visionOS 26.4 Vision Pro direct device-plist
+hashes are identical before and after the audit, and both persisted states
+remain `1` (`Shutdown`). No generalized `simctl list`, create, clone, boot,
+bootstatus, install, launch, run, shutdown, delete, upgrade, build, or test
+action is used for a Simulator. The surrounding Booted iPhone is not queried,
+closed, or adopted. This bounded result does not prove app runtime, signing,
+physical focus/input, HDR brightness, audible spatial audio/head tracking, live
+Sunshine, comfort, latency, performance, power, or thermal behavior. Task 8.7
+physical/live acceptance and task 8.8 final authority synchronization remain
+pending.
+
 ## Physical and live acceptance boundary
 
 Task 8.7 remains pending until authorized signed Apple TV and Apple Vision Pro

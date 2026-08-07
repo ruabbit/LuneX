@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `44/50 ready`；8.2十项五平台Debug/Release warnings-as-errors矩阵与repository pre-gate已通过，下一项8.3 strict/fixture/generator/membership/license/config/privacy/API/analyzer/repository gates |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `48/50 ready`；8.6现有bounded tvOS/visionOS Simulator UI/navigation target空集合审计已通过，下一项8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收 |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -1666,3 +1666,20 @@
 - **post-mark final-state：** `/tmp/LuneX-18-8_5-final-state.E5JkFk`只读通过strict `9/9`、`47/50 next 8.6`、7文件authority-only scope、唯一8.5 checkbox、retained inventory/pre-gate、稳定project及repository/opt-in/process边界；未重复inventory/generator或操作Simulator。下一步final audit/record。
 - **final audit：** `/tmp/LuneX-18-8_5-final-audit.YnuqwB`通过最终7文件authority-only、唯一8.5 checkbox、current/historical inventory区分、existing iPhone preservation、27.0 identity隔离、strict `9/9`与`47/50 next 8.6`及全部仓库/proof边界。下一步final-record后精确stage、提交与push/fetch。
 - **final-record：** `/tmp/LuneX-18-8_5-final-record.fy4DMG`通过`47/50 next 8.6`、最终7文件、inventory/pre/post/audit四道成功marker、稳定project、零lifecycle mutation及remote/opt-in/process/repository边界。8.5进入独立提交推送。
+
+## 2026-08-08 阶段 18 任务 8.6 启动
+
+- **恢复基线：** macOS更新后确认Xcode仍为`26.4 (17E192)`、系统为macOS 27.0，`HEAD == origin/main == 5a58549d7e614f5884cc5a5b67f45d6229806682`且工作树clean；真实Keychain/live-host opt-in均unset，正常测试继续使用文件fallback。
+- **bounded target初查：** 当前工程精确只有4个application target与1个macOS unit-test bundle；UI-testing product type为0，仓库没有UI-test/navigation-harness命名文件。`xcodebuild -list -json`只列出5个对应scheme/target；当前正在从generator、shared scheme与XCUITest API scan完成交叉验收。
+- **执行边界：** 只运行本change现有且可重复断言结果的tvOS/visionOS Simulator UI/navigation target。若集合为空，记录`0 existing target / 0 executed`并复用7.5/8.1的offline deterministic application evidence；不得新增launch-only伪gate，也不得boot/install/launch/create/clone/shutdown/delete任何Simulator或改变用户现有Booted iPhone。
+- **验收编排修正：** 首轮`/tmp/LuneX-18-8_6-bounded-target.VBJhZV`在首组baseline因仍要求工作树clean而退出；本轮已按计划修改三份planning，所以该断言过期。该轮只写入baseline marker和三文件Git状态，未进入target、xcresult或设备检查。corrected轮固定三文件scope并要求pre/post diff hash一致。
+- **第二轮门禁修正：** `/tmp/LuneX-18-8_6-bounded-target-r2.4hDm4n`通过baseline、固定设备和权威target扫描，在生成器字符串检查处退出；Ruby模板内product type带转义引号，过窄`grep`得到0行。该轮未读取retained xcresult或执行任何Simulator target。r3改为统计稳定product-type token并继续完整审计。
+- **authority补丁修正：** 首个6文件组合补丁因`design.md`的Task 8.5段落换行锚点不精确被`apply_patch`原子拒绝，无部分修改；改为使用稳定章节标题拆分单文件补丁。
+- **bounded audit通过：** corrected `/tmp/LuneX-18-8_6-bounded-target-r3.VTe8DU`七组marker全部通过：4个App + 1个macOS unit-test、0 UI-testing/shared scheme/XCUITest/tvOS或visionOS test bundle，因此`existing=0 / executed=0`；retained 7.5 focused/related/normal与8.1 normal全部可读且唯一skip仍为真实Keychain opt-in。固定Apple TV/Vision Pro plist前后hash一致、继续Shutdown，未执行任何Simulator lifecycle/build/test/install/launch操作。
+- **证明边界：** 8.6完成的是“只运行既有bounded target”的空集合审计，不是Simulator App runtime通过。offline application结果不替代signed artifact、physical remote/input/HDR/空间音频、live Sunshine、comfort、延迟、性能、功耗或温度；8.7和8.8必须保持pending。下一步repository pre-gate，通过前不得勾选8.6。
+- **repository编排修正：** 首个pre-gate在shell启动前因JavaScript模板中含Markdown反引号而以`SyntaxError: Unexpected number`退出；无证据目录、fixture/generator、仓库或设备副作用。移除包装器反引号后从fresh目录完整执行。
+- **post-mark正则修正：** 首轮`/tmp/LuneX-18-8_6-final-state.cJUFIH`已确认strict `9/9`、`48/50 next 8.7`和精确7文件scope，随后在转义过度的checkbox正则处退出；保存diff精确只有8.6的`-- [ ]`到`+- [x]`。改用Python固定前缀计数从fresh目录重跑只读final-state。
+- **post-mark通过：** corrected `/tmp/LuneX-18-8_6-final-state-r2.MqvuzZ`通过strict `9/9`、`48/50 next 8.7`、精确7文件scope、唯一8.6 checkbox、retained audit/pre-gate、稳定project及remote/opt-in/process边界；8.7和8.8继续pending。下一步final diff audit与final-record后独立提交推送。
+- **final-audit编排修正：** 首个final audit再次因JavaScript模板中的Markdown反引号在shell前SyntaxError退出，无证据目录或仓库/设备副作用；corrected轮禁止wrapper出现反引号并使用纯文本稳定token。
+- **final audit通过：** corrected `/tmp/LuneX-18-8_6-final-audit-r2.c9Anqw`通过最终7文件authority/tasks scope、零production/test/project/config/vendor/reference diff、唯一8.6 checkbox、strict `9/9`、`48/50 next 8.7`、retained audit/pre/post gates及全部repository/proof边界。下一步final-record后独立提交推送。
+- **final-record：** `/tmp/LuneX-18-8_6-final-record.eWNhuu`通过最终authority状态、四道retained gate、`existing/executed=0/0`、固定设备无变化、唯一checkbox、稳定project及全部repository边界；补入本索引后运行r2确认最终diff，再独立提交推送。

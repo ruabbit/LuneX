@@ -68,6 +68,6 @@
 - [x] 8.3 Run OpenSpec strict, fixture, generator stability, membership, clean-room/reference/license, entitlement/configuration, privacy, API availability, analyzer, and repository-boundary gates
 - [x] 8.4 Run complete ASan, TSan, malloc scribble/guard, observer/controller handler cancellation, held-release, frame/audio completion, replacement, and teardown resource gates
 - [x] 8.5 Verify fixed simulator runtime/name/UUID identity, availability, shutdown, and single-instance inventory without creating, cloning, or duplicating device classes
-- [ ] 8.6 Run only existing bounded tvOS/visionOS simulator navigation or UI targets required by this change, never launching more than one simulator per device class and never treating simulator behavior as physical proof
+- [x] 8.6 Run only existing bounded tvOS/visionOS simulator navigation or UI targets required by this change, never launching more than one simulator per device class and never treating simulator behavior as physical proof
 - [ ] 8.7 On authorized signed Apple TV and Apple Vision Pro hardware, verify remote/controller/keyboard input, focus/window behavior, SDR/HDR, spatial audio/routes, interruptions, live Sunshine, latency, power/thermal/comfort, and clean teardown
 - [ ] 8.8 Synchronize OpenSpec, platform runtime contract, roadmap, `task_plan.md`, `findings.md`, and `progress.md`; record offline, simulator, signed-artifact, physical-device, and live-host proof boundaries before archive

@@ -732,6 +732,26 @@ signed artifacts, physical devices, live Sunshine, HDR or spatial output,
 latency, performance, power, or thermal behavior; tasks 8.6-8.8 remain
 separate.
 
+Task 8.6 runs only an existing bounded tvOS or visionOS Simulator UI or
+navigation target that can assert change-owned behavior. The generated project
+contains four application products and one macOS-only unit-test product, no UI
+testing product, no shared test scheme, no `XCUIApplication` harness, and no
+tvOS or visionOS test bundle. The existing bounded target set is therefore
+empty and the execution count is zero. A launch-only target is not added to
+manufacture a runtime claim.
+
+The retained task 7.5 focused, related, and normal results continue to prove
+deterministic focus, command, window/input, compact/wide, localization,
+accessibility, actual-state, migration, and clean-stop application behavior;
+task 8.1 independently proves the complete normal gate with the file identity
+fallback. Those are macOS offline tests, not Simulator UI execution. The fixed
+Apple TV and Vision Pro device plists remain byte-identical and Shutdown before
+and after the bounded audit, and no create, clone, boot, bootstatus, install,
+launch, run, shutdown, delete, or upgrade action is issued. Task 8.6 therefore
+records the honest no-applicable-target boundary without claiming app runtime,
+signing, physical input/HDR/spatial audio, live Sunshine, latency, performance,
+power, or thermal proof. Tasks 8.7 and 8.8 remain separate.
+
 ## Risks / Trade-offs
 
 - [Risk] tvOS focus and stream capture may both react to one press. ->

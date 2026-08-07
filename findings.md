@@ -3123,3 +3123,17 @@
 - post-mark `/tmp/LuneX-18-8_5-final-state.E5JkFk`确认OpenSpec精确推进到`47/50 next 8.6`且只有8.5 checkbox变化；inventory与仓库证据未漂移，没有重新读取或改变Simulator状态。
 - final audit `/tmp/LuneX-18-8_5-final-audit.YnuqwB`未发现阻止提交的问题：7个文件均为任务/authority记录，当前booted iPhone与固定Shutdown Apple TV/Vision Pro事实没有混淆，8.6-8.8和physical/live证明保持pending。
 - final-record `/tmp/LuneX-18-8_5-final-record.fy4DMG`再次确认8.5可独立提交；其结果不应扩称为App已安装/启动、UI导航、signed artifact、physical或live proof。
+
+## 2026-08-08 阶段 18 任务 8.6 bounded UI target 调查
+
+- macOS更新后恢复状态保持一致：Xcode为`26.4 (17E192)`，系统为macOS 27.0，Swift为6.3；`HEAD == origin/main == 5a58549d7e614f5884cc5a5b67f45d6229806682`且Git clean，真实Keychain/live-host opt-in均unset。
+- `xcodebuild -project LuneX.xcodeproj -list -json`精确列出`LuneX-macOS`、`LuneX-iOS`、`LuneX-tvOS`、`LuneX-visionOS`、`LuneXCoreTests`五个scheme和同名target。pbxproj产品类型精确为4个`com.apple.product-type.application`及1个`com.apple.product-type.bundle.unit-test`；`com.apple.product-type.bundle.ui-testing`计数为0。
+- 仓库不存在UI-test或navigation-harness命名文件。`xcodebuild -showTestPlans`输出的同名scheme计划提示不能单独证明XCUITest存在，必须继续读取shared scheme与generator membership；当前任何最终结论都不会依赖该提示的表面名称。
+- 7.5已实现的tvOS focus/navigation、visionOS window/input、compact/wide、localization、accessibility、actual-state、migration与clean-stop覆盖位于`LuneXCoreTests`，属于macOS offline deterministic application tests，不是tvOS/visionOS Simulator UI执行，也不能替代物理输入、HDR、空间音频、签名或live Sunshine证明。
+- corrected bounded audit `/tmp/LuneX-18-8_6-bounded-target-r3.VTe8DU`完整通过七组：工程/生成器只有4个App product与1个macOS-only unit-test bundle，shared scheme、UI-testing product、source XCUITest API、UI-harness命名文件和tvOS/visionOS test bundle均为空，所以existing/executed bounded Simulator target精确为`0/0`。
+- retained 7.5 focused `33/33`、related `217/216/1 exact Keychain skip/0`、7.5 normal和8.1 normal各`1123/1122/1 exact Keychain skip/0`在当前Xcode下结构化可读。它们证明offline application合同，不是Simulator UI proof。
+- 两个固定device plist在audit前后SHA-256逐字一致，Apple TV与Vision Pro仍为26.4正确identity、`isDeleted=false`、state code 1。audit的lifecycle命令清单为空；没有build/test/install/launch，也没有读取、关闭或接管现有Booted iPhone。
+- 因此8.6可诚实记录“无现成目标可运行”，但不能记录“Simulator App已启动/导航通过”。signed artifact、真机remote/controller/keyboard/window、物理HDR/空间音频、live Sunshine、comfort、latency、performance、power和thermal仍只属于8.7；8.8最终authority同步也未完成。
+- corrected post-mark `/tmp/LuneX-18-8_6-final-state-r2.MqvuzZ`确认OpenSpec精确为`48/50 next 8.7`，唯一task变化是8.6 checkbox；8.7 signed physical/live与8.8 final synchronization均保持未勾选，项目/生成器/opt-in/进程边界无漂移。
+- corrected final audit `/tmp/LuneX-18-8_6-final-audit-r2.c9Anqw`未发现阻止独立提交的问题：最终7文件无production/test/project/config/vendor/reference改动，空集合证据、offline/Simulator/physical/live分层、唯一checkbox与OpenSpec状态一致。
+- final-record `/tmp/LuneX-18-8_6-final-record.eWNhuu`再次确认8.6可独立提交；该提交不得扩称为Simulator App启动、signed artifact、physical/live acceptance或阶段18完成。

@@ -3650,3 +3650,16 @@
 - 2026-08-08：仅勾选8.5后，post-mark `/tmp/LuneX-18-8_5-final-state.E5JkFk`只读通过strict、`47/50 next 8.6`、7 authority scope、唯一checkbox、retained inventory/pre-gate、稳定project及repository边界；未重复inventory或操作Simulator。下一步final audit/record。
 - 2026-08-08：8.5 final audit `/tmp/LuneX-18-8_5-final-audit.YnuqwB`通过7文件authority-only scope、唯一checkbox、current inventory/identity/preservation语义、strict `9/9`、`47/50 next 8.6`及全部仓库/proof边界；下一步final-record与提交推送。
 - 2026-08-08：8.5 final-record `/tmp/LuneX-18-8_5-final-record.fy4DMG`通过`47/50 next 8.6`、最终7文件、四道成功门、retained inventory、稳定project及全部repository/proof边界；进入精确stage、提交与push/fetch。
+- 2026-08-08：macOS更新后恢复阶段18/8.6，确认Xcode 26.4、macOS 27.0、`HEAD == origin/main == 5a58549d7e614f5884cc5a5b67f45d6229806682`、Git clean、OpenSpec `47/50 next 8.6`且真实Keychain/live-host opt-in unset。
+- 2026-08-08：8.6只读初查确认工程为4个application target加1个macOS unit-test bundle、UI-testing product type为0且无UI-test/navigation-harness命名文件；继续从generator/shared scheme/XCUITest scan交叉确认现有bounded target集合，不操作Simulator lifecycle。
+- 2026-08-08：首轮bounded audit `/tmp/LuneX-18-8_6-bounded-target.VBJhZV`在baseline因错误要求工作树clean而退出；实际三份planning已按计划dirty。该轮未进入target/xcresult/device检查且无Simulator副作用；corrected轮改为锁定三文件scope与pre/post diff hash。
+- 2026-08-08：bounded audit r2 `/tmp/LuneX-18-8_6-bounded-target-r2.4hDm4n`通过前三组，在Ruby模板product-type过窄引号匹配处退出；项目事实未失败，未读取retained xcresult或执行Simulator target。r3按稳定token计数完整重跑只读门。
+- 2026-08-08：corrected 8.6 bounded audit `/tmp/LuneX-18-8_6-bounded-target-r3.VTe8DU`七组全部通过：existing/executed tvOS/visionOS Simulator UI target为`0/0`，retained 7.5/8.1 offline tests结构化可读且唯一skip为真实Keychain opt-in，固定Apple TV/Vision Pro plist hash前后相同并继续Shutdown；无Simulator lifecycle/build/test/install/launch操作。
+- 2026-08-08：首个authority组合补丁因`design.md`换行锚点不精确被原子拒绝；按稳定章节标题拆分后已同步OpenSpec design、阶段18runtime contract、completion roadmap与三份planning，明确8.6是现有target空集合边界而非Simulator App runtime通过。8.7 signed physical/live与8.8最终同步保持pending，下一步repository pre-gate。
+- 2026-08-08：首个8.6 repository pre-gate编排因JavaScript模板内Markdown反引号在shell前以SyntaxError退出；无证据目录、fixture/generator、仓库或设备副作用。改用无反引号稳定token从fresh目录完整重跑。
+- 2026-08-08：8.6 repository pre-gate `/tmp/LuneX-18-8_6-repository-pre-r2.iN3qYB`通过fixture、strict `9/9`、pre-mark `47/50 next 8.6`、精确6 authority scope、三次稳定generator、retained bounded audit及全部repository/proof边界；随后仅勾选8.6。
+- 2026-08-08：首轮post-mark `/tmp/LuneX-18-8_6-final-state.cJUFIH`确认`48/50 next 8.7`与7文件scope后，在转义过度的checkbox正则处退出；tasks diff实际精确只有8.6一对变化，改用固定前缀解析fresh重跑。
+- 2026-08-08：corrected post-mark `/tmp/LuneX-18-8_6-final-state-r2.MqvuzZ`只读通过strict `9/9`、`48/50 next 8.7`、7文件authority-only scope、唯一8.6 checkbox、retained audit/pre-gate与全部repository边界；8.7/8.8保持pending，下一步final audit/record。
+- 2026-08-08：首个8.6 final audit编排再次因JavaScript模板内Markdown反引号在shell前SyntaxError退出；无证据目录或副作用。corrected轮移除全部反引号字符并从fresh目录完整运行。
+- 2026-08-08：corrected final audit `/tmp/LuneX-18-8_6-final-audit-r2.c9Anqw`通过最终7文件authority/tasks scope、零production/test/project/config/vendor/reference、唯一8.6 checkbox、strict `9/9`、`48/50 next 8.7`及retained evidence/repository/proof边界；下一步final-record。
+- 2026-08-08：final-record `/tmp/LuneX-18-8_6-final-record.eWNhuu`通过authority、四道retained gate、空集合结果、固定设备、唯一checkbox、稳定project与repository边界；补入索引后运行final-record r2再提交。
