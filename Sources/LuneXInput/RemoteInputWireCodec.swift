@@ -170,7 +170,8 @@ enum RemoteInputWireCodec {
                 channelID: try controllerChannel(for: event.controllerIndex)
             )]
         case .virtualController, .gameController, .controllerConnected,
-             .controllerDisconnected, .controllerMotion, .controllerBattery,
+             .controllerDisconnected, .controllerRoster,
+             .controllerMotion, .controllerBattery,
              .tvRemote, .focus:
             throw RemoteInputCodecError.unsupportedEvent
         }

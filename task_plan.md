@@ -35,7 +35,7 @@
 | 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`16/50 ready`；1.1–3.4已完成task级验收，下一项3.5 controller registry routing与current-lease feedback |
+| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `integrate-tvos-visionos-runtime`为`17/50 ready`；1.1–3.5已完成task级验收，下一项3.6 ordered held-state release与local navigation restoration |
 | 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
@@ -53,7 +53,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`16/50 ready`、next 3.5。1.1至3.4已完成task级验收；3.4 actual tvOS generation-owned extended/micro handlers、deterministic 16-slot/fresh lease、complete roster、disconnect replacement、AppModel current-generation application与same-revision lease-only update已通过focused `5/5`、相关矩阵`85/85`、normal `1011/1010/1/0`、direct tvOS/visionOS、五平台Debug和repository pre-gate。下一项3.5把controller state路由到现有remote registry并只对current matching lease应用supported feedback；3.6 ordered release、display/HDR/audio adapters仍后置，当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`17/50 ready`、next 3.6。1.1至3.5已完成task级验收；3.5 atomic existing-registry routing、exact 16-slot complete held state、opaque current-lease feedback/motion、actual tvOS public haptics/light与handler/resource cleanup已通过focused `5/5`、相关矩阵`170/170`、normal `1015/1014/1/0`、direct tvOS、五平台Debug和repository pre-gate。下一项3.6把focus/scene/provider/replacement/stop loss接入existing ordered held-state release barrier并恢复local navigation；display/HDR/audio adapters仍后置，当前证据仍不是signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
 
 7.1严格限定AES-128 key、UInt32 key ID、authenticated mode与8...128-byte plaintext；input作为control type `0x0206`使用显式control-wide sequence和client `CC` nonce封装，context不拥有独立sequence。该证据只证明协商边界与byte-exact serialization，不证明transport delivery、ordering、platform mapping或live Sunshine input。
 
@@ -896,3 +896,30 @@
 - **post-mark final-state：** `/tmp/LuneX-18-3_4-final-state.0GVsGm`只读通过strict `9/9`、OpenSpec `16/50 next 3.5`、稳定project hash、精确十二文件scope、current semantics、全部retained evidence及privacy/reference/opt-in/process/diff边界；没有重复test/build/generator/simulator操作。下一步post-record和最终diff审计。
 - **post-record：** `/tmp/LuneX-18-3_4-post-record.8PiBxS`通过`16/50 next 3.5`、稳定project hash、十二文件scope、pre/final记录、retained evidence、opt-in/process/reference和diff门。
 - **最终审计：** slot candidate commit、active mask重建、handler清理与queue恢复、replacement fresh lease、current roster application及no-delivery边界均成立；未发现新的正确性、隐私或跨平台隔离问题。Task 3.4可独立提交推送。
+
+## 2026-08-07 阶段 18 任务 3.5 启动
+
+- **状态：** `in_progress`；3.4已提交推送为`da295bb Own tvOS controller runtime`，fetch确认`HEAD == origin/main`且工作树clean，OpenSpec为`16/50 ready`、next 3.5。
+- **现有路径：** `MoonlightRemoteInputProvider`已拥有唯一`RemoteControllerRegistry`、arrival/state/disconnect wire输出、held controller state、feedback source/stream和capability admission；`SessionMediaEnvironment`把current-generation feedback送到AppModel。3.5必须复用该registry，不能在tvOS另建wire ownership。
+- **关键缺口：** 3.4 roster目前只进入platform presentation leases，不发送controller connection/state；低级`.controllerState`会绕过registry内部state，因此不能作为complete roster接线，否则feedback lookup与后续release会观察空状态。现有`playerIndex`只偏好1...4，也不足以显式承载16-slot lease。
+- **实现方向：** 增加framework-free、opaque controller routing identity与高层complete-snapshot input；registry以lease slot作为checked preferred index，保存完整state后产生现有wire event。AppModel串行reconcile current roster的disconnect/connect/snapshot，并把provider feedback只交给匹配current input/controller lease的actual owner。
+- **边界：** controller ID由generation/slot/lease组成且不含vendor/framework identity；3.5只应用公开且实际声明支持的rumble/trigger/LED/motion-rate能力。focus/scene/provider/replacement/stop的完整ordered release barrier仍归3.6，3.5不得把unsigned编译或合成feedback描述为物理手柄证明。
+- **验收计划：** registry preferred 16-slot与complete state、disconnect/stale lease、AppModel FIFO reconcile/current generation、actual owner capability/feedback admission与handler cleanup、反馈映射no-stale、tvOS/visionOS隔离、focused/related/normal/五平台/repository/final-state。
+- **首次编译：** fresh macOS `/tmp/LuneX-18-3_5-compile-mac.c0RbId`与fixed Apple TV `/tmp/LuneX-18-3_5-compile-tv.qFXSAB`均结构化为`succeeded/0 warning/0 error/0 analyzer warning`；Apple TV固定UUID仅作build destination，没有查询或操作simulator lifecycle。
+- **验收错误 1：** 首轮focused `/tmp/LuneX-18-3_5-focused-first.UpxyQa`在0 tests时因三处测试源码编译错误退出：既有`ParsedControllerState`未暴露`leftTrigger`，两处`await iterator.next()`不能位于XCTest autoclosure。production/shared source没有编译错误；改为直接检查packet bytes并先await局部变量，从fresh bundle重跑。
+- **验收错误 2：** 第二轮focused `/tmp/LuneX-18-3_5-focused-r2.QlwjMx`结构化为`5 total / 4 passed / 1 failed`且build零诊断；四项registry/router/motion测试通过，唯一AppModel失败是测试在controlled environment记录send后、routing Task写回routed state前立即断言。扩展wait到send与state双完成屏障后用fresh bundle重跑。
+- **focused：** fresh `/tmp/LuneX-18-3_5-focused-r3.vWrygN`结构化通过`5/5 passed / 0 skipped / 0 failed / 0 expected failure`且build为`succeeded/0 warning/0 error/0 analyzer warning`。后续审计把多controller同批arrival fallback统一到final mask、haptic部分失败改为stop-all，并增加complete snapshot进入existing releaseAll的断言；需以修订后fresh focused为最终证据。
+- **实现完成：** complete roster现在先在candidate `RemoteControllerRegistry`原子校验exact `0...15` preferred slots，再用final active mask产生arrival/complete state；invalid replacement回滚且existing held state供`releaseAllControllerStates()`使用。opaque ID固定为`tv:<input generation>:<lease generation>:<slot>`，不含vendor或framework identity。
+- **actual cleanup：** tvOS owner保存并在disconnect/stop恢复原extended/micro `valueChangedHandler`；Core Haptics engine启动后若player启动失败会立即停止该player/engine，stop/replacement也stop-all。AppModel feedback/motion同时匹配current input generation、slot与lease，motion按lease/type保留latest finite sample。
+- **竞态验收：** 新增受控阻塞A→B→C roster replacement，证明provider routing严格串行，旧lease feedback/motion inert，只有current C lease继续接收；测试double增加一次性send阻塞、blocked状态和显式恢复。
+- **最终focused：** `/tmp/LuneX-18-3_5-focused-final-r2.qj3Kuj`为`5/5`且build `succeeded/0 error/0 warning/0 analyzer warning`。较早final candidate为`4/5`仅因测试在增加两次roster application后仍硬编码旧presentation counts；改为geometry前基数`+2/+3`后fresh通过，不保留失败run为最终证据。
+- **related/normal：** `/tmp/LuneX-18-3_5-related-final.xOsmvX`为`170/170`且零结构化诊断；`/tmp/LuneX-18-3_5-normal-final.fFbr02`为`1015 total / 1014 passed / 1 skipped / 0 failed`且零结构化诊断，唯一skip仍是显式禁用的真实Keychain round-trip。
+- **平台build：** direct tvOS `/tmp/LuneX-18-3_5-tvos-final.Tnldhb`为`succeeded/0/0/0`并有`1 AIR / 1 metallib`；五平台Debug `/tmp/LuneX-18-3_5-builds-final.10FtDl`全部`succeeded/0 error/0 warning/0 analyzer warning`且各有`1 AIR / 1 metallib`。固定UUID仅作build destination，未执行任何simulator lifecycle操作。
+- **验收错误 3：** focused最终xcresult的首次只读diagnostics包装命令因`jq`表达式`.errors?//empty`缺少`//`两侧空格而parser error；用正确表达式只读同一xcresult确认四类diagnostic均为0，没有重跑test。
+- **当前门：** runtime contract、roadmap与三份planning已同步，但OpenSpec仍保持`16/50 next 3.5`。下一步从fresh目录运行repository pre-gate；通过前不得勾选3.5。3.6完整ordered held-state release/local navigation restoration、物理controller/host/signed/HDR/spatial/performance证据均未完成。
+- **repository pre-gate：** fresh `/tmp/LuneX-18-3_5-repository-pre.qGGaan`从头通过fixture self/tree、OpenSpec strict `9/9`、pre-mark `16/50 next 3.5`、四次稳定generator hash、精确十三文件scope、source/test/membership semantics、focused `5/5`、related `170/170`、normal `1015/1014/1/0`、direct tvOS、五平台build及privacy/clean-room/reference/opt-in/process/diff边界。
+- **状态：** `complete`；3.5已勾选，预期权威状态为`17/50 ready`、next 3.6。下一步只读post-mark final-state，不重复test/build/generator/simulator操作。
+- **post-mark final-state：** `/tmp/LuneX-18-3_5-final-state.efZjqf`只读通过strict `9/9`、OpenSpec `17/50 next 3.6`、稳定project hash、精确十四文件scope、current routing/feedback/cleanup semantics、全部retained evidence及privacy/clean-room/reference/opt-in/process/diff边界；没有重复test/build/generator/simulator操作。下一步post-record和最终diff审计。
+- **验收错误 4：** 首轮post-record `/tmp/LuneX-18-3_5-post-record.*`在OpenSpec与scope通过后，把zsh特殊数组变量`path`误用为循环变量，覆盖命令搜索路径并导致后续`rg: command not found`；代码与retained evidence没有失败。改用`evidence_path`并从fresh目录完整重跑。
+- **post-record：** 修正后的 `/tmp/LuneX-18-3_5-post-record-r2.BNqR7l`通过`17/50 next 3.6`、稳定project hash、十四文件scope、pre/final记录、retained evidence、opt-in/process/reference和diff门。
+- **最终审计：** candidate registry只在完整slot/mask/state校验后提交；routing FIFO、current generation/lease feedback、motion gate、original handler/queue恢复和haptic partial-failure stop均成立。Xcode 26.4 header确认default/all haptic locality保证支持；trigger仍按双locality实际探测。未发现新的正确性、隐私或跨平台隔离问题，Task 3.5可独立提交推送。

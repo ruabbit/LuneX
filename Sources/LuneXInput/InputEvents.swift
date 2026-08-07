@@ -9,6 +9,7 @@ enum RemoteInputEvent: Equatable, Sendable {
     case gameController(GameControllerInputEvent)
     case controllerConnected(ControllerConnectionInputEvent)
     case controllerDisconnected(controllerID: String)
+    case controllerRoster(ControllerRosterInputEvent)
     case controllerMotion(ControllerMotionInputEvent)
     case controllerBattery(ControllerBatteryInputEvent)
     case controllerState(RemoteControllerState)
@@ -186,9 +187,36 @@ struct RemoteControllerButtonFlags: OptionSet, Codable, Hashable, Sendable {
 struct ControllerConnectionInputEvent: Codable, Equatable, Hashable, Sendable {
     var controllerID: String
     var playerIndex: Int?
+    var preferredControllerIndex: UInt8?
     var type: RemoteControllerType
     var capabilities: RemoteControllerCapabilities
     var supportedButtons: RemoteControllerButtonFlags
+
+    init(
+        controllerID: String,
+        playerIndex: Int?,
+        preferredControllerIndex: UInt8? = nil,
+        type: RemoteControllerType,
+        capabilities: RemoteControllerCapabilities,
+        supportedButtons: RemoteControllerButtonFlags
+    ) {
+        self.controllerID = controllerID
+        self.playerIndex = playerIndex
+        self.preferredControllerIndex = preferredControllerIndex
+        self.type = type
+        self.capabilities = capabilities
+        self.supportedButtons = supportedButtons
+    }
+}
+
+struct ControllerCompleteStateInputEvent: Equatable, Sendable {
+    var connection: ControllerConnectionInputEvent
+    var state: RemoteControllerState
+}
+
+struct ControllerRosterInputEvent: Equatable, Sendable {
+    var disconnectedControllerIDs: [String]
+    var controllers: [ControllerCompleteStateInputEvent]
 }
 
 enum ControllerMotionType: UInt8, Codable, Equatable, Hashable, Sendable {

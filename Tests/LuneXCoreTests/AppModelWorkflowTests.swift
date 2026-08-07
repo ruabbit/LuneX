@@ -2499,10 +2499,11 @@ final class AppModelWorkflowTests: XCTestCase {
         var controllerRuntime = try TVGameControllerSlotRuntime(
             inputGeneration: focusedInput.inputGeneration
         )
+        let firstControllerToken = try TVGameControllerDeviceToken(1)
         let controllerRoster = try controllerRuntime.connect(
-            token: TVGameControllerDeviceToken(1),
+            token: firstControllerToken,
             profile: .extendedGamepad,
-            capabilities: [.analogTriggers],
+            capabilities: [.analogTriggers, .rgbLED, .accelerometer],
             supportedButtons: .standard,
             completeState: TVGameControllerCompleteState(buttons: [.a])
         )
@@ -2518,7 +2519,158 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(rosterInput, focusedInput)
         XCTAssertEqual(rosterLeases, controllerRoster.controllers.map(\.lease))
         XCTAssertEqual(model.tvControllerRosterState, controllerRoster)
-        XCTAssertTrue(mediaEnvironment.currentSentInputApplications().isEmpty)
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 1
+                && model.tvControllerRoutedRosterState == controllerRoster
+        }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().first?.event,
+            .controllerRoster(TVGameControllerRosterRouter.reconcile(
+                previous: nil,
+                current: controllerRoster
+            ))
+        )
+        XCTAssertEqual(model.tvControllerRoutedRosterState, controllerRoster)
+
+        let lease = try XCTUnwrap(controllerRoster.controllers.first?.lease)
+        let controllerID = TVGameControllerRoutingIdentity(lease: lease).rawValue
+        mediaEnvironment.yieldFeedback(.led(ControllerLEDFeedback(
+            controllerID: controllerID,
+            red: 10,
+            green: 20,
+            blue: 30
+        )), sessionID: record.sessionID)
+        let feedbackRequest = try TVControllerFeedbackRequest(
+            lease: lease,
+            payload: .led(red: 10, green: 20, blue: 30)
+        )
+        await waitUntil {
+            model.tvControllerFeedbackDecisionState == .apply(feedbackRequest)
+        }
+
+        model.receiveTVGameControllerMotion(try TVGameControllerMotionSample(
+            lease: lease,
+            type: .accelerometer,
+            x: 1,
+            y: 2,
+            z: 3
+        ))
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 2
+        }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().last?.event,
+            .controllerMotion(ControllerMotionInputEvent(
+                controllerID: controllerID,
+                type: .accelerometer,
+                x: 1,
+                y: 2,
+                z: 3
+            ))
+        )
+
+        mediaEnvironment.blockNextInputSend()
+        _ = try controllerRuntime.disconnect(token: firstControllerToken)
+        let secondControllerToken = try TVGameControllerDeviceToken(2)
+        let secondRoster = try controllerRuntime.connect(
+            token: secondControllerToken,
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers, .rgbLED, .accelerometer],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.b])
+        )
+        model.receiveTVGameControllerRoster(secondRoster)
+        await waitUntil { mediaEnvironment.hasBlockedInputSend() }
+
+        _ = try controllerRuntime.disconnect(token: secondControllerToken)
+        let thirdRoster = try controllerRuntime.connect(
+            token: TVGameControllerDeviceToken(3),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers, .rgbLED, .accelerometer],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.x])
+        )
+        model.receiveTVGameControllerRoster(thirdRoster)
+        mediaEnvironment.resumeBlockedInputSend()
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 4
+                && model.tvControllerRoutedRosterState == thirdRoster
+        }
+        let serializedRosters = mediaEnvironment.currentSentInputApplications()
+        XCTAssertEqual(
+            serializedRosters[2].event,
+            .controllerRoster(TVGameControllerRosterRouter.reconcile(
+                previous: controllerRoster,
+                current: secondRoster
+            ))
+        )
+        XCTAssertEqual(
+            serializedRosters[3].event,
+            .controllerRoster(TVGameControllerRosterRouter.reconcile(
+                previous: secondRoster,
+                current: thirdRoster
+            ))
+        )
+
+        mediaEnvironment.yieldFeedback(.led(ControllerLEDFeedback(
+            controllerID: controllerID,
+            red: 1,
+            green: 2,
+            blue: 3
+        )), sessionID: record.sessionID)
+        await waitUntil {
+            model.tvControllerFeedbackDecisionState == .unavailable(
+                .controllerUnavailable
+            )
+        }
+        let currentLease = try XCTUnwrap(thirdRoster.controllers.first?.lease)
+        let currentControllerID = TVGameControllerRoutingIdentity(
+            lease: currentLease
+        ).rawValue
+        let currentFeedbackRequest = try TVControllerFeedbackRequest(
+            lease: currentLease,
+            payload: .led(red: 4, green: 5, blue: 6)
+        )
+        mediaEnvironment.yieldFeedback(.led(ControllerLEDFeedback(
+            controllerID: currentControllerID,
+            red: 4,
+            green: 5,
+            blue: 6
+        )), sessionID: record.sessionID)
+        await waitUntil {
+            model.tvControllerFeedbackDecisionState
+                == .apply(currentFeedbackRequest)
+        }
+
+        model.receiveTVGameControllerMotion(try TVGameControllerMotionSample(
+            lease: lease,
+            type: .accelerometer,
+            x: 7,
+            y: 8,
+            z: 9
+        ))
+        model.receiveTVGameControllerMotion(try TVGameControllerMotionSample(
+            lease: currentLease,
+            type: .accelerometer,
+            x: 10,
+            y: 11,
+            z: 12
+        ))
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count == 5
+        }
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().last?.event,
+            .controllerMotion(ControllerMotionInputEvent(
+                controllerID: currentControllerID,
+                type: .accelerometer,
+                x: 10,
+                y: 11,
+                z: 12
+            ))
+        )
+        let controllerInputCount = mediaEnvironment
+            .currentSentInputApplications().count
 
         await waitUntil {
             model.tvRemoteSurfacePressDisposition(for: surface) == .captured
@@ -2565,10 +2717,12 @@ final class AppModelWorkflowTests: XCTestCase {
         )
 
         await waitUntil {
-            mediaEnvironment.currentSentInputApplications().count == 4
+            mediaEnvironment.currentSentInputApplications().count
+                == controllerInputCount + 4
         }
         XCTAssertEqual(
-            mediaEnvironment.currentSentInputApplications().map(\.event),
+            Array(mediaEnvironment.currentSentInputApplications().suffix(4))
+                .map(\.event),
             [
                 .tvRemote(TVRemoteInputEvent(button: .select, isDown: true)),
                 .tvRemote(TVRemoteInputEvent(button: .select, isDown: false)),
@@ -2602,7 +2756,8 @@ final class AppModelWorkflowTests: XCTestCase {
             )
         )
         await waitUntil {
-            mediaEnvironment.currentSentInputApplications().count == 6
+            mediaEnvironment.currentSentInputApplications().count
+                == controllerInputCount + 6
         }
         XCTAssertEqual(
             Array(mediaEnvironment.currentSentInputApplications().suffix(2))
@@ -2621,6 +2776,8 @@ final class AppModelWorkflowTests: XCTestCase {
             model.tvRemoteSurfacePressDisposition(for: surface),
             .local
         )
+        let presentationCountBeforeFocusRestore = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications().count
         model.receiveTVVisionGeometryUpdate(
             try makeTVVisionActiveGeometryUpdate(
                 platform: .tvOS,
@@ -2630,7 +2787,8 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 8
+                .currentTVVisionPlatformPresentationApplications().count
+                == presentationCountBeforeFocusRestore + 2
                 && model.tvRemoteSurfacePressDisposition(for: surface)
                     == .captured
         }
@@ -2656,7 +2814,8 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 9
+                .currentTVVisionPlatformPresentationApplications().count
+                == presentationCountBeforeFocusRestore + 3
         }
         await waitUntil {
             model.tvRemoteSurfacePressDisposition(for: surface) == .local
@@ -2670,6 +2829,8 @@ final class AppModelWorkflowTests: XCTestCase {
 
         await model.stopStream()
         XCTAssertNil(model.tvControllerRosterState)
+        XCTAssertNil(model.tvControllerRoutedRosterState)
+        XCTAssertNil(model.tvControllerFeedbackDecisionState)
         await launchTask.value
     }
 
@@ -5815,6 +5976,8 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         [SessionTVVisionPlatformPresentationApplication] = []
     private var shouldBlockNextRelease = false
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
+    private var shouldBlockNextInputSend = false
+    private var blockedInputSendContinuation: CheckedContinuation<Void, Never>?
     private var shouldBlockNextStop = false
     private var blockedStopContinuation: CheckedContinuation<Void, Never>?
     private var blockedTVVisionActivationContinuation:
@@ -5992,6 +6155,23 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         if failsInputSend {
             throw RemoteInputRuntimeError.deliveryFailed
         }
+        let shouldBlock = withLock {
+            let value = shouldBlockNextInputSend
+            shouldBlockNextInputSend = false
+            return value
+        }
+        if shouldBlock {
+            await withCheckedContinuation { continuation in
+                withLock { blockedInputSendContinuation = continuation }
+            }
+            guard continuation(for: application.sessionID) != nil else {
+                throw SessionMediaEnvironmentError.inactiveSession
+            }
+            guard application.mediaGeneration
+                    == withLock({ UInt64(startRecords.count) }) else {
+                throw SessionMediaEnvironmentError.staleInputApplication
+            }
+        }
         withLock { sentInputApplications.append(application) }
     }
 
@@ -6114,6 +6294,22 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func currentReleasedInputApplications() -> [SessionInputReleaseApplication] {
         withLock { releasedInputApplications }
+    }
+
+    func blockNextInputSend() {
+        withLock { shouldBlockNextInputSend = true }
+    }
+
+    func hasBlockedInputSend() -> Bool {
+        withLock { blockedInputSendContinuation != nil }
+    }
+
+    func resumeBlockedInputSend() {
+        let continuation = withLock {
+            defer { blockedInputSendContinuation = nil }
+            return blockedInputSendContinuation
+        }
+        continuation?.resume()
     }
 
     func currentLifecycleApplications() -> [SessionLifecycleApplication] {

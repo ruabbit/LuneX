@@ -1052,7 +1052,7 @@ controller registry or input transport, and it does not apply rumble, trigger,
 LED, or motion feedback. Those remain task 3.5. Focus-, scene-, provider-,
 replacement-, and stop-owned ordered held-state release remains task 3.6.
 
-Retained verification before the repository pre-gate consists of:
+Retained verification consists of:
 
 - focused evidence `/tmp/LuneX-18-3_4-focused-r2.MyATKc` with `5/5` passed,
   no skips, failures, or expected failures, and zero structured build
@@ -1088,6 +1088,88 @@ deterministic controller ownership contract and unsigned SDK branch
 compatibility. They do not prove physical controller mapping, host receipt,
 feedback behavior, signed installation, HDR or spatial output, live Sunshine,
 latency, performance, power, or thermal acceptance.
+
+## Task 3.5 controller registry routing and current-lease feedback
+
+The tvOS controller roster now enters the existing session-owned
+`RemoteControllerRegistry` as one complete high-level snapshot. Reconciliation
+first builds a candidate registry, admits exact preferred slots in `0...15`,
+and validates the entire replacement before committing it. Invalid duplicate,
+out-of-range, or capacity-exhausted replacements leave the previous registry
+and wire state unchanged. A valid replacement emits ordered disconnects,
+arrivals, and complete states using the final active-controller mask, so the
+existing held-state registry and later `releaseAllControllerStates()` observe
+the same complete state that was sent to the host.
+
+The routing identity is an opaque, process-local value of the form
+`tv:<input generation>:<controller lease generation>:<slot>`. It carries no
+vendor or framework-object identity. `AppModel` serializes complete roster
+applications through one FIFO task, maps provider feedback back to the current
+slot and lease only, and makes feedback for a disconnected or replaced lease
+inert. A controlled A to B to C replacement test blocks the first provider send
+and proves that later roster applications cannot overtake it. Only C receives
+feedback and motion after the replacement completes. Motion is bounded as the
+latest sample per current lease and motion type before main-actor application,
+rather than an unbounded callback queue.
+
+The actual tvOS main-actor owner derives supported feedback capability from the
+current public `GCController` object. It applies default-locality continuous
+Core Haptics rumble, paired left/right trigger localities when both exist,
+`GCDeviceLight` color, and finite motion sampling at the admitted rate. It
+restores any pre-existing extended or micro gamepad `valueChangedHandler` when
+the controller disconnects or the owner stops. If a haptic engine starts but a
+player cannot start, the partial player and engine are stopped immediately;
+disconnect, replacement, and stop also stop all registered feedback resources.
+The registry remains the capability gate, so unsupported feedback is rejected
+before it reaches the actual owner.
+
+Retained verification before the repository pre-gate consists of:
+
+- final focused evidence `/tmp/LuneX-18-3_5-focused-final-r2.qj3Kuj` with `5/5`
+  passed, no skips, failures, or expected failures, and
+  `succeeded/0 error/0 warning/0 analyzer warning`;
+- related evidence `/tmp/LuneX-18-3_5-related-final.xOsmvX` with `170/170`
+  passed and zero structured diagnostics across remote provider/wire,
+  controller contracts, tvOS remote/focus, platform coordinator/state, and the
+  complete AppModel workflow;
+- normal evidence `/tmp/LuneX-18-3_5-normal-final.fFbr02` with
+  `1015 total / 1014 passed / 1 skipped / 0 failed`, where the sole skip is the
+  explicitly disabled real-Keychain round trip;
+- direct actual tvOS evidence `/tmp/LuneX-18-3_5-tvos-final.Tnldhb` with
+  `succeeded/0/0/0`, one AIR, and one metallib; and
+- macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro Debug
+  evidence `/tmp/LuneX-18-3_5-builds-final.10FtDl`, all
+  `succeeded/0 error/0 warning/0 analyzer warning` with one AIR and one metallib
+  per platform; and
+- repository pre-gate `/tmp/LuneX-18-3_5-repository-pre.qGGaan`, which passed
+  fixture self/tree, OpenSpec strict `9/9`, pre-mark `16/50 next 3.5`, four
+  identical generator hashes, exact 13-file scope, current source/test and
+  membership semantics, all retained evidence, privacy, clean-room/reference,
+  disabled opt-ins, process checks, and `git diff --check`; and
+- post-mark final-state `/tmp/LuneX-18-3_5-final-state.efZjqf`, which confirmed
+  OpenSpec `17/50 next 3.6`, exact 14-file scope, the stable project hash,
+  current routing, feedback, cleanup, task, and documentation semantics, all
+  retained evidence, and all proof boundaries without rerunning tests, builds,
+  the generator, or any simulator operation.
+
+An earlier final-candidate focused run had `4/5` because its AppModel test still
+asserted presentation counts from before two deliberate roster applications;
+the production race path completed correctly. The test now records its geometry
+baseline and expects `+2/+3`, and the fresh focused evidence above is the final
+result. A subsequent read-only diagnostics wrapper initially used an invalid
+`jq` expression without the required spacing around `//`; corrected inspection
+of the same retained xcresult confirmed all four diagnostic counts were zero.
+Neither wrapper issue is production evidence.
+
+The fixed UUIDs were build destinations only. Task 3.5 did not query, create,
+clone, boot, install, launch, run, shut down, or delete a simulator. Real
+Keychain and live-host opt-ins remained disabled. These results prove atomic
+registry routing, deterministic current-lease feedback admission, cleanup
+ownership, and unsigned SDK branch compatibility. They do not prove physical
+controller mapping or haptics/light/motion behavior, host receipt, the complete
+focus/scene/provider/replacement/stop ordered release barrier reserved for task
+3.6, signed installation, HDR or spatial output, live Sunshine, latency,
+performance, power, or thermal acceptance.
 
 ## Fixed simulator inventory
 

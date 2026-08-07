@@ -268,6 +268,107 @@ final class ControllerAndDiagnosticsTests: XCTestCase {
         }
     }
 
+    func testTVGameControllerRosterRouterUsesOpaqueLeaseIdentityAndExactSlots()
+        throws {
+        let inputGeneration = try TVVisionGeneration(
+            domain: .input,
+            rawValue: 9
+        )
+        var runtime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        let firstToken = try TVGameControllerDeviceToken(1)
+        _ = try runtime.connect(
+            token: firstToken,
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers, .rumble],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.a])
+        )
+        let previous = try runtime.connect(
+            token: TVGameControllerDeviceToken(2),
+            profile: .microGamepad,
+            capabilities: [.rgbLED],
+            supportedButtons: [.a, .x, .menu],
+            completeState: TVGameControllerCompleteState(buttons: [.x])
+        )
+        _ = try runtime.disconnect(token: firstToken)
+        let current = try runtime.connect(
+            token: TVGameControllerDeviceToken(3),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers, .gyroscope],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState(buttons: [.b])
+        )
+
+        let route = TVGameControllerRosterRouter.reconcile(
+            previous: previous,
+            current: current
+        )
+        XCTAssertEqual(route.disconnectedControllerIDs, ["tv:9:1:0"])
+        XCTAssertEqual(
+            route.controllers.map(\.connection.preferredControllerIndex),
+            [0, 1]
+        )
+        XCTAssertEqual(
+            route.controllers.map(\.connection.controllerID),
+            ["tv:9:3:0", "tv:9:2:1"]
+        )
+        XCTAssertEqual(
+            TVGameControllerRosterRouter.lease(
+                matching: "tv:9:3:0",
+                in: current
+            ),
+            current.controllers[0].lease
+        )
+        XCTAssertNil(TVGameControllerRosterRouter.lease(
+            matching: "controller-vendor-name",
+            in: current
+        ))
+    }
+
+    func testTVGameControllerMotionSampleRejectsNonfiniteAndUsesLeaseIdentity()
+        throws {
+        let inputGeneration = try TVVisionGeneration(
+            domain: .input,
+            rawValue: 4
+        )
+        var runtime = try TVGameControllerSlotRuntime(
+            inputGeneration: inputGeneration
+        )
+        let roster = try runtime.connect(
+            token: TVGameControllerDeviceToken(1),
+            profile: .extendedGamepad,
+            capabilities: [.analogTriggers, .accelerometer],
+            supportedButtons: .standard,
+            completeState: TVGameControllerCompleteState()
+        )
+        let lease = try XCTUnwrap(roster.controllers.first?.lease)
+        let sample = try TVGameControllerMotionSample(
+            lease: lease,
+            type: .accelerometer,
+            x: 1,
+            y: 2,
+            z: 3
+        )
+        XCTAssertEqual(sample.remoteEvent, .controllerMotion(
+            ControllerMotionInputEvent(
+                controllerID: "tv:4:1:0",
+                type: .accelerometer,
+                x: 1,
+                y: 2,
+                z: 3
+            )
+        ))
+        XCTAssertThrowsError(try TVGameControllerMotionSample(
+            lease: lease,
+            type: .accelerometer,
+            x: .nan,
+            y: 0,
+            z: 0
+        ))
+    }
+
     func testTVRemoteReservesInputUntilStreamIsActive() {
         let adapter = TVRemoteFocusInputAdapter(isStreamActive: false)
 

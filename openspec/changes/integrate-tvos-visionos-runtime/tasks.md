@@ -22,7 +22,7 @@
 - [x] 3.2 Coordinate SwiftUI focus and overlay visibility so browser/settings/overlay navigation remains local and stream capture owns only eligible supported presses
 - [x] 3.3 Keep Back/Menu/Home, volume, capture, power, and unsupported system commands local with native escape and typed unavailable behavior
 - [x] 3.4 Replace connection-list-only controller monitoring with generation-owned extended/micro gamepad handlers, deterministic bounded slots, normalized complete state, and disconnect replacement
-- [ ] 3.5 Route controller state through the existing remote controller registry and apply supported feedback only to matching current controller leases
+- [x] 3.5 Route controller state through the existing remote controller registry and apply supported feedback only to matching current controller leases
 - [ ] 3.6 Integrate focus/scene/provider/replacement/stop loss with the existing ordered held-state release barrier and local navigation restoration
 - [ ] 3.7 Add remote event order, local focus, overlay handoff, reserved command, controller profile/slot/capacity, feedback, disconnect, stale callback, release, replacement, and teardown tests
 

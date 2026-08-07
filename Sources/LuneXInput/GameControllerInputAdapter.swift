@@ -37,6 +37,7 @@ enum TVGameControllerRuntimeError: Error, Equatable, Sendable {
     case controllerCapacityExceeded
     case leaseGenerationExhausted
     case invalidCompleteState
+    case feedbackApplicationFailed
 }
 
 struct TVGameControllerDeviceToken: Equatable, Hashable, Sendable {
@@ -146,6 +147,12 @@ struct TVGameControllerSlotRuntime: Sendable {
         get throws { try makeRoster() }
     }
 
+    func lease(
+        for token: TVGameControllerDeviceToken
+    ) -> TVVisionControllerLease? {
+        entries[token]?.lease
+    }
+
     mutating func connect(
         token: TVGameControllerDeviceToken,
         profile: TVVisionControllerProfile,
@@ -244,6 +251,103 @@ struct TVGameControllerSlotRuntime: Sendable {
     }
 }
 
+struct TVGameControllerRoutingIdentity: Equatable, Hashable, Sendable {
+    let lease: TVVisionControllerLease
+
+    var rawValue: String {
+        [
+            "tv",
+            String(lease.inputGeneration.rawValue),
+            String(lease.leaseGeneration.rawValue),
+            String(lease.slot.rawValue)
+        ].joined(separator: ":")
+    }
+}
+
+enum TVGameControllerRosterRouter {
+    static func reconcile(
+        previous: TVControllerRosterSnapshot?,
+        current: TVControllerRosterSnapshot
+    ) -> ControllerRosterInputEvent {
+        let currentLeases = Dictionary(uniqueKeysWithValues: current.controllers.map {
+            ($0.lease.slot, $0.lease)
+        })
+        let disconnected = previous?.controllers.compactMap { controller -> String? in
+            guard currentLeases[controller.lease.slot] != controller.lease else {
+                return nil
+            }
+            return TVGameControllerRoutingIdentity(
+                lease: controller.lease
+            ).rawValue
+        } ?? []
+        let controllers = current.controllers.map { controller in
+            ControllerCompleteStateInputEvent(
+                connection: ControllerConnectionInputEvent(
+                    controllerID: TVGameControllerRoutingIdentity(
+                        lease: controller.lease
+                    ).rawValue,
+                    playerIndex: nil,
+                    preferredControllerIndex: controller.lease.slot.rawValue,
+                    type: .unknown,
+                    capabilities: controller.lease.capabilities,
+                    supportedButtons: controller.supportedButtons
+                ),
+                state: controller.state
+            )
+        }
+        return ControllerRosterInputEvent(
+            disconnectedControllerIDs: disconnected,
+            controllers: controllers
+        )
+    }
+
+    static func lease(
+        matching remoteControllerID: String,
+        in roster: TVControllerRosterSnapshot
+    ) -> TVVisionControllerLease? {
+        roster.controllers.first {
+            TVGameControllerRoutingIdentity(lease: $0.lease).rawValue
+                == remoteControllerID
+        }?.lease
+    }
+}
+
+struct TVGameControllerMotionSample: Equatable, Sendable {
+    let lease: TVVisionControllerLease
+    let type: ControllerMotionType
+    let x: Float
+    let y: Float
+    let z: Float
+
+    init(
+        lease: TVVisionControllerLease,
+        type: ControllerMotionType,
+        x: Float,
+        y: Float,
+        z: Float
+    ) throws {
+        guard lease.platform == .tvOS,
+              [x, y, z].allSatisfy(\.isFinite) else {
+            throw TVGameControllerRuntimeError.invalidCompleteState
+        }
+        self.lease = lease
+        self.type = type
+        self.x = x
+        self.y = y
+        self.z = z
+    }
+
+    var remoteEvent: RemoteInputEvent {
+        .controllerMotion(ControllerMotionInputEvent(
+            controllerID: TVGameControllerRoutingIdentity(lease: lease).rawValue,
+            type: type,
+            x: x,
+            y: y,
+            z: z
+        ))
+    }
+}
+
 struct GameControllerInputAdapter: Sendable {
     var pressedThreshold = 0.5
 
@@ -294,6 +398,7 @@ struct GameControllerInputAdapter: Sendable {
 
 #if canImport(GameController) && os(tvOS)
 import GameController
+import CoreHaptics
 
 private final class MainQueueGameControllerReference: @unchecked Sendable {
     let controller: GCController
@@ -304,14 +409,126 @@ private final class MainQueueGameControllerReference: @unchecked Sendable {
 }
 
 @MainActor
+private final class TVGameControllerHapticsRuntime {
+    private enum Channel: Hashable {
+        case primary
+        case leftTrigger
+        case rightTrigger
+    }
+
+    private struct Playback {
+        let engine: CHHapticEngine
+        let player: any CHHapticAdvancedPatternPlayer
+    }
+
+    private let haptics: GCDeviceHaptics
+    private var playbacks: [Channel: Playback] = [:]
+
+    init(haptics: GCDeviceHaptics) {
+        self.haptics = haptics
+    }
+
+    func applyRumble(lowFrequency: Float, highFrequency: Float) throws {
+        let total = lowFrequency + highFrequency
+        let intensity = max(lowFrequency, highFrequency)
+        let sharpness = total > 0 ? highFrequency / total : 0
+        try play(
+            channel: .primary,
+            locality: .default,
+            intensity: intensity,
+            sharpness: sharpness
+        )
+    }
+
+    func applyTriggerRumble(leftMotor: Float, rightMotor: Float) throws {
+        try play(
+            channel: .leftTrigger,
+            locality: .leftTrigger,
+            intensity: leftMotor,
+            sharpness: 0.5
+        )
+        try play(
+            channel: .rightTrigger,
+            locality: .rightTrigger,
+            intensity: rightMotor,
+            sharpness: 0.5
+        )
+    }
+
+    func stopAll() {
+        for channel in Array(playbacks.keys) {
+            stop(channel)
+        }
+    }
+
+    private func play(
+        channel: Channel,
+        locality: GCHapticsLocality,
+        intensity: Float,
+        sharpness: Float
+    ) throws {
+        stop(channel)
+        guard intensity > 0 else { return }
+        guard haptics.supportedLocalities.contains(locality),
+              let engine = haptics.createEngine(withLocality: locality) else {
+            throw TVGameControllerRuntimeError.feedbackApplicationFailed
+        }
+        let event = CHHapticEvent(
+            eventType: .hapticContinuous,
+            parameters: [
+                CHHapticEventParameter(
+                    parameterID: .hapticIntensity,
+                    value: intensity
+                ),
+                CHHapticEventParameter(
+                    parameterID: .hapticSharpness,
+                    value: sharpness
+                )
+            ],
+            relativeTime: 0,
+            duration: 1
+        )
+        let pattern = try CHHapticPattern(events: [event], parameters: [])
+        let player = try engine.makeAdvancedPlayer(with: pattern)
+        player.loopEnabled = true
+        do {
+            try engine.start()
+            try player.start(atTime: CHHapticTimeImmediate)
+            playbacks[channel] = Playback(engine: engine, player: player)
+        } catch {
+            try? player.stop(atTime: CHHapticTimeImmediate)
+            engine.stop(completionHandler: nil)
+            throw error
+        }
+    }
+
+    private func stop(_ channel: Channel) {
+        guard let playback = playbacks.removeValue(forKey: channel) else {
+            return
+        }
+        try? playback.player.stop(atTime: CHHapticTimeImmediate)
+        playback.engine.stop(completionHandler: nil)
+    }
+}
+
+@MainActor
 final class TVGameControllerRuntimeOwner {
     typealias RosterHandler = @MainActor (TVControllerRosterSnapshot) -> Void
+    typealias MotionHandler = @MainActor (TVGameControllerMotionSample) -> Void
 
     private struct Binding {
         let controller: GCController
         let token: TVGameControllerDeviceToken
+        let lease: TVVisionControllerLease
         let previousHandlerQueue: DispatchQueue
         let profile: TVVisionControllerProfile
+        let previousExtendedHandler: GCExtendedGamepadValueChangedHandler?
+        let previousMicroHandler: GCMicroGamepadValueChangedHandler?
+        let previousMotionHandler: GCMotionValueChangedHandler?
+        let previousMotionSensorsActive: Bool
+        let hapticsRuntime: TVGameControllerHapticsRuntime?
+        var motionRates: [ControllerMotionType: Int] = [:]
+        var lastMotionDeliveryNanoseconds: [ControllerMotionType: UInt64] = [:]
     }
 
     private var observers: [NSObjectProtocol] = []
@@ -319,6 +536,7 @@ final class TVGameControllerRuntimeOwner {
     private var bindings: [ObjectIdentifier: Binding] = [:]
     private var runtime: TVGameControllerSlotRuntime?
     private var rosterHandler: RosterHandler = { _ in }
+    private var motionHandler: MotionHandler = { _ in }
     private var nextDeviceToken: UInt64? = 1
     private(set) var latestRoster: TVControllerRosterSnapshot?
     private(set) var latestFailure: TVGameControllerRuntimeError?
@@ -326,7 +544,8 @@ final class TVGameControllerRuntimeOwner {
     func start(
         inputGeneration: TVVisionGeneration,
         notificationCenter: NotificationCenter = .default,
-        rosterHandler: @escaping RosterHandler
+        rosterHandler: @escaping RosterHandler,
+        motionHandler: @escaping MotionHandler = { _ in }
     ) throws {
         stop()
         runtime = try TVGameControllerSlotRuntime(
@@ -334,6 +553,7 @@ final class TVGameControllerRuntimeOwner {
         )
         self.notificationCenter = notificationCenter
         self.rosterHandler = rosterHandler
+        self.motionHandler = motionHandler
         nextDeviceToken = 1
         latestFailure = nil
 
@@ -385,6 +605,7 @@ final class TVGameControllerRuntimeOwner {
         notificationCenter = nil
         runtime = nil
         rosterHandler = { _ in }
+        motionHandler = { _ in }
         nextDeviceToken = 1
         latestRoster = nil
         latestFailure = nil
@@ -400,59 +621,60 @@ final class TVGameControllerRuntimeOwner {
               let token = takeNextDeviceToken() else { return }
         let previousHandlerQueue = controller.handlerQueue
         controller.handlerQueue = .main
+        let previousExtendedHandler = controller.extendedGamepad?.valueChangedHandler
+        let previousMicroHandler = controller.microGamepad?.valueChangedHandler
+        let previousMotionHandler = controller.motion?.valueChangedHandler
+        let previousMotionSensorsActive = controller.motion?.sensorsActive ?? false
+        let capabilities = Self.capabilities(controller: controller)
 
         do {
-            let binding: Binding
+            let profile: TVVisionControllerProfile
             if let gamepad = controller.extendedGamepad {
                 let supportedButtons = Self.supportedButtons(gamepad)
                 let completeState = try Self.completeState(gamepad)
                 _ = try runtime.connect(
                     token: token,
                     profile: .extendedGamepad,
-                    capabilities: [.analogTriggers],
+                    capabilities: capabilities.union(.analogTriggers),
                     supportedButtons: supportedButtons,
                     completeState: completeState
                 )
-                binding = Binding(
-                    controller: controller,
-                    token: token,
-                    previousHandlerQueue: previousHandlerQueue,
-                    profile: .extendedGamepad
-                )
-                gamepad.valueChangedHandler = { [weak self, weak controller] gamepad, _ in
-                    MainActor.assumeIsolated {
-                        guard let controller else { return }
-                        self?.handleExtendedChange(gamepad, controller: controller)
-                    }
-                }
+                profile = .extendedGamepad
             } else if let gamepad = controller.microGamepad {
                 let supportedButtons = Self.supportedButtons(gamepad)
                 let completeState = try Self.completeState(gamepad)
                 _ = try runtime.connect(
                     token: token,
                     profile: .microGamepad,
-                    capabilities: [],
+                    capabilities: capabilities,
                     supportedButtons: supportedButtons,
                     completeState: completeState
                 )
-                binding = Binding(
-                    controller: controller,
-                    token: token,
-                    previousHandlerQueue: previousHandlerQueue,
-                    profile: .microGamepad
-                )
-                gamepad.valueChangedHandler = { [weak self, weak controller] gamepad, _ in
-                    MainActor.assumeIsolated {
-                        guard let controller else { return }
-                        self?.handleMicroChange(gamepad, controller: controller)
-                    }
-                }
+                profile = .microGamepad
             } else {
                 controller.handlerQueue = previousHandlerQueue
                 return
             }
+            guard let lease = runtime.lease(for: token) else {
+                throw TVGameControllerRuntimeError.deviceUnavailable(token.rawValue)
+            }
+            let binding = Binding(
+                controller: controller,
+                token: token,
+                lease: lease,
+                previousHandlerQueue: previousHandlerQueue,
+                profile: profile,
+                previousExtendedHandler: previousExtendedHandler,
+                previousMicroHandler: previousMicroHandler,
+                previousMotionHandler: previousMotionHandler,
+                previousMotionSensorsActive: previousMotionSensorsActive,
+                hapticsRuntime: controller.haptics.map(
+                    TVGameControllerHapticsRuntime.init
+                )
+            )
             self.runtime = runtime
             bindings[identity] = binding
+            installHandlers(for: binding)
             if publishesRoster { publishCurrentRoster() }
         } catch let error as TVGameControllerRuntimeError {
             controller.handlerQueue = previousHandlerQueue
@@ -505,6 +727,139 @@ final class TVGameControllerRuntimeOwner {
         )
     }
 
+    func applyFeedback(
+        _ request: TVControllerFeedbackRequest
+    ) -> TVControllerFeedbackDecision {
+        guard let roster = latestRoster else {
+            return .unavailable(.controllerUnavailable)
+        }
+        let decision = TVControllerFeedbackResolver.resolve(
+            request,
+            roster: roster
+        )
+        guard case .apply = decision,
+              let identity = bindings.first(where: {
+                  $0.value.lease == request.lease
+              })?.key,
+              var binding = bindings[identity] else {
+            return decision
+        }
+        do {
+            switch request.payload {
+            case let .rumble(lowFrequency, highFrequency):
+                guard let haptics = binding.hapticsRuntime else {
+                    return .unavailable(.unsupportedCapability)
+                }
+                try haptics.applyRumble(
+                    lowFrequency: lowFrequency,
+                    highFrequency: highFrequency
+                )
+            case let .triggerRumble(leftMotor, rightMotor):
+                guard let haptics = binding.hapticsRuntime else {
+                    return .unavailable(.unsupportedCapability)
+                }
+                try haptics.applyTriggerRumble(
+                    leftMotor: leftMotor,
+                    rightMotor: rightMotor
+                )
+            case let .led(red, green, blue):
+                guard let light = binding.controller.light else {
+                    return .unavailable(.unsupportedCapability)
+                }
+                light.color = GCColor(
+                    red: Float(red) / Float(UInt8.max),
+                    green: Float(green) / Float(UInt8.max),
+                    blue: Float(blue) / Float(UInt8.max)
+                )
+            case let .motionRate(type, reportRateHz):
+                if reportRateHz == 0 {
+                    binding.motionRates[type] = nil
+                    binding.lastMotionDeliveryNanoseconds[type] = nil
+                } else {
+                    binding.motionRates[type] = reportRateHz
+                }
+                if let motion = binding.controller.motion,
+                   motion.sensorsRequireManualActivation {
+                    motion.sensorsActive = !binding.motionRates.isEmpty
+                }
+                bindings[identity] = binding
+            }
+            latestFailure = nil
+        } catch {
+            binding.hapticsRuntime?.stopAll()
+            latestFailure = .feedbackApplicationFailed
+        }
+        return decision
+    }
+
+    private func installHandlers(for binding: Binding) {
+        switch binding.profile {
+        case .extendedGamepad:
+            binding.controller.extendedGamepad?.valueChangedHandler = {
+                [weak self, weak controller = binding.controller] gamepad, _ in
+                MainActor.assumeIsolated {
+                    guard let controller else { return }
+                    self?.handleExtendedChange(gamepad, controller: controller)
+                }
+            }
+        case .microGamepad:
+            binding.controller.microGamepad?.valueChangedHandler = {
+                [weak self, weak controller = binding.controller] gamepad, _ in
+                MainActor.assumeIsolated {
+                    guard let controller else { return }
+                    self?.handleMicroChange(gamepad, controller: controller)
+                }
+            }
+        }
+        binding.controller.motion?.valueChangedHandler = {
+            [weak self, weak controller = binding.controller] motion in
+            MainActor.assumeIsolated {
+                guard let controller else { return }
+                self?.handleMotionChange(motion, controller: controller)
+            }
+        }
+    }
+
+    private func handleMotionChange(
+        _ motion: GCMotion,
+        controller: GCController
+    ) {
+        let identity = ObjectIdentifier(controller)
+        guard var binding = bindings[identity] else { return }
+        let now = DispatchTime.now().uptimeNanoseconds
+        for type in binding.motionRates.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let rate = binding.motionRates[type], rate > 0 else { continue }
+            let interval = UInt64(1_000_000_000 / rate)
+            let previous = binding.lastMotionDeliveryNanoseconds[type] ?? 0
+            guard previous == 0 || now &- previous >= interval else { continue }
+            let vector: (Double, Double, Double)
+            switch type {
+            case .accelerometer:
+                vector = (
+                    motion.acceleration.x,
+                    motion.acceleration.y,
+                    motion.acceleration.z
+                )
+            case .gyroscope:
+                vector = (
+                    motion.rotationRate.x,
+                    motion.rotationRate.y,
+                    motion.rotationRate.z
+                )
+            }
+            guard let sample = try? TVGameControllerMotionSample(
+                lease: binding.lease,
+                type: type,
+                x: Float(vector.0),
+                y: Float(vector.1),
+                z: Float(vector.2)
+            ) else { continue }
+            binding.lastMotionDeliveryNanoseconds[type] = now
+            motionHandler(sample)
+        }
+        bindings[identity] = binding
+    }
+
     private func update(
         controller: GCController,
         expectedProfile: TVVisionControllerProfile,
@@ -546,11 +901,43 @@ final class TVGameControllerRuntimeOwner {
     private func clearHandler(_ binding: Binding) {
         switch binding.profile {
         case .extendedGamepad:
-            binding.controller.extendedGamepad?.valueChangedHandler = nil
+            binding.controller.extendedGamepad?.valueChangedHandler =
+                binding.previousExtendedHandler
         case .microGamepad:
-            binding.controller.microGamepad?.valueChangedHandler = nil
+            binding.controller.microGamepad?.valueChangedHandler =
+                binding.previousMicroHandler
         }
+        if let motion = binding.controller.motion {
+            motion.valueChangedHandler = binding.previousMotionHandler
+            if motion.sensorsRequireManualActivation {
+                motion.sensorsActive = binding.previousMotionSensorsActive
+            }
+        }
+        binding.hapticsRuntime?.stopAll()
         binding.controller.handlerQueue = binding.previousHandlerQueue
+    }
+
+    private static func capabilities(
+        controller: GCController
+    ) -> RemoteControllerCapabilities {
+        var capabilities: RemoteControllerCapabilities = []
+        if let haptics = controller.haptics {
+            capabilities.insert(.rumble)
+            if haptics.supportedLocalities.contains(.leftTrigger),
+               haptics.supportedLocalities.contains(.rightTrigger) {
+                capabilities.insert(.triggerRumble)
+            }
+        }
+        if controller.light != nil {
+            capabilities.insert(.rgbLED)
+        }
+        if let motion = controller.motion {
+            capabilities.insert(.accelerometer)
+            if motion.hasRotationRate {
+                capabilities.insert(.gyroscope)
+            }
+        }
+        return capabilities
     }
 
     private func takeNextDeviceToken() -> TVGameControllerDeviceToken? {

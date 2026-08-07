@@ -899,6 +899,144 @@ final class RemoteInputDeliveryTests: XCTestCase {
         await provider.stopInput(sessionID: sessionID)
     }
 
+    func testProviderAtomicallyRoutesPreferredSlotCompleteRosterAndFeedback()
+        async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(
+            sender: sender,
+            feedbackSource: source
+        )
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x62, count: 16))
+        )
+        let controllerID = "tv:1:1:15"
+        let state = RemoteControllerState(
+            controllerIndex: 15,
+            activeGamepadMask: 0x8000,
+            buttons: [.a],
+            leftTrigger: 64,
+            rightTrigger: 0,
+            leftStickX: 1_024,
+            leftStickY: 0,
+            rightStickX: 0,
+            rightStickY: 0
+        )
+        try await provider.send(.controllerRoster(ControllerRosterInputEvent(
+            disconnectedControllerIDs: [],
+            controllers: [ControllerCompleteStateInputEvent(
+                connection: ControllerConnectionInputEvent(
+                    controllerID: controllerID,
+                    playerIndex: nil,
+                    preferredControllerIndex: 15,
+                    type: .unknown,
+                    capabilities: [.analogTriggers, .rumble],
+                    supportedButtons: .standard
+                ),
+                state: state
+            )]
+        )), sessionID: sessionID)
+
+        let sends = await sender.recordedSends()
+        XCTAssertEqual(sends.count, 3)
+        XCTAssertEqual(sends.map(\.channelID), [0x1F, 0x1F, 0x1F])
+        let routed = try controllerState(from: sends[2].packet)
+        XCTAssertEqual(routed.controllerIndex, 15)
+        XCTAssertEqual(routed.activeMask, 0x8000)
+        XCTAssertEqual(routed.buttons, RemoteControllerButtonFlags.a.rawValue)
+        XCTAssertEqual(routed.leftTrigger, 64)
+        XCTAssertEqual(routed.leftStickX, 1_024)
+
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var iterator = feedback.makeAsyncIterator()
+        await source.yield(.rumble(
+            controllerIndex: 15,
+            lowFrequency: UInt16.max,
+            highFrequency: 0
+        ))
+        let receivedFeedback = await iterator.next()
+        XCTAssertEqual(receivedFeedback, .rumble(ControllerRumbleFeedback(
+            controllerID: controllerID,
+            lowFrequency: 1,
+            highFrequency: 0
+        )))
+        await provider.releaseAll(sessionID: sessionID)
+        let releaseSends = await sender.recordedSends()
+        XCTAssertEqual(releaseSends.count, 4)
+        let released = try controllerState(from: releaseSends[3].packet)
+        XCTAssertEqual(released.controllerIndex, 15)
+        XCTAssertEqual(released.activeMask, 0x8000)
+        XCTAssertEqual(released.buttons, 0)
+        XCTAssertEqual(released.leftTrigger, 0)
+        XCTAssertEqual(released.leftStickX, 0)
+        await provider.stopInput(sessionID: sessionID)
+    }
+
+    func testInvalidRosterReplacementIsAtomicAndKeepsCurrentFeedbackLease()
+        async throws {
+        let sender = InputSenderStub()
+        let source = InputFeedbackSourceStub()
+        let provider = MoonlightRemoteInputProvider(
+            sender: sender,
+            feedbackSource: source
+        )
+        let sessionID = UUID()
+        try await provider.startInput(
+            sessionID: sessionID,
+            endpoint: inputEndpoint(),
+            configuration: inputConfiguration(key: Data(repeating: 0x63, count: 16))
+        )
+        let oldID = "tv:1:1:0"
+        let newID = "tv:1:2:0"
+        func controller(
+            id: String,
+            mask: UInt16
+        ) -> ControllerCompleteStateInputEvent {
+            ControllerCompleteStateInputEvent(
+                connection: ControllerConnectionInputEvent(
+                    controllerID: id,
+                    playerIndex: nil,
+                    preferredControllerIndex: 0,
+                    type: .unknown,
+                    capabilities: [.rumble],
+                    supportedButtons: .standard
+                ),
+                state: RemoteControllerState.empty(
+                    controllerIndex: 0,
+                    activeGamepadMask: mask
+                )
+            )
+        }
+        try await provider.send(.controllerRoster(ControllerRosterInputEvent(
+            disconnectedControllerIDs: [],
+            controllers: [controller(id: oldID, mask: 1)]
+        )), sessionID: sessionID)
+
+        await assertProviderError(.invalidControllerEvent) {
+            try await provider.send(.controllerRoster(ControllerRosterInputEvent(
+                disconnectedControllerIDs: [oldID],
+                controllers: [controller(id: newID, mask: 0)]
+            )), sessionID: sessionID)
+        }
+        let feedback = await provider.feedback(sessionID: sessionID)
+        var iterator = feedback.makeAsyncIterator()
+        await source.yield(.rumble(
+            controllerIndex: 0,
+            lowFrequency: 0,
+            highFrequency: UInt16.max
+        ))
+        let receivedFeedback = await iterator.next()
+        XCTAssertEqual(receivedFeedback, .rumble(ControllerRumbleFeedback(
+            controllerID: oldID,
+            lowFrequency: 0,
+            highFrequency: 1
+        )))
+        await provider.stopInput(sessionID: sessionID)
+    }
+
     func testProviderMapsFeedbackAndGatesMotionUntilHostRequest() async throws {
         let sender = InputSenderStub()
         let source = InputFeedbackSourceStub()
@@ -1810,6 +1948,7 @@ final class RemoteInputDeliveryTests: XCTestCase {
             activeMask: readLittleEndianUInt16(bytes, offset: 12),
             buttons: UInt32(readLittleEndianUInt16(bytes, offset: 16))
                 | UInt32(readLittleEndianUInt16(bytes, offset: 30)) << 16,
+            leftTrigger: bytes[18],
             leftStickX: Int16(bitPattern: readLittleEndianUInt16(bytes, offset: 20))
         )
     }
@@ -1917,6 +2056,7 @@ private struct ParsedControllerState: Equatable, Sendable {
     var controllerIndex: UInt8
     var activeMask: UInt16
     var buttons: UInt32
+    var leftTrigger: UInt8
     var leftStickX: Int16
 }
 

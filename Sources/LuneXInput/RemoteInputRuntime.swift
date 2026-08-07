@@ -706,6 +706,8 @@ private struct RemoteControllerRegistry: Sendable {
                 activeGamepadMask: activeGamepadMask
             ))
             return ResolvedRemoteInputEvent(event: state, events: [state], allowsCoalescing: false)
+        case let .controllerRoster(roster):
+            return try reconcile(roster)
         case let .gameController(delta):
             let defaultConnection = ControllerConnectionInputEvent(
                 controllerID: delta.controllerID,
@@ -884,6 +886,10 @@ private struct RemoteControllerRegistry: Sendable {
         }
         if let existingIndex = indicesByControllerID[connection.controllerID],
            var existing = entriesByIndex[existingIndex] {
+            if let preferred = connection.preferredControllerIndex,
+               preferred != existingIndex {
+                throw RemoteInputRuntimeError.invalidControllerEvent
+            }
             var capabilities = connection.capabilities
             if capabilities.contains(.dualTouchpad) {
                 capabilities.insert(.touchpad)
@@ -895,13 +901,20 @@ private struct RemoteControllerRegistry: Sendable {
             return (existing, false)
         }
 
-        let preferredIndex = connection.playerIndex.flatMap { playerIndex -> UInt8? in
+        let playerPreferredIndex = connection.playerIndex.flatMap { playerIndex -> UInt8? in
             guard (1...4).contains(playerIndex) else { return nil }
             return UInt8(playerIndex - 1)
         }
         let controllerIndex: UInt8
-        if let preferredIndex, entriesByIndex[preferredIndex] == nil {
+        if let preferredIndex = connection.preferredControllerIndex {
+            guard Int(preferredIndex) < RemoteInputWireCodec.maximumControllerCount,
+                  entriesByIndex[preferredIndex] == nil else {
+                throw RemoteInputRuntimeError.invalidControllerEvent
+            }
             controllerIndex = preferredIndex
+        } else if let playerPreferredIndex,
+                  entriesByIndex[playerPreferredIndex] == nil {
+            controllerIndex = playerPreferredIndex
         } else if let available = (0..<RemoteInputWireCodec.maximumControllerCount)
             .map(UInt8.init)
             .first(where: { entriesByIndex[$0] == nil }) {
@@ -926,6 +939,96 @@ private struct RemoteControllerRegistry: Sendable {
         indicesByControllerID[connection.controllerID] = controllerIndex
         entriesByIndex[controllerIndex] = entry
         return (entry, true)
+    }
+
+    private mutating func reconcile(
+        _ roster: ControllerRosterInputEvent
+    ) throws -> ResolvedRemoteInputEvent {
+        let disconnectedIDs = roster.disconnectedControllerIDs
+        guard Set(disconnectedIDs).count == disconnectedIDs.count else {
+            throw RemoteInputRuntimeError.invalidControllerEvent
+        }
+        let connectedIDs = roster.controllers.map(\.connection.controllerID)
+        guard Set(connectedIDs).count == connectedIDs.count,
+              Set(disconnectedIDs).isDisjoint(with: connectedIDs) else {
+            throw RemoteInputRuntimeError.invalidControllerEvent
+        }
+
+        var candidate = self
+        var resolvedEvents: [RemoteInputEvent] = []
+        for controllerID in disconnectedIDs {
+            guard let index = candidate.indicesByControllerID
+                .removeValue(forKey: controllerID) else {
+                throw RemoteInputRuntimeError.controllerNotRegistered
+            }
+            candidate.entriesByIndex[index] = nil
+            resolvedEvents.append(.controllerState(.empty(
+                controllerIndex: index,
+                activeGamepadMask: candidate.activeGamepadMask
+            )))
+        }
+
+        let orderedControllers = roster.controllers.sorted {
+            let left = $0.connection.preferredControllerIndex ?? UInt8.max
+            let right = $1.connection.preferredControllerIndex ?? UInt8.max
+            if left != right { return left < right }
+            return $0.connection.controllerID < $1.connection.controllerID
+        }
+        var insertedEntries: [Entry] = []
+        for controller in orderedControllers {
+            let registration = try candidate.register(controller.connection)
+            guard registration.entry.controllerIndex
+                    == controller.connection.preferredControllerIndex else {
+                throw RemoteInputRuntimeError.invalidControllerEvent
+            }
+            if registration.wasInserted {
+                insertedEntries.append(registration.entry)
+            }
+        }
+
+        let finalMask = candidate.activeGamepadMask
+        for entry in insertedEntries {
+            resolvedEvents.append(.controllerArrival(RemoteControllerArrival(
+                controllerIndex: entry.controllerIndex,
+                type: entry.type,
+                capabilities: entry.capabilities,
+                supportedButtons: entry.supportedButtons
+            )))
+            resolvedEvents.append(.controllerState(.empty(
+                controllerIndex: entry.controllerIndex,
+                activeGamepadMask: finalMask
+            )))
+        }
+        for controller in orderedControllers {
+            let controllerID = controller.connection.controllerID
+            guard let index = candidate.indicesByControllerID[controllerID],
+                  var entry = candidate.entriesByIndex[index],
+                  controller.state.controllerIndex == index,
+                  controller.state.activeGamepadMask == finalMask,
+                  controller.state.buttons.intersection(entry.supportedButtons)
+                    == controller.state.buttons else {
+                throw RemoteInputRuntimeError.invalidControllerEvent
+            }
+            if !entry.capabilities.contains(.analogTriggers),
+               (controller.state.leftTrigger != 0
+                || controller.state.rightTrigger != 0
+                || controller.state.leftStickX != 0
+                || controller.state.leftStickY != 0
+                || controller.state.rightStickX != 0
+                || controller.state.rightStickY != 0) {
+                throw RemoteInputRuntimeError.invalidControllerEvent
+            }
+            entry.state = controller.state
+            candidate.entriesByIndex[index] = entry
+            resolvedEvents.append(.controllerState(controller.state))
+        }
+
+        self = candidate
+        return ResolvedRemoteInputEvent(
+            event: .controllerRoster(roster),
+            events: resolvedEvents,
+            allowsCoalescing: false
+        )
     }
 
     private mutating func update(

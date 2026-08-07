@@ -2578,3 +2578,23 @@
 - corrected repository pre-gate `/tmp/LuneX-18-3_4-repository-pre-r2.cKwJoH`通过strict `9/9`、pre-mark `15/50 next 3.4`、四次稳定generator、精确十一文件scope、production/test/no-delivery semantics、全部retained evidence以及privacy/reference/opt-in/process/diff边界。3.4可以勾选；3.5 registry routing/current-lease feedback与3.6 ordered release仍不得视为完成。
 - post-mark final-state `/tmp/LuneX-18-3_4-final-state.0GVsGm`确认OpenSpec `16/50 next 3.5`、十二文件scope、稳定project hash、current semantics与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
 - post-record `/tmp/LuneX-18-3_4-post-record.8PiBxS`和最终人工diff审计确认pre/final证据、scope、project hash、opt-in/reference/process/diff边界一致；未发现需要推翻3.4实现的新问题。
+
+## 2026-08-07 阶段 18 任务 3.5 调查
+
+- `MoonlightRemoteInputProvider`启动时创建唯一`RemoteControllerRegistry`并订阅control channel feedback；高层`.controllerConnected/.gameController/.controllerDisconnected`会更新registry，host feedback通过controller index查registry ID与capability后发布到current session stream。
+- 低级`.controllerState`只是直接编码wire packet，不更新registry entry state；若3.4 complete roster直接走该case，feedback lookup虽可在先connect后存在，但`releaseAllControllerStates()`仍看到空状态，破坏held state与3.6 release前提。因此需要registry-owned complete snapshot事件，而不是绕过registry。
+- `ControllerConnectionInputEvent.playerIndex`当前只接受1...4作为preferred index，registry/wire实际支持16。3.5需要显式checked preferred slot，避免routing晚于若干connect/disconnect时把带gap的3.4 lease roster压缩到错误wire slot，进而把host feedback映射到错误controller lease。
+- AppModel当前只保存`latestRemoteInputFeedback`和诊断，3.4 actual owner也只生成roster；还没有feedback application、motion callback或opaque ID到current lease的映射。反馈必须同时匹配current media/input generation、slot和controller lease generation，replacement后旧feedback必须inert。
+- 公开actual capability必须由当前`GCController`对象探测：只有存在的haptics/locality、light或motion能力才能写入lease capabilities和应用相应feedback；unsupported capability继续由existing registry产生typed diagnostic。任何vendor name、`GCController` identity或host payload均不得跨actor或进入diagnostics。
+- atomic roster应先在candidate registry完成全部preferred-slot注册，再用最终active mask生成所有arrival fallback和complete states；逐controller注册时立即生成fallback会在同一batch中泄露partial mask。disconnect仍按slot有序产生逐步缩小的neutral mask。
+- actual rumble用default locality的continuous looping CoreHaptics player，low/high映射到intensity/sharpness；trigger rumble仅在left/right trigger localities都公开支持时声明capability。任一player创建失败必须停止该请求已启动的其他player，disconnect/stop也必须stop-all。
+- 修订前focused r3为`5/5`且零诊断，证明provider preferred slot/atomic invalid rollback、opaque router/motion与AppModel接线基本成立；final-mask/haptic cleanup/releaseAll修订后必须fresh重跑，不复用r3作最终证据。
+- actual owner清理审计发现不能在stop/disconnect时简单把profile `valueChangedHandler`置空，因为controller可能已有外部handler；最终实现按profile保存并恢复原handler。Core Haptics同样需要两阶段cleanup：engine启动成功而player启动失败时，必须立即stop player/engine，不能等到已注册active engine的常规stop路径。
+- controlled AppModel A→B→C replacement把A roster send故意阻塞，再排入B与C；恢复后wire/application按FIFO完成，A/B旧lease feedback和motion均不改变actual owner，只有C current lease生效。这证明的是本进程deterministic routing ownership，不是host实际feedback或物理controller行为。
+- final focused `/tmp/LuneX-18-3_5-focused-final-r2.qj3Kuj`为`5/5`，related `/tmp/LuneX-18-3_5-related-final.xOsmvX`为`170/170`，normal `/tmp/LuneX-18-3_5-normal-final.fFbr02`为`1015/1014/1 exact Keychain skip/0`；所有build diagnostics为0。direct tvOS `/tmp/LuneX-18-3_5-tvos-final.Tnldhb`与五平台 `/tmp/LuneX-18-3_5-builds-final.10FtDl`全部成功且每平台有一份AIR/metallib。
+- 较早focused final candidate `4/5`不是production失败：新增A→B→C两次roster application后，测试仍断言旧presentation counts `8/9`；改为geometry前基数`+2/+3`后fresh通过。首次读取最终xcresult时`jq`表达式缺空格产生parser error，正确表达式只读同一xcresult确认四类diagnostic为0。
+- Task 3.5离线证据证明atomic existing-registry routing、exact slot/held state、current opaque lease feedback admission、bounded motion和actual public API资源cleanup；不证明物理haptics/light/motion、host receipt、完整3.6 ordered release、signed install、HDR/spatial、live Sunshine、性能、功耗或热状态。
+- repository pre-gate `/tmp/LuneX-18-3_5-repository-pre.qGGaan`通过strict `9/9`、pre-mark `16/50 next 3.5`、四次稳定generator、精确十三文件scope、current atomic routing/feedback/cleanup与测试语义、全部retained evidence以及privacy/clean-room/reference/opt-in/process/diff边界。3.5可以勾选；3.6 ordered release/local navigation restoration仍不得视为完成。
+- post-mark final-state `/tmp/LuneX-18-3_5-final-state.efZjqf`确认OpenSpec `17/50 next 3.6`、十四文件scope、稳定project hash、current semantics与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
+- post-record首轮失败是zsh保留变量误用：`path`与`PATH`联动，循环赋值后后续命令无法解析；修正变量名后的`/tmp/LuneX-18-3_5-post-record-r2.BNqR7l`完整通过。这一包装器错误不改变pre/final证据。
+- tvOS 26.4 `GCDeviceHaptics.h`明确`GCHapticsLocalityDefault`与`All` guaranteed supported，因此`controller.haptics != nil`即可真实声明generic rumble；trigger rumble仍必须同时包含left/right trigger localities。最终审计未发现需要推翻3.5的实现问题。

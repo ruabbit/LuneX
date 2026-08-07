@@ -179,6 +179,9 @@ final class AppModel: ApplicationInputSink {
     private(set) var tvRemoteReservedCommandState =
         TVRemoteReservedCommandRuntimeState.idle
     private(set) var tvControllerRosterState: TVControllerRosterSnapshot?
+    private(set) var tvControllerRoutedRosterState: TVControllerRosterSnapshot?
+    private(set) var tvControllerFeedbackDecisionState:
+        TVControllerFeedbackDecision?
 
     var tvStreamOverlayVisible: Bool {
         tvRemoteFocusHandoffState.isOverlayVisible
@@ -332,6 +335,12 @@ final class AppModel: ApplicationInputSink {
         Task<Void, Never>?
     @ObservationIgnored private var tvControllerRosterApplicationOperationID:
         UUID?
+    @ObservationIgnored private var tvControllerRoutingTask: Task<Void, Never>?
+    @ObservationIgnored private var tvControllerRoutingOperationID: UUID?
+    @ObservationIgnored private var tvControllerMotionDeliveryTask:
+        Task<Void, Never>?
+    @ObservationIgnored private var tvPendingControllerMotionSamples:
+        [String: TVGameControllerMotionSample] = [:]
 #if os(tvOS)
     @ObservationIgnored private var tvGameControllerRuntimeOwner:
         TVGameControllerRuntimeOwner?
@@ -702,6 +711,9 @@ final class AppModel: ApplicationInputSink {
             update,
             ownership: ownership
         )
+        if let roster = tvControllerRosterState {
+            scheduleTVGameControllerRouting(roster)
+        }
     }
 
     func receiveTVRemoteSurfacePressEvent(
@@ -728,6 +740,26 @@ final class AppModel: ApplicationInputSink {
         guard roster != tvControllerRosterState else { return }
         tvControllerRosterState = roster
         scheduleTVGameControllerRosterApplication(roster)
+        scheduleTVGameControllerRouting(roster)
+    }
+
+    func receiveTVGameControllerMotion(
+        _ sample: TVGameControllerMotionSample
+    ) {
+        guard expectedTVVisionPlatform == .tvOS,
+              activeMediaGeneration == sample.lease.inputGeneration.rawValue,
+              tvControllerRosterState?.controllers.contains(where: {
+                  $0.lease == sample.lease
+              }) == true,
+              currentTVRemoteInputSnapshot?.focusEligibility == .eligible else {
+            return
+        }
+        let key = [
+            TVGameControllerRoutingIdentity(lease: sample.lease).rawValue,
+            String(sample.type.rawValue)
+        ].joined(separator: ":")
+        tvPendingControllerMotionSamples[key] = sample
+        startTVGameControllerMotionDrainIfNeeded()
     }
 
     func tvRemoteSurfacePressDisposition(
@@ -1689,6 +1721,7 @@ final class AppModel: ApplicationInputSink {
             }
         case let .feedback(feedback):
             latestRemoteInputFeedback = feedback
+            applyTVGameControllerFeedback(feedback)
             if case let .diagnostic(inputDiagnostic) = feedback {
                 diagnostics.record(ApplicationDiagnosticFactory.remoteFeedback(inputDiagnostic))
             }
@@ -2144,6 +2177,9 @@ final class AppModel: ApplicationInputSink {
                 inputGeneration: inputGeneration,
                 rosterHandler: { [weak self] roster in
                     self?.receiveTVGameControllerRoster(roster)
+                },
+                motionHandler: { [weak self] sample in
+                    self?.receiveTVGameControllerMotion(sample)
                 }
             )
         } catch {
@@ -2303,6 +2339,74 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
+    private func scheduleTVGameControllerRouting(
+        _ roster: TVControllerRosterSnapshot
+    ) {
+        guard activeMediaGeneration == roster.inputGeneration.rawValue,
+              currentTVRemoteInputSnapshot?.focusEligibility == .eligible,
+              tvControllerRoutedRosterState != roster else { return }
+        let previous = tvControllerRoutingTask
+        let geometryTask = tvVisionPlatformApplicationTask
+        let operationID = UUID()
+        tvControllerRoutingOperationID = operationID
+        tvControllerRoutingTask = Task { [weak self] in
+            await previous?.value
+            await geometryTask?.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.tvControllerRosterState == roster,
+                  self.activeMediaGeneration == roster.inputGeneration.rawValue,
+                  self.currentTVRemoteInputSnapshot?.focusEligibility
+                    == .eligible else { return }
+            let event = TVGameControllerRosterRouter.reconcile(
+                previous: self.tvControllerRoutedRosterState,
+                current: roster
+            )
+            do {
+                try await self.sendRemoteInput(.controllerRoster(event))
+                guard self.activeMediaGeneration
+                        == roster.inputGeneration.rawValue else { return }
+                self.tvControllerRoutedRosterState = roster
+            } catch {
+                // The input provider owns delivery failure and session teardown.
+            }
+            if self.tvControllerRoutingOperationID == operationID {
+                self.tvControllerRoutingTask = nil
+                self.tvControllerRoutingOperationID = nil
+            }
+        }
+    }
+
+    private func startTVGameControllerMotionDrainIfNeeded() {
+        guard tvControllerMotionDeliveryTask == nil else { return }
+        tvControllerMotionDeliveryTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled,
+                  let key = self.tvPendingControllerMotionSamples.keys
+                    .sorted().first,
+                  let sample = self.tvPendingControllerMotionSamples
+                    .removeValue(forKey: key) {
+                guard self.activeMediaGeneration
+                        == sample.lease.inputGeneration.rawValue,
+                      self.tvControllerRosterState?.controllers.contains(where: {
+                          $0.lease == sample.lease
+                      }) == true,
+                      self.currentTVRemoteInputSnapshot?.focusEligibility
+                        == .eligible else { continue }
+                do {
+                    try await self.sendRemoteInput(sample.remoteEvent)
+                } catch {
+                    self.tvPendingControllerMotionSamples.removeAll()
+                    break
+                }
+            }
+            self.tvControllerMotionDeliveryTask = nil
+            if !self.tvPendingControllerMotionSamples.isEmpty {
+                self.startTVGameControllerMotionDrainIfNeeded()
+            }
+        }
+    }
+
     private func applyTVVisionPlatformPresentationState(
         _ state: SessionTVVisionPlatformPresentationState,
         sessionID: UUID
@@ -2373,10 +2477,18 @@ final class AppModel: ApplicationInputSink {
         tvControllerRosterApplicationTask?.cancel()
         tvControllerRosterApplicationTask = nil
         tvControllerRosterApplicationOperationID = nil
+        tvControllerRoutingTask?.cancel()
+        tvControllerRoutingTask = nil
+        tvControllerRoutingOperationID = nil
+        tvControllerMotionDeliveryTask?.cancel()
+        tvControllerMotionDeliveryTask = nil
+        tvPendingControllerMotionSamples.removeAll()
         tvVisionPlatformGeometryAdmission = nil
         tvRemoteSurfacePressCaptureOwner?.invalidate()
         tvRemoteSurfacePressCaptureOwner = nil
         tvControllerRosterState = nil
+        tvControllerRoutedRosterState = nil
+        tvControllerFeedbackDecisionState = nil
 #if os(tvOS)
         tvGameControllerRuntimeOwner?.stop()
         tvGameControllerRuntimeOwner = nil
@@ -2433,6 +2545,76 @@ final class AppModel: ApplicationInputSink {
         guard let roster = tvControllerRosterState,
               roster.inputGeneration == inputGeneration else { return [] }
         return roster.controllers.map(\.lease)
+    }
+
+    private var currentTVRemoteInputSnapshot:
+        TVVisionInputCapabilitySnapshot? {
+        guard let admission = tvVisionPlatformGeometryAdmission else {
+            return nil
+        }
+        return makeTVRemoteInputSnapshot(
+            update: admission.update,
+            ownership: admission.ownership
+        )
+    }
+
+    private func applyTVGameControllerFeedback(
+        _ feedback: RemoteInputFeedback
+    ) {
+        guard expectedTVVisionPlatform == .tvOS,
+              let roster = tvControllerRosterState,
+              currentTVRemoteInputSnapshot?.focusEligibility == .eligible else {
+            tvControllerFeedbackDecisionState = nil
+            return
+        }
+        let remoteControllerID: String
+        let payload: TVControllerFeedbackPayload
+        switch feedback {
+        case let .rumble(value):
+            remoteControllerID = value.controllerID
+            payload = .rumble(
+                lowFrequency: value.lowFrequency,
+                highFrequency: value.highFrequency
+            )
+        case let .triggerRumble(value):
+            remoteControllerID = value.controllerID
+            payload = .triggerRumble(
+                leftMotor: value.leftMotor,
+                rightMotor: value.rightMotor
+            )
+        case let .led(value):
+            remoteControllerID = value.controllerID
+            payload = .led(red: value.red, green: value.green, blue: value.blue)
+        case let .motionRate(controllerID, type, reportRateHz):
+            remoteControllerID = controllerID
+            payload = .motionRate(type: type, reportRateHz: reportRateHz)
+        case .diagnostic:
+            return
+        }
+        guard let lease = TVGameControllerRosterRouter.lease(
+            matching: remoteControllerID,
+            in: roster
+        ),
+        let request = try? TVControllerFeedbackRequest(
+            lease: lease,
+            payload: payload
+        ) else {
+            tvControllerFeedbackDecisionState = .unavailable(
+                .controllerUnavailable
+            )
+            return
+        }
+        let decision = TVControllerFeedbackResolver.resolve(
+            request,
+            roster: roster
+        )
+        tvControllerFeedbackDecisionState = decision
+#if os(tvOS)
+        if case .apply = decision {
+            tvControllerFeedbackDecisionState = tvGameControllerRuntimeOwner?
+                .applyFeedback(request) ?? .unavailable(.controllerUnavailable)
+        }
+#endif
     }
 
     private var currentTVVisionGeometryStamp: TVRemoteSurfaceFocusStamp? {
