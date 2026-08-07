@@ -3210,3 +3210,13 @@
 - focused `/tmp/LuneX-19-1_6-focused.ubhIb2`通过三类foundation tests `30/30`；normal `/tmp/LuneX-19-1_6-normal.ZIvjnw`通过`1150 total / 1149 passed / 1 exact real-Keychain skip / 0 failed`。两轮raw Xcode log均删除。
 - 这些结果证明typed values/parser/registry和现有macOS application/unit regression；不证明AppModel/scene workspace接线、真实多窗口、signed artifact、physical assistive technology或live Sunshine。
 - Task 1.6 final gate `/tmp/LuneX-19-1_6-foundation-final.TDfp4H`通过strict、`6/48`、8文件test/docs scope、零production/project/config diff、adversarial matrix、focused `30/30`、normal `1150/1149/1/0`与exact Keychain skip。
+
+## 2026-08-08 阶段 19 Task 2.1 Host Library Workspace Migration
+
+- `AppModel`保持单一process runtime，仅新增一个primary `ProductWorkspaceRegistry` owner；legacy navigation与selected-host API变为primary workspace computed projection，保留既有单窗口调用面，不自动重绑被replacement的stale primary reference。
+- `ProductHostLibraryWorkspaceState`持有phase、refresh activity/typed issue、manual draft与submission state；共享host repository及loaded `hosts`仍为process-level，不复制runtime/provider/media/input owner。
+- `loadHosts(in:)`和`addManualHost(in:)`在await前捕获完整workspace reference，并在共享host投影或workspace结果写入前重新校验generation；late load与late save replacement测试确认旧结果不污染replacement selection/draft/result。
+- 正常load会对所有live workspace执行shared selection reconcile，但不转移session ownership；manual add成功只选择发起workspace的normalized host并清空该draft，invalid input不持久化且ProductIssue不回显credential-bearing draft。
+- 2.1未接线Add Host sheet awaited dismissal、catalog/pairing、scene multiwindow或session owner；这些分别保留给2.2、2.3、2.4、4.x与3.x。
+- final review移除normalized address缺失时fallback选择首个无关host的路径；异常manager结果现在映射typed `hostAddFailed`，不会虚报成功或错误选择。
+- focused `/tmp/LuneX-19-2_1-focused-r3.LMQhRz`为`38/38`；final related `/tmp/LuneX-19-2_1-related-final.onnIaL`为`103/103`；final serial normal `/tmp/LuneX-19-2_1-normal-final.OmNZLt`为`1158/1157/1/0`，精确Keychain skip proof `/tmp/LuneX-19-2_1-keychain-skip-proof.nEMMlR`为`1 skipped / 0 failed`且opt-in unset。所有raw日志与xcresult均删除。

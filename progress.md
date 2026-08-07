@@ -3697,3 +3697,12 @@
 - 2026-08-08：开始task 1.6，仅扩充issue/action privacy、endpoint边界、workspace identity/replacement/reconciliation/close adversarial tests；focused通过后运行完整normal suite，预期真实Keychain仍为唯一skip。
 - 2026-08-08：task 1.6 focused `/tmp/LuneX-19-1_6-focused.ubhIb2`为`30/30`；normal `/tmp/LuneX-19-1_6-normal.ZIvjnw`为`1150/1149/1 exact Keychain skip/0`，raw日志删除。勾选1.6后运行foundation final gate。
 - 2026-08-08：task 1.6 final gate `/tmp/LuneX-19-1_6-foundation-final.TDfp4H`通过strict、`6/48`、8文件scope、no production/project/config diff、adversarial matrix、focused `30/30`与normal `1150/1149/1/0`；准备独立提交推送。
+- 2026-08-08：task 2.1首轮focused因test中actor `await`误放XCTest autoclosure而编译退出、0 tests；改为await局部saveCount后断言，清理raw identity-bearing evidence并fresh重跑。
+- 2026-08-08：恢复task 2.1，corrected focused `/tmp/LuneX-19-2_1-focused-r2.0XSIyi`确认`37/37`；发现旧bundle及device字段残留后完成补清理，目录现仅保留纯计数JSON。related `/tmp/LuneX-19-2_1-related.HWEDpq`为`102/102`，raw与xcresult均删除。
+- 2026-08-08：补充pending host load `isRefreshing`及manual save期间workspace replacement的stale-result adversarial test；fresh focused `/tmp/LuneX-19-2_1-focused-r3.LMQhRz`为`38/38`。
+- 2026-08-08：首轮完整normal `/tmp/LuneX-19-2_1-normal.43ml8N`为`1158/1156/1/1`，失败为既有mac drawable geometry时序测试；单独诊断 `/tmp/LuneX-19-2_1-diagnose-input.W5toVj`为`1/1`，下一步运行禁用parallel testing的fresh normal gate。
+- 2026-08-08：serial normal `/tmp/LuneX-19-2_1-normal-serial.7iMpFx`测试本体通过`1158/1157/1/0`，wrapper仅因Xcode 27 skip日志格式不匹配退出；精确选择Keychain用例的 `/tmp/LuneX-19-2_1-keychain-skip-proof.nEMMlR`在opt-in unset下为`1 skipped / 0 failed`，确认完整套件唯一skip。两轮raw/xcresult均删除。
+- 2026-08-08：task 2.1实现与合同同步完成，勾选OpenSpec至`7/48`；下一步运行generator/strict/scope/final evidence gate后独立提交推送，再进入2.2 Add Host awaited presentation。
+- 2026-08-08：final review移除manual add找不到normalized address时选择首个无关host的fallback；final related `/tmp/LuneX-19-2_1-related-final.onnIaL`为`103/103`，final serial normal `/tmp/LuneX-19-2_1-normal-final.OmNZLt`为`1158/1157/1/0`，两个opt-in unset且raw/xcresult均删除。
+- 2026-08-08：首个final scope gate仅因generated pbxproj membership精确计数预期3、实际4而退出；诊断确认其余断言通过，修正gate后继续，不重跑已成功测试。
+- 2026-08-08：task 2.1 corrected final gate `/tmp/LuneX-19-2_1-final-r2.asqNYj`通过11文件scope、generator稳定SHA-256、strict、`7/48 next 2.2`、related `103/103`、normal `1158/1157/1/0`、exact Keychain skip、opt-in unset及raw/xcresult absent；准备独立提交推送。

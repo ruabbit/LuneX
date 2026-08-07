@@ -175,6 +175,40 @@ collisions, empty-host reconciliation, known catalog pruning, and unknown
 catalog preservation. These tests prove deterministic value and registry
 semantics only; they do not prove scene wiring or native multiwindow behavior.
 
+### Host library workspace migration
+
+`AppModel` now creates one checked primary workspace in the process registry.
+Its legacy `navigationSelection` and `selectedHostID` APIs are computed
+projections of that workspace so existing single-window views and application
+tests remain compatible while direct scene bindings are migrated later. Host
+selection changes clear only that workspace's selected app. Replacing the
+primary generation deliberately makes the legacy projection stale; it does not
+silently rebind or transfer ownership to the replacement.
+
+Each workspace now owns a `ProductHostLibraryWorkspaceState`: initial/loading,
+first-use, available, or failed phase; observable refresh activity; a typed
+refresh issue; the manual-host draft; and validating, saving, success, or typed
+failure submission state. The shared host repository and loaded host array
+remain process-level data and are not duplicated per window.
+
+Host load and manual-add entry points accept a complete workspace reference.
+They capture that owner before suspension and revalidate its ID and generation
+after each awaited repository operation, before publishing loaded hosts or
+submission results into `AppModel`. A stale or replaced owner cannot update the
+loaded host projection, selection, draft, or result state of its replacement.
+Successful shared host loads reconcile selection across all live workspaces;
+successful manual add selects the normalized host only in the initiating
+workspace, clears its draft, and records a typed success. Invalid input performs
+no persistence, keeps the user's editable draft local, and stores only a closed
+field-safe issue code for presentation.
+
+This migration is deterministic application-state evidence. The Add Host sheet
+still uses its legacy presentation callback and awaited success/failure dismissal
+is task 2.2. Catalog, pairing, root scene/multiwindow, and active-session owner
+wiring remain tasks 2.3, 2.4, 4.x, and 3.x respectively. No Simulator lifecycle,
+signed artifact, physical-device interaction, or live Sunshine behavior is
+proved by task 2.1.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public

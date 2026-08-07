@@ -11,7 +11,7 @@ final class ProductIssueTests: XCTestCase {
             "authorization"
         ]
 
-        XCTAssertEqual(ProductIssueCode.allCases.count, 24)
+        XCTAssertEqual(ProductIssueCode.allCases.count, 25)
         XCTAssertEqual(
             Set(ProductIssueCode.allCases.map(\.rawValue)).count,
             ProductIssueCode.allCases.count

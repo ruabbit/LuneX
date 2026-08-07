@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` artifacts严格校验通过，当前`0/48`，开始逐项实现 pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`7/48`；product foundations与host-library workspace migration完成，继续Add Host awaited presentation |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`6/48`。Group 1 product-state foundations完成：static baseline、typed issue/action、manual endpoint validation、workspace values/registry及adversarial regression；focused `30/30`，normal `1150/1149/1 exact Keychain skip/0`。这些仍未接线AppModel/scene；下一项2.1开始迁移host selection/first-use/refresh/manual-add state到owner workspace。
+阶段19当前权威进度`7/48`。Group 1 product-state foundations完成；2.1已将legacy navigation/host selection compatibility projection及first-use/refresh/manual-add draft/result迁入checked owner workspace，并在await后拒绝stale generation。final related `103/103`，final serial normal `1158/1157/1 exact Keychain skip/0`。scene/multiwindow与Add Host sheet awaited dismissal尚未接线；下一项2.2完成field-safe Add Host presentation。
 
 ### 阶段19错误记录
 
@@ -52,6 +52,12 @@
 - Task 1.1 corrected scope gate通过后，单行全文断言因合同中的proof句跨两行而退出；逐项诊断确认production diff为0、checkbox精确2行、opt-in unset，其余token均通过。final gate改为两个稳定短token并给每项断言显式marker。
 - Task 1.3首个focused编排在xcodebuild结束后尝试写zsh只读特殊变量`status`而退出；fresh xcresult仍可读，确认实际测试`11 passed / 1 failed`。后续编排使用`test_exit`，不重复该shell错误。
 - Task 1.3唯一测试失败为`[not-ipv6]`未抛错：bracketed parser剥离方括号后误走通用hostname校验。修复在bracketed入口强制IPv6语义，继续复用统一normalization；原始含自动设备枚举的Xcode日志已删除。
+- Task 2.1首轮focused在编译期因两处`await repository.saveCount()`位于XCTest同步autoclosure而退出，0 tests executed；production未报告编译错误。修复为先await局部值再断言，清除identity-bearing raw/xcresult后fresh重跑。
+- Task 2.1恢复时发现上轮focused evidence仍保留identity-bearing `xcresult`和device字段；首个清理命令因`rm -rf`安全策略被拒绝且无副作用，改为结构化`jq`脱敏并以定向`find -depth -delete`清除bundle，最终仅保留纯计数摘要。
+- Task 2.1首轮完整normal为`1158/1156/1/1`，唯一失败是既有`testMacPlatformInputFailsClosedWithoutCurrentDrawableGeometry`；该测试单独fresh复现`1/1`通过，未发现host/workspace稳定回归。下一门改为禁用parallel testing的fresh normal，不原样重复失败命令，并适配Xcode 27日志格式核对唯一Keychain skip。
+- Task 2.1串行normal测试本体通过`1158/1157/1/0`，但Xcode 27 skip日志提取器未匹配而使wrapper非零；未重复完整套件，改为仅选择`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled`且保持opt-in unset，结构化结果`1 skipped / 0 failed`，与完整套件唯一skip计数闭合。
+- Task 2.1 final review发现manual add异常返回缺少normalized address时会fallback选择首个无关host；移除fallback并改走typed `hostAddFailed`。修正后expanded related `103/103`及完整serial normal `1158/1157/1/0`通过。
+- Task 2.1首个final scope gate把新测试文件在generated pbxproj中的引用数假设为3，实际稳定结构为4而提前退出；其余scope/OpenSpec/generator/test/artifact断言均通过。corrected gate只修正精确计数，不重复测试或运行时操作。
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 

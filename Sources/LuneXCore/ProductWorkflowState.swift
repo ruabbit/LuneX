@@ -18,6 +18,7 @@ enum ProductIssueSeverity: String, CaseIterable, Hashable, Sendable {
 
 enum ProductActionKind: String, CaseIterable, Hashable, Sendable {
     case correctHostAddress
+    case refreshHosts
     case retryHostAdd
     case retryHostRemoval
     case resetHostTrust
@@ -105,6 +106,7 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
     case hostAddFailed = "host_add_failed"
     case hostRemoveFailed = "host_remove_failed"
     case hostTrustResetFailed = "host_trust_reset_failed"
+    case hostLibraryLoadFailed = "host_library_load_failed"
     case pairingUnavailable = "pairing_unavailable"
     case pairingPINInvalid = "pairing_pin_invalid"
     case pairingFailed = "pairing_failed"
@@ -128,7 +130,7 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
     var domain: ProductIssueDomain {
         switch self {
         case .hostAddressRequired, .hostAddressInvalid, .hostAddFailed,
-             .hostRemoveFailed, .hostTrustResetFailed:
+             .hostRemoveFailed, .hostTrustResetFailed, .hostLibraryLoadFailed:
             .host
         case .pairingUnavailable, .pairingPINInvalid, .pairingFailed,
              .pairingCancelled:
@@ -156,6 +158,7 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
              .streamInterrupted, .staleAction:
             .warning
         case .hostAddFailed, .hostRemoveFailed, .hostTrustResetFailed,
+             .hostLibraryLoadFailed,
              .pairingUnavailable, .pairingFailed, .catalogRefreshFailed,
              .streamUnavailable, .reconnectExhausted, .streamStopFailed,
              .streamSettingsInvalid, .hdrPresentationFailed,
@@ -175,6 +178,8 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             .retryHostRemoval
         case .hostTrustResetFailed:
             .resetHostTrust
+        case .hostLibraryLoadFailed:
+            .refreshHosts
         case .pairingUnavailable:
             .updateBuild
         case .pairingPINInvalid, .pairingFailed:
@@ -220,6 +225,8 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             issue("Host not removed", "The host remains in your library. Try again.", "trash.slash")
         case .hostTrustResetFailed:
             issue("Trust not reset", "The saved trust remains unchanged. Try again.", "checkmark.shield")
+        case .hostLibraryLoadFailed:
+            issue("Hosts not loaded", "The saved host library could not be loaded. Try refreshing again.", "desktopcomputer.trianglebadge.exclamationmark")
         case .pairingUnavailable:
             issue("Pairing unavailable", "This build does not include the authenticated pairing provider.", "exclamationmark.shield")
         case .pairingPINInvalid:
@@ -374,19 +381,59 @@ struct ProductWorkspaceState: Equatable, Sendable {
     var selectedHostID: MoonlightHost.ID?
     var selectedAppID: RemoteApp.ID?
     var presentation: ProductWorkspacePresentationState
+    var hostLibrary: ProductHostLibraryWorkspaceState
 
     init(
         reference: ProductWorkspaceReference,
         navigationSelection: AppNavigationSelection = .library,
         selectedHostID: MoonlightHost.ID? = nil,
         selectedAppID: RemoteApp.ID? = nil,
-        presentation: ProductWorkspacePresentationState = .init()
+        presentation: ProductWorkspacePresentationState = .init(),
+        hostLibrary: ProductHostLibraryWorkspaceState = .init()
     ) {
         self.reference = reference
         self.navigationSelection = navigationSelection
         self.selectedHostID = selectedHostID
         self.selectedAppID = selectedAppID
         self.presentation = presentation
+        self.hostLibrary = hostLibrary
+    }
+}
+
+enum ProductHostLibraryPhase: Equatable, Sendable {
+    case loading
+    case firstUse
+    case available
+    case failed
+}
+
+enum ManualHostSubmissionState: Equatable, Sendable {
+    case idle
+    case validating
+    case saving
+    case succeeded(hostID: MoonlightHost.ID)
+    case failed(ProductIssue)
+}
+
+struct ProductHostLibraryWorkspaceState: Equatable, Sendable {
+    var phase: ProductHostLibraryPhase
+    var isRefreshing: Bool
+    var refreshIssue: ProductIssue?
+    var manualHostDraft: ManualHostDraft
+    var manualHostSubmission: ManualHostSubmissionState
+
+    init(
+        phase: ProductHostLibraryPhase = .loading,
+        isRefreshing: Bool = false,
+        refreshIssue: ProductIssue? = nil,
+        manualHostDraft: ManualHostDraft = .init(),
+        manualHostSubmission: ManualHostSubmissionState = .idle
+    ) {
+        self.phase = phase
+        self.isRefreshing = isRefreshing
+        self.refreshIssue = refreshIssue
+        self.manualHostDraft = manualHostDraft
+        self.manualHostSubmission = manualHostSubmission
     }
 }
 
@@ -435,6 +482,23 @@ final class ProductWorkspaceRegistry {
     ) {
         statesByID = [:]
         latestGenerationByID = [:]
+        self.generateID = generateID
+    }
+
+    init(
+        primaryWorkspaceID: ProductWorkspaceID,
+        generateID: @escaping @MainActor () -> ProductWorkspaceID = {
+            ProductWorkspaceID()
+        }
+    ) {
+        let reference = ProductWorkspaceReference(
+            id: primaryWorkspaceID,
+            generation: .initial
+        )
+        statesByID = [
+            primaryWorkspaceID: ProductWorkspaceState(reference: reference)
+        ]
+        latestGenerationByID = [primaryWorkspaceID: .initial]
         self.generateID = generateID
     }
 

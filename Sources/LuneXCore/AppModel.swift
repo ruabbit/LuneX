@@ -159,13 +159,33 @@ final class AppModel: ApplicationInputSink {
     var session = StreamingSessionState()
     var renderState = StreamRenderState()
     var diagnostics = DiagnosticsStore()
-    var navigationSelection: AppNavigationSelection = .library {
-        didSet {
-            guard navigationSelection != oldValue else { return }
+    let workspaceRegistry: ProductWorkspaceRegistry
+    let primaryWorkspaceReference: ProductWorkspaceReference
+    var navigationSelection: AppNavigationSelection {
+        get {
+            workspaceRegistry.state(for: primaryWorkspaceReference)?
+                .navigationSelection ?? .library
+        }
+        set {
+            let oldValue = navigationSelection
+            guard oldValue != newValue else { return }
+            updatePrimaryWorkspace { $0.navigationSelection = newValue }
             updateTVRemoteNavigationSelection()
         }
     }
-    var selectedHostID: MoonlightHost.ID?
+    var selectedHostID: MoonlightHost.ID? {
+        get {
+            workspaceRegistry.state(for: primaryWorkspaceReference)?
+                .selectedHostID
+        }
+        set {
+            updatePrimaryWorkspace { state in
+                guard state.selectedHostID != newValue else { return }
+                state.selectedHostID = newValue
+                state.selectedAppID = nil
+            }
+        }
+    }
     var appsByHostID: [MoonlightHost.ID: [RemoteApp]] = [:]
     var pairingUI = PairingUIState()
     var appCatalogUI = AppCatalogUIState()
@@ -644,6 +664,14 @@ final class AppModel: ApplicationInputSink {
         remoteInputKey: RemoteInputKeyMaterial? = nil,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator()
     ) {
+        let primaryWorkspaceID = ProductWorkspaceID()
+        workspaceRegistry = ProductWorkspaceRegistry(
+            primaryWorkspaceID: primaryWorkspaceID
+        )
+        primaryWorkspaceReference = ProductWorkspaceReference(
+            id: primaryWorkspaceID,
+            generation: .initial
+        )
         self.hostLibraryManager = hostLibraryManager
         self.settingsRepository = settingsRepository
         self.appCatalogManager = appCatalogManager
@@ -688,6 +716,40 @@ final class AppModel: ApplicationInputSink {
     var selectedHost: MoonlightHost? {
         guard let selectedHostID else { return hosts.first }
         return hosts.first { $0.id == selectedHostID }
+    }
+
+    var primaryWorkspaceState: ProductWorkspaceState? {
+        workspaceRegistry.state(for: primaryWorkspaceReference)
+    }
+
+    func workspaceState(
+        for reference: ProductWorkspaceReference
+    ) -> ProductWorkspaceState? {
+        workspaceRegistry.state(for: reference)
+    }
+
+    private func updatePrimaryWorkspace(
+        _ mutation: (inout ProductWorkspaceState) -> Void
+    ) {
+        do {
+            try workspaceRegistry.update(primaryWorkspaceReference, mutation)
+        } catch {
+            diagnostics.record(
+                "The current window state could not be updated.",
+                subsystem: "workspace",
+                severity: .error,
+                code: "workspace_primary_update_failed"
+            )
+        }
+    }
+
+    private func reconcileWorkspaceSelections() {
+        workspaceRegistry.reconcile(
+            availableHostIDs: hosts.map(\.id),
+            availableAppIDsByHostID: appsByHostID.mapValues {
+                Set($0.map(\.id))
+            }
+        )
     }
 
     var selectedApps: [RemoteApp] {
@@ -1290,14 +1352,37 @@ final class AppModel: ApplicationInputSink {
     }
 
     func loadHosts() async {
+        await loadHosts(in: primaryWorkspaceReference)
+    }
+
+    func loadHosts(in workspace: ProductWorkspaceReference) async {
+        guard workspaceRegistry.state(for: workspace) != nil else { return }
+        _ = try? workspaceRegistry.update(workspace) { state in
+            state.hostLibrary.isRefreshing = true
+            state.hostLibrary.refreshIssue = nil
+        }
         do {
-            hosts = try await hostLibraryManager.loadHosts()
-            if selectedHostID == nil {
-                selectedHostID = hosts.first?.id
+            let loadedHosts = try await hostLibraryManager.loadHosts()
+            guard workspaceRegistry.state(for: workspace) != nil else { return }
+            hosts = loadedHosts
+            reconcileWorkspaceSelections()
+            _ = try? workspaceRegistry.update(workspace) { state in
+                state.hostLibrary.phase = loadedHosts.isEmpty ? .firstUse : .available
+                state.hostLibrary.isRefreshing = false
+                state.hostLibrary.refreshIssue = nil
             }
             diagnostics.record("Loaded \(hosts.count) saved hosts")
             logger.info("Loaded \(self.hosts.count, privacy: .public) saved hosts")
         } catch {
+            guard workspaceRegistry.state(for: workspace) != nil else { return }
+            _ = try? workspaceRegistry.update(workspace) { state in
+                state.hostLibrary.phase = .failed
+                state.hostLibrary.isRefreshing = false
+                state.hostLibrary.refreshIssue = ProductIssue(
+                    code: .hostLibraryLoadFailed,
+                    actionScope: .workspace(workspace)
+                )
+            }
             diagnostics.record(
                 "The saved host library could not be loaded.",
                 subsystem: "hosts",
@@ -1358,18 +1443,106 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
+    func setManualHostDraft(
+        _ draft: ManualHostDraft,
+        in workspace: ProductWorkspaceReference
+    ) {
+        guard workspaceRegistry.state(for: workspace) != nil else { return }
+        _ = try? workspaceRegistry.update(workspace) { state in
+            state.hostLibrary.manualHostDraft = draft
+            state.hostLibrary.manualHostSubmission = .idle
+        }
+    }
+
     func addManualHost(name: String? = nil, address: String) async {
+        setManualHostDraft(
+            ManualHostDraft(name: name ?? "", address: address),
+            in: primaryWorkspaceReference
+        )
+        _ = await addManualHost(in: primaryWorkspaceReference)
+    }
+
+    @discardableResult
+    func addManualHost(
+        in workspace: ProductWorkspaceReference
+    ) async -> ManualHostSubmissionState {
+        guard let workspaceState = workspaceRegistry.state(for: workspace) else {
+            return .failed(ProductIssue(code: .staleAction))
+        }
+        _ = try? workspaceRegistry.update(workspace) {
+            $0.hostLibrary.manualHostSubmission = .validating
+        }
+        let validation = workspaceState.hostLibrary.manualHostDraft.validate()
+        guard case let .success(submission) = validation else {
+            let issueCode: ProductIssueCode
+            if case let .failure(failure) = validation {
+                issueCode = failure.issueCode
+            } else {
+                issueCode = .hostAddressInvalid
+            }
+            let result = ManualHostSubmissionState.failed(ProductIssue(
+                code: issueCode,
+                actionScope: .workspace(workspace)
+            ))
+            _ = try? workspaceRegistry.update(workspace) {
+                $0.hostLibrary.manualHostSubmission = result
+            }
+            return result
+        }
+        _ = try? workspaceRegistry.update(workspace) {
+            $0.hostLibrary.manualHostSubmission = .saving
+        }
         do {
-            hosts = try await hostLibraryManager.addManualHost(name: name, address: address)
-            selectedHostID = hosts.first { $0.address == address }?.id ?? selectedHostID ?? hosts.first?.id
+            let updatedHosts = try await hostLibraryManager.addManualHost(
+                name: submission.name,
+                address: submission.normalizedAddress
+            )
+            guard workspaceRegistry.state(for: workspace) != nil else {
+                return .failed(ProductIssue(code: .staleAction))
+            }
+            hosts = updatedHosts
+            reconcileWorkspaceSelections()
+            let addedHostID = updatedHosts.first {
+                $0.addresses.contains { $0.rawValue == submission.normalizedAddress }
+            }?.id
+            guard let addedHostID else {
+                let result = ManualHostSubmissionState.failed(ProductIssue(
+                    code: .hostAddFailed,
+                    actionScope: .workspace(workspace)
+                ))
+                _ = try? workspaceRegistry.update(workspace) {
+                    $0.hostLibrary.manualHostSubmission = result
+                }
+                return result
+            }
+            let result = ManualHostSubmissionState.succeeded(hostID: addedHostID)
+            _ = try? workspaceRegistry.update(workspace) { state in
+                state.selectedHostID = addedHostID
+                state.selectedAppID = nil
+                state.hostLibrary.phase = .available
+                state.hostLibrary.manualHostDraft = ManualHostDraft()
+                state.hostLibrary.manualHostSubmission = result
+            }
             diagnostics.record("Added a host", subsystem: "hosts", code: "host_added")
+            return result
         } catch {
+            guard workspaceRegistry.state(for: workspace) != nil else {
+                return .failed(ProductIssue(code: .staleAction))
+            }
+            let result = ManualHostSubmissionState.failed(ProductIssue(
+                code: .hostAddFailed,
+                actionScope: .workspace(workspace)
+            ))
+            _ = try? workspaceRegistry.update(workspace) {
+                $0.hostLibrary.manualHostSubmission = result
+            }
             diagnostics.record(
                 "The host could not be added.",
                 subsystem: "hosts",
                 severity: .error,
                 code: "host_add_failed"
             )
+            return result
         }
     }
 
