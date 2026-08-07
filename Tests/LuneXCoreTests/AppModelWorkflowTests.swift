@@ -2134,7 +2134,7 @@ final class AppModelWorkflowTests: XCTestCase {
         model.receiveTVVisionGeometryUpdate(current)
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 2
+                .currentTVVisionPlatformPresentationApplications().count == 3
                 && model.visionInputCaptureEnabled
         }
         var applications = mediaEnvironment
@@ -2145,6 +2145,13 @@ final class AppModelWorkflowTests: XCTestCase {
             return XCTFail("Expected current visionOS scene application")
         }
         XCTAssertEqual(currentScene, current)
+        guard case let .input(currentInput, currentLeases) =
+                applications[2].action else {
+            return XCTFail("Expected current visionOS input application")
+        }
+        XCTAssertEqual(currentInput.platform, .visionOS)
+        XCTAssertEqual(currentInput.focusEligibility, .eligible)
+        XCTAssertTrue(currentLeases.isEmpty)
 
         let replacement = try makeTVVisionActiveGeometryUpdate(
             platform: .visionOS,
@@ -2154,19 +2161,26 @@ final class AppModelWorkflowTests: XCTestCase {
         model.receiveTVVisionGeometryUpdate(replacement)
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 4
+                .currentTVVisionPlatformPresentationApplications().count == 6
         }
         applications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
-        XCTAssertEqual(applications[2].action, .activate)
+        XCTAssertEqual(applications[3].action, .activate)
         XCTAssertEqual(
-            applications[2].ownership.presentationGeneration.rawValue,
+            applications[3].ownership.presentationGeneration.rawValue,
             2
         )
-        guard case let .scene(replacementScene) = applications[3].action else {
+        guard case let .scene(replacementScene) = applications[4].action else {
             return XCTFail("Expected replacement visionOS scene application")
         }
         XCTAssertEqual(replacementScene, replacement)
+        guard case let .input(replacementInput, replacementLeases) =
+                applications[5].action else {
+            return XCTFail("Expected replacement visionOS input application")
+        }
+        XCTAssertEqual(replacementInput.platform, .visionOS)
+        XCTAssertEqual(replacementInput.focusEligibility, .eligible)
+        XCTAssertTrue(replacementLeases.isEmpty)
 
         let stale = try makeTVVisionActiveGeometryUpdate(
             platform: .visionOS,
@@ -2178,7 +2192,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(
             mediaEnvironment
                 .currentTVVisionPlatformPresentationApplications().count,
-            4
+            6
         )
 
         let detached = try makeTVVisionClosedGeometryUpdate(
@@ -2189,19 +2203,19 @@ final class AppModelWorkflowTests: XCTestCase {
         model.receiveTVVisionGeometryUpdate(detached)
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 5
+                .currentTVVisionPlatformPresentationApplications().count == 7
         }
         applications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
-        guard case let .scene(detachedScene) = applications[4].action else {
+        guard case let .scene(detachedScene) = applications[6].action else {
             return XCTFail("Expected detached visionOS scene application")
         }
         XCTAssertEqual(detachedScene, detached)
         XCTAssertNil(detachedScene.binding)
-        XCTAssertFalse(applications.contains { application in
+        XCTAssertEqual(applications.filter { application in
             if case .input = application.action { return true }
             return false
-        })
+        }.count, 2)
 
         provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
         provider.finish(sessionID: record.sessionID)
@@ -2375,7 +2389,7 @@ final class AppModelWorkflowTests: XCTestCase {
         model.receiveTVVisionGeometryUpdate(currentGeometry)
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 2
+                .currentTVVisionPlatformPresentationApplications().count == 3
         }
         await waitUntil { model.visionInputCaptureEnabled }
 
@@ -2435,7 +2449,7 @@ final class AppModelWorkflowTests: XCTestCase {
         model.receiveTVVisionGeometryUpdate(replacementGeometry)
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 4
+                .currentTVVisionPlatformPresentationApplications().count == 6
         }
         XCTAssertTrue(model.visionInputReleasePending)
         XCTAssertFalse(model.visionInputCaptureEnabled)
@@ -3105,7 +3119,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 2
+                .currentTVVisionPlatformPresentationApplications().count == 3
         }
         let first = try makeTVVisionPresentationState(
             sessionID: record.sessionID,
@@ -3139,7 +3153,7 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         await waitUntil {
             mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count == 4
+                .currentTVVisionPlatformPresentationApplications().count == 6
                 && model.visionWindowedPresentationState == nil
         }
         mediaEnvironment.yieldTVVisionPlatformPresentation(
@@ -3187,6 +3201,280 @@ final class AppModelWorkflowTests: XCTestCase {
         provider.finish(sessionID: record.sessionID)
         await launchTask.value
         XCTAssertNil(model.visionWindowedPresentationState)
+    }
+
+    func testVisionPresentationCoordinatesCurrentMediaReconnectAndRemoteStop()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 82,
+                    key: Data(repeating: 0x82, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let geometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        let display = try makeVisionOSDisplaySnapshot(
+            revision: 1,
+            displayGeneration: 1
+        )
+        let audio = try makeVisionOSAudioRouteSnapshot(
+            revision: 1,
+            graphGeneration: 1,
+            presentationMode: .headTracked
+        )
+        model.receiveTVVisionGeometryUpdate(geometry)
+        model.receiveTVVisionDisplayHDREvent(.snapshot(
+            surfaceGeneration: geometry.surfaceGeneration,
+            snapshot: display
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        let applications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(applications[0].action, .activate)
+        guard case let .scene(appliedGeometry) = applications[1].action,
+              case let .input(input, leases) = applications[2].action,
+              case let .display(appliedDisplay) = applications[3].action else {
+            return XCTFail(
+                "Expected visionOS activation, scene, input, then display."
+            )
+        }
+        XCTAssertEqual(appliedGeometry, geometry)
+        XCTAssertEqual(input.platform, .visionOS)
+        XCTAssertEqual(input.focusEligibility, .eligible)
+        XCTAssertTrue(leases.isEmpty)
+        XCTAssertEqual(appliedDisplay, display)
+
+        let ownership = applications[0].ownership
+        let coordinator = try TVVisionPlatformPresentationCoordinator(
+            diagnosticCapacity: 4
+        )
+        _ = await coordinator.activate(ownership)
+        _ = await coordinator.applyScene(geometry, ownership: ownership)
+        _ = await coordinator.applyInput(
+            input,
+            controllerLeases: [],
+            ownership: ownership
+        )
+        _ = await coordinator.applyDisplay(display, ownership: ownership)
+        _ = await coordinator.applyAudioRoute(audio, ownership: ownership)
+        let videoOwnership = StreamVideoPresentationDeliveryOwnership(
+            sessionID: record.sessionID,
+            mediaGeneration: ownership.mediaGeneration,
+            revision: 1
+        )
+        _ = await coordinator.receiveVideo(
+            .decoderStarted(
+                ownership: videoOwnership,
+                contract: StreamVideoDecoderPresentationContract(
+                    decoderGeneration: 7,
+                    colorMetadata: .rec709VideoRange()
+                )
+            ),
+            ownership: ownership
+        )
+        _ = await coordinator.receiveVideo(
+            .decodedFrame(
+                ownership: StreamVideoPresentationDeliveryOwnership(
+                    sessionID: record.sessionID,
+                    mediaGeneration: ownership.mediaGeneration,
+                    revision: 2
+                ),
+                frame: try makeHDRApplicationFrame(
+                    generation: 7,
+                    frameID: 42,
+                    metadata: .rec709VideoRange()
+                )
+            ),
+            ownership: ownership
+        )
+        let optionalCoordinatedSnapshot = await coordinator.snapshot()
+        let coordinatedSnapshot = try XCTUnwrap(optionalCoordinatedSnapshot)
+        let coordinated = SessionTVVisionPlatformPresentationState(
+            sessionID: record.sessionID,
+            mediaGeneration: ownership.mediaGeneration,
+            snapshot: coordinatedSnapshot
+        )
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            coordinated,
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.tvVisionPlatformPresentationState == coordinated
+        }
+        XCTAssertEqual(model.visionWindowedPresentationState?.mode, .windowed)
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?.inputCapabilities,
+            coordinatedSnapshot.presentation?.inputCapabilities
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.platformStrategy,
+            .visionOutputExperience
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.headTrackingCapability,
+            .intendedSpatialExperience
+        )
+        XCTAssertEqual(
+            model.tvVisionPlatformPresentationSnapshot?
+                .audioRoute.spatialPresentationMode,
+            .headTracked
+        )
+        XCTAssertEqual(
+            model.tvVisionDisplayHDRFallbackReason,
+            .headroomUnavailable
+        )
+        XCTAssertEqual(model.renderState.displaySnapshot?.headroom, DisplayHeadroom())
+        guard case .frameReady(decoderGeneration: 7, frameID: 42) =
+                coordinatedSnapshot.video.phase else {
+            return XCTFail("Expected the current decoded visionOS frame.")
+        }
+        XCTAssertLessThanOrEqual(coordinatedSnapshot.diagnostics.count, 4)
+        XCTAssertTrue(coordinatedSnapshot.diagnostics.contains {
+            $0.classification == .displayFallback(.headroomUnavailable)
+        })
+
+        mediaEnvironment.blockNextStop()
+        provider.yield(
+            .reconnecting(attempt: 1, reason: "Control channel interrupted."),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.hasBlockedStop() }
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertNil(model.visionWindowedPresentationState)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
+        XCTAssertFalse(model.visionInputCaptureEnabled)
+        let reconnectApplications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(reconnectApplications.last?.action, .stop(.reconnect))
+        mediaEnvironment.resumeBlockedStop()
+
+        provider.yield(.rtspReady, sessionID: record.sessionID)
+        provider.yield(
+            .negotiated(makeSessionConfiguration(
+                sessionID: record.sessionID,
+                keyMaterial: record.request.remoteInputKey
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { mediaEnvironment.currentStartRecords().count == 2 }
+        provider.yield(.channelsReady(.control), sessionID: record.sessionID)
+        await waitUntil { model.session.isStreaming }
+
+        model.receiveTVVisionGeometryUpdate(geometry)
+        model.receiveTVVisionDisplayHDREvent(.snapshot(
+            surfaceGeneration: geometry.surfaceGeneration,
+            snapshot: display
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count
+                == reconnectApplications.count + 4
+        }
+        let replay = Array(mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications().suffix(4))
+        XCTAssertEqual(replay.map(\.ownership.mediaGeneration), [2, 2, 2, 2])
+        XCTAssertEqual(replay[0].action, .activate)
+        guard case .scene = replay[1].action,
+              case .input = replay[2].action,
+              case .display = replay[3].action else {
+            return XCTFail("Expected current visionOS reconnect replay.")
+        }
+        mediaEnvironment.yieldTVVisionPlatformPresentation(
+            coordinated,
+            sessionID: record.sessionID
+        )
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertNil(model.visionWindowedPresentationState)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
+        XCTAssertFalse(model.visionInputCaptureEnabled)
+        XCTAssertEqual(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().last?.action,
+            .stop(.remoteTermination)
+        )
+    }
+
+    func testVisionPresentationClearsAndAppliesLocalStop() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 83,
+                    key: Data(repeating: 0x83, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .visionOS,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+        )
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 3
+                && model.visionInputCaptureEnabled
+        }
+
+        await model.stopStream()
+        await launchTask.value
+
+        XCTAssertNil(model.tvVisionPlatformPresentationState)
+        XCTAssertNil(model.visionWindowedPresentationState)
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
+        XCTAssertFalse(model.visionInputCaptureEnabled)
+        XCTAssertEqual(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().last?.action,
+            .stop(.localStop)
+        )
     }
 
     func testTVVisionPresentationClearsAndAppliesLocalStop() async throws {
@@ -3603,7 +3891,7 @@ final class AppModelWorkflowTests: XCTestCase {
     {
         let provider = ControlledSessionControlProvider()
         let mediaEnvironment = ControlledSessionMediaEnvironment(
-            failsTVOSDisplayApplication: true
+            failsTVVisionDisplayApplication: true
         )
         let model = makeLaunchReadyModel(
             sessionControlProvider: provider,
@@ -3651,6 +3939,133 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(actions[4], .fail(.actionFailed(.display)))
         XCTAssertNil(model.renderState.displaySnapshot)
         XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
+    func testVisionDisplayApplicationFailureTerminatesCurrentPresentation()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            failsTVVisionDisplayApplication: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 84,
+                    key: Data(repeating: 0x84, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        let geometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(geometry)
+        model.receiveTVVisionDisplayHDREvent(.snapshot(
+            surfaceGeneration: geometry.surfaceGeneration,
+            snapshot: try makeVisionOSDisplaySnapshot(
+                revision: 1,
+                displayGeneration: 1
+            )
+        ))
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 5
+        }
+        let actions = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications().map(\.action)
+        guard case .display = actions[3] else {
+            return XCTFail("Expected the failing visionOS display application.")
+        }
+        XCTAssertEqual(actions[4], .fail(.actionFailed(.display)))
+        XCTAssertNil(model.renderState.displaySnapshot)
+        XCTAssertNil(model.tvVisionDisplayHDRFallbackReason)
+
+        await model.stopStream()
+        await launchTask.value
+    }
+
+    func testVisionDisplayReplaysAgainstLatestPendingGeometry() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment(
+            blocksFirstTVVisionActivation: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 85,
+                    key: Data(repeating: 0x85, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let initialGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        let display = try makeVisionOSDisplaySnapshot(
+            revision: 1,
+            displayGeneration: 1
+        )
+        model.receiveTVVisionGeometryUpdate(initialGeometry)
+        await waitUntil { mediaEnvironment.hasBlockedTVVisionActivation() }
+        model.receiveTVVisionDisplayHDREvent(.snapshot(
+            surfaceGeneration: initialGeometry.surfaceGeneration,
+            snapshot: display
+        ))
+        let replacementGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 2
+        )
+        model.receiveTVVisionGeometryUpdate(replacementGeometry)
+
+        mediaEnvironment.resumeBlockedTVVisionActivation()
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        let applications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(applications.map(\.action).first, .activate)
+        guard case let .scene(appliedGeometry) = applications[1].action,
+              case let .input(appliedInput, leases) = applications[2].action,
+              case let .display(appliedDisplay) = applications[3].action else {
+            return XCTFail(
+                "Expected latest scene and input before replayed display."
+            )
+        }
+        XCTAssertEqual(appliedGeometry, replacementGeometry)
+        XCTAssertEqual(appliedInput.revision, replacementGeometry.revision)
+        XCTAssertTrue(leases.isEmpty)
+        XCTAssertEqual(appliedDisplay, display)
 
         await model.stopStream()
         await launchTask.value
@@ -6196,7 +6611,9 @@ final class AppModelWorkflowTests: XCTestCase {
                 currentEDRHeadroom: $0.currentEDRHeadroom,
                 potentialEDRHeadroom: $0.potentialEDRHeadroom,
                 layerCapability: $0.layerCapability,
-                tvOSHDRCapabilityResolution: $0.tvOSHDRCapabilityResolution
+                tvOSHDRCapabilityResolution: $0.tvOSHDRCapabilityResolution,
+                visionOSHDRCapabilityResolution:
+                    $0.visionOSHDRCapabilityResolution
             )
         }
         let audioRoute = try sourceAudioRoute.map {
@@ -6321,6 +6738,37 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    private func makeVisionOSDisplaySnapshot(
+        revision: UInt64,
+        displayGeneration: UInt64
+    ) throws -> TVVisionDisplaySnapshot {
+        let resolution = TVVisionDisplayHDRCapabilityResolver.resolve(
+            TVVisionDisplayHDRCapabilityInputs(
+                isOutputAvailable: true,
+                layerCapability: .preferredDynamicRange,
+                supportsToneMapControl: true,
+                supportsContentsHeadroom: true,
+                supportedEDRGamuts: [.displayP3, .ituR2020],
+                currentEDRHeadroom: nil,
+                potentialEDRHeadroom: nil
+            )
+        )
+        return try TVVisionDisplaySnapshot(
+            platform: .visionOS,
+            revision: TVVisionSemanticRevision(rawValue: revision),
+            displayGeneration: TVVisionGeneration(
+                domain: .display,
+                rawValue: displayGeneration
+            ),
+            isOutputAvailable: true,
+            headroomSource: .unavailable,
+            currentEDRHeadroom: nil,
+            potentialEDRHeadroom: nil,
+            layerCapability: .preferredDynamicRange,
+            visionOSHDRCapabilityResolution: resolution
+        )
+    }
+
     private func makeTVOSAudioRouteSnapshot(
         revision: UInt64,
         graphGeneration: UInt64,
@@ -6339,6 +6787,31 @@ final class AppModelWorkflowTests: XCTestCase {
             spatialSupport: .supported,
             platformStrategy: .environmentListener,
             headTrackingCapability: .entitlementRequired,
+            runtimeStage: .running,
+            eventCause: .initial,
+            spatialPresentationMode: presentationMode,
+            spatialFallbackReason: nil
+        )
+    }
+
+    private func makeVisionOSAudioRouteSnapshot(
+        revision: UInt64,
+        graphGeneration: UInt64,
+        presentationMode: SpatialAudioPresentationMode
+    ) throws -> TVVisionAudioRouteSnapshot {
+        try TVVisionAudioRouteSnapshot(
+            platform: .visionOS,
+            revision: TVVisionSemanticRevision(rawValue: revision),
+            routeGeneration: TVVisionGeneration(
+                domain: .audioRoute,
+                rawValue: graphGeneration
+            ),
+            outputAvailable: true,
+            currentOutputChannelCount: 2,
+            maximumOutputChannelCount: 8,
+            spatialSupport: .supported,
+            platformStrategy: .visionOutputExperience,
+            headTrackingCapability: .intendedSpatialExperience,
             runtimeStage: .running,
             eventCause: .initial,
             spatialPresentationMode: presentationMode,
@@ -7669,7 +8142,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private let automaticallyReady: Bool
     private let failsLifecycleApplication: Bool
     private let failsInputSend: Bool
-    private let failsTVOSDisplayApplication: Bool
+    private let failsTVVisionDisplayApplication: Bool
     private let blocksFirstTVVisionActivation: Bool
     private let blocksFailingTVVisionActivationAfterTerminalEvent: Bool
     private var startRecords: [StartRecord] = []
@@ -7697,14 +8170,14 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         automaticallyReady: Bool = true,
         failsLifecycleApplication: Bool = false,
         failsInputSend: Bool = false,
-        failsTVOSDisplayApplication: Bool = false,
+        failsTVVisionDisplayApplication: Bool = false,
         blocksFirstTVVisionActivation: Bool = false,
         blocksFailingTVVisionActivationAfterTerminalEvent: Bool = false
     ) {
         self.automaticallyReady = automaticallyReady
         self.failsLifecycleApplication = failsLifecycleApplication
         self.failsInputSend = failsInputSend
-        self.failsTVOSDisplayApplication = failsTVOSDisplayApplication
+        self.failsTVVisionDisplayApplication = failsTVVisionDisplayApplication
         self.blocksFirstTVVisionActivation = blocksFirstTVVisionActivation
         shouldBlockTVVisionActivation = blocksFirstTVVisionActivation
         self.blocksFailingTVVisionActivationAfterTerminalEvent =
@@ -7806,7 +8279,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         withLock {
             tvVisionPlatformPresentationApplications.append(application)
         }
-        if failsTVOSDisplayApplication,
+        if failsTVVisionDisplayApplication,
            case .display = application.action {
             throw MediaEnvironmentApplicationTestError.failed
         }

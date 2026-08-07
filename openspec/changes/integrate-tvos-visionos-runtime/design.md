@@ -406,6 +406,37 @@ and AppModel. Task 4.5 completes same-view reconnect through current-value
 geometry followed by display replay at unchanged semantic revisions; it does
 not create a display-specific bypass or a second platform runtime.
 
+Task 6.5 connects the actual visionOS layer display event from the SwiftUI
+stream surface to the same `AppModel` and media-environment application path
+used by tvOS. The geometry application now derives the platform-appropriate
+input capability snapshot for both tvOS and visionOS, so an attached eligible
+visionOS surface applies `activate`, scene, input, then display under one
+checked presentation ownership. Audio and decoded video continue to enter the
+same coordinator through the canonical media environment established by tasks
+6.2 and 6.4; no second surface, decoder, frame queue, HDR resolver, audio graph,
+input owner, or coordinator is introduced.
+
+The display source remains surface-owned and current-platform checked. A new
+surface generation cancels pending display work and clears the source. A newer
+geometry revision on the same surface preserves that current source and
+reschedules its display application behind the newest geometry task. Operation
+identity, exact admission, session, media generation, platform, display
+generation, and semantic revision guards reject superseded work, so a resize
+cannot either leak an old display or permanently lose a valid source that was
+queued behind the old geometry.
+
+Reconnect first runs the shared release, presentation stop, render/HDR clear,
+and environment teardown, then the surviving actual view may replay unchanged
+geometry and display values into the new media generation. Old coordinator
+state is rejected. Remote termination and local stop apply their typed stop
+reason and clear windowed, input, display, and render state; a display action
+failure applies the matching coordinator failure and clears the source. The
+combined regression builds one current snapshot containing windowed scene,
+eligible input, decoded frame, typed visionOS HDR fallback, intended spatial
+experience, bounded diagnostics, and then exercises reconnect, late old state,
+remote termination, local stop, display failure, and the same-surface resize
+race.
+
 ### Preserve proof tiers and simulator discipline
 
 Deterministic tests and fixed simulator checks prove reducers, ownership,

@@ -2577,6 +2577,112 @@ pre/final/post-record/audit authority indexes, stable project and retained
 evidence, disabled opt-ins, and implementation, task, privacy, dependency, and
 proof boundaries before the task-level commit.
 
+## Task 6.5 complete visionOS presentation coordination
+
+Task 6.5 keeps the one `TVVisionPlatformPresentationCoordinator`, actual
+`MetalStreamSurface`, `StreamMetalPresenter`, decoded-frame source, HDR
+resolver, canonical audio graph, and vision input owner established by earlier
+tasks. The visionOS `RootView` surface now forwards its actual layer display
+event into a platform-generic `AppModel` entry. The previous tvOS entry remains
+a tvOS-only compatibility wrapper; shared private display source, application,
+fallback, revision-exhaustion, matching, and cleanup state is fixed to the
+current expected TV/Vision platform.
+
+An attached visionOS geometry application now derives the current
+`VisionWindowInputSnapshot` capability and applies one ordered sequence:
+`activate`, scene, input, then display. tvOS alone still updates the Siri Remote
+surface capture owner. The existing media environment continues to inject the
+current decoded video and canonical audio route into that same coordinator.
+The resulting snapshot can therefore contain the actual windowed scene,
+eligible input capability, current decoded frame, platform-branded
+`.headroomUnavailable` HDR-to-SDR fallback, public vision output intended
+spatial experience, and bounded diagnostics under one ownership and semantic
+revision.
+
+Display application remains serialized behind geometry. A replacement surface
+cancels pending application and clears its source. During review, a
+same-surface race was found: a newer geometry admission could correctly reject
+an already queued display application but leave its still-current source
+unapplied. The geometry path now reschedules a matching current-platform source
+behind the newest geometry task. Operation ID, exact admission, session, media
+generation, surface, display generation, and revision checks keep old work
+inert. A deterministic test blocks the first activation and verifies that only
+the latest scene/input revision and current display are applied.
+
+Reconnect first clears current presentation, render/HDR, and input state and
+applies `.stop(.reconnect)`. The surviving actual view may replay unchanged
+geometry and display values only into media generation 2; a generation 1 state
+is rejected. Remote termination applies `.stop(.remoteTermination)`, local stop
+applies `.stop(.localStop)`, and both clear windowed, input, display, render,
+and fallback state. A display action failure clears the source/render state and
+applies `.fail(.actionFailed(.display))` to the matching current ownership.
+
+Fresh post-audit pre-mark evidence is:
+
+- focused `/tmp/LuneX-18-6_5-focused-r3.6pazwk/Focused.xcresult`:
+  `7/7 passed / 0 skipped / 0 failed / 0 expected failure`, with zero warning,
+  error, or analyzer-warning diagnostics;
+- related `/tmp/LuneX-18-6_5-related-r2.lmoqpY/Related.xcresult`:
+  `324/324 passed / 0 skipped / 0 failed / 0 expected failure`, with zero
+  warning, error, or analyzer-warning diagnostics;
+- normal `/tmp/LuneX-18-6_5-normal.CV3Nzw/Normal.xcresult`:
+  `1088 total / 1087 passed / 1 skipped / 0 failed / 0 expected failure`, with
+  the only skip exactly the disabled real-Keychain round-trip and zero warning,
+  error, or analyzer-warning diagnostics;
+- fixed Vision Pro unsigned Debug
+  `/tmp/LuneX-18-6_5-visionos-direct.vMBJUC/VisionOS.xcresult`: succeeded with
+  zero warning, error, or analyzer-warning diagnostics and one AIR plus one
+  metallib; and
+- five-platform unsigned Debug `/tmp/LuneX-18-6_5-builds.1uxfoD`: macOS and the
+  fixed iPhone, iPad, Apple TV, and Vision Pro destinations all succeeded with
+  zero warning, error, or analyzer-warning diagnostics, one AIR plus one
+  metallib each, and Metal `-Werror` present.
+
+Both real opt-ins remained unset and normal tests continued to use the file
+fallback. Fixed UUIDs were used only as build destinations; no Simulator
+inventory or lifecycle command ran. These results prove deterministic current
+ownership, ordering, stale rejection, reconnect replay, failure, terminal
+cleanup, shared-regression behavior, and unsigned cross-platform compilation.
+They do not prove Simulator runtime, signed installation, physical Vision Pro
+window/input behavior, headset HDR, audible fixed or head-tracked spatial
+audio, live Sunshine, latency, comfort, performance, power, or thermal state.
+Task 6.6 retains the broader connected resource regression, task 7.2 retains
+actual-state UI, and tasks 8.5-8.7 retain simulator and signed physical/live
+acceptance. OpenSpec remains pre-mark `35/50 ready`, task 6.5 next, until the
+repository gate passes.
+
+The fresh repository pre-gate
+`/tmp/LuneX-18-6_5-repository-pre.QOi58Z` passed fixture self/tree, OpenSpec
+strict `9/9`, pre-mark `35/50 next 6.5`, three byte-stable project generations,
+exact ten-file scope, generator/project membership, current platform/input/
+display/replay/terminal semantics, all retained focused/related/normal/direct/
+five-platform Metal evidence, the exact Keychain skip, disabled opt-ins, no
+residual process, and clean-room, reference, dependency, privacy, diff, and
+proof-tier boundaries. Only task 6.5 was then checked; task 6.6 and all 7.x-8.x
+work remain pending.
+
+The read-only post-mark final-state
+`/tmp/LuneX-18-6_5-final-state.UppBOq` confirmed OpenSpec strict `9/9`, `36/50
+ready`, task 6.5 complete, task 6.6 next, exact eleven-file scope, the single
+6.5 checkbox replacement, stable generated project and retained evidence,
+disabled opt-ins, no residual process, and unchanged reference, dependency,
+diff, and proof boundaries. It did not repeat tests, builds, generation,
+Keychain, live-host, or Simulator operations.
+
+The final diff audit `/tmp/LuneX-18-6_5-final-audit.B4HJVK` confirmed the final
+eleven files as two production, one test, and eight authority files; the
+RootView display connection, platform-generic display ownership, visionOS input
+application, same-surface display replay, replacement and terminal cleanup;
+all four connected tests without weakening; the single 6.5 checkbox; and
+stable privacy, reference, dependency, opt-in, process, project, and proof
+boundaries. No issue blocks the task-level commit.
+
+The final record `/tmp/LuneX-18-6_5-final-record.7HghDO` confirmed the same
+`36/50 next 6.6` state, final eleven-file `2/1/8` classification, complete
+pre-mark/final-state/audit authority indexes, stable project and retained
+evidence, disabled opt-ins, and implementation, task, privacy, dependency,
+process, and proof boundaries before the task-level commit.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

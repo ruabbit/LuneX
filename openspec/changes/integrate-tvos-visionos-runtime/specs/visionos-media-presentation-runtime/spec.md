@@ -88,9 +88,29 @@ media-reset behavior without claiming unavailable listener head tracking.
 LuneX SHALL bind window scene, surface, decoded frames, HDR policy, audio route,
 diagnostics, and teardown to one current media presentation coordinator.
 
+#### Scenario: Current platform components are coordinated
+- **WHEN** the current visionOS media generation has an attached active scene, eligible input, decoded frame, typed HDR resolution, and canonical audio route
+- **THEN** LuneX SHALL publish them through one matching presentation ownership and bounded coordinator snapshot without creating a second media or input owner
+
+#### Scenario: Display arrives before a same-surface resize completes
+- **WHEN** a current display source is pending behind one geometry application and a newer geometry revision replaces it on the same surface
+- **THEN** LuneX SHALL reject the superseded application, apply the latest scene and input first, and replay the current display source behind that latest geometry
+
+#### Scenario: Surface generation changes
+- **WHEN** a replacement surface generation supersedes the current geometry
+- **THEN** LuneX SHALL cancel pending display application, clear the old display source, and SHALL NOT replay it into the replacement surface
+
+#### Scenario: Media generation reconnects
+- **WHEN** the current session enters reconnect and starts a replacement media generation on the surviving actual window
+- **THEN** LuneX SHALL clear old windowed, render, HDR, and input state, apply a reconnect stop, replay current surface values only into the replacement generation, and reject late old-generation coordinator state
+
+#### Scenario: Current display application fails
+- **WHEN** the current visionOS display action cannot be applied
+- **THEN** LuneX SHALL clear render and HDR source state and fail the matching current presentation through the shared coordinator
+
 #### Scenario: Stream stops
 - **WHEN** local or remote stop completes
-- **THEN** LuneX SHALL release surface, frame, audio, observer, and coordinator ownership idempotently
+- **THEN** LuneX SHALL apply the matching typed stop reason, clear windowed, input, display, render, frame, audio, observer, and coordinator ownership, and make late state inert
 
 ### Requirement: visionOS media UI SHALL expose actual state accessibly
 Stream controls and Settings SHALL show actual windowed mode, render state, HDR
