@@ -115,6 +115,18 @@ Scanning `connectedScenes`, using a global screen size, or deriving geometry
 from requested stream resolution was rejected because multiwindow, resizing,
 display changes, and view attachment would diverge.
 
+Task 5.1 keeps that single actual-view owner and adds a generation-owned
+window observation around it. The observer weakly tracks the current
+`UIWindow` and `UIWindowScene`, replaces all tokens when either identity
+changes, and maps public visible, hidden, key, resign-key, active, inactive,
+background, and foreground notifications back into the existing surface
+callbacks. Every queued notification also carries a private observation UUID,
+so removal of the old token is not the only late-event barrier. visionOS focus
+eligibility is the actual visible, interactive, current key window; tvOS keeps
+its existing focus-engine `canBecomeFocused` rule. The observer never advances
+geometry or writes drawable state: the existing geometry owner remains the
+single semantic-revision and drawable writer.
+
 ### Keep visionOS windowed streaming explicit
 
 Stage 18 supports the actual SwiftUI window containing the Metal stream

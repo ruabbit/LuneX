@@ -13,6 +13,14 @@ windowed stream surface under one checked generation.
 - **WHEN** an old attachment emits after window or session replacement
 - **THEN** LuneX SHALL reject it without changing current presentation or input
 
+#### Scenario: Window identity changes within one scene
+- **WHEN** the actual stream surface moves to a replacement window in the same window scene
+- **THEN** LuneX SHALL replace the window observation, publish only replacement-window state, and make queued or later old-window events inert
+
+#### Scenario: Window key eligibility changes
+- **WHEN** the actual visible interactive visionOS stream window becomes or resigns key status
+- **THEN** LuneX SHALL re-read focus eligibility from that current window without changing tvOS focus-engine semantics
+
 ### Requirement: visionOS geometry SHALL synchronize rendering and input
 One normalized semantic revision SHALL drive drawable sizing, video fit/fill,
 and supported indirect or absolute input mapping. Detached or invalid geometry

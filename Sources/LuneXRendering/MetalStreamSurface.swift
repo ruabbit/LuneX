@@ -157,6 +157,230 @@ final class TVVisionUIKitStreamSurfaceRelay<
     }
 }
 
+struct TVVisionUIKitWindowObservationNotificationNames: Equatable, Sendable {
+    let didBecomeVisible: Notification.Name
+    let didBecomeHidden: Notification.Name
+    let didBecomeKey: Notification.Name
+    let didResignKey: Notification.Name
+    let sceneDidActivate: Notification.Name
+    let sceneWillDeactivate: Notification.Name
+    let sceneDidEnterBackground: Notification.Name
+    let sceneWillEnterForeground: Notification.Name
+}
+
+enum TVVisionUIKitWindowObservationOutcome: Equatable, Sendable {
+    case attached
+    case replaced
+    case unchanged
+    case detached
+    case staleSurfaceGeneration
+    case invalidated
+    case alreadyInvalidated
+}
+
+private final class TVVisionUIKitWindowObservationTokens:
+    @unchecked Sendable
+{
+    private let notificationCenter: NotificationCenter
+    private var observers: [NSObjectProtocol] = []
+
+    init(notificationCenter: NotificationCenter) {
+        self.notificationCenter = notificationCenter
+    }
+
+    func replace(_ observers: [NSObjectProtocol]) {
+        removeAll()
+        self.observers = observers
+    }
+
+    func removeAll() {
+        observers.forEach(notificationCenter.removeObserver)
+        observers.removeAll()
+    }
+
+    deinit {
+        removeAll()
+    }
+}
+
+@MainActor
+final class TVVisionUIKitWindowObservation<
+    Window: AnyObject,
+    WindowScene: AnyObject
+> {
+    typealias Handler = @MainActor (
+        [TVVisionUIKitStreamSurfaceCallback]
+    ) -> Void
+
+    let surfaceGeneration: TVVisionGeneration
+    var currentWindow: Window? { window }
+    var currentWindowScene: WindowScene? { windowScene }
+
+    private let notificationCenter: NotificationCenter
+    private let names: TVVisionUIKitWindowObservationNotificationNames
+    private let observerTokens: TVVisionUIKitWindowObservationTokens
+    private weak var window: Window?
+    private weak var windowScene: WindowScene?
+    private var observationID: UUID?
+    private var handler: Handler?
+    private var isInvalidated = false
+
+    init(
+        surfaceGeneration: TVVisionGeneration,
+        notificationCenter: NotificationCenter,
+        names: TVVisionUIKitWindowObservationNotificationNames,
+        handler: @escaping Handler
+    ) throws {
+        try surfaceGeneration.require(.surface)
+        self.surfaceGeneration = surfaceGeneration
+        self.notificationCenter = notificationCenter
+        self.names = names
+        observerTokens = TVVisionUIKitWindowObservationTokens(
+            notificationCenter: notificationCenter
+        )
+        self.handler = handler
+    }
+
+    @discardableResult
+    func attach(
+        window candidateWindow: Window,
+        windowScene candidateScene: WindowScene,
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> TVVisionUIKitWindowObservationOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        if window === candidateWindow, windowScene === candidateScene {
+            return .unchanged
+        }
+
+        let outcome: TVVisionUIKitWindowObservationOutcome =
+            window == nil && windowScene == nil ? .attached : .replaced
+        stopObserving()
+        window = candidateWindow
+        windowScene = candidateScene
+        let nextObservationID = UUID()
+        observationID = nextObservationID
+        observerTokens.replace([
+            observe(
+                name: names.didBecomeVisible,
+                object: candidateWindow,
+                observationID: nextObservationID,
+                callbacks: [.visibility, .focusEligibility]
+            ),
+            observe(
+                name: names.didBecomeHidden,
+                object: candidateWindow,
+                observationID: nextObservationID,
+                callbacks: [.visibility, .focusEligibility]
+            ),
+            observe(
+                name: names.didBecomeKey,
+                object: candidateWindow,
+                observationID: nextObservationID,
+                callbacks: [.focusEligibility]
+            ),
+            observe(
+                name: names.didResignKey,
+                object: candidateWindow,
+                observationID: nextObservationID,
+                callbacks: [.focusEligibility]
+            ),
+            observe(
+                name: names.sceneDidActivate,
+                object: candidateScene,
+                observationID: nextObservationID,
+                callbacks: [.windowScene, .visibility, .focusEligibility]
+            ),
+            observe(
+                name: names.sceneWillDeactivate,
+                object: candidateScene,
+                observationID: nextObservationID,
+                callbacks: [.windowScene, .visibility, .focusEligibility]
+            ),
+            observe(
+                name: names.sceneDidEnterBackground,
+                object: candidateScene,
+                observationID: nextObservationID,
+                callbacks: [.windowScene, .visibility, .focusEligibility]
+            ),
+            observe(
+                name: names.sceneWillEnterForeground,
+                object: candidateScene,
+                observationID: nextObservationID,
+                callbacks: [.windowScene, .visibility, .focusEligibility]
+            )
+        ])
+        return outcome
+    }
+
+    @discardableResult
+    func detach(
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> TVVisionUIKitWindowObservationOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        guard window != nil || windowScene != nil else { return .unchanged }
+        stopObserving()
+        return .detached
+    }
+
+    @discardableResult
+    func invalidate(
+        surfaceGeneration candidateGeneration: TVVisionGeneration
+    ) -> TVVisionUIKitWindowObservationOutcome {
+        guard candidateGeneration == surfaceGeneration else {
+            return .staleSurfaceGeneration
+        }
+        guard !isInvalidated else { return .alreadyInvalidated }
+        isInvalidated = true
+        stopObserving()
+        handler = nil
+        return .invalidated
+    }
+
+    private func observe<Object: AnyObject>(
+        name: Notification.Name,
+        object: Object,
+        observationID: UUID,
+        callbacks: [TVVisionUIKitStreamSurfaceCallback]
+    ) -> NSObjectProtocol {
+        notificationCenter.addObserver(
+            forName: name,
+            object: object,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.receive(
+                    observationID: observationID,
+                    callbacks: callbacks
+                )
+            }
+        }
+    }
+
+    private func receive(
+        observationID candidateObservationID: UUID,
+        callbacks: [TVVisionUIKitStreamSurfaceCallback]
+    ) {
+        guard !isInvalidated,
+              observationID == candidateObservationID,
+              window != nil,
+              windowScene != nil else { return }
+        handler?(callbacks)
+    }
+
+    private func stopObserving() {
+        observerTokens.removeAll()
+        observationID = nil
+        window = nil
+        windowScene = nil
+    }
+}
+
 enum TVVisionUIKitStreamSurfaceGenerationValidationError:
     Equatable,
     Sendable
@@ -3675,6 +3899,19 @@ struct MetalStreamSurface: NSViewRepresentable {
 }
 #else
 #if os(tvOS) || os(visionOS)
+extension TVVisionUIKitWindowObservationNotificationNames {
+    static let current = TVVisionUIKitWindowObservationNotificationNames(
+        didBecomeVisible: UIWindow.didBecomeVisibleNotification,
+        didBecomeHidden: UIWindow.didBecomeHiddenNotification,
+        didBecomeKey: UIWindow.didBecomeKeyNotification,
+        didResignKey: UIWindow.didResignKeyNotification,
+        sceneDidActivate: UIScene.didActivateNotification,
+        sceneWillDeactivate: UIScene.willDeactivateNotification,
+        sceneDidEnterBackground: UIScene.didEnterBackgroundNotification,
+        sceneWillEnterForeground: UIScene.willEnterForegroundNotification
+    )
+}
+
 @MainActor
 enum TVVisionStreamSurfaceGenerationSequence {
     private static var nextRawValue: UInt64 = 1
@@ -3702,6 +3939,10 @@ final class TVVisionStreamMetalView: MTKView {
         UIWindowScene
     >
     typealias SurfaceCallbackHandler = SurfaceRelay.Handler
+    typealias WindowObservation = TVVisionUIKitWindowObservation<
+        UIWindow,
+        UIWindowScene
+    >
 #if os(tvOS)
     typealias SurfaceGenerationOwner =
         TVVisionUIKitStreamSurfaceGenerationOwner<
@@ -3750,6 +3991,7 @@ final class TVVisionStreamMetalView: MTKView {
     }
 
     private var surfaceRelay: SurfaceRelay?
+    private var windowObservation: WindowObservation?
     private var surfaceGenerationOwner: SurfaceGenerationOwner?
     private var geometryBindingOwner: GeometryBindingOwner?
     private var surfaceGenerationUpdateHandler:
@@ -3759,8 +4001,6 @@ final class TVVisionStreamMetalView: MTKView {
     private var displayHDREventHandler: DisplayHDREventHandler = { _ in }
     private var remotePressEventHandler: RemotePressEventHandler = { _ in .local }
     private var reservedRemoteCommandHandler: ReservedRemoteCommandHandler = { _ in }
-    private weak var observedWindowScene: UIWindowScene?
-    private var sceneLifecycleObservers: [NSObjectProtocol] = []
     private var traitChangeRegistration:
         (any UITraitChangeRegistration)?
 #if os(tvOS)
@@ -3840,21 +4080,36 @@ final class TVVisionStreamMetalView: MTKView {
                     && !surface.isHidden
                     && surface.alpha > 0
                     && window?.isHidden == false
+#if os(tvOS)
+                let isFocusEligible = isVisible
+                    && surface.isUserInteractionEnabled
+                    && surface.canBecomeFocused
+#else
+                let isFocusEligible = isVisible
+                    && surface.isUserInteractionEnabled
+                    && window?.isKeyWindow == true
+#endif
                 return TVVisionUIKitStreamSurfaceState(
                     isAttached: isAttached,
                     windowScene: window?.windowScene,
                     isVisible: isVisible,
                     scale: Double(surface.contentScaleFactor),
                     drawableSize: surface.drawableSize,
-                    isFocusEligible: isVisible
-                        && surface.isUserInteractionEnabled
-                        && surface.canBecomeFocused
+                    isFocusEligible: isFocusEligible
                 )
             },
             handler: surfaceCallbackHandler
         )
         if let surfaceGeneration =
             TVVisionStreamSurfaceGenerationSequence.next() {
+            windowObservation = try? WindowObservation(
+                surfaceGeneration: surfaceGeneration,
+                notificationCenter: .default,
+                names: .current,
+                handler: { [weak self] callbacks in
+                    self?.publishSurfaceCallbacks(callbacks)
+                }
+            )
             geometryBindingOwner = try? GeometryBindingOwner(
                 platform: Self.platform,
                 surfaceGeneration: surfaceGeneration,
@@ -4104,6 +4359,12 @@ final class TVVisionStreamMetalView: MTKView {
             self.displayHDRObserver = nil
         }
 #endif
+        if let windowObservation {
+            _ = windowObservation.invalidate(
+                surfaceGeneration: windowObservation.surfaceGeneration
+            )
+            self.windowObservation = nil
+        }
         if let traitChangeRegistration {
             unregisterForTraitChanges(traitChangeRegistration)
             self.traitChangeRegistration = nil
@@ -4122,7 +4383,6 @@ final class TVVisionStreamMetalView: MTKView {
             )
             self.surfaceGenerationOwner = nil
         }
-        removeSceneLifecycleObservers()
         surfaceRelay?.invalidate()
         surfaceRelay = nil
         displayHDREventHandler = { _ in }
@@ -4207,7 +4467,7 @@ final class TVVisionStreamMetalView: MTKView {
     private func publishSurfaceCallbacks(
         _ callbacks: [TVVisionUIKitStreamSurfaceCallback]
     ) {
-        refreshSceneLifecycleObservation()
+        refreshWindowObservation()
         guard let rawState = surfaceRelay?.publish(callbacks) else { return }
         if let surfaceGenerationOwner {
             for callback in callbacks {
@@ -4247,47 +4507,20 @@ final class TVVisionStreamMetalView: MTKView {
     }
 #endif
 
-    private func refreshSceneLifecycleObservation() {
-        let currentScene = window?.windowScene
-        guard observedWindowScene !== currentScene else { return }
-        removeSceneLifecycleObservers()
-        guard let currentScene else { return }
-
-        observedWindowScene = currentScene
-        let names: [Notification.Name] = [
-            UIScene.didActivateNotification,
-            UIScene.willDeactivateNotification,
-            UIScene.didEnterBackgroundNotification,
-            UIScene.willEnterForegroundNotification
-        ]
-        sceneLifecycleObservers = names.map { name in
-            NotificationCenter.default.addObserver(
-                forName: name,
-                object: currentScene,
-                queue: .main
-            ) { [weak self, weak currentScene] _ in
-                Task { @MainActor in
-                    guard let self,
-                          let currentScene,
-                          self.window?.windowScene === currentScene else {
-                        return
-                    }
-                    self.publishSurfaceCallbacks([
-                        .windowScene,
-                        .visibility,
-                        .focusEligibility
-                    ])
-                }
-            }
+    private func refreshWindowObservation() {
+        guard let windowObservation else { return }
+        guard let window,
+              let windowScene = window.windowScene else {
+            _ = windowObservation.detach(
+                surfaceGeneration: windowObservation.surfaceGeneration
+            )
+            return
         }
-    }
-
-    private func removeSceneLifecycleObservers() {
-        sceneLifecycleObservers.forEach(
-            NotificationCenter.default.removeObserver
+        _ = windowObservation.attach(
+            window: window,
+            windowScene: windowScene,
+            surfaceGeneration: windowObservation.surfaceGeneration
         )
-        sceneLifecycleObservers.removeAll()
-        observedWindowScene = nil
     }
 
     private static func sceneActivity(

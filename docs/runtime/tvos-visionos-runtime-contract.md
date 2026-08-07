@@ -1775,6 +1775,85 @@ connected matrix and public-state assertions, no async XCTest autoclosure,
 no production or project-graph change, no removed contract, and all proof
 boundaries. Task 4.6 is ready for its independent commit and push.
 
+## Task 5.1 actual visionOS window observation
+
+Task 5.1 extends the existing `TVVisionStreamMetalView`; it does not create a
+second stream surface, scene runtime, geometry owner, decoder, presenter, or
+input adapter. A checked surface-generation observer weakly owns the current
+`UIWindow` and `UIWindowScene` identities and installs the public visible,
+hidden, key, resign-key, active, inactive, background, and foreground
+notifications. Replacement of either identity removes the complete old token
+set before installing the new one. Each queued callback also carries an
+observation UUID and must match the current UUID, generation, live weak window,
+and live weak scene before it can publish an existing surface callback.
+
+The actual surface callback reader continues to derive attachment, scene,
+visibility, scale, and drawable size from the current `MTKView` and its window.
+visionOS focus eligibility is true only for a visible, user-interactive stream
+surface in the current key window. tvOS retains its existing visible,
+interactive, focus-engine `canBecomeFocused` rule. The observer itself does not
+write drawable size or advance geometry revisions; the existing generation
+owner validates actual state and the existing geometry binding owner remains
+the single drawable and semantic-revision writer. Current visionOS AppModel
+coverage confirms `activate` then scene application, newer surface replacement,
+old-generation rejection, current detach publication, and terminal clearing,
+without producing a tvOS input action.
+
+Fresh deterministic and build evidence is:
+
+- observer and AppModel minimal `/tmp/LuneX-18-5_1-minimal-r2.rTbf7R`: `2/2
+  passed`, zero structured diagnostics;
+- focused `/tmp/LuneX-18-5_1-focused.2cR6CT`: `219/219 passed / 0 skipped / 0
+  failed / 0 expected failure`, zero structured diagnostics;
+- related `/tmp/LuneX-18-5_1-related.52fA7X`: `121/121 passed / 0 skipped / 0
+  failed / 0 expected failure`, zero structured diagnostics;
+- normal `/tmp/LuneX-18-5_1-normal.CJi9Ut`: `1058 total / 1057 passed / 1
+  exact real-Keychain opt-in skip / 0 failed / 0 expected failure`, zero
+  structured diagnostics;
+- fixed Vision Pro direct `/tmp/LuneX-18-5_1-visionos-compile.8NsiO6` and
+  fixed Apple TV direct `/tmp/LuneX-18-5_1-tvos.r5KL4H`: unsigned Debug
+  success, zero structured diagnostics, and one AIR/metallib pair each; and
+- unsigned five-platform Debug `/tmp/LuneX-18-5_1-builds.K3hUMY`: macOS,
+  fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro all succeeded
+  with zero structured diagnostics and one AIR/metallib pair each.
+
+Real-Keychain and live-host opt-ins remained unset. Fixed UUIDs were used only
+as build destinations; task 5.1 did not query, create, clone, boot, install,
+launch, run, shut down, or delete a simulator. These tests prove deterministic
+observer ownership, replacement admission, shared presentation application,
+public SDK compilation, and cross-target compatibility. They do not prove a
+Simulator window session, signed installation, physical Vision Pro focus or
+resize behavior, keyboard/pointer/controller input, gaze/hand interaction,
+HDR, intended spatial audio, live Sunshine, comfort, latency, performance,
+power, or thermal behavior. Tasks 5.2, 5.3, and 6.x remain separate.
+
+Repository pre-gate `/tmp/LuneX-18-5_1-repository-pre.v1iwKK` passed fixture
+self/tree validation, OpenSpec strict `9/9`, pre-mark `25/50 next 5.1`, three
+stable generator runs at project SHA-256
+`ef2e3e615f1dbd84b76bfe4c8681fab7d44291176f06324acd757fa1c1008353`, exact
+ten-file implementation, test, and authority scope, observer/generation/owner
+semantics, all retained test and build evidence, and privacy, clean-room,
+reference, dependency, opt-in, process, and diff boundaries. Task 5.1 is
+therefore marked complete; OpenSpec is expected to be `26/50 ready` with task
+5.2 next, subject to the read-only post-mark final-state gate.
+
+Post-mark final-state `/tmp/LuneX-18-5_1-final-state.BQG3yQ` read-only
+confirmed OpenSpec strict `9/9`, `26/50 ready`, task 5.1 done, task 5.2 next,
+the same stable project SHA-256, exact eleven-file implementation, test, and
+authority scope, observer ownership and platform focus boundaries, all
+retained test/build evidence, the exact Keychain skip, and opt-in, process,
+reference, dependency, and diff boundaries. It did not rerun tests, builds,
+the generator, or Simulator work.
+
+Post-record `/tmp/LuneX-18-5_1-post-record-r3.jAEfZ5` and final audit
+`/tmp/LuneX-18-5_1-final-audit.U5fWgQ` confirmed the same eleven-file scope,
+one production file, two test files, and eight authority files; checked
+generation, weak window/scene ownership, token replacement, observation-UUID
+late admission, platform-specific focus eligibility, single geometry writer,
+test membership, no async XCTest autoclosure, no out-of-scope input/media
+runtime, no removed contract, and all proof boundaries. Task 5.1 is ready for
+its independent commit and push.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

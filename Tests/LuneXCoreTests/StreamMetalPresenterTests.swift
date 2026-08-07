@@ -121,6 +121,105 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testTVVisionWindowObservationTracksReplacementAndRejectsLateEvents()
+        async throws
+    {
+        let generation = try tvVisionSurfaceGeneration(191)
+        let staleGeneration = try tvVisionSurfaceGeneration(190)
+        let center = NotificationCenter()
+        let names = tvVisionWindowObservationTestNotificationNames()
+        let scene = TVVisionWindowObservationTestScene()
+        let firstWindow = TVVisionWindowObservationTestWindow()
+        let replacementWindow = TVVisionWindowObservationTestWindow()
+        var callbacks: [[TVVisionUIKitStreamSurfaceCallback]] = []
+        let observation = try TVVisionUIKitWindowObservation<
+            TVVisionWindowObservationTestWindow,
+            TVVisionWindowObservationTestScene
+        >(
+            surfaceGeneration: generation,
+            notificationCenter: center,
+            names: names,
+            handler: { callbacks.append($0) }
+        )
+
+        XCTAssertEqual(
+            observation.attach(
+                window: firstWindow,
+                windowScene: scene,
+                surfaceGeneration: generation
+            ),
+            .attached
+        )
+        XCTAssertEqual(
+            observation.attach(
+                window: firstWindow,
+                windowScene: scene,
+                surfaceGeneration: generation
+            ),
+            .unchanged
+        )
+        XCTAssertTrue(observation.currentWindow === firstWindow)
+        XCTAssertTrue(observation.currentWindowScene === scene)
+
+        center.post(name: names.didBecomeVisible, object: firstWindow)
+        center.post(name: names.didBecomeKey, object: firstWindow)
+        center.post(name: names.sceneWillDeactivate, object: scene)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            callbacks,
+            [
+                [.visibility, .focusEligibility],
+                [.focusEligibility],
+                [.windowScene, .visibility, .focusEligibility]
+            ]
+        )
+
+        center.post(name: names.didBecomeHidden, object: firstWindow)
+        XCTAssertEqual(
+            observation.attach(
+                window: replacementWindow,
+                windowScene: scene,
+                surfaceGeneration: generation
+            ),
+            .replaced
+        )
+        center.post(name: names.didResignKey, object: firstWindow)
+        center.post(name: names.didBecomeHidden, object: replacementWindow)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            callbacks,
+            [
+                [.visibility, .focusEligibility],
+                [.focusEligibility],
+                [.windowScene, .visibility, .focusEligibility],
+                [.visibility, .focusEligibility]
+            ]
+        )
+        XCTAssertTrue(observation.currentWindow === replacementWindow)
+        XCTAssertEqual(
+            observation.detach(surfaceGeneration: staleGeneration),
+            .staleSurfaceGeneration
+        )
+        XCTAssertEqual(
+            observation.detach(surfaceGeneration: generation),
+            .detached
+        )
+        center.post(name: names.didBecomeVisible, object: replacementWindow)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(callbacks.count, 4)
+        XCTAssertNil(observation.currentWindow)
+        XCTAssertNil(observation.currentWindowScene)
+        XCTAssertEqual(
+            observation.invalidate(surfaceGeneration: generation),
+            .invalidated
+        )
+        XCTAssertEqual(
+            observation.invalidate(surfaceGeneration: generation),
+            .alreadyInvalidated
+        )
+    }
+
+    @MainActor
     func testTVVisionSurfaceGenerationOwnerDerivesActualAttachmentState()
         throws
     {
@@ -5066,6 +5165,26 @@ private typealias MobileSurfaceAttachmentTestOwner =
     >
 
 private final class TVVisionSurfaceRelayTestScene {}
+
+private final class TVVisionWindowObservationTestWindow {}
+
+private final class TVVisionWindowObservationTestScene {}
+
+private func tvVisionWindowObservationTestNotificationNames()
+    -> TVVisionUIKitWindowObservationNotificationNames
+{
+    let prefix = UUID().uuidString
+    return TVVisionUIKitWindowObservationNotificationNames(
+        didBecomeVisible: Notification.Name("\(prefix).window-visible"),
+        didBecomeHidden: Notification.Name("\(prefix).window-hidden"),
+        didBecomeKey: Notification.Name("\(prefix).window-key"),
+        didResignKey: Notification.Name("\(prefix).window-resign-key"),
+        sceneDidActivate: Notification.Name("\(prefix).scene-active"),
+        sceneWillDeactivate: Notification.Name("\(prefix).scene-inactive"),
+        sceneDidEnterBackground: Notification.Name("\(prefix).scene-background"),
+        sceneWillEnterForeground: Notification.Name("\(prefix).scene-foreground")
+    )
+}
 
 private final class TVVisionSurfaceRelayTestSurface {
     var isAttached: Bool

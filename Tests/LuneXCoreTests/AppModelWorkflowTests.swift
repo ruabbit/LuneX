@@ -2101,6 +2101,113 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.session.phase, .disconnected)
     }
 
+    func testVisionWindowObservationAppliesSceneReplacementAndDetach()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 70,
+                    key: Data(repeating: 0x70, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let current = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(current)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 2
+        }
+        var applications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(applications[0].action, .activate)
+        XCTAssertEqual(applications[0].ownership.platform, .visionOS)
+        guard case let .scene(currentScene) = applications[1].action else {
+            return XCTFail("Expected current visionOS scene application")
+        }
+        XCTAssertEqual(currentScene, current)
+
+        let replacement = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(replacement)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 4
+        }
+        applications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        XCTAssertEqual(applications[2].action, .activate)
+        XCTAssertEqual(
+            applications[2].ownership.presentationGeneration.rawValue,
+            2
+        )
+        guard case let .scene(replacementScene) = applications[3].action else {
+            return XCTFail("Expected replacement visionOS scene application")
+        }
+        XCTAssertEqual(replacementScene, replacement)
+
+        let stale = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 2
+        )
+        model.receiveTVVisionGeometryUpdate(stale)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count,
+            4
+        )
+
+        let detached = try makeTVVisionClosedGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 2,
+            revision: 2
+        )
+        model.receiveTVVisionGeometryUpdate(detached)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 5
+        }
+        applications = mediaEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        guard case let .scene(detachedScene) = applications[4].action else {
+            return XCTFail("Expected detached visionOS scene application")
+        }
+        XCTAssertEqual(detachedScene, detached)
+        XCTAssertNil(detachedScene.binding)
+        XCTAssertFalse(applications.contains { application in
+            if case .input = application.action { return true }
+            return false
+        })
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launchTask.value
+        XCTAssertEqual(model.session.phase, .disconnected)
+    }
+
     func testTVVisionPresentationAcceptsCurrentGenerationAndClearsOnReconnectAndRemoteTermination()
         async throws {
         let provider = ControlledSessionControlProvider()
