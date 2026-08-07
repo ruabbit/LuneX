@@ -3166,3 +3166,12 @@
 - diagnostics已有capacity 500、category-specific actionable state和redacted export；阶段19应复用并增强typed product issue/action，不能另建诊断栈或继续把裸字符串带入observable workflow state。
 - task 1.1只读执行source/project metadata scan；没有build/test/install/launch/signing/Keychain/live host或Simulator lifecycle命令。`xcodebuild -list`在macOS更新后发出非致命DVTDeviceOperation空build-number warning但正常返回完整inventory。
 - Task 1.1 final gate `/tmp/LuneX-19-1_1-audit-final.F3Muuj`通过strict、`1/48`、精确五文件scope、唯一1.1 checkbox、零production/test/project diff与opt-in unset断言；该证据仍只属于static repository/Xcode metadata层级。
+
+## 2026-08-08 阶段 19 Task 1.2 类型化产品问题合同
+
+- 产品问题采用closed `ProductIssueCode`派生domain/severity/LocalizedStringResource/icon/default action；`ProductIssue`不提供自由文本、endpoint、host identity或provider error字段，从类型边界阻止任意底层字符串进入UI state。
+- `ProductActionToken`由opaque UUID、closed action kind和application/workspace/session scope构成；token只是待复核claim，后续dispatcher仍必须在调用时对比当前workspace/session owner，不能把持有token本身当作授权。
+- 本任务建立类型与聚焦合同测试，不迁移现有AppModel UI strings、不创建workspace registry，也不改变session/media/input runtime owner。
+- generator连续两次生成`project.pbxproj`的SHA-256均为`e8e1ac4f1b2a528648f78dd8d4b8c7307e865ac0727974086bd69047a460b573`；`ProductWorkflowState.swift`进入四个App与test target，`ProductIssueTests.swift`只进入macOS test target。
+- focused macOS `ProductIssueTests`通过`5/5`。Xcode初始化时自动枚举外接锁定iOS设备并产生非致命DDI warning，但实际destination/test runner为本机macOS，没有install/launch LuneX到外接设备；原始identity-bearing输出不持久化，也不构成physical proof。
+- Task 1.2 final gate `/tmp/LuneX-19-1_2-product-issue.rXdSpM`通过strict、`2/48`、精确9文件scope、generator stability/membership、focused `5/5`、privacy-shape与opt-in unset；没有Simulator lifecycle或physical install/launch。

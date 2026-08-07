@@ -3681,3 +3681,6 @@
 - 2026-08-08：task 1.1首个验收编排因`git diff --name-only`不列未跟踪合同文档而在scope comparison退出；strict通过且无运行时副作用。改用porcelain status纳入untracked文件后fresh重跑。
 - 2026-08-08：task 1.1 corrected gate的scope已通过，随后因proof关键句在Markdown跨行而被单行全文断言误判；逐项诊断确认其他边界成立，final gate改用稳定短token和显式marker。
 - 2026-08-08：task 1.1 final gate `/tmp/LuneX-19-1_1-audit-final.F3Muuj`通过strict、`1/48`、五文件scope、唯一checkbox、零production/test/project diff、opt-ins unset与无Simulator/build/test边界；准备独立提交推送。
+- 2026-08-08：开始task 1.2，新增closed ProductIssue/domain/severity/presentation、checked ProductActionToken/scope及聚焦测试；通过generator纳入所有App与macOS test target，不接线现有UI/runtime。
+- 2026-08-08：task 1.2 generator双次hash稳定，focused `ProductIssueTests`为`5/5`；真实Keychain/live-host opt-in均unset，未操作Simulator。Xcode自动外接设备枚举警告不作为设备验收且不保留identity-bearing raw output。
+- 2026-08-08：task 1.2 final gate `/tmp/LuneX-19-1_2-product-issue.rXdSpM`通过strict、`2/48`、9文件scope、generator/membership、focused `5/5`与privacy/opt-in边界；准备独立提交推送。

@@ -43,7 +43,7 @@
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`1/48`。Task 1.1完成pre-change静态基线：单一process-level AppModel、全局产品presentation、4 App + 1 macOS unit-test、Swift 6.0、0 UI-test harness与现有workflow/diagnostics保护边界已记录到`docs/runtime/native-product-workflow-contract.md`。下一项1.2定义typed product issue/action token；不在该任务提前迁移UI。
+阶段19当前权威进度`2/48`。Task 1.1完成pre-change静态基线；1.2新增closed `ProductIssueCode`派生domain/severity/localized presentation/default action，以及application/workspace/session scoped `ProductActionToken`，focused `5/5`通过。现有UI string迁移、workspace registry与dispatcher复核仍属后续任务，1.2不扩称为已接线产品UX。
 
 ### 阶段19错误记录
 

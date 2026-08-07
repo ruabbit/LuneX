@@ -103,6 +103,21 @@ state must not accept arbitrary provider strings or `Error.localizedDescription`
 Checked product actions must revalidate their workspace, host, pairing attempt,
 and session generations when invoked.
 
+### Typed issue and action values
+
+`ProductIssueCode` is the closed, stable source for product domain, severity,
+localized title, localized message, system image, and default action kind.
+`ProductIssue` has no free-text or provider-error field. Adding a new
+user-visible failure therefore requires an explicit code and reviewed
+presentation rather than copying a lower-level string.
+
+`ProductActionToken` carries an opaque identifier, a closed
+`ProductActionKind`, and one of three non-display scopes: application,
+workspace identity/generation, or session identity plus its owning workspace.
+The value is an authorization claim, not authorization by itself. The action
+dispatcher must compare its scope with current checked owners at invocation and
+must return a `stale_action` issue without executing when they differ.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public
