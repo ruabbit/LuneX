@@ -1171,6 +1171,98 @@ focus/scene/provider/replacement/stop ordered release barrier reserved for task
 3.6, signed installation, HDR or spatial output, live Sunshine, latency,
 performance, power, or thermal acceptance.
 
+## Task 3.6 ordered held-state release and local navigation restoration
+
+`TVRemoteSurfacePressCaptureOwner` now executes every reducer effect through one
+main-actor FIFO rather than extracting only remote press deliveries. A release
+operation closes actual admission, removes current controller handlers, sends
+balanced remote-button ups in reducer order, joins the existing input
+provider's release barrier, and only then restores local navigation. Each FIFO
+operation owns its own UUID-keyed release count, so completion of an older
+operation cannot clear a newer pending release, including after explicit owner
+invalidation and reuse.
+
+Actual admission is separate from desired capture ownership. A private UUID
+intent token changes whenever surface or ownership intent changes and on
+invalidation, avoiding numeric revision wraparound. An admission open must
+match that token, the current surface, current input generation, current stream
+ownership, and a nonfailed generation both before the side effect and before
+the owner records admission. This suppresses an obsolete open in queued
+`release(A), open(B), release(B), open(C)` surface replacement and prevents a
+terminal release from restarting controller handlers. Duplicate eligible and
+semantic-revision-only updates preserve a legitimate pending open.
+
+`AppModel` applies the same effects to the current tvOS generation. Handler
+removal stops the actual `TVGameControllerRuntimeOwner`, clears pending
+feedback/motion, and joins roster application, registry routing, and motion
+delivery tasks. The barrier then calls the existing
+`NativeSessionMediaEnvironment.releaseInput` application path; no second held
+registry or release provider exists. Local overlay/focus is restored only after
+a completed release and is not flashed during replacement. A fresh eligible
+open restarts controller observation only after the barrier. Roster, routing,
+motion, feedback, and surface press admission all remain closed while any
+release operation is pending.
+
+Stop, reconnect, remote termination, media failure, presentation application
+failure, and provider failure join the same owner FIFO before platform runtime
+clear. Repeated terminal callers join current work and do not create an
+additional held-state registry or stale controller restart. A provider release
+failure marks that input generation failed, keeps remote admission closed, and
+still completes bounded local UI restoration. A replacement admission failure
+marks and closes the generation named by the open effect, not the older
+delivery generation carried by the preceding release.
+
+Final verification before the repository pre-gate consists of:
+
+- focused evidence `/tmp/LuneX-18-3_6-focused-r5.I6eHeU` with `37/37` passed,
+  no skips, failures, or expected failures, and zero structured build
+  diagnostics. It includes A to B to C replacement, cross-input-generation
+  replacement and admission failure, invalidate/reuse release accounting,
+  overlapping terminal release, provider failure, and five AppModel terminal
+  workflows;
+- related evidence `/tmp/LuneX-18-3_6-related-r4.B4s4Tw` with `233/233` passed
+  and zero structured diagnostics across AppModel, controller/diagnostics,
+  input adapters, remote provider delivery/release, media environment,
+  remote/focus ownership, and shared tvOS/visionOS presentation teardown;
+- normal evidence `/tmp/LuneX-18-3_6-normal-r2.fzHNaM` with
+  `1024 total / 1023 passed / 1 skipped / 0 failed`, where the sole skip is the
+  explicitly disabled real-Keychain round trip, and zero structured build
+  diagnostics;
+- direct fixed Apple TV evidence `/tmp/LuneX-18-3_6-tvos-r4.wGNQq9` with
+  `succeeded/0 warning/0 error/0 analyzer warning`, one AIR, and one metallib;
+  and
+- macOS, fixed iPhone, fixed iPad, fixed Apple TV, and fixed Vision Pro Debug
+  evidence `/tmp/LuneX-18-3_6-builds-r2.cEhpxR`, all
+  `succeeded/0 warning/0 error/0 analyzer warning` with one AIR and one
+  metallib per platform; and
+- repository pre-gate `/tmp/LuneX-18-3_6-repository-pre.w3TVP6`, which passed
+  fixture self/tree, OpenSpec strict `9/9`, pre-mark `17/50 next 3.6`, four
+  identical generator hashes, exact nine-file scope, current source/test
+  membership and ordered-release semantics, all retained evidence, privacy,
+  clean-room/reference, disabled opt-ins, process checks, and
+  `git diff --check`; and
+- post-mark final-state `/tmp/LuneX-18-3_6-final-state.a7qNA6`, which read back
+  strict `9/9`, `18/50 next 3.7`, the unchanged project hash, exact ten-file
+  scope, current semantics, all retained evidence, and the same repository
+  boundaries without rerunning tests, builds, the generator, or simulator
+  operations.
+
+Earlier 33/35-item focused, 229/231-item related, direct-build, normal, and
+five-platform candidates predate the final generation-failure and per-operation
+accounting corrections and are not final task evidence. One related candidate
+also exposed a test-only wait race between coordinator readiness and AppModel
+admission; the test now waits for both without changing production macOS input
+behavior.
+
+The fixed UUIDs were build destinations only. Task 3.6 did not query, create,
+clone, boot, install, launch, run, shut down, or delete a simulator. Real
+Keychain and live-host opt-ins remained disabled. These results prove the
+deterministic FIFO, generation and failure fences, application ordering, and
+unsigned SDK branch compatibility. They do not prove simulator navigation or
+Siri Remote callbacks, a signed install, physical controller/remote behavior,
+host receipt, television HDR, spatial audio, live Sunshine, latency,
+performance, power, or thermal acceptance.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

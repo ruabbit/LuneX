@@ -608,6 +608,7 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             surfaceGeneration: surface,
             input: inputSnapshot(generation: inputGeneration)
         )
+        await owner.waitForPendingDeliveries()
         XCTAssertEqual(owner.disposition(for: surface), .captured)
 
         XCTAssertEqual(
@@ -667,6 +668,7 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             surfaceGeneration: firstSurface,
             input: inputSnapshot()
         )
+        await owner.waitForPendingDeliveries()
         XCTAssertEqual(
             owner.handle(try surfacePress(firstSurface, 1, .left, .began)),
             .captured
@@ -680,6 +682,8 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             owner.handle(try surfacePress(firstSurface, 1, .left, .ended)),
             .local
         )
+        XCTAssertEqual(owner.disposition(for: replacementSurface), .local)
+        await owner.waitForPendingDeliveries()
         XCTAssertEqual(
             owner.handle(try surfacePress(replacementSurface, 1, .right, .began)),
             .captured
@@ -709,6 +713,7 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             surfaceGeneration: surface,
             input: inputSnapshot()
         )
+        await owner.waitForPendingDeliveries()
 
         XCTAssertEqual(
             owner.handle(try surfacePress(surface, 1, .select, .began)),
@@ -740,6 +745,7 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
             surfaceGeneration: surface,
             input: inputSnapshot()
         )
+        await owner.waitForPendingDeliveries()
 
         XCTAssertEqual(
             owner.handle(try surfacePress(surface, 1, .select, .began)),
@@ -899,6 +905,7 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
                 revision: 1
             )
         )
+        await owner.waitForPendingDeliveries()
         XCTAssertEqual(
             owner.handle(try surfacePress(surface, 1, .left, .began)),
             .captured
@@ -926,7 +933,485 @@ final class TVRemoteFocusCaptureContractTests: XCTestCase {
                 revision: 3
             )
         )
+        await owner.waitForPendingDeliveries()
         XCTAssertEqual(owner.disposition(for: surface), .captured)
+    }
+
+    @MainActor
+    func testSurfaceReplacementWaitsForOrderedReleaseBeforeAdmission()
+        async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let inputGeneration = try generation(.input, 1)
+        let controller = try controllerLease(
+            slot: 0,
+            lease: 1,
+            inputGeneration: inputGeneration
+        )
+        let firstSurface = try generation(.surface, 1)
+        let replacementSurface = try generation(.surface, 2)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(generation: inputGeneration),
+            controllerLeases: [controller]
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        XCTAssertEqual(
+            owner.handle(try surfacePress(firstSurface, 1, .left, .began)),
+            .captured
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        recorder.blockNextReleaseBarrier()
+
+        try owner.update(
+            surfaceGeneration: replacementSurface,
+            input: inputSnapshot(generation: inputGeneration),
+            controllerLeases: [controller]
+        )
+        for _ in 0..<100 where !recorder.hasBlockedReleaseBarrier {
+            await Task.yield()
+        }
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+        XCTAssertTrue(owner.isReleasePending)
+        XCTAssertEqual(owner.disposition(for: firstSurface), .local)
+        XCTAssertEqual(owner.disposition(for: replacementSurface), .local)
+        XCTAssertEqual(recorder.effects, [
+            .closeRemoteAdmission(inputGeneration: inputGeneration),
+            .removeControllerHandlers([controller]),
+            .sendRemote(TVRemoteInputEvent(button: .left, isDown: false)),
+            .awaitRemoteReleaseBarrier(inputGeneration: inputGeneration)
+        ])
+
+        recorder.resumeReleaseBarrier()
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.effects, [
+            .closeRemoteAdmission(inputGeneration: inputGeneration),
+            .removeControllerHandlers([controller]),
+            .sendRemote(TVRemoteInputEvent(button: .left, isDown: false)),
+            .awaitRemoteReleaseBarrier(inputGeneration: inputGeneration),
+            .restoreLocalFocus(.replacing),
+            .openRemoteAdmission(inputGeneration: inputGeneration)
+        ])
+        XCTAssertFalse(owner.isReleasePending)
+        XCTAssertEqual(owner.disposition(for: replacementSurface), .captured)
+    }
+
+    @MainActor
+    func testDuplicateFocusLossJoinsOneReleaseBarrier() async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let inputGeneration = try generation(.input, 1)
+        let surface = try generation(.surface, 1)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(generation: inputGeneration, revision: 1)
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        recorder.blockNextReleaseBarrier()
+        let unavailable = try inputSnapshot(
+            generation: inputGeneration,
+            eligibility: .ineligible(.notFocused),
+            revision: 2
+        )
+        try owner.update(surfaceGeneration: surface, input: unavailable)
+        try owner.update(surfaceGeneration: surface, input: unavailable)
+        for _ in 0..<100 where !recorder.hasBlockedReleaseBarrier {
+            await Task.yield()
+        }
+        XCTAssertEqual(recorder.effects.filter {
+            if case .awaitRemoteReleaseBarrier = $0 { return true }
+            return false
+        }.count, 1)
+        recorder.resumeReleaseBarrier()
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(owner.disposition(for: surface), .local)
+    }
+
+    @MainActor
+    func testTerminalReleaseKeepsOverlappingReplacementClosed() async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let inputGeneration = try generation(.input, 1)
+        let controller = try controllerLease(
+            slot: 0,
+            lease: 1,
+            inputGeneration: inputGeneration
+        )
+        let firstSurface = try generation(.surface, 1)
+        let replacementSurface = try generation(.surface, 2)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(generation: inputGeneration),
+            controllerLeases: [controller]
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        recorder.blockNextReleaseBarrier()
+
+        try owner.update(
+            surfaceGeneration: replacementSurface,
+            input: inputSnapshot(generation: inputGeneration),
+            controllerLeases: [controller]
+        )
+        for _ in 0..<100 where !recorder.hasBlockedReleaseBarrier {
+            await Task.yield()
+        }
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+
+        let terminalRelease = Task { @MainActor in
+            await owner.releaseForTerminal(controllerLeases: [controller])
+        }
+        for _ in 0..<10 {
+            await Task.yield()
+        }
+        recorder.blockNextReleaseBarrier()
+        recorder.resumeReleaseBarrier()
+        for _ in 0..<100 {
+            let releaseBarrierCount = recorder.effects.filter {
+                if case .awaitRemoteReleaseBarrier = $0 { return true }
+                return false
+            }.count
+            if releaseBarrierCount == 2,
+               recorder.hasBlockedReleaseBarrier {
+                break
+            }
+            await Task.yield()
+        }
+
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+        XCTAssertTrue(owner.isReleasePending)
+        XCTAssertFalse(recorder.effects.contains(
+            .openRemoteAdmission(inputGeneration: inputGeneration)
+        ))
+        XCTAssertEqual(owner.disposition(for: replacementSurface), .local)
+
+        recorder.resumeReleaseBarrier()
+        await terminalRelease.value
+        XCTAssertFalse(owner.isReleasePending)
+        XCTAssertEqual(owner.disposition(for: replacementSurface), .local)
+    }
+
+    @MainActor
+    func testNewestReplacementSuppressesEarlierQueuedAdmission() async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let inputGeneration = try generation(.input, 1)
+        let firstSurface = try generation(.surface, 1)
+        let secondSurface = try generation(.surface, 2)
+        let thirdSurface = try generation(.surface, 3)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(generation: inputGeneration)
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        recorder.blockNextReleaseBarrier()
+
+        try owner.update(
+            surfaceGeneration: secondSurface,
+            input: inputSnapshot(generation: inputGeneration)
+        )
+        for _ in 0..<100 where !recorder.hasBlockedReleaseBarrier {
+            await Task.yield()
+        }
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+        try owner.update(
+            surfaceGeneration: thirdSurface,
+            input: inputSnapshot(generation: inputGeneration)
+        )
+        recorder.blockNextReleaseBarrier()
+        recorder.resumeReleaseBarrier()
+        for _ in 0..<100 {
+            let releaseBarrierCount = recorder.effects.filter {
+                if case .awaitRemoteReleaseBarrier = $0 { return true }
+                return false
+            }.count
+            if releaseBarrierCount == 2,
+               recorder.hasBlockedReleaseBarrier {
+                break
+            }
+            await Task.yield()
+        }
+
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+        XCTAssertTrue(owner.isReleasePending)
+        XCTAssertFalse(recorder.effects.contains(
+            .openRemoteAdmission(inputGeneration: inputGeneration)
+        ))
+        XCTAssertEqual(owner.disposition(for: secondSurface), .local)
+        XCTAssertEqual(owner.disposition(for: thirdSurface), .local)
+
+        recorder.resumeReleaseBarrier()
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(recorder.effects.filter {
+            if case .openRemoteAdmission = $0 { return true }
+            return false
+        }.count, 1)
+        XCTAssertFalse(owner.isReleasePending)
+        XCTAssertEqual(owner.disposition(for: thirdSurface), .captured)
+    }
+
+    @MainActor
+    func testInputGenerationReplacementOpensOnlyNewGeneration() async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let firstInputGeneration = try generation(.input, 1)
+        let secondInputGeneration = try generation(.input, 2)
+        let surface = try generation(.surface, 1)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(generation: firstInputGeneration)
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        recorder.blockNextReleaseBarrier()
+
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(generation: secondInputGeneration)
+        )
+        for _ in 0..<100 where !recorder.hasBlockedReleaseBarrier {
+            await Task.yield()
+        }
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+        XCTAssertEqual(owner.disposition(for: surface), .local)
+        recorder.resumeReleaseBarrier()
+        await owner.waitForPendingDeliveries()
+
+        XCTAssertEqual(recorder.effects, [
+            .closeRemoteAdmission(inputGeneration: firstInputGeneration),
+            .removeControllerHandlers([]),
+            .awaitRemoteReleaseBarrier(inputGeneration: firstInputGeneration),
+            .openRemoteAdmission(inputGeneration: secondInputGeneration)
+        ])
+        XCTAssertEqual(
+            owner.admittedInputGeneration,
+            secondInputGeneration
+        )
+        XCTAssertEqual(owner.disposition(for: surface), .captured)
+    }
+
+    @MainActor
+    func testInputGenerationReplacementAdmissionFailureClosesNewGeneration()
+        async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let firstInputGeneration = try generation(.input, 1)
+        let secondInputGeneration = try generation(.input, 2)
+        let firstSurface = try generation(.surface, 1)
+        let secondSurface = try generation(.surface, 2)
+        var shouldFailReplacementAdmission = true
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+                if effect == .openRemoteAdmission(
+                    inputGeneration: secondInputGeneration
+                ), shouldFailReplacementAdmission {
+                    shouldFailReplacementAdmission = false
+                    throw TVRemoteSurfaceDeliveryTestError.failed
+                }
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(generation: firstInputGeneration)
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(generation: secondInputGeneration)
+        )
+        await owner.waitForPendingDeliveries()
+        XCTAssertNil(owner.admittedInputGeneration)
+        XCTAssertEqual(owner.disposition(for: firstSurface), .local)
+
+        try owner.update(
+            surfaceGeneration: secondSurface,
+            input: inputSnapshot(
+                generation: secondInputGeneration,
+                revision: 2
+            )
+        )
+        await owner.waitForPendingDeliveries()
+
+        XCTAssertEqual(recorder.effects.filter {
+            $0 == .openRemoteAdmission(
+                inputGeneration: secondInputGeneration
+            )
+        }.count, 1)
+        XCTAssertNil(owner.admittedInputGeneration)
+        XCTAssertEqual(owner.disposition(for: secondSurface), .local)
+    }
+
+    @MainActor
+    func testInvalidateCannotClearReusedOwnerReleaseAccounting()
+        async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let firstInputGeneration = try generation(.input, 1)
+        let secondInputGeneration = try generation(.input, 2)
+        let firstSurface = try generation(.surface, 1)
+        let secondSurface = try generation(.surface, 2)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(generation: firstInputGeneration)
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+        recorder.blockNextReleaseBarrier()
+
+        try owner.update(
+            surfaceGeneration: firstSurface,
+            input: inputSnapshot(
+                generation: firstInputGeneration,
+                eligibility: .ineligible(.notFocused),
+                revision: 2
+            )
+        )
+        for _ in 0..<100 where !recorder.hasBlockedReleaseBarrier {
+            await Task.yield()
+        }
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+
+        owner.invalidate()
+        try owner.update(
+            surfaceGeneration: secondSurface,
+            input: inputSnapshot(generation: secondInputGeneration)
+        )
+        try owner.update(
+            surfaceGeneration: secondSurface,
+            input: inputSnapshot(
+                generation: secondInputGeneration,
+                eligibility: .ineligible(.notFocused),
+                revision: 2
+            )
+        )
+        XCTAssertTrue(owner.isReleasePending)
+
+        recorder.blockNextReleaseBarrier()
+        recorder.resumeReleaseBarrier()
+        for _ in 0..<100 {
+            let releaseBarrierCount = recorder.effects.filter {
+                if case .awaitRemoteReleaseBarrier = $0 { return true }
+                return false
+            }.count
+            if releaseBarrierCount == 2,
+               recorder.hasBlockedReleaseBarrier {
+                break
+            }
+            await Task.yield()
+        }
+        XCTAssertTrue(recorder.hasBlockedReleaseBarrier)
+        XCTAssertTrue(owner.isReleasePending)
+
+        recorder.resumeReleaseBarrier()
+        await owner.waitForPendingDeliveries()
+        XCTAssertFalse(owner.isReleasePending)
+        XCTAssertEqual(owner.disposition(for: secondSurface), .local)
+    }
+
+    @MainActor
+    func testContractViolationUsesCurrentOrderedReleaseState() async throws {
+        let recorder = TVRemoteCaptureEffectRecorder()
+        let inputGeneration = try generation(.input, 1)
+        let controller = try controllerLease(
+            slot: 0,
+            lease: 1,
+            inputGeneration: inputGeneration
+        )
+        let surface = try generation(.surface, 1)
+        let owner = TVRemoteSurfacePressCaptureOwner(
+            effectApplication: { effect in
+                await recorder.apply(effect)
+            },
+            delivery: { _, event in
+                recorder.recordDelivery(event)
+            }
+        )
+        try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(generation: inputGeneration),
+            controllerLeases: [controller]
+        )
+        await owner.waitForPendingDeliveries()
+        XCTAssertEqual(
+            owner.handle(try surfacePress(surface, 1, .right, .began)),
+            .captured
+        )
+        await owner.waitForPendingDeliveries()
+        recorder.reset()
+
+        let staleController = try controllerLease(
+            slot: 0,
+            lease: 2,
+            inputGeneration: generation(.input, 2)
+        )
+        XCTAssertThrowsError(try owner.update(
+            surfaceGeneration: surface,
+            input: inputSnapshot(generation: inputGeneration),
+            controllerLeases: [staleController]
+        ))
+        owner.failClosedForContractViolation()
+        XCTAssertEqual(owner.disposition(for: surface), .local)
+        await owner.waitForPendingDeliveries()
+
+        XCTAssertEqual(recorder.effects, [
+            .closeRemoteAdmission(inputGeneration: inputGeneration),
+            .removeControllerHandlers([controller]),
+            .sendRemote(TVRemoteInputEvent(button: .right, isDown: false)),
+            .awaitRemoteReleaseBarrier(inputGeneration: inputGeneration),
+            .restoreLocalFocus(.inputUnavailable)
+        ])
+        XCTAssertFalse(owner.isReleasePending)
     }
 
     private func inputSnapshot(
@@ -1064,6 +1549,46 @@ private final class TVRemoteSurfaceDeliveryRecorder {
             throw TVRemoteSurfaceDeliveryTestError.failed
         }
         events.append(event)
+    }
+}
+
+@MainActor
+private final class TVRemoteCaptureEffectRecorder {
+    private(set) var effects: [TVRemoteCaptureEffect] = []
+    private var shouldBlockReleaseBarrier = false
+    private var blockedReleaseBarrierContinuation:
+        CheckedContinuation<Void, Never>?
+
+    var hasBlockedReleaseBarrier: Bool {
+        blockedReleaseBarrierContinuation != nil
+    }
+
+    func apply(_ effect: TVRemoteCaptureEffect) async {
+        effects.append(effect)
+        guard case .awaitRemoteReleaseBarrier = effect,
+              shouldBlockReleaseBarrier else { return }
+        shouldBlockReleaseBarrier = false
+        await withCheckedContinuation { continuation in
+            blockedReleaseBarrierContinuation = continuation
+        }
+    }
+
+    func recordDelivery(_ event: TVRemoteInputEvent) {
+        effects.append(.sendRemote(event))
+    }
+
+    func blockNextReleaseBarrier() {
+        shouldBlockReleaseBarrier = true
+    }
+
+    func resumeReleaseBarrier() {
+        let continuation = blockedReleaseBarrierContinuation
+        blockedReleaseBarrierContinuation = nil
+        continuation?.resume()
+    }
+
+    func reset() {
+        effects.removeAll()
     }
 }
 

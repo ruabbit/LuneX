@@ -2598,3 +2598,39 @@
 - post-mark final-state `/tmp/LuneX-18-3_5-final-state.efZjqf`确认OpenSpec `17/50 next 3.6`、十四文件scope、稳定project hash、current semantics与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
 - post-record首轮失败是zsh保留变量误用：`path`与`PATH`联动，循环赋值后后续命令无法解析；修正变量名后的`/tmp/LuneX-18-3_5-post-record-r2.BNqR7l`完整通过。这一包装器错误不改变pre/final证据。
 - tvOS 26.4 `GCDeviceHaptics.h`明确`GCHapticsLocalityDefault`与`All` guaranteed supported，因此`controller.haptics != nil`即可真实声明generic rumble；trigger rumble仍必须同时包含left/right trigger localities。最终审计未发现需要推翻3.5的实现问题。
+
+## 2026-08-07 阶段 18 任务 3.6 调查
+
+- `NativeSessionMediaEnvironment.releaseInput`先校验active session/generation，再await current input provider `releaseAll`，之后再次校验replacement fence；AppModel现有`releaseRemoteInput`已经是正确的唯一application入口，无需新增transport路径。
+- `TVPlatformInputReleasePlan`顺序已经明确为close admission、按slot remove controller handlers、active remote press逆序up、await provider barrier、restore local focus；但`TVRemoteSurfacePressCaptureOwner.apply`只抽取`.sendRemote`，其余effect全部丢失，这是3.6核心production缺口。
+- surface replacement目前先把旧state更新为`.replacing`并排队remote-up，却立即把state置nil后从eligible new input建立stream ownership；如果没有独立actual admission fence，新surface可在旧barrier前capture。owner必须把state ownership与effect完成后的admitted generation分开。
+- controller owner不能只stop后立即清所有routing引用：已经accepted或in-flight roster send必须先完成，再由provider release在其后发送neutral state。release pending期间新roster/motion必须fail closed；barrier完成后旧routed roster可用于fresh lease replacement的disconnect/connect reconcile。
+- overlay desired state与SwiftUI visible/focus restoration需要分层：handoff先变local以关闭surface，UI overlay focus在barrier完成后再公开；scene/focus/provider loss也应在barrier后显示本地controls，避免无控制入口。
+- normal stop/reconnect/remote termination已经经过async `stopTVVisionPlatformPresentation`，可在clear前join owner release；media-environment failure当前直接sync clear，必须先await同一release。其他sync clear调用主要在未建立active media或environment stop之后，不得虚构额外release。
+- release pending不能用由任一`restore`直接清除的单一布尔值表示：replacement、terminal或provider failure可在前一barrier阻塞时追加第二个release。按含close的FIFO操作计数可保证较早序列完成后仍fail closed；同理，`openRemoteAdmission`必须在调用AppModel/controller副作用前重验owner desired state与surface，否则terminal已经把surface置空时仍可能短暂安装handlers。
+- 即使AppModel构造路径按类型应使owner update错误不可达，catch也不能用`invalidate()`跳过held state。新的contract-violation路径只信任owner已持有的current generation/state/leases，标记该代失败并复用完整release FIFO；AppModel provider release失败回归要求local overlay仍恢复，但同一失败generation即使收到fresh geometry也不能重新capture。
+- 修订组合focused `/tmp/LuneX-18-3_6-focused-r3.ycXtoF`已由xcresult串行确认`33/33`且build四类diagnostic为0；它证明受控macOS宿主上的owner/AppModel时序，不证明actual tvOS GameController framework handler执行或物理controller/remote行为。
+- fixed Apple TV direct build `/tmp/LuneX-18-3_6-tvos-r2.5BXadt`为`succeeded/0 warning/0 error/0 analyzer warning`且产出一份AIR和一份metallib；它只证明tvOS 26.4 actual条件分支可编译，固定UUID没有被启动或运行。
+- 3.6 related matrix `/tmp/LuneX-18-3_6-related.kUZxE4`串行读取同一xcresult后确认`229/229 passed / 0 skipped / 0 failed / 0 expected failure`，build四类diagnostic为0；覆盖完整AppModel、controller/diagnostics、input adapter、remote input delivery、session media environment、tvOS focus capture与TV/vision presentation teardown回归。
+- 最终diff审计发现同input generation的A→B→C连续surface replacement会在FIFO形成`release(A), open(B), release(B), open(C)`；只按input generation验证open不足以阻止旧B admission。跨input generation transition也需要让旧代release按旧代delivery、而新代open按新代desired state执行。新增monotonic admission intent revision只在surface或capture ownership意图变化时推进，duplicate eligible/revision-only update不使合法pending open失效。
+- 修订后focused `/tmp/LuneX-18-3_6-focused-r4.MH3aFT`串行结构化确认`35/35`且build四类diagnostic为0；连续replacement在第二barrier阻塞时没有任何open，完成后只执行最新open；generation replacement按旧代release、新代open并最终admit新代。
+- 首轮修订related唯一失败揭示既有测试等待竞态：`MacSessionInputCoordinator.activate`可先让actor snapshot报告acceptsInput，AppModel随后才在MainActor写入`activeMacInputGeneration`并刷新surface policy。测试必须同时等待`macInputSurfacePolicy.admitsInput`，不能把actor内部ready当成application admission完成。
+- 修订后related `/tmp/LuneX-18-3_6-related-r3.U316bz`串行结构化确认`231/231`且build四类diagnostic为0，覆盖完整AppModel、controller/diagnostics、input adapter、remote provider release/stop、session media environment与TV/vision shared teardown。
+- 修订后direct fixed Apple TV `/tmp/LuneX-18-3_6-tvos-r3.z7MzTk`为`succeeded/0 warning/0 error/0 analyzer warning`且有一份AIR/metallib；仍仅是unsigned simulator-destination compile evidence，不是runtime navigation、controller callback或物理硬件证明。
+- fresh normal `/tmp/LuneX-18-3_6-normal.dt203K`为`1022/1021/1 exact Keychain skip/0 failed`且build四类diagnostic为0；真实Keychain与live-host opt-in均未启用。
+
+## 2026-08-07 阶段 18 任务 3.6 续接审计
+
+- macOS更新后环境保持Xcode 26.4 build 17E192、Swift 6.3，宿主为macOS 27.0；Git仍在`d372f06`且`HEAD == origin/main`，真实Keychain/live-host opt-in均unset，没有执行simulator inventory或lifecycle操作。
+- 暂停前Task 3.6证据已完成focused `35/35`、related `231/231`、normal `1022/1021/1/0`、direct fixed tvOS及五平台Debug，但续接人工竞态审计发现两处未覆盖边界，因此这些证据降为历史中间证据。
+- 跨input generation的combined transition若新`.openRemoteAdmission(new)`应用失败，旧错误路径会按operation delivery generation标记old并对old执行fail-current，可能让new generation保持eligible但未admitted。修复为open effect失败始终标记并关闭effect自身generation。
+- `invalidate()`清零单一pending release count后复用owner时，旧release operation的defer可能扣除新operation的pending count。修复为按operation UUID独立记账；旧completion只能移除自身entry。admission intent也改用私有UUID token，消除UInt64回绕与排队旧open发生revision碰撞的理论边界。
+- 新增跨generation admission failure与invalidate/reuse pending accounting回归。由于production source和测试均变化，暂停前全部3.6测试/build证据不再作为最终验收，必须从fresh目录重跑。
+- 续接修订后的fresh focused `/tmp/LuneX-18-3_6-focused-r5.I6eHeU`为`37/37`，related `/tmp/LuneX-18-3_6-related-r4.B4s4Tw`为`233/233`；两者均无skip/failure/expected failure且build四类diagnostic为0。新增两项竞态回归及完整相关矩阵通过。
+- fresh fixed tvOS direct build `/tmp/LuneX-18-3_6-tvos-r4.wGNQq9`为`succeeded/0 warning/0 error/0 analyzer warning`，目标为固定Apple TV 4K (3rd generation) tvOS Simulator 26.4并有一份AIR/metallib；UUID只作build destination。
+- fresh normal `/tmp/LuneX-18-3_6-normal-r2.fzHNaM`为`1024 total / 1023 passed / 1 exact Keychain skip / 0 failed / 0 expected failure`，build四类diagnostic为0；真实Keychain/live-host opt-in保持unset。
+- 五平台fresh Debug根`/tmp/LuneX-18-3_6-builds-r2.cEhpxR`中macOS、fixed iPhone/iPad/Apple TV/Vision Pro全部`succeeded/0 warning/0 error/0 analyzer warning`且各有一份AIR/metallib；未执行任何simulator lifecycle操作。
+- Task 3.6 runtime contract、roadmap与三份planning已同步完整FIFO、per-operation accounting、UUID admission intent、controller quiesce、existing provider barrier、local restoration、terminal/failure时序和五级proof boundary。OpenSpec仍为pre-mark `17/50 next 3.6`，repository pre-gate通过前不得勾选。
+- 首轮repository pre-gate只因静态断言使用不存在的`.restoreLocalNavigation` case名，在retained evidence前退出；实际实现使用`.restoreLocalFocus(reason)`。修正后的fresh `/tmp/LuneX-18-3_6-repository-pre.w3TVP6`完整通过strict `9/9`、pre-mark `17/50 next 3.6`、四次稳定generator、精确九文件scope、current ordered-release语义、全部retained evidence以及privacy/clean-room/reference/opt-in/process/diff边界。3.6可以勾选，3.7完整回归仍未完成。
+- post-mark final-state `/tmp/LuneX-18-3_6-final-state.a7qNA6`确认OpenSpec `18/50 next 3.7`、稳定project hash、十文件scope、current semantics与全部retained evidence/boundary一致；没有重复test/build/generator/simulator操作。
+- post-record `/tmp/LuneX-18-3_6-post-record.dHIyHe`再次确认`18/50 next 3.7`、pre/final记录、retained evidence与repository boundary。最终人工diff审计未发现新问题；3.6可独立提交，3.7仍只代表待补的完整回归任务。

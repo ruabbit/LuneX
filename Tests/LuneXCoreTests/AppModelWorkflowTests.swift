@@ -987,7 +987,10 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
-        await waitUntil { model.macSessionInputSnapshot().acceptsInput }
+        await waitUntil {
+            model.macSessionInputSnapshot().acceptsInput
+                && model.macInputSurfacePolicy.admitsInput
+        }
 
         let sample = MacPlatformInputSample.keyboard(MacKeyboardSample(
             rawKeyCode: 0,
@@ -2672,9 +2675,17 @@ final class AppModelWorkflowTests: XCTestCase {
         let controllerInputCount = mediaEnvironment
             .currentSentInputApplications().count
 
-        await waitUntil {
-            model.tvRemoteSurfacePressDisposition(for: surface) == .captured
+        for _ in 0..<100
+        where model.tvRemoteSurfacePressDisposition(for: surface) != .captured {
+            await Task.yield()
         }
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .captured,
+            "pending=\(model.tvRemoteInputReleasePending) "
+                + "overlay=\(model.tvStreamOverlayVisible) "
+                + "applications=\(mediaEnvironment.currentTVVisionPlatformPresentationApplications().count)"
+        )
         XCTAssertEqual(
             model.receiveTVRemoteSurfacePressEvent(
                 try makeTVRemoteSurfacePress(surface, 1, .select, .began)
@@ -2737,8 +2748,30 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             .captured
         )
+        mediaEnvironment.blockNextRelease()
         model.receiveTVRemoteReservedCommand(.backMenu)
-        XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+        await waitUntil { mediaEnvironment.hasBlockedRelease() }
+        XCTAssertTrue(model.tvRemoteInputReleasePending)
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            1
+        )
+        model.receiveTVRemoteReservedCommand(.backMenu)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            1
+        )
+        mediaEnvironment.resumeBlockedRelease()
+        await waitUntil {
+            model.tvStreamOverlayVisible
+                && !model.tvRemoteInputReleasePending
+        }
         XCTAssertEqual(
             model.tvRemoteReservedCommandState,
             .handledLocally(
@@ -2785,16 +2818,26 @@ final class AppModelWorkflowTests: XCTestCase {
                 revision: 3
             )
         )
-        await waitUntil {
-            mediaEnvironment
-                .currentTVVisionPlatformPresentationApplications().count
-                == presentationCountBeforeFocusRestore + 2
-                && model.tvRemoteSurfacePressDisposition(for: surface)
-                    == .captured
+        for _ in 0..<100
+        where model.tvRemoteSurfacePressDisposition(for: surface) != .captured {
+            await Task.yield()
         }
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .captured,
+            "pending=\(model.tvRemoteInputReleasePending) "
+                + "overlay=\(model.tvStreamOverlayVisible) "
+                + "applications=\(mediaEnvironment.currentTVVisionPlatformPresentationApplications().count)"
+        )
+        XCTAssertEqual(
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count,
+            presentationCountBeforeFocusRestore + 2
+        )
 
         model.navigationSelection = .settings
-        XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        await waitUntil { model.tvStreamOverlayVisible }
         XCTAssertEqual(
             model.tvRemoteSurfacePressDisposition(for: surface),
             .local
@@ -2827,7 +2870,123 @@ final class AppModelWorkflowTests: XCTestCase {
             .local
         )
 
-        await model.stopStream()
+        model.setTVStreamOverlayVisible(false)
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 5
+            )
+        )
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: surface) == .captured
+        }
+
+        let replacementGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 2,
+            revision: 1
+        )
+        let replacementSurface = replacementGeometry.surfaceGeneration
+        let releasesBeforeReplacement = mediaEnvironment
+            .currentReleasedInputApplications().count
+        mediaEnvironment.blockNextRelease()
+        model.receiveTVVisionGeometryUpdate(replacementGeometry)
+        await waitUntil { mediaEnvironment.hasBlockedRelease() }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            releasesBeforeReplacement + 1
+        )
+        XCTAssertTrue(model.tvRemoteInputReleasePending)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: replacementSurface),
+            .local
+        )
+        model.receiveTVVisionGeometryUpdate(replacementGeometry)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            releasesBeforeReplacement + 1
+        )
+        mediaEnvironment.resumeBlockedRelease()
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: replacementSurface)
+                == .captured
+                && !model.tvRemoteInputReleasePending
+        }
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+
+        let sceneLoss = try makeTVVisionClosedGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 2,
+            revision: 2
+        )
+        let releasesBeforeSceneLoss = mediaEnvironment
+            .currentReleasedInputApplications().count
+        mediaEnvironment.blockNextRelease()
+        model.receiveTVVisionGeometryUpdate(sceneLoss)
+        await waitUntil { mediaEnvironment.hasBlockedRelease() }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            releasesBeforeSceneLoss + 1
+        )
+        XCTAssertTrue(model.tvRemoteInputReleasePending)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: replacementSurface),
+            .local
+        )
+        model.receiveTVVisionGeometryUpdate(sceneLoss)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            releasesBeforeSceneLoss + 1
+        )
+        mediaEnvironment.resumeBlockedRelease()
+        await waitUntil {
+            model.tvStreamOverlayVisible
+                && !model.tvRemoteInputReleasePending
+        }
+
+        model.setTVStreamOverlayVisible(false)
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 2,
+                revision: 3
+            )
+        )
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: replacementSurface)
+                == .captured
+        }
+        let releasesBeforeStop = mediaEnvironment
+            .currentReleasedInputApplications().count
+        mediaEnvironment.blockNextRelease()
+        let stopTask = Task { await model.stopStream() }
+        await waitUntil { mediaEnvironment.hasBlockedRelease() }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            releasesBeforeStop + 1
+        )
+        XCTAssertTrue(mediaEnvironment.currentStoppedSessionIDs().isEmpty)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: replacementSurface),
+            .local
+        )
+        mediaEnvironment.resumeBlockedRelease()
+        await stopTask.value
+        XCTAssertFalse(model.tvRemoteInputReleasePending)
+        XCTAssertTrue(model.tvStreamOverlayVisible)
         XCTAssertNil(model.tvControllerRosterState)
         XCTAssertNil(model.tvControllerRoutedRosterState)
         XCTAssertNil(model.tvControllerFeedbackDecisionState)
@@ -2882,6 +3041,89 @@ final class AppModelWorkflowTests: XCTestCase {
         await model.stopStream()
         await launchTask.value
         XCTAssertNil(model.tvVisionPlatformPresentationState)
+    }
+
+    func testTVRemoteProviderReleaseFailureRestoresLocalUIAndFailsClosed()
+        async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 77,
+                    key: Data(repeating: 0x77, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        model.setTVStreamWorkspaceVisible(true)
+
+        let initialGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .tvOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        let surface = initialGeometry.surfaceGeneration
+        model.receiveTVVisionGeometryUpdate(initialGeometry)
+        await waitUntil {
+            mediaEnvironment
+                .currentTVVisionPlatformPresentationApplications().count == 3
+        }
+        model.setTVStreamOverlayVisible(false)
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 2
+            )
+        )
+        await waitUntil {
+            model.tvRemoteSurfacePressDisposition(for: surface) == .captured
+        }
+
+        let releasesBeforeFailure = mediaEnvironment
+            .currentReleasedInputApplications().count
+        mediaEnvironment.failNextRelease()
+        model.receiveTVRemoteReservedCommand(.backMenu)
+        await waitUntil {
+            model.tvStreamOverlayVisible
+                && !model.tvRemoteInputReleasePending
+        }
+        XCTAssertEqual(
+            mediaEnvironment.currentReleasedInputApplications().count,
+            releasesBeforeFailure + 1
+        )
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+
+        model.setTVStreamOverlayVisible(false)
+        model.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 3
+            )
+        )
+        for _ in 0..<100 { await Task.yield() }
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .local
+        )
+
+        await model.stopStream()
+        await launchTask.value
     }
 
     func testTVVisionMediaFailurePreservesOnlyTerminalBoundedState()
@@ -5975,6 +6217,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var tvVisionPlatformPresentationApplications:
         [SessionTVVisionPlatformPresentationApplication] = []
     private var shouldBlockNextRelease = false
+    private var shouldFailNextRelease = false
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
     private var shouldBlockNextInputSend = false
     private var blockedInputSendContinuation: CheckedContinuation<Void, Never>?
@@ -6177,16 +6420,20 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func releaseInput(_ application: SessionInputReleaseApplication) async throws {
         try validateRelease(application)
-        let shouldBlock = withLock {
-            let value = shouldBlockNextRelease
+        let behavior = withLock {
+            let value = (shouldBlockNextRelease, shouldFailNextRelease)
             shouldBlockNextRelease = false
+            shouldFailNextRelease = false
             releasedInputApplications.append(application)
             return value
         }
-        if shouldBlock {
+        if behavior.0 {
             await withCheckedContinuation { continuation in
                 withLock { blockedReleaseContinuation = continuation }
             }
+        }
+        if behavior.1 {
+            throw RemoteInputRuntimeError.deliveryFailed
         }
         try validateRelease(application)
     }
@@ -6340,6 +6587,10 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func blockNextRelease() {
         withLock { shouldBlockNextRelease = true }
+    }
+
+    func failNextRelease() {
+        withLock { shouldFailNextRelease = true }
     }
 
     func hasBlockedRelease() -> Bool {
