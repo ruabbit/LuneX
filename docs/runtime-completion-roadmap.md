@@ -284,6 +284,9 @@ flowchart LR
 
 ## 阶段 19：原生产品工作流与无障碍
 
+- OpenSpec `complete-native-product-workflows`已进入`in_progress`；proposal、五项capability specs与design已建立，任务覆盖product-state基础、host/pairing/catalog、session恢复、multiwindow、accessibility、privacy-bounded diagnostics、集成验证与阶段验收。
+- 架构在现有process-level `AppModel`与单一session/media/input owner之上引入checked workspace identity/generation；禁止每窗口复制runtime stack，也禁止非owner窗口停止、恢复、显示或接管另一个workspace的session。
+- 普通测试继续保持`LUNEX_RUN_KEYCHAIN_TEST`与`LUNEX_RUN_LIVE_HOST_TEST` unset并使用Debug文件identity fallback；Simulator只复用既有每类单实例，不创建launch-only UI target制造验收口径。
 - 配对、host信任重置、app启动、重连、停止、远端终止和provider缺失都提供可恢复且不泄密的SwiftUI流程。
 - stream overlay提供明确命令、状态与模式控制，不遮挡视频或依赖hover；macOS/iPad多窗口状态相互隔离。
 - 关键任务覆盖VoiceOver/Voice Control、Dynamic Type、Reduce Motion、键盘导航、tvOS focus与visionOS可达性语义。

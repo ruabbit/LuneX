@@ -3672,3 +3672,8 @@
 - 2026-08-08：首轮8.8 final audit `/tmp/LuneX-18-8_8-final-audit.Yi4ckM`通过scope/OpenSpec/checkbox后，因contract关键句跨行而被单行全文断言误判；无实现或设备副作用，改为两段稳定token fresh重跑。
 - 2026-08-08：corrected final audit `/tmp/LuneX-18-8_8-final-audit-r2.Kma7ZH`通过最终7文件authority/tasks、唯一8.8 checkbox、strict `9/9`、`49/50 only 8.7 pending`、脱敏readiness、五级矩阵与repository边界；下一步final-record。
 - 2026-08-08：final-record `/tmp/LuneX-18-8_8-final-record.xuo5aN`通过authority、完整retained chain、8.7 not-ready脱敏状态、唯一checkbox、稳定project与repository边界；补入索引后运行r2再提交。
+- 2026-08-07：用户完成macOS更新后恢复长期goal；确认goal仍active，`HEAD == origin/main == f51eb0e`，工作树仅含阶段19新OpenSpec目录。
+- 2026-08-07：只读复核系统为macOS 27.0/Xcode 26.4，并确认iOS/tvOS/visionOS 26.4与27.0 runtime可用；未创建、启动或改变任何Simulator lifecycle。
+- 2026-08-07：阶段19 `complete-native-product-workflows`进入`in_progress`，先生成proposal/spec/design/tasks，再按任务逐项实现与自验收；阶段13–18 live/signed/physical pending边界保持不变。
+- 2026-08-07：完成阶段19 proposal、五份ADDED capability specs与design草案；合同覆盖host/pairing、session recovery/overlay、checked multiwindow workspace、accessibility和privacy-bounded diagnostics，明确复用现有runtime owner及五级proof boundary。
+- 2026-08-07：生成阶段19 `tasks.md`共48项，按8组覆盖基础、host/pairing/catalog、session、multiwindow、accessibility、diagnostics、集成验证和阶段证明；strict `1/1`与apply `0/48 ready`通过，路线图同步为in_progress，下一步建立独立OpenSpec checkpoint。

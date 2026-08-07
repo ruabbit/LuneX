@@ -3149,3 +3149,11 @@
 - 8.8 repository pre-gate `/tmp/LuneX-18-8_8-repository-pre.U0WN6n`与post-mark `/tmp/LuneX-18-8_8-final-state.r8HNJn`均通过；OpenSpec精确为`49/50`且唯一pending为8.7，唯一task变化是8.8 checkbox。该状态不是all-done，不能archive。
 - corrected final audit `/tmp/LuneX-18-8_8-final-audit-r2.Kma7ZH`确认最终7文件只有authority/tasks，五级矩阵与readiness不含identity、没有signed/physical/live完成误报，8.7仍唯一pending且阶段18仍in_progress。
 - final-record `/tmp/LuneX-18-8_8-final-record.xuo5aN`再次确认8.8可独立提交，但change只有`49/50`，不能archive或把阶段18报告为完成。
+## 2026-08-07 阶段 19 恢复与环境复核
+
+- 系统更新后环境为 macOS 27.0 build 26A5388g、Xcode 26.4 build 17E192；已安装 iOS/tvOS/visionOS 26.4 与 27.0 simulator runtimes。本次只读枚举 runtime，没有创建、启动或复制模拟器。
+- Git `main` 与 `origin/main` 对齐于 `f51eb0e`；恢复时唯一未跟踪内容为新建的 `openspec/changes/complete-native-product-workflows/`。
+- 阶段18权威状态继续为`49/50`，唯一pending为8.7 signed physical Apple TV/Vision Pro + live Sunshine验收；设备发现、离线测试或阶段19产品工作流不能替代该证明。
+- 阶段19 UI入口集中在`Sources/LuneXApp/RootView.swift`，application owner位于`Sources/LuneXCore/AppModel.swift`。现有基础覆盖host列表、手动添加、pairing、app catalog、stream状态/overlay、settings与diagnostics，但仍需把首次使用、信任重置、失败/重试、恢复/停止、多窗口所有权、无障碍与privacy-bounded错误合同系统化。
+- 新change建议拆分五项新capability：`native-host-pairing-workflows`、`native-session-recovery-controls`、`native-multiwindow-workspaces`、`native-accessibility-interaction`、`privacy-bounded-product-diagnostics`。不修改或复制GPL上游实现，只将Moonlight iOS/Qt作为只读行为参考。
+- OpenSpec确认项目当前没有`openspec/specs/`全局capability；阶段19五项均为ADDED requirements。架构选择是在单一process/runtime `AppModel`上增加checked workspace identity/generation，而不是每窗口复制一个AppModel或第二套session/media/input owner。

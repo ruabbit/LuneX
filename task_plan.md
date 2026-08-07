@@ -36,10 +36,12 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | pending | pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` artifacts严格校验通过，当前`0/48`，开始逐项实现 pairing/recovery/stream control、错误 UX、多窗口、VoiceOver、键盘与触控回归 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
+
+阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
@@ -53,7 +55,7 @@
 
 阶段17 OpenSpec `integrate-mobile-scene-pip-continuity`保持`in_progress`，权威进度`35/36`。1.x至5.6、6.1–6.5与6.7的actual runtime/UI、normal/build/repository/API/analyzer/sanitizer/resource/fixed-simulator和五级proof boundary封版均完成；已推送`c7c9089`上的阶段级fresh normal `909/908/1/0`与组合门再次通过。唯一剩余6.6需要signed physical iPhone/iPad、system PiP、Stage Manager、external display、visible EDR、空间音频、power/thermal与live Sunshine receipt；change不可archive。
 
-阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`42/50 ready`、next 8.1。1.1至7.5已完成task级离线验收；7.5补齐`LocalizedStringResource`展示路径、compact/wide与accessibility Dynamic Type布局、tvOS focus/command顺序、visionOS current synchronized coordinator投影、partial/replacement/stale fail-closed、设置迁移和clean-stop应用回归。retained focused `33/33`、related `217/216/1/0`、normal `1123/1122/1/0`、fixed Apple TV/Vision Pro direct及五平台unsigned Debug均零失败/零结构化diagnostics；normal仅为7.5回归证据，不提前完成8.1。repository pre-gate `/tmp/LuneX-18-7_5-repository-pre-r3.1O8JBJ`完整通过并只勾选7.5；当前证据仍不是Simulator runtime、signed artifact、physical HDR/input/spatial、live Sunshine或性能证明。
+阶段18 OpenSpec `integrate-tvos-visionos-runtime`为`49/50 ready`，唯一pending 8.7。离线实现、测试、build、repository与bounded Simulator target审计已按任务记录成立；signed physical Apple TV/Vision Pro与live Sunshine仍无完整receipt，因此change不可archive且阶段保持`in_progress`。阶段19/20不得替代或回填8.7的physical/live proof。
 
 5.6 post-record `/tmp/LuneX-18-5_6-post-record-r2.omtl07`与final audit `/tmp/LuneX-18-5_6-final-audit.cNq2is`确认五份authority含pre/final双门索引、精确11文件3 test/8 authority分类、三条矩阵断言未弱化或禁用、tasks仅5.6 checkbox变化、production/reference/dependency零diff及证明分层准确；无阻止独立提交的问题。
 
