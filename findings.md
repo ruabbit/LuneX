@@ -2790,3 +2790,21 @@
 - 静态唯一性检查不能用共享前缀`final class TVVisionUIKitWindowObservation`计数，因为合法token manager也以该前缀命名；应精确匹配observer的generic声明，并分别检查token manager只有资源清理职责。
 - `git diff -U0 | awk '/^\+[^+]/ {print}'`只筛选新增行但不会移除diff的`+`前缀；后续anchored正则必须显式包含`^\+`，或先用`sub(/^\+/, "")`规范化后再匹配。
 - 5.1最终人工与静态审计没有发现阻止提交的问题：observer只拥有notification admission，弱持有window/scene并在replacement/detach/invalidate移除token；generation owner重新读取actual state，geometry owner仍独占drawable/revision；AppModel visionOS测试明确无tvOS input action，文档未删除或提升物理/live合同。
+- 5.2生产能力并非空缺：阶段18任务2.3已把actual bounds/scale、drawable、fit/fill `StreamCoordinateSnapshot`、input reference和`TVVisionStreamAbsoluteInputMapping`绑定到同一`TVVisionSemanticRevision`，并在detach/invalid/coordinate unavailable时同时清除binding、mapping和drawable；5.1补齐actual visionOS window source后，这条共享路径已实际接入visionOS surface。
+- 5.2不应为了形成production diff再造mapping owner。合理增量是补一条visionOS端到端确定性回归，跨owner与surface coordinator同时断言fit/fill render snapshot、absolute mapping的相同revision/remote point/reference size，以及detach或invalid后render和input均不可用；5.3再安装实际输入adapter与current-generation admission。
+- 现有surface coordinator的几何应用返回枚举名是`TVVisionStreamGeometryApplicationOutcome`，与geometry owner的`TVVisionStreamGeometryBindingOutcome`分层；综合测试应保留这两个边界，不另造测试专用outcome。
+- actual SwiftUI顺序是先`context.coordinator.update(renderState:)`同步requested source/mode，再调用view的`updateGeometryBinding`发布exact coordinate snapshot；若测试直接发布新`.fill`而render transform仍为`.fit`，coordinator应且确实清除不一致snapshot。综合回归必须复现此顺序，而不是绕过fail-closed合同。
+- 在一个大测试文件中用常见`updateRenderInputs(.fill)`片段作补丁锚点会命中既有用例；修复应使用新测试独有的相邻fit input断言或函数名作为稳定边界，避免跨用例误插。
+- 5.2综合用例确认fill在`1920x1080 -> 800x600`时同一local left-center点从fit远端`(0,540)`变为fill远端约`(240,540)`，且mapping revision与presenter coordinate revision完全一致；这直接证明crop-aware absolute mapping复用Metal的同一resolved video rectangle。
+- presenter、AppModel/media/coordinator/state及相邻vision/tvOS/input/HDR/lifecycle/mobile合同共`71 + 220 + 121`项fresh回归全绿，支持5.2为已有shared production路径的综合验收，而不是需要新增第二mapper的判断。
+- 完整normal总数从5.1的1058增加到1059且唯一新增综合用例通过，唯一skip未变化；这证明5.2测试已进入正式test target，普通运行仍未访问真实Keychain。
+- fixed Vision Pro direct与五平台unsigned Debug均为零结构化诊断并各有AIR/metallib；固定UUID仅作`xcodebuild -destination`，所以证据层级是SDK编译链接，不是Simulator launch、signed install或物理Vision Pro行为。
+- 5.2权威合同必须明确actual SwiftUI先同步render source/mode，再发布geometry exact snapshot；否则coordinator的mode mismatch fail-closed会被误判为mapping缺陷。render snapshot与absolute mapping的shared semantic revision、resolved crop和reference size是本项核心证明。
+- runtime contract的真实文本把`Task 5.1 is ready for`接在上一句末尾，不能把它当独立patch行；稳定插入锚点是下一节标题`## Fixed simulator inventory`。两次不精确补丁均原子拒绝且无部分文件修改。
+- 5.2没有production source diff是预期且正确的：能力由2.3实现、5.1接入actual window，本项新增综合回归和权威证据。production diff为零不能作为补造第二mapper的理由。
+- 5.2测试实际以`fitInput.revision == fit.revision`和`fillInput.revision == fill.revision`表达render/input revision一致；门禁不可把续接摘要中的概念名`fitMapping/fitRenderCoordinates`当成源码变量。首轮pre-gate因此是静态包装错误，不是测试或实现失败。
+- 修正后的5.2 repository pre-gate以真实源码变量和分组step marker完整通过，确认精确8文件纯test/authority范围、production mapper零diff、三次稳定project hash、全部行为/编译证据与仓库边界。5.2可以勾选，但证据仍不提升到Simulator runtime、signed或物理Vision Pro层级。
+- post-mark文档断言不能假设Markdown自动换行后的两个短语仍在同一行；runtime合同实际以`Task 5.2`行尾、下一行`is ready to mark complete`表达状态。首轮final-state退出是只读包装错误，OpenSpec已确认`27/50 next 5.3`。
+- 修正后的5.2 final-state确认勾选只增加tasks authority文件，scope从8变9，project/test/docs与全部retained证据没有漂移。后续只需post-record和最终diff审计，不应为最终落账重复任何行为验收。
+- post-record的deletion gate需要区分合同删除与checkbox状态替换：5.2最终numstat中测试及7份记录为纯新增，`tasks.md`恰好`1 add / 1 delete`是`[ ] -> [x]`，不应被误报为删除合同。
+- 最终审计未发现阻止5.2提交的问题：测试严格复现actual SwiftUI的mode-before-geometry顺序，fit/fill mapping与render snapshot共享revision，detach/invalid各自同时清空三条路径；其余diff只记录OpenSpec/docs/planning，没有production、project、dependency或reference变化。

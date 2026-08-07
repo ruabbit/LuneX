@@ -127,6 +127,21 @@ its existing focus-engine `canBecomeFocused` rule. The observer never advances
 geometry or writes drawable state: the existing geometry owner remains the
 single semantic-revision and drawable writer.
 
+Task 5.2 reuses that owner rather than introducing a visionOS-specific mapper.
+The actual SwiftUI update order first synchronizes the requested source size
+and fit/fill mode into `StreamMetalPresenter`, then publishes the exact
+coordinate snapshot from `TVVisionUIKitStreamGeometryBindingOwner` through
+`MobileStreamSurfaceCoordinator`. Render coordinates and
+`TVVisionStreamAbsoluteInputMapping` therefore carry the same
+`TVVisionSemanticRevision`, resolved video rectangle, source crop, and input
+reference size. A fit-to-fill transition advances that shared semantic
+revision and changes crop-aware absolute mapping without creating an
+independent presenter or input revision. Detach, nonfinite bounds, invalid
+drawable geometry, or unavailable coordinates clear drawable size, render
+coordinates, and absolute mapping together. Task 5.3 remains responsible for
+installing public keyboard, pointer, indirect-input, and controller adapters
+and admitting their events to the current generation.
+
 ### Keep visionOS windowed streaming explicit
 
 Stage 18 supports the actual SwiftUI window containing the Metal stream

@@ -1136,6 +1136,143 @@ final class StreamMetalPresenterTests: XCTestCase {
     }
 
     @MainActor
+    func testVisionGeometryBindsFitFillRenderAndAbsoluteInputThenCloses()
+        throws
+    {
+        let generation = try tvVisionSurfaceGeneration(303)
+        let surface = tvVisionGeometryBindingTestSurface()
+        let renderState = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 1_920, height: 1_080),
+            drawableSize: .zero,
+            mode: .fit
+        ))
+        let coordinator = MobileStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState
+        )
+        coordinator.activateTVVisionSurfaceGeneration(generation)
+        var updates: [TVVisionStreamGeometryBindingUpdate] = []
+        var applications: [TVVisionStreamGeometryApplicationOutcome] = []
+        let owner = try tvVisionGeometryBindingTestOwner(
+            platform: .visionOS,
+            generation: generation,
+            surface: surface,
+            handler: { update in
+                updates.append(update)
+                applications.append(
+                    coordinator.handleTVVisionGeometryUpdate(update)
+                )
+            }
+        )
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+        let fit = try XCTUnwrap(owner.currentBinding)
+        XCTAssertEqual(applications, [.applied])
+        XCTAssertEqual(fit.revision.rawValue, 1)
+        XCTAssertEqual(fit.coordinateSnapshot.mode, .fit)
+        XCTAssertEqual(
+            renderState.coordinateSnapshot,
+            fit.coordinateSnapshot
+        )
+        let fitInput = try XCTUnwrap(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 0, y: 150)
+        ))
+        XCTAssertEqual(fitInput.revision, fit.revision)
+        XCTAssertEqual(fitInput.point, RemotePoint(x: 0, y: 540))
+        XCTAssertEqual(fitInput.referenceSize, fit.inputReferenceSize)
+
+        renderState.transform.mode = .fill
+        XCTAssertEqual(
+            owner.updateRenderInputs(
+                sourceSize: PixelSize(width: 1_920, height: 1_080),
+                mode: .fill,
+                surface: surface,
+                surfaceGeneration: generation
+            ),
+            .published
+        )
+        let fill = try XCTUnwrap(owner.currentBinding)
+        XCTAssertEqual(applications, [.applied, .applied])
+        XCTAssertEqual(fill.revision.rawValue, 2)
+        XCTAssertEqual(fill.coordinateSnapshot.mode, .fill)
+        XCTAssertEqual(
+            renderState.coordinateSnapshot,
+            fill.coordinateSnapshot
+        )
+        let fillInput = try XCTUnwrap(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 0, y: 150)
+        ))
+        XCTAssertEqual(fillInput.revision, fill.revision)
+        XCTAssertEqual(fillInput.point.x, 240, accuracy: 0.000_001)
+        XCTAssertEqual(fillInput.point.y, 540, accuracy: 0.000_001)
+        XCTAssertEqual(fillInput.referenceSize, fill.inputReferenceSize)
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestDetachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .closed(.detached)
+        )
+        XCTAssertEqual(applications.last, .applied)
+        XCTAssertNil(renderState.coordinateSnapshot)
+        XCTAssertEqual(renderState.transform.drawableSize, .zero)
+        XCTAssertNil(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 0, y: 150)
+        ))
+
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface
+            )),
+            .published
+        )
+        surface.geometryReading = TVVisionUIKitStreamSurfaceGeometryReading(
+            viewBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: .infinity,
+                height: 300
+            ),
+            windowBounds: TVVisionRect(
+                x: 0,
+                y: 0,
+                width: 400,
+                height: 300
+            ),
+            safeAreaInsets: .zero,
+            scale: 2
+        )
+        XCTAssertEqual(
+            owner.handle(tvVisionGeometryBindingTestAttachedUpdate(
+                platform: .visionOS,
+                generation: generation,
+                surface: surface,
+                callback: .layout
+            )),
+            .closed(.invalidGeometry(.invalidViewBounds))
+        )
+        XCTAssertEqual(updates.last?.status, .closed(
+            .invalidGeometry(.invalidViewBounds)
+        ))
+        XCTAssertNil(renderState.coordinateSnapshot)
+        XCTAssertEqual(renderState.transform.drawableSize, .zero)
+        XCTAssertNil(owner.absoluteInputMapping(
+            localPoint: RemotePoint(x: 0, y: 150)
+        ))
+    }
+
+    @MainActor
     func testMobileSurfaceAttachmentRelayReplacesAndInvalidatesHandler() {
         let surface = MobileSurfaceAttachmentTestSurface()
         var firstEvents: [MobileStreamSurfaceAttachmentEvent] = []

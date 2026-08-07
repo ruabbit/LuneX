@@ -1854,6 +1854,95 @@ test membership, no async XCTest autoclosure, no out-of-scope input/media
 runtime, no removed contract, and all proof boundaries. Task 5.1 is ready for
 its independent commit and push.
 
+## Task 5.2 visionOS geometry render and input binding
+
+Task 5.2 deliberately adds no production mapper. Task 2.3 already established
+`TVVisionUIKitStreamGeometryBindingOwner` as the single actual-view owner for
+finite normalized bounds/scale, drawable sizing, fit/fill
+`StreamCoordinateSnapshot`, resolved video rectangle/source crop, input
+reference size, and `TVVisionStreamAbsoluteInputMapping`. Task 5.1 connected
+that owner to actual visionOS window identity and lifecycle. Creating a second
+visionOS geometry or input owner here would split revisions and violate the
+single-writer contract.
+
+The actual SwiftUI surface update order is part of the contract. It first
+synchronizes source size and requested fit/fill mode into the current render
+state, then calls the existing geometry binding owner and applies its exact
+coordinate snapshot through `MobileStreamSurfaceCoordinator`. A matching
+render snapshot and absolute input mapping therefore carry the same
+`TVVisionSemanticRevision`. A mode mismatch fails closed rather than allowing
+rendering and input to observe different crops. Detach, unavailable
+coordinates, nonfinite bounds, or invalid drawable geometry clear drawable
+size, presenter coordinates, and absolute input mapping together; a later
+valid attachment may establish a new current revision.
+
+`testVisionGeometryBindsFitFillRenderAndAbsoluteInputThenCloses` provides the
+integrated deterministic receipt. With a 1920 by 1080 source and 800 by 600
+drawable, fit maps the local left-center point to remote `(0, 540)`. After the
+render state is changed to fill before geometry publication, the next shared
+revision maps the same point to approximately `(240, 540)`, proving that input
+uses the presenter's crop-aware resolved rectangle. Detach clears drawable,
+render coordinates, and mapping; reattachment restores them; a subsequent
+nonfinite view bound produces `invalidViewBounds` and clears all three again.
+This verifies the existing production binding without installing a test-only
+production seam or completing task 5.3 input adapters.
+
+Fresh retained evidence is:
+
+- minimal integrated test `/tmp/LuneX-18-5_2-minimal-r3.luBq4W`: `1/1`
+  passed, no skip/failure/expected failure, and all four structured build
+  diagnostic counts zero;
+- complete presenter `/tmp/LuneX-18-5_2-presenter.7h2rAT`: `71/71`, cross-layer
+  focused `/tmp/LuneX-18-5_2-focused.wM0NK4`: `220/220`, and related
+  `/tmp/LuneX-18-5_2-related.slZmgu`: `121/121`, all passed with zero structured
+  build diagnostics;
+- normal `/tmp/LuneX-18-5_2-normal.TjccHx`: `1059 total / 1058 passed / 1
+  skipped / 0 failed / 0 expected failure`; the only skipped test is the
+  explicitly opt-in real-Keychain round trip;
+- fixed Vision Pro direct `/tmp/LuneX-18-5_2-visionos.ags3s2` and unsigned
+  five-platform Debug `/tmp/LuneX-18-5_2-builds.gqJzlP`: macOS, fixed iPhone,
+  iPad, Apple TV, and Vision Pro all succeeded with zero warning, error, or
+  analyzer-warning diagnostics and each produced one AIR plus one metallib.
+
+The fixed device UUIDs were used only as build destinations. No simulator was
+queried, created, booted, installed, launched, shut down, or deleted, and the
+real-Keychain/live-host opt-ins remained disabled. These receipts prove
+deterministic mapping semantics and unsigned SDK compatibility only. They do
+not prove signed install, simulator runtime, physical Vision Pro resize,
+keyboard/pointer/controller delivery, gaze or hand interaction, HDR, spatial
+audio, live Sunshine, latency, comfort, performance, power, or thermal
+behavior. Task 5.3 still owns actual public input adapters and current-
+generation event admission; tasks 6.x still own visionOS media, HDR, and audio.
+
+Fresh repository pre-gate
+`/tmp/LuneX-18-5_2-repository-pre-r2.Jwvbum` passed fixture self/tree,
+OpenSpec strict `9/9`, pre-mark `26/50` with task 5.2 next, three stable project
+generations at SHA-256
+`ef2e3e615f1dbd84b76bfe4c8681fab7d44291176f06324acd757fa1c1008353`,
+the exact eight-file test/authority scope, zero production/dependency/reference
+diff, test membership, integrated fit/fill/revision/close semantics, all
+retained structured test/build/Metal evidence, the exact Keychain skip,
+disabled opt-ins, no owned test/build process, and `git diff --check`. Task 5.2
+is ready to mark complete; the required post-mark gate is read-only and must
+not repeat tests, builds, generator work, Keychain access, or Simulator work.
+
+The corrected read-only post-mark final-state
+`/tmp/LuneX-18-5_2-final-state-r2.0VX1j5` confirmed OpenSpec strict `9/9`,
+`27/50 ready`, task 5.2 done, task 5.3 next, the stable project SHA-256, the
+exact nine-file test/authority scope, zero production/dependency/reference
+diff, every retained test/build result, the exact Keychain skip, disabled
+opt-ins, no owned test/build process, and `git diff --check`. It did not rerun
+tests, builds, the generator, Keychain access, or Simulator work.
+
+Post-record `/tmp/LuneX-18-5_2-post-record-r2.d3bpX7` and final audit
+`/tmp/LuneX-18-5_2-final-audit.YC6Bfa` confirmed the exact nine-file scope:
+one test file, eight authority files, and no production file. The audit checked
+the actual render-mode-before-geometry order, fit/fill render/input revision
+identity, both detach and invalid-geometry closures, the single expected task
+checkbox replacement, no asynchronous XCTest autoclosure or `try?`, no second
+mapper or project/dependency/reference change, and all physical/live proof
+boundaries. No finding blocks the independent task 5.2 commit and push.
+
 ## Fixed simulator inventory
 
 Task 1.1 executed one read-only `xcrun simctl list --json` inventory after the

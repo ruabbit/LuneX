@@ -30,6 +30,14 @@ SHALL suppress presentation and input.
 - **WHEN** the user changes the window size continuously
 - **THEN** LuneX SHALL deduplicate equivalent snapshots and use the same final revision for rendering and input
 
+#### Scenario: Fit or fill mode changes
+- **WHEN** the current visionOS window changes between fit and fill for the same finite source and drawable geometry
+- **THEN** LuneX SHALL apply one new semantic revision to both the resolved Metal video rectangle and crop-aware absolute input mapping
+
+#### Scenario: Geometry closes
+- **WHEN** the actual visionOS stream surface detaches or publishes nonfinite or otherwise invalid geometry
+- **THEN** LuneX SHALL clear drawable sizing, render coordinates, and absolute input mapping together until a later valid current surface revision
+
 ### Requirement: visionOS system interaction SHALL remain reserved
 LuneX SHALL keep system gestures, recentering, capture, safety, volume, and
 platform escape behavior local. LuneX SHALL NOT synthesize or forward an

@@ -38,7 +38,7 @@
 ## 5. visionOS window and input runtime
 
 - [x] 5.1 Implement actual visionOS windowed stream-surface attachment, scene activity, visibility, geometry, scale, drawable, focus eligibility, and replacement observation
-- [ ] 5.2 Bind the normalized visionOS geometry revision to Metal fit/fill and supported indirect or absolute input mapping, suppressing both on invalid/detached geometry
+- [x] 5.2 Bind the normalized visionOS geometry revision to Metal fit/fill and supported indirect or absolute input mapping, suppressing both on invalid/detached geometry
 - [ ] 5.3 Inventory and implement public supported visionOS controller, keyboard, pointer, and indirect-input adapters behind typed capability and current-generation admission
 - [ ] 5.4 Reserve system gestures, recentering, capture, safety, volume, escape, and unsupported gaze/hand interactions locally without synthetic Moonlight events
 - [ ] 5.5 Integrate controller/keyboard/pointer focus loss, scene loss, provider failure, replacement, and stop with ordered held-state release and local UI restoration
