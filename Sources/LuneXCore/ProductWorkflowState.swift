@@ -104,6 +104,11 @@ struct ProductHostActionOwner: Hashable, Sendable {
     let hostSelectionGeneration: ProductHostSelectionGeneration
 }
 
+struct ProductSessionOwner: Hashable, Sendable {
+    let workspace: ProductWorkspaceReference
+    let sessionID: UUID
+}
+
 enum ProductActionScope: Hashable, Sendable {
     case application
     case workspace(ProductWorkspaceReference)

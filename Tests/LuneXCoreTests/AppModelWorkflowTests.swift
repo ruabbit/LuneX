@@ -6525,6 +6525,224 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(launchCount, 0)
     }
 
+    func testPrimaryCompatibilityLaunchRecordsAndClearsProductSessionOwner()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 31,
+                    key: Data(repeating: 0x31, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+
+        let launch = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+
+        XCTAssertEqual(
+            model.activeProductSessionOwner,
+            ProductSessionOwner(
+                workspace: model.primaryWorkspaceReference,
+                sessionID: record.sessionID
+            )
+        )
+        let didStop = await model.stopStream(in: model.primaryWorkspaceReference)
+        XCTAssertTrue(didStop)
+        await launch.value
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertFalse(model.hasActiveStreamSession)
+    }
+
+    func testExplicitWorkspaceOwnerRejectsNonOwnerStop() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 32,
+                    key: Data(repeating: 0x32, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let hostID = try XCTUnwrap(model.selectedHostID)
+        let appID = try XCTUnwrap(model.selectedAppID)
+        let workspace = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                selectedHostID: hostID,
+                selectedAppID: appID
+            )
+        )
+
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        let owner = try XCTUnwrap(model.activeProductSessionOwner)
+        XCTAssertEqual(owner.workspace, workspace)
+        XCTAssertEqual(owner.sessionID, record.sessionID)
+
+        let nonOwnerStop = await model.stopStream(
+            in: model.primaryWorkspaceReference
+        )
+        XCTAssertFalse(nonOwnerStop)
+        XCTAssertEqual(model.activeProductSessionOwner, owner)
+        XCTAssertTrue(provider.currentStoppedSessionIDs().isEmpty)
+
+        let ownerStop = await model.stopStream(in: workspace)
+        XCTAssertTrue(ownerStop)
+        await launch.value
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testWorkspaceReplacementCannotClaimOwnerAndTriggersCheckedCleanup()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 33,
+                    key: Data(repeating: 0x33, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                selectedHostID: try XCTUnwrap(model.selectedHostID),
+                selectedAppID: try XCTUnwrap(model.selectedAppID)
+            )
+        )
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+
+        let replacement = try model.workspaceRegistry.replace(workspace)
+        XCTAssertEqual(replacement.id, workspace.id)
+        XCTAssertNotEqual(replacement.generation, workspace.generation)
+        let replacementStop = await model.stopStream(in: replacement)
+        let staleStop = await model.stopStream(in: workspace)
+        XCTAssertFalse(replacementStop)
+        XCTAssertFalse(staleStop)
+        XCTAssertEqual(model.activeProductSessionOwner?.workspace, workspace)
+
+        provider.yield(
+            .launchAccepted(makeSessionLaunchResponse()),
+            sessionID: record.sessionID
+        )
+        await launch.value
+
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertNotEqual(
+            model.activeProductSessionOwner?.workspace,
+            replacement
+        )
+    }
+
+    func testMediaEventDetectsReplacedWorkspaceAndStopsOwnedSession()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 35,
+                    key: Data(repeating: 0x35, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                selectedHostID: try XCTUnwrap(model.selectedHostID),
+                selectedAppID: try XCTUnwrap(model.selectedAppID)
+            )
+        )
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let replacement = try model.workspaceRegistry.replace(workspace)
+        environment.yieldFeedback(
+            .led(ControllerLEDFeedback(
+                controllerID: "stale-owner",
+                red: 1,
+                green: 2,
+                blue: 3
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.activeProductSessionOwner == nil }
+        await launch.value
+
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertNil(model.latestRemoteInputFeedback)
+        XCTAssertNotEqual(
+            model.activeProductSessionOwner?.workspace,
+            replacement
+        )
+    }
+
+    func testRemoteTerminationClearsWorkspaceSessionAndMediaOwnership()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 34,
+                    key: Data(repeating: 0x34, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launch = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+        let activeEnvironment = await environment.snapshot()
+        XCTAssertEqual(
+            model.activeProductSessionOwner?.sessionID,
+            activeEnvironment.sessionID
+        )
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launch.value
+
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertFalse(model.hasActiveStreamSession)
+        let stoppedEnvironment = await environment.snapshot()
+        XCTAssertNil(stoppedEnvironment.sessionID)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+    }
+
     private func makeLaunchReadyModel(
         sessionControlProvider: any SessionControlProvider,
         sessionMediaEnvironment: any SessionMediaEnvironment =

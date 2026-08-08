@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`13/48`；host/pairing/catalog工作流与跨状态application matrix完成，继续3.1 session workspace owner |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`14/48`；host/pairing/catalog与checked session workspace owner完成，继续3.2 actual-state command reducer |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`13/48`。Group 1与2.x完成：host library、catalog、pairing及destructive confirmation属于checked workspace，纯值surface表达完整状态；新增四条跨状态AppModel workflow覆盖first-use restore、valid/invalid manual entry、host-switch stale retry、catalog recovery、pairing cancel/retry/replacement、trust reset及stop-before-remove。focused `4/4`、related `139/139`、normal `1202/1201/1 exact Keychain skip/0`通过。完整adaptive/accessibility属于5.x，legacy workflow string迁移属于6.1/6.2，root UI仍是primary compatibility binding。下一项3.1记录并验证initiating workspace session owner。
+阶段19当前权威进度`14/48`。Group 1与2.x完成：host library、catalog、pairing及destructive confirmation属于checked workspace，纯值surface表达完整状态；3.1新增`ProductSessionOwner`，在prepare前绑定完整workspace generation与session UUID，复验host/app/selection generation，并将control/media/input/HDR/audio/lifecycle/mobile/tvOS/visionOS runtime应用纳入同一owner gate。non-owner及replacement stop fail closed，control-only/media-only stale detection、normal stop、remote termination和failure同步清理owner。3.1 focused `5/5`、related `143/143`、normal `1207/1206/1 exact Keychain skip/0`与四平台generic Debug通过。完整command reducer属于3.2，stop idempotence属于3.4，owning-window close policy属于4.4，adaptive/accessibility属于5.x，legacy workflow string迁移属于6.1/6.2，root UI仍是primary compatibility binding。下一项3.2定义actual-state session command reducer。
 
 ### 阶段19错误记录
 

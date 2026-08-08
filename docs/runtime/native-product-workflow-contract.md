@@ -354,8 +354,55 @@ mutation. Its labels distinguish remove/reset from stop-and-remove/
 stop-and-reset, disables duplicate performing actions, and exposes typed retry
 presentation. The panel still uses the primary compatibility workspace; full
 per-scene injection remains task 4.2.
-The active session is checked by the existing host/session runtime owner;
-recording the initiating workspace as session owner remains task 3.1.
+The destructive path uses the checked product session owner described below;
+full owning-window close policy remains task 4.4.
+
+### Checked workspace and session ownership
+
+`ProductSessionOwner` combines the complete initiating
+`ProductWorkspaceReference` with the existing stream session UUID. Launch
+installs that owner and the matching `activeStreamSessionID` as one reservation
+before awaiting session preparation. A second launch cannot enter while either
+reservation exists, including the preparation window before a provider starts.
+The process still owns only one session coordinator, provider, media
+environment, renderer, audio graph, and input path.
+
+Launch captures the initiating workspace, selected host, selected app, and
+`ProductHostSelectionGeneration`. After session preparation it revalidates the
+complete workspace generation and the same host, app, and host-selection
+generation before starting the provider. Replacement, close, host switch, or
+app switch during preparation invalidates the prepared coordinator session and
+clears both product owner and session UUID without stopping a provider that was
+never started.
+
+The primary `launchSelectedApp()` and `stopStream()` APIs remain compatibility
+commands for `primaryWorkspaceReference`. Explicit
+`launchSelectedApp(in:)` and checked `stopStream(in:)` accept a complete
+workspace reference. Only the exact current owning reference may stop; a second
+workspace, the replacement generation of the same workspace ID, and the stale
+original reference all fail closed. Replacement never claims or transfers the
+active session. Internal teardown remains available for admitted destructive
+actions, runtime exhaustion, and stale asynchronous owner detection so cleanup
+does not depend on a now-ineligible UI command.
+
+Session-control consumption, media events, spatial-audio preference
+application, lifecycle application, macOS input, HDR/video state, mobile
+continuity/PiP, and tvOS/visionOS presentation all require the same current
+product owner in addition to their existing session/media/input generations.
+Session snapshots are accepted only when their session UUID matches that
+owner. If a replaced owner is first observed through either control or media
+traffic, LuneX performs checked internal teardown instead of leaving an
+unowned runtime active or transferring it to the replacement.
+
+Normal stop, remote termination, provider or media failure, preparation
+invalidation, and stale-owner teardown clear `activeProductSessionOwner` and
+`activeStreamSessionID` together and release media/input ownership. The task
+3.1 regression covers primary compatibility ownership, explicit ownership,
+non-owner stop rejection, same-ID replacement rejection, control-only and
+media-only stale cleanup, normal stop, and remote termination. The complete
+actual-state command reducer, typed recovery issues/actions, concurrent stop
+idempotence, overlay ownership, and owning-window close policy remain tasks
+3.2, 3.3, 3.4, 3.5, and 4.4 respectively.
 
 ### Host, pairing, and catalog product surfaces
 

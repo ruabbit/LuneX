@@ -20,6 +20,7 @@ private enum PairingApplicationError: Error {
 
 private enum SessionApplicationError: Error {
     case incompleteControlStream
+    case staleProductSessionOwner
 }
 
 struct StreamLaunchUIState: Equatable {
@@ -110,6 +111,13 @@ final class AppModel: ApplicationInputSink {
     private struct PreparedPairingIdentity {
         let owner: ProductPairingOwner
         let material: ClientIdentityMaterial
+    }
+
+    private struct ProductStreamLaunchSelection {
+        let workspace: ProductWorkspaceReference
+        let host: MoonlightHost
+        let app: RemoteApp
+        let hostSelectionGeneration: ProductHostSelectionGeneration
     }
 
     private struct TVVisionPlatformGeometryAdmission: Equatable {
@@ -275,8 +283,12 @@ final class AppModel: ApplicationInputSink {
     }
 
     var tvStreamControlPresentationState: TVStreamControlPresentationState {
+        let hasCurrentOwner = activeProductSessionOwner.map(
+            productSessionOwnerIsCurrent
+        ) ?? false
         let hasActiveSession = expectedTVVisionPlatform == .tvOS
             && session.isStreaming
+            && hasCurrentOwner
             && activeStreamSessionID != nil
             && activeMediaSessionID == activeStreamSessionID
             && activeMediaGeneration != nil
@@ -346,8 +358,12 @@ final class AppModel: ApplicationInputSink {
     var visionStreamControlPresentationState:
         VisionStreamControlPresentationState
     {
+        let hasCurrentOwner = activeProductSessionOwner.map(
+            productSessionOwnerIsCurrent
+        ) ?? false
         let hasActiveSession = expectedTVVisionPlatform == .visionOS
             && session.isStreaming
+            && hasCurrentOwner
             && activeStreamSessionID != nil
             && activeMediaSessionID == activeStreamSessionID
             && activeMediaGeneration != nil
@@ -491,6 +507,8 @@ final class AppModel: ApplicationInputSink {
         }
         guard let coordinator = mobilePictureInPictureCoordinator,
               let snapshot = mobilePictureInPictureSnapshot,
+              let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
               coordinator.generation == snapshot.generation,
               snapshot.generation.mediaGeneration == activeMediaGeneration else {
             return .unavailable
@@ -535,6 +553,7 @@ final class AppModel: ApplicationInputSink {
     private var preparedPairingIdentity: PreparedPairingIdentity?
     private var activeHostDestructiveOwner: ProductHostActionOwner?
     private var hostDestructiveOperationInFlight = false
+    private(set) var activeProductSessionOwner: ProductSessionOwner?
     private var activeStreamSessionID: UUID?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
@@ -1183,6 +1202,8 @@ final class AppModel: ApplicationInputSink {
         _ update: TVVisionStreamGeometryBindingUpdate
     ) {
         guard let platform = expectedTVVisionPlatform,
+              let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
               update.platform == platform,
               update.surfaceGeneration.domain == .surface,
               let sessionID = activeStreamSessionID,
@@ -1510,7 +1531,9 @@ final class AppModel: ApplicationInputSink {
     func submitMacPlatformInput(
         _ sample: MacPlatformInputSample
     ) -> MacSessionInputEnqueueResult {
-        guard let generation = activeMacInputGeneration else {
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              let generation = activeMacInputGeneration else {
             return .rejected(.inactiveGeneration)
         }
         guard let sessionID = activeStreamSessionID,
@@ -1930,7 +1953,7 @@ final class AppModel: ApplicationInputSink {
             )
         }
         if sessionIsActive {
-            await stopStream()
+            _ = await stopStreamInternally()
             guard hostDestructiveOwnerCanMutate(confirmation.owner) else {
                 return failHostDestructiveAction(
                     confirmation,
@@ -2512,17 +2535,96 @@ final class AppModel: ApplicationInputSink {
         return true
     }
 
+    private func streamLaunchSelection(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductStreamLaunchSelection? {
+        guard let state = workspaceRegistry.state(for: workspace),
+              let hostID = state.selectedHostID,
+              let host = hosts.first(where: { $0.id == hostID }) else {
+            return nil
+        }
+        let apps = appsByHostID[hostID] ?? []
+        let app = state.selectedAppID.flatMap { selectedAppID in
+            apps.first { $0.id == selectedAppID }
+        } ?? apps.first
+        guard let app else { return nil }
+        return ProductStreamLaunchSelection(
+            workspace: workspace,
+            host: host,
+            app: app,
+            hostSelectionGeneration: state.hostSelectionGeneration
+        )
+    }
+
+    private func productSessionLaunchIsCurrent(
+        owner: ProductSessionOwner,
+        selection: ProductStreamLaunchSelection
+    ) -> Bool {
+        guard productSessionOwnerIsCurrent(owner),
+              owner.workspace == selection.workspace,
+              let current = streamLaunchSelection(in: selection.workspace) else {
+            return false
+        }
+        return current.host.id == selection.host.id
+            && current.app.id == selection.app.id
+            && current.hostSelectionGeneration == selection.hostSelectionGeneration
+    }
+
+    private func productSessionOwnerIsCurrent(
+        _ owner: ProductSessionOwner
+    ) -> Bool {
+        productSessionOwnerOwnsActiveReservation(owner)
+            && workspaceRegistry.state(for: owner.workspace) != nil
+    }
+
+    private func productSessionOwnerOwnsActiveReservation(
+        _ owner: ProductSessionOwner
+    ) -> Bool {
+        activeProductSessionOwner == owner
+            && activeStreamSessionID == owner.sessionID
+    }
+
+    private func invalidatePreparedProductSession(
+        _ owner: ProductSessionOwner
+    ) async {
+        guard activeProductSessionOwner == owner,
+              activeStreamSessionID == owner.sessionID else { return }
+        _ = try? await streamSessionCoordinator.fail(
+            SessionApplicationError.staleProductSessionOwner,
+            sessionID: owner.sessionID
+        )
+        guard activeProductSessionOwner == owner,
+              activeStreamSessionID == owner.sessionID else { return }
+        activeProductSessionOwner = nil
+        activeStreamSessionID = nil
+        activeControlReadiness = []
+        activeMediaReadiness = []
+        streamLaunchUI.isLaunching = false
+        session.activeHostID = nil
+        session.lastError = nil
+        session.phase = .disconnected
+        renderState.policy = .idle
+        refreshMacInputSurfacePolicy()
+    }
+
     func launchSelectedApp() async {
-        guard let host = selectedHost, let app = selectedApp else {
+        await launchSelectedApp(in: primaryWorkspaceReference)
+    }
+
+    func launchSelectedApp(in workspace: ProductWorkspaceReference) async {
+        guard let launchSelection = streamLaunchSelection(in: workspace) else {
             streamLaunchUI.errorMessage = "Select a host and app first."
             return
         }
+        let host = launchSelection.host
+        let app = launchSelection.app
 
         guard activeHostDestructiveOwner?.hostID != host.id else {
             return
         }
 
-        guard activeStreamSessionID == nil else {
+        guard activeProductSessionOwner == nil,
+              activeStreamSessionID == nil else {
             return
         }
 
@@ -2567,21 +2669,38 @@ final class AppModel: ApplicationInputSink {
         }
 
         let sessionID = UUID()
-        var didPrepareSession = false
+        let owner = ProductSessionOwner(
+            workspace: workspace,
+            sessionID: sessionID
+        )
+        activeProductSessionOwner = owner
+        activeStreamSessionID = sessionID
+        activeControlReadiness = []
+        activeMediaReadiness = []
+        clearStreamActionPresentation()
+        streamLaunchUI.isLaunching = true
+        session.activeHostID = host.id
+        session.lastError = nil
+        if workspace == primaryWorkspaceReference {
+            navigationSelection = .stream
+        } else {
+            _ = try? workspaceRegistry.update(workspace) {
+                $0.navigationSelection = .stream
+            }
+        }
+        var didStartProvider = false
         do {
             let snapshot = try await streamSessionCoordinator.prepare(
                 request,
                 sessionID: sessionID
             )
-            activeStreamSessionID = sessionID
-            didPrepareSession = true
-            activeControlReadiness = []
-            activeMediaReadiness = []
-            clearStreamActionPresentation()
-            streamLaunchUI.isLaunching = true
-            session.activeHostID = host.id
-            session.lastError = nil
-            navigationSelection = .stream
+            guard productSessionLaunchIsCurrent(
+                owner: owner,
+                selection: launchSelection
+            ) else {
+                await invalidatePreparedProductSession(owner)
+                return
+            }
             applySessionSnapshot(snapshot)
 
             var receivedTerminalEvent = false
@@ -2589,32 +2708,49 @@ final class AppModel: ApplicationInputSink {
                 sessionID: sessionID,
                 request: request
             )
+            didStartProvider = true
+            guard productSessionOwnerIsCurrent(owner) else {
+                await stopStreamInternally(expectedOwner: owner)
+                return
+            }
             for try await event in events {
-                guard activeStreamSessionID == sessionID else { return }
+                guard productSessionOwnerIsCurrent(owner) else {
+                    await stopStreamInternally(expectedOwner: owner)
+                    return
+                }
                 try await consumeSessionControlEvent(
                     event,
-                    sessionID: sessionID,
+                    owner: owner,
                     sessionControlProvider: sessionControlProvider
                 )
+                guard productSessionOwnerIsCurrent(owner) else {
+                    await stopStreamInternally(expectedOwner: owner)
+                    return
+                }
                 if case .terminated = event {
                     receivedTerminalEvent = true
                 }
             }
 
-            guard activeStreamSessionID == sessionID else { return }
+            guard productSessionOwnerIsCurrent(owner) else { return }
             guard receivedTerminalEvent else {
                 throw SessionApplicationError.incompleteControlStream
             }
+            activeProductSessionOwner = nil
             activeStreamSessionID = nil
             streamLaunchUI.isLaunching = false
         } catch {
-            guard activeStreamSessionID == nil || activeStreamSessionID == sessionID else {
+            guard activeProductSessionOwner == nil
+                    || activeProductSessionOwner == owner else {
                 return
             }
-            guard activeStreamSessionID == sessionID else {
-                if !didPrepareSession {
-                    failStreamSession(error, sessionID: nil)
-                }
+            guard activeProductSessionOwner == owner,
+                  activeStreamSessionID == sessionID else {
+                return
+            }
+            if !productSessionOwnerIsCurrent(owner),
+               error is SessionApplicationError {
+                await stopStreamInternally(expectedOwner: owner)
                 return
             }
             await stopMediaEnvironment(sessionID: sessionID)
@@ -2623,15 +2759,38 @@ final class AppModel: ApplicationInputSink {
                 sessionID: sessionID
             )
             failStreamSession(error, sessionID: sessionID)
-            await sessionControlProvider.stop(sessionID: sessionID)
+            if didStartProvider {
+                await sessionControlProvider.stop(sessionID: sessionID)
+            }
         }
     }
 
     func stopStream() async {
+        _ = await stopStream(in: primaryWorkspaceReference)
+    }
+
+    @discardableResult
+    func stopStream(in workspace: ProductWorkspaceReference) async -> Bool {
+        guard workspaceRegistry.state(for: workspace) != nil,
+              let owner = activeProductSessionOwner,
+              owner.workspace == workspace,
+              productSessionOwnerIsCurrent(owner) else {
+            return false
+        }
+        return await stopStreamInternally(expectedOwner: owner)
+    }
+
+    @discardableResult
+    private func stopStreamInternally(
+        expectedOwner: ProductSessionOwner? = nil
+    ) async -> Bool {
         clearStreamActionPresentation()
-        guard let sessionID = activeStreamSessionID,
+        guard let owner = activeProductSessionOwner,
+              expectedOwner == nil || expectedOwner == owner,
+              let sessionID = activeStreamSessionID,
+              owner.sessionID == sessionID,
               let sessionControlProvider = runtimeProviders.sessionControl else {
-            return
+            return false
         }
         let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
             reason: .stopped
@@ -2640,6 +2799,11 @@ final class AppModel: ApplicationInputSink {
             reason: .stop,
             requiresReleaseBarrier: !platformOwnsReleaseBarrier
         )
+        guard activeProductSessionOwner == owner,
+              activeStreamSessionID == sessionID else {
+            return false
+        }
+        activeProductSessionOwner = nil
         activeStreamSessionID = nil
         streamLaunchUI.isLaunching = false
         session.phase = .stopping
@@ -2652,6 +2816,7 @@ final class AppModel: ApplicationInputSink {
         session.lastError = nil
         session.phase = .disconnected
         renderState.policy = .idle
+        return true
     }
 
     func updateSpatialAudioPreferences(
@@ -2659,20 +2824,24 @@ final class AppModel: ApplicationInputSink {
     ) async throws {
         guard preferences != spatialAudioPreferences else { return }
         settings.audio = AudioPreferences(preferences)
-        guard let sessionID = activeStreamSessionID,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration else {
             return
         }
         try await applySpatialAudioPreferences(
             preferences,
-            sessionID: sessionID,
+            owner: owner,
             mediaGeneration: mediaGeneration
         )
     }
 
     func sendRemoteInput(_ event: RemoteInputEvent) async throws {
-        guard let sessionID = activeStreamSessionID,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration else {
             throw SessionMediaEnvironmentError.inactiveSession
@@ -2688,7 +2857,8 @@ final class AppModel: ApplicationInputSink {
         do {
             try await sessionMediaEnvironment.sendInput(application)
         } catch {
-            if activeStreamSessionID == sessionID,
+            if productSessionOwnerIsCurrent(owner),
+               activeStreamSessionID == sessionID,
                activeMediaSessionID == sessionID,
                activeMediaGeneration == mediaGeneration {
                 isMacInputGenerationFailed = true
@@ -2875,6 +3045,11 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func applySessionSnapshot(_ snapshot: StreamSessionSnapshot) {
+        guard let owner = activeProductSessionOwner,
+              owner.sessionID == snapshot.sessionID,
+              activeStreamSessionID == snapshot.sessionID else {
+            return
+        }
         defer {
             refreshMacInputSurfacePolicy()
             refreshHDRRenderResolution()
@@ -2883,6 +3058,7 @@ final class AppModel: ApplicationInputSink {
         case .idle, .disconnected:
             clearActiveVideoPresentation()
             clearActiveAudioRuntime()
+            activeProductSessionOwner = nil
             activeStreamSessionID = nil
             activeControlReadiness = []
             activeMediaReadiness = []
@@ -2948,22 +3124,29 @@ final class AppModel: ApplicationInputSink {
 
     private func consumeSessionControlEvent(
         _ event: SessionControlEvent,
-        sessionID: UUID,
+        owner: ProductSessionOwner,
         sessionControlProvider: any SessionControlProvider
     ) async throws {
+        guard productSessionOwnerIsCurrent(owner) else {
+            throw SessionApplicationError.staleProductSessionOwner
+        }
+        let sessionID = owner.sessionID
         switch event {
         case let .channelsReady(reportedReadiness):
             activeControlReadiness = reportedReadiness.intersection(.control)
-            try await applyAggregatedReadiness(sessionID: sessionID)
+            try await applyAggregatedReadiness(owner: owner)
 
         case let .negotiated(configuration):
             let snapshot = try await streamSessionCoordinator.apply(
                 event,
                 sessionID: sessionID
             )
+            guard productSessionOwnerIsCurrent(owner) else {
+                throw SessionApplicationError.staleProductSessionOwner
+            }
             applySessionSnapshot(snapshot)
             _ = try await startMediaEnvironment(
-                sessionID: sessionID,
+                owner: owner,
                 configuration: configuration,
                 sessionControlProvider: sessionControlProvider
             )
@@ -2975,18 +3158,26 @@ final class AppModel: ApplicationInputSink {
                 event,
                 sessionID: sessionID
             )
+            guard productSessionOwnerIsCurrent(owner) else {
+                throw SessionApplicationError.staleProductSessionOwner
+            }
             applySessionSnapshot(snapshot)
             await stopMediaEnvironment(
                 sessionID: sessionID,
                 inputReason: .replacement
             )
-            guard activeStreamSessionID == sessionID else { return }
+            guard productSessionOwnerIsCurrent(owner) else {
+                throw SessionApplicationError.staleProductSessionOwner
+            }
 
         case let .videoColorMetadata(metadata):
             let snapshot = try await streamSessionCoordinator.apply(
                 event,
                 sessionID: sessionID
             )
+            guard productSessionOwnerIsCurrent(owner) else {
+                throw SessionApplicationError.staleProductSessionOwner
+            }
             applySessionSnapshot(snapshot)
             if activeMediaSessionID == sessionID {
                 updateNegotiatedVideoColorMetadata(metadata)
@@ -2994,6 +3185,9 @@ final class AppModel: ApplicationInputSink {
                     metadata,
                     sessionID: sessionID
                 )
+                guard productSessionOwnerIsCurrent(owner) else {
+                    throw SessionApplicationError.staleProductSessionOwner
+                }
             }
 
         case .terminated:
@@ -3001,6 +3195,9 @@ final class AppModel: ApplicationInputSink {
                 event,
                 sessionID: sessionID
             )
+            guard productSessionOwnerIsCurrent(owner) else {
+                throw SessionApplicationError.staleProductSessionOwner
+            }
             applySessionSnapshot(snapshot)
             await stopMediaEnvironment(
                 sessionID: sessionID,
@@ -3012,15 +3209,22 @@ final class AppModel: ApplicationInputSink {
                 event,
                 sessionID: sessionID
             )
+            guard productSessionOwnerIsCurrent(owner) else {
+                throw SessionApplicationError.staleProductSessionOwner
+            }
             applySessionSnapshot(snapshot)
         }
     }
 
     private func startMediaEnvironment(
-        sessionID: UUID,
+        owner: ProductSessionOwner,
         configuration: NegotiatedSessionConfiguration,
         sessionControlProvider: any SessionControlProvider
     ) async throws -> Bool {
+        let sessionID = owner.sessionID
+        guard productSessionOwnerIsCurrent(owner) else {
+            throw SessionApplicationError.staleProductSessionOwner
+        }
         guard activeMediaSessionID == nil else {
             throw SessionMediaEnvironmentError.sessionAlreadyActive
         }
@@ -3029,13 +3233,13 @@ final class AppModel: ApplicationInputSink {
             configuration: configuration,
             controlProvider: sessionControlProvider
         )
-        guard activeStreamSessionID == sessionID else {
+        guard productSessionOwnerIsCurrent(owner) else {
             clearTVVisionPlatformPresentationRuntime()
             _ = await sessionMediaEnvironment.stop(sessionID: sessionID)
             return false
         }
         let environmentSnapshot = await sessionMediaEnvironment.snapshot()
-        guard activeStreamSessionID == sessionID,
+        guard productSessionOwnerIsCurrent(owner),
               environmentSnapshot.sessionID == sessionID,
               environmentSnapshot.generation > 0 else {
             clearTVVisionPlatformPresentationRuntime()
@@ -3055,7 +3259,7 @@ final class AppModel: ApplicationInputSink {
         }
         try await applySpatialAudioPreferences(
             spatialAudioPreferences,
-            sessionID: sessionID,
+            owner: owner,
             mediaGeneration: environmentSnapshot.generation
         )
         beginVideoPresentation(
@@ -3070,7 +3274,7 @@ final class AppModel: ApplicationInputSink {
         appliedLifecycleApplication = nil
         let lifecycleTask = scheduleLifecycleApplication()
         await lifecycleTask?.value
-        guard activeStreamSessionID == sessionID,
+        guard productSessionOwnerIsCurrent(owner),
               activeMediaSessionID == sessionID,
               activeMediaGeneration == environmentSnapshot.generation else {
             return false
@@ -3082,7 +3286,7 @@ final class AppModel: ApplicationInputSink {
                     guard let self else { return }
                     await self.consumeMediaEnvironmentEvent(
                         event,
-                        sessionID: sessionID,
+                        owner: owner,
                         sessionControlProvider: sessionControlProvider
                     )
                 }
@@ -3092,7 +3296,7 @@ final class AppModel: ApplicationInputSink {
                 guard let self else { return }
                 await self.failFromMediaEnvironment(
                     error,
-                    sessionID: sessionID,
+                    owner: owner,
                     sessionControlProvider: sessionControlProvider
                 )
             }
@@ -3102,11 +3306,16 @@ final class AppModel: ApplicationInputSink {
 
     private func consumeMediaEnvironmentEvent(
         _ event: SessionMediaEnvironmentEvent,
-        sessionID: UUID,
+        owner: ProductSessionOwner,
         sessionControlProvider: any SessionControlProvider
     ) async {
-        guard activeStreamSessionID == sessionID,
+        let sessionID = owner.sessionID
+        guard productSessionOwnerOwnsActiveReservation(owner),
               activeMediaSessionID == sessionID else { return }
+        guard productSessionOwnerIsCurrent(owner) else {
+            _ = await stopStreamInternally(expectedOwner: owner)
+            return
+        }
         switch event {
         case let .readiness(readiness):
             let previousReadiness = activeMediaReadiness
@@ -3135,11 +3344,11 @@ final class AppModel: ApplicationInputSink {
             }
             refreshTVRemoteSurfacePressOwnership()
             do {
-                try await applyAggregatedReadiness(sessionID: sessionID)
+                try await applyAggregatedReadiness(owner: owner)
             } catch {
                 await failFromMediaEnvironment(
                     error,
-                    sessionID: sessionID,
+                    owner: owner,
                     sessionControlProvider: sessionControlProvider
                 )
             }
@@ -3168,9 +3377,13 @@ final class AppModel: ApplicationInputSink {
 
     private func applySpatialAudioPreferences(
         _ preferences: SessionSpatialAudioPreferences,
-        sessionID: UUID,
+        owner: ProductSessionOwner,
         mediaGeneration: UInt64
     ) async throws {
+        let sessionID = owner.sessionID
+        guard productSessionOwnerIsCurrent(owner) else {
+            throw SessionMediaEnvironmentError.staleAudioApplication
+        }
         let application = SessionSpatialAudioPreferenceApplication(
             sessionID: sessionID,
             mediaGeneration: mediaGeneration,
@@ -3181,14 +3394,14 @@ final class AppModel: ApplicationInputSink {
                 application
             )
         } catch {
-            guard activeStreamSessionID == sessionID,
+            guard productSessionOwnerIsCurrent(owner),
                   activeMediaSessionID == sessionID,
                   activeMediaGeneration == mediaGeneration else {
                 throw SessionMediaEnvironmentError.staleAudioApplication
             }
             throw error
         }
-        guard activeStreamSessionID == sessionID,
+        guard productSessionOwnerIsCurrent(owner),
               activeMediaSessionID == sessionID,
               activeMediaGeneration == mediaGeneration else {
             throw SessionMediaEnvironmentError.staleAudioApplication
@@ -3199,7 +3412,9 @@ final class AppModel: ApplicationInputSink {
         _ state: SessionMediaAudioRuntimeState,
         sessionID: UUID
     ) {
-        guard activeStreamSessionID == sessionID,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              activeStreamSessionID == sessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration,
               state.sessionID == sessionID,
@@ -3242,20 +3457,34 @@ final class AppModel: ApplicationInputSink {
         )
     }
 
-    private func applyAggregatedReadiness(sessionID: UUID) async throws {
+    private func applyAggregatedReadiness(
+        owner: ProductSessionOwner
+    ) async throws {
+        guard productSessionOwnerIsCurrent(owner) else {
+            throw SessionApplicationError.staleProductSessionOwner
+        }
+        let sessionID = owner.sessionID
         let snapshot = try await streamSessionCoordinator.apply(
             .channelsReady(activeControlReadiness.union(activeMediaReadiness)),
             sessionID: sessionID
         )
+        guard productSessionOwnerIsCurrent(owner) else {
+            throw SessionApplicationError.staleProductSessionOwner
+        }
         applySessionSnapshot(snapshot)
     }
 
     private func failFromMediaEnvironment(
         _ error: Error,
-        sessionID: UUID,
+        owner: ProductSessionOwner,
         sessionControlProvider: any SessionControlProvider
     ) async {
-        guard activeStreamSessionID == sessionID else { return }
+        let sessionID = owner.sessionID
+        guard productSessionOwnerOwnsActiveReservation(owner) else { return }
+        guard productSessionOwnerIsCurrent(owner) else {
+            _ = await stopStreamInternally(expectedOwner: owner)
+            return
+        }
         let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
             reason: .inputUnavailable
         )
@@ -3263,6 +3492,11 @@ final class AppModel: ApplicationInputSink {
             reason: .inputChannelFailure,
             requiresReleaseBarrier: !platformOwnsReleaseBarrier
         )
+        guard productSessionOwnerOwnsActiveReservation(owner) else { return }
+        guard productSessionOwnerIsCurrent(owner) else {
+            _ = await stopStreamInternally(expectedOwner: owner)
+            return
+        }
         invalidateLifecycleApplicationPump()
         clearTVVisionPlatformPresentationRuntime(
             preservingTerminalState: true
@@ -3319,7 +3553,9 @@ final class AppModel: ApplicationInputSink {
 
     @discardableResult
     private func scheduleLifecycleApplication() -> Task<Void, Never>? {
-        guard activeStreamSessionID != nil,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              activeStreamSessionID != nil,
               activeMediaSessionID != nil,
               activeMediaGeneration != nil else {
             return nil
@@ -3339,7 +3575,10 @@ final class AppModel: ApplicationInputSink {
     private func drainLifecycleApplications(operationID: UUID) async {
         while !Task.isCancelled,
               lifecycleApplicationOperationID == operationID,
+              let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
               let sessionID = activeStreamSessionID,
+              owner.sessionID == sessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration {
             let application = SessionLifecycleApplication(
@@ -3360,6 +3599,7 @@ final class AppModel: ApplicationInputSink {
             } catch {
                 guard !Task.isCancelled,
                       lifecycleApplicationOperationID == operationID,
+                      productSessionOwnerIsCurrent(owner),
                       activeStreamSessionID == sessionID,
                       activeMediaSessionID == sessionID,
                       activeMediaGeneration == mediaGeneration else {
@@ -3372,7 +3612,7 @@ final class AppModel: ApplicationInputSink {
                 if let sessionControlProvider = runtimeProviders.sessionControl {
                     await failFromMediaEnvironment(
                         error,
-                        sessionID: sessionID,
+                        owner: owner,
                         sessionControlProvider: sessionControlProvider
                     )
                 }
@@ -3381,6 +3621,7 @@ final class AppModel: ApplicationInputSink {
 
             guard !Task.isCancelled,
                   lifecycleApplicationOperationID == operationID,
+                  productSessionOwnerIsCurrent(owner),
                   activeStreamSessionID == sessionID,
                   activeMediaSessionID == sessionID,
                   activeMediaGeneration == mediaGeneration else {
@@ -3407,7 +3648,9 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func activateMacInputGenerationIfNeeded() async {
-        guard activeMacInputGeneration == nil,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              activeMacInputGeneration == nil,
               let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
               activeMediaGeneration != nil,
@@ -3421,7 +3664,8 @@ final class AppModel: ApplicationInputSink {
         let generation = await macSessionInputCoordinator.activate(
             isFocusEligible: initialEligibility
         )
-        guard activeStreamSessionID == sessionID,
+        guard productSessionOwnerIsCurrent(owner),
+              activeStreamSessionID == sessionID,
               activeMediaSessionID == sessionID,
               activeMediaGeneration != nil,
               activeMediaReadiness.contains(.input) else {
@@ -3514,6 +3758,11 @@ final class AppModel: ApplicationInputSink {
            activeStreamSessionID != sessionID {
             return
         }
+        if let sessionID,
+           activeProductSessionOwner != nil,
+           activeProductSessionOwner?.sessionID != sessionID {
+            return
+        }
 
         invalidateLifecycleApplicationPump()
         clearTVVisionPlatformPresentationRuntime(
@@ -3526,6 +3775,7 @@ final class AppModel: ApplicationInputSink {
             message: diagnostic.summary
         )
 
+        activeProductSessionOwner = nil
         activeStreamSessionID = nil
         activeMediaSessionID = nil
         activeMediaGeneration = nil
@@ -3555,6 +3805,9 @@ final class AppModel: ApplicationInputSink {
         }
         let admitsInput = hasPlatformLifecycle
             && session.isStreaming
+            && (activeProductSessionOwner.map {
+                productSessionOwnerIsCurrent($0)
+            } ?? false)
             && lifecycleAllowsInput
             && activeStreamSessionID != nil
             && activeMediaSessionID == activeStreamSessionID
@@ -4110,7 +4363,9 @@ final class AppModel: ApplicationInputSink {
         sessionID: UUID
     ) {
         let snapshot = state.snapshot
-        guard state.sessionID == sessionID,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              state.sessionID == sessionID,
               state.mediaGeneration == snapshot.ownership.mediaGeneration,
               activeStreamSessionID == sessionID,
               activeMediaSessionID == sessionID,
@@ -4918,7 +5173,9 @@ final class AppModel: ApplicationInputSink {
         sessionID: UUID
     ) {
         let application = state.application
-        guard !isMobileRuntimeRevisionExhausted,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              !isMobileRuntimeRevisionExhausted,
               activeStreamSessionID == sessionID,
               activeMediaSessionID == sessionID,
               application.sessionID == sessionID,
@@ -5061,7 +5318,9 @@ final class AppModel: ApplicationInputSink {
 
     private func queueMobileRuntimeApplication() {
         guard !isMobileRuntimeRevisionExhausted else { return }
-        guard let sessionID = activeStreamSessionID,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration,
               mobilePictureInPictureGenerationOrdinal > 0,
@@ -5141,8 +5400,9 @@ final class AppModel: ApplicationInputSink {
         )
         Task { [weak self] in
             guard let self,
-                  self.activeStreamSessionID == sessionID else { return }
-            await self.stopStream()
+                  let owner = self.activeProductSessionOwner,
+                  owner.sessionID == sessionID else { return }
+            _ = await self.stopStreamInternally(expectedOwner: owner)
         }
     }
 
@@ -5256,6 +5516,8 @@ final class AppModel: ApplicationInputSink {
     ) {
         guard !isMobilePictureInPictureGenerationExhausted,
               settings.continuity.pictureInPictureEnabled,
+              let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
               let sessionID = activeStreamSessionID,
               activeMediaSessionID == sessionID,
               let mediaGeneration = activeMediaGeneration,
@@ -5564,7 +5826,9 @@ final class AppModel: ApplicationInputSink {
         sessionID: UUID
     ) {
         let ownership = event.ownership
-        guard activeStreamSessionID == sessionID,
+        guard let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
+              activeStreamSessionID == sessionID,
               activeMediaSessionID == sessionID,
               ownership.sessionID == sessionID,
               ownership.mediaGeneration == activeMediaGeneration,
@@ -5639,6 +5903,8 @@ final class AppModel: ApplicationInputSink {
 
     private func refreshHDRRenderResolution() {
         guard session.isStreaming,
+              let owner = activeProductSessionOwner,
+              productSessionOwnerIsCurrent(owner),
               activeStreamSessionID != nil,
               activeMediaSessionID == activeStreamSessionID,
               activeMediaGeneration != nil,
