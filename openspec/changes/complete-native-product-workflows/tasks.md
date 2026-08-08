@@ -20,7 +20,7 @@
 ## 3. Session Recovery And Stream Controls
 
 - [x] 3.1 Record and validate the initiating workspace identity/generation alongside the existing active session and media/input generation owners.
-- [ ] 3.2 Define an actual-state session command reducer for launch, reconnect, resume, stop, unavailable providers, remote termination, reconnect exhaustion, and terminal failures.
+- [x] 3.2 Define an actual-state session command reducer for launch, reconnect, resume, stop, unavailable providers, remote termination, reconnect exhaustion, and terminal failures.
 - [ ] 3.3 Replace launch/recovery display strings with typed product issues and checked actions that revalidate workspace and session ownership at invocation.
 - [ ] 3.4 Make cancel, retry, reconnect, and repeated stop idempotent across overlay, window close, scene transition, and replacement completion paths.
 - [ ] 3.5 Bind stream overlay visibility, focus handoff, local commands, and stop confirmation to the owning workspace while keeping system-reserved commands out of remote input.

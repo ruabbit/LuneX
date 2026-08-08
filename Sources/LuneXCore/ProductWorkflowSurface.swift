@@ -252,3 +252,174 @@ struct ProductAppCatalogSurface: Equatable, Sendable {
             && !canRetry
     }
 }
+
+enum ProductSessionCommandUnavailableReason: Equatable, Sendable {
+    case staleWorkspace
+    case providersUnavailable
+    case selectionRequired
+    case ownedByAnotherWorkspace
+    case staleSessionOwner
+    case noActiveSession
+    case sessionActive
+    case commandInProgress
+    case terminalSession
+    case inconsistentActualState
+}
+
+enum ProductSessionCommandDisposition: Equatable, Sendable {
+    case available
+    case inProgress
+    case unavailable(ProductSessionCommandUnavailableReason)
+}
+
+struct ProductSessionCommandInput: Equatable, Sendable {
+    let workspaceIsCurrent: Bool
+    let ownership: ProductSessionWorkspaceOwnership
+    let phase: ProductSessionActualPhase
+    let hasLaunchSelection: Bool
+    let canLaunchTransport: Bool
+    let canControlSession: Bool
+}
+
+struct ProductSessionCommandState: Equatable, Sendable {
+    let phase: ProductSessionActualPhase
+    let launch: ProductSessionCommandDisposition
+    let reconnect: ProductSessionCommandDisposition
+    let resume: ProductSessionCommandDisposition
+    let stop: ProductSessionCommandDisposition
+
+    init(_ input: ProductSessionCommandInput) {
+        phase = input.phase
+        let resolved: (
+            launch: ProductSessionCommandDisposition,
+            reconnect: ProductSessionCommandDisposition,
+            resume: ProductSessionCommandDisposition,
+            stop: ProductSessionCommandDisposition
+        )
+
+        if !input.workspaceIsCurrent {
+            resolved = Self.unavailable(.staleWorkspace)
+        } else {
+            resolved = switch input.ownership {
+            case .otherWorkspace:
+                Self.unavailable(.ownedByAnotherWorkspace)
+            case .staleReservation:
+                Self.unavailable(.staleSessionOwner)
+            case .current:
+                Self.resolveOwned(input)
+            case .none:
+                Self.resolveUnowned(input)
+            }
+        }
+
+        launch = resolved.launch
+        reconnect = resolved.reconnect
+        resume = resolved.resume
+        stop = resolved.stop
+    }
+
+    private static func resolveOwned(
+        _ input: ProductSessionCommandInput
+    ) -> (
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition
+    ) {
+        let stop = input.canControlSession
+            ? ProductSessionCommandDisposition.available
+            : .unavailable(.providersUnavailable)
+        switch input.phase {
+        case .launching, .waitingForTransport:
+            return (
+                .inProgress,
+                .unavailable(.sessionActive),
+                .unavailable(.sessionActive),
+                stop
+            )
+        case .streaming:
+            return (
+                .unavailable(.sessionActive),
+                .unavailable(.sessionActive),
+                .unavailable(.sessionActive),
+                stop
+            )
+        case .reconnecting:
+            return (
+                .unavailable(.sessionActive),
+                .inProgress,
+                .inProgress,
+                stop
+            )
+        case .stopping:
+            return (
+                .unavailable(.commandInProgress),
+                .unavailable(.commandInProgress),
+                .unavailable(.commandInProgress),
+                .inProgress
+            )
+        case .idle, .remoteTerminated, .reconnectExhausted, .failed:
+            return unavailable(.inconsistentActualState)
+        }
+    }
+
+    private static func resolveUnowned(
+        _ input: ProductSessionCommandInput
+    ) -> (
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition
+    ) {
+        switch input.phase {
+        case .idle:
+            return (
+                newSessionDisposition(input),
+                .unavailable(.noActiveSession),
+                .unavailable(.noActiveSession),
+                .unavailable(.noActiveSession)
+            )
+        case .remoteTerminated, .reconnectExhausted, .failed:
+            let reconnect = newSessionDisposition(input)
+            return (
+                reconnect,
+                reconnect,
+                .unavailable(.terminalSession),
+                .unavailable(.noActiveSession)
+            )
+        case .stopping:
+            return (
+                .unavailable(.commandInProgress),
+                .unavailable(.commandInProgress),
+                .unavailable(.commandInProgress),
+                .inProgress
+            )
+        case .launching, .waitingForTransport, .streaming, .reconnecting:
+            return unavailable(.inconsistentActualState)
+        }
+    }
+
+    private static func newSessionDisposition(
+        _ input: ProductSessionCommandInput
+    ) -> ProductSessionCommandDisposition {
+        guard input.canLaunchTransport else {
+            return .unavailable(.providersUnavailable)
+        }
+        guard input.hasLaunchSelection else {
+            return .unavailable(.selectionRequired)
+        }
+        return .available
+    }
+
+    private static func unavailable(
+        _ reason: ProductSessionCommandUnavailableReason
+    ) -> (
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition,
+        ProductSessionCommandDisposition
+    ) {
+        let value = ProductSessionCommandDisposition.unavailable(reason)
+        return (value, value, value, value)
+    }
+}

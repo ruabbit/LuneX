@@ -109,6 +109,25 @@ struct ProductSessionOwner: Hashable, Sendable {
     let sessionID: UUID
 }
 
+enum ProductSessionActualPhase: Equatable, Sendable {
+    case idle
+    case launching
+    case waitingForTransport
+    case streaming
+    case reconnecting(attempt: Int?)
+    case stopping
+    case remoteTerminated
+    case reconnectExhausted
+    case failed
+}
+
+enum ProductSessionWorkspaceOwnership: Equatable, Sendable {
+    case none
+    case current
+    case otherWorkspace
+    case staleReservation
+}
+
 enum ProductActionScope: Hashable, Sendable {
     case application
     case workspace(ProductWorkspaceReference)

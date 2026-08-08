@@ -554,6 +554,7 @@ final class AppModel: ApplicationInputSink {
     private var activeHostDestructiveOwner: ProductHostActionOwner?
     private var hostDestructiveOperationInFlight = false
     private(set) var activeProductSessionOwner: ProductSessionOwner?
+    private(set) var productSessionActualPhase: ProductSessionActualPhase = .idle
     private var activeStreamSessionID: UUID?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
@@ -968,6 +969,35 @@ final class AppModel: ApplicationInputSink {
 
     var hasActiveStreamSession: Bool {
         activeStreamSessionID != nil
+    }
+
+    func sessionCommandState(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductSessionCommandState {
+        let workspaceIsCurrent = workspaceRegistry.state(for: workspace) != nil
+        let ownership: ProductSessionWorkspaceOwnership
+        if let owner = activeProductSessionOwner {
+            if !productSessionOwnerOwnsActiveReservation(owner)
+                || workspaceRegistry.state(for: owner.workspace) == nil {
+                ownership = .staleReservation
+            } else if owner.workspace == workspace {
+                ownership = .current
+            } else {
+                ownership = .otherWorkspace
+            }
+        } else if activeStreamSessionID != nil {
+            ownership = .staleReservation
+        } else {
+            ownership = .none
+        }
+        return ProductSessionCommandState(ProductSessionCommandInput(
+            workspaceIsCurrent: workspaceIsCurrent,
+            ownership: ownership,
+            phase: productSessionActualPhase,
+            hasLaunchSelection: streamLaunchSelection(in: workspace) != nil,
+            canLaunchTransport: isStreamTransportAvailable,
+            canControlSession: runtimeProviders.sessionControl != nil
+        ))
     }
 
     var isPairingPINValid: Bool {
@@ -2597,6 +2627,7 @@ final class AppModel: ApplicationInputSink {
               activeStreamSessionID == owner.sessionID else { return }
         activeProductSessionOwner = nil
         activeStreamSessionID = nil
+        productSessionActualPhase = .idle
         activeControlReadiness = []
         activeMediaReadiness = []
         streamLaunchUI.isLaunching = false
@@ -2675,6 +2706,7 @@ final class AppModel: ApplicationInputSink {
         )
         activeProductSessionOwner = owner
         activeStreamSessionID = sessionID
+        productSessionActualPhase = .launching
         activeControlReadiness = []
         activeMediaReadiness = []
         clearStreamActionPresentation()
@@ -2792,6 +2824,7 @@ final class AppModel: ApplicationInputSink {
               let sessionControlProvider = runtimeProviders.sessionControl else {
             return false
         }
+        productSessionActualPhase = .stopping
         let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
             reason: .stopped
         )
@@ -2816,6 +2849,7 @@ final class AppModel: ApplicationInputSink {
         session.lastError = nil
         session.phase = .disconnected
         renderState.policy = .idle
+        productSessionActualPhase = .idle
         return true
     }
 
@@ -3044,7 +3078,10 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
-    private func applySessionSnapshot(_ snapshot: StreamSessionSnapshot) {
+    private func applySessionSnapshot(
+        _ snapshot: StreamSessionSnapshot,
+        remoteTermination: Bool = false
+    ) {
         guard let owner = activeProductSessionOwner,
               owner.sessionID == snapshot.sessionID,
               activeStreamSessionID == snapshot.sessionID else {
@@ -3056,6 +3093,9 @@ final class AppModel: ApplicationInputSink {
         }
         switch snapshot.stage {
         case .idle, .disconnected:
+            productSessionActualPhase = remoteTermination
+                ? .remoteTerminated
+                : .idle
             clearActiveVideoPresentation()
             clearActiveAudioRuntime()
             activeProductSessionOwner = nil
@@ -3080,14 +3120,17 @@ final class AppModel: ApplicationInputSink {
             }
 
         case .resolvingHost, .validatingPairing, .preparingParameters, .launching:
+            productSessionActualPhase = .launching
             session.phase = .connecting(stage: "Launching Stream")
             renderState.policy = .idle
 
         case .readyForTransport:
+            productSessionActualPhase = .waitingForTransport
             session.phase = .connecting(stage: pendingTransportMessage(for: snapshot))
             renderState.policy = .idle
 
         case .streaming:
+            productSessionActualPhase = .streaming
             diagnostics.clearActionableEvents(in: [.transport])
             streamLaunchUI.errorMessage = nil
             streamLaunchUI.actionMessage = nil
@@ -3099,6 +3142,9 @@ final class AppModel: ApplicationInputSink {
             updateRenderPreferences()
 
         case .reconnecting:
+            productSessionActualPhase = .reconnecting(
+                attempt: snapshot.reconnectAttempt
+            )
             clearActiveAudioRuntime()
             streamLaunchUI.isLaunching = false
             let suffix = snapshot.reconnectAttempt.map { " (Attempt \($0))" } ?? ""
@@ -3106,6 +3152,7 @@ final class AppModel: ApplicationInputSink {
             renderState.policy = .idle
 
         case .stopping:
+            productSessionActualPhase = .stopping
             clearActiveAudioRuntime()
             streamLaunchUI.isLaunching = false
             session.phase = .stopping
@@ -3198,7 +3245,7 @@ final class AppModel: ApplicationInputSink {
             guard productSessionOwnerIsCurrent(owner) else {
                 throw SessionApplicationError.staleProductSessionOwner
             }
-            applySessionSnapshot(snapshot)
+            applySessionSnapshot(snapshot, remoteTermination: true)
             await stopMediaEnvironment(
                 sessionID: sessionID,
                 inputReason: .remoteTermination
@@ -3792,6 +3839,12 @@ final class AppModel: ApplicationInputSink {
         session.lastError = sessionError
         session.phase = .failed(sessionError)
         renderState.policy = .idle
+        if let failure = error as? StreamNegotiationFailure,
+           failure.code == .reconnectExhausted {
+            productSessionActualPhase = .reconnectExhausted
+        } else {
+            productSessionActualPhase = .failed
+        }
         refreshMacInputSurfacePolicy()
         diagnostics.record(diagnostic)
     }

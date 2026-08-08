@@ -399,10 +399,43 @@ invalidation, and stale-owner teardown clear `activeProductSessionOwner` and
 `activeStreamSessionID` together and release media/input ownership. The task
 3.1 regression covers primary compatibility ownership, explicit ownership,
 non-owner stop rejection, same-ID replacement rejection, control-only and
-media-only stale cleanup, normal stop, and remote termination. The complete
-actual-state command reducer, typed recovery issues/actions, concurrent stop
-idempotence, overlay ownership, and owning-window close policy remain tasks
-3.2, 3.3, 3.4, 3.5, and 4.4 respectively.
+media-only stale cleanup, normal stop, and remote termination.
+
+### Actual-state session command reducer
+
+`ProductSessionActualPhase` is the product-layer projection of the accepted
+session snapshot and teardown path. It distinguishes idle, launching, waiting
+for transport, streaming, reconnecting with the optional current attempt,
+stopping, remote termination, typed reconnect exhaustion, and other terminal
+failure. It is updated when the product reservation is installed, whenever a
+current session snapshot is applied, before local teardown begins, and when a
+current failure clears the reservation. It is not inferred from a button press,
+navigation destination, desired setting, or display string.
+
+`ProductSessionCommandState` is a pure reducer for launch, reconnect, resume,
+and stop. Its input combines the actual phase, current workspace validity,
+product-session ownership, current launch selection, complete required stream
+provider availability, and session-control provider availability. Idle launch
+requires a current workspace, a host/app selection, and the complete stream
+inventory. Stop for an owned active session requires only its actual control
+provider. Launch remains in progress during launch/transport preparation;
+reconnect and resume remain in progress while the current runtime is already
+reconnecting; stop is in progress throughout teardown.
+
+Remote termination, reconnect exhaustion, and generic terminal failure no
+longer masquerade as idle. They may admit only a new checked launch/reconnect
+when the current selection and provider inventory still permit it; resume is
+terminally unavailable and no old session remains stoppable. A stale
+workspace, non-owner workspace, stale reservation, or owner/phase mismatch
+fails closed with a stable typed reason. The brief teardown interval after the
+owner/session reservation has been cleared intentionally preserves an unowned
+`.stopping` phase so the command surface cannot offer a new launch before media
+and provider cleanup completes.
+
+This reducer describes command truth but does not yet create or invoke recovery
+action tokens. Typed recovery issues/actions, concurrent repeated-stop result
+sharing, overlay ownership, and owning-window close policy remain tasks 3.3,
+3.4, 3.5, and 4.4 respectively.
 
 ### Host, pairing, and catalog product surfaces
 

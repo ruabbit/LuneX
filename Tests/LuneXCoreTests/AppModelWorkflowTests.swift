@@ -1814,6 +1814,15 @@ final class AppModelWorkflowTests: XCTestCase {
 
             await model.loadInitialState()
             await model.refreshAppsForSelectedHost()
+            let commands = model.sessionCommandState(
+                in: model.primaryWorkspaceReference
+            )
+            XCTAssertEqual(commands.phase, .idle)
+            XCTAssertEqual(
+                commands.launch,
+                .unavailable(.providersUnavailable),
+                "\(missingProvider) must close launch from the actual inventory."
+            )
             await model.launchSelectedApp()
 
             XCTAssertFalse(
@@ -6587,6 +6596,14 @@ final class AppModelWorkflowTests: XCTestCase {
         let owner = try XCTUnwrap(model.activeProductSessionOwner)
         XCTAssertEqual(owner.workspace, workspace)
         XCTAssertEqual(owner.sessionID, record.sessionID)
+        XCTAssertEqual(
+            model.sessionCommandState(in: workspace).stop,
+            .available
+        )
+        XCTAssertEqual(
+            model.sessionCommandState(in: model.primaryWorkspaceReference).stop,
+            .unavailable(.ownedByAnotherWorkspace)
+        )
 
         let nonOwnerStop = await model.stopStream(
             in: model.primaryWorkspaceReference
@@ -6600,6 +6617,151 @@ final class AppModelWorkflowTests: XCTestCase {
         await launch.value
         XCTAssertNil(model.activeProductSessionOwner)
         XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testSessionCommandStateTracksReconnectAndRemoteTermination()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 36,
+                    key: Data(repeating: 0x36, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        XCTAssertEqual(model.sessionCommandState(in: workspace).launch, .available)
+
+        let launch = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        XCTAssertEqual(model.productSessionActualPhase, .launching)
+        XCTAssertEqual(model.sessionCommandState(in: workspace).launch, .inProgress)
+        XCTAssertEqual(model.sessionCommandState(in: workspace).stop, .available)
+
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+        XCTAssertEqual(
+            model.sessionCommandState(in: workspace).launch,
+            .unavailable(.sessionActive)
+        )
+
+        provider.yield(
+            .reconnecting(attempt: 1, reason: "control_unavailable"),
+            sessionID: record.sessionID
+        )
+        await waitUntil {
+            model.productSessionActualPhase == .reconnecting(attempt: 1)
+        }
+        let reconnecting = model.sessionCommandState(in: workspace)
+        XCTAssertEqual(reconnecting.reconnect, .inProgress)
+        XCTAssertEqual(reconnecting.resume, .inProgress)
+        XCTAssertEqual(reconnecting.stop, .available)
+
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launch.value
+
+        let terminated = model.sessionCommandState(in: workspace)
+        XCTAssertEqual(terminated.phase, .remoteTerminated)
+        XCTAssertEqual(terminated.launch, .available)
+        XCTAssertEqual(terminated.reconnect, .available)
+        XCTAssertEqual(terminated.resume, .unavailable(.terminalSession))
+        XCTAssertEqual(terminated.stop, .unavailable(.noActiveSession))
+    }
+
+    func testReconnectExhaustionBecomesTerminalReconnectCommandState()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 37,
+                    key: Data(repeating: 0x37, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launch = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+
+        environment.finish(
+            sessionID: record.sessionID,
+            throwing: StreamNegotiationFailure(
+                code: .reconnectExhausted,
+                subsystem: "reconnect",
+                message: "Reconnect budget exhausted."
+            )
+        )
+        await launch.value
+
+        let terminal = model.sessionCommandState(
+            in: model.primaryWorkspaceReference
+        )
+        XCTAssertEqual(terminal.phase, .reconnectExhausted)
+        XCTAssertEqual(terminal.launch, .available)
+        XCTAssertEqual(terminal.reconnect, .available)
+        XCTAssertEqual(terminal.resume, .unavailable(.terminalSession))
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testSessionCommandStateRemainsStoppingDuringUnownedTeardown()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 38,
+                    key: Data(repeating: 0x38, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let launch = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+
+        environment.blockNextStop()
+        let stop = Task {
+            await model.stopStream(in: model.primaryWorkspaceReference)
+        }
+        await waitUntil { environment.hasBlockedStop() }
+        XCTAssertNil(model.activeProductSessionOwner)
+        let stopping = model.sessionCommandState(
+            in: model.primaryWorkspaceReference
+        )
+        XCTAssertEqual(stopping.phase, .stopping)
+        XCTAssertEqual(stopping.stop, .inProgress)
+        XCTAssertEqual(stopping.launch, .unavailable(.commandInProgress))
+
+        environment.resumeBlockedStop()
+        let didStop = await stop.value
+        XCTAssertTrue(didStop)
+        await launch.value
+        let idle = model.sessionCommandState(in: model.primaryWorkspaceReference)
+        XCTAssertEqual(idle.phase, .idle)
+        XCTAssertEqual(idle.launch, .available)
     }
 
     func testWorkspaceReplacementCannotClaimOwnerAndTriggersCheckedCleanup()

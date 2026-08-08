@@ -278,6 +278,149 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertFalse(requiresPairing.canRetry)
     }
 
+    func testSessionCommandsRequireCurrentWorkspaceProvidersAndSelection() {
+        let ready = sessionCommandState(phase: .idle)
+        XCTAssertEqual(ready.launch, .available)
+        XCTAssertEqual(ready.reconnect, .unavailable(.noActiveSession))
+        XCTAssertEqual(ready.resume, .unavailable(.noActiveSession))
+        XCTAssertEqual(ready.stop, .unavailable(.noActiveSession))
+
+        let noProviders = sessionCommandState(
+            phase: .idle,
+            canLaunchTransport: false
+        )
+        XCTAssertEqual(
+            noProviders.launch,
+            .unavailable(.providersUnavailable)
+        )
+
+        let noSelection = sessionCommandState(
+            phase: .idle,
+            hasLaunchSelection: false
+        )
+        XCTAssertEqual(noSelection.launch, .unavailable(.selectionRequired))
+
+        let staleWorkspace = sessionCommandState(
+            phase: .idle,
+            workspaceIsCurrent: false
+        )
+        XCTAssertEqual(
+            staleWorkspace,
+            ProductSessionCommandState(ProductSessionCommandInput(
+                workspaceIsCurrent: false,
+                ownership: .none,
+                phase: .idle,
+                hasLaunchSelection: false,
+                canLaunchTransport: false,
+                canControlSession: false
+            ))
+        )
+        XCTAssertEqual(
+            staleWorkspace.launch,
+            .unavailable(.staleWorkspace)
+        )
+    }
+
+    func testOwnedSessionCommandsFollowEveryActivePhase() {
+        let launching = sessionCommandState(
+            phase: .launching,
+            ownership: .current
+        )
+        XCTAssertEqual(launching.launch, .inProgress)
+        XCTAssertEqual(launching.reconnect, .unavailable(.sessionActive))
+        XCTAssertEqual(launching.resume, .unavailable(.sessionActive))
+        XCTAssertEqual(launching.stop, .available)
+
+        let waiting = sessionCommandState(
+            phase: .waitingForTransport,
+            ownership: .current
+        )
+        XCTAssertEqual(waiting.launch, .inProgress)
+        XCTAssertEqual(waiting.stop, .available)
+
+        let streaming = sessionCommandState(
+            phase: .streaming,
+            ownership: .current
+        )
+        XCTAssertEqual(streaming.launch, .unavailable(.sessionActive))
+        XCTAssertEqual(streaming.reconnect, .unavailable(.sessionActive))
+        XCTAssertEqual(streaming.resume, .unavailable(.sessionActive))
+        XCTAssertEqual(streaming.stop, .available)
+
+        let reconnecting = sessionCommandState(
+            phase: .reconnecting(attempt: 2),
+            ownership: .current
+        )
+        XCTAssertEqual(reconnecting.reconnect, .inProgress)
+        XCTAssertEqual(reconnecting.resume, .inProgress)
+        XCTAssertEqual(reconnecting.stop, .available)
+
+        let stopping = sessionCommandState(
+            phase: .stopping,
+            ownership: .current
+        )
+        XCTAssertEqual(stopping.launch, .unavailable(.commandInProgress))
+        XCTAssertEqual(stopping.reconnect, .unavailable(.commandInProgress))
+        XCTAssertEqual(stopping.resume, .unavailable(.commandInProgress))
+        XCTAssertEqual(stopping.stop, .inProgress)
+    }
+
+    func testTerminalSessionCommandsStartOnlyANewCheckedConnection() {
+        let terminalPhases: [ProductSessionActualPhase] = [
+            .remoteTerminated,
+            .reconnectExhausted,
+            .failed
+        ]
+        for phase in terminalPhases {
+            let state = sessionCommandState(phase: phase)
+            XCTAssertEqual(state.launch, .available, "Unexpected launch for \(phase)")
+            XCTAssertEqual(
+                state.reconnect,
+                .available,
+                "Unexpected reconnect for \(phase)"
+            )
+            XCTAssertEqual(state.resume, .unavailable(.terminalSession))
+            XCTAssertEqual(state.stop, .unavailable(.noActiveSession))
+        }
+    }
+
+    func testNonOwnerStaleOwnerAndInconsistentActualStateFailClosed() {
+        let nonOwner = sessionCommandState(
+            phase: .streaming,
+            ownership: .otherWorkspace
+        )
+        XCTAssertEqual(
+            nonOwner.stop,
+            .unavailable(.ownedByAnotherWorkspace)
+        )
+
+        let staleOwner = sessionCommandState(
+            phase: .streaming,
+            ownership: .staleReservation
+        )
+        XCTAssertEqual(staleOwner.stop, .unavailable(.staleSessionOwner))
+
+        let inconsistent = sessionCommandState(phase: .streaming)
+        XCTAssertEqual(
+            inconsistent.launch,
+            .unavailable(.inconsistentActualState)
+        )
+
+        let unownedStopping = sessionCommandState(phase: .stopping)
+        XCTAssertEqual(unownedStopping.stop, .inProgress)
+        XCTAssertEqual(
+            unownedStopping.launch,
+            .unavailable(.commandInProgress)
+        )
+
+        let noControl = sessionCommandState(
+            phase: .streaming,
+            ownership: .current,
+            canControlSession: false
+        )
+        XCTAssertEqual(noControl.stop, .unavailable(.providersUnavailable))
+    }
+
     func testRootViewConsumesSurfaceContractsAndNativeAppButtons() throws {
         let source = try String(contentsOf: rootViewURL, encoding: .utf8)
 
@@ -331,6 +474,24 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             hostID: hostID,
             hostSelectionGeneration: ProductHostSelectionGeneration()
         )
+    }
+
+    private func sessionCommandState(
+        phase: ProductSessionActualPhase,
+        ownership: ProductSessionWorkspaceOwnership = .none,
+        workspaceIsCurrent: Bool = true,
+        hasLaunchSelection: Bool = true,
+        canLaunchTransport: Bool = true,
+        canControlSession: Bool = true
+    ) -> ProductSessionCommandState {
+        ProductSessionCommandState(ProductSessionCommandInput(
+            workspaceIsCurrent: workspaceIsCurrent,
+            ownership: ownership,
+            phase: phase,
+            hasLaunchSelection: hasLaunchSelection,
+            canLaunchTransport: canLaunchTransport,
+            canControlSession: canControlSession
+        ))
     }
 
     private var workspace: ProductWorkspaceReference {
