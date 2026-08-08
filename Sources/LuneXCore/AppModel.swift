@@ -118,6 +118,13 @@ final class AppModel: ApplicationInputSink {
         let hostSelectionGeneration: ProductHostSelectionGeneration
     }
 
+    private struct ProductSessionStopOperation {
+        let id: UUID
+        let owner: ProductSessionOwner
+        let actionToken: ProductActionToken?
+        let task: Task<Bool, Never>
+    }
+
     private enum ProductActionAdmission {
         case navigate(ProductWorkspaceReference, AppNavigationSelection)
         case launch(ProductWorkspaceReference)
@@ -560,6 +567,8 @@ final class AppModel: ApplicationInputSink {
     private(set) var activeProductSessionOwner: ProductSessionOwner?
     private(set) var productSessionActualPhase: ProductSessionActualPhase = .idle
     private var activeStreamSessionID: UUID?
+    @ObservationIgnored private var productSessionStopOperation:
+        ProductSessionStopOperation?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
     @ObservationIgnored private var activeDecodedSourceSize: PixelSize?
@@ -1027,6 +1036,13 @@ final class AppModel: ApplicationInputSink {
     func performProductAction(
         _ token: ProductActionToken
     ) async -> ProductActionInvocationResult {
+        if let operation = productSessionStopOperation,
+           operation.actionToken == token,
+           workspaceRegistry.state(for: operation.owner.workspace) != nil {
+            return await awaitProductSessionStopOperation(operation)
+                ? .performed
+                : .rejected(ProductIssue(code: .staleAction))
+        }
         guard let admission = productActionAdmission(for: token) else {
             return .rejected(ProductIssue(code: .staleAction))
         }
@@ -1040,8 +1056,10 @@ final class AppModel: ApplicationInputSink {
             clearStreamIssue(in: workspace, matching: token)
             await launchSelectedApp(in: workspace)
         case let .stop(owner):
-            clearStreamIssue(in: owner.workspace, matching: token)
-            guard await stopStreamInternally(expectedOwner: owner) else {
+            guard await stopStreamInternally(
+                expectedOwner: owner,
+                actionToken: token
+            ) else {
                 return .rejected(ProductIssue(code: .staleAction))
             }
         }
@@ -2782,7 +2800,8 @@ final class AppModel: ApplicationInputSink {
         }
 
         guard activeProductSessionOwner == nil,
-              activeStreamSessionID == nil else {
+              activeStreamSessionID == nil,
+              productSessionStopOperation == nil else {
             return
         }
 
@@ -2933,19 +2952,35 @@ final class AppModel: ApplicationInputSink {
 
     @discardableResult
     func stopStream(in workspace: ProductWorkspaceReference) async -> Bool {
-        guard workspaceRegistry.state(for: workspace) != nil,
-              let owner = activeProductSessionOwner,
+        guard workspaceRegistry.state(for: workspace) != nil else {
+            return false
+        }
+        if let operation = productSessionStopOperation,
+           operation.owner.workspace == workspace {
+            return await awaitProductSessionStopOperation(operation)
+        }
+        guard let owner = activeProductSessionOwner,
               owner.workspace == workspace,
               productSessionOwnerIsCurrent(owner) else {
             return false
         }
-        return await stopStreamInternally(expectedOwner: owner)
+        return await stopStreamInternally(
+            expectedOwner: owner,
+            actionToken: currentStopActionToken(for: owner)
+        )
     }
 
     @discardableResult
     private func stopStreamInternally(
-        expectedOwner: ProductSessionOwner? = nil
+        expectedOwner: ProductSessionOwner? = nil,
+        actionToken: ProductActionToken? = nil
     ) async -> Bool {
+        if let operation = productSessionStopOperation {
+            guard expectedOwner == nil || expectedOwner == operation.owner else {
+                return false
+            }
+            return await awaitProductSessionStopOperation(operation)
+        }
         guard let owner = activeProductSessionOwner,
               expectedOwner == nil || expectedOwner == owner,
               let sessionID = activeStreamSessionID,
@@ -2953,6 +2988,55 @@ final class AppModel: ApplicationInputSink {
               let sessionControlProvider = runtimeProviders.sessionControl else {
             return false
         }
+        let operationID = UUID()
+        let admittedActionToken = actionToken ?? currentStopActionToken(for: owner)
+        let task = Task { [weak self] in
+            guard let self else { return false }
+            return await self.performProductSessionStop(
+                owner: owner,
+                sessionControlProvider: sessionControlProvider
+            )
+        }
+        let operation = ProductSessionStopOperation(
+            id: operationID,
+            owner: owner,
+            actionToken: admittedActionToken,
+            task: task
+        )
+        productSessionStopOperation = operation
+        return await awaitProductSessionStopOperation(operation)
+    }
+
+    private func awaitProductSessionStopOperation(
+        _ operation: ProductSessionStopOperation
+    ) async -> Bool {
+        let result = await operation.task.value
+        if productSessionStopOperation?.id == operation.id {
+            productSessionStopOperation = nil
+        }
+        return result
+    }
+
+    private func currentStopActionToken(
+        for owner: ProductSessionOwner
+    ) -> ProductActionToken? {
+        guard let token = workspaceRegistry.state(for: owner.workspace)?
+            .presentation.issue?.action,
+              token.kind == .stopStream,
+              token.scope == .session(
+                workspace: owner.workspace,
+                sessionID: owner.sessionID
+              ) else {
+            return nil
+        }
+        return token
+    }
+
+    private func performProductSessionStop(
+        owner: ProductSessionOwner,
+        sessionControlProvider: any SessionControlProvider
+    ) async -> Bool {
+        let sessionID = owner.sessionID
         clearStreamActionPresentation(in: owner.workspace)
         productSessionActualPhase = .stopping
         let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
@@ -2962,12 +3046,16 @@ final class AppModel: ApplicationInputSink {
             reason: .stop,
             requiresReleaseBarrier: !platformOwnsReleaseBarrier
         )
-        guard activeProductSessionOwner == owner,
-              activeStreamSessionID == sessionID else {
+        guard productSessionStopOperation?.owner == owner else {
             return false
         }
-        activeProductSessionOwner = nil
-        activeStreamSessionID = nil
+        if activeProductSessionOwner == owner,
+           activeStreamSessionID == sessionID {
+            activeProductSessionOwner = nil
+            activeStreamSessionID = nil
+        } else if activeProductSessionOwner != nil || activeStreamSessionID != nil {
+            return false
+        }
         streamLaunchUI.isLaunching = false
         session.phase = .stopping
         _ = try? await streamSessionCoordinator.beginLocalStop(sessionID: sessionID)
@@ -3386,6 +3474,7 @@ final class AppModel: ApplicationInputSink {
             guard productSessionOwnerIsCurrent(owner) else {
                 throw SessionApplicationError.staleProductSessionOwner
             }
+            guard productSessionStopOperation?.owner != owner else { return }
             applySessionSnapshot(snapshot, remoteTermination: true)
             await stopMediaEnvironment(
                 sessionID: sessionID,
@@ -3668,6 +3757,7 @@ final class AppModel: ApplicationInputSink {
         sessionControlProvider: any SessionControlProvider
     ) async {
         let sessionID = owner.sessionID
+        guard productSessionStopOperation?.owner != owner else { return }
         guard productSessionOwnerOwnsActiveReservation(owner) else { return }
         guard productSessionOwnerIsCurrent(owner) else {
             _ = await stopStreamInternally(expectedOwner: owner)
@@ -3680,6 +3770,7 @@ final class AppModel: ApplicationInputSink {
             reason: .inputChannelFailure,
             requiresReleaseBarrier: !platformOwnsReleaseBarrier
         )
+        guard productSessionStopOperation?.owner != owner else { return }
         guard productSessionOwnerOwnsActiveReservation(owner) else { return }
         guard productSessionOwnerIsCurrent(owner) else {
             _ = await stopStreamInternally(expectedOwner: owner)

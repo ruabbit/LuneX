@@ -151,6 +151,7 @@ final class ProductPairingWorkspaceTests: XCTestCase {
         XCTAssertTrue(nonOwnerCancellations.isEmpty)
 
         await model.cancelPairing(in: model.primaryWorkspaceReference)
+        await model.cancelPairing(in: model.primaryWorkspaceReference)
         let ownerCancellations = await provider.cancelledAttemptIDs()
         XCTAssertEqual(
             ownerCancellations,
@@ -239,6 +240,9 @@ final class ProductPairingWorkspaceTests: XCTestCase {
         await provisioner.waitUntilRetryIsPending()
         let retryOwner = try XCTUnwrap(model.primaryPairingState?.owner)
         XCTAssertNotEqual(retryOwner, failedOwner)
+        let duplicateRetryAccepted = await model.retryPairing(in: workspace)
+        XCTAssertFalse(duplicateRetryAccepted)
+        XCTAssertEqual(model.primaryPairingState?.owner, retryOwner)
         let replacement = try model.workspaceRegistry.replace(workspace)
         await provisioner.resumeRetry()
         let retryAccepted = await retry.value

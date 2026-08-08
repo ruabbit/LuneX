@@ -6924,6 +6924,138 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(idle.launch, .available)
     }
 
+    func testConcurrentStopActionAndDirectCallersShareOneTeardownResult()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 42,
+                    key: Data(repeating: 0x42, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+        let owner = try XCTUnwrap(model.activeProductSessionOwner)
+        let issue = ProductIssue(
+            code: .streamStopFailed,
+            actionScope: .session(
+                workspace: workspace,
+                sessionID: owner.sessionID
+            )
+        )
+        try model.workspaceRegistry.update(workspace) {
+            $0.presentation.issue = issue
+        }
+        let token = try XCTUnwrap(issue.action)
+
+        environment.blockNextStop()
+        let firstAction = Task { await model.performProductAction(token) }
+        await waitUntil { environment.hasBlockedStop() }
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertNil(model.streamProductIssue(in: workspace))
+
+        let repeatedAction = Task { await model.performProductAction(token) }
+        let directStop = Task { await model.stopStream(in: workspace) }
+        for _ in 0..<3 { await Task.yield() }
+        XCTAssertEqual(provider.currentStartRecords().count, 1)
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertTrue(provider.currentStoppedSessionIDs().isEmpty)
+
+        environment.resumeBlockedStop()
+        let firstActionResult = await firstAction.value
+        let repeatedActionResult = await repeatedAction.value
+        let directStopResult = await directStop.value
+        XCTAssertEqual(firstActionResult, .performed)
+        XCTAssertEqual(repeatedActionResult, .performed)
+        XCTAssertTrue(directStopResult)
+        await launch.value
+
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(model.productSessionActualPhase, .idle)
+        let replay = await model.performProductAction(token)
+        XCTAssertEqual(replay.issue?.code, .staleAction)
+        let repeatedStopResult = await model.stopStream(in: workspace)
+        XCTAssertFalse(repeatedStopResult)
+    }
+
+    func testWorkspaceReplacementCannotJoinOrLaunchAcrossInFlightStop()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 43,
+                    key: Data(repeating: 0x43, count: 16)
+                )),
+                .success(RemoteInputKeyMaterial(
+                    keyID: 44,
+                    key: Data(repeating: 0x44, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        let firstLaunch = Task { await model.launchSelectedApp(in: workspace) }
+        let first = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: first)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+
+        environment.blockNextStop()
+        let stop = Task { await model.stopStream(in: workspace) }
+        await waitUntil { environment.hasBlockedStop() }
+        let replacement = try model.workspaceRegistry.replace(workspace)
+
+        let staleStopResult = await model.stopStream(in: workspace)
+        let replacementStopResult = await model.stopStream(in: replacement)
+        XCTAssertFalse(staleStopResult)
+        XCTAssertFalse(replacementStopResult)
+        await model.launchSelectedApp(in: replacement)
+        XCTAssertEqual(provider.currentStartRecords().count, 1)
+
+        environment.resumeBlockedStop()
+        let stopResult = await stop.value
+        XCTAssertTrue(stopResult)
+        await firstLaunch.value
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [first.sessionID])
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [first.sessionID])
+
+        let replacementLaunch = Task {
+            await model.launchSelectedApp(in: replacement)
+        }
+        await waitUntil { provider.currentStartRecords().count == 2 }
+        let second = try XCTUnwrap(provider.currentStartRecords().last)
+        XCTAssertNotEqual(second.sessionID, first.sessionID)
+        XCTAssertEqual(model.activeProductSessionOwner?.workspace, replacement)
+        XCTAssertEqual(model.activeProductSessionOwner?.sessionID, second.sessionID)
+
+        let replacementDidStop = await model.stopStream(in: replacement)
+        XCTAssertTrue(replacementDidStop)
+        await replacementLaunch.value
+        XCTAssertEqual(
+            provider.currentStoppedSessionIDs(),
+            [first.sessionID, second.sessionID]
+        )
+    }
+
     func testWorkspaceReplacementCannotClaimOwnerAndTriggersCheckedCleanup()
         async throws
     {

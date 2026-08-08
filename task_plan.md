@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`16/48`；typed recovery issue/action完成，继续3.4 command idempotence |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`17/48`；command idempotence完成，继续3.5 stream overlay ownership |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`16/48`。Group 1、2.x及3.1-3.3已完成；3.3移除stream launch/recovery自由文本error/action state，以workspace/session-scoped `ProductIssue`和invocation-time checked dispatcher处理selection、provider、reconnecting、remote termination、reconnect exhaustion及typed failure。fresh focused `30/30`、related `139/139`、最终源码normal `1218/1217/1 exact Keychain skip/0`、补强focused `14/14`与`12/12`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug最终`4/4`通过。下一项3.4实现cancel/retry/reconnect/repeated-stop并发幂等与共享结果；overlay属于3.5，compact/wide UI属于3.6，owning-window close属于4.4，完整应用矩阵属于3.7/7.x，legacy全局字符串迁移属于6.1/6.2。
+阶段19当前权威进度`17/48`。Group 1、2.x及3.1-3.4已完成；3.4以完整`ProductSessionOwner`注册MainActor共享stop operation，同一workspace/session的direct、checked action及scene/window-style caller共享teardown结果，operation完成前阻止replacement launch，replaced/non-owner/other-session/post-completion调用fail closed；pairing/catalog/reconnect的唯一generation reservation与late-completion拒绝由回归锁定。最终focused `7/7`、related `192/192`、normal `1221/1220/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`通过。下一项3.5接入stream overlay visibility、focus handoff、local commands与stop confirmation；compact/wide UI属于3.6，owning-window close属于4.4，完整应用矩阵属于3.7/7.x，legacy全局字符串迁移属于6.1/6.2。
 
 ### 阶段19错误记录
 

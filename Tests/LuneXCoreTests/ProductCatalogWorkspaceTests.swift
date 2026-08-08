@@ -246,6 +246,42 @@ final class ProductCatalogWorkspaceTests: XCTestCase {
         XCTAssertEqual(requestCount, 2)
     }
 
+    func testConcurrentCatalogRetryAdmitsOneCurrentOwnerRequest() async throws {
+        let host = makeHost(idSuffix: 15, name: "Concurrent Retry")
+        let apps = makeApps()
+        let client = SuspendedRetryProductCatalogClient()
+        let model = makeModel(hosts: [host], appListClient: client)
+        let workspace = model.primaryWorkspaceReference
+        await model.loadHosts()
+
+        await model.refreshAppsForSelectedHost(in: workspace)
+        let owner = try XCTUnwrap(model.primaryCatalogState?.owner)
+        XCTAssertEqual(
+            model.primaryCatalogState?.phase,
+            .failed(hasCachedApps: false)
+        )
+
+        let retry = Task { await model.retryAppCatalog(in: workspace) }
+        await client.waitUntilRetryIsPending()
+        XCTAssertEqual(
+            model.primaryCatalogState?.phase,
+            .loading(hasCachedApps: false)
+        )
+        let duplicateAccepted = await model.retryAppCatalog(in: workspace)
+        let requestCountWhilePending = await client.requestCount()
+        XCTAssertFalse(duplicateAccepted)
+        XCTAssertEqual(requestCountWhilePending, 2)
+        XCTAssertEqual(model.primaryCatalogState?.owner, owner)
+
+        await client.resumeRetry(with: apps)
+        let retryAccepted = await retry.value
+        XCTAssertTrue(retryAccepted)
+        XCTAssertEqual(model.primaryCatalogState?.phase, .current)
+        XCTAssertEqual(model.selectedApps, apps)
+        let finalRequestCount = await client.requestCount()
+        XCTAssertEqual(finalRequestCount, 2)
+    }
+
     func testAppCatalogPanelUsesWorkspaceCatalogAndTypedIssues() throws {
         let source = try String(contentsOf: rootViewURL, encoding: .utf8)
 
@@ -469,6 +505,52 @@ private actor SuspendedProductCatalogClient: AppListClient {
         continuation?.resume(returning: apps)
         continuation = nil
     }
+}
+
+private actor SuspendedRetryProductCatalogClient: AppListClient {
+    private var requests = 0
+    private var retryContinuation: CheckedContinuation<[RemoteApp], Error>?
+
+    func fetchApps(
+        from endpoint: HostEndpoint,
+        clientUniqueID: String,
+        pinnedIdentity: PinnedHostIdentity?
+    ) async throws -> [RemoteApp] {
+        _ = endpoint
+        _ = clientUniqueID
+        _ = pinnedIdentity
+        requests += 1
+        guard requests > 1 else {
+            throw ProductCatalogTestError.expectedFailure
+        }
+        return try await withCheckedThrowingContinuation {
+            retryContinuation = $0
+        }
+    }
+
+    func fetchArtwork(
+        for app: RemoteApp,
+        from endpoint: HostEndpoint,
+        clientUniqueID: String,
+        pinnedIdentity: PinnedHostIdentity?
+    ) async throws -> RemoteAppArtwork? {
+        _ = app
+        _ = endpoint
+        _ = clientUniqueID
+        _ = pinnedIdentity
+        return nil
+    }
+
+    func waitUntilRetryIsPending() async {
+        while retryContinuation == nil { await Task.yield() }
+    }
+
+    func resumeRetry(with apps: [RemoteApp]) {
+        retryContinuation?.resume(returning: apps)
+        retryContinuation = nil
+    }
+
+    func requestCount() -> Int { requests }
 }
 
 private actor RecordingProductCatalogRepository: AppCatalogSnapshotRepository {

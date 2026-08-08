@@ -292,6 +292,8 @@ flowchart LR
 - remote termination、typed reconnect exhaustion与generic failure保持不同terminal truth；owner已清但teardown仍await时继续表达stopping，禁止过早开放新launch。
 - Task 3.3移除stream launch/recovery的自由文本error/action state，以owning workspace中的closed `ProductIssue`表达selection、provider、reconnecting、remote termination、reconnect exhaustion和typed failure；RootView只渲染reviewed localized presentation/action kind。
 - checked action dispatcher在invocation时重新核对workspace generation、当前展示token、active或terminal session identity及3.2 command disposition；旧session replay和replaced workspace返回typed `staleAction`且不操作replacement。并发共享结果、overlay与owning-window close仍分别属于3.4、3.5与4.4。
+- Task 3.4以完整`ProductSessionOwner`为key注册单一MainActor stop operation；direct、checked action及scene/window-style同owner调用共享同一teardown task和terminal result，operation在media/input/control清理结束前持续阻止replacement launch。exact admitted token可在可见issue清除后加入，replaced/non-owner/other-session/post-completion调用fail closed，remote/media failure不与已接管local stop重复teardown。
+- pairing cancel/retry、catalog retry与terminal reconnect继续通过attempt/catalog/session generation在首个相关suspension前建立唯一reservation；并发duplicate不会创建第二provider request，replacement后的late completion不发布旧状态。3.4不提前实现3.5 overlay、3.6 compact/wide UI或4.4 owning-window policy。
 - stream overlay提供明确命令、状态与模式控制，不遮挡视频或依赖hover；macOS/iPad多窗口状态相互隔离。
 - 关键任务覆盖VoiceOver/Voice Control、Dynamic Type、Reduce Motion、键盘导航、tvOS focus与visionOS可达性语义。
 - 错误与diagnostics保持类型化、可导出且经过redaction；不把底层任意字符串、host身份或secret复制到UI。

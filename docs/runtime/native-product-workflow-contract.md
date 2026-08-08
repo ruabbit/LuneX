@@ -461,11 +461,38 @@ performs no mutation. Reconnecting may present
 the current interruption, but its reconnect action remains disabled while the
 reducer reports `.inProgress`; the existing owner and local stop remain intact.
 
-This task does not coordinate concurrent action callers or make repeated stop
-callers share one in-flight terminal result. That idempotence remains task 3.4.
-Overlay ownership, compact/wide stream composition, and owning-window close
-policy remain tasks 3.5, 3.6, and 4.4 respectively. Broader mapping/removal of
-legacy host, pairing, diagnostics, and runtime strings remains tasks 6.1/6.2.
+Task 3.4 adds one MainActor-owned stop operation keyed by the complete
+`ProductSessionOwner`. The operation is registered before its task reaches the
+first suspension, clears visible session action state only after registration,
+and remains a launch-admission barrier until media, input, coordinator, and
+control teardown complete. Concurrent direct, checked-action, scene-style, and
+future window/overlay callers for that exact workspace/session owner await the
+same task and observe the same Boolean terminal result. Caller cancellation does
+not cancel the unstructured teardown task, and only the matching operation UUID
+may clear the reservation after completion.
+
+The operation retains only the exact bounded stop token that was current at
+admission. That token may join after visible issue state is cleared, but a
+different token, a replaced workspace generation, a non-owner workspace, a
+different session, or a post-completion replay fails closed. The owner/session
+reservation can be cleared during teardown without admitting a replacement
+launch because the operation remains present. Remote termination and media
+failure paths yield to an already-running local stop for the same owner instead
+of starting a second teardown.
+
+Pairing cancel/retry and catalog retry retain their existing generation-based
+idempotence: cancellation invalidates the attempt before provider cancellation,
+pairing retry installs one replacement attempt before identity preparation,
+and catalog retry publishes loading before transport suspension. Duplicate
+callers cannot create another provider request, and late completion cannot
+publish into a replaced workspace. Terminal reconnect actions still reserve a
+new session owner before provider work and reject replay of the old token.
+
+Task 3.4 provides the underlying command coordination but does not choose an
+owning-window retain-versus-stop policy or wire overlay presentation. Overlay
+ownership, compact/wide stream composition, and owning-window close policy
+remain tasks 3.5, 3.6, and 4.4 respectively. Broader mapping/removal of legacy
+host, pairing, diagnostics, and runtime strings remains tasks 6.1/6.2.
 
 ### Host, pairing, and catalog product surfaces
 
