@@ -432,10 +432,40 @@ owner/session reservation has been cleared intentionally preserves an unowned
 `.stopping` phase so the command surface cannot offer a new launch before media
 and provider cleanup completes.
 
-This reducer describes command truth but does not yet create or invoke recovery
-action tokens. Typed recovery issues/actions, concurrent repeated-stop result
-sharing, overlay ownership, and owning-window close policy remain tasks 3.3,
-3.4, 3.5, and 4.4 respectively.
+### Typed session issues and checked recovery actions
+
+Launch and recovery presentation no longer stores `errorMessage` or
+`actionMessage` strings in `StreamLaunchUIState`. The owning workspace instead
+stores a closed `ProductIssue`: selection and provider failures use workspace
+scope, while reconnecting, remote termination, reconnect exhaustion, and
+post-reservation failures use session scope with the initiating workspace
+reference and session UUID. Root SwiftUI renders only the issue's reviewed
+localized presentation and action kind; diagnostic summaries, provider text,
+and diagnostic action labels do not cross into observable stream UI state.
+
+`performProductAction(_:)` treats a `ProductActionToken` as a claim, not an
+authorization. Admission requires the complete workspace generation to remain
+current, that exact token to remain the workspace's currently presented issue,
+and the session scope to match either the active checked owner/reservation or
+the still-presented terminal identity. Reconnect and input recovery additionally
+require the actual command reducer to admit a new connection; stop requires the
+current owner and available control provider. Selection correction, settings,
+build review, reconnect, and stop route only to finite local commands.
+
+Starting a new session or completing local stop clears the old issue, so replay
+cannot act on a replacement session. Replacing or closing a workspace clears
+its transient issue and makes its token stale. Changing the selected app also
+clears a session-domain issue so an ended-session token cannot relaunch a newly
+selected title. A rejected invocation returns a typed `stale_action` issue and
+performs no mutation. Reconnecting may present
+the current interruption, but its reconnect action remains disabled while the
+reducer reports `.inProgress`; the existing owner and local stop remain intact.
+
+This task does not coordinate concurrent action callers or make repeated stop
+callers share one in-flight terminal result. That idempotence remains task 3.4.
+Overlay ownership, compact/wide stream composition, and owning-window close
+policy remain tasks 3.5, 3.6, and 4.4 respectively. Broader mapping/removal of
+legacy host, pairing, diagnostics, and runtime strings remains tasks 6.1/6.2.
 
 ### Host, pairing, and catalog product surfaces
 

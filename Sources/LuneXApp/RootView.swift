@@ -1102,6 +1102,8 @@ private struct StreamLaunchPanel: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
+        let workspace = appModel.primaryWorkspaceReference
+        let commands = appModel.sessionCommandState(in: workspace)
         Panel {
             VStack(alignment: .leading, spacing: 12) {
                 PanelHeader(title: "Launch", systemImage: "play.fill")
@@ -1117,16 +1119,16 @@ private struct StreamLaunchPanel: View {
                         if appModel.hasActiveStreamSession {
                             Button(role: .destructive) {
                                 Task {
-                                    await appModel.stopStream()
+                                    await appModel.stopStream(in: workspace)
                                 }
                             } label: {
                                 Label("Stop Stream", systemImage: "stop.circle")
                             }
-                            .disabled(appModel.session.phase == .stopping)
+                            .disabled(commands.stop != .available)
                         } else {
                             Button {
                                 Task {
-                                    await appModel.launchSelectedApp()
+                                    await appModel.launchSelectedApp(in: workspace)
                                 }
                             } label: {
                                 Label(
@@ -1135,7 +1137,7 @@ private struct StreamLaunchPanel: View {
                                 )
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(appModel.streamLaunchUI.isLaunching || host.pairingState != .paired)
+                            .disabled(commands.launch != .available || host.pairingState != .paired)
                         }
                     } else {
                         Label("Moonlight media transport unavailable", systemImage: "exclamationmark.triangle")
@@ -1143,18 +1145,34 @@ private struct StreamLaunchPanel: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if let error = appModel.streamLaunchUI.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    if let action = appModel.streamLaunchUI.actionMessage {
-                        Label(action, systemImage: "arrow.forward.circle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
                 } else {
                     ContentUnavailableView("Select an App", systemImage: "play.fill")
+                }
+
+                if let issue = appModel.streamProductIssue(in: workspace) {
+                    Label {
+                        Text(issue.presentation.message)
+                    } icon: {
+                        Image(systemName: issue.presentation.systemImage)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(
+                        issue.severity == .error ? Color.red : Color.orange
+                    )
+                    if let action = issue.action {
+                        Button {
+                            Task {
+                                await appModel.performProductAction(action)
+                            }
+                        } label: {
+                            Label {
+                                Text(action.kind.title)
+                            } icon: {
+                                Image(systemName: "arrow.forward.circle")
+                            }
+                        }
+                        .disabled(!appModel.canPerformProductAction(action))
+                    }
                 }
             }
         }

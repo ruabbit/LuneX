@@ -31,6 +31,9 @@ final class ProductIssueTests: XCTestCase {
                 XCTAssertFalse(code.rawValue.localizedCaseInsensitiveContains(secret), code.rawValue)
             }
         }
+        for action in ProductActionKind.allCases {
+            XCTAssertFalse(String(localized: action.title).isEmpty, action.rawValue)
+        }
     }
 
     func testIssueDerivesDomainSeverityPresentationAndActionFromStableCode() {
@@ -150,6 +153,32 @@ final class ProductIssueTests: XCTestCase {
         XCTAssertEqual(second.presentation.streamOverlay, .hidden)
     }
 
+    func testAppSelectionChangeInvalidatesPresentedSessionAction() {
+        let reference = ProductWorkspaceReference(
+            id: ProductWorkspaceID(
+                rawValue: UUID(uuidString: "30000000-0000-0000-0000-000000000010")!
+            ),
+            generation: .initial
+        )
+        var state = ProductWorkspaceState(
+            reference: reference,
+            selectedAppID: "app-1"
+        )
+        state.presentation.issue = ProductIssue(
+            code: .streamTerminated,
+            actionScope: .session(
+                workspace: reference,
+                sessionID: UUID(
+                    uuidString: "30000000-0000-0000-0000-000000000011"
+                )!
+            )
+        )
+
+        state.selectedAppID = "app-2"
+
+        XCTAssertNil(state.presentation.issue)
+    }
+
     func testInformationalAndStaleIssuesDoNotInventRecoveryActions() {
         let cancelled = ProductIssue(code: .pairingCancelled)
         let stale = ProductIssue(code: .staleAction)
@@ -195,6 +224,11 @@ final class ProductIssueTests: XCTestCase {
         XCTAssertFalse(String(reflecting: failure).contains(rejected))
         XCTAssertFalse(String(reflecting: failure).contains("private-password"))
         XCTAssertFalse(String(reflecting: failure).contains("private-host"))
+
+        XCTAssertEqual(
+            Set(Mirror(reflecting: StreamLaunchUIState()).children.compactMap(\.label)),
+            ["isLaunching"]
+        )
     }
 
     func testScopedIssuePresentationDoesNotExposeWorkspaceOrSessionIdentity() {

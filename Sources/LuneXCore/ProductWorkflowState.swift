@@ -34,6 +34,28 @@ enum ProductActionKind: String, CaseIterable, Hashable, Sendable {
     case updateBuild
     case retrySettingsSave
     case exportDiagnostics
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .correctHostAddress: "Correct Address"
+        case .refreshHosts: "Refresh Hosts"
+        case .retryHostAdd: "Retry Add Host"
+        case .retryHostRemoval: "Retry Host Removal"
+        case .resetHostTrust: "Reset Trust"
+        case .retryPairing: "Retry Pairing"
+        case .refreshCatalog: "Refresh Apps"
+        case .chooseHostAndApp: "Choose Host and App"
+        case .reconnectStream: "Reconnect Stream"
+        case .stopStream: "Stop Stream"
+        case .reviewStreamSettings: "Review Stream Settings"
+        case .reviewHDRSettings: "Review HDR Settings"
+        case .checkAudioOutput: "Check Audio Output"
+        case .reconnectInput: "Reconnect Input"
+        case .updateBuild: "Review Build"
+        case .retrySettingsSave: "Retry Settings Save"
+        case .exportDiagnostics: "Export Diagnostics"
+        }
+    }
 }
 
 struct ProductWorkspaceID: Hashable, Sendable {
@@ -153,6 +175,16 @@ struct ProductActionToken: Identifiable, Hashable, Sendable {
         self.id = id
         self.kind = kind
         self.scope = scope
+    }
+}
+
+enum ProductActionInvocationResult: Equatable, Sendable {
+    case performed
+    case rejected(ProductIssue)
+
+    var issue: ProductIssue? {
+        guard case let .rejected(issue) = self else { return nil }
+        return issue
     }
 }
 
@@ -306,7 +338,7 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
         case .streamUnavailable:
             issue("Streaming unavailable", "This build does not include every required streaming provider.", "exclamationmark.triangle")
         case .streamInterrupted:
-            issue("Connection interrupted", "LuneX is waiting for the current session to recover.", "network.slash")
+            issue("Connection interrupted", "Wait for current recovery, or start a new connection when it becomes available.", "network.slash")
         case .streamTerminated:
             issue("Stream ended", "The remote host ended this session.", "stop.circle")
         case .reconnectExhausted:
@@ -535,7 +567,13 @@ struct ProductWorkspaceState: Equatable, Sendable {
         }
     }
     private(set) var hostSelectionGeneration: ProductHostSelectionGeneration
-    var selectedAppID: RemoteApp.ID?
+    var selectedAppID: RemoteApp.ID? {
+        didSet {
+            guard selectedAppID != oldValue,
+                  presentation.issue?.domain == .session else { return }
+            presentation.issue = nil
+        }
+    }
     var presentation: ProductWorkspacePresentationState
     var hostLibrary: ProductHostLibraryWorkspaceState
     var catalog: ProductAppCatalogWorkspaceState

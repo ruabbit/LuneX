@@ -431,6 +431,11 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(source.contains("retryAppCatalog(in: workspace)"))
         XCTAssertTrue(source.contains("Pairing complete"))
         XCTAssertTrue(source.contains("Pairing cancelled"))
+        XCTAssertTrue(source.contains("streamProductIssue(in: workspace)"))
+        XCTAssertTrue(source.contains("performProductAction(action)"))
+        XCTAssertTrue(source.contains("canPerformProductAction(action)"))
+        XCTAssertFalse(source.contains("streamLaunchUI.errorMessage"))
+        XCTAssertFalse(source.contains("streamLaunchUI.actionMessage"))
         XCTAssertTrue(source.contains("Button {\n                    appModel.select(app: app, in: workspace)"))
         XCTAssertFalse(source.contains(".onTapGesture"))
     }

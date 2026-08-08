@@ -36,17 +36,18 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`15/48`；actual-state session command reducer完成，继续3.3 typed recovery issue/action |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`16/48`；typed recovery issue/action完成，继续3.4 command idempotence |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`15/48`。Group 1、2.x、3.1及3.2已完成；3.2新增actual session phase与launch/reconnect/resume/stop纯值reducer，AppModel从current workspace、product owner/reservation、actual provider inventory、selection及session snapshot/teardown投影命令状态。remote termination、typed reconnect exhaustion与generic failure保持不同terminal truth；owner清除但teardown仍await的窗口保持unowned stopping。fresh focused `16/16`、related `157/157`、normal `1214/1213/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`通过。typed issue/action属于下一项3.3，stop idempotence属于3.4，overlay属于3.5，owning-window close policy属于4.4，adaptive/accessibility属于5.x，legacy workflow string迁移属于6.1/6.2，root UI仍是primary compatibility binding。
+阶段19当前权威进度`16/48`。Group 1、2.x及3.1-3.3已完成；3.3移除stream launch/recovery自由文本error/action state，以workspace/session-scoped `ProductIssue`和invocation-time checked dispatcher处理selection、provider、reconnecting、remote termination、reconnect exhaustion及typed failure。fresh focused `30/30`、related `139/139`、最终源码normal `1218/1217/1 exact Keychain skip/0`、补强focused `14/14`与`12/12`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug最终`4/4`通过。下一项3.4实现cancel/retry/reconnect/repeated-stop并发幂等与共享结果；overlay属于3.5，compact/wide UI属于3.6，owning-window close属于4.4，完整应用矩阵属于3.7/7.x，legacy全局字符串迁移属于6.1/6.2。
 
 ### 阶段19错误记录
 
+- Task 3.3 final pre-gate的scope包装器在functions JavaScript解析阶段把shell环境变量展开误作模板表达式，以`Missing } in template expression`拒绝；shell未启动，仓库、测试、设备与evidence无副作用。后续改用无模板插值的`env | rg`断言，不重复原包装器。
 - Task 3.2定向cleanup已删除全部显式artifact后，零残留验证使用zsh unmatched glob并因`nomatch`返回1；删除已完成且没有项目/设备副作用。后续改用`find /private/tmp -maxdepth 1 -name`验证零残留，不重复glob。
 - Task 3.2 repository pre-gate首个隐私扫描把包含反引号的长正则放入双引号，zsh在命令启动前以`unmatched \"`退出；没有项目、测试、设备或artifact副作用。后续改用多个固定单引号pattern，不重复该包装器。
 - Task 3.2完整suite后把同一个`Normal.xcresult`的summary与test-tree读取并行执行，触发已知`database.sqlite3` reader conflict；测试本身已成功且bundle未损坏。停止并行读取后对同一bundle串行读回`1214/1213/1/0`及唯一Keychain skip，不重复测试。

@@ -289,7 +289,9 @@ flowchart LR
 - 普通测试继续保持`LUNEX_RUN_KEYCHAIN_TEST`与`LUNEX_RUN_LIVE_HOST_TEST` unset并使用Debug文件identity fallback；Simulator只复用既有每类单实例，不创建launch-only UI target制造验收口径。
 - 配对、host信任重置、app启动、重连、停止、远端终止和provider缺失都提供可恢复且不泄密的SwiftUI流程。
 - Task 3.2以actual session snapshot/teardown为真值定义idle、launching、waiting-for-transport、streaming、reconnecting、stopping及三类terminal phase，并将launch/reconnect/resume/stop归约为available、in-progress或typed unavailable reason；workspace、reservation、provider与selection不一致全部fail closed。
-- remote termination、typed reconnect exhaustion与generic failure保持不同terminal truth；owner已清但teardown仍await时继续表达stopping，禁止过早开放新launch。typed action invocation、repeated-stop result sharing、overlay与owning-window close分别继续属于3.3、3.4、3.5与4.4。
+- remote termination、typed reconnect exhaustion与generic failure保持不同terminal truth；owner已清但teardown仍await时继续表达stopping，禁止过早开放新launch。
+- Task 3.3移除stream launch/recovery的自由文本error/action state，以owning workspace中的closed `ProductIssue`表达selection、provider、reconnecting、remote termination、reconnect exhaustion和typed failure；RootView只渲染reviewed localized presentation/action kind。
+- checked action dispatcher在invocation时重新核对workspace generation、当前展示token、active或terminal session identity及3.2 command disposition；旧session replay和replaced workspace返回typed `staleAction`且不操作replacement。并发共享结果、overlay与owning-window close仍分别属于3.4、3.5与4.4。
 - stream overlay提供明确命令、状态与模式控制，不遮挡视频或依赖hover；macOS/iPad多窗口状态相互隔离。
 - 关键任务覆盖VoiceOver/Voice Control、Dynamic Type、Reduce Motion、键盘导航、tvOS focus与visionOS可达性语义。
 - 错误与diagnostics保持类型化、可导出且经过redaction；不把底层任意字符串、host身份或secret复制到UI。

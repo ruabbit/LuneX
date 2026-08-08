@@ -25,8 +25,6 @@ private enum SessionApplicationError: Error {
 
 struct StreamLaunchUIState: Equatable {
     var isLaunching = false
-    var errorMessage: String?
-    var actionMessage: String?
 }
 
 struct RuntimeProviderAvailability: OptionSet, Equatable, Sendable {
@@ -118,6 +116,12 @@ final class AppModel: ApplicationInputSink {
         let host: MoonlightHost
         let app: RemoteApp
         let hostSelectionGeneration: ProductHostSelectionGeneration
+    }
+
+    private enum ProductActionAdmission {
+        case navigate(ProductWorkspaceReference, AppNavigationSelection)
+        case launch(ProductWorkspaceReference)
+        case stop(ProductSessionOwner)
     }
 
     private struct TVVisionPlatformGeometryAdmission: Equatable {
@@ -998,6 +1002,128 @@ final class AppModel: ApplicationInputSink {
             canLaunchTransport: isStreamTransportAvailable,
             canControlSession: runtimeProviders.sessionControl != nil
         ))
+    }
+
+    var streamProductIssue: ProductIssue? {
+        streamProductIssue(in: primaryWorkspaceReference)
+    }
+
+    func streamProductIssue(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductIssue? {
+        guard let issue = workspaceRegistry.state(for: workspace)?
+            .presentation.issue,
+              issue.domain == .session else {
+            return nil
+        }
+        return issue
+    }
+
+    func canPerformProductAction(_ token: ProductActionToken) -> Bool {
+        productActionAdmission(for: token) != nil
+    }
+
+    @discardableResult
+    func performProductAction(
+        _ token: ProductActionToken
+    ) async -> ProductActionInvocationResult {
+        guard let admission = productActionAdmission(for: token) else {
+            return .rejected(ProductIssue(code: .staleAction))
+        }
+        switch admission {
+        case let .navigate(workspace, destination):
+            clearStreamIssue(in: workspace, matching: token)
+            _ = try? workspaceRegistry.update(workspace) {
+                $0.navigationSelection = destination
+            }
+        case let .launch(workspace):
+            clearStreamIssue(in: workspace, matching: token)
+            await launchSelectedApp(in: workspace)
+        case let .stop(owner):
+            clearStreamIssue(in: owner.workspace, matching: token)
+            guard await stopStreamInternally(expectedOwner: owner) else {
+                return .rejected(ProductIssue(code: .staleAction))
+            }
+        }
+        return .performed
+    }
+
+    private func productActionAdmission(
+        for token: ProductActionToken
+    ) -> ProductActionAdmission? {
+        guard let workspace = productActionWorkspace(for: token.scope),
+              let state = workspaceRegistry.state(for: workspace),
+              state.presentation.issue?.action == token else {
+            return nil
+        }
+
+        let scopedOwner: ProductSessionOwner?
+        switch token.scope {
+        case let .session(scopedWorkspace, sessionID):
+            guard scopedWorkspace == workspace else { return nil }
+            let owner = ProductSessionOwner(
+                workspace: scopedWorkspace,
+                sessionID: sessionID
+            )
+            if activeProductSessionOwner != nil || activeStreamSessionID != nil {
+                guard productSessionOwnerIsCurrent(owner) else { return nil }
+            } else {
+                switch productSessionActualPhase {
+                case .remoteTerminated, .reconnectExhausted, .failed:
+                    break
+                case .idle, .launching, .waitingForTransport, .streaming,
+                     .reconnecting, .stopping:
+                    return nil
+                }
+            }
+            scopedOwner = owner
+        case let .workspace(scopedWorkspace):
+            guard scopedWorkspace == workspace else { return nil }
+            scopedOwner = nil
+        case .application, .catalog, .pairing, .host:
+            return nil
+        }
+
+        let commands = sessionCommandState(in: workspace)
+        switch token.kind {
+        case .chooseHostAndApp:
+            return .navigate(workspace, .library)
+        case .reconnectStream:
+            guard scopedOwner != nil,
+                  commands.reconnect == .available else { return nil }
+            return .launch(workspace)
+        case .stopStream:
+            guard let scopedOwner,
+                  commands.stop == .available else { return nil }
+            return .stop(scopedOwner)
+        case .reconnectInput:
+            if scopedOwner == nil {
+                guard commands.launch == .available else { return nil }
+            } else {
+                guard commands.reconnect == .available else { return nil }
+            }
+            return .launch(workspace)
+        case .reviewStreamSettings, .reviewHDRSettings, .checkAudioOutput:
+            return .navigate(workspace, .settings)
+        case .updateBuild:
+            return .navigate(workspace, .diagnostics)
+        case .correctHostAddress, .refreshHosts, .retryHostAdd,
+             .retryHostRemoval, .resetHostTrust, .retryPairing,
+             .refreshCatalog, .retrySettingsSave, .exportDiagnostics:
+            return nil
+        }
+    }
+
+    private func productActionWorkspace(
+        for scope: ProductActionScope
+    ) -> ProductWorkspaceReference? {
+        switch scope {
+        case let .workspace(workspace),
+             let .session(workspace, _):
+            return workspace
+        case .application, .catalog, .pairing, .host:
+            return nil
+        }
     }
 
     var isPairingPINValid: Bool {
@@ -2631,6 +2757,7 @@ final class AppModel: ApplicationInputSink {
         activeControlReadiness = []
         activeMediaReadiness = []
         streamLaunchUI.isLaunching = false
+        clearStreamActionPresentation(in: owner.workspace)
         session.activeHostID = nil
         session.lastError = nil
         session.phase = .disconnected
@@ -2644,7 +2771,7 @@ final class AppModel: ApplicationInputSink {
 
     func launchSelectedApp(in workspace: ProductWorkspaceReference) async {
         guard let launchSelection = streamLaunchSelection(in: workspace) else {
-            streamLaunchUI.errorMessage = "Select a host and app first."
+            presentStreamIssue(.launchSelectionRequired, in: workspace)
             return
         }
         let host = launchSelection.host
@@ -2662,8 +2789,7 @@ final class AppModel: ApplicationInputSink {
         guard isStreamTransportAvailable,
               let sessionControlProvider = runtimeProviders.sessionControl else {
             let diagnostic = ApplicationDiagnosticFactory.streamUnavailable
-            streamLaunchUI.errorMessage = diagnostic.summary
-            streamLaunchUI.actionMessage = diagnostic.action?.label
+            presentStreamIssue(.streamUnavailable, in: workspace)
             session.activeHostID = nil
             session.phase = .disconnected
             renderState.policy = .idle
@@ -2695,7 +2821,11 @@ final class AppModel: ApplicationInputSink {
                     message: "Remote input key generation failed."
                 )
             }
-            failStreamSession(contextualError, sessionID: nil)
+            failStreamSession(
+                contextualError,
+                sessionID: nil,
+                workspace: workspace
+            )
             return
         }
 
@@ -2709,7 +2839,7 @@ final class AppModel: ApplicationInputSink {
         productSessionActualPhase = .launching
         activeControlReadiness = []
         activeMediaReadiness = []
-        clearStreamActionPresentation()
+        clearStreamActionPresentation(in: workspace)
         streamLaunchUI.isLaunching = true
         session.activeHostID = host.id
         session.lastError = nil
@@ -2816,7 +2946,6 @@ final class AppModel: ApplicationInputSink {
     private func stopStreamInternally(
         expectedOwner: ProductSessionOwner? = nil
     ) async -> Bool {
-        clearStreamActionPresentation()
         guard let owner = activeProductSessionOwner,
               expectedOwner == nil || expectedOwner == owner,
               let sessionID = activeStreamSessionID,
@@ -2824,6 +2953,7 @@ final class AppModel: ApplicationInputSink {
               let sessionControlProvider = runtimeProviders.sessionControl else {
             return false
         }
+        clearStreamActionPresentation(in: owner.workspace)
         productSessionActualPhase = .stopping
         let platformOwnsReleaseBarrier = await releasePlatformInputForTerminal(
             reason: .stopped
@@ -3103,11 +3233,18 @@ final class AppModel: ApplicationInputSink {
             activeControlReadiness = []
             activeMediaReadiness = []
             streamLaunchUI.isLaunching = false
-            clearStreamActionPresentation()
+            clearStreamActionPresentation(in: owner.workspace)
             session.activeHostID = nil
             session.lastError = nil
             session.phase = .disconnected
             renderState.policy = .idle
+            if remoteTermination {
+                presentStreamIssue(
+                    .streamTerminated,
+                    in: owner.workspace,
+                    sessionID: owner.sessionID
+                )
+            }
             if let reason = snapshot.terminationReason {
                 _ = reason
                 diagnostics.record(ApplicationDiagnostic(
@@ -3132,8 +3269,7 @@ final class AppModel: ApplicationInputSink {
         case .streaming:
             productSessionActualPhase = .streaming
             diagnostics.clearActionableEvents(in: [.transport])
-            streamLaunchUI.errorMessage = nil
-            streamLaunchUI.actionMessage = nil
+            clearStreamIssue(in: owner.workspace)
             streamLaunchUI.isLaunching = false
             session.phase = .streaming
             renderState.policy = hasPlatformLifecycle
@@ -3147,6 +3283,11 @@ final class AppModel: ApplicationInputSink {
             )
             clearActiveAudioRuntime()
             streamLaunchUI.isLaunching = false
+            presentStreamIssue(
+                .streamInterrupted,
+                in: owner.workspace,
+                sessionID: owner.sessionID
+            )
             let suffix = snapshot.reconnectAttempt.map { " (Attempt \($0))" } ?? ""
             session.phase = .connecting(stage: "Reconnecting\(suffix)")
             renderState.policy = .idle
@@ -3799,7 +3940,11 @@ final class AppModel: ApplicationInputSink {
             : "Waiting for \(pending.joined(separator: ", "))"
     }
 
-    private func failStreamSession(_ error: Error, sessionID: UUID?) {
+    private func failStreamSession(
+        _ error: Error,
+        sessionID: UUID?,
+        workspace: ProductWorkspaceReference? = nil
+    ) {
         if let sessionID,
            activeStreamSessionID != nil,
            activeStreamSessionID != sessionID {
@@ -3821,6 +3966,8 @@ final class AppModel: ApplicationInputSink {
             subsystem: diagnostic.subsystem,
             message: diagnostic.summary
         )
+        let issueOwner = activeProductSessionOwner
+        let issueWorkspace = issueOwner?.workspace ?? workspace
 
         activeProductSessionOwner = nil
         activeStreamSessionID = nil
@@ -3833,8 +3980,6 @@ final class AppModel: ApplicationInputSink {
         activeMediaReadiness = []
         latestRemoteInputFeedback = nil
         streamLaunchUI.isLaunching = false
-        streamLaunchUI.errorMessage = sessionError.message
-        streamLaunchUI.actionMessage = diagnostic.action?.label
         session.activeHostID = nil
         session.lastError = sessionError
         session.phase = .failed(sessionError)
@@ -3845,8 +3990,55 @@ final class AppModel: ApplicationInputSink {
         } else {
             productSessionActualPhase = .failed
         }
+        if let issueWorkspace {
+            presentStreamIssue(
+                productIssueCode(for: error, diagnostic: diagnostic),
+                in: issueWorkspace,
+                sessionID: issueOwner?.sessionID
+            )
+        }
         refreshMacInputSurfacePolicy()
         diagnostics.record(diagnostic)
+    }
+
+    private func productIssueCode(
+        for error: Error,
+        diagnostic: ApplicationDiagnostic
+    ) -> ProductIssueCode {
+        if let failure = error as? StreamNegotiationFailure {
+            switch failure.code {
+            case .hostNotPaired:
+                return .launchSelectionRequired
+            case .invalidResolution, .invalidBitrate:
+                return .streamSettingsInvalid
+            case .reconnectExhausted:
+                return .reconnectExhausted
+            case .invalidInputKey, .reconnectKeyGenerationFailed:
+                return .inputUnavailable
+            case .missingHostAddress, .launchRejected, .resumeRejected,
+                 .cancelRejected, .transportUnavailable, .invalidTransition:
+                return .streamInterrupted
+            }
+        }
+        if let failure = error as? SessionMediaEnvironmentError,
+           case .missingProvider = failure {
+            return .streamUnavailable
+        }
+        return switch diagnostic.action {
+        case .reviewStreamSettings:
+            .streamSettingsInvalid
+        case .reviewHDRSettings:
+            .hdrPresentationFailed
+        case .checkAudioOutput:
+            .audioOutputUnavailable
+        case .reconnectInput:
+            .inputUnavailable
+        case .updateBuild:
+            .streamUnavailable
+        case .retryStream, .checkHost, .pairAgain, .verifyPIN,
+             .useSupportedController, nil:
+            .streamInterrupted
+        }
     }
 
     private func refreshMacInputSurfacePolicy() {
@@ -5791,10 +5983,45 @@ final class AppModel: ApplicationInputSink {
     }
 #endif
 
-    private func clearStreamActionPresentation() {
+    private func presentStreamIssue(
+        _ code: ProductIssueCode,
+        in workspace: ProductWorkspaceReference,
+        sessionID: UUID? = nil
+    ) {
+        let scope: ProductActionScope = sessionID.map {
+            .session(workspace: workspace, sessionID: $0)
+        } ?? .workspace(workspace)
+        _ = try? workspaceRegistry.update(workspace) { state in
+            let current = state.presentation.issue
+            guard current?.code != code || current?.action?.scope != scope else {
+                return
+            }
+            state.presentation.issue = ProductIssue(
+                code: code,
+                actionScope: scope
+            )
+        }
+    }
+
+    private func clearStreamIssue(
+        in workspace: ProductWorkspaceReference,
+        matching token: ProductActionToken? = nil
+    ) {
+        _ = try? workspaceRegistry.update(workspace) { state in
+            guard let issue = state.presentation.issue,
+                  issue.domain == .session,
+                  token == nil || issue.action == token else {
+                return
+            }
+            state.presentation.issue = nil
+        }
+    }
+
+    private func clearStreamActionPresentation(
+        in workspace: ProductWorkspaceReference
+    ) {
         diagnostics.clearStreamActionableEvents()
-        streamLaunchUI.errorMessage = nil
-        streamLaunchUI.actionMessage = nil
+        clearStreamIssue(in: workspace)
     }
 
 #if os(macOS)

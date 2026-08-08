@@ -1778,8 +1778,13 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.session.isStreaming)
         XCTAssertEqual(model.session.phase, .disconnected)
         XCTAssertEqual(model.navigationSelection, .library)
-        XCTAssertTrue(model.streamLaunchUI.errorMessage?.contains("unavailable") == true)
-        XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.updateBuild.label)
+        let issue = try XCTUnwrap(model.streamProductIssue)
+        XCTAssertEqual(issue.code, .streamUnavailable)
+        XCTAssertEqual(issue.action?.kind, .updateBuild)
+        XCTAssertEqual(
+            issue.action?.scope,
+            .workspace(model.primaryWorkspaceReference)
+        )
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .transport)
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "stream_provider_unavailable")
         let launchCount = await launchClient.currentLaunchCount()
@@ -1834,8 +1839,13 @@ final class AppModelWorkflowTests: XCTestCase {
             XCTAssertEqual(model.session.phase, .disconnected)
             XCTAssertEqual(model.navigationSelection, .library)
             XCTAssertEqual(model.renderState.policy, .idle)
-            XCTAssertEqual(model.streamLaunchUI.errorMessage, ApplicationDiagnosticFactory.streamUnavailable.summary)
-            XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.updateBuild.label)
+            let issue = try XCTUnwrap(model.streamProductIssue)
+            XCTAssertEqual(issue.code, .streamUnavailable)
+            XCTAssertEqual(issue.action?.kind, .updateBuild)
+            XCTAssertEqual(
+                issue.action?.scope,
+                .workspace(model.primaryWorkspaceReference)
+            )
             XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "stream_provider_unavailable")
             XCTAssertEqual(keyGenerator.currentGenerationCount(), 0)
             XCTAssertEqual(controlProvider.currentStartRecords().count, 0)
@@ -1843,6 +1853,35 @@ final class AppModelWorkflowTests: XCTestCase {
             let launchCount = await launchClient.currentLaunchCount()
             XCTAssertEqual(launchCount, 0)
         }
+    }
+
+    func testLaunchSelectionIssueUsesCheckedWorkspaceAction() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        model.selectedHostID = nil
+        model.navigationSelection = .stream
+
+        await model.launchSelectedApp(in: workspace)
+
+        let issue = try XCTUnwrap(model.streamProductIssue(in: workspace))
+        XCTAssertEqual(issue.code, .launchSelectionRequired)
+        let action = try XCTUnwrap(issue.action)
+        XCTAssertEqual(action.kind, .chooseHostAndApp)
+        XCTAssertEqual(action.scope, .workspace(workspace))
+        XCTAssertTrue(model.canPerformProductAction(action))
+        XCTAssertTrue(provider.currentStartRecords().isEmpty)
+
+        let result = await model.performProductAction(action)
+        XCTAssertEqual(result, .performed)
+        XCTAssertEqual(model.navigationSelection, .library)
+        XCTAssertNil(model.streamProductIssue(in: workspace))
     }
 
     func testSessionUIRequiresNegotiationAndEveryRequiredChannel() async throws {
@@ -6119,8 +6158,16 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { model.session.isStreaming }
-        model.streamLaunchUI.errorMessage = "stale failure"
-        model.streamLaunchUI.actionMessage = "stale action"
+        let owner = try XCTUnwrap(model.activeProductSessionOwner)
+        try model.workspaceRegistry.update(owner.workspace) {
+            $0.presentation.issue = ProductIssue(
+                code: .streamInterrupted,
+                actionScope: .session(
+                    workspace: owner.workspace,
+                    sessionID: owner.sessionID
+                )
+            )
+        }
 
         await model.stopStream()
         provider.yield(.channelsReady(.all), sessionID: record.sessionID)
@@ -6130,8 +6177,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.hasActiveStreamSession)
         XCTAssertEqual(model.session.phase, .disconnected)
         XCTAssertEqual(model.renderState.policy, .idle)
-        XCTAssertNil(model.streamLaunchUI.errorMessage)
-        XCTAssertNil(model.streamLaunchUI.actionMessage)
+        XCTAssertNil(model.streamProductIssue)
     }
 
     func testDuplicateLaunchDoesNotStartAnotherSessionGeneration() async throws {
@@ -6188,7 +6234,11 @@ final class AppModelWorkflowTests: XCTestCase {
             XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
             XCTAssertEqual(model.renderState.policy, .idle)
             XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .transport)
-            XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.retryStream.label)
+            XCTAssertEqual(model.streamProductIssue?.code, .streamInterrupted)
+            XCTAssertEqual(
+                model.streamProductIssue?.action?.kind,
+                .reconnectStream
+            )
         }
     }
 
@@ -6235,9 +6285,10 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(failureEvent.category, .decoder)
         XCTAssertEqual(failureEvent.code, "video_pipeline_failed")
         XCTAssertEqual(failureEvent.action, .reviewStreamSettings)
+        XCTAssertEqual(model.streamProductIssue?.code, .streamSettingsInvalid)
         XCTAssertEqual(
-            model.streamLaunchUI.actionMessage,
-            ApplicationDiagnosticAction.reviewStreamSettings.label
+            model.streamProductIssue?.action?.kind,
+            .reviewStreamSettings
         )
         XCTAssertFalse(failureEvent.message.contains("must-not-appear"))
     }
@@ -6492,13 +6543,10 @@ final class AppModelWorkflowTests: XCTestCase {
         guard case .failed = model.session.phase else {
             return XCTFail("Input-key generation failure must fail the session before launch.")
         }
-        XCTAssertEqual(
-            model.streamLaunchUI.errorMessage,
-            "Remote input is no longer available for this session."
-        )
+        XCTAssertEqual(model.streamProductIssue?.code, .inputUnavailable)
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.category, .input)
         XCTAssertEqual(model.diagnostics.latestActionableEvent?.code, "invalidInputKey")
-        XCTAssertEqual(model.streamLaunchUI.actionMessage, ApplicationDiagnosticAction.reconnectInput.label)
+        XCTAssertEqual(model.streamProductIssue?.action?.kind, .reconnectInput)
         XCTAssertEqual(model.renderState.policy, .idle)
     }
 
@@ -6662,6 +6710,15 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(reconnecting.reconnect, .inProgress)
         XCTAssertEqual(reconnecting.resume, .inProgress)
         XCTAssertEqual(reconnecting.stop, .available)
+        let interruption = try XCTUnwrap(model.streamProductIssue(in: workspace))
+        XCTAssertEqual(interruption.code, .streamInterrupted)
+        XCTAssertEqual(interruption.action?.kind, .reconnectStream)
+        XCTAssertEqual(
+            interruption.action?.scope,
+            .session(workspace: workspace, sessionID: record.sessionID)
+        )
+        let interruptionAction = try XCTUnwrap(interruption.action)
+        XCTAssertFalse(model.canPerformProductAction(interruptionAction))
 
         provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
         provider.finish(sessionID: record.sessionID)
@@ -6673,6 +6730,109 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(terminated.reconnect, .available)
         XCTAssertEqual(terminated.resume, .unavailable(.terminalSession))
         XCTAssertEqual(terminated.stop, .unavailable(.noActiveSession))
+        let issue = try XCTUnwrap(model.streamProductIssue(in: workspace))
+        XCTAssertEqual(issue.code, .streamTerminated)
+        XCTAssertEqual(issue.action?.kind, .reconnectStream)
+        let issueAction = try XCTUnwrap(issue.action)
+        XCTAssertTrue(model.canPerformProductAction(issueAction))
+    }
+
+    func testRemoteTerminationActionRelaunchesOnceAndRejectsOldSessionToken()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 39,
+                    key: Data(repeating: 0x39, count: 16)
+                )),
+                .success(RemoteInputKeyMaterial(
+                    keyID: 40,
+                    key: Data(repeating: 0x40, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+
+        let firstLaunch = Task { await model.launchSelectedApp(in: workspace) }
+        let first = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: first)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+        provider.yield(.terminated(reason: nil), sessionID: first.sessionID)
+        provider.finish(sessionID: first.sessionID)
+        await firstLaunch.value
+
+        let issue = try XCTUnwrap(model.streamProductIssue(in: workspace))
+        let action = try XCTUnwrap(issue.action)
+        XCTAssertTrue(model.canPerformProductAction(action))
+
+        let actionTask = Task { await model.performProductAction(action) }
+        await waitUntil { provider.currentStartRecords().count == 2 }
+        let second = try XCTUnwrap(provider.currentStartRecords().last)
+        XCTAssertNotEqual(second.sessionID, first.sessionID)
+        XCTAssertNil(model.streamProductIssue(in: workspace))
+
+        let replay = await model.performProductAction(action)
+        XCTAssertEqual(replay.issue?.code, .staleAction)
+        XCTAssertEqual(provider.currentStartRecords().count, 2)
+
+        let didStop = await model.stopStream(in: workspace)
+        XCTAssertTrue(didStop)
+        let actionResult = await actionTask.value
+        XCTAssertEqual(actionResult, .performed)
+        XCTAssertEqual(
+            provider.currentStoppedSessionIDs(),
+            [second.sessionID]
+        )
+    }
+
+    func testTerminalActionRejectsReplacedWorkspaceGeneration()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 41,
+                    key: Data(repeating: 0x41, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                selectedHostID: try XCTUnwrap(model.selectedHostID),
+                selectedAppID: try XCTUnwrap(model.selectedAppID)
+            )
+        )
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+        provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
+        provider.finish(sessionID: record.sessionID)
+        await launch.value
+
+        let action = try XCTUnwrap(
+            model.streamProductIssue(in: workspace)?.action
+        )
+        let replacement = try model.workspaceRegistry.replace(workspace)
+        XCTAssertNotEqual(replacement.generation, workspace.generation)
+        XCTAssertFalse(model.canPerformProductAction(action))
+
+        let result = await model.performProductAction(action)
+        XCTAssertEqual(result.issue?.code, .staleAction)
+        XCTAssertEqual(provider.currentStartRecords().count, 1)
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertNil(model.streamProductIssue(in: replacement))
     }
 
     func testReconnectExhaustionBecomesTerminalReconnectCommandState()
