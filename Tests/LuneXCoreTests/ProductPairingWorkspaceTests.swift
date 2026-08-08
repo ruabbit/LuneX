@@ -205,6 +205,62 @@ final class ProductPairingWorkspaceTests: XCTestCase {
         XCTAssertFalse(source.contains("$appModel.pairingUI.pin"))
     }
 
+    func testApplicationPairingCancelRetryAndReplacementWorkflow() async throws {
+        let host = makeHost(idSuffix: 7, name: "Application")
+        let provider = PairingWorkspaceProvider()
+        let provisioner = ApplicationPairingIdentityProvisioner(
+            identity: makeIdentity()
+        )
+        let model = makeModel(
+            hosts: [host],
+            provider: provider,
+            identityProvisioner: provisioner
+        )
+        let workspace = model.primaryWorkspaceReference
+        await model.loadHosts()
+
+        await model.beginPairing(host: host, in: workspace)
+        let cancelledOwner = try XCTUnwrap(model.primaryPairingState?.owner)
+        XCTAssertEqual(model.primaryPairingState?.stage, .waitingForPIN)
+        await model.cancelPairing(in: workspace)
+        XCTAssertEqual(model.primaryPairingState?.stage, .cancelled)
+        XCTAssertNil(model.primaryPairingState?.issue?.action)
+
+        await model.beginPairing(host: host, in: workspace)
+        let failedOwner = try XCTUnwrap(model.primaryPairingState?.owner)
+        XCTAssertNotEqual(failedOwner, cancelledOwner)
+        XCTAssertEqual(model.primaryPairingState?.stage, .failed)
+        XCTAssertEqual(
+            model.primaryPairingState?.issue?.action?.scope,
+            .pairing(failedOwner)
+        )
+
+        let retry = Task { await model.retryPairing(in: workspace) }
+        await provisioner.waitUntilRetryIsPending()
+        let retryOwner = try XCTUnwrap(model.primaryPairingState?.owner)
+        XCTAssertNotEqual(retryOwner, failedOwner)
+        let replacement = try model.workspaceRegistry.replace(workspace)
+        await provisioner.resumeRetry()
+        let retryAccepted = await retry.value
+        await waitForCancellation(
+            retryOwner.attemptGeneration.rawValue,
+            provider: provider
+        )
+
+        XCTAssertTrue(retryAccepted)
+        XCTAssertNil(model.workspaceState(for: workspace))
+        XCTAssertEqual(model.workspaceState(for: replacement)?.selectedHostID, host.id)
+        XCTAssertEqual(model.workspaceState(for: replacement)?.pairing, PairingUIState())
+        XCTAssertEqual(model.hosts.first?.pairingState, .unpaired)
+        XCTAssertNil(model.hosts.first?.pinnedIdentity)
+        let requestCount = await provider.requestCount()
+        XCTAssertEqual(requestCount, 0)
+        let cancellations = await provider.cancelledAttemptIDs()
+        XCTAssertTrue(cancellations.contains(cancelledOwner.attemptGeneration.rawValue))
+        XCTAssertFalse(cancellations.contains(failedOwner.attemptGeneration.rawValue))
+        XCTAssertTrue(cancellations.contains(retryOwner.attemptGeneration.rawValue))
+    }
+
     private func makeModel(
         hosts: [MoonlightHost],
         provider: PairingWorkspaceProvider,
@@ -321,6 +377,40 @@ private actor SuspendedPairingWorkspaceIdentityProvisioner: ClientIdentityProvis
     func resume(with identity: ClientIdentityMaterial) {
         continuation?.resume(returning: identity)
         continuation = nil
+    }
+}
+
+private actor ApplicationPairingIdentityProvisioner: ClientIdentityProvisioning {
+    private let identity: ClientIdentityMaterial
+    private var attempts = 0
+    private var retryContinuation: CheckedContinuation<ClientIdentityMaterial, Error>?
+
+    init(identity: ClientIdentityMaterial) {
+        self.identity = identity
+    }
+
+    func loadOrCreateIdentity(createdAt: Date) async throws -> ClientIdentityMaterial {
+        _ = createdAt
+        attempts += 1
+        switch attempts {
+        case 1:
+            return identity
+        case 2:
+            throw PairingWorkspaceTestError.identityUnavailable
+        default:
+            return try await withCheckedThrowingContinuation {
+                retryContinuation = $0
+            }
+        }
+    }
+
+    func waitUntilRetryIsPending() async {
+        while retryContinuation == nil { await Task.yield() }
+    }
+
+    func resumeRetry() {
+        retryContinuation?.resume(returning: identity)
+        retryContinuation = nil
     }
 }
 

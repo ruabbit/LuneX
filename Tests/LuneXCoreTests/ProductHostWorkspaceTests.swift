@@ -249,6 +249,58 @@ final class ProductHostWorkspaceTests: XCTestCase {
         XCTAssertEqual(saveCountAfterCompletion, 1)
     }
 
+    func testApplicationFirstUseManualEntryAndRestorationWorkflow() async throws {
+        let repository = RecordingProductHostRepository()
+        let model = makeModel(repository: repository)
+        let workspace = model.primaryWorkspaceReference
+
+        await model.loadHosts(in: workspace)
+        XCTAssertEqual(model.primaryWorkspaceState?.hostLibrary.phase, .firstUse)
+        XCTAssertEqual(
+            ProductHostLibrarySurface(
+                library: try XCTUnwrap(model.primaryWorkspaceState?.hostLibrary),
+                hostCount: model.hosts.count,
+                selectedHost: model.selectedHost
+            ).content,
+            .firstUse
+        )
+
+        model.setManualHostDraft(
+            ManualHostDraft(name: "Invalid", address: "   "),
+            in: workspace
+        )
+        let invalid = await model.addManualHost(in: workspace)
+        guard case let .failed(issue) = invalid else {
+            return XCTFail("Expected typed invalid manual entry")
+        }
+        XCTAssertEqual(issue.code, .hostAddressRequired)
+        XCTAssertEqual(issue.action?.scope, .workspace(workspace))
+        let savesAfterInvalid = await repository.saveCount()
+        XCTAssertEqual(savesAfterInvalid, 0)
+
+        model.setManualHostDraft(
+            ManualHostDraft(name: "  Studio  ", address: "  Moon.Local.  "),
+            in: workspace
+        )
+        let valid = await model.addManualHost(in: workspace)
+        guard case let .succeeded(hostID) = valid else {
+            return XCTFail("Expected valid manual entry to persist")
+        }
+        XCTAssertEqual(model.selectedHostID, hostID)
+        XCTAssertEqual(model.selectedHost?.address, "moon.local")
+        XCTAssertEqual(model.primaryWorkspaceState?.hostLibrary.phase, .available)
+
+        let restored = makeModel(repository: repository)
+        await restored.loadHosts()
+        XCTAssertEqual(restored.primaryWorkspaceState?.hostLibrary.phase, .available)
+        XCTAssertEqual(restored.selectedHostID, hostID)
+        XCTAssertEqual(restored.hosts.map(\.id), [hostID])
+        XCTAssertEqual(
+            restored.primaryWorkspaceState?.hostLibrary.manualHostSubmission,
+            .idle
+        )
+    }
+
     private func makeModel(repository: any HostRepository) -> AppModel {
         AppModel(
             hostLibraryManager: HostLibraryManager(

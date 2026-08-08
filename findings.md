@@ -3268,3 +3268,10 @@
 - Host与Catalog retry新增checked入口，只接受当前workspace或catalog owner的typed action；App tile改为原生Button并继续经过catalog membership选择检查。无issue的不一致failed state显示稳定占位且不生成未校验动作。
 - 最终逐段审读进一步要求Catalog retry的typed action与当前`.failed` phase同时成立；即使异常状态在current/cached presentation残留旧issue，也只允许普通current refresh，不把旧issue解释为retry admission。
 - 最终focused为`30/30`，related为`135/135`，serial normal为`1198/1197/1/0`且唯一skip仍是opt-in unset真实Keychain；macOS、iOS/iPadOS、tvOS、visionOS unsigned generic Debug均成功。未调用Simulator lifecycle，不构成signed/physical/live/assistive-technology证明。
+
+## 2026-08-08 阶段 19 Task 2.7 Application Workflow Matrix
+
+- 2.1至2.6的分散AppModel测试已逐项覆盖first-use、manual input、host/catalog ABA、pairing cancel/retry/replacement、catalog recovery、trust reset和stop-before-remove；2.7新增跨状态应用链路，而不是用source contract替代运行时断言。
+- 新矩阵按四条链路组织：first-use到invalid/valid manual add再由新AppModel恢复；Host A失败后切到B拒绝旧retry再由B scoped retry恢复；pairing cancel后新attempt失败、retry并在identity await期间replacement；trust reset保持catalog/unrelated host，再由fresh active session验证stop严格先于catalog/host mutation。
+- 失败identity preparation发生在provider request之前，因此正确合同是不创建伪provider cancellation；显式cancelled owner与replacement期间已启动的retry owner会取消，而pre-provider failed owner只通过generation/action失效。
+- 最终focused `4/4`、related `139/139`、serial normal `1202/1201/1/0`；唯一skip仍是opt-in unset真实Keychain。测试只证明offline deterministic application state/order，不证明SwiftUI automation、Simulator launch、signed/physical/live workflow。

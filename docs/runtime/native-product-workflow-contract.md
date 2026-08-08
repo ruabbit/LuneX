@@ -398,6 +398,29 @@ technology, and direct per-scene injection remain tasks 5.x and 4.2. Retained
 legacy workflow strings remain within the explicit tasks 6.1/6.2 migration
 boundary.
 
+### Host workflow application matrix
+
+The deterministic application matrix now drives four multi-step workflows
+through `AppModel`, real workspace generations, and asynchronous test doubles:
+
+- an empty repository reaches first use, invalid manual input remains local and
+  unsaved, valid input is normalized and selected, and a new application model
+  restores the persisted host without retaining submission presentation;
+- a failed catalog action for host A becomes ineligible after switching to host
+  B, performs no request, and host B can fail and recover only through its own
+  current catalog owner action;
+- pairing cancellation invalidates its attempt, a later identity failure
+  creates a retryable owner, retry rotates generation, and replacement while
+  identity preparation is suspended rejects the late owner without saving
+  trust or starting a provider request;
+- trust reset preserves the host, unrelated host, and catalog while clearing
+  only target trust, and a separate active-session removal proves session stop
+  precedes both catalog and host repository mutation.
+
+This is offline deterministic application evidence. It does not claim SwiftUI
+gesture automation, Simulator app launch, signed artifacts, physical devices,
+live Sunshine, or the broader end-to-end matrix reserved for tasks 7.x.
+
 ## Compatibility Boundary
 
 Workspace migration must initially preserve the existing single-window public

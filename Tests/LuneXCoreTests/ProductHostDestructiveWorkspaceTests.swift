@@ -366,6 +366,91 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
         XCTAssertLessThan(cancelIndex, hostIndex)
     }
 
+    func testApplicationTrustResetAndStopThenRemoveWorkflow() async throws {
+        let hosts = [makeHost(1), makeHost(2)]
+        let snapshots = makeSnapshots(hosts: hosts)
+        let trustRepository = DestructiveHostRepository(hosts: hosts)
+        let trustCatalog = DestructiveCatalogRepository(snapshots: snapshots)
+        let trustModel = makeModel(
+            hostRepository: trustRepository,
+            catalogRepository: trustCatalog
+        )
+        await trustModel.loadInitialState()
+        trustModel.selectedHostID = hosts[0].id
+
+        _ = try XCTUnwrap(
+            trustModel.requestHostTrustReset(
+                in: trustModel.primaryWorkspaceReference
+            )
+        )
+        let reset = await trustModel.confirmHostDestructiveAction(
+            in: trustModel.primaryWorkspaceReference
+        )
+        XCTAssertEqual(
+            reset,
+            .succeeded(kind: .resetTrust, hostID: hosts[0].id)
+        )
+        let resetHost = try XCTUnwrap(
+            trustModel.hosts.first { $0.id == hosts[0].id }
+        )
+        XCTAssertEqual(resetHost.pairingState, .unpaired)
+        XCTAssertNil(resetHost.pinnedIdentity)
+        XCTAssertEqual(
+            trustModel.hosts.first { $0.id == hosts[1].id },
+            hosts[1]
+        )
+        let trustSnapshots = await trustCatalog.currentSnapshots()
+        XCTAssertEqual(trustSnapshots, snapshots)
+
+        let recorder = DestructiveEventRecorder()
+        let control = DestructiveSessionControlProvider(recorder: recorder)
+        let removalRepository = DestructiveHostRepository(
+            hosts: hosts,
+            recorder: recorder
+        )
+        let removalCatalog = DestructiveCatalogRepository(
+            snapshots: snapshots,
+            recorder: recorder
+        )
+        let removalModel = makeStreamingModel(
+            hostRepository: removalRepository,
+            catalogRepository: removalCatalog,
+            control: control
+        )
+        await removalModel.loadInitialState()
+        removalModel.selectedHostID = hosts[0].id
+        let launch = Task { await removalModel.launchSelectedApp() }
+        await control.waitUntilStarted()
+
+        let confirmation = try XCTUnwrap(
+            removalModel.requestHostRemoval(
+                in: removalModel.primaryWorkspaceReference
+            )
+        )
+        XCTAssertTrue(confirmation.requiresSessionStop)
+        let removal = await removalModel.confirmHostDestructiveAction(
+            in: removalModel.primaryWorkspaceReference
+        )
+        await launch.value
+
+        XCTAssertEqual(
+            removal,
+            .succeeded(kind: .remove, hostID: hosts[0].id)
+        )
+        XCTAssertNil(removalModel.session.activeHostID)
+        XCTAssertEqual(removalModel.hosts, [hosts[1]])
+        let persistedHosts = await removalRepository.currentHosts()
+        let persistedSnapshots = await removalCatalog.currentSnapshots()
+        XCTAssertEqual(persistedHosts, [hosts[1]])
+        XCTAssertEqual(persistedSnapshots, [snapshots[1]])
+        let events = await recorder.currentEvents()
+        let stopIndex = try XCTUnwrap(events.firstIndex(of: .sessionStop))
+        let catalogIndex = try XCTUnwrap(events.firstIndex(of: .catalogSave))
+        let hostIndex = try XCTUnwrap(events.firstIndex(of: .hostSave))
+        XCTAssertLessThan(stopIndex, catalogIndex)
+        XCTAssertLessThan(stopIndex, hostIndex)
+    }
+
     func testDuplicateRequestPerformAndRetryRemainIdempotent() async throws {
         let hosts = [makeHost(1), makeHost(2)]
         let hostRepository = DestructiveHostRepository(

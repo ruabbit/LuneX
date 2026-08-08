@@ -3759,3 +3759,11 @@
 - 2026-08-08：task 2.6 final audit r2 `/private/tmp/LuneX-19-2_6-final-audit-r2.eAKjE9`通过最终13文件scope、diff check、strict/apply `12/48 next 2.7`、generator双跑稳定SHA-256 `60e6966fc42bbe0facbb8adfdf66794746948039ba1f190ac13dc0438a9d2224`、最终测试/四平台build、Catalog failed-phase admission及opt-in/process/proof边界；下一步清理全部本轮raw evidence并运行final record。
 - 2026-08-08：首次raw cleanup因工具策略在执行前拒绝`rm -rf`而未删除任何目录；改用精确限定`/private/tmp/LuneX-19-2_6-*`的`find -depth -delete`，不触碰仓库内历史build产物。
 - 2026-08-08：task 2.6 cleanup后final record通过最终13文件、strict/apply `12/48 next 2.7`、稳定project SHA-256、raw artifact 0、opt-in unset及无xcodebuild/xctest残留；准备精确stage、独立commit/push/fetch对齐。
+- 2026-08-08：task 2.6以`7bbb1a9 Recompose native workflow surfaces`提交推送，fetch与ls-remote确认HEAD/origin/main/remote三方一致且工作树clean；OpenSpec进入`12/48 next 2.7`。
+- 2026-08-08：开始task 2.7，审计现有Host/Catalog/Pairing/Destructive/AppModel测试后新增四条跨状态application workflow，覆盖要求中的八类行为；仅修改测试与planning，下一步warnings-as-errors compile与focused验收。
+- 2026-08-08：2.7 warnings-as-errors compile `/private/tmp/LuneX-19-2_7-compile.aLQkF0`成功；首轮focused为`4 total / 3 passed / 1 failed`，唯一失败是测试误要求identity preparation失败也调用尚未启动的provider cancellation。改为断言不取消未启动provider，production无需修改，删除失败bundle后fresh重跑。
+- 2026-08-08：2.7 corrected focused为`4/4`，related Product/AppModel为`139/139`，serial normal为`1202/1201/1/0`；唯一skip精确为opt-in unset真实Keychain，live-host opt-in同样unset。同步application matrix合同并勾选2.7至`13/48 next 3.1`。
+- 2026-08-08：2.7四平台unsigned generic Debug `/private/tmp/LuneX-19-2_7-platform-builds.BzEjDZ`为macOS、iOS/iPadOS、tvOS、visionOS `4/4`成功；无源码warning/error，未调用Simulator lifecycle。下一步strict/generator/test-only scope/proof final gate。
+- 2026-08-08：首轮2.7 final audit `/private/tmp/LuneX-19-2_7-final-audit.tYseFx`在production/scope/OpenSpec/generator后因`rg -c`零个removed tests返回空字符串而退出；只读诊断确认其余test/build证据完整。corrected gate用`wc -l`规范化零计数，不重复test/build。
+- 2026-08-08：corrected task 2.7 final audit `/private/tmp/LuneX-19-2_7-final-audit-r2.ifVIFd`通过9文件scope、production/project/config零diff、strict/apply `13/48 next 3.1`、stable generator、focused/related/normal、4/4 build及opt-in/process/proof边界；下一步清理raw evidence并final record。
+- 2026-08-08：task 2.7 raw evidence清理后final record确认9文件test/authority scope、production diff 0、strict `13/48 next 3.1`、project hash稳定、raw artifact 0及无xcodebuild/xctest残留；准备独立提交推送。

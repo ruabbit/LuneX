@@ -258,6 +258,54 @@ final class ProductCatalogWorkspaceTests: XCTestCase {
         XCTAssertFalse(source.contains("appModel.streamLaunchUI.selectedAppID"))
     }
 
+    func testApplicationHostSwitchRejectsStaleRetryAndRecoversCatalog() async throws {
+        let first = makeHost(idSuffix: 13, name: "A")
+        let second = makeHost(idSuffix: 14, name: "B")
+        let apps = makeApps()
+        let client = ScriptedProductCatalogClient(results: [
+            .failure(.expectedFailure),
+            .failure(.expectedFailure),
+            .success(apps)
+        ])
+        let model = makeModel(hosts: [first, second], appListClient: client)
+        let workspace = model.primaryWorkspaceReference
+        await model.loadHosts()
+        model.selectedHostID = first.id
+
+        await model.refreshAppsForSelectedHost(in: workspace)
+        let firstOwner = try XCTUnwrap(model.primaryCatalogState?.owner)
+        XCTAssertEqual(model.primaryCatalogState?.phase, .failed(hasCachedApps: false))
+        XCTAssertEqual(
+            model.primaryCatalogState?.issue?.action?.scope,
+            .catalog(firstOwner)
+        )
+
+        model.selectedHostID = second.id
+        let secondOwner = try XCTUnwrap(model.primaryCatalogState?.owner)
+        XCTAssertNotEqual(firstOwner, secondOwner)
+        let staleRetryAccepted = await model.retryAppCatalog(in: workspace)
+        let requestsAfterStaleRetry = await client.requestCount()
+        XCTAssertFalse(staleRetryAccepted)
+        XCTAssertEqual(requestsAfterStaleRetry, 1)
+        XCTAssertEqual(model.primaryCatalogState?.phase, .idle)
+
+        await model.refreshAppsForSelectedHost(in: workspace)
+        XCTAssertEqual(model.primaryCatalogState?.phase, .failed(hasCachedApps: false))
+        XCTAssertEqual(
+            model.primaryCatalogState?.issue?.action?.scope,
+            .catalog(secondOwner)
+        )
+        let recoveryAccepted = await model.retryAppCatalog(in: workspace)
+
+        XCTAssertTrue(recoveryAccepted)
+        XCTAssertEqual(model.primaryCatalogState?.owner, secondOwner)
+        XCTAssertEqual(model.primaryCatalogState?.phase, .current)
+        XCTAssertEqual(model.selectedApps, apps)
+        XCTAssertEqual(model.selectedAppID, apps.first?.id)
+        let totalRequests = await client.requestCount()
+        XCTAssertEqual(totalRequests, 3)
+    }
+
     private func makeModel(
         hosts: [MoonlightHost],
         appListClient: any AppListClient = FixedProductCatalogClient(apps: []),
