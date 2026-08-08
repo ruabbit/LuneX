@@ -36,16 +36,18 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`11/48`；typed host removal/trust reset与active owner clean teardown完成，继续host/pairing/catalog surface recomposition |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`12/48`；host/pairing/catalog纯值surface、完整状态呈现与checked retry完成，继续2.7应用工作流矩阵 |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`11/48`。Group 1与2.1至2.5完成：host library、catalog、pairing及destructive confirmation属于checked workspace；remove/reset trust要求显式确认，target active session必须使用stop consent并await clean teardown，target pairing先取消，所有await边界重验owner。focused `12/12`、related `127/127`、normal `1190/1189/1 exact Keychain skip/0`、四application target generic Debug `4/4`通过。host/catalog跨repository rollback为best-effort而非原子事务；root UI仍是primary compatibility binding，session workspace owner留给3.1。下一项2.6重组host/pairing/catalog完整状态surface。
+阶段19当前权威进度`12/48`。Group 1与2.1至2.6完成：host library、catalog、pairing及destructive confirmation属于checked workspace；纯值surface逐项呈现first-use/loading/empty/cached/current/failed/retry/confirmation/completed，Host与Catalog retry复核typed owner action，app tile改为原生Button。focused `30/30`、related `135/135`、normal `1198/1197/1 exact Keychain skip/0`、四application target generic Debug `4/4`通过。完整adaptive/accessibility属于5.x，legacy workflow string迁移属于6.1/6.2，root UI仍是primary compatibility binding且session workspace owner留给3.1。下一项2.7补齐端到端应用工作流矩阵。
 
 ### 阶段19错误记录
+
+- Task 2.6首轮warnings-as-errors compile在0 tests前发现Swift不接受将switch expression直接放在`&&`右侧；改为局部`cancellablePhase`后fresh compile及全部测试通过，失败raw evidence已删除。
 
 - Task 1.1首轮项目元数据读取假设存在`project.yml`，命令返回`No such file or directory`；无文件或运行时副作用。已确认本仓库权威生成器为`Tools/generate_xcodeproj.rb`，后续直接审计生成器与pbxproj，不重复错误路径。
 - Task 1.1首个验收编排使用`git diff --name-only`比较范围，未包含未跟踪的新合同文档而退出；OpenSpec strict已通过，无production/test/device/Keychain副作用。corrected gate改用`git status --porcelain`解析tracked与untracked精确集合，并从fresh evidence目录完整重跑。

@@ -86,7 +86,7 @@ struct RootView: View {
 
         return TabView(selection: $appModel.navigationSelection) {
             NavigationStack {
-                LibraryDashboardView()
+                LibraryDashboardView(onAddHost: presentAddHost)
                     .navigationTitle("Library")
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
@@ -149,7 +149,7 @@ struct RootView: View {
     private var content: some View {
         switch appModel.navigationSelection {
         case .library:
-            LibraryDashboardView()
+            LibraryDashboardView(onAddHost: presentAddHost)
         case .stream:
             #if os(macOS)
             StreamWorkspaceView(platformLifecycle: platformLifecycle)
@@ -363,6 +363,7 @@ private struct AddHostSheet: View {
 private struct LibraryDashboardView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let onAddHost: () -> Void
 
     var body: some View {
         @Bindable var appModel = appModel
@@ -371,7 +372,10 @@ private struct LibraryDashboardView: View {
             #if os(iOS)
             if horizontalSizeClass == .compact {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    HostLibraryPanel(selectedHostID: $appModel.selectedHostID)
+                    HostLibraryPanel(
+                        selectedHostID: $appModel.selectedHostID,
+                        onAddHost: onAddHost
+                    )
                     AppCatalogPanel()
                     PairingPanel()
                     StreamLaunchPanel()
@@ -391,7 +395,10 @@ private struct LibraryDashboardView: View {
     private func dashboardGrid(selectedHostID: Binding<MoonlightHost.ID?>) -> some View {
         Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
             GridRow {
-                HostLibraryPanel(selectedHostID: selectedHostID)
+                HostLibraryPanel(
+                    selectedHostID: selectedHostID,
+                    onAddHost: onAddHost
+                )
                 AppCatalogPanel()
             }
             GridRow {
@@ -406,20 +413,36 @@ private struct LibraryDashboardView: View {
 private struct HostLibraryPanel: View {
     @Environment(AppModel.self) private var appModel
     @Binding var selectedHostID: MoonlightHost.ID?
+    let onAddHost: () -> Void
 
     var body: some View {
         let workspace = appModel.primaryWorkspaceReference
-        let destructiveState = appModel.hostDestructiveState(for: workspace)
-            ?? .idle
+        let library = appModel.workspaceState(for: workspace)?.hostLibrary
+            ?? ProductHostLibraryWorkspaceState()
+        let surface = ProductHostLibrarySurface(
+            library: library,
+            hostCount: appModel.hosts.count,
+            selectedHost: appModel.selectedHost
+        )
 
         Panel {
             VStack(alignment: .leading, spacing: 12) {
                 PanelHeader(title: "Hosts", systemImage: "desktopcomputer")
 
-                if appModel.hosts.isEmpty {
-                    ContentUnavailableView("No Hosts", systemImage: "desktopcomputer", description: Text("Add a Sunshine or GameStream host."))
-                        .frame(minHeight: 180)
-                } else {
+                switch surface.content {
+                case .loading:
+                    ProgressView("Loading hosts...")
+                        .frame(maxWidth: .infinity, minHeight: 180)
+                case .firstUse:
+                    ContentUnavailableView(
+                        "No Hosts",
+                        systemImage: "desktopcomputer",
+                        description: Text("Refresh discovery or add a host manually.")
+                    )
+                    .frame(minHeight: 180)
+                case .failed:
+                    hostLibraryFailure(library.refreshIssue)
+                case .hosts:
                     List(selection: $selectedHostID) {
                         ForEach(appModel.hosts) { host in
                             HostRow(host: host)
@@ -431,52 +454,50 @@ private struct HostLibraryPanel: View {
                 }
 
                 HStack {
+                    Button(action: onAddHost) {
+                        Label("Add Host", systemImage: "plus")
+                    }
+                    .disabled(!surface.canAddHost)
+
                     Button {
                         Task {
-                            await appModel.loadHosts()
+                            await appModel.loadHosts(in: workspace)
                         }
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
+                    .disabled(!surface.canRefresh)
 
                     Button {
                         appModel.requestHostTrustReset(in: workspace)
                     } label: {
                         Label("Reset Trust", systemImage: "checkmark.shield")
                     }
-                    .disabled(
-                        destructiveState.isPerforming
-                            || appModel.selectedHost?.pairingState != .paired
-                    )
+                    .disabled(!surface.canResetTrust)
 
                     Button(role: .destructive) {
                         appModel.requestHostRemoval(in: workspace)
                     } label: {
                         Label("Remove", systemImage: "trash")
                     }
-                    .disabled(
-                        destructiveState.isPerforming
-                            || appModel.selectedHost == nil
-                    )
+                    .disabled(!surface.canRemove)
                 }
 
-                if let issue = destructiveState.issue {
-                    Label {
-                        Text(issue.presentation.message)
-                    } icon: {
-                        Image(systemName: issue.presentation.systemImage)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-
-                    if issue.action != nil {
+                if surface.content == .hosts,
+                   let issue = surface.refreshIssue {
+                    productIssueLabel(issue)
+                    if issue.action?.kind == .refreshHosts {
                         Button {
-                            appModel.retryHostDestructiveAction(in: workspace)
+                            Task {
+                                await appModel.retryHostLibraryLoad(in: workspace)
+                            }
                         } label: {
-                            Label("Retry", systemImage: "arrow.clockwise")
+                            Label("Retry Host Refresh", systemImage: "arrow.clockwise")
                         }
                     }
                 }
+
+                destructiveStatus(surface.destructive, workspace: workspace)
             }
         }
         .confirmationDialog(
@@ -505,6 +526,83 @@ private struct HostLibraryPanel: View {
                 Text(destructiveActionMessage(confirmation))
             }
         }
+    }
+
+    @ViewBuilder
+    private func hostLibraryFailure(_ issue: ProductIssue?) -> some View {
+        if let issue {
+            ContentUnavailableView {
+                Label {
+                    Text(issue.presentation.title)
+                } icon: {
+                    Image(systemName: issue.presentation.systemImage)
+                }
+            } description: {
+                Text(issue.presentation.message)
+            } actions: {
+                if issue.action?.kind == .refreshHosts {
+                    Button {
+                        Task {
+                            await appModel.retryHostLibraryLoad(
+                                in: appModel.primaryWorkspaceReference
+                            )
+                        }
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                    }
+                }
+            }
+            .frame(minHeight: 180)
+        } else {
+            ContentUnavailableView(
+                "Hosts Not Loaded",
+                systemImage: "desktopcomputer.trianglebadge.exclamationmark",
+                description: Text("Try refreshing the host library again.")
+            )
+            .frame(minHeight: 180)
+        }
+    }
+
+    @ViewBuilder
+    private func destructiveStatus(
+        _ destructive: ProductHostDestructiveSurface,
+        workspace: ProductWorkspaceReference
+    ) -> some View {
+        switch destructive {
+        case .idle, .awaitingConfirmation:
+            EmptyView()
+        case let .performing(kind):
+            ProgressView(
+                kind == .remove ? "Removing host..." : "Resetting trust..."
+            )
+            .controlSize(.small)
+        case let .failed(issue):
+            productIssueLabel(issue)
+            if issue.action != nil {
+                Button {
+                    appModel.retryHostDestructiveAction(in: workspace)
+                } label: {
+                    Label("Retry Host Action", systemImage: "arrow.clockwise")
+                }
+            }
+        case let .completed(kind):
+            Label(
+                kind == .remove ? "Host removed" : "Trust reset",
+                systemImage: "checkmark.circle"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func productIssueLabel(_ issue: ProductIssue) -> some View {
+        Label {
+            Text(issue.presentation.message)
+        } icon: {
+            Image(systemName: issue.presentation.systemImage)
+        }
+        .font(.caption)
+        .foregroundStyle(issue.severity == .error ? Color.red : Color.orange)
     }
 
     private var currentHostConfirmation: ProductHostDestructiveConfirmation? {
@@ -595,6 +693,12 @@ private struct PairingPanel: View {
     var body: some View {
         let workspace = appModel.primaryWorkspaceReference
         let pairing = appModel.pairingState(for: workspace) ?? PairingUIState()
+        let surface = ProductPairingSurface(
+            selectedHost: appModel.selectedHost,
+            pairing: pairing,
+            transportAvailable: appModel.isPairingTransportAvailable,
+            isPINValid: appModel.isPairingPINValid(in: workspace)
+        )
 
         Panel {
             VStack(alignment: .leading, spacing: 12) {
@@ -603,112 +707,174 @@ private struct PairingPanel: View {
                 if let host = appModel.selectedHost {
                     Text(host.name)
                         .font(.headline)
-                    Text(host.pairingState == .paired ? "Paired" : "Unpaired")
-                        .font(.caption)
-                        .foregroundStyle(host.pairingState == .paired ? .green : .secondary)
-
-                    if host.pairingState == .paired {
-                        Label("Pinned identity preserved", systemImage: "checkmark.shield")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if !appModel.isPairingTransportAvailable {
-                        Label("Authenticated pairing transport unavailable", systemImage: "exclamationmark.shield")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if pairing.isRunning,
-                              pairing.hostID == host.id {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Button {
-                                Task {
-                                    await appModel.cancelPairing(in: workspace)
-                                }
-                            } label: {
-                                Label("Cancel", systemImage: "xmark")
-                            }
-                        }
-                    } else if pairing.stage == .waitingForPIN,
-                              pairing.hostID == host.id {
-                        HStack {
-                            TextField(
-                                "PIN",
-                                text: Binding(
-                                    get: {
-                                        appModel.pairingState(for: workspace)?.pin ?? ""
-                                    },
-                                    set: {
-                                        appModel.updatePairingPIN($0, in: workspace)
-                                    }
-                                )
-                            )
-                                #if os(iOS)
-                                .keyboardType(.numberPad)
-                                #endif
-                                #if !os(tvOS)
-                                .textFieldStyle(.roundedBorder)
-                                #endif
-                                .frame(maxWidth: 120)
-
-                            Button {
-                                Task {
-                                    await appModel.submitPairingPIN(in: workspace)
-                                }
-                            } label: {
-                                Label("Submit", systemImage: "checkmark")
-                            }
-                            .disabled(!appModel.isPairingPINValid(in: workspace))
-
-                            Button {
-                                Task {
-                                    await appModel.cancelPairing(in: workspace)
-                                }
-                            } label: {
-                                Label("Cancel", systemImage: "xmark")
-                            }
-                        }
-                    } else if pairing.stage == .failed,
-                              pairing.issue?.action?.kind == .retryPairing {
-                        Button {
-                            Task {
-                                await appModel.retryPairing(in: workspace)
-                            }
-                        } label: {
-                            Label("Retry Pairing", systemImage: "arrow.clockwise")
-                        }
-                    } else {
-                        Button {
-                            Task {
-                                await appModel.beginPairing(
-                                    host: host,
-                                    in: workspace
-                                )
-                            }
-                        } label: {
-                            Label("Start Pairing", systemImage: "lock.open")
-                        }
-                    }
-
-                    if let issue = pairing.issue {
-                        Label {
-                            Text(issue.presentation.message)
-                        } icon: {
-                            Image(systemName: issue.presentation.systemImage)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(
-                            issue.severity == .error ? .orange : .secondary
-                        )
-                    } else if let message = pairing.message {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    pairingContent(
+                        surface,
+                        host: host,
+                        workspace: workspace
+                    )
                 } else {
                     ContentUnavailableView("Select a Host", systemImage: "key")
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func pairingContent(
+        _ surface: ProductPairingSurface,
+        host: MoonlightHost,
+        workspace: ProductWorkspaceReference
+    ) -> some View {
+        switch surface.phase {
+        case .noHost:
+            ContentUnavailableView("Select a Host", systemImage: "key")
+        case .ready:
+            Label("Ready to pair", systemImage: "lock.open")
+                .foregroundStyle(.secondary)
+            startPairingButton(host: host, workspace: workspace)
+        case .unavailable:
+            if let issue = surface.issue {
+                issueLabel(issue)
+            } else {
+                Label(
+                    "Authenticated pairing transport unavailable",
+                    systemImage: "exclamationmark.shield"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        case .preparing:
+            pairingProgress("Preparing secure pairing...", surface: surface, workspace: workspace)
+        case .waitingForPIN:
+            Label("Enter the four-digit PIN shown by the host.", systemImage: "number.square")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                TextField("PIN", text: pairingPINBinding(workspace: workspace))
+                    #if os(iOS)
+                    .keyboardType(.numberPad)
+                    #endif
+                    #if !os(tvOS)
+                    .textFieldStyle(.roundedBorder)
+                    #endif
+                    .frame(maxWidth: 120)
+
+                Button {
+                    Task {
+                        await appModel.submitPairingPIN(in: workspace)
+                    }
+                } label: {
+                    Label("Submit PIN", systemImage: "checkmark")
+                }
+                .disabled(!surface.canSubmitPIN)
+
+                cancelPairingButton(workspace: workspace)
+                    .disabled(!surface.canCancel)
+            }
+            if let issue = surface.issue {
+                issueLabel(issue)
+            }
+        case .exchangingSecrets:
+            pairingProgress("Exchanging pairing secrets...", surface: surface, workspace: workspace)
+        case .verifyingServer:
+            pairingProgress("Verifying host identity...", surface: surface, workspace: workspace)
+        case .savingIdentity:
+            pairingProgress("Saving verified identity...", surface: surface, workspace: workspace)
+        case .completed:
+            Label("Pairing complete", systemImage: "checkmark.shield")
+                .font(.caption)
+            Text("The verified host identity is saved on this device.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .cancelled:
+            if let issue = surface.issue {
+                issueLabel(issue)
+            } else {
+                Label("Pairing cancelled", systemImage: "xmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if surface.canStart {
+                startPairingButton(host: host, workspace: workspace)
+            }
+        case .failed:
+            if let issue = surface.issue {
+                issueLabel(issue)
+            } else {
+                Label(
+                    "Pairing failed",
+                    systemImage: "lock.trianglebadge.exclamationmark"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+            if surface.canRetry {
+                Button {
+                    Task {
+                        await appModel.retryPairing(in: workspace)
+                    }
+                } label: {
+                    Label("Retry Pairing", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+    }
+
+    private func pairingPINBinding(
+        workspace: ProductWorkspaceReference
+    ) -> Binding<String> {
+        Binding(
+            get: { appModel.pairingState(for: workspace)?.pin ?? "" },
+            set: { appModel.updatePairingPIN($0, in: workspace) }
+        )
+    }
+
+    private func startPairingButton(
+        host: MoonlightHost,
+        workspace: ProductWorkspaceReference
+    ) -> some View {
+        Button {
+            Task {
+                await appModel.beginPairing(host: host, in: workspace)
+            }
+        } label: {
+            Label("Start Pairing", systemImage: "lock.open")
+        }
+    }
+
+    private func cancelPairingButton(
+        workspace: ProductWorkspaceReference
+    ) -> some View {
+        Button {
+            Task {
+                await appModel.cancelPairing(in: workspace)
+            }
+        } label: {
+            Label("Cancel", systemImage: "xmark")
+        }
+    }
+
+    private func pairingProgress(
+        _ title: LocalizedStringKey,
+        surface: ProductPairingSurface,
+        workspace: ProductWorkspaceReference
+    ) -> some View {
+        HStack(spacing: 12) {
+            ProgressView(title)
+                .controlSize(.small)
+            cancelPairingButton(workspace: workspace)
+                .disabled(!surface.canCancel)
+        }
+    }
+
+    private func issueLabel(_ issue: ProductIssue) -> some View {
+        Label {
+            Text(issue.presentation.message)
+        } icon: {
+            Image(systemName: issue.presentation.systemImage)
+        }
+        .font(.caption)
+        .foregroundStyle(issue.severity == .error ? Color.red : Color.orange)
     }
 }
 
@@ -719,6 +885,11 @@ private struct AppCatalogPanel: View {
         let workspace = appModel.primaryWorkspaceReference
         let catalog = appModel.catalogState(for: workspace)
             ?? ProductAppCatalogWorkspaceState()
+        let surface = ProductAppCatalogSurface(
+            catalog: catalog,
+            selectedHost: appModel.selectedHost,
+            appCount: appModel.selectedApps.count
+        )
 
         Panel {
             VStack(alignment: .leading, spacing: 12) {
@@ -732,29 +903,16 @@ private struct AppCatalogPanel: View {
                     } label: {
                         Label("Refresh Apps", systemImage: "arrow.down.circle")
                     }
-                    .disabled(
-                        catalog.phase.isRefreshing || appModel.selectedHost == nil
-                    )
+                    .disabled(!surface.canRefresh)
                 }
 
-                if appModel.selectedApps.isEmpty {
-                    emptyCatalogContent(catalog)
+                if surface.showsApps {
+                    appGrid(workspace: workspace)
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
-                        ForEach(appModel.selectedApps) { app in
-                            RemoteAppTile(
-                                app: app,
-                                isSelected: appModel.selectedAppID == app.id
-                            )
-                            .onTapGesture {
-                                appModel.select(app: app, in: workspace)
-                            }
-                        }
-                    }
-                    .frame(minHeight: 240, alignment: .top)
+                    emptyCatalogContent(surface, workspace: workspace)
                 }
 
-                catalogStatus(catalog)
+                catalogStatus(surface, workspace: workspace)
 
                 if let date = catalog.updatedAt {
                     Text("Updated \(date.formatted(date: .omitted, time: .shortened))")
@@ -767,13 +925,28 @@ private struct AppCatalogPanel: View {
 
     @ViewBuilder
     private func emptyCatalogContent(
-        _ catalog: ProductAppCatalogWorkspaceState
+        _ surface: ProductAppCatalogSurface,
+        workspace: ProductWorkspaceReference
     ) -> some View {
-        switch catalog.phase {
+        switch surface.content {
         case .unavailable:
             ContentUnavailableView("Select a Host", systemImage: "square.grid.3x3")
                 .frame(minHeight: 240)
-        case .loading:
+        case .requiresPairing:
+            ContentUnavailableView(
+                "Pairing Required",
+                systemImage: "lock",
+                description: Text("Pair this host before loading its apps.")
+            )
+            .frame(minHeight: 240)
+        case .idle:
+            ContentUnavailableView(
+                "Apps Not Loaded",
+                systemImage: "square.grid.3x3",
+                description: Text("Refresh this host to load its apps.")
+            )
+            .frame(minHeight: 240)
+        case .loading, .loadingCached:
             ProgressView("Loading apps...")
                 .frame(maxWidth: .infinity, minHeight: 240)
         case let .empty(source):
@@ -788,7 +961,7 @@ private struct AppCatalogPanel: View {
             )
             .frame(minHeight: 240)
         case .failed:
-            if let issue = catalog.issue {
+            if let issue = surface.issue {
                 ContentUnavailableView {
                     Label {
                         Text(issue.presentation.title)
@@ -797,25 +970,38 @@ private struct AppCatalogPanel: View {
                     }
                 } description: {
                     Text(issue.presentation.message)
+                } actions: {
+                    if surface.canRetry {
+                        Button {
+                            Task {
+                                await appModel.retryAppCatalog(in: workspace)
+                            }
+                        } label: {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                        }
+                    }
                 }
                 .frame(minHeight: 240)
+            } else {
+                ContentUnavailableView(
+                    "Apps Not Updated",
+                    systemImage: "square.grid.3x3",
+                    description: Text("Try refreshing the app catalog again.")
+                )
+                .frame(minHeight: 240)
             }
-        case .idle, .cached, .current:
-            ContentUnavailableView(
-                "No Apps",
-                systemImage: "square.grid.3x3",
-                description: Text("Refresh this host to load its apps.")
-            )
-            .frame(minHeight: 240)
+        case .cached, .current:
+            EmptyView()
         }
     }
 
     @ViewBuilder
     private func catalogStatus(
-        _ catalog: ProductAppCatalogWorkspaceState
+        _ surface: ProductAppCatalogSurface,
+        workspace: ProductWorkspaceReference
     ) -> some View {
-        switch catalog.phase {
-        case .loading where !appModel.selectedApps.isEmpty:
+        switch surface.content {
+        case .loadingCached:
             ProgressView("Updating apps...")
                 .controlSize(.small)
         case .cached:
@@ -824,18 +1010,57 @@ private struct AppCatalogPanel: View {
         case .current:
             Label("Current app list", systemImage: "checkmark.circle")
                 .foregroundStyle(.secondary)
-        case .failed where !appModel.selectedApps.isEmpty:
-            if let issue = catalog.issue {
-                Label {
-                    Text(issue.presentation.message)
-                } icon: {
-                    Image(systemName: issue.presentation.systemImage)
+        case .requiresPairing(hasCachedApps: true):
+            Label("Saved apps require pairing", systemImage: "lock")
+                .foregroundStyle(.secondary)
+        case .failed(hasCachedApps: true):
+            if let issue = surface.issue {
+                issueLabel(issue)
+            }
+            if surface.canRetry {
+                Button {
+                    Task {
+                        await appModel.retryAppCatalog(in: workspace)
+                    }
+                } label: {
+                    Label("Retry App Refresh", systemImage: "arrow.clockwise")
                 }
-                .foregroundStyle(.orange)
             }
         default:
             EmptyView()
         }
+    }
+
+    private func appGrid(
+        workspace: ProductWorkspaceReference
+    ) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 150), spacing: 12)],
+            spacing: 12
+        ) {
+            ForEach(appModel.selectedApps) { app in
+                Button {
+                    appModel.select(app: app, in: workspace)
+                } label: {
+                    RemoteAppTile(
+                        app: app,
+                        isSelected: appModel.selectedAppID == app.id
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(minHeight: 240, alignment: .top)
+    }
+
+    private func issueLabel(_ issue: ProductIssue) -> some View {
+        Label {
+            Text(issue.presentation.message)
+        } icon: {
+            Image(systemName: issue.presentation.systemImage)
+        }
+        .font(.caption)
+        .foregroundStyle(issue.severity == .error ? Color.red : Color.orange)
     }
 }
 

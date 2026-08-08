@@ -229,8 +229,15 @@ final class ProductCatalogWorkspaceTests: XCTestCase {
 
         await model.refreshAppsForSelectedHost(in: model.primaryWorkspaceReference)
         XCTAssertEqual(model.primaryCatalogState?.issue?.action?.scope, .catalog(owner))
-        await model.refreshAppsForSelectedHost(in: model.primaryWorkspaceReference)
+        let admitted = await model.retryAppCatalog(
+            in: model.primaryWorkspaceReference
+        )
+        let duplicate = await model.retryAppCatalog(
+            in: model.primaryWorkspaceReference
+        )
 
+        XCTAssertTrue(admitted)
+        XCTAssertFalse(duplicate)
         XCTAssertEqual(model.primaryCatalogState?.owner, owner)
         XCTAssertEqual(model.primaryCatalogState?.phase, .current)
         XCTAssertNil(model.primaryCatalogState?.issue)

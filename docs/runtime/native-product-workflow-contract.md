@@ -353,9 +353,50 @@ The SwiftUI host panel requests confirmation rather than calling immediate
 mutation. Its labels distinguish remove/reset from stop-and-remove/
 stop-and-reset, disables duplicate performing actions, and exposes typed retry
 presentation. The panel still uses the primary compatibility workspace; full
-per-scene injection and state-surface recomposition remain tasks 4.2 and 2.6.
+per-scene injection remains task 4.2.
 The active session is checked by the existing host/session runtime owner;
 recording the initiating workspace as session owner remains task 3.1.
+
+### Host, pairing, and catalog product surfaces
+
+`ProductHostLibrarySurface`, `ProductPairingSurface`, and
+`ProductAppCatalogSurface` are pure value reducers between checked workflow
+state and SwiftUI presentation. They do not own repositories, pairing, network
+requests, media, input, or session runtime. Their command eligibility is
+derived from the same selected workspace/host owner and typed action used by
+the invocation path, so a stale or incomplete surface fails closed.
+
+The host surface distinguishes initial loading, first use, a loaded host list,
+and load failure even when cached hosts remain visible. First use keeps both
+manual Add Host and discovery refresh reachable. Refresh progress disables a
+duplicate request; a failed load exposes only the current workspace-scoped
+`refreshHosts` action through `retryHostLibraryLoad(in:)`. Destructive
+confirmation remains a native dialog, while performing, typed failure/retry,
+host-removed, and trust-reset results have explicit in-panel status.
+
+The pairing surface maps every actual `PairingStage`: identity preparation,
+waiting for PIN, secret exchange, server verification, identity persistence,
+paired completion, cancellation, and failure. PIN submission is visible only
+while waiting and is enabled only for four ASCII digits. Cancel remains
+reachable throughout an owned in-progress attempt; retry is shown only for a
+current `.pairing(owner)` `retryPairing` action. Restored paired hosts receive a
+completed presentation without starting another attempt, while unavailable
+transport and cancelled attempts remain distinct terminal states.
+
+The catalog surface distinguishes no host, pairing required, not loaded,
+initial loading, loading over cached apps, cached/current empty, cached/current
+apps, failure without cache, and failure while cached apps remain visible.
+`retryAppCatalog(in:)` admits only the current `.catalog(owner)`
+`refreshCatalog` action and reuses the existing refresh path. App tiles are
+native buttons rather than gesture-only containers, and selection still passes
+through the checked catalog membership API.
+
+These reducers and source contracts provide deterministic offline presentation
+coverage only. Full localization/accessibility descriptors, narrow-window and
+accessibility Dynamic Type reflow, keyboard/focus policy, physical assistive
+technology, and direct per-scene injection remain tasks 5.x and 4.2. Retained
+legacy workflow strings remain within the explicit tasks 6.1/6.2 migration
+boundary.
 
 ## Compatibility Boundary
 

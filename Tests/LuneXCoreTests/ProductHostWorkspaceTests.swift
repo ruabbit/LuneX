@@ -60,6 +60,26 @@ final class ProductHostWorkspaceTests: XCTestCase {
         XCTAssertTrue(model.hosts.isEmpty)
     }
 
+    func testHostLoadRetryRequiresCurrentTypedWorkspaceAction() async throws {
+        let repository = RetryProductHostRepository()
+        let model = makeModel(repository: repository)
+
+        await model.loadHosts()
+        let admitted = await model.retryHostLibraryLoad(
+            in: model.primaryWorkspaceReference
+        )
+        let duplicate = await model.retryHostLibraryLoad(
+            in: model.primaryWorkspaceReference
+        )
+
+        XCTAssertTrue(admitted)
+        XCTAssertFalse(duplicate)
+        XCTAssertEqual(model.primaryWorkspaceState?.hostLibrary.phase, .firstUse)
+        XCTAssertNil(model.primaryWorkspaceState?.hostLibrary.refreshIssue)
+        let loadCount = await repository.loadCount()
+        XCTAssertEqual(loadCount, 2)
+    }
+
     func testManualHostValidationFailureDoesNotPersistOrEchoDraft() async throws {
         let repository = RecordingProductHostRepository()
         let model = makeModel(repository: repository)
@@ -285,6 +305,24 @@ private actor FailingProductHostRepository: HostRepository {
         _ = hosts
         throw ProductHostTestError.expectedFailure
     }
+}
+
+private actor RetryProductHostRepository: HostRepository {
+    private var loads = 0
+
+    func loadHosts() async throws -> [MoonlightHost] {
+        loads += 1
+        if loads == 1 {
+            throw ProductHostTestError.expectedFailure
+        }
+        return []
+    }
+
+    func saveHosts(_ hosts: [MoonlightHost]) async throws {
+        _ = hosts
+    }
+
+    func loadCount() -> Int { loads }
 }
 
 private actor RecordingProductHostRepository: HostRepository {

@@ -1589,6 +1589,22 @@ final class AppModel: ApplicationInputSink {
         }
     }
 
+    @discardableResult
+    func retryHostLibraryLoad(
+        in workspace: ProductWorkspaceReference
+    ) async -> Bool {
+        guard let library = workspaceRegistry.state(for: workspace)?.hostLibrary,
+              library.phase == .failed,
+              !library.isRefreshing,
+              let action = library.refreshIssue?.action,
+              action.kind == .refreshHosts,
+              action.scope == .workspace(workspace) else {
+            return false
+        }
+        await loadHosts(in: workspace)
+        return true
+    }
+
     func loadSettings() async {
         do {
             settings = try await settingsRepository.loadSettings()
@@ -2365,6 +2381,25 @@ final class AppModel: ApplicationInputSink {
 
     func refreshAppsForSelectedHost() async {
         await refreshAppsForSelectedHost(in: primaryWorkspaceReference)
+    }
+
+    @discardableResult
+    func retryAppCatalog(
+        in workspace: ProductWorkspaceReference
+    ) async -> Bool {
+        guard let state = workspaceRegistry.state(for: workspace),
+              let owner = state.catalogOwner,
+              state.catalog.owner == owner,
+              case .failed = state.catalog.phase,
+              !state.catalog.phase.isRefreshing,
+              let action = state.catalog.issue?.action,
+              action.kind == .refreshCatalog,
+              action.scope == .catalog(owner),
+              catalogOwnerIsCurrent(owner) else {
+            return false
+        }
+        await refreshAppsForSelectedHost(in: workspace)
+        return true
     }
 
     func refreshAppsForSelectedHost(

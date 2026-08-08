@@ -3259,3 +3259,12 @@
 - host与catalog repository没有共同transaction，best-effort rollback不能宣称原子性；进程中断或rollback自身失败仍可能留下部分提交。session仍按existing host/session owner检查，initiating workspace session ownership属于3.1。
 - focused `/tmp/LuneX-19-2_5-focused-r2.JG3oGI`为`12/12`，related `/tmp/LuneX-19-2_5-related.SVlXIR`为`127/127`，serial normal `/tmp/LuneX-19-2_5-normal.AopzR5`为`1190/1189/1/0`；唯一skip是opt-in unset真实Keychain测试。
 - final generic Debug build `/private/tmp/LuneX-19-2_5-platform-builds-final.MdqHEC`在最终RootView上覆盖macOS、iOS/iPadOS、tvOS、visionOS，均`succeeded`且结构化build errors/warnings/analyzer warnings全零；signing disabled，未调用Simulator lifecycle，不证明signed、physical或live-host行为。
+
+## 2026-08-08 阶段 19 Task 2.6 Native Workflow Surfaces
+
+- 暂停后审计确认Host panel没有消费`ProductHostLibraryPhase.loading/firstUse/failed`、`isRefreshing`或`refreshIssue`；Pairing底层实际stage为idle/waitingForPIN/exchangingSecrets/verifyingServer/pinningIdentity/paired/failed/cancelled，但旧UI未逐项表达；Catalog保留cached apps但缺checked retry且tile只用tap gesture。
+- 2.6范围限定为纯值surface reducer、Host/Catalog checked retry与Host/Pairing/Catalog SwiftUI重组；完整Dynamic Type/narrow-window布局仍属于5.2，workflow-facing arbitrary string全面迁移仍属于6.1/6.2，不能由本任务提前宣称完成。
+- `ProductHostLibrarySurface`区分loading/first-use/hosts/failed并表达refresh与destructive performing/failed/completed；`ProductPairingSurface`穷举真实8个PairingStage并区分transport unavailable/cancelled/completed；`ProductAppCatalogSurface`区分unavailable/pairing-required/idle/loading/cached/current/empty/failed且failure可保留cached tiles。
+- Host与Catalog retry新增checked入口，只接受当前workspace或catalog owner的typed action；App tile改为原生Button并继续经过catalog membership选择检查。无issue的不一致failed state显示稳定占位且不生成未校验动作。
+- 最终逐段审读进一步要求Catalog retry的typed action与当前`.failed` phase同时成立；即使异常状态在current/cached presentation残留旧issue，也只允许普通current refresh，不把旧issue解释为retry admission。
+- 最终focused为`30/30`，related为`135/135`，serial normal为`1198/1197/1/0`且唯一skip仍是opt-in unset真实Keychain；macOS、iOS/iPadOS、tvOS、visionOS unsigned generic Debug均成功。未调用Simulator lifecycle，不构成signed/physical/live/assistive-technology证明。
