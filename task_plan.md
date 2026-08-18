@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`17/48`；command idempotence完成，继续3.5 stream overlay ownership |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`18/48`；owner-scoped stream controls完成，继续3.6 adaptive stream layout |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`17/48`。Group 1、2.x及3.1-3.4已完成；3.4以完整`ProductSessionOwner`注册MainActor共享stop operation，同一workspace/session的direct、checked action及scene/window-style caller共享teardown结果，operation完成前阻止replacement launch，replaced/non-owner/other-session/post-completion调用fail closed；pairing/catalog/reconnect的唯一generation reservation与late-completion拒绝由回归锁定。最终focused `7/7`、related `192/192`、normal `1221/1220/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`通过。下一项3.5接入stream overlay visibility、focus handoff、local commands与stop confirmation；compact/wide UI属于3.6，owning-window close属于4.4，完整应用矩阵属于3.7/7.x，legacy全局字符串迁移属于6.1/6.2。
+阶段19当前权威进度`18/48`。Group 1、2.x及3.1-3.5已完成；3.5把requested overlay与stop confirmation绑定到完整workspace/session owner，non-owner/replaced generation fail closed，macOS/tvOS/visionOS复用现有input/focus release合同，system-reserved escape命令保持本地，confirmed stop加入3.4共享teardown。最终focused `8/8`、related `219/219`、normal `1224/1223/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断通过。下一项3.6重组compact/wide stream presentation；owning-window close属于4.4，完整session应用矩阵属于3.7/7.x，完整无障碍收尾属于5.x，legacy全局字符串迁移属于6.1/6.2。
 
 ### 阶段19错误记录
 
@@ -1725,3 +1725,30 @@
 - **final-audit断言修正：** 首轮`/tmp/LuneX-18-8_8-final-audit.Yi4ckM`通过scope/OpenSpec/checkbox后，对contract中跨两行的Task 8.7唯一physical/live语义使用单行全文匹配而退出；改查两段稳定token后fresh重跑只读audit。
 - **final audit通过：** corrected `/tmp/LuneX-18-8_8-final-audit-r2.Kma7ZH`通过最终7文件authority/tasks scope、唯一8.8 checkbox、strict `9/9`、`49/50 only 8.7 pending`、五级proof matrix、脱敏readiness、稳定project及全部repository边界；下一步final-record后独立提交推送。
 - **final-record：** `/tmp/LuneX-18-8_8-final-record.xuo5aN`通过最终authority、完整retained chain、8.7 not-ready脱敏状态、唯一8.8 checkbox、稳定project及repository边界；补入索引后运行r2，再独立提交推送。
+
+## 2026-08-18 阶段 19 任务 3.5 恢复
+
+- **状态：** `in_progress`；`HEAD == origin/main == c74b4f0adfcff13d76a3937cfd9fec5379bb2403`且工作树clean，OpenSpec `complete-native-product-workflows`保持`17/48 ready`、next 3.5。
+- **当前任务：** 将stream overlay可见性、focus handoff、本地命令和stop confirmation绑定到完整`ProductWorkspaceReference`与current `ProductSessionOwner`，non-owner/replaced workspace fail closed，并继续阻止system-reserved command进入remote input。
+- **执行边界：** 本任务不提前实现3.6 compact/wide重排、3.7完整应用矩阵、4.4 owning-window close policy或5.x无障碍收尾；真实Keychain/live-host opt-in保持unset，普通测试继续使用文件fallback，不查询或改变Simulator lifecycle。
+- **恢复异常：** 用户已明确要求继续并曾要求重建目标，但`create_goal`因旧记录仍是unfinished `blocked`而拒绝，且目标接口没有resume状态操作；该限制只记录为跟踪层异常，不作为代码/OpenSpec阻塞，也不停止3.5实施。
+- **production补丁修正：** 首个tvOS restore/runtime begin/mac admission/vision eligibility/navigation组合补丁因`applyInputLifecycle`锚点与当前格式不完全一致而被`apply_patch`原子拒绝，没有部分写入；改用最新精确行拆成独立小补丁，不重复组合失败方式。
+- **只读/生成器编排修正：** 查历史命令时`Makefile*`无匹配被zsh提前拒绝；随后`generate_xcodeproj.rb --help`因脚本无help分支而实际运行生成器。生成后project SHA-256仍为稳定`60e6966f...d2224`且零project diff；不重复这两条命令，后续使用已确认的scheme直接build。
+- **compile-1失败：** fresh macOS warnings-as-errors在`AppModel.swift`唯一报错：新增workspace版`receiveTVRemoteSurfacePressEvent`末尾缺少显式`return`，导致nil-coalescing表达式结果未使用。已精确补`return`，失败bundle保留到最终审计后定向清理，下一轮使用fresh DerivedData。
+- **compile-2通过：** fresh `/private/tmp/LuneX-19-3_5-compile-2`以`LuneX-macOS` generic macOS、Debug、unsigned、warnings-as-errors完成universal `arm64 + x86_64`构建；唯一日志warning是工程既有的无AppIntents依赖metadata extraction skip。该结果仅证明当前production/API条件编译，下一步补owner/non-owner/replacement、mac focus、tvOS/visionOS reserved command和stop confirmation focused回归。
+- **focused-1编排失败：** `/private/tmp/LuneX-19-3_5-focused-1`在编译前以exit 66退出，因为误用只配置build的`LuneX-macOS` scheme执行test action；工程权威列表确认专用测试scheme为`LuneXCoreTests`。不复用该结果或重复错误scheme，focused-2改用`LuneXCoreTests`与fresh DerivedData。
+- **focused-2单测设计失败：** warnings-as-errors编译通过，7个selected中6个通过；唯一失败是将Escape overlay release插入既有visionOS长流程后，使后续精确release/application计数合法增加1并连锁超时。保持原generation测试使用不改变capture的本地interaction，另建隔离Escape测试；focused-3使用fresh evidence，不复用失败结果。
+- **focused-3通过：** fresh `/private/tmp/LuneX-19-3_5-focused-3`结构化`8/8`、0 skip/failure，覆盖owner/non-owner/replaced workspace overlay、mac focus、remote cleanup、confirmation cancel/confirm与direct stop共享、tvOS Menu、visionOS Escape和RootView显式workspace contract；两个真实opt-in unset且未操作Simulator。
+- **related通过：** 复用focused-3编译缓存但使用独立`/private/tmp/LuneX-19-3_5-related-1/Related.xcresult`，8个相关suite结构化`219/219`、0 skip/failure；覆盖AppModel、mac input、tvOS focus、vision input、两平台control presentation与destructive stop协调。
+- **normal通过：** fresh serial `/private/tmp/LuneX-19-3_5-normal-final/Normal.xcresult`结构化`1224 total / 1223 passed / 1 skipped / 0 failed`；唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，真实Keychain/live-host opt-in均unset，继续文件fallback。
+- **四平台build通过：** `/private/tmp/LuneX-19-3_5-platform-builds-final`中的macOS universal、iOS/iPadOS、tvOS、visionOS warnings-as-errors unsigned generic Debug均结构化`succeeded / 0 error / 0 warning / 0 analyzer warning`；macOS产物含`x86_64 arm64`。未调用Simulator lifecycle，不代表signed、physical、assistive-technology或live Sunshine证明。
+- **结构化读回脚本修正：** 首轮给zsh特殊变量`path`赋bundle路径，意外覆盖该shell的`PATH`并使`xcrun`不可见；构建与xcresult未受影响。改用`bundle_path`只读同一证据成功，不重复build/test。
+- **文档搜索修正：** 广泛搜索使用不存在的`openspec/.../specs/*.md`层级，zsh `nomatch`在命令启动前退出；改为明确spec路径后完成读取，无文件、测试、Keychain或设备副作用。
+- **最终源码审计：** owner/generation、requested/actual overlay、macOS/tvOS/visionOS focus/input handoff、system-reserved local command、全部可见stop confirmation及terminal双重transient cleanup均一致；没有新增production修复。下一步generator稳定性、OpenSpec strict与repository pre-gate，通过前3.5保持未勾选。
+- **pre-gate编排修正 1：** 首轮repository组合门在fixture通过后因`.overlayVisible`静态正则过度转义而退出；拆分固定字符串/语义断言后均通过，未重复fixture、test或build。
+- **pre-gate编排修正 2：** 第二轮组合门把`jq`对象键`next`写成未加引号的控制关键字，OpenSpec读取阶段提前退出；改为直接断言progress与首个pending description，不改变仓库或运行时。
+- **repository pre-gate：** corrected门通过protocol fixture self/tree、strict `1/1`、pre-mark `17/48 next 3.5`、稳定generator SHA-256、精确10文件scope、owner/reserved-command/confirmation语义、retained `8/219/1224`测试、四平台build、privacy/reference/dependency/opt-in/process/diff边界。
+- **状态：** `complete`；3.5已勾选，预期权威状态为`18/48 ready`、next 3.6。下一步仅运行post-mark只读final-state，不重复test/build/generator、Keychain、live host或Simulator操作。
+- **post-mark final-state：** 只读门通过OpenSpec strict `1/1`、`18/48 next 3.6`、精确11文件scope、唯一3.5 checkbox、稳定project hash、全部retained test/build、disabled opt-ins及零LuneX build/test process；未重复任何验收或Simulator操作。
+- **evidence cleanup：** 八个明确`/private/tmp/LuneX-19-3_5-*`路径已逐项`find -depth -delete`，包含失败/成功DerivedData、raw logs与xcresult；定向零残留检查通过。下一步final record后精确stage、独立commit/push/fetch。
+- **final record：** 通过基线`HEAD == origin/main == c74b4f0`、strict `1/1`、OpenSpec `18/48 next 3.6`、最终11文件scope、唯一3.5 checkbox、稳定project、计划内retained证据索引、零task artifact、disabled opt-ins及repository/process/proof边界。3.5进入精确stage与独立commit/push/fetch。

@@ -2465,12 +2465,12 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         let currentSystemInteraction = try VisionSurfaceSystemInteractionEvent(
             surfaceGeneration: currentSurface,
-            decision: VisionSystemInteractionDecision.resolve(.escape)
+            decision: VisionSystemInteractionDecision.resolve(.volume)
         )
         model.receiveVisionSystemInteractionEvent(currentSystemInteraction)
         XCTAssertEqual(
             model.visionSystemInteractionDecisionState,
-            .resolve(.escape)
+            .resolve(.volume)
         )
         XCTAssertTrue(mediaEnvironment.currentSentInputApplications().isEmpty)
         let firstEvent = try VisionSurfaceInputEvent(
@@ -3124,7 +3124,12 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.tvVisionPlatformPresentationSnapshot)
         XCTAssertNil(model.renderState.displaySnapshot)
         XCTAssertNil(model.tvOSDisplayHDRFallbackReason)
-        XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.workspaceState(for: model.primaryWorkspaceReference)?
+                .presentation.streamOverlay,
+            .hidden
+        )
         let terminatedApplications = mediaEnvironment
             .currentTVVisionPlatformPresentationApplications()
         XCTAssertEqual(
@@ -4557,8 +4562,38 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             .captured
         )
+        await waitUntil {
+            mediaEnvironment.currentSentInputApplications().count
+                == controllerInputCount + 5
+        }
+        let nonOwnerWorkspace = try model.workspaceRegistry.create()
+        let inputCountBeforeNonOwnerCommand = mediaEnvironment
+            .currentSentInputApplications().count
+        model.receiveTVRemoteReservedCommand(
+            .backMenu,
+            in: nonOwnerWorkspace
+        )
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.tvRemoteSurfacePressDisposition(for: surface),
+            .captured
+        )
+        XCTAssertEqual(
+            model.receiveTVRemoteSurfacePressEvent(
+                try makeTVRemoteSurfacePress(surface, 40, .right, .began),
+                in: nonOwnerWorkspace
+            ),
+            .local
+        )
+        XCTAssertEqual(
+            mediaEnvironment.currentSentInputApplications().count,
+            inputCountBeforeNonOwnerCommand
+        )
         mediaEnvironment.blockNextRelease()
-        model.receiveTVRemoteReservedCommand(.backMenu)
+        model.receiveTVRemoteReservedCommand(
+            .backMenu,
+            in: model.primaryWorkspaceReference
+        )
         XCTAssertFalse(model.tvStreamOverlayVisible)
         XCTAssertEqual(
             model.tvRemoteSurfacePressDisposition(for: surface),
@@ -4825,7 +4860,12 @@ final class AppModelWorkflowTests: XCTestCase {
         mediaEnvironment.resumeBlockedRelease()
         await stopTask.value
         XCTAssertFalse(model.tvRemoteInputReleasePending)
-        XCTAssertTrue(model.tvStreamOverlayVisible)
+        XCTAssertFalse(model.tvStreamOverlayVisible)
+        XCTAssertEqual(
+            model.workspaceState(for: model.primaryWorkspaceReference)?
+                .presentation.streamOverlay,
+            .hidden
+        )
         XCTAssertEqual(model.tvStreamControlPresentationState.focus, .unavailable)
         XCTAssertEqual(model.tvStreamControlPresentationState.capture, .unavailable)
         XCTAssertEqual(model.tvStreamControlPresentationState.render, .inactive)
@@ -7185,6 +7225,13 @@ final class AppModelWorkflowTests: XCTestCase {
             model.activeProductSessionOwner?.sessionID,
             activeEnvironment.sessionID
         )
+        let workspace = model.primaryWorkspaceReference
+        XCTAssertTrue(model.setStreamOverlayVisibility(.visible, in: workspace))
+        XCTAssertTrue(model.requestStopStreamConfirmation(in: workspace))
+        XCTAssertEqual(
+            model.stopStreamConfirmationSessionID(in: workspace),
+            record.sessionID
+        )
 
         provider.yield(.terminated(reason: nil), sessionID: record.sessionID)
         provider.finish(sessionID: record.sessionID)
@@ -7195,6 +7242,239 @@ final class AppModelWorkflowTests: XCTestCase {
         let stoppedEnvironment = await environment.snapshot()
         XCTAssertNil(stoppedEnvironment.sessionID)
         XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertEqual(
+            model.workspaceState(for: workspace)?.presentation.streamOverlay,
+            .hidden
+        )
+        XCTAssertNil(
+            model.workspaceState(for: workspace)?.presentation.dialog
+        )
+        XCTAssertNil(model.stopStreamConfirmationSessionID(in: workspace))
+    }
+
+    func testOwnerScopedOverlayControlsMacFocusAndRejectsOtherWorkspaces()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 45,
+                    key: Data(repeating: 0x45, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let ownerWorkspace = model.primaryWorkspaceReference
+        let nonOwnerWorkspace = try model.workspaceRegistry.create()
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        )
+        model.applyPlatformLifecycle(lifecycle)
+
+        let launch = Task {
+            await model.launchSelectedApp(in: ownerWorkspace)
+        }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.macInputSurfacePolicy.admitsInput }
+        XCTAssertEqual(
+            model.streamOverlayVisibility(in: ownerWorkspace),
+            .hidden
+        )
+
+        XCTAssertFalse(model.setStreamOverlayVisibility(
+            .visible,
+            in: nonOwnerWorkspace
+        ))
+        XCTAssertTrue(model.setStreamOverlayVisibility(
+            .visible,
+            in: ownerWorkspace
+        ))
+        XCTAssertEqual(
+            model.streamOverlayVisibility(in: ownerWorkspace),
+            .visible
+        )
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        XCTAssertFalse(model.setStreamOverlayVisibility(
+            .hidden,
+            in: nonOwnerWorkspace
+        ))
+        XCTAssertEqual(
+            model.streamOverlayVisibility(in: ownerWorkspace),
+            .visible
+        )
+
+        XCTAssertTrue(model.setStreamOverlayVisibility(
+            .hidden,
+            in: ownerWorkspace
+        ))
+        await waitUntil { model.macInputSurfacePolicy.admitsInput }
+
+        let replacement = try model.workspaceRegistry.replace(ownerWorkspace)
+        XCTAssertFalse(model.setStreamOverlayVisibility(
+            .visible,
+            in: ownerWorkspace
+        ))
+        XCTAssertFalse(model.setStreamOverlayVisibility(
+            .visible,
+            in: replacement
+        ))
+        XCTAssertEqual(
+            model.streamOverlayVisibility(in: replacement),
+            .hidden
+        )
+
+        environment.yieldFeedback(
+            .led(ControllerLEDFeedback(
+                controllerID: "replaced-overlay-owner",
+                red: 1,
+                green: 2,
+                blue: 3
+            )),
+            sessionID: record.sessionID
+        )
+        await waitUntil { model.activeProductSessionOwner == nil }
+        await launch.value
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testStopConfirmationCancelAndConfirmedDirectStopShareTeardown()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 46,
+                    key: Data(repeating: 0x46, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+
+        XCTAssertTrue(model.setStreamOverlayVisibility(.visible, in: workspace))
+        XCTAssertTrue(model.requestStopStreamConfirmation(in: workspace))
+        XCTAssertEqual(
+            model.stopStreamConfirmationSessionID(in: workspace),
+            record.sessionID
+        )
+        XCTAssertTrue(model.cancelStopStreamConfirmation(in: workspace))
+        XCTAssertNil(model.stopStreamConfirmationSessionID(in: workspace))
+        XCTAssertEqual(model.activeProductSessionOwner?.sessionID, record.sessionID)
+        XCTAssertTrue(provider.currentStoppedSessionIDs().isEmpty)
+        XCTAssertTrue(environment.currentStoppedSessionIDs().isEmpty)
+
+        XCTAssertTrue(model.requestStopStreamConfirmation(in: workspace))
+        environment.blockNextStop()
+        let confirmedStop = try XCTUnwrap(
+            model.beginConfirmedStopStream(in: workspace)
+        )
+        let directStop = Task { await model.stopStream(in: workspace) }
+        await waitUntil { environment.hasBlockedStop() }
+        XCTAssertNil(model.stopStreamConfirmationSessionID(in: workspace))
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertTrue(provider.currentStoppedSessionIDs().isEmpty)
+
+        environment.resumeBlockedStop()
+        let confirmedStopResult = await confirmedStop.value
+        let directStopResult = await directStop.value
+        XCTAssertTrue(confirmedStopResult)
+        XCTAssertTrue(directStopResult)
+        await launch.value
+        XCTAssertEqual(environment.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(
+            model.workspaceState(for: workspace)?.presentation.streamOverlay,
+            .hidden
+        )
+        XCTAssertNil(model.workspaceState(for: workspace)?.presentation.dialog)
+    }
+
+    func testVisionEscapeShowsOwnerOverlayWithoutRemoteSerialization()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 47,
+                    key: Data(repeating: 0x47, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        let nonOwnerWorkspace = try model.workspaceRegistry.create()
+        let launch = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        let geometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        model.receiveTVVisionGeometryUpdate(geometry)
+        await waitUntil { model.visionInputCaptureEnabled(in: workspace) }
+        let escape = try VisionSurfaceSystemInteractionEvent(
+            surfaceGeneration: geometry.surfaceGeneration,
+            decision: VisionSystemInteractionDecision.resolve(.escape)
+        )
+        let inputCount = environment.currentSentInputApplications().count
+
+        model.receiveVisionSystemInteractionEvent(
+            escape,
+            in: nonOwnerWorkspace
+        )
+        XCTAssertNil(model.visionSystemInteractionDecisionState)
+        XCTAssertEqual(model.streamOverlayVisibility(in: workspace), .hidden)
+        XCTAssertTrue(model.visionInputCaptureEnabled(in: workspace))
+
+        model.receiveVisionSystemInteractionEvent(escape, in: workspace)
+        XCTAssertEqual(
+            model.visionSystemInteractionDecisionState,
+            .resolve(.escape)
+        )
+        await waitUntil {
+            model.streamOverlayVisibility(in: workspace) == .visible
+                && !model.visionInputReleasePending
+        }
+        XCTAssertFalse(model.visionInputCaptureEnabled(in: workspace))
+        XCTAssertEqual(
+            environment.currentSentInputApplications().count,
+            inputCount
+        )
+
+        let didStop = await model.stopStream(in: workspace)
+        XCTAssertTrue(didStop)
+        await launch.value
     }
 
     private func makeLaunchReadyModel(

@@ -262,7 +262,10 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
         let controls = String(rootView[controlsStart.lowerBound..<controlsEnd.lowerBound])
 
         let required = [
-            "let state = appModel.tvStreamControlPresentationState",
+            "let workspace: ProductWorkspaceReference",
+            "let state = appModel.tvStreamControlPresentationState(in: workspace)",
+            "requestStopStreamConfirmation(in: workspace)",
+            "setStreamOverlayVisibility(",
             "case hideControls",
             "case disconnect",
             ".focused($focusedControl, equals: .hideControls)",

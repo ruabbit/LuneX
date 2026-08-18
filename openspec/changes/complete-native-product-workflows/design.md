@@ -36,6 +36,14 @@ Session start records the initiating workspace identity/generation alongside the
 
 This is preferred over broadcasting one session to every window because command and input ownership would be ambiguous. Supporting concurrent remote sessions is deferred because the existing runtime is intentionally single-owner.
 
+### Keep stream controls local to the owning workspace
+
+Store requested stream-overlay visibility and stop confirmation in the owning `ProductWorkspaceState`, while deriving actual visibility from the current session owner and any platform input-release barrier. Every show, hide, input, focus, and confirmation command revalidates the complete workspace generation and session identifier. Non-owning, replaced, and stale workspaces fail closed without changing the active session.
+
+Showing controls closes macOS and visionOS remote-input admission and uses the existing tvOS focus/release coordinator; hiding controls can restore capture only when lifecycle, geometry, media generation, focus, and session ownership are still current. macOS Escape, tvOS Menu/Back, and visionOS Escape remain local commands and never enter remote serialization. Confirmed stop clears the workspace-local dialog and joins the existing owner-keyed stop operation so media, input, and control teardown still occur exactly once.
+
+This keeps requested presentation state separate from actual platform eligibility and avoids a second focus or input owner. Compact/wide control composition remains a separate adaptive-layout task.
+
 ### Use typed product issues and action tokens
 
 Replace workflow-facing message strings with `ProductIssue` values containing a stable code, localized presentation key, severity, bounded context enum, and optional `ProductActionToken`. Tokens include workspace/session ownership snapshots and are revalidated at invocation. Provider errors map at the application boundary; arbitrary descriptions and response bodies are never copied into observable UI state.

@@ -33,9 +33,21 @@ The application SHALL route stream overlay commands through the owning workspace
 - **WHEN** the user opens or dismisses stream controls
 - **THEN** the command changes local presentation only and is not serialized as remote input
 
+#### Scenario: Non-owner overlay command
+- **WHEN** a non-owning or replaced workspace requests stream controls, input capture, or stop confirmation
+- **THEN** the command fails closed without changing the owning workspace, focus admission, or active session
+
+#### Scenario: System-reserved escape command
+- **WHEN** macOS Escape, tvOS Menu/Back, or visionOS Escape exits remote interaction
+- **THEN** local controls receive focus and no corresponding remote input event is serialized
+
 #### Scenario: Stop from overlay
 - **WHEN** the user confirms stop from the active stream overlay
 - **THEN** the owning generation performs clean input release, media teardown, and control teardown exactly once
+
+#### Scenario: Stale stop confirmation
+- **WHEN** the workspace generation or session owner changes before a visible stop confirmation is accepted
+- **THEN** confirmation is rejected or cleared and cannot stop the replacement session
 
 ### Requirement: Video-safe overlay presentation
 The application SHALL keep essential stream controls reachable without permanently obscuring decoded video, SHALL support touch and focus navigation without hover, and SHALL adapt to compact and resized windows.

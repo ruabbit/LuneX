@@ -23,7 +23,7 @@
 - [x] 3.2 Define an actual-state session command reducer for launch, reconnect, resume, stop, unavailable providers, remote termination, reconnect exhaustion, and terminal failures.
 - [x] 3.3 Replace launch/recovery display strings with typed product issues and checked actions that revalidate workspace and session ownership at invocation.
 - [x] 3.4 Make cancel, retry, reconnect, and repeated stop idempotent across overlay, window close, scene transition, and replacement completion paths.
-- [ ] 3.5 Bind stream overlay visibility, focus handoff, local commands, and stop confirmation to the owning workspace while keeping system-reserved commands out of remote input.
+- [x] 3.5 Bind stream overlay visibility, focus handoff, local commands, and stop confirmation to the owning workspace while keeping system-reserved commands out of remote input.
 - [ ] 3.6 Recompose compact and wide stream presentation so controls remain reachable without permanently obscuring video and without relying on hover.
 - [ ] 3.7 Add application tests for provider absence, duplicate launch, owner and non-owner commands, recoverable interruption, remote termination, stale termination, reconnect exhaustion, repeated stop, and clean teardown.
 

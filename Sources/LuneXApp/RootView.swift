@@ -13,6 +13,24 @@ struct RootView: View {
             .task {
                 await appModel.loadInitialState()
             }
+            .confirmationDialog(
+                "Disconnect Stream?",
+                isPresented: stopStreamConfirmationBinding,
+                titleVisibility: .visible
+            ) {
+                Button("Disconnect", role: .destructive) {
+                    _ = appModel.beginConfirmedStopStream(
+                        in: appModel.primaryWorkspaceReference
+                    )
+                }
+                Button("Cancel", role: .cancel) {
+                    _ = appModel.cancelStopStreamConfirmation(
+                        in: appModel.primaryWorkspaceReference
+                    )
+                }
+            } message: {
+                Text("Remote input and media playback will stop on this device.")
+            }
             .sheet(isPresented: $isShowingAddHost) {
                 AddHostSheet(workspace: appModel.primaryWorkspaceReference)
             }
@@ -68,9 +86,9 @@ struct RootView: View {
                         }
 
                         Button {
-                            Task {
-                                await appModel.stopStream()
-                            }
+                            _ = appModel.requestStopStreamConfirmation(
+                                in: appModel.primaryWorkspaceReference
+                            )
                         } label: {
                             Label("Disconnect", systemImage: "stop.fill")
                         }
@@ -104,14 +122,16 @@ struct RootView: View {
             .tag(AppNavigationSelection.library)
 
             NavigationStack {
-                StreamWorkspaceView()
+                StreamWorkspaceView(
+                    workspace: appModel.primaryWorkspaceReference
+                )
                     .navigationTitle("Stream")
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             Button {
-                                Task {
-                                    await appModel.stopStream()
-                                }
+                                _ = appModel.requestStopStreamConfirmation(
+                                    in: appModel.primaryWorkspaceReference
+                                )
                             } label: {
                                 Label("Disconnect", systemImage: "stop.fill")
                             }
@@ -152,9 +172,14 @@ struct RootView: View {
             LibraryDashboardView(onAddHost: presentAddHost)
         case .stream:
             #if os(macOS)
-            StreamWorkspaceView(platformLifecycle: platformLifecycle)
+            StreamWorkspaceView(
+                workspace: appModel.primaryWorkspaceReference,
+                platformLifecycle: platformLifecycle
+            )
             #else
-            StreamWorkspaceView()
+            StreamWorkspaceView(
+                workspace: appModel.primaryWorkspaceReference
+            )
             #endif
         case .diagnostics:
             DiagnosticsView()
@@ -178,6 +203,23 @@ struct RootView: View {
             in: appModel.primaryWorkspaceReference
         )
         isShowingAddHost = true
+    }
+
+    private var stopStreamConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: {
+                appModel.stopStreamConfirmationSessionID(
+                    in: appModel.primaryWorkspaceReference
+                ) != nil
+            },
+            set: { isPresented in
+                if !isPresented {
+                    _ = appModel.cancelStopStreamConfirmation(
+                        in: appModel.primaryWorkspaceReference
+                    )
+                }
+            }
+        )
     }
 }
 
@@ -1118,9 +1160,9 @@ private struct StreamLaunchPanel: View {
                     if appModel.isStreamTransportAvailable {
                         if appModel.hasActiveStreamSession {
                             Button(role: .destructive) {
-                                Task {
-                                    await appModel.stopStream(in: workspace)
-                                }
+                                _ = appModel.requestStopStreamConfirmation(
+                                    in: workspace
+                                )
                             } label: {
                                 Label("Stop Stream", systemImage: "stop.circle")
                             }
@@ -1181,6 +1223,7 @@ private struct StreamLaunchPanel: View {
 
 private struct StreamWorkspaceView: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
     #if os(macOS)
     let platformLifecycle: PlatformLifecycleState
     #endif
@@ -1197,10 +1240,13 @@ private struct StreamWorkspaceView: View {
                 lifecycle: platformLifecycle,
                 inputPolicy: appModel.macInputSurfacePolicy,
                 inputSampleHandler: { sample in
-                    _ = appModel.submitMacPlatformInput(sample)
+                    _ = appModel.submitMacPlatformInput(
+                        sample,
+                        in: workspace
+                    )
                 },
                 captureExitHandler: {
-                    appModel.exitMacRelativePointerCapture()
+                    appModel.exitMacRelativePointerCapture(in: workspace)
                 },
                 diagnosticLease: hdrPresentationDiagnosticLease
             )
@@ -1243,10 +1289,16 @@ private struct StreamWorkspaceView: View {
                     appModel.receiveTVOSDisplayHDREvent(event)
                 },
                 remotePressEventHandler: { event in
-                    appModel.receiveTVRemoteSurfacePressEvent(event)
+                    appModel.receiveTVRemoteSurfacePressEvent(
+                        event,
+                        in: workspace
+                    )
                 },
                 reservedRemoteCommandHandler: { command in
-                    appModel.receiveTVRemoteReservedCommand(command)
+                    appModel.receiveTVRemoteReservedCommand(
+                        command,
+                        in: workspace
+                    )
                 }
             )
                 .ignoresSafeArea()
@@ -1261,7 +1313,7 @@ private struct StreamWorkspaceView: View {
                 platformPresentationOwner:
                     appModel.tvVisionMetalPresentationOwner,
                 visionInputCaptureEnabled:
-                    appModel.visionInputCaptureEnabled,
+                    appModel.visionInputCaptureEnabled(in: workspace),
                 geometryBindingUpdateHandler: { update in
                     appModel.receiveTVVisionGeometryUpdate(update)
                 },
@@ -1269,24 +1321,39 @@ private struct StreamWorkspaceView: View {
                     appModel.receiveTVVisionDisplayHDREvent(event)
                 },
                 visionSurfaceInputEventHandler: { event in
-                    appModel.receiveVisionSurfaceInputEvent(event)
+                    appModel.receiveVisionSurfaceInputEvent(
+                        event,
+                        in: workspace
+                    )
                 },
                 visionSystemInteractionEventHandler: { event in
-                    appModel.receiveVisionSystemInteractionEvent(event)
+                    appModel.receiveVisionSystemInteractionEvent(
+                        event,
+                        in: workspace
+                    )
                 }
             )
                 .ignoresSafeArea()
             #endif
 
-            #if os(tvOS)
-            if appModel.tvStreamOverlayVisible {
-                StreamStatusOverlay()
+            if appModel.streamOverlayVisibility(in: workspace) == .visible {
+                StreamStatusOverlay(workspace: workspace)
                     .padding(16)
-            }
-            #else
-            StreamStatusOverlay()
+            } else if appModel.hasActiveStreamSession {
+                #if !os(tvOS)
+                Button {
+                    _ = appModel.setStreamOverlayVisibility(
+                        .visible,
+                        in: workspace
+                    )
+                } label: {
+                    Image(systemName: "eye")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Show Stream Controls")
                 .padding(16)
-            #endif
+                #endif
+            }
 
             if appModel.settings.input.showVirtualController && appModel.session.isStreaming {
                 VirtualControllerOverlay()
@@ -1297,16 +1364,19 @@ private struct StreamWorkspaceView: View {
         .background(Color.black)
         #if os(tvOS)
         .onAppear {
-            appModel.setTVStreamWorkspaceVisible(true)
-            isTVStreamSurfaceFocused = !appModel.tvStreamOverlayVisible
+            appModel.setTVStreamWorkspaceVisible(true, in: workspace)
+            isTVStreamSurfaceFocused =
+                appModel.streamOverlayVisibility(in: workspace) == .hidden
         }
         .onDisappear {
-            appModel.setTVStreamWorkspaceVisible(false)
+            appModel.setTVStreamWorkspaceVisible(false, in: workspace)
             isTVStreamSurfaceFocused = false
         }
-        .onChange(of: appModel.tvStreamOverlayVisible, initial: true) {
-            _, isVisible in
-            isTVStreamSurfaceFocused = !isVisible
+        .onChange(
+            of: appModel.streamOverlayVisibility(in: workspace),
+            initial: true
+        ) { _, visibility in
+            isTVStreamSurfaceFocused = visibility == .hidden
         }
         #endif
     }
@@ -1331,13 +1401,14 @@ private struct StreamWorkspaceView: View {
 
 private struct StreamStatusOverlay: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             #if os(tvOS)
-            TVStreamControls()
+            TVStreamControls(workspace: workspace)
             #elseif os(visionOS)
-            VisionStreamControls()
+            VisionStreamControls(workspace: workspace)
             #else
             HStack(spacing: 10) {
                 Label(appModel.session.phase.label, systemImage: appModel.session.isStreaming ? "dot.radiowaves.left.and.right" : "moon")
@@ -1346,9 +1417,15 @@ private struct StreamStatusOverlay: View {
                 MobilePictureInPictureCommandButton()
                 #endif
                 Button {
-                    Task {
-                        await appModel.stopStream()
-                    }
+                    _ = appModel.setStreamOverlayVisibility(
+                        .hidden,
+                        in: workspace
+                    )
+                } label: {
+                    Label("Hide Controls", systemImage: "eye.slash")
+                }
+                Button {
+                    _ = appModel.requestStopStreamConfirmation(in: workspace)
                 } label: {
                     Label("Disconnect", systemImage: "xmark.circle")
                 }
@@ -1431,12 +1508,13 @@ private enum TVStreamControlFocusTarget: Hashable {
 
 private struct TVStreamControls: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var focusedControl: TVStreamControlFocusTarget?
 
     var body: some View {
-        let state = appModel.tvStreamControlPresentationState
+        let state = appModel.tvStreamControlPresentationState(in: workspace)
 
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
@@ -1451,7 +1529,10 @@ private struct TVStreamControls: View {
                 Spacer(minLength: 28)
 
                 Button {
-                    appModel.setTVStreamOverlayVisible(false)
+                    _ = appModel.setStreamOverlayVisibility(
+                        .hidden,
+                        in: workspace
+                    )
                 } label: {
                     Label("Hide Controls", systemImage: "eye.slash")
                 }
@@ -1459,9 +1540,7 @@ private struct TVStreamControls: View {
                 .accessibilitySortPriority(2)
 
                 Button(role: .destructive) {
-                    Task {
-                        await appModel.stopStream()
-                    }
+                    _ = appModel.requestStopStreamConfirmation(in: workspace)
                 } label: {
                     Label("Disconnect", systemImage: "xmark.circle")
                 }
@@ -1566,11 +1645,12 @@ private struct TVStreamControls: View {
 #if os(visionOS)
 private struct VisionStreamControls: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        let state = appModel.visionStreamControlPresentationState
+        let state = appModel.visionStreamControlPresentationState(in: workspace)
 
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
@@ -1584,10 +1664,17 @@ private struct VisionStreamControls: View {
 
                 Spacer(minLength: 12)
 
+                Button {
+                    _ = appModel.setStreamOverlayVisibility(
+                        .hidden,
+                        in: workspace
+                    )
+                } label: {
+                    Label("Hide Controls", systemImage: "eye.slash")
+                }
+
                 Button(role: .destructive) {
-                    Task {
-                        await appModel.stopStream()
-                    }
+                    _ = appModel.requestStopStreamConfirmation(in: workspace)
                 } label: {
                     Label("Disconnect", systemImage: "xmark.circle")
                 }
