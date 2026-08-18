@@ -42,7 +42,9 @@ Store requested stream-overlay visibility and stop confirmation in the owning `P
 
 Showing controls closes macOS and visionOS remote-input admission and uses the existing tvOS focus/release coordinator; hiding controls can restore capture only when lifecycle, geometry, media generation, focus, and session ownership are still current. macOS Escape, tvOS Menu/Back, and visionOS Escape remain local commands and never enter remote serialization. Confirmed stop clears the workspace-local dialog and joins the existing owner-keyed stop operation so media, input, and control teardown still occur exactly once.
 
-This keeps requested presentation state separate from actual platform eligibility and avoids a second focus or input owner. Compact/wide control composition remains a separate adaptive-layout task.
+This keeps requested presentation state separate from actual platform eligibility and avoids a second focus or input owner. Stream composition is selected by a pure layout value that treats compact horizontal size class, accessibility Dynamic Type, an actual finite container width below 900 points, or an invalid width as compact. Compact controls stay in the bottom safe area, scroll within at most 48 percent of the container height, and reflow their command header. Wide controls remain top-leading, use a restrained 640...1040 point width derived from the container, and consume at most 82 percent of its height. tvOS and visionOS receive the outer geometry decision so their command groups also reflow for genuinely narrow windows rather than relying only on size class.
+
+Visible controls and the virtual controller are mutually exclusive, and hidden controls always expose an explicit non-hover restore command. This preserves reachable local commands without permanently covering decoded video. Every Disconnect entry still requests the owning workspace's stop confirmation, tvOS keeps Hide Controls before Disconnect in focus order, and the existing session/input owner checks remain the only authority for restoring capture.
 
 ### Use typed product issues and action tokens
 

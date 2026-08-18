@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`18/48`；owner-scoped stream controls完成，继续3.6 adaptive stream layout |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`19/48`；adaptive stream layout完成，继续3.7 session application matrix |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`18/48`。Group 1、2.x及3.1-3.5已完成；3.5把requested overlay与stop confirmation绑定到完整workspace/session owner，non-owner/replaced generation fail closed，macOS/tvOS/visionOS复用现有input/focus release合同，system-reserved escape命令保持本地，confirmed stop加入3.4共享teardown。最终focused `8/8`、related `219/219`、normal `1224/1223/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断通过。下一项3.6重组compact/wide stream presentation；owning-window close属于4.4，完整session应用矩阵属于3.7/7.x，完整无障碍收尾属于5.x，legacy全局字符串迁移属于6.1/6.2。
+阶段19当前权威进度`19/48`。Group 1、2.x及3.1-3.6已完成；3.5把requested overlay与stop confirmation绑定到完整workspace/session owner，3.6再以actual geometry、size class和accessibility text归约compact/wide stream controls，保持non-hover恢复、virtual-controller排他及tvOS/visionOS内部reflow。3.6最终focused `4/4`、related `176/176`、normal `1225/1224/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断通过。下一项3.7补完整session应用矩阵；owning-window close属于4.4，完整无障碍收尾属于5.x，legacy全局字符串迁移属于6.1/6.2。
 
 ### 阶段19错误记录
 
@@ -1752,3 +1752,39 @@
 - **post-mark final-state：** 只读门通过OpenSpec strict `1/1`、`18/48 next 3.6`、精确11文件scope、唯一3.5 checkbox、稳定project hash、全部retained test/build、disabled opt-ins及零LuneX build/test process；未重复任何验收或Simulator操作。
 - **evidence cleanup：** 八个明确`/private/tmp/LuneX-19-3_5-*`路径已逐项`find -depth -delete`，包含失败/成功DerivedData、raw logs与xcresult；定向零残留检查通过。下一步final record后精确stage、独立commit/push/fetch。
 - **final record：** 通过基线`HEAD == origin/main == c74b4f0`、strict `1/1`、OpenSpec `18/48 next 3.6`、最终11文件scope、唯一3.5 checkbox、稳定project、计划内retained证据索引、零task artifact、disabled opt-ins及repository/process/proof边界。3.5进入精确stage与独立commit/push/fetch。
+
+## 2026-08-18 阶段 19 任务 3.6 启动
+
+- **状态：** `in_progress`；3.5已以`84b35d8 Bind stream controls to workspace owners`提交推送，OpenSpec为`18/48 ready`、next 3.6。当前只保留`RootView.swift`、`ProductWorkflowSurface.swift`和`ProductWorkflowSurfaceTests.swift`三个未验收候选修改。
+- **目标：** compact horizontal size class或accessibility Dynamic Type使用底部、可滚动且最高约占窗口48%的controls；wide使用顶左、自然尺寸优先且最高约占82%的controls。所有primary commands必须可达、可重排、不依赖hover，controls可见时不得与virtual controller重叠，tvOS/visionOS保留既有focus与owner-scoped stop合同。
+- **恢复门：** session catchup只发现尚未落盘的对话记录；`git diff --check`通过，Xcode 26.4/Swift 6.3，真实Keychain/live-host opt-in均unset，无活动LuneX `xcodebuild`/`xctest`，未操作Simulator lifecycle。
+- **lint边界：** `xcrun swift-format lint --strict`对三个完整文件报告大量既有两空格缩进、line length、`UseLetInEveryBoundCaseVariable`与`NoAccessLevelOnExtensionDeclaration`诊断；仓库没有匹配既有四空格风格的配置，因此该全文件结果不是局部3.6门禁且不据此批量format。权威门为fresh warnings-as-errors编译、结构化tests/build、`git diff --check`和人工diff/UI语义审计。
+- **下一步：** 从fresh DerivedData运行macOS warnings-as-errors compile；失败时仅精确修复当前候选并废弃失败证据，不复用失败DerivedData。
+- **命令检索错误：** 首轮历史命令搜索包含不存在的`Makefile*`，zsh在命令启动前因`nomatch`报告错误；无文件、构建或设备副作用。已直接用`xcodebuild -list -json`确认scheme，不重复该glob。
+- **fresh compile：** `/private/tmp/LuneX-19-3_6-compile-1.hkeJQH` unsigned generic macOS Debug warnings-as-errors一次通过；xcresult为`status succeeded / 0 error / 0 warning / 0 analyzer warning`，日志唯一warning为无AppIntents依赖的metadata skip，产物含`x86_64 arm64`。下一步focused测试。
+- **focused通过：** fresh `/private/tmp/LuneX-19-3_6-focused.GqDNRx/Focused.xcresult`结构化通过`4/4`、0 skip/failure；覆盖pure layout矩阵、RootView adaptive/virtual-controller/non-hover合同及tvOS/visionOS source/focus合同，build diagnostics全零。
+- **related通过：** 复用同一fresh build缓存的`/private/tmp/LuneX-19-3_6-related.HrWyOS/Related.xcresult`结构化通过`176/176`、0 skip/failure；覆盖Product surface/workspace、AppModel owner/session、macOS input、mobile presentation、tvOS/visionOS controls/settings，build diagnostics全零。下一步独立fresh serial normal。
+- **normal通过：** 独立fresh `/private/tmp/LuneX-19-3_6-normal.Rd9rKL/Normal.xcresult`串行通过`1225 total / 1224 passed / 1 skipped / 0 failed / 0 expected failure`，build diagnostics全零；唯一skip精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，两个真实opt-in保持unset，普通测试继续JSON文件store。下一步四平台generic Debug build。
+- **中间四平台build：** 首版候选在`/private/tmp/LuneX-19-3_6-platform-builds.IkwJPZ`通过macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`且四份xcresult均零diagnostic；随后人工UI审计发现实际窗口宽度未参与layout选择，因此该结果降为修订前中间证据，不能作为最终3.6验收。
+- **UI审计修复：** macOS resized window通常没有compact size class，首版会错误保持wide；`ProductStreamWorkspaceLayout`现以900pt阈值同时消费actual `GeometryReader` width，非有限宽度fail closed为compact，并把outer result传给tvOS/visionOS controls。compact高度严格限制为实际容器48%，wide保持82%且宽度约68%、640...1040pt，避免无意义占满窗口。
+- **审计搜索错误：** 两个只读`rg`分别包含不存在的`project.yml`和`Documentation`路径并报告file-not-found；其余明确路径读取完成，无文件、构建或设备副作用。后续只搜索已确认路径。
+- **证据失效：** 因production与test均在UI审计后变化，修订前compile/focused/related/normal/四平台结果仅作诊断历史；最终证据必须从fresh目录重跑。
+- **最终focused：** `/private/tmp/LuneX-19-3_6-focused-final.cO86i1/Focused.xcresult`结构化通过`4 total / 4 passed / 0 skipped / 0 failed`，build为`succeeded / 0 error / 0 warning / 0 analyzer warning`；覆盖actual-width layout reducer、RootView compact/wide/virtual-controller/non-hover合同及tvOS/visionOS内部reflow/focus语义。
+- **最终related：** `/private/tmp/LuneX-19-3_6-related-final.Sqk1fr/Related.xcresult`结构化通过`176/176`、零skip/failure，build四类diagnostic全零；覆盖Product surface/workspace registry、AppModel owner/session、tvOS/visionOS presentation、macOS input与mobile状态，确认3.5 owner/input/reserved-command合同未回归。
+- **最终normal：** `/private/tmp/LuneX-19-3_6-normal-final.F3zbOj/Normal.xcresult`串行通过`1225 total / 1224 passed / 1 skipped / 0 failed / 0 expected failure`，build diagnostics全零；唯一skip精确为显式关闭的真实Keychain round-trip，两个真实opt-in保持unset并继续JSON文件fallback。
+- **最终四平台build：** `/private/tmp/LuneX-19-3_6-platform-builds-final.c62DaX`中macOS universal、iOS/iPadOS、tvOS、visionOS unsigned generic Debug全部`succeeded / 0 error / 0 warning / 0 analyzer warning`；macOS executable为`x86_64 arm64`，每份raw log只有既有AppIntents metadata extraction skip。
+- **当前门：** 产品代码冻结。下一步同步OpenSpec/design/runtime authority并运行静态语义、generator稳定性、strict validation与repository pre-gate；全部通过前保持`18/48 next 3.6`且不得勾选task。最终证据只证明offline deterministic source/test与unsigned build，不证明signed、physical UI/focus、assistive technology、live Sunshine或性能功耗。
+- **静态门包装器错误：** 首轮语义门前四组已通过，在stop ownership组把截止于`TVStreamControlFocusTarget`之前的通用stream切片错误地当作包含tvOS/visionOS controls，并要求其中出现三次confirmation，因此无输出退出；实际通用、tvOS、visionOS各有一个入口。该轮只读、未修改源码或运行build/test/Keychain/Simulator；修正为三段分别精确断言后继续。
+- **静态门与skip读取：** corrected源码语义门已通过全部layout/geometry/reachability/reflow/focus/owner/test/pre-mark/diff断言。随后同一只读wrapper的skip名称提取错误假设test-tree节点使用`testStatus/status`字段，在`SKIP_IDENTITY`后无匹配退出；normal summary仍已结构化确认1 skip/0 failure。下一步按实际Xcode 26.4 JSON字段只补读唯一skip和四平台build，不重复静态门。
+- **最终证据复读尾部错误：** 按实际`.result == "Skipped"`已精确确认唯一Keychain测试，四个平台build也逐份确认`succeeded/0/0/0`；wrapper最后用`find`路径加`file`固定英文短语检查universal binary时无匹配退出。该退出发生在四份build已通过之后，只需以实际可执行路径和`lipo -archs`补验架构，不重复结构化读取。
+- **最终静态与generator门：** corrected源码语义门、唯一Keychain skip、四平台build复读及`lipo -archs == x86_64 arm64`全部通过。工程生成前、第一次及第二次`ruby Tools/generate_xcodeproj.rb`后的project SHA-256均为`60e6966fc42bbe0facbb8adfdf66794746948039ba1f190ac13dc0438a9d2224`，无工程diff且`git diff --check`通过；下一步strict/apply与repository pre-gate。
+- **repository pre-gate编排错误：** 首个组合门在shell启动前被functions JavaScript解析器把Bash的`${spec%%:*}`误作模板表达式，以`SyntaxError: Unexpected token '%'`拒绝；未创建evidence、运行命令、修改仓库或触发test/build/Keychain/live host/Simulator。改为`IFS=:`读取字段后从fresh目录完整执行，不重复该写法。
+- **repository pre-gate r1进程误判：** `/private/tmp/LuneX-19-3_6-repository-pre.CibDgd`已通过01-08的scope/OpenSpec/generator/source/authority/tests/builds/privacy门；09用整行`ps`匹配时命中wrapper自身命令文本中的文件名`xcodebuild.log`，误报活动进程并退出。没有真实xcodebuild/xctest或runtime副作用；改用`pgrep -x`精确进程名后从fresh r2完整执行，r1不计最终门。
+- **repository pre-gate r2过宽artifact门：** `/private/tmp/LuneX-19-3_6-repository-pre-r2.OOerd5`再次通过01-08且09未发现真实opt-in或build/test进程，随后“工作区不得存在任何`DerivedData`/log”断言无输出退出；这会把`.gitignore`排除的既有cache与task漂移混同。只读确认来源后，r3收窄为Git可见staged/untracked与task-specific workspace artifact，不删除既有或用户cache。
+- **repository pre-gate：** fresh `/private/tmp/LuneX-19-3_6-repository-pre-r3.98Tnh5`完整通过基线与精确10文件scope、strict/OpenSpec `18/48 next 3.6`、稳定project、源码/authority语义、focused `4/4`、related `176/176`、normal `1225/1224/1/0`、四平台build `4/4`、privacy/test integrity、disabled opt-ins、零build/test进程、Git-visible artifact及diff边界；未操作Simulator lifecycle。
+- **状态：** `complete`；3.6已勾选，权威状态应为`19/48 ready`、next 3.7。下一步仅运行post-mark只读final-state，确认唯一checkbox和11文件scope；不重复generator/test/build或操作Keychain/live host/Simulator。
+- **post-mark final-state：** `/private/tmp/LuneX-19-3_6-final-state.aAzzoV`只读通过strict、OpenSpec `19/48 next 3.7`、精确11文件scope、唯一3.6 checkbox、稳定project hash、最终evidence/pre-gate可读、disabled opt-ins及零build/test process；未重复generator/test/build或操作Simulator。下一步定向清理task evidence。
+- **cleanup编排错误：** 首个32路径定向清理脚本在shell启动前因functions JavaScript误解析Bash数组`${paths[@]}`而以SyntaxError拒绝；没有任何路径被删除。改用无数组展开的here-doc逐行读取同一组绝对路径，再逐项`find <exact> -depth -delete`。
+- **evidence cleanup：** 已枚举的32个`/private/tmp/LuneX-19-3_6-*`目录/路径文件全部逐项以`find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除，也未触碰仓库既有ignored `build/DerivedData`。下一步最终diff audit与final record。
+- **final audit文档修复：** 首轮最终审计确认product diff只涉及stream workspace/overlay/tvOS/visionOS controls、tests只新增且OpenSpec为`19/48 next 3.7`，同时发现roadmap在3.6完成记录前仍写“3.6仍负责compact/wide”。已精确改为3.6现已完成、3.7仍负责完整矩阵；只改文档时态，不重跑test/build。
+- **final audit：** corrected只读审计通过最终11文件scope、RootView hunk仅1224...1710 stream范围、layout core `21+/0-`、tests新增1函数且无函数删除/skip/disable、唯一3.6 checkbox、strict `19/48 next 3.7`、零stale authority wording、privacy/opt-in/process/artifact/project/reference/diff边界。下一步final record与精确stage/commit/push/fetch。

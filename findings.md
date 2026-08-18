@@ -3329,3 +3329,24 @@
 - The first structured build-summary wrapper assigned to zsh's special `path` variable, which rewrote `PATH` and made `xcrun` unavailable. Renaming it to `bundle_path` read the same retained results successfully without rebuilding. A separate broad documentation search used an unmatched `specs/*.md` glob and was rejected by zsh before reading files; subsequent searches used explicit paths.
 - Repository pre-mark validation passes fixture self/tree checks, strict OpenSpec `1/1`, stable project generation, exact scope, source semantics, retained tests/builds, privacy/dependency drift, disabled opt-ins, and process/diff gates. Two wrapper-only exits were caused by an over-escaped `.overlayVisible` assertion and an unquoted jq `next` key; corrected fixed-string/progress assertions passed without rerunning test or build evidence.
 - Post-mark state is `18/48` with task 3.6 next, exactly one task checkbox changed, and all retained results remained readable before cleanup. All eight task-specific temporary evidence directories were then deleted by explicit path; no raw build, test, device-enumeration, or DerivedData artifact remains under the task prefix.
+
+## 2026-08-18 阶段 19 任务 3.6 调查
+
+- 当前stream controls始终以顶左浮层呈现；compact窗口和accessibility Dynamic Type没有高度上限或滚动容器，command header可能横向挤压，且controls与virtual controller可同时遮挡视频。这些是3.6的实际布局缺口，owner/focus/reserved-command/stop-confirmation状态合同已由3.5提供。
+- 候选新增纯值`ProductStreamWorkspaceLayout`：compact horizontal size class或accessibility text size归约为`.compact`，其余为`.wide`。RootView使用当前`GeometryReader`尺寸计算overlay上限；compact为底部、约48%、可滚动，wide为顶左、最大宽度1040、约82%，恢复controls的eye按钮仍显式可见且不依赖hover。
+- controls可见时隐藏`VirtualControllerOverlay`，避免本地controls与远端虚拟手柄重叠；macOS/iOS和tvOS/visionOS command header都按compact/wide重排，stop入口仍调用workspace-local confirmation，tvOS focus顺序仍由既有`hideControls`/`disconnect`声明控制。
+- `xcrun swift-format lint --strict`扫描完整既有文件时使用与仓库不一致的默认两空格等规则，产生大量非本次诊断；不批量改写`RootView.swift`。`git diff --check`已通过，后续以warnings-as-errors编译、结构化测试/构建与人工UI语义检查判断候选。
+- Fresh generic macOS warnings-as-errors build编译通过两个架构，结构化xcresult为`succeeded`且四类diagnostic全零；候选SwiftUI builder、GeometryReader、dynamic alignment和条件平台分支至少在macOS编译面成立。日志只有既有AppIntents metadata skip，不能把该unsigned build解释为实际窗口resize、触控、focus或物理设备体验证明。
+- Focused `4/4`与related `176/176`均通过且build diagnostics全零。相关矩阵覆盖3.5 owner/session stop、macOS input capture、workspace replacement、mobile presentation、tvOS focus与visionOS actual-state合同，因此布局重组没有从确定性测试面破坏这些既有行为；仍需normal和其他SDK编译验证。
+- Fresh serial normal通过`1225/1224/1/0`且结构化build diagnostics全零；唯一skip是显式关闭的真实Keychain round-trip。该结果确认当前源码普通测试继续使用文件store且无离线回归，但不代表真实Keychain、live host或物理平台UI验收。
+- Post-build人工UI审计发现首版compact判定只依赖size class与Dynamic Type；macOS resized window通常保持nil/regular size class，因此实际窄窗口仍会走wide。这违反3.6对resized macOS的直接要求，导致此前全部证据降为中间证据。
+- 修订合同将actual geometry width纳入纯值reducer：小于900pt、compact size class、accessibility text或非有限width任一成立即compact。outer layout传入tvOS/visionOS command/status controls，确保实际窗口窄时不只限制容器，还会触发内部重排；compact maximum height严格为48%，wide为82%且宽度约束在640...1040pt。
+- 修订后的tvOS compact command header使用`ViewThatFits`，因此accessibility字号下可从水平commands回退为垂直；visionOS使用相同策略。outer layout先按actual geometry判定，再与各平台内部size class/accessibility条件合并，避免只改变容器而不重排primary commands。
+- 最终fresh focused `4/4`、related `176/176`、serial normal `1225/1224/1/0`及macOS universal、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`全部结构化零失败、零compiler warning、零error、零analyzer warning。唯一skip是显式禁用的真实Keychain round-trip，普通测试继续JSON文件fallback。
+- 最终证据证明布局值、source contracts、owner/session回归与四SDK编译；没有操作Simulator，也不证明signed artifact、真实窗口resize/触控/focus、VoiceOver/Voice Control、live Sunshine、HDR/空间音频物理效果或性能功耗。3.7、4.4与5.x边界保持不变。
+- 最终静态门逐项确认actual geometry、900pt、48%/82%、640...1040pt、command reflow、无`.onHover`、explicit eye restore、virtual-controller排他、tvOS Hide-before-Disconnect、三平台workspace confirmation及3.5 reserved/input合同；生成器两次运行与生成前project hash均稳定为`60e6966f...d2224`且没有工程diff。
+- Corrected repository pre-gate `/private/tmp/LuneX-19-3_6-repository-pre-r3.98Tnh5`完整通过`18/48 next 3.6`的pre-mark状态、精确10文件scope、source/authority语义、全部最终test/build、privacy/test integrity、disabled opt-ins、零build/test process与Git-visible artifact边界。3.6可以勾选；3.7完整session应用矩阵仍未完成。
+- Post-mark `/private/tmp/LuneX-19-3_6-final-state.aAzzoV`确认`19/48 next 3.7`、精确11文件、tasks中只有3.6 checkbox变化、稳定project与最终证据仍可读；没有重复执行generator/test/build或设备操作。
+- Post-mark完成后，32个明确task evidence目录与current-path文件已逐项删除，`/private/tmp/LuneX-19-3_6-*`零残留；既有ignored workspace cache未被删除或更改。
+- Final diff audit确认RootView所有hunk均在stream workspace/status/tvOS/visionOS controls范围，layout core与tests只新增；未删除测试函数或加入skip。唯一发现是roadmap的一句3.6旧时态，已改为3.6完成且3.7仍负责完整矩阵。
+- Corrected final audit通过11文件分类、RootView旧行范围1224...1710、core `21+/0-`、1个新增测试函数/0删除/0 skip、唯一3.6 checkbox、strict `19/48 next 3.7`及全部privacy/repository边界；未发现新的产品正确性或UI合同问题。

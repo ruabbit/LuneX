@@ -489,10 +489,50 @@ publish into a replaced workspace. Terminal reconnect actions still reserve a
 new session owner before provider work and reject replay of the old token.
 
 Task 3.4 provides the underlying command coordination but does not choose an
-owning-window retain-versus-stop policy or wire overlay presentation. Overlay
-ownership, compact/wide stream composition, and owning-window close policy
-remain tasks 3.5, 3.6, and 4.4 respectively. Broader mapping/removal of legacy
-host, pairing, diagnostics, and runtime strings remains tasks 6.1/6.2.
+owning-window retain-versus-stop policy. Tasks 3.5 and 3.6 now wire checked
+overlay ownership and adaptive stream composition as described below. The
+owning-window close policy remains task 4.4, and broader mapping/removal of
+legacy host, pairing, diagnostics, and runtime strings remains tasks 6.1/6.2.
+
+### Checked stream overlay and adaptive composition
+
+Requested overlay visibility and stop confirmation live only in the owning
+`ProductWorkspaceState`. Actual visibility additionally requires the current
+`ProductSessionOwner` and completion of the platform input-release barrier.
+Non-owning, replaced, and stale workspaces fail closed. Showing controls closes
+macOS and visionOS remote-input admission and uses the existing tvOS held-input
+release/focus handoff; hiding controls restores capture only through the same
+current geometry, lifecycle, media, focus, and session checks. macOS Escape,
+tvOS Menu/Back, and visionOS Escape remain local and never enter remote input
+serialization. Every visible Disconnect command requests the workspace-local
+stop confirmation and confirmed stop joins the Task 3.4 owner-keyed teardown.
+
+`ProductStreamWorkspaceLayout` is a pure deterministic value. A compact
+horizontal size class, accessibility Dynamic Type, an actual container width
+below 900 points, or a non-finite width selects `.compact`; only a finite width
+of at least 900 points with the other conditions clear selects `.wide`. The
+outer `GeometryReader` result is passed into tvOS and visionOS controls so a
+genuinely narrow window also reflows their internal command groups.
+
+Compact controls are bottom-aligned within the safe area, vertically
+scrollable, and capped at 48 percent of the actual container height. Wide
+controls are top-leading, use approximately 68 percent of the container width
+clamped to 640...1040 points, and are capped at 82 percent of container height.
+Command headers use horizontal-first reflow with a vertical fallback. Visible
+controls suppress the virtual controller; hidden controls expose an explicit
+eye restore button with no hover dependency. tvOS keeps Hide Controls before
+Disconnect in focus priority, and visionOS uses the same compact command
+fallback without weakening owner-scoped stop or capture admission.
+
+The focused deterministic result is `4/4`, the related ownership/platform
+matrix is `176/176`, and the serial normal suite is `1225 total / 1224 passed /
+1 skipped / 0 failed`; the only skip is the explicitly disabled real-Keychain
+round trip. Unsigned generic Debug builds for macOS universal, iOS/iPadOS,
+tvOS, and visionOS pass `4/4` with zero structured compiler, analyzer, or build
+warnings. These are offline source/test/build receipts with the JSON identity
+fallback and both real opt-ins unset. They do not prove signed installation,
+physical resize/touch/focus, assistive technology, live Sunshine, or device
+performance, and Task 3.7 retains the broader session application matrix.
 
 ### Host, pairing, and catalog product surfaces
 

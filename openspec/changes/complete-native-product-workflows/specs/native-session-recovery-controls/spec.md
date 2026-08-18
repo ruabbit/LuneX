@@ -50,11 +50,23 @@ The application SHALL route stream overlay commands through the owning workspace
 - **THEN** confirmation is rejected or cleared and cannot stop the replacement session
 
 ### Requirement: Video-safe overlay presentation
-The application SHALL keep essential stream controls reachable without permanently obscuring decoded video, SHALL support touch and focus navigation without hover, and SHALL adapt to compact and resized windows.
+The application SHALL keep essential stream controls reachable without permanently obscuring decoded video, SHALL support touch and focus navigation without hover, and SHALL adapt to compact and resized windows using the actual container width in addition to size class and accessibility text size.
 
 #### Scenario: Compact window
-- **WHEN** the stream window becomes compact
-- **THEN** controls remain reachable inside safe areas with no text or command overlap
+- **WHEN** the stream container is narrower than 900 points, has a compact horizontal size class, uses an accessibility text size, or reports an invalid width
+- **THEN** controls reflow inside a scrollable bottom safe-area surface bounded to at most 48 percent of the container height, with no text or command overlap
+
+#### Scenario: Wide window
+- **WHEN** the stream container has a finite width of at least 900 points, a non-compact horizontal size class, and a non-accessibility text size
+- **THEN** controls remain top-leading with a restrained 640...1040 point width and at most 82 percent of the container height
+
+#### Scenario: Hidden controls
+- **WHEN** the owning workspace hides stream controls
+- **THEN** an explicit non-hover restore command remains reachable and the virtual controller may appear only while the control surface is hidden
+
+#### Scenario: Platform command reflow
+- **WHEN** a tvOS or visionOS stream surface becomes compact by outer geometry or accessibility conditions
+- **THEN** its primary local commands reflow without changing focus order, command ownership, or stop confirmation semantics
 
 #### Scenario: Reduced motion
 - **WHEN** Reduce Motion is enabled

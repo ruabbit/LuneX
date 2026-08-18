@@ -3833,3 +3833,31 @@
 - 2026-08-18：post-mark final-state只读通过strict `1/1`、OpenSpec `18/48 next 3.6`、精确11文件scope、唯一3.5 checkbox、稳定project与全部retained evidence；未重复test/build/generator或操作Keychain、live host、Simulator。
 - 2026-08-18：八个明确`/private/tmp/LuneX-19-3_5-*`证据路径已用`find -depth -delete`逐项清理，失败/成功DerivedData、xcresult及Xcode自动设备枚举文本均不再保留；零残留检查通过。下一步final record与独立commit/push/fetch。
 - 2026-08-18：final record通过基线`HEAD == origin/main == c74b4f0`、strict、`18/48 next 3.6`、最终11文件scope、唯一3.5 checkbox、稳定project、零task artifact、disabled opt-ins及repository/process/proof边界。准备精确stage、独立commit/push/fetch。
+- 2026-08-18：启动阶段19 task 3.6；恢复确认OpenSpec `18/48 next 3.6`，工作树仅有`RootView.swift`、`ProductWorkflowSurface.swift`和`ProductWorkflowSurfaceTests.swift`三个候选修改，`git diff --check`通过。Xcode 26.4/Swift 6.3，Keychain/live-host opt-in unset，无活动LuneX build/test进程且未操作Simulator。
+- 2026-08-18：3.6候选建立compact/wide纯值布局合同；compact controls位于底部安全区、最大约48%高度且可滚动，wide位于顶左、最大宽度1040且最大约82%高度。controls显示时virtual controller不再同时显示，command headers可重排，show/hide仍不依赖hover。
+- 2026-08-18：全文件`xcrun swift-format lint --strict`产生大量既有默认两空格、line length及既有规则诊断，不作为局部3.6门禁且不批量format；改用fresh warnings-as-errors编译、结构化xcresult、`git diff --check`和人工审读。下一步fresh macOS compile。
+- 2026-08-18：历史命令搜索因不存在的`Makefile*`触发zsh `nomatch`，在搜索启动前退出且无副作用；直接读取工程scheme后继续。
+- 2026-08-18：fresh `/private/tmp/LuneX-19-3_6-compile-1.hkeJQH` generic macOS Debug warnings-as-errors编译一次通过；xcresult为`succeeded/0 error/0 warning/0 analyzer warning`，日志只有AppIntents metadata skip，universal产物含`x86_64 arm64`。下一步focused布局与RootView合同测试。
+- 2026-08-18：fresh focused结构化通过`4/4`、零skip/failure及零build diagnostics；覆盖layout reducer、RootView adaptive/non-hover/virtual-controller合同和tvOS/visionOS source/focus合同。
+- 2026-08-18：related八簇复用fresh build缓存并结构化通过`176/176`、零skip/failure及零build diagnostics；owner/session、workspace、mac input、mobile、tvOS和visionOS presentation均无回归。下一步独立fresh serial normal。
+- 2026-08-18：独立fresh serial normal结构化通过`1225 total / 1224 passed / 1 skipped / 0 failed`，build diagnostics全零；唯一skip精确为显式禁用的real-Keychain round-trip，Keychain/live-host opt-in均unset，继续文件fallback。下一步四平台generic Debug build。
+- 2026-08-18：首版四平台generic Debug顺序通过`4/4`且每份xcresult为`succeeded/0/0/0`，macOS为`x86_64 arm64`；随后人工UI审计发现actual resized macOS width未参与compact判定，故此前compile/test/build全部降为修订前中间证据。
+- 2026-08-18：修订`ProductStreamWorkspaceLayout`以900pt阈值消费GeometryReader actual width，并让tvOS/visionOS内部controls继承outer compact判定；非有限width fail closed。compact max height由带96pt floor改为严格48%，wide height82%、宽度约68%并夹在640...1040pt。下一步从fresh目录重新编译与测试。
+- 2026-08-18：修订后fresh focused `/private/tmp/LuneX-19-3_6-focused-final.cO86i1`结构化通过`4/4`，related `/private/tmp/LuneX-19-3_6-related-final.Sqk1fr`通过`176/176`；两者均零skip/failure且build diagnostics全零。tvOS compact header补用`ViewThatFits`后重新纳入最终证据。
+- 2026-08-18：最终fresh serial normal `/private/tmp/LuneX-19-3_6-normal-final.F3zbOj`通过`1225/1224/1/0`，唯一skip为显式禁用的真实Keychain round-trip；真实Keychain/live-host opt-in均unset，普通测试继续文件fallback。
+- 2026-08-18：最终四平台目录`/private/tmp/LuneX-19-3_6-platform-builds-final.c62DaX`中macOS universal、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`均`succeeded/0 error/0 warning/0 analyzer warning`，macOS为`x86_64 arm64`。未操作Simulator lifecycle。
+- 2026-08-18：已开始同步3.6 authority：OpenSpec design/spec、runtime contract、completion roadmap与三份planning记录actual width、900pt、48%/82%、virtual-controller排他、non-hover restore、tvOS/visionOS reflow及最终证据；task仍保持pre-mark `18/48 next 3.6`，下一步静态/generator/strict/repository pre-gate。
+- 2026-08-18：首轮静态语义wrapper通过layout/geometry/reachability/reflow四组后，在ownership组因错误要求不含平台controls的通用源码切片出现三次stop confirmation而退出；无production/test/build/device副作用。修正为通用、tvOS、visionOS三段各一次后继续，不把该轮计作完整门。
+- 2026-08-18：corrected静态语义门完整通过actual-width、48%/82%、command reflow、non-hover restore、virtual-controller排他、tvOS focus顺序、三平台workspace confirmation、3.5 reserved/input合同、source tests、pre-mark与diff-check。后续skip提取器因错误JSON字段无匹配退出；将按实际schema只读补验，不重复静态门。
+- 2026-08-18：按实际test-tree `result`字段确认normal唯一skip为真实Keychain round-trip；四平台最终build逐份结构化确认`succeeded/0/0/0`。wrapper仅在末尾固定`file`短语/路径的universal断言无匹配，改用实际路径加`lipo -archs`补验，不重复前述证据。
+- 2026-08-18：`lipo -archs`确认最终macOS可执行文件为`x86_64 arm64`；generator运行前及连续两次运行后project SHA-256均为`60e6966fc42bbe0facbb8adfdf66794746948039ba1f190ac13dc0438a9d2224`，工程无diff且diff-check通过。下一步strict/apply与repository pre-gate。
+- 2026-08-18：首个repository pre-gate在任何shell启动前因外层JavaScript误解析Bash `${spec%%:*}`而以SyntaxError拒绝；无evidence或项目/运行时副作用。将用`IFS=:`替代参数展开并从fresh目录完整执行。
+- 2026-08-18：repository pre-gate r1 `/private/tmp/LuneX-19-3_6-repository-pre.CibDgd`通过01-08全部门，在09的process检查因wrapper命令行含`xcodebuild.log`而自匹配误报；未运行真实build/test。改用`pgrep -x`并从fresh r2完整重跑，r1只保留诊断。
+- 2026-08-18：r2 `/private/tmp/LuneX-19-3_6-repository-pre-r2.OOerd5`通过01-08及opt-in/process检查，随后过宽禁止所有ignored `DerivedData`/log的断言退出。将只读确认命中并收窄到Git可见与task-specific artifact，不删除既有cache；r2不计最终门。
+- 2026-08-18：fresh repository pre-gate r3 `/private/tmp/LuneX-19-3_6-repository-pre-r3.98Tnh5`完整通过10组门：baseline/精确10文件、strict与`18/48 next 3.6`、稳定generator、source/authority、最终tests/builds、privacy/test integrity、disabled opt-ins、零build/test process、Git-visible artifact及diff边界；未操作Simulator。
+- 2026-08-18：OpenSpec 3.6已勾选，预期权威进度`19/48 ready`、next 3.7。下一步仅运行post-mark只读final-state，不重复generator/test/build或操作Keychain/live host/Simulator。
+- 2026-08-18：post-mark `/private/tmp/LuneX-19-3_6-final-state.aAzzoV`只读通过strict、`19/48 next 3.7`、11文件scope、唯一3.6 checkbox、稳定project、最终evidence/pre-gate、disabled opt-ins和零build/test process。下一步逐个定向清理所有3.6临时证据。
+- 2026-08-18：首个cleanup脚本在shell启动前因外层JavaScript误解析Bash数组展开而拒绝，32个已枚举路径均未删除；改用here-doc逐行精确路径执行，不使用宽泛删除。
+- 2026-08-18：32个已枚举`/private/tmp/LuneX-19-3_6-*`路径已逐个`find <exact> -depth -delete`，task prefix零残留；仓库既有ignored `build/DerivedData`未触碰。下一步final diff audit与record。
+- 2026-08-18：首轮final audit确认product hunk全在stream UI、tests无删除/skip、OpenSpec `19/48 next 3.7`，并发现roadmap一句“3.6仍负责”的stale时态；已精确改为3.6完成、3.7仍负责完整矩阵，不重跑test/build。下一步重跑只读final audit。
+- 2026-08-18：corrected final audit通过11文件scope、RootView stream-only hunk范围、core `21+/0-`、1新增/0删除测试函数、无skip/disable、唯一3.6 checkbox、strict `19/48 next 3.7`、零stale authority wording及privacy/opt-in/process/artifact/project/diff边界。下一步final record后提交推送。

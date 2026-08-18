@@ -1,6 +1,57 @@
 import XCTest
 
 final class ProductWorkflowSurfaceTests: XCTestCase {
+    func testStreamWorkspaceLayoutUsesCompactForNarrowOrExpandedText() {
+        XCTAssertEqual(
+            ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: 1_280
+            ),
+            .wide
+        )
+        XCTAssertEqual(
+            ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: true,
+                usesAccessibilityTextSize: false,
+                availableWidth: 1_280
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: true,
+                availableWidth: 1_280
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: ProductStreamWorkspaceLayout.wideMinimumWidth - 1
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: ProductStreamWorkspaceLayout.wideMinimumWidth
+            ),
+            .wide
+        )
+        XCTAssertEqual(
+            ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: .nan
+            ),
+            .compact
+        )
+    }
+
     func testHostLibraryMapsLoadingFirstUseAvailableAndFailure() {
         let host = makeHost(pairingState: .paired)
 
@@ -438,6 +489,58 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertFalse(source.contains("streamLaunchUI.actionMessage"))
         XCTAssertTrue(source.contains("Button {\n                    appModel.select(app: app, in: workspace)"))
         XCTAssertFalse(source.contains(".onTapGesture"))
+
+        let workspaceStart = try XCTUnwrap(
+            source.range(of: "private struct StreamWorkspaceView: View")
+        )
+        let workspaceEnd = try XCTUnwrap(
+            source.range(
+                of: "private struct StreamStatusOverlay: View",
+                range: workspaceStart.upperBound..<source.endIndex
+            )
+        )
+        let streamWorkspace = String(
+            source[workspaceStart.lowerBound..<workspaceEnd.lowerBound]
+        )
+        let streamContracts = [
+            "ProductStreamWorkspaceLayout(",
+            "GeometryReader",
+            "availableWidth: geometry.size.width",
+            "overlayMaximumHeight(",
+            "layout == .compact ? 0.48 : 0.82",
+            ".safeAreaPadding(16)",
+            "alignment: streamOverlayAlignment(for: layout)",
+            "streamOverlayVisibility(in: workspace) == .hidden"
+        ]
+        for contract in streamContracts {
+            XCTAssertTrue(
+                streamWorkspace.contains(contract),
+                "Missing stream workspace contract: \(contract)"
+            )
+        }
+        XCTAssertFalse(streamWorkspace.contains(".onHover"))
+
+        let overlayEnd = try XCTUnwrap(
+            source.range(
+                of: "private enum TVStreamControlFocusTarget: Hashable",
+                range: workspaceEnd.upperBound..<source.endIndex
+            )
+        )
+        let streamOverlay = String(
+            source[workspaceEnd.lowerBound..<overlayEnd.lowerBound]
+        )
+        XCTAssertTrue(streamOverlay.contains("case .compact:"))
+        XCTAssertTrue(streamOverlay.contains("ScrollView"))
+        XCTAssertTrue(streamOverlay.contains(".scrollBounceBehavior(.basedOnSize)"))
+        XCTAssertTrue(streamOverlay.contains("compactCommandHeader"))
+        XCTAssertTrue(streamOverlay.contains("wideCommandHeader"))
+        XCTAssertTrue(streamOverlay.contains(
+            "TVStreamControls(workspace: workspace, workspaceLayout: layout)"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "VisionStreamControls(workspace: workspace, workspaceLayout: layout)"
+        ))
+        XCTAssertFalse(streamOverlay.contains(".onHover"))
     }
 
     private func surface(

@@ -1223,6 +1223,8 @@ private struct StreamLaunchPanel: View {
 
 private struct StreamWorkspaceView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let workspace: ProductWorkspaceReference
     #if os(macOS)
     let platformLifecycle: PlatformLifecycleState
@@ -1232,7 +1234,14 @@ private struct StreamWorkspaceView: View {
     #endif
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        GeometryReader { geometry in
+            let layout = ProductStreamWorkspaceLayout(
+                horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
+                usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize,
+                availableWidth: geometry.size.width
+            )
+
+            ZStack(alignment: .topLeading) {
             #if os(macOS)
             MetalStreamSurface(
                 renderState: appModel.renderState,
@@ -1336,49 +1345,100 @@ private struct StreamWorkspaceView: View {
                 .ignoresSafeArea()
             #endif
 
-            if appModel.streamOverlayVisibility(in: workspace) == .visible {
-                StreamStatusOverlay(workspace: workspace)
-                    .padding(16)
-            } else if appModel.hasActiveStreamSession {
-                #if !os(tvOS)
-                Button {
-                    _ = appModel.setStreamOverlayVisibility(
-                        .visible,
-                        in: workspace
+                if appModel.streamOverlayVisibility(in: workspace) == .visible {
+                    StreamStatusOverlay(
+                        workspace: workspace,
+                        layout: layout
                     )
-                } label: {
-                    Image(systemName: "eye")
+                    .frame(maxWidth: streamOverlayMaximumWidth(
+                        in: geometry.size,
+                        layout: layout
+                    ))
+                    .frame(maxHeight: overlayMaximumHeight(
+                        in: geometry.size,
+                        layout: layout
+                    ))
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: streamOverlayAlignment(for: layout)
+                    )
+                    .safeAreaPadding(16)
+                } else if appModel.hasActiveStreamSession {
+                    #if !os(tvOS)
+                    Button {
+                        _ = appModel.setStreamOverlayVisibility(
+                            .visible,
+                            in: workspace
+                        )
+                    } label: {
+                        Image(systemName: "eye")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Show Stream Controls")
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: .topLeading
+                    )
+                    .safeAreaPadding(16)
+                    #endif
                 }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Show Stream Controls")
-                .padding(16)
-                #endif
-            }
 
-            if appModel.settings.input.showVirtualController && appModel.session.isStreaming {
-                VirtualControllerOverlay()
-                    .padding(18)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                if appModel.settings.input.showVirtualController,
+                   appModel.session.isStreaming,
+                   appModel.streamOverlayVisibility(in: workspace) == .hidden {
+                    VirtualControllerOverlay()
+                        .padding(18)
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: .infinity,
+                            alignment: .bottom
+                        )
+                }
             }
+            .background(Color.black)
+            #if os(tvOS)
+            .onAppear {
+                appModel.setTVStreamWorkspaceVisible(true, in: workspace)
+                isTVStreamSurfaceFocused =
+                    appModel.streamOverlayVisibility(in: workspace) == .hidden
+            }
+            .onDisappear {
+                appModel.setTVStreamWorkspaceVisible(false, in: workspace)
+                isTVStreamSurfaceFocused = false
+            }
+            .onChange(
+                of: appModel.streamOverlayVisibility(in: workspace),
+                initial: true
+            ) { _, visibility in
+                isTVStreamSurfaceFocused = visibility == .hidden
+            }
+            #endif
         }
-        .background(Color.black)
-        #if os(tvOS)
-        .onAppear {
-            appModel.setTVStreamWorkspaceVisible(true, in: workspace)
-            isTVStreamSurfaceFocused =
-                appModel.streamOverlayVisibility(in: workspace) == .hidden
-        }
-        .onDisappear {
-            appModel.setTVStreamWorkspaceVisible(false, in: workspace)
-            isTVStreamSurfaceFocused = false
-        }
-        .onChange(
-            of: appModel.streamOverlayVisibility(in: workspace),
-            initial: true
-        ) { _, visibility in
-            isTVStreamSurfaceFocused = visibility == .hidden
-        }
-        #endif
+    }
+
+    private func streamOverlayAlignment(
+        for layout: ProductStreamWorkspaceLayout
+    ) -> Alignment {
+        layout == .compact ? .bottom : .topLeading
+    }
+
+    private func streamOverlayMaximumWidth(
+        in size: CGSize,
+        layout: ProductStreamWorkspaceLayout
+    ) -> CGFloat {
+        guard layout == .wide else { return .infinity }
+        return min(1_040, max(640, size.width * 0.68))
+    }
+
+    private func overlayMaximumHeight(
+        in size: CGSize,
+        layout: ProductStreamWorkspaceLayout
+    ) -> CGFloat {
+        guard size.height.isFinite, size.height > 0 else { return 0 }
+        let fraction = layout == .compact ? 0.48 : 0.82
+        return size.height * fraction
     }
 
     private var hdrPresentationDiagnosticLease: HDRPresentationDiagnosticLease {
@@ -1402,34 +1462,39 @@ private struct StreamWorkspaceView: View {
 private struct StreamStatusOverlay: View {
     @Environment(AppModel.self) private var appModel
     let workspace: ProductWorkspaceReference
+    let layout: ProductStreamWorkspaceLayout
 
     var body: some View {
+        Group {
+            switch layout {
+            case .compact:
+                ScrollView {
+                    overlayContent
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            case .wide:
+                overlayContent
+            }
+        }
+        .padding(12)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var overlayContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             #if os(tvOS)
-            TVStreamControls(workspace: workspace)
+            TVStreamControls(workspace: workspace, workspaceLayout: layout)
             #elseif os(visionOS)
-            VisionStreamControls(workspace: workspace)
+            VisionStreamControls(workspace: workspace, workspaceLayout: layout)
             #else
-            HStack(spacing: 10) {
-                Label(appModel.session.phase.label, systemImage: appModel.session.isStreaming ? "dot.radiowaves.left.and.right" : "moon")
-                    .font(.headline)
-                #if os(iOS)
-                MobilePictureInPictureCommandButton()
-                #endif
-                Button {
-                    _ = appModel.setStreamOverlayVisibility(
-                        .hidden,
-                        in: workspace
-                    )
-                } label: {
-                    Label("Hide Controls", systemImage: "eye.slash")
-                }
-                Button {
-                    _ = appModel.requestStopStreamConfirmation(in: workspace)
-                } label: {
-                    Label("Disconnect", systemImage: "xmark.circle")
-                }
-                .disabled(appModel.session.phase == .disconnected)
+            switch layout {
+            case .compact:
+                compactCommandHeader
+            case .wide:
+                wideCommandHeader
             }
 
             ViewThatFits(in: .horizontal) {
@@ -1449,9 +1514,59 @@ private struct StreamStatusOverlay: View {
                 .foregroundStyle(.secondary)
             #endif
         }
-        .padding(12)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var compactCommandHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            streamPhaseLabel
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    localCommandButtons
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    localCommandButtons
+                }
+            }
+        }
+    }
+
+    private var wideCommandHeader: some View {
+        HStack(spacing: 10) {
+            streamPhaseLabel
+            Spacer(minLength: 16)
+            localCommandButtons
+        }
+    }
+
+    private var streamPhaseLabel: some View {
+        Label(
+            appModel.session.phase.label,
+            systemImage: appModel.session.isStreaming
+                ? "dot.radiowaves.left.and.right"
+                : "moon"
+        )
+        .font(.headline)
+    }
+
+    @ViewBuilder
+    private var localCommandButtons: some View {
+        #if os(iOS)
+        MobilePictureInPictureCommandButton()
+        #endif
+        Button {
+            _ = appModel.setStreamOverlayVisibility(
+                .hidden,
+                in: workspace
+            )
+        } label: {
+            Label("Hide Controls", systemImage: "eye.slash")
+        }
+        Button {
+            _ = appModel.requestStopStreamConfirmation(in: workspace)
+        } label: {
+            Label("Disconnect", systemImage: "xmark.circle")
+        }
+        .disabled(appModel.session.phase == .disconnected)
     }
 
     @ViewBuilder
@@ -1509,6 +1624,7 @@ private enum TVStreamControlFocusTarget: Hashable {
 private struct TVStreamControls: View {
     @Environment(AppModel.self) private var appModel
     let workspace: ProductWorkspaceReference
+    let workspaceLayout: ProductStreamWorkspaceLayout
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var focusedControl: TVStreamControlFocusTarget?
@@ -1517,37 +1633,7 @@ private struct TVStreamControls: View {
         let state = appModel.tvStreamControlPresentationState(in: workspace)
 
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 14) {
-                Label(
-                    appModel.session.phase.label,
-                    systemImage: appModel.session.isStreaming
-                        ? "dot.radiowaves.left.and.right"
-                        : "moon"
-                )
-                    .font(.headline)
-
-                Spacer(minLength: 28)
-
-                Button {
-                    _ = appModel.setStreamOverlayVisibility(
-                        .hidden,
-                        in: workspace
-                    )
-                } label: {
-                    Label("Hide Controls", systemImage: "eye.slash")
-                }
-                .focused($focusedControl, equals: .hideControls)
-                .accessibilitySortPriority(2)
-
-                Button(role: .destructive) {
-                    _ = appModel.requestStopStreamConfirmation(in: workspace)
-                } label: {
-                    Label("Disconnect", systemImage: "xmark.circle")
-                }
-                .focused($focusedControl, equals: .disconnect)
-                .accessibilitySortPriority(1)
-                .disabled(appModel.session.phase == .disconnected)
-            }
+            commandHeader
             .focusSection()
 
             Text("Actual Stream State")
@@ -1558,6 +1644,63 @@ private struct TVStreamControls: View {
         }
         .frame(maxWidth: 980, alignment: .leading)
         .defaultFocus($focusedControl, .hideControls)
+    }
+
+    @ViewBuilder
+    private var commandHeader: some View {
+        switch controlsLayout {
+        case .compact:
+            VStack(alignment: .leading, spacing: 12) {
+                streamPhaseLabel
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 14) {
+                        commandButtons
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        commandButtons
+                    }
+                }
+            }
+        case .wide:
+            HStack(spacing: 14) {
+                streamPhaseLabel
+                Spacer(minLength: 28)
+                commandButtons
+            }
+        }
+    }
+
+    private var streamPhaseLabel: some View {
+        Label(
+            appModel.session.phase.label,
+            systemImage: appModel.session.isStreaming
+                ? "dot.radiowaves.left.and.right"
+                : "moon"
+        )
+        .font(.headline)
+    }
+
+    @ViewBuilder
+    private var commandButtons: some View {
+        Button {
+            _ = appModel.setStreamOverlayVisibility(
+                .hidden,
+                in: workspace
+            )
+        } label: {
+            Label("Hide Controls", systemImage: "eye.slash")
+        }
+        .focused($focusedControl, equals: .hideControls)
+        .accessibilitySortPriority(2)
+
+        Button(role: .destructive) {
+            _ = appModel.requestStopStreamConfirmation(in: workspace)
+        } label: {
+            Label("Disconnect", systemImage: "xmark.circle")
+        }
+        .focused($focusedControl, equals: .disconnect)
+        .accessibilitySortPriority(1)
+        .disabled(appModel.session.phase == .disconnected)
     }
 
     @ViewBuilder
@@ -1576,7 +1719,8 @@ private struct TVStreamControls: View {
     }
 
     private var controlsLayout: TVVisionStreamControlsLayout {
-        TVVisionStreamControlsLayout(
+        guard workspaceLayout == .wide else { return .compact }
+        return TVVisionStreamControlsLayout(
             horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
             usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize
         )
@@ -1646,6 +1790,7 @@ private struct TVStreamControls: View {
 private struct VisionStreamControls: View {
     @Environment(AppModel.self) private var appModel
     let workspace: ProductWorkspaceReference
+    let workspaceLayout: ProductStreamWorkspaceLayout
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -1653,33 +1798,7 @@ private struct VisionStreamControls: View {
         let state = appModel.visionStreamControlPresentationState(in: workspace)
 
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Label(
-                    appModel.session.phase.label,
-                    systemImage: appModel.session.isStreaming
-                        ? "dot.radiowaves.left.and.right"
-                        : "moon"
-                )
-                    .font(.headline)
-
-                Spacer(minLength: 12)
-
-                Button {
-                    _ = appModel.setStreamOverlayVisibility(
-                        .hidden,
-                        in: workspace
-                    )
-                } label: {
-                    Label("Hide Controls", systemImage: "eye.slash")
-                }
-
-                Button(role: .destructive) {
-                    _ = appModel.requestStopStreamConfirmation(in: workspace)
-                } label: {
-                    Label("Disconnect", systemImage: "xmark.circle")
-                }
-                .disabled(appModel.session.phase == .disconnected)
-            }
+            commandHeader
 
             Text("Actual Windowed Stream State")
                 .font(.subheadline.weight(.semibold))
@@ -1688,6 +1807,59 @@ private struct VisionStreamControls: View {
             statusRows(state)
         }
         .frame(maxWidth: 760, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var commandHeader: some View {
+        switch controlsLayout {
+        case .compact:
+            VStack(alignment: .leading, spacing: 10) {
+                streamPhaseLabel
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        commandButtons
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        commandButtons
+                    }
+                }
+            }
+        case .wide:
+            HStack(spacing: 12) {
+                streamPhaseLabel
+                Spacer(minLength: 12)
+                commandButtons
+            }
+        }
+    }
+
+    private var streamPhaseLabel: some View {
+        Label(
+            appModel.session.phase.label,
+            systemImage: appModel.session.isStreaming
+                ? "dot.radiowaves.left.and.right"
+                : "moon"
+        )
+        .font(.headline)
+    }
+
+    @ViewBuilder
+    private var commandButtons: some View {
+        Button {
+            _ = appModel.setStreamOverlayVisibility(
+                .hidden,
+                in: workspace
+            )
+        } label: {
+            Label("Hide Controls", systemImage: "eye.slash")
+        }
+
+        Button(role: .destructive) {
+            _ = appModel.requestStopStreamConfirmation(in: workspace)
+        } label: {
+            Label("Disconnect", systemImage: "xmark.circle")
+        }
+        .disabled(appModel.session.phase == .disconnected)
     }
 
     @ViewBuilder
@@ -1706,7 +1878,8 @@ private struct VisionStreamControls: View {
     }
 
     private var controlsLayout: TVVisionStreamControlsLayout {
-        TVVisionStreamControlsLayout(
+        guard workspaceLayout == .wide else { return .compact }
+        return TVVisionStreamControlsLayout(
             horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
             usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize
         )
