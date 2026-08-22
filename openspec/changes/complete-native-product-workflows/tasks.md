@@ -43,7 +43,7 @@
 - [x] 5.3 Add predictable macOS/iPadOS keyboard focus, default/cancel actions, Voice Control names, and local handling for system-reserved shortcuts.
 - [x] 5.4 Enforce native touch target sizing, text expansion, state communication independent of color, and reduced-motion transitions.
 - [x] 5.5 Complete tvOS overlay focus order/restoration and visionOS reachability semantics from actual focus/input eligibility.
-- [ ] 5.6 Add deterministic accessibility descriptor, focus-policy, reduced-motion, longest-localized-text, Dynamic Type, compact/wide, touch-target, tvOS, and visionOS application tests.
+- [x] 5.6 Add deterministic accessibility descriptor, focus-policy, reduced-motion, longest-localized-text, Dynamic Type, compact/wide, touch-target, tvOS, and visionOS application tests.
 
 ## 6. Privacy-Bounded Diagnostics And Export
 

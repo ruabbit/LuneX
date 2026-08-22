@@ -3542,3 +3542,11 @@
 - Task 5.5只完成actual policy与SwiftUI wiring；5.6仍负责完整descriptor/focus/reduced-motion/localization/layout/touch/platform matrix，物理Apple TV remote和Vision Pro gaze/hand/hardware input仍属于7.7。
 - 5.5最终focus/reachability实现新增2个测试；focused `5/5`与11类related serial `316/316`均通过。related前两轮分别暴露旧source切片边界和单次vision AppModel session等待超时，均以单项fresh及第三轮完整fresh矩阵闭合，没有用单项替代矩阵或修改runtime以掩盖时序。
 - 2026-08-22：Task 5.5最终源码候选已在参数顺序修复后从fresh目录闭合：focused `6/6`、11类serial related `316/316`、serial normal `1263/1262/1/0`、四平台unsigned generic Debug `4/4`，全部structured diagnostics为0且macOS为`x86_64 arm64`。唯一skip仍是显式关闭的真实Keychain round-trip，普通测试继续JSON文件identity fallback；没有操作Simulator lifecycle。该证据仅证明pure focus/reachability策略、SwiftUI source wiring、离线回归和generic compilation，不证明物理Apple TV remote焦点、Vision Pro gaze/hand、VoiceOver、signed安装或live Sunshine。
+
+### Stage 19 Task 5.6 accessibility application matrix audit (2026-08-22)
+
+- 既有5.1至5.5单元/source测试已覆盖各自策略，5.6的有效增量是用真实`AppModel`和checked primary workspace连接六类semantic surface、最长动态本地化文本、keyboard focus、Dynamic Type、compact/wide、44pt target、Reduce Motion以及tvOS/visionOS actual overlay时间线，而不是按维度复制底层测试。
+- application矩阵暴露一个真实production缺口：visionOS control presentation原先永久复用geometry admission时的input focus eligibility，overlay release后UI无法看到`.local(.overlayVisible)`并会错误禁用Hide Controls。修复只重建现有read-only projection，没有增加第二session、input、focus、platform coordinator或serialization owner。
+- geometry admission的source revision与`TVVisionPlatformPresentationCoordinator`统一semantic revision不是同一个revision域；coordinator每应用scene/input/display/audio component都会推进并重标内部revision。projection因此先验证current owner、surface generation、scene activity/attachment/visibility/geometry、input platform/generation和capability set，再使用coordinator revision与current runtime focus eligibility构造能力快照。任何owner/surface/geometry/generation/capability不一致仍fail closed。
+- 最终fresh证据为focused `2/2`、14类serial related `335/335`、serial normal `1265/1264/1/0`及四平台unsigned generic Debug `4/4`，全部structured diagnostics为0且macOS为`x86_64 arm64` universal；唯一skip精确为显式关闭的真实Keychain round-trip，普通测试继续JSON文件identity fallback，两个真实opt-in unset且未操作Simulator lifecycle。
+- 这些证据只证明确定性application integration和generic compilation，不证明物理VoiceOver/Voice Control、hardware keyboard/touch、Apple TV remote focus、Vision Pro gaze/hand、signed安装或live Sunshine。Task 7.7及既有阶段13至18的physical/live gates保持pending。

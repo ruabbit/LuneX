@@ -603,8 +603,49 @@ These receipts prove pure focus/reachability decisions, shared SwiftUI source
 wiring, offline regression behavior, and unsigned generic compilation. They do
 not prove physical Apple TV remote focus movement, Vision Pro gaze or hand
 interaction, VoiceOver behavior, signed installation, or live Sunshine. The
-complete deterministic accessibility matrix remains Task 5.6, and physical
-platform/assistive-technology acceptance remains Task 7.7.
+complete deterministic accessibility matrix is supplied by Task 5.6 below,
+and physical platform/assistive-technology acceptance remains Task 7.7.
+
+### Complete accessibility application matrix
+
+Task 5.6 adds two real-`AppModel` application matrices rather than duplicating
+the lower policy tests. The first constructs host, pairing, catalog, stream,
+settings, and diagnostics semantic surfaces from one checked workspace and
+requires every descriptor label, value, and hint to remain localized and
+nonempty. It verifies that a dynamic application label longer than 300
+characters is preserved, host semantics omit the endpoint, Add Host, pairing,
+and stream focus targets remain stable, accessibility Dynamic Type and narrow
+width choose compact composition, normal width chooses wide composition,
+tvOS/visionOS controls honor accessibility text, the iOS action floor remains
+44 points, and Reduce Motion selects the immediate transition.
+
+The second matrix drives actual tvOS and visionOS sessions through geometry,
+overlay show/hide, ordered input release, focus restoration, capture recovery,
+and clean stop. The visionOS presentation projection continues to require the
+current single-workspace session owner, current window presentation, matching
+surface generation, scene activity/attachment/visibility/geometry, input
+generation, platform, and capability set. Geometry admission keeps its source
+revision while the platform coordinator advances and rebrands a unified
+semantic revision as components are applied, so these revision domains are not
+compared directly. After all field-level current-state checks pass, the
+projection rebuilds a read-only capability snapshot at the coordinator's
+semantic revision using the current runtime focus eligibility. This exposes
+`.local(.overlayVisible)` only after actual release and keeps stale ownership,
+surface, geometry, generation, or capability mismatch fail closed.
+
+Fresh deterministic evidence is `2/2` focused application tests, a serial
+`335/335` related ownership/presentation/media/input matrix, and an independent
+serial normal suite of `1265 total / 1264 passed / 1 skipped / 0 failed`. The
+sole skip is the explicitly disabled real-Keychain round trip; ordinary tests
+continue through the JSON file identity fallback and both real opt-ins are
+unset. Unsigned generic Debug builds for macOS universal (`x86_64 arm64`),
+iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured compiler,
+analyzer, or build warnings. No Simulator lifecycle was used.
+
+These receipts prove deterministic application integration and generic
+compilation only. They do not prove physical VoiceOver or Voice Control,
+hardware keyboard or touch, Apple TV remote focus, Vision Pro gaze or hand
+interaction, signed installation, or live Sunshine behavior.
 
 ### Host library workspace migration
 
@@ -996,7 +1037,7 @@ signed installation, physical platform behavior, assistive technology, or the
 later accessibility/cross-product work. Task 4.4 supplies the offline close
 contract above, Task 4.6 supplies the two-workspace application matrix, and
 Task 5.1 now supplies the typed semantic descriptor layer above. Tasks 5.2
-through 5.6 and 7.x remain separate.
+through 5.6 were validated as separate increments above; 7.x remains separate.
 
 ### Host, pairing, and catalog product surfaces
 

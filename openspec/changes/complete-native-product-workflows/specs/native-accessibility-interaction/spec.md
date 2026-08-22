@@ -101,3 +101,7 @@ Deterministic tests SHALL validate semantic contracts and layout state generatio
 #### Scenario: Offline accessibility test passes
 - **WHEN** source-contract and application tests pass
 - **THEN** reporting claims only deterministic accessibility coverage and not physical assistive-technology acceptance
+
+#### Scenario: Complete application accessibility matrix
+- **WHEN** deterministic application tests exercise semantic descriptors, keyboard focus, longest localized text, Dynamic Type, compact and wide layout, touch targets, reduced motion, tvOS focus restoration, and visionOS overlay reachability
+- **THEN** every value is derived from the current checked workspace and actual platform presentation, stale owner or surface state fails closed, and physical VoiceOver, Voice Control, remote, gaze, hand, signed-device, and live-host acceptance remain unclaimed

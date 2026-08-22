@@ -406,14 +406,46 @@ final class AppModel: ApplicationInputSink {
         if hasActiveSession,
            let windowedPresentation,
            let presentation = coordinator?.presentation,
+           let currentWindowInput = currentVisionWindowInputSnapshot,
            presentation.ownership == windowedPresentation.ownership,
            presentation.revision == windowedPresentation.revision,
            presentation.sceneSurface.surfaceGeneration
-                == windowedPresentation.surfaceGeneration {
+                == windowedPresentation.surfaceGeneration,
+           currentWindowInput.presentation.ownership
+                == windowedPresentation.ownership,
+           currentWindowInput.presentation.surfaceGeneration
+                == windowedPresentation.surfaceGeneration,
+           currentWindowInput.sceneSurface.platform
+                == presentation.sceneSurface.platform,
+           currentWindowInput.sceneSurface.surfaceGeneration
+                == presentation.sceneSurface.surfaceGeneration,
+           currentWindowInput.sceneSurface.activity
+                == presentation.sceneSurface.activity,
+           currentWindowInput.sceneSurface.attachment
+                == presentation.sceneSurface.attachment,
+           currentWindowInput.sceneSurface.isVisible
+                == presentation.sceneSurface.isVisible,
+           currentWindowInput.sceneSurface.geometry
+                == presentation.sceneSurface.geometry,
+           currentWindowInput.inputCapabilities.platform
+                == presentation.inputCapabilities.platform,
+           currentWindowInput.inputCapabilities.inputGeneration
+                == presentation.inputCapabilities.inputGeneration,
+           currentWindowInput.inputCapabilities.supported
+                == presentation.inputCapabilities.supported,
+           let currentCapabilities = try? TVVisionInputCapabilitySnapshot(
+                platform: presentation.inputCapabilities.platform,
+                revision: presentation.inputCapabilities.revision,
+                inputGeneration:
+                    presentation.inputCapabilities.inputGeneration,
+                supported: presentation.inputCapabilities.supported,
+                focusEligibility:
+                    currentWindowInput.inputCapabilities.focusEligibility
+           ) {
             windowInput = try? VisionWindowInputSnapshot(
                 presentation: windowedPresentation,
                 sceneSurface: presentation.sceneSurface,
-                inputCapabilities: presentation.inputCapabilities
+                inputCapabilities: currentCapabilities
             )
         } else {
             windowInput = nil

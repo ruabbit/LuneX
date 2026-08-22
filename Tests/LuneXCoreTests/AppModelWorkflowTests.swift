@@ -8172,6 +8172,485 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    func testAccessibilityApplicationMatrixConnectsWorkspaceSemanticsAndPolicies()
+        async throws
+    {
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: ControlledSessionControlProvider(),
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+
+        let workspace = model.primaryWorkspaceReference
+        let workspaceState = try XCTUnwrap(
+            model.workspaceState(for: workspace)
+        )
+        let selectedHost = try XCTUnwrap(model.selectedHost(in: workspace))
+        let apps = model.selectedApps(in: workspace)
+        XCTAssertFalse(apps.isEmpty)
+
+        let hostSurface = ProductHostLibrarySurface(
+            library: workspaceState.hostLibrary,
+            hostCount: model.hosts.count,
+            selectedHost: selectedHost
+        )
+        let pairingSurface = ProductPairingSurface(
+            selectedHost: selectedHost,
+            pairing: workspaceState.pairing,
+            transportAvailable: model.isPairingTransportAvailable,
+            isPINValid: false
+        )
+        let catalogSurface = ProductAppCatalogSurface(
+            catalog: workspaceState.catalog,
+            selectedHost: selectedHost,
+            appCount: apps.count
+        )
+        let descriptorGroups: [[ProductSemanticDescriptor]] = [
+            ProductHostSemanticSurface(
+                surface: hostSurface,
+                hostCount: model.hosts.count
+            ).items.map(\.descriptor),
+            ProductPairingSemanticSurface(
+                surface: pairingSurface
+            ).items.map(\.descriptor),
+            ProductCatalogSemanticSurface(
+                surface: catalogSurface,
+                appCount: apps.count
+            ).items.map(\.descriptor),
+            ProductStreamSemanticSurface(
+                commands: model.sessionCommandState(in: workspace),
+                controlsVisible: false
+            ).items.map(\.descriptor),
+            ProductSettingsSemanticSurface(
+                settings: model.settings
+            ).items.map(\.descriptor),
+            ProductDiagnosticsSemanticSurface(
+                eventCount: model.diagnostics.events.count,
+                exportSupported: true
+            ).items.map(\.descriptor)
+        ]
+        let descriptors = descriptorGroups.flatMap { $0 }
+        XCTAssertEqual(
+            descriptors.count,
+            ProductHostSemanticID.allCases.count
+                + ProductPairingSemanticID.allCases.count
+                + ProductCatalogSemanticID.allCases.count
+                + ProductStreamSemanticID.allCases.count
+                + ProductSettingsSemanticID.allCases.count
+                + ProductDiagnosticsSemanticID.allCases.count
+        )
+        for descriptor in descriptors {
+            XCTAssertFalse(localized(descriptor.label).isEmpty)
+            XCTAssertFalse(localized(descriptor.value).isEmpty)
+            XCTAssertFalse(localized(descriptor.hint).isEmpty)
+        }
+
+        let longestName = String(
+            repeating: "Maximum Localized Remote Application Name ",
+            count: 8
+        )
+        let longestDescriptor = ProductCatalogSemanticSurface.appItem(
+            name: longestName,
+            isSelected: true,
+            isEnabled: true
+        )
+        let longestLabel = localized(longestDescriptor.label)
+        XCTAssertTrue(longestLabel.contains(longestName))
+        XCTAssertGreaterThan(longestLabel.count, 300)
+        XCTAssertFalse(
+            localized(ProductHostSemanticSurface.hostItem(
+                selectedHost,
+                isSelected: true
+            ).label).contains(selectedHost.address)
+        )
+
+        XCTAssertEqual(
+            ProductKeyboardFocusPolicy.addHostInitialTarget,
+            .manualHostAddress
+        )
+        XCTAssertEqual(
+            ProductKeyboardFocusPolicy.pairingTarget(for: pairingSurface),
+            .pairingResult
+        )
+        XCTAssertEqual(
+            ProductKeyboardFocusPolicy.streamOverlayInitialTarget,
+            .streamHideControls
+        )
+
+        let layoutCases: [(
+            compactSizeClass: Bool,
+            accessibilityText: Bool,
+            width: CGFloat,
+            isCompact: Bool
+        )] = [
+            (false, false, 1_280, false),
+            (true, false, 1_280, true),
+            (false, true, 1_280, true),
+            (false, false, 640, true)
+        ]
+        for layoutCase in layoutCases {
+            let expectedLibrary: ProductLibraryDashboardLayout =
+                layoutCase.isCompact ? .compact : .wide
+            let expectedStream: ProductStreamWorkspaceLayout =
+                layoutCase.isCompact ? .compact : .wide
+            XCTAssertEqual(
+                ProductLibraryDashboardLayout(
+                    horizontalSizeClassIsCompact:
+                        layoutCase.compactSizeClass,
+                    usesAccessibilityTextSize:
+                        layoutCase.accessibilityText,
+                    availableWidth: layoutCase.width
+                ),
+                expectedLibrary
+            )
+            XCTAssertEqual(
+                ProductStreamWorkspaceLayout(
+                    horizontalSizeClassIsCompact:
+                        layoutCase.compactSizeClass,
+                    usesAccessibilityTextSize:
+                        layoutCase.accessibilityText,
+                    availableWidth: layoutCase.width
+                ),
+                expectedStream
+            )
+        }
+        XCTAssertEqual(
+            TVVisionStreamControlsLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false
+            ),
+            .wide
+        )
+        XCTAssertEqual(
+            TVVisionStreamControlsLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: true
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension,
+            44
+        )
+        XCTAssertEqual(
+            ProductInteractionAccessibilityPolicy.transitionStyle(
+                reduceMotionEnabled: false
+            ),
+            .opacity
+        )
+        XCTAssertEqual(
+            ProductInteractionAccessibilityPolicy.transitionStyle(
+                reduceMotionEnabled: true
+            ),
+            .immediate
+        )
+
+        let inactiveTVModel = makeLaunchReadyModel(
+            sessionControlProvider: ControlledSessionControlProvider(),
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [])
+        )
+        let inactiveTV = inactiveTVModel.tvStreamControlPresentationState
+        XCTAssertEqual(inactiveTV.focus, .unavailable)
+        XCTAssertNil(ProductTVStreamFocusPolicy.target(
+            overlayVisibility: .visible,
+            presentation: inactiveTV
+        ))
+
+        let inactiveVisionModel = makeLaunchReadyModel(
+            sessionControlProvider: ControlledSessionControlProvider(),
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [])
+        )
+        XCTAssertFalse(
+            inactiveVisionModel.visionStreamControlPresentationState
+                .reachability.canHideControls
+        )
+    }
+
+    func testTVVisionAccessibilityApplicationMatrixTracksActualOverlayEligibility()
+        async throws
+    {
+        let tvProvider = ControlledSessionControlProvider()
+        let tvModel = makeLaunchReadyModel(
+            sessionControlProvider: tvProvider,
+            tvVisionPlatform: .tvOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 73,
+                    key: Data(repeating: 0x73, count: 16)
+                ))
+            ])
+        )
+        await tvModel.loadInitialState()
+        await tvModel.refreshAppsForSelectedHost()
+        let tvWorkspace = tvModel.primaryWorkspaceReference
+        let tvLaunch = Task {
+            await tvModel.launchSelectedApp(in: tvWorkspace)
+        }
+        let tvRecord = try await waitForSessionStart(tvProvider)
+        driveSessionToStreaming(tvProvider, record: tvRecord)
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "phase=\(tvModel.session.phase.label)"
+            },
+            condition: { tvModel.session.isStreaming }
+        ) else { return }
+        tvModel.setTVStreamWorkspaceVisible(true, in: tvWorkspace)
+        XCTAssertTrue(tvModel.setStreamOverlayVisibility(
+            .hidden,
+            in: tvWorkspace
+        ))
+        tvModel.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+        )
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "focus=\(tvModel.tvStreamControlPresentationState.focus) "
+                    + "release=\(tvModel.tvRemoteInputReleasePending)"
+            },
+            condition: {
+                tvModel.tvStreamControlPresentationState.focus
+                    == .streamSurface
+            }
+        ) else { return }
+        let hiddenTV = tvModel.tvStreamControlPresentationState
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.target(
+                overlayVisibility: .hidden,
+                presentation: hiddenTV
+            ),
+            .streamSurface
+        )
+
+        XCTAssertTrue(tvModel.setStreamOverlayVisibility(
+            .visible,
+            in: tvWorkspace
+        ))
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "overlay=\(tvModel.tvStreamOverlayVisible) "
+                    + "focus=\(tvModel.tvStreamControlPresentationState.focus) "
+                    + "release=\(tvModel.tvRemoteInputReleasePending)"
+            },
+            condition: {
+                tvModel.tvStreamOverlayVisible
+                    && !tvModel.tvRemoteInputReleasePending
+                    && tvModel.tvStreamControlPresentationState.focus
+                        == .localControls
+            }
+        ) else { return }
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.target(
+                overlayVisibility: .visible,
+                presentation: tvModel.tvStreamControlPresentationState
+            ),
+            .hideControls
+        )
+        XCTAssertTrue(tvModel.setStreamOverlayVisibility(
+            .hidden,
+            in: tvWorkspace
+        ))
+        tvModel.receiveTVVisionGeometryUpdate(
+            try makeTVVisionActiveGeometryUpdate(
+                platform: .tvOS,
+                surfaceGeneration: 1,
+                revision: 2
+            )
+        )
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "focus=\(tvModel.tvStreamControlPresentationState.focus)"
+            },
+            condition: {
+                tvModel.tvStreamControlPresentationState.focus
+                    == .streamSurface
+            }
+        ) else { return }
+        let didStopTVStream = await tvModel.stopStream(in: tvWorkspace)
+        XCTAssertTrue(didStopTVStream)
+        await tvLaunch.value
+
+        let visionProvider = ControlledSessionControlProvider()
+        let visionEnvironment = ControlledSessionMediaEnvironment()
+        let visionModel = makeLaunchReadyModel(
+            sessionControlProvider: visionProvider,
+            sessionMediaEnvironment: visionEnvironment,
+            tvVisionPlatform: .visionOS,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 74,
+                    key: Data(repeating: 0x74, count: 16)
+                ))
+            ])
+        )
+        await visionModel.loadInitialState()
+        await visionModel.refreshAppsForSelectedHost()
+        let visionWorkspace = visionModel.primaryWorkspaceReference
+        let visionLaunch = Task {
+            await visionModel.launchSelectedApp(in: visionWorkspace)
+        }
+        let visionRecord = try await waitForSessionStart(visionProvider)
+        driveSessionToStreaming(visionProvider, record: visionRecord)
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "phase=\(visionModel.session.phase.label)"
+            },
+            condition: { visionModel.session.isStreaming }
+        ) else { return }
+        let visionGeometry = try makeTVVisionActiveGeometryUpdate(
+            platform: .visionOS,
+            surfaceGeneration: 1,
+            revision: 1
+        )
+        visionModel.receiveTVVisionGeometryUpdate(visionGeometry)
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "capture=\(visionModel.visionInputCaptureEnabled(in: visionWorkspace)) "
+                    + "applications=\(visionEnvironment.currentTVVisionPlatformPresentationApplications().count)"
+            },
+            condition: {
+                visionModel.visionInputCaptureEnabled(in: visionWorkspace)
+                    && visionEnvironment
+                        .currentTVVisionPlatformPresentationApplications().count
+                        == 3
+            }
+        ) else { return }
+        let visionApplications = visionEnvironment
+            .currentTVVisionPlatformPresentationApplications()
+        let visionOwnership = visionApplications[0].ownership
+        guard case let .scene(appliedVisionGeometry) = visionApplications[1].action,
+              case let .input(visionInput, controllerLeases) =
+                visionApplications[2].action else {
+            return XCTFail("Expected visionOS scene and input application.")
+        }
+        XCTAssertEqual(appliedVisionGeometry, visionGeometry)
+        XCTAssertTrue(controllerLeases.isEmpty)
+        let visionCoordinator = try TVVisionPlatformPresentationCoordinator(
+            diagnosticCapacity: 4
+        )
+        _ = await visionCoordinator.activate(visionOwnership)
+        _ = await visionCoordinator.applyScene(
+            appliedVisionGeometry,
+            ownership: visionOwnership
+        )
+        _ = await visionCoordinator.applyInput(
+            visionInput,
+            controllerLeases: controllerLeases,
+            ownership: visionOwnership
+        )
+        _ = await visionCoordinator.applyDisplay(
+            try makeVisionOSDisplaySnapshot(
+                revision: 1,
+                displayGeneration: 1
+            ),
+            ownership: visionOwnership
+        )
+        _ = await visionCoordinator.applyAudioRoute(
+            try makeVisionOSAudioRouteSnapshot(
+                revision: 1,
+                graphGeneration: 1,
+                presentationMode: .headTracked
+            ),
+            ownership: visionOwnership
+        )
+        let optionalVisionSnapshot = await visionCoordinator.snapshot()
+        let visionSnapshot = try XCTUnwrap(optionalVisionSnapshot)
+        let visionPresentation = SessionTVVisionPlatformPresentationState(
+            sessionID: visionRecord.sessionID,
+            mediaGeneration: visionOwnership.mediaGeneration,
+            snapshot: visionSnapshot
+        )
+        visionEnvironment.yieldTVVisionPlatformPresentation(
+            visionPresentation,
+            sessionID: visionRecord.sessionID
+        )
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                let state = visionModel.visionStreamControlPresentationState(
+                    in: visionWorkspace
+                )
+                return "window=\(state.window) input=\(state.input)"
+            },
+            condition: {
+                visionModel.tvVisionPlatformPresentationState
+                    == visionPresentation
+                    && visionModel.visionStreamControlPresentationState(
+                        in: visionWorkspace
+                    ).input == .captured(
+                        capabilityCount: visionInput.supported.count
+                    )
+            }
+        ) else { return }
+        XCTAssertFalse(
+            visionModel.visionStreamControlPresentationState(
+                in: visionWorkspace
+            ).reachability.canHideControls
+        )
+
+        XCTAssertTrue(visionModel.setStreamOverlayVisibility(
+            .visible,
+            in: visionWorkspace
+        ))
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                let state = visionModel.visionStreamControlPresentationState(
+                    in: visionWorkspace
+                )
+                return "overlay=\(visionModel.streamOverlayVisibility(in: visionWorkspace)) "
+                    + "input=\(state.input) release=\(visionModel.visionInputReleasePending)"
+            },
+            condition: {
+                visionModel.streamOverlayVisibility(in: visionWorkspace)
+                    == .visible
+                    && !visionModel.visionInputReleasePending
+                    && visionModel.visionStreamControlPresentationState(
+                        in: visionWorkspace
+                    ).reachability.canHideControls
+            }
+        ) else { return }
+        XCTAssertFalse(
+            visionModel.visionInputCaptureEnabled(in: visionWorkspace)
+        )
+
+        XCTAssertTrue(visionModel.setStreamOverlayVisibility(
+            .hidden,
+            in: visionWorkspace
+        ))
+        guard await waitForApplicationIntegrationState(
+            diagnostic: {
+                "capture=\(visionModel.visionInputCaptureEnabled(in: visionWorkspace))"
+            },
+            condition: {
+                visionModel.visionInputCaptureEnabled(in: visionWorkspace)
+            }
+        ) else { return }
+        XCTAssertFalse(
+            visionModel.visionStreamControlPresentationState(
+                in: visionWorkspace
+            ).reachability.canHideControls
+        )
+        let didStopVisionStream = await visionModel.stopStream(
+            in: visionWorkspace
+        )
+        XCTAssertTrue(didStopVisionStream)
+        await visionLaunch.value
+    }
+
+    private func localized(_ resource: LocalizedStringResource) -> String {
+        String(localized: resource)
+    }
+
     private func makeLaunchReadyModel(
         sessionControlProvider: any SessionControlProvider,
         sessionMediaEnvironment: any SessionMediaEnvironment =
