@@ -432,8 +432,9 @@ Task 5.2 supplies the adaptive dashboard and primary-command reflow described
 below. Task 5.3 now supplies the macOS/iPadOS focus, default/cancel, Voice
 Control naming, and system-shortcut-local contracts described below. Task 5.4
 supplies iOS touch targets, text expansion, non-color state markers, and
-reduced-motion behavior. tvOS/visionOS focus and the complete matrix remain
-tasks 5.5 and 5.6 and the later physical acceptance gate.
+reduced-motion behavior. Task 5.5 supplies deterministic tvOS focus restoration
+and visionOS actual-input reachability below. The complete matrix and physical
+acceptance remain Task 5.6 and the later physical gate.
 
 ### Adaptive workflow layout
 
@@ -469,8 +470,9 @@ window resizing, Stage Manager, every longest localization, SwiftUI snapshot
 geometry, physical VoiceOver or Voice Control, signed installation, or live
 Sunshine. Task 5.3 adds deterministic keyboard and Voice Control naming
 contracts below, and Task 5.4 adds deterministic touch/text/non-color/motion
-contracts below. Tasks 5.5, 5.6, and the later physical gate retain the
-remaining focus, matrix, and acceptance work.
+contracts below. Task 5.5 supplies the platform focus/reachability contract
+below; Task 5.6 and the later physical gate retain the matrix and acceptance
+work.
 
 ### Native keyboard and Voice Control operation
 
@@ -480,8 +482,9 @@ maps ready and cancelled state to Start Pairing, PIN entry to Pairing PIN, every
 owned intermediate stage to its progress status, a retryable failure to Retry
 Pairing, and unavailable, completed, or non-retryable terminal state to result
 content. The owning stream overlay initially focuses Hide Stream Controls.
-Focus state exists only in macOS/iOS SwiftUI branches, so this task does not
-replace the tvOS/visionOS focus restoration work reserved for task 5.5.
+Focus state exists only in macOS/iOS SwiftUI branches. Task 5.5 separately adds
+the tvOS shared focus scope and visionOS actual-input reachability described
+below.
 
 Add Host, Start Pairing, Submit PIN, and Retry Pairing use the native default
 action. Add Host cancel, pairing cancel, stream control hiding, and confirmation
@@ -558,8 +561,50 @@ lifecycle was used.
 These receipts prove pure policy values, source wiring, related regression
 behavior, and platform compilation. They do not prove physical touch geometry,
 Switch Control, contrast perception, VoiceOver/Voice Control, a signed build,
-iPad Stage Manager, or live Sunshine. tvOS/visionOS focus restoration and the
-complete accessibility matrix remain tasks 5.5 and 5.6.
+iPad Stage Manager, or live Sunshine. Task 5.5 supplies the deterministic
+tvOS/visionOS contract below; the complete accessibility matrix remains Task
+5.6.
+
+### tvOS focus restoration and visionOS reachability
+
+Task 5.5 adds `ProductTVStreamFocusTarget` and the pure
+`ProductTVStreamFocusPolicy`. The tvOS stream surface, status overlay, and
+`TVStreamControls` share one
+`FocusState<ProductTVStreamFocusTarget?>.Binding`; there is no independent
+child focus owner. When the actual presentation has entered local-controls
+focus and the overlay is visible, the policy selects Hide Controls. Hide
+Controls remains before Disconnect in both focus source order and accessibility
+sort priority. When the overlay closes from handoff-pending or stream-surface
+focus, the policy restores the declared stream-surface destination. Unavailable
+or mismatched presentation states return no target and fail closed.
+
+The same task adds `VisionStreamControlReachability` to the existing read-only
+visionOS presentation state. Hide Controls is enabled only when the window is
+actually visible, window presentation and input capability revision/generation
+match, input is local specifically because the overlay is visible, and the
+current visionOS capability set is nonempty. Releasing, captured, other local
+ineligibility, unavailable ownership, stale/missing state, and an empty
+capability set disable the command so SwiftUI removes it from focus admission.
+Its accessibility value reports the actual bounded reason, including the
+explicit no-current-remote-input-path state. The initializer's default
+reachability is unavailable, preserving fail-closed compatibility for callers
+that construct status-only presentation values.
+
+Fresh final-source deterministic evidence is `6/6` focused tests and a serial
+`316/316` related platform ownership, input, and presentation matrix. The
+independent serial normal suite is `1263 total / 1262 passed / 1 skipped / 0
+failed`; the sole skip is the explicitly disabled real-Keychain round trip,
+ordinary tests continue through the JSON file identity fallback, and both real
+opt-ins are unset. Unsigned generic Debug builds for macOS universal (`x86_64
+arm64`), iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured
+compiler, analyzer, or build warnings. No Simulator lifecycle was used.
+
+These receipts prove pure focus/reachability decisions, shared SwiftUI source
+wiring, offline regression behavior, and unsigned generic compilation. They do
+not prove physical Apple TV remote focus movement, Vision Pro gaze or hand
+interaction, VoiceOver behavior, signed installation, or live Sunshine. The
+complete deterministic accessibility matrix remains Task 5.6, and physical
+platform/assistive-technology acceptance remains Task 7.7.
 
 ### Host library workspace migration
 
@@ -993,8 +1038,9 @@ descriptors, Task 5.2 provides actual-width and accessibility Dynamic Type
 dashboard/primary-command reflow, and Task 5.3 provides the macOS/iPadOS
 keyboard/focus policy and stable Voice Control names. Task 5.4 provides iOS
 touch targets, text expansion, non-color state markers, and reduced-motion
-overlay behavior. tvOS/visionOS focus, the complete matrix, and physical
-assistive technology remain tasks 5.5, 5.6, and the later physical gate.
+overlay behavior, and Task 5.5 provides deterministic tvOS focus restoration
+and visionOS actual-input reachability. The complete matrix and physical
+assistive technology remain Task 5.6 and the later physical gate.
 Direct per-scene injection is complete for
 these surfaces; retained legacy workflow strings remain within the explicit
 tasks 6.1/6.2 migration boundary.

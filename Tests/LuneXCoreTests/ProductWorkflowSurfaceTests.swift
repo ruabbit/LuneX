@@ -124,6 +124,51 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         )
     }
 
+    func testTVStreamFocusPolicyOrdersOverlayAndRestoresStreamSurface() {
+        let localControls = tvPresentation(focus: .localControls)
+        let handoffPending = tvPresentation(focus: .handoffPending)
+        let streamSurface = tvPresentation(focus: .streamSurface)
+        let unavailable = tvPresentation(focus: .unavailable)
+
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.target(
+                overlayVisibility: .visible,
+                presentation: localControls
+            ),
+            .hideControls
+        )
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.target(
+                overlayVisibility: .hidden,
+                presentation: handoffPending
+            ),
+            .streamSurface
+        )
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.target(
+                overlayVisibility: .hidden,
+                presentation: streamSurface
+            ),
+            .streamSurface
+        )
+        XCTAssertNil(ProductTVStreamFocusPolicy.target(
+            overlayVisibility: .visible,
+            presentation: streamSurface
+        ))
+        XCTAssertNil(ProductTVStreamFocusPolicy.target(
+            overlayVisibility: .hidden,
+            presentation: unavailable
+        ))
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.overlayInitialTarget,
+            .hideControls
+        )
+        XCTAssertEqual(
+            ProductTVStreamFocusPolicy.restorationTarget,
+            .streamSurface
+        )
+    }
+
     func testHostLibraryMapsLoadingFirstUseAvailableAndFailure() {
         let host = makeHost(pairingState: .paired)
 
@@ -1077,7 +1122,7 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
 
         let overlayEnd = try XCTUnwrap(
             source.range(
-                of: "private enum TVStreamControlFocusTarget: Hashable",
+                of: "private struct TVStreamControls: View",
                 range: workspaceEnd.upperBound..<source.endIndex
             )
         )
@@ -1090,7 +1135,7 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(streamOverlay.contains("compactCommandHeader"))
         XCTAssertTrue(streamOverlay.contains("wideCommandHeader"))
         XCTAssertTrue(streamOverlay.contains(
-            "TVStreamControls(workspace: workspace, workspaceLayout: layout)"
+            "TVStreamControls(\n                workspace: workspace,\n                workspaceLayout: layout,\n                focusedControl: tvFocusedControl\n            )"
         ))
         XCTAssertTrue(streamOverlay.contains(
             "VisionStreamControls(workspace: workspace, workspaceLayout: layout)"
@@ -1290,6 +1335,21 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             address: "test.local",
             pairingState: pairingState,
             reachability: .online
+        )
+    }
+
+    private func tvPresentation(
+        focus: TVStreamLocalFocusPresentationStatus
+    ) -> TVStreamControlPresentationState {
+        TVStreamControlPresentationState(
+            focus: focus,
+            capture: .local,
+            controllers: .unavailable,
+            surface: .visible,
+            render: .waitingForDecoder,
+            hdr: .inactive,
+            audio: .inactive,
+            failure: .none
         )
     }
 

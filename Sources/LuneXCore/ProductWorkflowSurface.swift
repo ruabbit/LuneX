@@ -57,6 +57,36 @@ enum ProductInteractionAccessibilityPolicy {
     }
 }
 
+enum ProductTVStreamFocusTarget: Hashable, Sendable {
+    case streamSurface
+    case hideControls
+    case disconnect
+}
+
+enum ProductTVStreamFocusPolicy {
+    static let overlayInitialTarget = ProductTVStreamFocusTarget.hideControls
+    static let restorationTarget = ProductTVStreamFocusTarget.streamSurface
+
+    static func target(
+        overlayVisibility: ProductStreamOverlayVisibility,
+        presentation: TVStreamControlPresentationState
+    ) -> ProductTVStreamFocusTarget? {
+        switch overlayVisibility {
+        case .visible:
+            presentation.focus == .localControls
+                ? overlayInitialTarget
+                : nil
+        case .hidden:
+            switch presentation.focus {
+            case .streamSurface, .handoffPending:
+                restorationTarget
+            case .unavailable, .localControls:
+                nil
+            }
+        }
+    }
+}
+
 enum ProductKeyboardFocusTarget: Hashable, Sendable {
     case manualHostName
     case manualHostAddress

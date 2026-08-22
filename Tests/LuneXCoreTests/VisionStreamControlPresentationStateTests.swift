@@ -14,6 +14,7 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
         XCTAssertEqual(state.spatial, .inactive)
         XCTAssertEqual(state.immersive, .unavailable)
         XCTAssertEqual(state.failure, .none)
+        XCTAssertFalse(state.reachability.canHideControls)
         XCTAssertEqual(
             state.rows.map(\.kind),
             VisionStreamControlStatusContent.Kind.allCases
@@ -39,6 +40,7 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
 
         XCTAssertEqual(state.window, .visible)
         XCTAssertEqual(state.input, .captured(capabilityCount: 3))
+        XCTAssertFalse(state.reachability.canHideControls)
         XCTAssertEqual(state.controllers, .active(connected: 2, routed: 1))
         XCTAssertEqual(state.render, .waitingForDecoder)
     }
@@ -67,6 +69,51 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
 
         XCTAssertEqual(local.input, .local(.overlayVisible))
         XCTAssertEqual(releasing.input, .releasing)
+        XCTAssertTrue(local.reachability.canHideControls)
+        XCTAssertEqual(
+            localized(local.reachability.hideControlsAccessibilityValue),
+            "2 remote input paths available after controls close."
+        )
+        XCTAssertFalse(releasing.reachability.canHideControls)
+        XCTAssertEqual(
+            localized(releasing.reachability.hideControlsAccessibilityValue),
+            "Remote input release is in progress."
+        )
+    }
+
+    func testHideControlsReachabilityFailsClosedWithoutActualRemoteInput()
+        throws
+    {
+        let notFocused = resolve(
+            hasActiveSession: true,
+            windowedPresentation: try presentation(),
+            sceneSurface: try sceneSurface(),
+            inputCapabilities: try inputCapabilities(
+                focusEligibility: .ineligible(.notFocused)
+            ),
+            renderPolicy: .active
+        )
+        let noCapabilities = resolve(
+            hasActiveSession: true,
+            windowedPresentation: try presentation(),
+            sceneSurface: try sceneSurface(),
+            inputCapabilities: try inputCapabilities(
+                supported: [],
+                focusEligibility: .ineligible(.overlayVisible)
+            ),
+            renderPolicy: .active
+        )
+
+        XCTAssertFalse(notFocused.reachability.canHideControls)
+        XCTAssertEqual(
+            localized(notFocused.reachability.hideControlsAccessibilityValue),
+            "The current window is not input eligible."
+        )
+        XCTAssertFalse(noCapabilities.reachability.canHideControls)
+        XCTAssertEqual(
+            localized(noCapabilities.reachability.hideControlsAccessibilityValue),
+            "No current remote input path is available."
+        )
     }
 
     func testFrameHDRFallbackAndHeadTrackedSpatialRemainTruthful() throws {
@@ -311,6 +358,9 @@ final class VisionStreamControlPresentationStateTests: XCTestCase {
             ".accessibilityLabel(Text(row.title))",
             ".accessibilityValue(Text(row.accessibilityValue))",
             ".frame(maxWidth: 760, alignment: .leading)",
+            "commandHeader(state)",
+            ".disabled(!state.reachability.canHideControls)",
+            "Text(state.reachability.hideControlsAccessibilityValue)",
             "TVVisionStreamControlsLayout(",
             "ViewThatFits(in: .horizontal)",
             "compactStatusRows(state)",

@@ -3534,3 +3534,11 @@
 - generator双跑保持`project.pbxproj` hash `4214a283c9e353456098dba5504f2cef3cf7cabd78ff2d4c51a2d34060b2f04f`且strict OpenSpec通过。repository gate前两轮分别暴露零匹配`rg -c`空输出与进程检索自匹配的脚本问题；均无源码/runtime副作用，改用`awk`确定性计数和`pgrep -x`后fresh r3完整通过。
 - 最终pre-gate确认5.4没有新增任何tvOS/visionOS focus production modifier，selection、severity和Reduce Motion合同均来自actual RootView wiring；因此可标记5.4，但5.5 focus order/restoration和5.6完整可访问性矩阵仍必须独立实现与验收。
 - 5.4所有17个task-specific临时证据路径已在post-mark后逐项精确清理，prefix零残留；后续final audit只依赖已同步的仓库权威记录，不再假设raw xcresult或generator日志存在，也不重复行为门。
+
+### Stage 19 Task 5.5 tvOS focus and visionOS reachability audit (2026-08-22)
+
+- tvOS现有surface与overlay分别持有不同`FocusState`，虽然source order和default focus都是Hide Controls优先，但overlay关闭后的surface赋值不在同一focus scope，无法证明确定性恢复；应共享一个typed focus target并由pure policy声明`.streamSurface` restoration destination。
+- visionOS `VisionStreamControlPresentationState.input`已经是actual owner/window/capability/focus/release投影；`Hide Controls`当前却无disabled/semantic value接线。只应在visible window + `.local(.overlayVisible)` + nonempty current capabilities时允许隐藏overlay以恢复remote input，其他状态保持local并让该命令不可聚焦。
+- Task 5.5只完成actual policy与SwiftUI wiring；5.6仍负责完整descriptor/focus/reduced-motion/localization/layout/touch/platform matrix，物理Apple TV remote和Vision Pro gaze/hand/hardware input仍属于7.7。
+- 5.5最终focus/reachability实现新增2个测试；focused `5/5`与11类related serial `316/316`均通过。related前两轮分别暴露旧source切片边界和单次vision AppModel session等待超时，均以单项fresh及第三轮完整fresh矩阵闭合，没有用单项替代矩阵或修改runtime以掩盖时序。
+- 2026-08-22：Task 5.5最终源码候选已在参数顺序修复后从fresh目录闭合：focused `6/6`、11类serial related `316/316`、serial normal `1263/1262/1/0`、四平台unsigned generic Debug `4/4`，全部structured diagnostics为0且macOS为`x86_64 arm64`。唯一skip仍是显式关闭的真实Keychain round-trip，普通测试继续JSON文件identity fallback；没有操作Simulator lifecycle。该证据仅证明pure focus/reachability策略、SwiftUI source wiring、离线回归和generic compilation，不证明物理Apple TV remote焦点、Vision Pro gaze/hand、VoiceOver、signed安装或live Sunshine。

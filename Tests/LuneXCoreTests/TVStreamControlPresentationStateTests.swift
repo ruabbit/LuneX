@@ -254,7 +254,7 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
             encoding: .utf8
         )
         let controlsStart = try XCTUnwrap(
-            rootView.range(of: "private enum TVStreamControlFocusTarget: Hashable")
+            rootView.range(of: "private struct TVStreamControls: View")
         )
         let controlsEnd = try XCTUnwrap(
             rootView.range(of: "#endif", range: controlsStart.upperBound..<rootView.endIndex)
@@ -266,11 +266,10 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
             "let state = appModel.tvStreamControlPresentationState(in: workspace)",
             "requestStopStreamConfirmation(in: workspace)",
             "setStreamOverlayVisibility(",
-            "case hideControls",
-            "case disconnect",
-            ".focused($focusedControl, equals: .hideControls)",
-            ".focused($focusedControl, equals: .disconnect)",
-            ".defaultFocus($focusedControl, .hideControls)",
+            "let focusedControl: FocusState<ProductTVStreamFocusTarget?>.Binding",
+            ".focused(focusedControl, equals: .hideControls)",
+            ".focused(focusedControl, equals: .disconnect)",
+            ".defaultFocus(focusedControl, .hideControls)",
             ".focusSection()",
             ".accessibilitySortPriority(2)",
             ".accessibilitySortPriority(1)",
@@ -288,6 +287,18 @@ final class TVStreamControlPresentationStateTests: XCTestCase {
         }
         XCTAssertFalse(controls.contains(".onHover"))
         XCTAssertFalse(controls.contains("preferRelativeMouseMode"))
+        XCTAssertTrue(rootView.contains(
+            "@FocusState private var tvFocusedControl: ProductTVStreamFocusTarget?"
+        ))
+        XCTAssertTrue(rootView.contains(
+            ".focused($tvFocusedControl, equals: .streamSurface)"
+        ))
+        XCTAssertTrue(rootView.contains(
+            "tvFocusedControl: $tvFocusedControl"
+        ))
+        XCTAssertTrue(rootView.contains(
+            "tvFocusedControl = ProductTVStreamFocusPolicy.target("
+        ))
         let hideControls = try XCTUnwrap(controls.range(
             of: "Label(\"Hide Controls\", systemImage: \"eye.slash\")"
         ))

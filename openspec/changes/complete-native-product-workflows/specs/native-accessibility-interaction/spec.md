@@ -66,11 +66,19 @@ iOS/iPadOS actions SHALL meet native touch target expectations, and tvOS/visionO
 
 #### Scenario: tvOS overlay focus
 - **WHEN** the stream overlay opens on tvOS
-- **THEN** focus moves to an eligible local command and returns to the declared prior destination when the overlay closes
+- **THEN** the shared focus scope moves to Hide Controls before Disconnect, and closing the overlay restores the stream surface only from a current handoff or stream-surface state
+
+#### Scenario: tvOS unavailable focus restoration
+- **WHEN** the tvOS focus presentation is unavailable or does not match the actual overlay state
+- **THEN** the focus policy fails closed without selecting a stale overlay command or stream surface
 
 #### Scenario: visionOS unavailable input
 - **WHEN** visionOS input capture is ineligible
-- **THEN** the UI communicates the unavailable state semantically and does not focus a command that would claim unavailable capture
+- **THEN** Hide Controls is disabled, communicates the actual unavailable state semantically, and cannot receive focus while claiming unavailable capture
+
+#### Scenario: visionOS eligible input restoration
+- **WHEN** the current visible visionOS window has matching presentation and input generations, the overlay is the actual local-input reason, and at least one current remote input capability is available
+- **THEN** Hide Controls is enabled and exposes the number of remote input paths that become available after the overlay closes
 
 ### Requirement: Reduced motion and contrast independence
 The application SHALL respect Reduce Motion and SHALL not communicate pairing, reachability, failure, HDR, audio, or session state by color or animation alone.

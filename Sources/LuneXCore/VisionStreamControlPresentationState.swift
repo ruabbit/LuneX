@@ -102,6 +102,11 @@ struct VisionStreamControlStatusContent: Identifiable, Equatable, Sendable {
     var accessibilityValue: LocalizedStringResource { "\(value). \(detail)" }
 }
 
+struct VisionStreamControlReachability: Equatable, Sendable {
+    let canHideControls: Bool
+    let hideControlsAccessibilityValue: LocalizedStringResource
+}
+
 struct VisionStreamControlPresentationState: Equatable, Sendable {
     let window: VisionStreamWindowPresentationStatus
     let input: VisionStreamInputPresentationStatus
@@ -111,6 +116,34 @@ struct VisionStreamControlPresentationState: Equatable, Sendable {
     let spatial: VisionStreamSpatialPresentationStatus
     let immersive: VisionStreamImmersivePresentationStatus
     let failure: VisionStreamFailurePresentationStatus
+    let reachability: VisionStreamControlReachability
+
+    init(
+        window: VisionStreamWindowPresentationStatus,
+        input: VisionStreamInputPresentationStatus,
+        controllers: VisionStreamControllerPresentationStatus,
+        render: VisionStreamRenderPresentationStatus,
+        hdr: VisionStreamHDRPresentationStatus,
+        spatial: VisionStreamSpatialPresentationStatus,
+        immersive: VisionStreamImmersivePresentationStatus,
+        failure: VisionStreamFailurePresentationStatus,
+        reachability: VisionStreamControlReachability =
+            VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue:
+                    "Remote input reachability is unavailable."
+            )
+    ) {
+        self.window = window
+        self.input = input
+        self.controllers = controllers
+        self.render = render
+        self.hdr = hdr
+        self.spatial = spatial
+        self.immersive = immersive
+        self.failure = failure
+        self.reachability = reachability
+    }
 
     var rows: [VisionStreamControlStatusContent] {
         [
@@ -150,16 +183,22 @@ enum VisionStreamControlPresentationStateResolver {
         _ input: VisionStreamControlPresentationInput
     ) -> VisionStreamControlPresentationState {
         let window = windowStatus(input)
+        let inputStatus = inputStatus(input, window: window)
         let failure = failureStatus(input)
         return VisionStreamControlPresentationState(
             window: window,
-            input: inputStatus(input, window: window),
+            input: inputStatus,
             controllers: controllerStatus(input),
             render: renderStatus(input, window: window, failure: failure),
             hdr: hdrStatus(input),
             spatial: spatialStatus(input),
             immersive: immersiveStatus(input),
-            failure: failure
+            failure: failure,
+            reachability: reachabilityStatus(
+                input,
+                window: window,
+                inputStatus: inputStatus
+            )
         )
     }
 
@@ -200,6 +239,65 @@ enum VisionStreamControlPresentationStateResolver {
             return .local(reason)
         }
         return .local(nil)
+    }
+
+    private static func reachabilityStatus(
+        _ input: VisionStreamControlPresentationInput,
+        window: VisionStreamWindowPresentationStatus,
+        inputStatus: VisionStreamInputPresentationStatus
+    ) -> VisionStreamControlReachability {
+        guard window == .visible,
+              let presentation = input.windowedPresentation,
+              let capabilities = input.inputCapabilities,
+              capabilities.platform == .visionOS,
+              presentation.revision == capabilities.revision,
+              presentation.ownership.inputGeneration
+                == capabilities.inputGeneration else {
+            return VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue:
+                    "Remote input is unavailable for the current window."
+            )
+        }
+
+        switch inputStatus {
+        case .local(.overlayVisible) where !capabilities.supported.isEmpty:
+            return VisionStreamControlReachability(
+                canHideControls: true,
+                hideControlsAccessibilityValue:
+                    "\(capabilities.supported.count) remote input paths available after controls close."
+            )
+        case .local(.overlayVisible):
+            return VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue:
+                    "No current remote input path is available."
+            )
+        case .releasing:
+            return VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue:
+                    "Remote input release is in progress."
+            )
+        case let .captured(capabilityCount):
+            return VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue:
+                    "Remote input is already active on \(capabilityCount) paths."
+            )
+        case let .local(reason):
+            return VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue: reason?.visionDetail
+                    ?? "Remote input is not currently eligible."
+            )
+        case .unavailable:
+            return VisionStreamControlReachability(
+                canHideControls: false,
+                hideControlsAccessibilityValue:
+                    "No current window input ownership is available."
+            )
+        }
     }
 
     private static func controllerStatus(

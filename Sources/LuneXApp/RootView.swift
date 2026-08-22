@@ -1473,7 +1473,7 @@ private struct StreamWorkspaceView: View {
     let platformLifecycle: PlatformLifecycleState
     #endif
     #if os(tvOS)
-    @FocusState private var isTVStreamSurfaceFocused: Bool
+    @FocusState private var tvFocusedControl: ProductTVStreamFocusTarget?
     #endif
 
     var body: some View {
@@ -1555,7 +1555,7 @@ private struct StreamWorkspaceView: View {
             )
                 .ignoresSafeArea()
                 .focusable()
-                .focused($isTVStreamSurfaceFocused)
+                .focused($tvFocusedControl, equals: .streamSurface)
             #else
             MetalStreamSurface(
                 renderState: appModel.renderState,
@@ -1589,10 +1589,20 @@ private struct StreamWorkspaceView: View {
             #endif
 
                 if appModel.streamOverlayVisibility(in: workspace) == .visible {
-                    StreamStatusOverlay(
-                        workspace: workspace,
-                        layout: layout
-                    )
+                    Group {
+                        #if os(tvOS)
+                        StreamStatusOverlay(
+                            workspace: workspace,
+                            layout: layout,
+                            tvFocusedControl: $tvFocusedControl
+                        )
+                        #else
+                        StreamStatusOverlay(
+                            workspace: workspace,
+                            layout: layout
+                        )
+                        #endif
+                    }
                     .transition(streamOverlayTransition)
                     .frame(maxWidth: streamOverlayMaximumWidth(
                         in: geometry.size,
@@ -1650,18 +1660,19 @@ private struct StreamWorkspaceView: View {
             #if os(tvOS)
             .onAppear {
                 appModel.setTVStreamWorkspaceVisible(true, in: workspace)
-                isTVStreamSurfaceFocused =
-                    appModel.streamOverlayVisibility(in: workspace) == .hidden
+                updateTVFocus(
+                    for: appModel.streamOverlayVisibility(in: workspace)
+                )
             }
             .onDisappear {
                 appModel.setTVStreamWorkspaceVisible(false, in: workspace)
-                isTVStreamSurfaceFocused = false
+                tvFocusedControl = nil
             }
             .onChange(
                 of: appModel.streamOverlayVisibility(in: workspace),
                 initial: true
             ) { _, visibility in
-                isTVStreamSurfaceFocused = visibility == .hidden
+                updateTVFocus(for: visibility)
             }
             #endif
         }
@@ -1688,6 +1699,19 @@ private struct StreamWorkspaceView: View {
             .easeInOut(duration: 0.18)
         }
     }
+
+    #if os(tvOS)
+    private func updateTVFocus(
+        for visibility: ProductStreamOverlayVisibility
+    ) {
+        tvFocusedControl = ProductTVStreamFocusPolicy.target(
+            overlayVisibility: visibility,
+            presentation: appModel.tvStreamControlPresentationState(
+                in: workspace
+            )
+        )
+    }
+    #endif
 
     private func streamOverlayAlignment(
         for layout: ProductStreamWorkspaceLayout
@@ -1737,6 +1761,9 @@ private struct StreamStatusOverlay: View {
     #endif
     let workspace: ProductWorkspaceReference
     let layout: ProductStreamWorkspaceLayout
+    #if os(tvOS)
+    let tvFocusedControl: FocusState<ProductTVStreamFocusTarget?>.Binding
+    #endif
 
     var body: some View {
         Group {
@@ -1765,7 +1792,11 @@ private struct StreamStatusOverlay: View {
     private var overlayContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             #if os(tvOS)
-            TVStreamControls(workspace: workspace, workspaceLayout: layout)
+            TVStreamControls(
+                workspace: workspace,
+                workspaceLayout: layout,
+                focusedControl: tvFocusedControl
+            )
             #elseif os(visionOS)
             VisionStreamControls(workspace: workspace, workspaceLayout: layout)
             #else
@@ -1908,18 +1939,13 @@ private struct StreamStatusOverlay: View {
 }
 
 #if os(tvOS)
-private enum TVStreamControlFocusTarget: Hashable {
-    case hideControls
-    case disconnect
-}
-
 private struct TVStreamControls: View {
     @Environment(AppModel.self) private var appModel
     let workspace: ProductWorkspaceReference
     let workspaceLayout: ProductStreamWorkspaceLayout
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @FocusState private var focusedControl: TVStreamControlFocusTarget?
+    let focusedControl: FocusState<ProductTVStreamFocusTarget?>.Binding
 
     var body: some View {
         let state = appModel.tvStreamControlPresentationState(in: workspace)
@@ -1935,7 +1961,7 @@ private struct TVStreamControls: View {
             statusRows(state)
         }
         .frame(maxWidth: 980, alignment: .leading)
-        .defaultFocus($focusedControl, .hideControls)
+        .defaultFocus(focusedControl, .hideControls)
     }
 
     @ViewBuilder
@@ -1982,7 +2008,7 @@ private struct TVStreamControls: View {
         } label: {
             Label("Hide Controls", systemImage: "eye.slash")
         }
-        .focused($focusedControl, equals: .hideControls)
+        .focused(focusedControl, equals: .hideControls)
         .accessibilitySortPriority(2)
 
         Button(role: .destructive) {
@@ -1990,7 +2016,7 @@ private struct TVStreamControls: View {
         } label: {
             Label("Disconnect", systemImage: "xmark.circle")
         }
-        .focused($focusedControl, equals: .disconnect)
+        .focused(focusedControl, equals: .disconnect)
         .accessibilitySortPriority(1)
         .disabled(appModel.session.phase == .disconnected)
     }
@@ -2090,7 +2116,7 @@ private struct VisionStreamControls: View {
         let state = appModel.visionStreamControlPresentationState(in: workspace)
 
         VStack(alignment: .leading, spacing: 16) {
-            commandHeader
+            commandHeader(state)
 
             Text("Actual Windowed Stream State")
                 .font(.subheadline.weight(.semibold))
@@ -2102,17 +2128,19 @@ private struct VisionStreamControls: View {
     }
 
     @ViewBuilder
-    private var commandHeader: some View {
+    private func commandHeader(
+        _ state: VisionStreamControlPresentationState
+    ) -> some View {
         switch controlsLayout {
         case .compact:
             VStack(alignment: .leading, spacing: 10) {
                 streamPhaseLabel
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) {
-                        commandButtons
+                        commandButtons(state)
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        commandButtons
+                        commandButtons(state)
                     }
                 }
             }
@@ -2120,7 +2148,7 @@ private struct VisionStreamControls: View {
             HStack(spacing: 12) {
                 streamPhaseLabel
                 Spacer(minLength: 12)
-                commandButtons
+                commandButtons(state)
             }
         }
     }
@@ -2136,7 +2164,9 @@ private struct VisionStreamControls: View {
     }
 
     @ViewBuilder
-    private var commandButtons: some View {
+    private func commandButtons(
+        _ state: VisionStreamControlPresentationState
+    ) -> some View {
         Button {
             _ = appModel.setStreamOverlayVisibility(
                 .hidden,
@@ -2145,6 +2175,11 @@ private struct VisionStreamControls: View {
         } label: {
             Label("Hide Controls", systemImage: "eye.slash")
         }
+        .disabled(!state.reachability.canHideControls)
+        .accessibilityLabel("Hide Stream Controls")
+        .accessibilityValue(
+            Text(state.reachability.hideControlsAccessibilityValue)
+        )
 
         Button(role: .destructive) {
             _ = appModel.requestStopStreamConfirmation(in: workspace)
