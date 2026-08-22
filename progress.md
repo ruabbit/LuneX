@@ -4064,3 +4064,11 @@
 - 2026-08-22：post-mark `/private/tmp/LuneX-19-5_6-final-state.d65lHB`只读通过strict、`32/48 next 6.1`、10文件scope、唯一5.6 checkbox、stable project、authority、disabled opt-ins、零process与diff边界；未重复行为门或操作Simulator。下一步精确清理5.6 evidence并做cleanup final audit。
 - 2026-08-22：已逐项精确清理20个`/private/tmp/LuneX-19-5_6*`路径，包含失败/最终xcresult、marker、generator log与门禁报告，prefix残留0；未触碰其他task evidence或仓库cache。下一步cleanup final audit与提交推送。
 - 2026-08-22：cleanup final audit `/private/tmp/LuneX-19-5_6-cleanup-final-audit.ORsfpF`完整通过10文件scope、`32/48 next 6.1` strict、唯一5.6 checkbox、production/test/authority、stable project、disabled opt-ins、零process、remote baseline与diff边界；删除audit路径并做提交前零残留检查后独立提交推送。
+- 2026-08-22：Task 5.6以`c022846 Complete accessibility application matrix`提交推送并确认三方SHA一致、工作树clean；进入6.1。审计定位launch-unpaired、decoder/media与unknown application/platform三类typed issue mapping缺口，下一步closed code/pure mapper/AppModel terminal mapping与focused tests。
+- 2026-08-22：6.1首轮focused在补强前通过`13/13`且build零诊断；补强r2因新增测试在media continuation建立前finish导致错误丢失并挂起，已终止xcodebuild/xctest。现改用control provider test-only arbitrary-error finish并在streaming后注入，不改production或timeout；挂起轮不计验收。
+- 2026-08-22：修正后6.1 fresh focused r3结构化通过`14/14`且build diagnostics全零，闭合closed code/category/action、adversarial diagnostic隔离、真实media映射和checked launch-pairing recovery；下一步serial related矩阵。
+- 2026-08-22：6.1 fresh serial related通过`237/237`且build diagnostics全零；独立serial normal通过`1268/1267/1/0`、0 expected failure且build diagnostics全零，唯一skip为显式真实Keychain round-trip。下一步四平台generic Debug，不操作Simulator。
+- 2026-08-22：6.1 fresh四平台generic Debug通过`4/4`且structured diagnostics全零，macOS为`x86_64 arm64` universal；已同步closed mapper、`14/237/1268/4`证据与后续proof边界。下一步generator双跑、strict与repository pre-gate。
+- 2026-08-22：6.1 generator稳定、strict valid，repository pre-gate `/private/tmp/LuneX-19-6_1-repository-pre.LXuj3u`完整通过11文件scope、mapper/AppModel/test/authority、pre-mark `32/48`、`14/237/1268/4` evidence、唯一Keychain skip与安全边界。已只勾选6.1，当前应为`33/48 next 6.2`；下一步只读post-mark。
+- 2026-08-22：6.1 post-mark通过`33/48 next 6.2`、12文件scope、唯一checkbox与安全边界；随后逐项精确清理9个`/private/tmp/LuneX-19-6_1*`路径且prefix残留0。下一步提交前final audit，不重复test/build。
+- 2026-08-22：6.1 cleanup-final audit通过三方baseline、`33/48 next 6.2`、12文件、28-code mapper、3新增/0删除/0 skip测试、authority、stable project与零artifact/opt-in/process/diff边界；准备独立提交推送。

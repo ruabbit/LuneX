@@ -3550,3 +3550,11 @@
 - geometry admission的source revision与`TVVisionPlatformPresentationCoordinator`统一semantic revision不是同一个revision域；coordinator每应用scene/input/display/audio component都会推进并重标内部revision。projection因此先验证current owner、surface generation、scene activity/attachment/visibility/geometry、input platform/generation和capability set，再使用coordinator revision与current runtime focus eligibility构造能力快照。任何owner/surface/geometry/generation/capability不一致仍fail closed。
 - 最终fresh证据为focused `2/2`、14类serial related `335/335`、serial normal `1265/1264/1/0`及四平台unsigned generic Debug `4/4`，全部structured diagnostics为0且macOS为`x86_64 arm64` universal；唯一skip精确为显式关闭的真实Keychain round-trip，普通测试继续JSON文件identity fallback，两个真实opt-in unset且未操作Simulator lifecycle。
 - 这些证据只证明确定性application integration和generic compilation，不证明物理VoiceOver/Voice Control、hardware keyboard/touch、Apple TV remote focus、Vision Pro gaze/hand、signed安装或live Sunshine。Task 7.7及既有阶段13至18的physical/live gates保持pending。
+
+### Stage 19 Task 6.1 privacy-bounded issue mapping audit (2026-08-22)
+
+- `ProductIssue`自身仍只有`id/code/action`，presentation由closed code派生；真实缺口在error-to-code mapping，不需要引入自由文本context、第二action-token类型或复制diagnostic payload。
+- `StreamNegotiationFailure.hostNotPaired`当前映射到`launchSelectionRequired`，会给出“Choose Host and App”而不是明确回到library完成pairing；decoder/media diagnostic的`.reviewStreamSettings`又与negotiated setting validation共用`streamSettingsInvalid`，不能稳定区分媒体管线失败；unknown `.application` category退化为transport interruption。
+- 6.1应增加closed `streamRequiresPairing`、`mediaPresentationFailed`与`platformPresentationFailed`，并让pure mapper只读取`ApplicationDiagnosticCategory`和`ApplicationDiagnosticAction`。adversarial diagnostic即使携带endpoint、PIN、certificate、provider body等任意`code/summary`，映射输出也必须完全相同且presentation不含这些值。
+- 最终实现把closed code从25扩展到28；AppModel保留negotiation/provider特例后统一调用pure mapper，真实host-not-paired terminal用session-scoped Choose Host and App token返回library，media terminal与unknown application/platform不再伪装成settings validation或transport interruption。
+- fresh focused `14/14`、serial related `237/237`、serial normal `1268/1267/1/0`与四平台generic Debug `4/4`全部structured diagnostics为0，macOS为`x86_64 arm64` universal；唯一skip为真实Keychain opt-in，两个真实opt-in unset且未操作Simulator。6.2 observable string migration和6.3-6.5 retention/export仍独立pending。

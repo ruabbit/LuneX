@@ -47,7 +47,7 @@
 
 ## 6. Privacy-Bounded Diagnostics And Export
 
-- [ ] 6.1 Map pairing, host, catalog, launch, recovery, input, media, HDR, audio, and platform failures into stable privacy-bounded product issues and actions.
+- [x] 6.1 Map pairing, host, catalog, launch, recovery, input, media, HDR, audio, and platform failures into stable privacy-bounded product issues and actions.
 - [ ] 6.2 Remove workflow-facing `Error.localizedDescription`, arbitrary provider text, endpoint/identity echoes, and untyped error/action strings from observable UI state and views.
 - [ ] 6.3 Specify and enforce bounded diagnostic retention, deterministic deduplication, category-specific clearing, and stable privacy-safe export records.
 - [ ] 6.4 Add a native diagnostics export/share workflow that requires neither Keychain access nor live-host communication and labels offline/Simulator proof tiers honestly.

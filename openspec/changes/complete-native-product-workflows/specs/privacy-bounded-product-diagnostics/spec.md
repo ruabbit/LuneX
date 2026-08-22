@@ -7,6 +7,10 @@ Product workflows SHALL consume typed error categories and safe presentation des
 - **WHEN** a provider returns an unmapped internal error
 - **THEN** the UI presents a stable generic category and correlation-safe action while detailed arbitrary text remains outside user-facing state
 
+#### Scenario: Typed failure mapping matrix
+- **WHEN** host, pairing, catalog, launch, recovery, input, media, HDR, audio, or platform presentation fails
+- **THEN** a closed product issue code and checked action are selected from typed context, diagnostic category, and action only, without consuming the diagnostic code, summary, endpoint, identity, or provider payload
+
 ### Requirement: Secret and identity redaction
 UI state, logs, diagnostics, tests, and exports SHALL exclude PINs, private keys, certificates, pinned trust material, host endpoints, host identity, device identifiers, and authentication payloads except where an explicitly bounded local input field requires transient entry.
 

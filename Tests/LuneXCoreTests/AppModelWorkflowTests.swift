@@ -6361,12 +6361,63 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(failureEvent.category, .decoder)
         XCTAssertEqual(failureEvent.code, "video_pipeline_failed")
         XCTAssertEqual(failureEvent.action, .reviewStreamSettings)
-        XCTAssertEqual(model.streamProductIssue?.code, .streamSettingsInvalid)
+        XCTAssertEqual(model.streamProductIssue?.code, .mediaPresentationFailed)
         XCTAssertEqual(
             model.streamProductIssue?.action?.kind,
             .reviewStreamSettings
         )
         XCTAssertFalse(failureEvent.message.contains("must-not-appear"))
+    }
+
+    func testLaunchPairingFailureUsesCheckedLibraryRecoveryAction() async throws {
+        let provider = ControlledSessionControlProvider()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 82,
+                    key: Data(repeating: 0x82, count: 16)
+                ))
+            ])
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+        let launchTask = Task { await model.launchSelectedApp(in: workspace) }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.session.isStreaming }
+
+        provider.finish(
+            sessionID: record.sessionID,
+            throwing: StreamNegotiationFailure(
+                code: .hostNotPaired,
+                subsystem: "must-not-appear",
+                message: "https://user:1234@sunshine.internal provider-body"
+            )
+        )
+        await launchTask.value
+
+        let issue = try XCTUnwrap(model.streamProductIssue(in: workspace))
+        XCTAssertEqual(issue.code, .streamRequiresPairing)
+        XCTAssertEqual(issue.action?.kind, .chooseHostAndApp)
+        let action = try XCTUnwrap(issue.action)
+        XCTAssertTrue(model.canPerformProductAction(action))
+        let actionResult = await model.performProductAction(action)
+        XCTAssertEqual(actionResult, .performed)
+        XCTAssertEqual(
+            model.workspaceState(for: workspace)?.navigationSelection,
+            .library
+        )
+        let presentation = [
+            String(localized: issue.presentation.title),
+            String(localized: issue.presentation.message)
+        ].joined(separator: " ")
+        XCTAssertFalse(presentation.contains("sunshine.internal"))
+        XCTAssertFalse(presentation.contains("1234"))
+        XCTAssertFalse(presentation.contains("provider-body"))
     }
 
     func testMacSurfacePolicyDerivesSessionLifecycleGeometryAndInputSettings() async throws {
@@ -10354,6 +10405,13 @@ private final class ControlledSessionControlProvider: SessionControlProvider, @u
                 message: "Session control failed."
             ))
         }
+    }
+
+    func finish(sessionID: UUID, throwing error: Error) {
+        let continuation = withLock {
+            continuations.removeValue(forKey: sessionID)
+        }
+        continuation?.finish(throwing: error)
     }
 
     func currentStartRecords() -> [StartRecord] {

@@ -111,6 +111,29 @@ localized title, localized message, system image, and default action kind.
 user-visible failure therefore requires an explicit code and reviewed
 presentation rather than copying a lower-level string.
 
+Task 6.1 expands the closed set to 28 codes and distinguishes launch-time
+pairing (`stream_requires_pairing`), decoder/media presentation failure, and
+generic platform presentation failure from selection, settings validation, and
+transport interruption. `ProductIssueFailureMapper` consumes only
+`ApplicationDiagnosticCategory` and `ApplicationDiagnosticAction`; it never
+reads diagnostic code, summary, severity, endpoint, identity, or provider
+payload. Host, pairing, catalog, launch, recovery, input, media, HDR, audio,
+and platform failures therefore resolve to fixed local presentation and an
+existing checked action kind. The AppModel terminal failure boundary uses this
+mapper after its more specific negotiation/provider checks, and a launch-time
+unpaired failure returns a session-scoped Choose Host and App token that is
+revalidated before navigating to the library.
+
+Fresh deterministic evidence is `14/14` focused mapping/application tests, a
+serial `237/237` related issue, workflow, diagnostics, platform, HDR, audio,
+and input matrix, and an independent serial normal suite of `1268 total / 1267
+passed / 1 skipped / 0 failed`. The sole skip remains the explicitly disabled
+real-Keychain round trip. Unsigned generic Debug builds for macOS universal
+(`x86_64 arm64`), iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero
+structured diagnostics; both real opt-ins are unset and no Simulator lifecycle
+was used. Task 6.2 retains the remaining observable-string migration, while
+retention and export remain Tasks 6.3 through 6.5.
+
 `ProductActionToken` carries an opaque identifier, a closed
 `ProductActionKind`, and one of six non-display scopes: application,
 workspace identity/generation, catalog owner, pairing owner, host-action owner,

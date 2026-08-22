@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`32/48`；5.6完整accessibility application matrix已独立验收，继续6.1 privacy-bounded product issue mapping |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`33/48`；6.1 privacy-bounded product issue mapping已独立验收，继续6.2 observable workflow string migration |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`32/48`、next `6.1`。Group 1–5全部完成；5.6以两条真实`AppModel` accessibility application matrix闭合六类semantic surface、最长本地化文本、focus/layout/touch/motion和tvOS/visionOS actual eligibility，并以窄production投影修复保持visionOS current runtime focus eligibility与actual coordinator state一致。fresh focused `2/2`、related `335/335`、normal `1265/1264/1/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`均结构化零诊断；唯一skip是显式真实Keychain opt-in。下一项6.1开始privacy-bounded product issue mapping，物理assistive-technology/hardware/signed/live证明继续pending。
+阶段19当前权威进度`33/48`、next `6.2`。Group 1–5与6.1已完成；6.1将closed issue扩展至28项，补齐launch pairing、media与platform failure，并以只消费typed diagnostic category/action的pure mapper隔离任意code/summary/provider payload。fresh focused `14/14`、related `237/237`、normal `1268/1267/1/0`及四平台generic Debug `4/4`均结构化零诊断，macOS universal且唯一skip为真实Keychain opt-in。下一项6.2清理observable workflow strings，6.3-6.5 retention/export与physical/live证明继续pending。
 
 ### 阶段19错误记录
 
@@ -2109,3 +2109,16 @@
 - **post-mark final-state：** `/private/tmp/LuneX-19-5_6-final-state.d65lHB`只读确认strict、OpenSpec `32/48 next 6.1 ready`、最终10文件scope、唯一5.6 checkbox、stable project、authority、disabled opt-ins、零build/test process与diff边界；未重复test/build/generator或操作Simulator。下一步精确清理全部5.6 task evidence并做cleanup final audit。
 - **evidence cleanup：** 已枚举并逐项精确删除20个`/private/tmp/LuneX-19-5_6*`失败/最终bundle、marker、generator log和门禁路径，prefix残留为0；未使用宽泛删除或触碰其他task evidence与仓库cache。下一步cleanup final audit与独立提交推送。
 - **cleanup final audit：** `/private/tmp/LuneX-19-5_6-cleanup-final-audit.ORsfpF`完整通过最终10文件scope、OpenSpec `32/48 next 6.1` strict、唯一5.6 checkbox、vision current/fail-closed production投影、测试`2 add / 0 delete / 0 new skip`、authority current-state、stable project、disabled opt-ins、零process、remote baseline与diff边界。删除audit路径并确认prefix零残留后即可独立提交推送。
+
+## 2026-08-22 阶段 19 任务 6.1 启动
+
+- **状态：** `in_progress`；Task 5.6已以`c022846 Complete accessibility application matrix`提交推送，fetch/ls-remote确认`HEAD == origin/main == remote`且工作树clean；OpenSpec为`32/48 next 6.1 ready`。
+- **映射审计：** closed issue已覆盖host/pairing/catalog/launch/recovery/HDR/audio/input，但`hostNotPaired`错误映射为`launchSelectionRequired`、decoder/media failure被diagnostic action映射为`streamSettingsInvalid`、unknown application/platform failure退化为`streamInterrupted`。现有product mapper还以private AppModel switch散落，缺少可枚举的privacy-bounded application contract。
+- **实现边界：** 新增closed stream-pairing/media/platform issue code和typed diagnostic category/action mapper；AppModel terminal failure边界消费mapper，mapper不得读取diagnostic code/summary或任意Error文本。6.2才负责全面移除workflow-facing strings，6.3以后retention/export保持pending，不提前改变diagnostic store或UI。
+- **focused补强轮夹具挂起：** r2在编译完成后停在新增launch-pairing application用例；测试在media continuation建立前调用`finish`导致错误丢失，随后`await launchTask`持续等待。已终止该轮xcodebuild/xctest，改由control provider test double在确认streaming后注入arbitrary terminal error，不增加timeout或修改production；挂起轮不计验收。
+- **focused通过：** 修正后的fresh `/private/tmp/LuneX-19-6_1-focused-r3.tpsbeI/Focused.xcresult`结构化通过`14/14`、0 skip/failure/expected failure，build为`succeeded / 0 error / 0 warning / 0 analyzer warning`；覆盖28个closed code、host/pairing/catalog/runtime category/action矩阵、adversarial arbitrary diagnostic隔离、真实media failure和checked launch-pairing recovery。下一步serial related矩阵。
+- **related/normal：** fresh serial related `/private/tmp/LuneX-19-6_1-related-serial.2OOn1d`结构化通过`237/237`且build diagnostics全零；独立serial normal `/private/tmp/LuneX-19-6_1-normal-serial.VcX74U`通过`1268/1267/1/0`、0 expected failure且build diagnostics全零，唯一skip精确为真实Keychain opt-in。下一步四平台fresh unsigned generic Debug。
+- **四平台/authority：** fresh `/private/tmp/LuneX-19-6_1-platform-builds.kcyAlD`顺序通过macOS、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`且每份structured diagnostics全零，macOS executable为`x86_64 arm64` universal；两个真实opt-in unset且未操作Simulator。已同步OpenSpec design/privacy spec、runtime contract、roadmap与三份planning，6.2-6.5及physical/live边界保持pending；下一步generator、strict与repository pre-gate。
+- **状态：** `complete`；generator三次hash稳定为`4214a283c9e353456098dba5504f2cef3cf7cabd78ff2d4c51a2d34060b2f04f`且strict valid。fresh repository pre-gate `/private/tmp/LuneX-19-6_1-repository-pre.LXuj3u`通过remote baseline、11文件scope、closed mapper/AppModel/test/authority、pre-mark `32/48 next 6.1`、最终`14/237/1268/4` evidence、唯一Keychain skip、disabled opt-ins、零process与diff边界；现只勾选6.1并推进至`33/48 next 6.2`。
+- **post-mark/cleanup：** 只读final-state通过strict、OpenSpec `33/48 next 6.2`、12文件scope、唯一6.1 checkbox、零process与diff边界；未重复行为门。随后逐项精确清理9个`/private/tmp/LuneX-19-6_1*`失败/最终evidence、generator log和pre-gate路径，prefix残留0且未触碰其他task evidence或仓库cache；下一步提交前final audit。
+- **cleanup final audit：** 提交前只读门完整通过三方baseline、`33/48 next 6.2` strict、12文件scope、28-code mapper、测试`3 add / 0 delete / 0 new skip`、authority、stable project、零task artifact/opt-in/process与diff边界；无阻止6.1独立提交的问题。

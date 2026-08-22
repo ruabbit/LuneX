@@ -62,7 +62,7 @@ Visible controls and the virtual controller are mutually exclusive, and hidden c
 
 ### Use typed product issues and action tokens
 
-Replace workflow-facing message strings with `ProductIssue` values containing a stable code, localized presentation key, severity, bounded context enum, and optional `ProductActionToken`. Tokens include workspace/session ownership snapshots and are revalidated at invocation. Provider errors map at the application boundary; arbitrary descriptions and response bodies are never copied into observable UI state.
+Replace workflow-facing message strings with `ProductIssue` values containing a stable code, localized presentation key, severity, bounded context enum, and optional `ProductActionToken`. Tokens include workspace/session ownership snapshots and are revalidated at invocation. Provider errors map at the application boundary; arbitrary descriptions and response bodies are never copied into observable UI state. Task 6.1 closes the mapping gaps for launch pairing, decoder/media, and platform presentation failures, and centralizes runtime mapping on typed diagnostic category/action only; diagnostic code, summary, endpoint, identity, and provider payload are not mapper inputs.
 
 This is preferred over sanitizing strings after presentation because secrets and provider text would already have crossed the product-state boundary. Existing typed `ApplicationDiagnosticEvent` remains the telemetry source and will be adapted rather than replaced.
 

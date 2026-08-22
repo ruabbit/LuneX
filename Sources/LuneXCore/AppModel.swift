@@ -4671,7 +4671,7 @@ final class AppModel: ApplicationInputSink {
         if let failure = error as? StreamNegotiationFailure {
             switch failure.code {
             case .hostNotPaired:
-                return .launchSelectionRequired
+                return .streamRequiresPairing
             case .invalidResolution, .invalidBitrate:
                 return .streamSettingsInvalid
             case .reconnectExhausted:
@@ -4687,21 +4687,7 @@ final class AppModel: ApplicationInputSink {
            case .missingProvider = failure {
             return .streamUnavailable
         }
-        return switch diagnostic.action {
-        case .reviewStreamSettings:
-            .streamSettingsInvalid
-        case .reviewHDRSettings:
-            .hdrPresentationFailed
-        case .checkAudioOutput:
-            .audioOutputUnavailable
-        case .reconnectInput:
-            .inputUnavailable
-        case .updateBuild:
-            .streamUnavailable
-        case .retryStream, .checkHost, .pairAgain, .verifyPIN,
-             .useSupportedController, nil:
-            .streamInterrupted
-        }
+        return ProductIssueFailureMapper.code(for: diagnostic)
     }
 
     private func refreshMacInputSurfacePolicy() {

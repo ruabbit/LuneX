@@ -11,7 +11,7 @@ final class ProductIssueTests: XCTestCase {
             "authorization"
         ]
 
-        XCTAssertEqual(ProductIssueCode.allCases.count, 25)
+        XCTAssertEqual(ProductIssueCode.allCases.count, 28)
         XCTAssertEqual(
             Set(ProductIssueCode.allCases.map(\.rawValue)).count,
             ProductIssueCode.allCases.count
@@ -51,6 +51,110 @@ final class ProductIssueTests: XCTestCase {
         XCTAssertEqual(issue.action?.id, actionID)
         XCTAssertEqual(issue.action?.kind, .refreshCatalog)
         XCTAssertEqual(issue.action?.scope, .application)
+    }
+
+    func testFailureMapperCoversEveryRuntimeCategoryAndTypedActionOverride() {
+        let workflowMatrix: [(ProductIssueCode, ProductIssueDomain, ProductActionKind)] = [
+            (.hostLibraryLoadFailed, .host, .refreshHosts),
+            (.hostAddFailed, .host, .retryHostAdd),
+            (.hostRemoveFailed, .host, .retryHostRemoval),
+            (.hostTrustResetFailed, .host, .resetHostTrust),
+            (.pairingUnavailable, .pairing, .updateBuild),
+            (.pairingFailed, .pairing, .retryPairing),
+            (.catalogRequiresPairing, .catalog, .retryPairing),
+            (.catalogRefreshFailed, .catalog, .refreshCatalog),
+            (.launchSelectionRequired, .session, .chooseHostAndApp),
+            (.streamRequiresPairing, .session, .chooseHostAndApp),
+            (.streamInterrupted, .session, .reconnectStream),
+            (.reconnectExhausted, .session, .reconnectStream),
+            (.inputUnavailable, .session, .reconnectInput),
+            (.mediaPresentationFailed, .session, .reviewStreamSettings),
+            (.hdrPresentationFailed, .session, .reviewHDRSettings),
+            (.audioOutputUnavailable, .session, .checkAudioOutput),
+            (.platformPresentationFailed, .session, .reconnectStream)
+        ]
+        for (code, domain, action) in workflowMatrix {
+            XCTAssertEqual(code.domain, domain, code.rawValue)
+            XCTAssertEqual(code.defaultAction, action, code.rawValue)
+        }
+
+        let categoryMatrix: [(ApplicationDiagnosticCategory, ProductIssueCode)] = [
+            (.pairing, .pairingFailed),
+            (.transport, .streamInterrupted),
+            (.decoder, .mediaPresentationFailed),
+            (.hdr, .hdrPresentationFailed),
+            (.audio, .audioOutputUnavailable),
+            (.input, .inputUnavailable),
+            (.application, .platformPresentationFailed)
+        ]
+        XCTAssertEqual(categoryMatrix.count, ApplicationDiagnosticCategory.allCases.count)
+        for (category, expected) in categoryMatrix {
+            XCTAssertEqual(
+                ProductIssueFailureMapper.code(category: category, action: nil),
+                expected
+            )
+        }
+
+        let actionMatrix: [(
+            ApplicationDiagnosticCategory,
+            ApplicationDiagnosticAction,
+            ProductIssueCode
+        )] = [
+            (.pairing, .updateBuild, .pairingUnavailable),
+            (.transport, .updateBuild, .streamUnavailable),
+            (.pairing, .verifyPIN, .pairingFailed),
+            (.pairing, .pairAgain, .pairingFailed),
+            (.pairing, .checkHost, .pairingFailed),
+            (.transport, .checkHost, .streamInterrupted),
+            (.decoder, .retryStream, .mediaPresentationFailed),
+            (.decoder, .reviewStreamSettings, .mediaPresentationFailed),
+            (.transport, .reviewStreamSettings, .streamSettingsInvalid),
+            (.hdr, .reviewHDRSettings, .hdrPresentationFailed),
+            (.audio, .checkAudioOutput, .audioOutputUnavailable),
+            (.input, .reconnectInput, .inputUnavailable),
+            (.input, .useSupportedController, .inputUnavailable)
+        ]
+        for (category, action, expected) in actionMatrix {
+            XCTAssertEqual(
+                ProductIssueFailureMapper.code(
+                    category: category,
+                    action: action
+                ),
+                expected
+            )
+        }
+    }
+
+    func testFailureMapperIgnoresArbitraryDiagnosticCodeAndSummary() {
+        let secret = "https://user:1234@sunshine.internal:47989 certificate provider-body"
+        let first = ApplicationDiagnostic(
+            category: .application,
+            severity: .error,
+            code: secret,
+            summary: secret,
+            action: .retryStream
+        )
+        let second = ApplicationDiagnostic(
+            category: .application,
+            severity: .warning,
+            code: "different-private-value",
+            summary: "different-private-value",
+            action: .retryStream
+        )
+
+        let firstCode = ProductIssueFailureMapper.code(for: first)
+        XCTAssertEqual(firstCode, ProductIssueFailureMapper.code(for: second))
+        XCTAssertEqual(firstCode, .platformPresentationFailed)
+        let presentation = [
+            String(localized: firstCode.presentation.title),
+            String(localized: firstCode.presentation.message),
+            firstCode.presentation.systemImage,
+            firstCode.rawValue
+        ].joined(separator: " ")
+        XCTAssertFalse(presentation.localizedCaseInsensitiveContains(secret))
+        XCTAssertFalse(presentation.localizedCaseInsensitiveContains("1234"))
+        XCTAssertFalse(presentation.localizedCaseInsensitiveContains("certificate"))
+        XCTAssertFalse(presentation.localizedCaseInsensitiveContains("provider-body"))
     }
 
     func testActionTokenCarriesCheckedWorkspaceAndSessionScopesWithoutDisplayText() {

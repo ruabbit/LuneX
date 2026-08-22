@@ -239,15 +239,18 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
     case catalogRequiresPairing = "catalog_requires_pairing"
     case catalogRefreshFailed = "catalog_refresh_failed"
     case launchSelectionRequired = "launch_selection_required"
+    case streamRequiresPairing = "stream_requires_pairing"
     case streamUnavailable = "stream_unavailable"
     case streamInterrupted = "stream_interrupted"
     case streamTerminated = "stream_terminated"
     case reconnectExhausted = "reconnect_exhausted"
     case streamStopFailed = "stream_stop_failed"
     case streamSettingsInvalid = "stream_settings_invalid"
+    case mediaPresentationFailed = "media_presentation_failed"
     case hdrPresentationFailed = "hdr_presentation_failed"
     case audioOutputUnavailable = "audio_output_unavailable"
     case inputUnavailable = "input_unavailable"
+    case platformPresentationFailed = "platform_presentation_failed"
     case staleAction = "stale_action"
     case settingsSaveFailed = "settings_save_failed"
     case diagnosticExportFailed = "diagnostic_export_failed"
@@ -262,10 +265,12 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             .pairing
         case .catalogRequiresPairing, .catalogRefreshFailed:
             .catalog
-        case .launchSelectionRequired, .streamUnavailable, .streamInterrupted,
-             .streamTerminated, .reconnectExhausted, .streamStopFailed,
-             .streamSettingsInvalid, .hdrPresentationFailed,
-             .audioOutputUnavailable, .inputUnavailable, .staleAction:
+        case .launchSelectionRequired, .streamRequiresPairing,
+             .streamUnavailable, .streamInterrupted, .streamTerminated,
+             .reconnectExhausted, .streamStopFailed, .streamSettingsInvalid,
+             .mediaPresentationFailed, .hdrPresentationFailed,
+             .audioOutputUnavailable, .inputUnavailable,
+             .platformPresentationFailed, .staleAction:
             .session
         case .settingsSaveFailed:
             .settings
@@ -280,15 +285,17 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             .information
         case .hostAddressRequired, .hostAddressInvalid, .pairingPINInvalid,
              .catalogRequiresPairing, .launchSelectionRequired,
+             .streamRequiresPairing,
              .streamInterrupted, .staleAction:
             .warning
         case .hostAddFailed, .hostRemoveFailed, .hostTrustResetFailed,
              .hostLibraryLoadFailed,
              .pairingUnavailable, .pairingFailed, .catalogRefreshFailed,
              .streamUnavailable, .reconnectExhausted, .streamStopFailed,
-             .streamSettingsInvalid, .hdrPresentationFailed,
-             .audioOutputUnavailable, .inputUnavailable, .settingsSaveFailed,
-             .diagnosticExportFailed:
+             .streamSettingsInvalid, .mediaPresentationFailed,
+             .hdrPresentationFailed, .audioOutputUnavailable,
+             .inputUnavailable, .platformPresentationFailed,
+             .settingsSaveFailed, .diagnosticExportFailed:
             .error
         }
     }
@@ -315,6 +322,8 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             .refreshCatalog
         case .launchSelectionRequired:
             .chooseHostAndApp
+        case .streamRequiresPairing:
+            .chooseHostAndApp
         case .streamUnavailable:
             .updateBuild
         case .streamInterrupted, .streamTerminated, .reconnectExhausted:
@@ -323,12 +332,16 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             .stopStream
         case .streamSettingsInvalid:
             .reviewStreamSettings
+        case .mediaPresentationFailed:
+            .reviewStreamSettings
         case .hdrPresentationFailed:
             .reviewHDRSettings
         case .audioOutputUnavailable:
             .checkAudioOutput
         case .inputUnavailable:
             .reconnectInput
+        case .platformPresentationFailed:
+            .reconnectStream
         case .settingsSaveFailed:
             .retrySettingsSave
         case .diagnosticExportFailed:
@@ -366,6 +379,8 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             issue("Apps not updated", "The saved app list remains available. Try refreshing again.", "square.grid.3x3")
         case .launchSelectionRequired:
             issue("Choose an app", "Select a paired host and an app before starting a stream.", "play.rectangle")
+        case .streamRequiresPairing:
+            issue("Pairing required", "Return to the host library and pair this host before starting a stream.", "lock.rectangle")
         case .streamUnavailable:
             issue("Streaming unavailable", "This build does not include every required streaming provider.", "exclamationmark.triangle")
         case .streamInterrupted:
@@ -378,12 +393,16 @@ enum ProductIssueCode: String, CaseIterable, Hashable, Sendable {
             issue("Stream did not stop cleanly", "LuneX released local media and input. Retry cleanup if it remains available.", "stop.circle")
         case .streamSettingsInvalid:
             issue("Stream settings unavailable", "Review the codec, resolution, frame rate, and bitrate, then try again.", "slider.horizontal.3")
+        case .mediaPresentationFailed:
+            issue("Video presentation stopped", "Review stream settings, then reconnect the stream.", "film.stack")
         case .hdrPresentationFailed:
             issue("HDR presentation unavailable", "Review HDR settings and the current display, then reconnect.", "sun.max.trianglebadge.exclamationmark")
         case .audioOutputUnavailable:
             issue("Audio output unavailable", "Check the current output route, then reconnect the stream.", "speaker.slash")
         case .inputUnavailable:
             issue("Remote input unavailable", "Refocus or reconnect the stream to restore remote input.", "cursorarrow.slash")
+        case .platformPresentationFailed:
+            issue("Platform presentation stopped", "The current platform presentation could not continue. Reconnect the stream.", "rectangle.on.rectangle.slash")
         case .staleAction:
             issue("Action no longer available", "The related window or session has changed.", "arrow.triangle.2.circlepath")
         case .settingsSaveFailed:
@@ -427,6 +446,63 @@ struct ProductIssue: Identifiable, Equatable, Sendable {
     var domain: ProductIssueDomain { code.domain }
     var severity: ProductIssueSeverity { code.severity }
     var presentation: ProductIssuePresentation { code.presentation }
+}
+
+enum ProductIssueFailureMapper {
+    static func code(
+        category: ApplicationDiagnosticCategory,
+        action: ApplicationDiagnosticAction?
+    ) -> ProductIssueCode {
+        switch action {
+        case .verifyPIN, .pairAgain:
+            return .pairingFailed
+        case .checkHost:
+            return category == .pairing ? .pairingFailed : .streamInterrupted
+        case .retryStream:
+            return code(for: category)
+        case .reviewStreamSettings:
+            return category == .decoder
+                ? .mediaPresentationFailed
+                : .streamSettingsInvalid
+        case .reviewHDRSettings:
+            return .hdrPresentationFailed
+        case .checkAudioOutput:
+            return .audioOutputUnavailable
+        case .reconnectInput, .useSupportedController:
+            return .inputUnavailable
+        case .updateBuild:
+            return category == .pairing
+                ? .pairingUnavailable
+                : .streamUnavailable
+        case nil:
+            return code(for: category)
+        }
+    }
+
+    static func code(for diagnostic: ApplicationDiagnostic) -> ProductIssueCode {
+        code(category: diagnostic.category, action: diagnostic.action)
+    }
+
+    private static func code(
+        for category: ApplicationDiagnosticCategory
+    ) -> ProductIssueCode {
+        switch category {
+        case .pairing:
+            .pairingFailed
+        case .transport:
+            .streamInterrupted
+        case .decoder:
+            .mediaPresentationFailed
+        case .hdr:
+            .hdrPresentationFailed
+        case .audio:
+            .audioOutputUnavailable
+        case .input:
+            .inputUnavailable
+        case .application:
+            .platformPresentationFailed
+        }
+    }
 }
 
 struct ManualHostSubmission: Equatable, Sendable {
