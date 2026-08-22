@@ -3941,3 +3941,21 @@
 - 2026-08-22：14个明确`/private/tmp/LuneX-19-4_4-*`目录与generator log已逐项以绝对`/usr/bin/find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有cache。下一步final diff/authority audit。
 - 2026-08-22：首轮cleanup-final audit在旧时态扫描中把同一行“4.4完成；4.5/4.6 pending”误判为4.4 pending并退出；此前scope/OpenSpec/checkbox/test/source断言已通过，未修改仓库或运行任何行为门。改为精确旧短语后完整重跑。
 - 2026-08-22：corrected cleanup-final audit通过最终13文件scope、source close/stop顺序、6新增/0删除/0 skip测试、唯一4.4 checkbox、strict `24/48 next 4.5`、稳定project、零task artifact、disabled opt-ins、零build/test进程与`1c9d348`三方基线。cleanup final record已同步，下一步精确stage、独立commit/push/fetch。
+- 2026-08-22：Task 4.4以`b60779b Apply owning window close policy`提交推送，fetch/ls-remote确认三方一致且工作树clean；OpenSpec为`24/48 next 4.5`。启动4.5审计，确认无自定义window command且tvOS/visionOS使用普通single-workspace WindowGroup，下一步追踪focus/input adapter的checked workspace owner。
+- 2026-08-22：4.5首轮只读盘点最后一个裸glob因无匹配触发zsh `nomatch`；已读取的App/Root/TV/Vision presentation内容有效，仓库无变化。后续改用`rg --files`定位输入owner文件。
+
+- 2026-08-22：阶段19 Task 4.5续接确认工作树仅有预期7文件，`HEAD=b60779b`、OpenSpec `24/48 next 4.5`。补记首个组合补丁原子拒绝与focused 0-test测试编译错误；已将不存在的`.pointerMove`改为合法`.pointer(.absoluteMove(...))`，production未为测试错误改变。
+- 2026-08-22：尝试按用户既有要求重建长期goal时，goal服务因旧目标同时为`blocked`和unfinished而拒绝；未误标旧目标complete，继续以OpenSpec/planning推进。真实Keychain与live-host opt-in继续unset，当前任务不操作Simulator lifecycle。
+- 2026-08-22：4.5 focused第二轮为`2/1/1`；active non-primary workspace的TV/Vision adapter fail-closed用例通过，唯一source-test失败因`#else`搜索误匹配`#elseif os(iOS)`。已收紧到完整directive行，production不变；失败bundle不计验收。
+- 2026-08-22：fresh最终focused `/private/tmp/LuneX-19-4_5-focused-r2.Cav4yU`结构化通过`2/2`且build diagnostics全零。下一步运行AppModel、Product workspace/workflow、TV focus/control与Vision input/presentation related矩阵。
+- 2026-08-22：fresh related `/private/tmp/LuneX-19-4_5-related.Ag1mod`结构化通过`310/310`、零skip/failure且build diagnostics全零；下一步独立serial normal，真实Keychain/live-host opt-in继续unset。
+- 2026-08-22：fresh serial normal `/private/tmp/LuneX-19-4_5-normal.SJ9MHO`通过`1248/1247/1/0`且build diagnostics全零；唯一skip为真实Keychain opt-in测试，文件fallback继续。下一步四平台unsigned generic Debug，不操作Simulator。
+- 2026-08-22：四平台unsigned generic Debug `/private/tmp/LuneX-19-4_5-platform-builds.hEsR0g`顺序通过macOS、iOS/iPadOS、tvOS、visionOS `4/4`，structured diagnostics全零且macOS universal；未操作Simulator。下一步同步authority并运行generator/strict/repository pre-gate。
+- 2026-08-22：已同步4.5 OpenSpec design/multiwindow spec、runtime contract、roadmap与三份planning，记录single-scene visibility、primary-only adapter ownership、`2/310/1248/4`证据及proof boundary。Task仍未勾选，下一步generator/strict/repository pre-gate。
+- 2026-08-22：generator前后双跑project SHA-256稳定为`60e6966f...d2224`且OpenSpec strict `1/1` valid；工程零diff。下一步repository pre-gate，通过前保持`24/48 next 4.5`。
+- 2026-08-22：首轮repository pre-gate包装器因JavaScript模板中未转义Markdown反引号在shell前SyntaxError退出，任何子命令均未运行。已记录并将用无反引号模板从fresh目录完整重跑。
+- 2026-08-22：corrected repository gate超过10秒yield后因上层仅转发output而丢失session ID；检查到strict/apply与全部test/build JSON已生成且无残留进程，但缺最终marker，不计验收。下一轮用30秒yield从fresh目录完整执行。
+- 2026-08-22：fresh repository pre-gate `/private/tmp/LuneX-19-4_5-repository-pre-final.cLDETj`完整通过7组remote/scope/source+test/authority+OpenSpec/project+retained evidence/privacy+process+diff检查。现已仅勾选4.5，预期`25/48 next 4.6`。
+- 2026-08-22：post-mark `/private/tmp/LuneX-19-4_5-final-state.wYwO7N`只读通过strict、`25/48 next 4.6`、12文件scope、唯一4.5 checkbox、稳定project、retained evidence与disabled opt-ins；下一步精确清理4.5临时证据。
+- 2026-08-22：12个明确`/private/tmp/LuneX-19-4_5-*`目录/log已逐项用绝对`find <exact> -depth -delete`清理，prefix零残留；未使用宽泛删除或触碰仓库cache。下一步final diff/authority audit。
+- 2026-08-22：cleanup final audit通过12文件scope、scene/adapter source、2新增/0删除/0 skip测试、唯一4.5 checkbox、strict `25/48 next 4.6`、稳定project、零artifact、disabled opt-ins、零进程与`b60779b`三方基线；准备精确stage、commit、push、fetch。

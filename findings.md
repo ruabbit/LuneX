@@ -3426,3 +3426,28 @@
 - Post-mark final-state只读确认4.4唯一checkbox已推进为`24/48 next 4.5`，最终13文件scope和全部保留证据一致；没有重复generator/test/build或设备操作。Task临时证据可在提交前逐路径清理，planning中的纯计数与proof boundary保留。
 - 14个4.4临时目录/log已在显式白名单内逐路径清理且prefix零残留；首轮Bash 3.2 `mapfile`失败发生在删除前，没有产生部分清理。最终审计应只依赖仓库中的计数/合同记录，不再假设raw xcresult存在。
 - Corrected cleanup-final audit确认实现与合同一致：close先验证attachment，owner stop reservation先于detach，actual PiP/audio-only与同workspace attachment是唯一retention输入，already-stopping共享operation，stale replacement不受影响；底层media cleanup没有保留失败的active-media early return。最终13文件可独立提交，下一任务为4.5。
+
+### Stage 19 Task 4.5 unsupported-window and adapter ownership audit (2026-08-22)
+
+- `LuneXApp`没有应用自定义window command。macOS/iOS编译typed `WindowGroup(id:for:)`并由scene attachment提供workspace；tvOS和visionOS编译普通`WindowGroup`且`RootView`显式接收`primaryWorkspaceReference`。4.5不应为不支持平台创建`openWindow`按钮或伪多窗口状态。
+- RootView所有workflow命令已经携带显式workspace，但tvOS/visionOS focus/input底层快照主要以session/media/input generation表达。需继续证明AppModel向这些adapter暴露状态/命令时复核active `ProductSessionOwner.workspace`，否则“single workspace”只是UI注入而非typed ownership合同。
+
+## 2026-08-22 阶段 19 Task 4.5 续接发现
+
+- `RemoteInputEvent`没有`.pointerMove` case；Vision surface pointer path必须包装合法`PointerInputEvent`，本用例采用`.pointer(.absoluteMove(point:referenceSize:buttons:))`，无需修改production迁就测试。
+- visionOS generic Debug已证明单实例`Window("LuneX", id: "main")`在当前SDK可编译；tvOS保留单一primary `WindowGroup`。两个unsupported product adapter都应通过`activeSingleWorkspacePlatformOwner(in:)`拒绝active non-primary workspace。
+- 首个跨production/test补丁的source-test锚点错误导致原子拒绝；首轮focused则只暴露测试事件case错误，两个失败均不构成production行为失败。
+- goal服务当前无法以blocked unfinished目标为基础重建新目标；项目执行仍由OpenSpec `complete-native-product-workflows`与持久planning文件跟踪。
+- Swift字符串搜索`range(of: "#else")`会命中`#elseif`前缀；source-contract提取条件编译分支必须匹配完整directive行。4.5第二轮focused的唯一失败由此造成，runtime ownership用例已通过，LuneXApp实际visionOS分支不含`WindowGroup`。
+- 修正directive切片后的最终focused为`2/2`且structured build diagnostics全零。production helper只在`expectedTVVisionPlatform != nil`且传入workspace等于checked current primary时返回active owner；macOS/iOS不会进入该策略，non-primary tvOS/visionOS session仍可由普通owner命令clean stop但不能驱动产品focus/input adapter。
+- 扩大related矩阵`310/310`通过且structured build diagnostics全零，证明primary tvOS/visionOS既有focus/input capture仍可工作，non-primary owner guard没有破坏workspace registry、host/pairing/catalog/destructive workflow、平台geometry/presentation或input teardown合同。
+- normal suite增至`1248/1247/1/0`并保持structured build diagnostics全零；唯一skip仍是明确opt-in的真实Keychain round-trip。`LUNEX_RUN_KEYCHAIN_TEST`与`LUNEX_RUN_LIVE_HOST_TEST`均未设置，符合测试期文件fallback约束。
+- 最终四平台unsigned generic Debug `4/4`通过，四份structured diagnostics全零，macOS为`x86_64 arm64` universal。该证据证明当前源码可离线编译，不等同signed artifact、真实tvOS/visionOS窗口交互、物理设备输入或live Sunshine行为。
+- authority已消除visionOS仍使用`WindowGroup`和4.5仍pending的陈旧时态，并明确普通session owner与unsupported平台adapter owner是两层合同：后者额外要求current checked primary，不能由active non-primary workspace驱动。
+- 4.5不增加工程成员；generator双跑完全稳定于既有SHA-256 `60e6966f...d2224`，OpenSpec strict `1/1` valid。
+- functions JavaScript的raw template仍会解析其中未转义的Markdown反引号；repository shell包装器应避免在静态`rg`断言中嵌入反引号。本次失败发生在shell前且无任何门禁或项目副作用。
+- 嵌套`exec_command`在yield返回时必须保留完整结果或session ID；只转发`.output`会让已继续运行的门禁最终marker不可恢复。4.5 corrected首轮已无残留进程并生成全部JSON，但证据口径要求fresh完整重跑。
+- fresh repository pre-gate最终以30秒yield完整返回，通过remote/scope/source/test/authority/OpenSpec/project/evidence/privacy/process/diff全部检查；因此4.5可单独勾选，4.6仍保持完整two-workspace application matrix边界。
+- post-mark只读门确认4.5唯一checkbox将权威进度推进至`25/48 next 4.6`，最终12文件和所有retained证据一致；不需要重复任何行为门。
+- 4.5全部raw evidence在提交前按12个显式绝对路径逐项清理；后续最终审计只依赖已同步的稳定计数、合同与proof boundary，不再假设xcresult仍存在。
+- cleanup final audit确认4.5实现没有触及4.4 teardown、工程/配置/依赖/reference，且4.6仍未勾选。最终12文件可作为独立提交。

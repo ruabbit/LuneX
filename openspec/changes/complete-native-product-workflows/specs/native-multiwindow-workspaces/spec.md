@@ -94,3 +94,11 @@ Platforms or configurations without product multiwindow support SHALL use one wo
 #### Scenario: tvOS root scene
 - **WHEN** LuneX runs on tvOS
 - **THEN** the root scene uses a single checked workspace and does not advertise create-window behavior
+
+#### Scenario: visionOS root scene
+- **WHEN** LuneX runs on visionOS
+- **THEN** the root uses one explicitly identified window scene backed by the checked primary workspace and exposes no application create-window, dismiss-window, or window-menu command
+
+#### Scenario: Unsupported-platform focus and input owner
+- **WHEN** tvOS or visionOS focus, remote-command, presentation, or input admission is evaluated
+- **THEN** only the active session owner whose current checked workspace equals the primary workspace may drive the platform adapter, while a non-primary or replaced workspace remains local and cannot create a second adapter owner

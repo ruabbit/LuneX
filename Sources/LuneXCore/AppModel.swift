@@ -239,7 +239,7 @@ final class AppModel: ApplicationInputSink {
         in workspace: ProductWorkspaceReference
     ) -> Bool {
         guard expectedTVVisionPlatform == .visionOS,
-              activeStreamOwner(in: workspace) != nil,
+              activeSingleWorkspacePlatformOwner(in: workspace) != nil,
               !streamOverlayIsRequestedVisible(in: workspace),
               !visionInputReleasePending,
               let snapshot = currentVisionWindowInputSnapshot,
@@ -292,7 +292,8 @@ final class AppModel: ApplicationInputSink {
     func tvStreamControlPresentationState(
         in workspace: ProductWorkspaceReference
     ) -> TVStreamControlPresentationState {
-        let hasCurrentOwner = activeStreamOwner(in: workspace) != nil
+        let hasCurrentOwner =
+            activeSingleWorkspacePlatformOwner(in: workspace) != nil
         let hasActiveSession = expectedTVVisionPlatform == .tvOS
             && session.isStreaming
             && hasCurrentOwner
@@ -371,7 +372,8 @@ final class AppModel: ApplicationInputSink {
     func visionStreamControlPresentationState(
         in workspace: ProductWorkspaceReference
     ) -> VisionStreamControlPresentationState {
-        let hasCurrentOwner = activeStreamOwner(in: workspace) != nil
+        let hasCurrentOwner =
+            activeSingleWorkspacePlatformOwner(in: workspace) != nil
         let hasActiveSession = expectedTVVisionPlatform == .visionOS
             && session.isStreaming
             && hasCurrentOwner
@@ -449,7 +451,7 @@ final class AppModel: ApplicationInputSink {
                 windowedPresentation: windowedPresentation,
                 sceneSurface: windowInput?.sceneSurface,
                 inputCapabilities: windowInput?.inputCapabilities,
-                inputCaptureEnabled: visionInputCaptureEnabled,
+                inputCaptureEnabled: visionInputCaptureEnabled(in: workspace),
                 inputReleasePending: visionInputReleasePending,
                 connectedControllerCount:
                     controllerRoster?.controllers.count ?? 0,
@@ -1881,7 +1883,9 @@ final class AppModel: ApplicationInputSink {
         _ event: TVRemoteSurfacePressEvent,
         in workspace: ProductWorkspaceReference
     ) -> TVRemoteSurfacePressDisposition {
-        guard activeStreamOwner(in: workspace) != nil else { return .local }
+        guard activeSingleWorkspacePlatformOwner(in: workspace) != nil else {
+            return .local
+        }
         return tvRemoteSurfacePressCaptureOwner?.handle(event) ?? .local
     }
 
@@ -1897,7 +1901,9 @@ final class AppModel: ApplicationInputSink {
         in workspace: ProductWorkspaceReference
     ) {
         guard expectedTVVisionPlatform == .tvOS,
-              activeStreamOwner(in: workspace) != nil else { return }
+              activeSingleWorkspacePlatformOwner(in: workspace) != nil else {
+            return
+        }
         tvRemoteReservedCommandState = .resolve(command)
         guard command == .backMenu else { return }
         _ = setStreamOverlayVisibility(.visible, in: workspace)
@@ -2036,7 +2042,9 @@ final class AppModel: ApplicationInputSink {
         in workspace: ProductWorkspaceReference
     ) {
         guard expectedTVVisionPlatform == .tvOS,
-              activeStreamOwner(in: workspace) != nil else { return }
+              activeSingleWorkspacePlatformOwner(in: workspace) != nil else {
+            return
+        }
         applyTVRemoteFocusHandoffState(
             tvRemoteFocusHandoffState.settingWorkspaceVisible(
                 visible,
@@ -3174,6 +3182,14 @@ final class AppModel: ApplicationInputSink {
         return owner
     }
 
+    private func activeSingleWorkspacePlatformOwner(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductSessionOwner? {
+        guard expectedTVVisionPlatform != nil,
+              workspace == primaryWorkspaceReference else { return nil }
+        return activeStreamOwner(in: workspace)
+    }
+
     private func streamOverlayIsRequestedVisible(
         in workspace: ProductWorkspaceReference
     ) -> Bool {
@@ -3216,6 +3232,9 @@ final class AppModel: ApplicationInputSink {
         refreshMacInputSurfacePolicy()
         switch expectedTVVisionPlatform {
         case .tvOS:
+            guard activeSingleWorkspacePlatformOwner(
+                in: owner.workspace
+            ) != nil else { return }
             applyTVRemoteFocusHandoffState(
                 tvRemoteFocusHandoffState.settingOverlayVisible(
                     streamOverlayIsRequestedVisible(in: owner.workspace),
@@ -3223,6 +3242,9 @@ final class AppModel: ApplicationInputSink {
                 )
             )
         case .visionOS:
+            guard activeSingleWorkspacePlatformOwner(
+                in: owner.workspace
+            ) != nil else { return }
             guard let admission = tvVisionPlatformGeometryAdmission,
                   admission.ownership == tvVisionPlatformPresentationOwnership else {
                 refreshVisionGameControllerRuntime()

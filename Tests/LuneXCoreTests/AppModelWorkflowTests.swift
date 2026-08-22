@@ -7854,6 +7854,112 @@ final class AppModelWorkflowTests: XCTestCase {
         await launch.value
     }
 
+    func testTVVisionAdaptersRejectActiveNonPrimaryWorkspaceOwnership()
+        async throws
+    {
+        for (index, platform) in [
+            TVVisionPlatform.tvOS,
+            TVVisionPlatform.visionOS
+        ].enumerated() {
+            let provider = ControlledSessionControlProvider()
+            let environment = ControlledSessionMediaEnvironment()
+            let model = makeLaunchReadyModel(
+                sessionControlProvider: provider,
+                sessionMediaEnvironment: environment,
+                tvVisionPlatform: platform,
+                launchClient: StubStreamLaunchClient(),
+                remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                    .success(RemoteInputKeyMaterial(
+                        keyID: 70 + index,
+                        key: Data(repeating: UInt8(70 + index), count: 16)
+                    ))
+                ])
+            )
+            await model.loadInitialState()
+            await model.refreshAppsForSelectedHost()
+            let hostID = try XCTUnwrap(model.selectedHostID)
+            let appID = try XCTUnwrap(model.selectedAppID)
+            let nonPrimary = try model.workspaceRegistry.create(
+                restoration: ProductWorkspaceRestorationState(
+                    selectedHostID: hostID,
+                    selectedAppID: appID
+                )
+            )
+            let launch = Task {
+                await model.launchSelectedApp(in: nonPrimary)
+            }
+            let record = try await waitForSessionStart(provider)
+            driveSessionToStreaming(provider, record: record)
+            await waitUntil { model.session.isStreaming }
+            XCTAssertEqual(
+                model.activeProductSessionOwner?.workspace,
+                nonPrimary
+            )
+
+            let geometry = try makeTVVisionActiveGeometryUpdate(
+                platform: platform,
+                surfaceGeneration: 1,
+                revision: 1
+            )
+            model.receiveTVVisionGeometryUpdate(geometry)
+
+            switch platform {
+            case .tvOS:
+                XCTAssertEqual(
+                    model.tvStreamControlPresentationState(in: nonPrimary)
+                        .focus,
+                    .unavailable
+                )
+                model.setTVStreamWorkspaceVisible(true, in: nonPrimary)
+                model.receiveTVRemoteReservedCommand(
+                    .backMenu,
+                    in: nonPrimary
+                )
+                XCTAssertEqual(
+                    model.receiveTVRemoteSurfacePressEvent(
+                        try makeTVRemoteSurfacePress(
+                            geometry.surfaceGeneration,
+                            1,
+                            .select,
+                            .began
+                        ),
+                        in: nonPrimary
+                    ),
+                    .local
+                )
+            case .visionOS:
+                XCTAssertEqual(
+                    model.visionStreamControlPresentationState(in: nonPrimary)
+                        .input,
+                    .unavailable
+                )
+                XCTAssertFalse(
+                    model.visionInputCaptureEnabled(in: nonPrimary)
+                )
+                let input = try VisionSurfaceInputEvent(
+                    surfaceGeneration: geometry.surfaceGeneration,
+                    path: .pointer,
+                    event: .pointer(.absoluteMove(
+                        point: RemotePoint(x: 1, y: 1),
+                        referenceSize: PixelSize(width: 1_920, height: 1_080),
+                        buttons: []
+                    ))
+                )
+                XCTAssertEqual(
+                    model.receiveVisionSurfaceInputEvent(
+                        input,
+                        in: nonPrimary
+                    ),
+                    .local
+                )
+            }
+
+            let didStop = await model.stopStream(in: nonPrimary)
+            XCTAssertTrue(didStop)
+            await launch.value
+        }
+    }
+
     private func makeLaunchReadyModel(
         sessionControlProvider: any SessionControlProvider,
         sessionMediaEnvironment: any SessionMediaEnvironment =

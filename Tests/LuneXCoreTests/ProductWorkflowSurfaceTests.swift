@@ -577,6 +577,45 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(infoSource.contains("<true/>"))
     }
 
+    func testUnsupportedPlatformsExposeOnlySingleWorkspaceScenes() throws {
+        let appSource = try String(contentsOf: appSourceURL, encoding: .utf8)
+
+        let tvStart = try XCTUnwrap(appSource.range(of: "#if os(tvOS)"))
+        let macStart = try XCTUnwrap(appSource.range(
+            of: "#elseif os(macOS)",
+            range: tvStart.upperBound..<appSource.endIndex
+        ))
+        let tvBranch = String(
+            appSource[tvStart.upperBound..<macStart.lowerBound]
+        )
+        let visionStart = try XCTUnwrap(appSource.range(
+            of: "        #else\n",
+            range: macStart.upperBound..<appSource.endIndex
+        ))
+        let visionEnd = try XCTUnwrap(appSource.range(
+            of: "#endif",
+            range: visionStart.upperBound..<appSource.endIndex
+        ))
+        let visionBranch = String(
+            appSource[visionStart.upperBound..<visionEnd.lowerBound]
+        )
+
+        XCTAssertTrue(tvBranch.contains("WindowGroup"))
+        XCTAssertTrue(tvBranch.contains(
+            "RootView(workspace: appModel.primaryWorkspaceReference)"
+        ))
+        XCTAssertFalse(tvBranch.contains("ProductWorkspaceSceneRoot"))
+        XCTAssertTrue(visionBranch.contains("Window(\"LuneX\", id: \"main\")"))
+        XCTAssertTrue(visionBranch.contains(
+            "RootView(workspace: appModel.primaryWorkspaceReference)"
+        ))
+        XCTAssertFalse(visionBranch.contains("WindowGroup"))
+        XCTAssertFalse(appSource.contains("openWindow"))
+        XCTAssertFalse(appSource.contains("dismissWindow"))
+        XCTAssertFalse(appSource.contains("CommandGroup"))
+        XCTAssertFalse(appSource.contains("CommandMenu"))
+    }
+
     private func surface(
         host: MoonlightHost,
         destructive: ProductHostDestructiveState

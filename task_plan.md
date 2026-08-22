@@ -47,6 +47,7 @@
 
 ### 阶段19错误记录
 
+- Task 4.5首轮文件盘点使用不存在的`Sources/LuneXCore/*Vision*Input*.swift`裸glob，zsh在该并行只读命令末尾以`no matches found`退出；其他文件读取已完成且仓库无变化。后续用`rg --files | rg`定位实际文件，不重复裸glob。
 - Task 4.4 cleanup-final audit的旧时态正则跨过同一行分号，把“4.4已完成；4.5/4.6 pending”误判为“4.4 pending”并退出；此前scope/OpenSpec/checkbox/test/source断言已通过，无仓库或runtime副作用。改用精确旧短语列表后从完整只读门重跑。
 - Task 4.4首次evidence cleanup在任何删除前退出：系统`/bin/bash`为3.2且不提供`mapfile` builtin，14个已枚举目标全部仍存在。改用显式路径列表与绝对`/usr/bin/find <exact-path> -depth -delete`逐项清理，不扩大匹配范围。
 - Task 4.2首次evidence cleanup在任何删除前退出：zsh的特殊数组变量`path`会联动覆盖`PATH`，循环赋值后无法解析`find`。只读复核确认22个已枚举目标全数仍存在；改用普通变量`target`与绝对`/usr/bin/find`逐项删除，不使用宽泛匹配删除。
@@ -1925,3 +1926,30 @@
 - **evidence cleanup：** 首轮`mapfile`兼容性错误后，14个明确`/private/tmp/LuneX-19-4_4-*`目录与generator log已逐项以绝对`/usr/bin/find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库`build/DerivedData`。下一步final diff/authority audit。
 - **final audit：** corrected完整只读门通过最终13文件scope、begin-stop-before-detach、actual continuity/attachment retention、stale/already-stopping语义、media cleanup基线、6新增/0删除/0 skip测试、唯一4.4 checkbox、strict `24/48 next 4.5`、稳定project、零task artifact、disabled opt-ins、零build/test进程及`1c9d348`三方基线。未发现需追加production/test修改，准备cleanup final record后独立提交推送。
 - **cleanup final record：** Task 4.4最终状态保持上述全部门禁，production/test在行为验收后未变化，authority旧时态与task artifact均归零；准备精确stage 13文件并提交`Apply owning window close policy`，提交后直接进入4.5且不archive change。
+
+## 2026-08-22 阶段 19 任务 4.5 启动
+
+- **状态：** `in_progress`；Task 4.4已以`b60779b Apply owning window close policy`提交推送，fetch/ls-remote确认三方SHA一致且工作树clean，OpenSpec为`24/48 next 4.5`。
+- **初步窗口审计：** App没有自定义`openWindow`/`dismissWindow`或窗口command menu；macOS/iOS使用typed workspace `WindowGroup`，tvOS与visionOS由编译分支保留普通single-workspace `WindowGroup`并直接注入checked primary。4.5需以显式产品能力合同与source/application tests证明不暴露unsupported command，而非增加无功能按钮。
+- **ownership审计方向：** 继续追踪tvOS remote focus与visionOS input capture从`RootView(workspace:)`到AppModel/session/media generation的调用，确认current `ProductSessionOwner.workspace`参与admission；若仅按process session判断，则补typed single-workspace policy与checked adapter入口，不提前实现4.6双workspace矩阵。
+
+## 2026-08-22 阶段 19 任务 4.5 续接
+
+- **状态：** `in_progress`；OpenSpec权威为`24/48 ready`、next `4.5`。继续验证tvOS/visionOS不暴露不支持的窗口命令，并让platform focus/input adapter只接受checked primary workspace owner。
+- **补丁编排错误：** 首个production+test组合补丁因`ProductWorkflowSurfaceTests`锚点不匹配被`apply_patch`原子拒绝，无部分修改；随后已按真实锚点拆分成功。
+- **focused首轮错误：** `/private/tmp/LuneX-19-4_5-focused.AR0hPZ`在0 tests的测试编译阶段失败，新测试误用了不存在的`RemoteInputEvent.pointerMove`；production编译没有诊断。已改用合法的`.pointer(.absoluteMove(...))`事件并将从fresh evidence目录重跑，该失败bundle不计验收。
+- **目标工具状态：** 续接时旧长期goal被报告为`blocked`但同时被视为unfinished，`create_goal`因此拒绝按用户要求重建；没有仓库、Keychain、live host、Simulator或runtime副作用。继续以OpenSpec和三份planning为执行权威，不把未完成旧目标误标complete。
+- **focused第二轮错误：** fresh `/private/tmp/LuneX-19-4_5-focused-final.30wDff`执行`2 total / 1 passed / 1 failed`；non-primary platform ownership application test通过，唯一失败是source test用`range(of: "#else")`误匹配`#elseif os(iOS)`前缀，导致vision切片包含iOS `WindowGroup`。production scene正确；测试已改为匹配完整缩进`#else`行并将从新目录重跑，该bundle不计验收。
+- **最终focused：** fresh `/private/tmp/LuneX-19-4_5-focused-r2.Cav4yU/Focused.xcresult`结构化通过`2/2`、0 skip/failure/expected failure，build为`succeeded / 0 error / 0 warning / 0 analyzer warning`。source scene与active non-primary TV/Vision adapter fail-closed合同均闭合，下一步related矩阵。
+- **related：** fresh `/private/tmp/LuneX-19-4_5-related.Ag1mod/Related.xcresult`结构化通过`310/310`、0 skip/failure/expected failure，build diagnostics全零。矩阵覆盖AppModel、Product workspace/workflow、tvOS focus/control/presentation及visionOS input/presentation；下一步独立fresh serial normal。
+- **serial normal：** fresh `/private/tmp/LuneX-19-4_5-normal.SJ9MHO/Normal.xcresult`结构化通过`1248 total / 1247 passed / 1 skipped / 0 failed / 0 expected failure`，build diagnostics全零。唯一skip精确为显式关闭的真实Keychain round-trip，两个真实opt-in unset且普通identity继续文件fallback；下一步四平台unsigned generic Debug。
+- **四平台build：** `/private/tmp/LuneX-19-4_5-platform-builds.hEsR0g`顺序完成macOS、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`；四份structured build均`succeeded / 0 error / 0 warning / 0 analyzer warning`，macOS executable为`x86_64 arm64`。未操作Simulator lifecycle；下一步authority同步与repository门禁。
+- **authority同步：** 已更新OpenSpec design/multiwindow spec、native product runtime contract、completion roadmap与三份planning，记录tvOS单一`WindowGroup`、visionOS显式单实例`Window`、无application window commands、primary-owner-only adapter admission、最终`2/310/1248/4`证据及signed/physical/live边界。Task保持pre-mark，下一步generator双跑、strict与repository pre-gate。
+- **generator/strict：** `project.pbxproj`在generator前、连续两次运行后SHA-256均为`60e6966fc42bbe0facbb8adfdf66794746948039ba1f190ac13dc0438a9d2224`且工程零diff；OpenSpec strict为`1/1` valid。下一步repository pre-gate，通过前不勾选4.5。
+- **repository包装器错误：** 首轮命令在shell启动前因functions JavaScript模板中的Markdown反引号触发`SyntaxError: Unexpected number`；没有运行fetch/OpenSpec/xcresult门禁，没有仓库、Keychain、live host或Simulator副作用。改用不含反引号的静态匹配并从fresh gate目录完整执行。
+- **repository输出编排错误：** corrected gate运行超过10秒首个yield后，上层只输出嵌套结果的`output`而没有保留`session_id`；目录内strict/apply及全部test/build JSON均已生成且进程已结束，但最终marker不可读，因此该轮不计最终门禁。改用30秒yield从fresh目录完整重跑，避免丢失session状态。
+- **repository pre-gate：** fresh `/private/tmp/LuneX-19-4_5-repository-pre-final.cLDETj`完整通过三方remote基线、精确11文件pre-mark scope、scene/owner/test语义、authority、strict `24/48 next 4.5`、稳定project、retained `2/310/1248/4`证据、唯一Keychain skip、disabled opt-ins、零build/test进程与diff边界。
+- **状态：** `complete`；现已仅勾选4.5，预期OpenSpec为`25/48 next 4.6`。下一步只读post-mark final-state，不重复generator/test/build或操作Simulator。
+- **post-mark final-state：** fresh `/private/tmp/LuneX-19-4_5-final-state.wYwO7N`只读确认strict、OpenSpec `25/48 next 4.6`、最终12文件scope、唯一4.5 checkbox、稳定project、retained `2/310/1248/4`证据、disabled opt-ins与零build/test进程；未重复test/build/generator或操作Simulator。下一步逐路径清理4.5 evidence。
+- **evidence cleanup：** 12个明确`/private/tmp/LuneX-19-4_5-*`目录/log已逐项用绝对`/usr/bin/find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有`build/DerivedData`。下一步cleanup后final diff/authority audit。
+- **cleanup final audit：** 完整只读门通过最终12文件scope、visionOS/tvOS scene与primary-only adapter source语义、2新增/0删除/0 skip测试、唯一4.5 checkbox、strict `25/48 next 4.6`、稳定project、零task artifact、disabled opt-ins、零build/test进程及`b60779b`三方基线。未发现需追加修改，准备精确stage并独立提交推送。

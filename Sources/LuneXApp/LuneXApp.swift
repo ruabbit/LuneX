@@ -30,7 +30,7 @@ struct LuneXApp: App {
         }
         .defaultSize(width: 1280, height: 800)
         #else
-        WindowGroup {
+        Window("LuneX", id: "main") {
             RootView(workspace: appModel.primaryWorkspaceReference)
                 .environment(appModel)
         }

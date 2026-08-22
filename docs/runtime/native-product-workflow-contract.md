@@ -330,6 +330,38 @@ coordination; they do not prove physical macOS window close/minimize behavior,
 iPad Stage Manager or system PiP transitions, signed installation, device
 background continuity, or live Sunshine teardown.
 
+### Unsupported platform scene and adapter ownership
+
+The product scene declaration does not advertise unsupported multiwindow
+commands. tvOS keeps one ordinary `WindowGroup` rooted in the checked primary
+workspace. visionOS uses the single identified `Window("LuneX", id: "main")`
+scene rooted in the same checked primary reference. The application source has
+no `openWindow`, `dismissWindow`, `CommandGroup`, or `CommandMenu` entry point,
+and the supported macOS/iOS typed workspace scene path remains unchanged.
+
+`activeSingleWorkspacePlatformOwner(in:)` is the admission boundary shared by
+tvOS focus/remote presentation and visionOS input/presentation projections. It
+requires a configured tvOS/visionOS product platform, equality with the current
+checked primary workspace reference, and the ordinary current active-session
+owner check. Presentation synchronization, tvOS reserved commands and remote
+presses, workspace visibility, Vision capture state, and asynchronous Vision
+delivery revalidate that boundary. An active session deliberately started from
+a non-primary workspace remains available to the ordinary checked clean-stop
+path, but its platform focus/input state is unavailable or local; ownership is
+not transferred and no second adapter owner is created.
+
+Task 4.5 deterministic evidence is `2/2` focused source/application tests and
+`310/310` related AppModel, workspace/workflow, tvOS focus/control, and visionOS
+input/presentation tests. The independent serial normal suite is `1248 total /
+1247 passed / 1 skipped / 0 failed`; the sole skip is the explicitly disabled
+real-Keychain round trip, ordinary tests continue through the JSON file identity
+fallback, and both real opt-ins are unset. Unsigned generic Debug builds for
+macOS universal, iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured
+compiler, analyzer, or build warnings. No Simulator lifecycle was used. These
+receipts prove offline scene source and checked adapter ownership; they do not
+prove actual Apple TV or Vision Pro window/focus/input interaction, signed or
+physical installation, assistive technology, or live Sunshine behavior.
+
 ### Host library workspace migration
 
 `AppModel` now creates one checked primary workspace in the process registry.
