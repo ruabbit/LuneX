@@ -52,6 +52,59 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         )
     }
 
+    func testLibraryDashboardLayoutUsesActualWidthAndAccessibilityText() {
+        XCTAssertEqual(
+            ProductLibraryDashboardLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: 1_280
+            ),
+            .wide
+        )
+        XCTAssertEqual(
+            ProductLibraryDashboardLayout(
+                horizontalSizeClassIsCompact: true,
+                usesAccessibilityTextSize: false,
+                availableWidth: 1_280
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductLibraryDashboardLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: true,
+                availableWidth: 1_280
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductLibraryDashboardLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: ProductLibraryDashboardLayout.wideMinimumWidth - 1
+            ),
+            .compact
+        )
+        XCTAssertEqual(
+            ProductLibraryDashboardLayout(
+                horizontalSizeClassIsCompact: false,
+                usesAccessibilityTextSize: false,
+                availableWidth: ProductLibraryDashboardLayout.wideMinimumWidth
+            ),
+            .wide
+        )
+        for invalidWidth in [CGFloat.nan, .infinity, -.infinity] {
+            XCTAssertEqual(
+                ProductLibraryDashboardLayout(
+                    horizontalSizeClassIsCompact: false,
+                    usesAccessibilityTextSize: false,
+                    availableWidth: invalidWidth
+                ),
+                .compact
+            )
+        }
+    }
+
     func testHostLibraryMapsLoadingFirstUseAvailableAndFailure() {
         let host = makeHost(pairingState: .paired)
 
@@ -890,6 +943,47 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             "VisionStreamControls(workspace: workspace, workspaceLayout: layout)"
         ))
         XCTAssertFalse(streamOverlay.contains(".onHover"))
+    }
+
+    func testLibraryDashboardAndCommandsReflowWithoutPlatformAssumptions() throws {
+        let source = try String(contentsOf: rootViewURL, encoding: .utf8)
+        let dashboardStart = try XCTUnwrap(
+            source.range(of: "private struct LibraryDashboardView: View")
+        )
+        let streamStart = try XCTUnwrap(
+            source.range(
+                of: "private struct StreamWorkspaceView: View",
+                range: dashboardStart.upperBound..<source.endIndex
+            )
+        )
+        let workflowSource = String(
+            source[dashboardStart.lowerBound..<streamStart.lowerBound]
+        )
+
+        let requiredContracts = [
+            "@Environment(\\.dynamicTypeSize) private var dynamicTypeSize",
+            "GeometryReader { geometry in",
+            "ProductLibraryDashboardLayout(",
+            "availableWidth: geometry.size.width",
+            "dynamicTypeSize.isAccessibilitySize",
+            "case .compact:",
+            "LazyVStack(alignment: .leading, spacing: 16)",
+            "case .wide:",
+            "dashboardGrid",
+            "ViewThatFits(in: .horizontal)",
+            "hostActionButtons(surface)",
+            "pairingPINField(workspace: workspace, maxWidth: .infinity)",
+            "refreshAppsButton(surface)",
+            "refreshAppsButton(surface)\n                    }\n                    .fixedSize(horizontal: true, vertical: false)",
+            ".fixedSize(horizontal: true, vertical: false)"
+        ]
+        for contract in requiredContracts {
+            XCTAssertTrue(
+                workflowSource.contains(contract),
+                "Missing adaptive workflow contract: \(contract)"
+            )
+        }
+        XCTAssertFalse(workflowSource.contains("#if os(iOS)\n            if horizontalSizeClass == .compact"))
     }
 
     func testAppSceneUsesRestorableWorkspaceIdentityAndSingleFallback() throws {

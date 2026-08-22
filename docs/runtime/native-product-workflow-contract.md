@@ -428,7 +428,44 @@ lifecycle was used. These receipts prove typed/localized semantic construction,
 privacy shape, and platform compilation only. They do not prove SwiftUI
 accessibility modifier wiring, physical VoiceOver or Voice Control behavior,
 hardware keyboard/touch/remote/focus, signed installation, or live Sunshine.
-Those remain tasks 5.2 through 5.6 and the later physical acceptance gate.
+Task 5.2 now supplies the adaptive dashboard and primary-command reflow
+described below. Accessibility modifier wiring, focus/default/cancel behavior,
+touch and reduced-motion behavior, tvOS/visionOS focus, and the complete matrix
+remain tasks 5.3 through 5.6 and the later physical acceptance gate.
+
+### Adaptive workflow layout
+
+Task 5.2 adds the pure `ProductLibraryDashboardLayout` value. It selects
+compact composition when the horizontal size class is compact, accessibility
+Dynamic Type is active, actual container width is below 900 points, or width is
+non-finite. A finite width at or above 900 points remains wide. The decision is
+platform-independent, so narrow macOS detail windows and iPadOS windows do not
+depend on an iPhone-only conditional before they can become one column.
+
+`LibraryDashboardView` reads actual `GeometryReader` width and renders host,
+catalog, pairing, and launch panels in one `LazyVStack` for compact layout or
+the existing two-column grid for wide layout. Host actions, pairing PIN and
+progress actions, and the Apps header use `ViewThatFits` with intrinsic-width
+horizontal commands and a vertical fallback. The fallback preserves visible
+text and command reachability instead of shrinking labels, hiding actions, or
+introducing a primary horizontal scroll region.
+
+Fresh deterministic evidence is `2/2` focused layout/source tests and a final
+serial `240/240` related workflow/runtime matrix. The first parallel related
+run produced two timing failures unrelated to the layout diff; both passed
+individually in fresh serial runs, and the complete fresh serial matrix passed.
+The independent serial normal suite is `1257 total / 1256 passed / 1 skipped /
+0 failed`; the sole skip remains the explicitly disabled real-Keychain round
+trip, ordinary tests use the JSON file identity fallback, and both real opt-ins
+are unset. Unsigned generic Debug builds for macOS universal (`x86_64 arm64`),
+iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured compiler,
+analyzer, or build warnings. No Simulator lifecycle was used.
+
+These receipts prove the pure layout threshold, source composition, related
+regression behavior, and platform compilation. They do not prove physical
+window resizing, Stage Manager, every longest localization, SwiftUI snapshot
+geometry, physical VoiceOver or Voice Control, signed installation, or live
+Sunshine. Those remain in tasks 5.3 through 5.6 and the later physical gate.
 
 ### Host library workspace migration
 
@@ -858,10 +895,11 @@ through the checked catalog membership API.
 
 These reducers and source contracts provide deterministic offline presentation
 coverage only. Task 5.1 now provides their typed localized accessibility
-descriptors. Narrow-window and accessibility Dynamic Type reflow,
-keyboard/focus policy, touch and reduced-motion behavior, tvOS/visionOS focus,
-the complete matrix, and physical assistive technology remain tasks 5.2 through
-5.6 and the later physical gate. Direct per-scene injection is complete for
+descriptors, and Task 5.2 provides actual-width and accessibility Dynamic Type
+dashboard/primary-command reflow. Keyboard/focus policy, touch and
+reduced-motion behavior, tvOS/visionOS focus, the complete matrix, and physical
+assistive technology remain tasks 5.3 through 5.6 and the later physical gate.
+Direct per-scene injection is complete for
 these surfaces; retained legacy workflow strings remain within the explicit
 tasks 6.1/6.2 migration boundary.
 

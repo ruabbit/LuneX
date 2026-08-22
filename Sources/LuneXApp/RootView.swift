@@ -423,33 +423,52 @@ private struct AddHostSheet: View {
 private struct LibraryDashboardView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let workspace: ProductWorkspaceReference
     let onAddHost: () -> Void
 
     var body: some View {
-        ScrollView {
-            #if os(iOS)
-            if horizontalSizeClass == .compact {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    HostLibraryPanel(
-                        workspace: workspace,
-                        selectedHostID: selectedHostBinding,
-                        onAddHost: onAddHost
-                    )
-                    AppCatalogPanel(workspace: workspace)
-                    PairingPanel(workspace: workspace)
-                    StreamLaunchPanel(workspace: workspace)
-                }
-                .padding(.horizontal)
-                .padding(.top)
-                .padding(.bottom, 96)
-            } else {
-                dashboardGrid
+        GeometryReader { geometry in
+            let layout = ProductLibraryDashboardLayout(
+                horizontalSizeClassIsCompact: horizontalSizeClass == .compact,
+                usesAccessibilityTextSize: dynamicTypeSize.isAccessibilitySize,
+                availableWidth: geometry.size.width
+            )
+            ScrollView {
+                dashboardContent(for: layout)
             }
-            #else
-            dashboardGrid
-            #endif
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    @ViewBuilder
+    private func dashboardContent(
+        for layout: ProductLibraryDashboardLayout
+    ) -> some View {
+        switch layout {
+        case .compact:
+            LazyVStack(alignment: .leading, spacing: 16) {
+                dashboardPanels
+            }
+            .padding()
+            #if os(iOS)
+            .padding(.bottom, 80)
+            #endif
+        case .wide:
+            dashboardGrid
+        }
+    }
+
+    @ViewBuilder
+    private var dashboardPanels: some View {
+        HostLibraryPanel(
+            workspace: workspace,
+            selectedHostID: selectedHostBinding,
+            onAddHost: onAddHost
+        )
+        AppCatalogPanel(workspace: workspace)
+        PairingPanel(workspace: workspace)
+        StreamLaunchPanel(workspace: workspace)
     }
 
     private var dashboardGrid: some View {
@@ -523,34 +542,14 @@ private struct HostLibraryPanel: View {
                     .frame(minHeight: 240)
                 }
 
-                HStack {
-                    Button(action: onAddHost) {
-                        Label("Add Host", systemImage: "plus")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        hostActionButtons(surface)
                     }
-                    .disabled(!surface.canAddHost)
-
-                    Button {
-                        Task {
-                            await appModel.loadHosts(in: workspace)
-                        }
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                    .fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 8) {
+                        hostActionButtons(surface)
                     }
-                    .disabled(!surface.canRefresh)
-
-                    Button {
-                        appModel.requestHostTrustReset(in: workspace)
-                    } label: {
-                        Label("Reset Trust", systemImage: "checkmark.shield")
-                    }
-                    .disabled(!surface.canResetTrust)
-
-                    Button(role: .destructive) {
-                        appModel.requestHostRemoval(in: workspace)
-                    } label: {
-                        Label("Remove", systemImage: "trash")
-                    }
-                    .disabled(!surface.canRemove)
                 }
 
                 if surface.content == .hosts,
@@ -596,6 +595,39 @@ private struct HostLibraryPanel: View {
                 Text(destructiveActionMessage(confirmation))
             }
         }
+    }
+
+    @ViewBuilder
+    private func hostActionButtons(
+        _ surface: ProductHostLibrarySurface
+    ) -> some View {
+        Button(action: onAddHost) {
+            Label("Add Host", systemImage: "plus")
+        }
+        .disabled(!surface.canAddHost)
+
+        Button {
+            Task {
+                await appModel.loadHosts(in: workspace)
+            }
+        } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .disabled(!surface.canRefresh)
+
+        Button {
+            appModel.requestHostTrustReset(in: workspace)
+        } label: {
+            Label("Reset Trust", systemImage: "checkmark.shield")
+        }
+        .disabled(!surface.canResetTrust)
+
+        Button(role: .destructive) {
+            appModel.requestHostRemoval(in: workspace)
+        } label: {
+            Label("Remove", systemImage: "trash")
+        }
+        .disabled(!surface.canRemove)
     }
 
     @ViewBuilder
@@ -830,27 +862,26 @@ private struct PairingPanel: View {
             Label("Enter the four-digit PIN shown by the host.", systemImage: "number.square")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            HStack {
-                TextField("PIN", text: pairingPINBinding(workspace: workspace))
-                    #if os(iOS)
-                    .keyboardType(.numberPad)
-                    #endif
-                    #if !os(tvOS)
-                    .textFieldStyle(.roundedBorder)
-                    #endif
-                    .frame(maxWidth: 120)
-
-                Button {
-                    Task {
-                        await appModel.submitPairingPIN(in: workspace)
-                    }
-                } label: {
-                    Label("Submit PIN", systemImage: "checkmark")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    pairingPINField(workspace: workspace, maxWidth: 120)
+                    submitPairingPINButton(
+                        workspace: workspace,
+                        enabled: surface.canSubmitPIN
+                    )
+                    cancelPairingButton(workspace: workspace)
+                        .disabled(!surface.canCancel)
                 }
-                .disabled(!surface.canSubmitPIN)
-
-                cancelPairingButton(workspace: workspace)
-                    .disabled(!surface.canCancel)
+                .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 8) {
+                    pairingPINField(workspace: workspace, maxWidth: .infinity)
+                    submitPairingPINButton(
+                        workspace: workspace,
+                        enabled: surface.canSubmitPIN
+                    )
+                    cancelPairingButton(workspace: workspace)
+                        .disabled(!surface.canCancel)
+                }
             }
             if let issue = surface.issue {
                 issueLabel(issue)
@@ -910,6 +941,34 @@ private struct PairingPanel: View {
         )
     }
 
+    private func pairingPINField(
+        workspace: ProductWorkspaceReference,
+        maxWidth: CGFloat
+    ) -> some View {
+        TextField("PIN", text: pairingPINBinding(workspace: workspace))
+            #if os(iOS)
+            .keyboardType(.numberPad)
+            #endif
+            #if !os(tvOS)
+            .textFieldStyle(.roundedBorder)
+            #endif
+            .frame(maxWidth: maxWidth)
+    }
+
+    private func submitPairingPINButton(
+        workspace: ProductWorkspaceReference,
+        enabled: Bool
+    ) -> some View {
+        Button {
+            Task {
+                await appModel.submitPairingPIN(in: workspace)
+            }
+        } label: {
+            Label("Submit PIN", systemImage: "checkmark")
+        }
+        .disabled(!enabled)
+    }
+
     private func startPairingButton(
         host: MoonlightHost,
         workspace: ProductWorkspaceReference
@@ -940,11 +999,20 @@ private struct PairingPanel: View {
         surface: ProductPairingSurface,
         workspace: ProductWorkspaceReference
     ) -> some View {
-        HStack(spacing: 12) {
-            ProgressView(title)
-                .controlSize(.small)
-            cancelPairingButton(workspace: workspace)
-                .disabled(!surface.canCancel)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                ProgressView(title)
+                    .controlSize(.small)
+                cancelPairingButton(workspace: workspace)
+                    .disabled(!surface.canCancel)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 8) {
+                ProgressView(title)
+                    .controlSize(.small)
+                cancelPairingButton(workspace: workspace)
+                    .disabled(!surface.canCancel)
+            }
         }
     }
 
@@ -975,17 +1043,17 @@ private struct AppCatalogPanel: View {
 
         Panel {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    PanelHeader(title: "Apps", systemImage: "square.grid.3x3")
-                    Spacer()
-                    Button {
-                        Task {
-                            await appModel.refreshAppsForSelectedHost(in: workspace)
-                        }
-                    } label: {
-                        Label("Refresh Apps", systemImage: "arrow.down.circle")
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        PanelHeader(title: "Apps", systemImage: "square.grid.3x3")
+                        Spacer()
+                        refreshAppsButton(surface)
                     }
-                    .disabled(!surface.canRefresh)
+                    .fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 8) {
+                        PanelHeader(title: "Apps", systemImage: "square.grid.3x3")
+                        refreshAppsButton(surface)
+                    }
                 }
 
                 if surface.showsApps {
@@ -1003,6 +1071,20 @@ private struct AppCatalogPanel: View {
                 }
             }
         }
+    }
+
+    private func refreshAppsButton(
+        _ surface: ProductAppCatalogSurface
+    ) -> some View {
+        Button {
+            Task {
+                await appModel.refreshAppsForSelectedHost(in: workspace)
+            }
+        } label: {
+            Label("Refresh Apps", systemImage: "arrow.down.circle")
+        }
+        .disabled(!surface.canRefresh)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder

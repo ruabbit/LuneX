@@ -3986,3 +3986,23 @@
 - 2026-08-22：19个明确`/private/tmp/LuneX-19-5_1-*`路径已逐项用绝对`find <exact> -depth -delete`清理，prefix零残留；未使用宽泛删除或触碰仓库cache。下一步cleanup后final diff/authority audit。
 - 2026-08-22：cleanup后authority复读发现runtime contract两处和roadmap一处仍把整个5.x列作later/pending；已精确改为5.1 typed semantic descriptor完成、5.2至5.6与physical gate仍pending。production/test不变，下一步完整只读final audit。
 - 2026-08-22：cleanup final audit通过最终12文件、846行semantic source、六类ID/surface、5新增/0删除/0 skip测试、privacy/destructive/eligibility、唯一5.1 checkbox、strict `27/48 next 5.2`、稳定project、零artifact/opt-in/process及`a2386ea`三方基线；准备精确stage、commit、push、fetch。
+- 2026-08-22：Task 5.1以`6a94c68 Define localized product semantics`提交推送，fetch/ls-remote确认三方SHA一致且工作树clean；OpenSpec `27/48 next 5.2`。启动5.2审计，确认dashboard仅iOS compact单列，macOS/iPad窄窗口与host/pairing/apps固定HStack是当前缺口；下一步production/test编辑。
+- 2026-08-22：5.2 production/test首轮完成；fresh macOS focused `/private/tmp/LuneX-19-5_2-focused.jmRbGA`通过pure layout与adaptive source合同`2/2`，structured build diagnostics全零。下一步related UI/runtime矩阵。
+- 2026-08-22：5.2首轮13类并行related `/private/tmp/LuneX-19-5_2-related.bWtX3d`结构化完成`240/238/0/2`且build diagnostics全零；两个时序失败分别为pairing `requestTimeout`和already-stopping状态仍为`streaming`。该轮不计最终验收，下一步分别从fresh evidence串行定向复验，禁止直接重复原并行命令。
+- 2026-08-22：两个首轮失败项在fresh独立DerivedData、禁用parallel testing下分别结构化`1/1`通过且build diagnostics全零，确认没有5.2 production路径回归证据；下一步完整13类related改为fresh串行运行。
+- 2026-08-22：fresh完整串行related `/private/tmp/LuneX-19-5_2-related-serial.CmIwbs`结构化通过`240/240`且build diagnostics全零，首轮并行失败已闭合。下一步独立fresh serial normal，Keychain/live-host opt-in保持unset。
+- 2026-08-22：fresh serial normal `/private/tmp/LuneX-19-5_2-normal.KP9sEP`结构化通过`1257/1256/1/0`且build diagnostics全零；唯一skip精确为真实Keychain opt-in测试，文件fallback继续。下一步四平台unsigned generic Debug，不操作Simulator lifecycle。
+- 2026-08-22：四平台unsigned generic Debug `/private/tmp/LuneX-19-5_2-platform-builds.ilPh0L`顺序通过`4/4`，四份structured diagnostics全零且macOS为`x86_64 arm64`；未操作Simulator。已同步5.2 OpenSpec design/spec、runtime contract、roadmap与planning边界，下一步generator双跑、strict与repository pre-gate。
+- 2026-08-22：generator前后双跑project SHA-256稳定为`4214a283...b04f`且工程零diff，OpenSpec strict valid；5.2仍为pre-mark `27/48 next 5.2`，下一步fresh repository pre-gate。
+- 2026-08-22：首个repository pre-gate包装器因JavaScript将shell `${name+x}`误作模板插值，在shell前`ReferenceError`退出且零子命令/副作用；已记录并将用无`${...}`环境检查从fresh目录完整重跑。
+- 2026-08-22：corrected repository gate前8组及final opt-in/process通过，但最后多文件`rg -c`计数被误作单整数而退出；未修改仓库或checkbox，本轮不计验收，下一轮改用汇总计数从fresh目录完整重跑。
+- 2026-08-22：fresh repository pre-gate `/private/tmp/LuneX-19-5_2-repository-pre-final-r2.d1gUM3`完整通过九组检查；现只勾选5.2，预期OpenSpec `28/48 next 5.3`，不重复test/build/generator或操作Simulator。
+- 2026-08-22：post-mark `/private/tmp/LuneX-19-5_2-final-state.eVCutC`只读通过strict、`28/48 next 5.3`、11文件scope、唯一5.2 checkbox、稳定project、retained evidence与disabled opt-ins；下一步精确清理5.2临时证据。
+- 2026-08-22：5.2 cleanup的25个绝对删除调用已执行，但helper变量`path`覆盖zsh PATH，末尾非绝对`find`验证失败；删除范围未扩张，下一步用绝对`/usr/bin/find`核对并只补清明确残留。
+- 2026-08-22：绝对`/usr/bin/find`确认全部25个5.2临时证据路径已清理且prefix零残留；未使用宽泛删除或触碰仓库cache。下一步cleanup后final diff/authority audit。
+- 2026-08-22：cleanup后UI合同复读发现Apps header首选HStack未固定整体intrinsic width，无法保证超长本地化文本触发vertical fallback；首个补丁因空hunk格式被原子拒绝，corrected补丁已补HStack fixedSize、强化精确source test并暂时取消5.2勾选。下一步从fresh证据重跑全部最终门。
+- 2026-08-22：修正后fresh `/private/tmp/LuneX-19-5_2-final-verification.h7O9Rb`再次通过focused `2/2`、serial related `240/240`、serial normal `1257/1256/1/0`与四平台generic Debug `4/4`，structured diagnostics全零、唯一Keychain skip、macOS universal。下一步generator/strict/repository pre-gate。
+- 2026-08-22：修正后generator/strict及最终repository pre-gate完整通过，包含Apps header整体fixedSize精确锚点与fresh `2/240/1257/4` evidence；现重新只勾选5.2，下一步只读post-mark。
+- 2026-08-22：修正后最终post-mark只读通过strict、`28/48 next 5.3`、11文件scope、唯一5.2 checkbox、stable project、disabled opt-ins与零进程；下一步清理single fresh evidence root。
+- 2026-08-22：修正后single fresh evidence root及path已逐项精确清理，5.2 prefix零残留且未触碰仓库cache；下一步cleanup final audit，通过后提交推送。
+- 2026-08-22：cleanup final audit通过最终11文件、adaptive/App header fallback、94新增/0删除测试行、authority、strict `28/48 next 5.3`、stable project、零artifact/opt-in/process及`6a94c68`三方基线；准备提交推送。

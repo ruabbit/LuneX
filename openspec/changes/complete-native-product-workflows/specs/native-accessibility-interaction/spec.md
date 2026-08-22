@@ -26,6 +26,10 @@ Workflow views SHALL support accessibility Dynamic Type, localized text expansio
 - **WHEN** the user selects an accessibility text size
 - **THEN** panels reflow into a readable vertical or adaptive layout and every primary action remains reachable
 
+#### Scenario: Narrow or invalid dashboard width
+- **WHEN** a macOS or iPadOS dashboard reports a finite width below the wide-layout threshold, a compact horizontal size class, or an invalid width
+- **THEN** host, catalog, pairing, and launch panels use one vertical composition and primary command groups fall back from horizontal to vertical without platform-specific assumptions
+
 ### Requirement: Keyboard and voice operation
 macOS and iPadOS workflows SHALL support predictable keyboard focus, default and cancel actions, and named Voice Control targets while preserving system-reserved shortcuts locally.
 

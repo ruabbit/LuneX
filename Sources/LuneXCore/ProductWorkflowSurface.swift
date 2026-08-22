@@ -21,6 +21,27 @@ enum ProductStreamWorkspaceLayout: Hashable, Sendable {
     }
 }
 
+enum ProductLibraryDashboardLayout: Hashable, Sendable {
+    case compact
+    case wide
+
+    static let wideMinimumWidth: CGFloat = 900
+
+    init(
+        horizontalSizeClassIsCompact: Bool,
+        usesAccessibilityTextSize: Bool,
+        availableWidth: CGFloat
+    ) {
+        let availableWidthIsCompact = !availableWidth.isFinite
+            || availableWidth < Self.wideMinimumWidth
+        self = horizontalSizeClassIsCompact
+            || usesAccessibilityTextSize
+            || availableWidthIsCompact
+            ? .compact
+            : .wide
+    }
+}
+
 enum ProductHostLibraryContentSurface: Equatable, Sendable {
     case loading
     case firstUse

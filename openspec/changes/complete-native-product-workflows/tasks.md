@@ -39,7 +39,7 @@
 ## 5. Accessibility And Adaptive Interaction
 
 - [x] 5.1 Define localized semantic descriptors for every host, pairing, catalog, stream, settings, and diagnostics state and action, including roles, values, eligibility, and destructive status.
-- [ ] 5.2 Replace fixed dashboard and compact control assumptions with adaptive layouts that remain nonoverlapping at accessibility Dynamic Type and narrow macOS/iPadOS window sizes.
+- [x] 5.2 Replace fixed dashboard and compact control assumptions with adaptive layouts that remain nonoverlapping at accessibility Dynamic Type and narrow macOS/iPadOS window sizes.
 - [ ] 5.3 Add predictable macOS/iPadOS keyboard focus, default/cancel actions, Voice Control names, and local handling for system-reserved shortcuts.
 - [ ] 5.4 Enforce native touch target sizing, text expansion, state communication independent of color, and reduced-motion transitions.
 - [ ] 5.5 Complete tvOS overlay focus order/restoration and visionOS reachability semantics from actual focus/input eligibility.

@@ -3484,3 +3484,28 @@
 - 5.1全部19个task-specific evidence路径已逐项精确清理且prefix零残留；后续final audit只复核已同步权威记录、最终diff和仓库状态，不再假设xcresult存在，也不重复行为门。
 - cleanup后authority复读发现runtime contract两处与roadmap一处仍把整个5.x写为later/pending；这是5.1完成后的文档时态漂移，不是实现缺口。修正后明确5.1 typed semantic descriptor已完成，5.2至5.6的view/layout/focus/touch/reduced-motion/platform matrix与physical gate继续pending。
 - cleanup final audit通过12文件scope、846行独立semantic source、六类ID/surface、test `5 add / 0 delete / 0 skip`、privacy/destructive/eligibility、唯一5.1 checkbox、strict `27/48 next 5.2`、stable project、零artifact/opt-in/process与`a2386ea`三方基线；5.1可作为独立提交。
+
+### Stage 19 Task 5.2 adaptive workflow layout audit (2026-08-22)
+
+- Task 5.1已提交推送为`6a94c68`且三方SHA一致。5.2当前缺口不是stream overlay或Settings，它们已分别用actual width + Dynamic Type和`ViewThatFits`回退；缺口是Library dashboard仍只对iOS compact size class单列，macOS窄detail与未切换size class的iPad窗口会继续两列。
+- 固定控制假设包括Host panel四按钮同一`HStack`、pairing PIN/Submit/Cancel同一`HStack`、pairing progress/Cancel同一`HStack`及Apps header/Refresh同一`HStack`。这些在accessibility字号或最长本地化文本下可能压缩/重叠，应使用horizontal-first/vertical-fallback而不是硬编码隐藏或缩小字体。
+- 5.2应建立pure `ProductLibraryDashboardLayout`，由actual finite width、horizontal compact和accessibility Dynamic Type共同选择compact/wide；无效宽度fail closed为compact。物理窗口resize、真实VoiceOver与完整longest-localization matrix仍属于5.6/7.7证明层级。
+- 首轮实现让Library dashboard在所有平台消费`GeometryReader` actual width、size class与accessibility Dynamic Type；compact单列不再受`#if os(iOS)`限制。Host actions、pairing PIN/progress与Apps header使用`ViewThatFits`，horizontal commands保持intrinsic width以可靠触发vertical fallback。fresh focused `2/2`且build diagnostics全零。
+- 首轮13类related并行矩阵完整执行`240`项而非编译或result bundle损坏：structured summary为`238 passed / 2 failed`、build diagnostics全零。失败文本分别是pairing authenticated trust测试的`requestTimeout`和already-stopping close测试预期`stopping`却观察到`streaming`；两者都没有对应5.2 production diff，需先单项串行验证是否为并行资源/调度干扰，失败bundle不能作为最终回归证据。
+- 两项失败在独立fresh DerivedData并禁用parallel testing后都结构化`1/1`通过、build diagnostics全零；pairing耗时从3.365秒降至0.009秒，already-stopping close从4.402秒降至0.015秒。没有production回归证据，首轮失败归因于大矩阵并行调度/共享机器资源干扰；最终related必须整体串行运行，不能以两个单项通过替代矩阵证据。
+- 相同13类related的fresh完整串行矩阵最终`240/240`通过且structured build diagnostics全零，闭合首轮并行失败；后续5.x含时序敏感AppModel/pairing类的扩大矩阵应优先串行，避免把机器调度压力误报为production回归。
+- 两项新增5.2 layout/source tests使normal从5.1的1255增长到1257；fresh serial结果为`1257/1256/1/0`且build diagnostics全零。唯一skip仍是显式真实Keychain round-trip，证明普通验证没有重新触发Keychain授权并继续使用JSON文件identity fallback。
+- 5.2最终四平台unsigned generic Debug顺序`4/4`通过，每份structured build result均`succeeded/0/0/0`，macOS实际可执行文件为`x86_64 arm64`。只使用generic destination且未操作Simulator；该证据不等同于真实resize/Stage Manager、signed/physical accessibility或live-host行为。
+- 5.2不增加工程成员；generator前、第一次与第二次生成后`project.pbxproj` SHA-256均稳定为`4214a283c9e353456098dba5504f2cef3cf7cabd78ff2d4c51a2d34060b2f04f`且工程零diff，OpenSpec strict validation通过。checkbox仍需等待repository pre-gate。
+- functions JavaScript模板中的shell `${name+x}`仍会被宿主JavaScript先解析；5.2首个repository gate因此在shell前`ReferenceError`，所有子命令均未执行。corrected gate必须从fresh目录完整运行，并用`env | rg`检查两个opt-in unset。
+- corrected repository gate的前8组与第9组opt-in/process均通过，但多文件`rg -c`返回`filename:count`，不能直接参与整数比较。该轮只产生read-only证据与fetch，不改变源码/任务；最终门需改为`awk -F:`汇总后从fresh目录完整重跑。
+- fresh repository pre-gate最终完整通过三方remote、10文件scope、pure layout/RootView/tests/authority、OpenSpec pre-mark、stable project、`2/240/1257/4` retained evidence、唯一Keychain skip、disabled opt-ins、零进程与diff边界；因此5.2可以单独勾选，5.3以后仍不得提前完成或archive。
+- post-mark只读确认5.2唯一checkbox把OpenSpec推进到`28/48 next 5.3`，最终11文件与全部retained evidence/safety边界一致；行为门无需为记录更新重复。整个change仍有20项，禁止archive。
+- zsh的`path`变量与`PATH`绑定；cleanup helper使用该名称会让后续非绝对命令不可解析。本轮25个删除动作本身都使用绝对`/usr/bin/find`并已逐项调用，只有末尾零残留验证失败；后续helper必须使用`target_path`并保持验证命令绝对路径。
+- 绝对路径只读复核确认全部25个5.2 task-specific evidence路径已删除且prefix零残留；后续final audit只依赖仓库中同步的稳定计数、合同与proof boundary，不再假设raw xcresult存在。
+- cleanup后逐段复读发现Apps header的Refresh按钮虽为fixed size，但包住header/Spacer/button的首选`HStack`不是intrinsic width；`ViewThatFits`可能接受被压缩或换行的第一候选而不选vertical fallback。合同要求命令组可靠reflow，因此已固定整个首选HStack并以精确source test防回归；5.2回到pre-mark并重做最终行为门。首个补丁仅因格式被原子拒绝，没有部分修改。
+- 修正后的single fresh evidence root再次闭合`2/240/1257/4`全部行为门，所有structured diagnostics全零、唯一skip精确为真实Keychain opt-in且macOS universal；因此新增Apps HStack约束没有破坏其他workflow/runtime或任何平台编译。
+- 最终repository gate对Apps header执行精确multiline结构检查，确认PanelHeader/Spacer/Refresh首选HStack之后立即应用整体fixedSize，再进入vertical VStack fallback；同时九组门完整通过，因此5.2可以重新勾选，5.3及以后保持pending。
+- 修正后最终post-mark再次确认5.2唯一checkbox与OpenSpec `28/48 next 5.3`，没有为记录更新重复任何行为门；最终候选是single fresh root验证的代码，不复用cleanup前旧证据。
+- 修正后single fresh evidence root与path已精确清理，5.2 prefix零残留；最终审计只复核仓库内计数/合同、源码结构、OpenSpec与三方基线，不再假设任何raw result bundle存在。
+- cleanup final audit确认最终实现与authority一致：dashboard由actual width/size class/accessibility text选择布局，四组固定命令区可vertical fallback，Apps header整体HStack具有intrinsic width锚点；OpenSpec为`28/48 next 5.3`且change不可archive。最终11文件可独立提交。
