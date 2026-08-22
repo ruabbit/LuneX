@@ -30,7 +30,7 @@
 ## 4. Native Multiwindow Workspaces
 
 - [x] 4.1 Add scene/workspace creation and restoration wiring for macOS and iPadOS while retaining a single checked workspace on unsupported configurations.
-- [ ] 4.2 Migrate navigation selection, selected host, sheets, dialogs, validation, retry state, and overlay presentation to workspace-local bindings.
+- [x] 4.2 Migrate navigation selection, selected host, sheets, dialogs, validation, retry state, and overlay presentation to workspace-local bindings.
 - [ ] 4.3 Reconcile shared host, trust, catalog, and settings repository mutations into every live workspace without transferring session ownership.
 - [ ] 4.4 Implement and test the owning-window close policy for inactive, launching, streaming, reconnecting, replaced, and already-stopping sessions.
 - [ ] 4.5 Hide unsupported window commands on tvOS/visionOS and preserve typed single-workspace ownership for platform focus/input adapters.

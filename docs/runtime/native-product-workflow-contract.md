@@ -200,9 +200,22 @@ SwiftUI `supportsMultipleWindows`. Unsupported runtime configurations ignore
 the serialized identity and use the one checked primary workspace. tvOS and
 visionOS keep the ordinary single-workspace `WindowGroup`. The iOS application
 manifest enables multiple scenes while retaining the existing background-audio
-mode. `RootView` receives the scene workspace for top-level Add Host, stream,
-Disconnect, and stop-confirmation commands; complete navigation, selection,
-sheet, dialog, validation, retry, and child-surface bindings remain task 4.2.
+mode. `RootView` receives the scene workspace and passes it through navigation,
+LibraryDashboard, host, pairing, catalog, launch, stream, Disconnect, and
+stop-confirmation surfaces. It contains no fallback lookup of
+`primaryWorkspaceReference`.
+
+Navigation and host selection use checked workspace setters; host/app values
+are derived from the same reference. Add Host presentation is the workspace
+`ProductWorkspaceSheet.addHost` value rather than a view-local Boolean.
+Presenting resets only that workspace's draft/submission state, and dismissal
+is rejected while submission is active before clearing that workspace's sheet,
+draft, and result. Host destructive confirmation must agree with both the
+workspace-local destructive state and `presentation.dialog`. Existing manual
+validation, host/catalog retry, pairing, session issue, and stream overlay APIs
+are now reached through the scene reference instead of being rediscovered from
+the primary workspace. A stale generation returns `false` or an empty derived
+value without mutating a current workspace.
 
 Fresh deterministic evidence is `8/8` focused scene/coordinator/application
 contracts and `160/160` related workspace/workflow tests. The serial normal
@@ -215,12 +228,27 @@ support and background audio. These receipts do not prove actual macOS window
 restoration, iPad Stage Manager, signed/physical interaction, window-close
 policy, assistive technology, or live Sunshine behavior.
 
+Task 4.2 deterministic evidence is `5/5` focused binding/source contracts and
+`161/161` final related workspace/workflow tests. The independent serial normal
+suite is `1234 total / 1233 passed / 1 skipped / 0 failed`; the only skip remains
+the explicitly disabled real-Keychain round trip, and ordinary testing continues
+through the JSON file identity fallback. Unsigned generic Debug builds for macOS
+universal, iOS/iPadOS, tvOS, and visionOS pass `4/4`, each with zero structured
+compiler, analyzer, or build warnings. The first related run had one stale source
+assertion and one existing visionOS application wait timeout; the source contract
+was corrected, both tests passed targeted remediation, and the fresh final related
+matrix passed in full. This proves offline checked binding behavior, not actual
+simultaneous native windows, Stage Manager interaction, shared repository mutation
+reconciliation, owning-window close policy, signed/physical behavior, or live
+Sunshine streaming.
+
 ### Host library workspace migration
 
 `AppModel` now creates one checked primary workspace in the process registry.
 Its legacy `navigationSelection` and `selectedHostID` APIs are computed
 projections of that workspace so existing single-window views and application
-tests remain compatible while direct scene bindings are migrated later. Host
+tests remain compatible. Native scene views use the explicit checked workspace
+getters and setters described above rather than those projections. Host
 selection changes clear only that workspace's selected app. Replacing the
 primary generation deliberately makes the legacy projection stale; it does not
 silently rebind or transfer ownership to the replacement.
@@ -256,13 +284,13 @@ stored address exactly matches the normalized submission and clears the draft;
 an unexpected result without that address fails instead of selecting an
 unrelated host.
 
-Opening or cancelling the current compatibility sheet clears only the primary
-workspace draft. Root presentation is still the existing Boolean SwiftUI sheet
-bound to `primaryWorkspaceReference`; direct per-scene sheet ownership remains
-task 4.2. Multiwindow and active-session owner wiring remain tasks 4.x and 3.x
-respectively. Deterministic tests and unsigned generic builds do not prove
-Simulator interaction, signed artifacts, physical devices, or live Sunshine
-behavior.
+Opening or cancelling Add Host clears only the initiating workspace draft and
+submission result. Root presentation is driven by that checked workspace's
+`ProductWorkspaceSheet.addHost`; submission in progress rejects dismissal, and
+success or an admitted cancel clears only the same workspace. Shared repository
+reconciliation and owning-window close policy remain tasks 4.3 and 4.4.
+Deterministic tests and unsigned generic builds do not prove Simulator
+interaction, signed artifacts, physical devices, or live Sunshine behavior.
 
 ### Catalog workspace and selected-host generation
 
@@ -293,11 +321,11 @@ replacement. Selection is admitted only when the requested app belongs to the
 current owner's host catalog; the compatibility `selectedAppID` projection is
 read-only so callers cannot bypass that check.
 
-The Apps panel reads the primary compatibility workspace catalog, invokes
+The Apps panel consumes its scene's checked workspace catalog, invokes
 workspace-scoped refresh and selection, distinguishes saved/current/empty/
 loading/failure presentation, and keeps cached tiles visible on refresh
-failure. Direct scene-specific catalog bindings remain part of the broader
-multiwindow migration in task 4.2. Pairing ownership is recorded below.
+failure. Its selected host, app list, and selected app all derive from the same
+workspace reference. Pairing ownership is recorded below.
 
 ### Pairing workspace, host, and attempt generation
 
@@ -337,11 +365,11 @@ historical owner, while cancellation intentionally has no action. Successful
 completion updates the shared authenticated host record and only the initiating
 workspace's pairing presentation.
 
-`PairingPanel` currently uses the checked primary compatibility workspace for
-PIN, submit, cancel, retry, progress, and typed failure presentation. Direct
-scene-specific panel injection remains part of task 4.2. The retained progress
-messages and other legacy workflow strings are removed or mapped in tasks 6.1
-and 6.2; task 2.4 does not claim that later privacy migration is complete.
+`PairingPanel` consumes the scene's checked workspace for selected host, PIN,
+submit, cancel, retry, progress, and typed failure presentation. The retained
+progress messages and other legacy workflow strings are removed or mapped in
+tasks 6.1 and 6.2; task 2.4 does not claim that later privacy migration is
+complete.
 
 ### Confirmed host removal and trust reset
 
@@ -391,8 +419,8 @@ partially committed repository state; this task does not claim atomicity.
 The SwiftUI host panel requests confirmation rather than calling immediate
 mutation. Its labels distinguish remove/reset from stop-and-remove/
 stop-and-reset, disables duplicate performing actions, and exposes typed retry
-presentation. The panel still uses the primary compatibility workspace; full
-per-scene injection remains task 4.2.
+presentation. The panel consumes its scene workspace, and confirmation is shown
+only when the typed destructive state agrees with that workspace's dialog.
 The destructive path uses the checked product session owner described below;
 full owning-window close policy remains task 4.4.
 
@@ -640,9 +668,9 @@ through the checked catalog membership API.
 These reducers and source contracts provide deterministic offline presentation
 coverage only. Full localization/accessibility descriptors, narrow-window and
 accessibility Dynamic Type reflow, keyboard/focus policy, physical assistive
-technology, and direct per-scene injection remain tasks 5.x and 4.2. Retained
-legacy workflow strings remain within the explicit tasks 6.1/6.2 migration
-boundary.
+technology remain tasks 5.x. Direct per-scene injection is complete for these
+surfaces; retained legacy workflow strings remain within the explicit tasks
+6.1/6.2 migration boundary.
 
 ### Host workflow application matrix
 

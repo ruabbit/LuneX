@@ -3382,3 +3382,17 @@
 - 续接时`create_goal`仍因旧goal同时呈现`blocked`与“unfinished”而拒绝；这是控制面跟踪矛盾，不是LuneX/OpenSpec blocker。当前执行状态继续以`20/48 next 4.1`和仓库planning记录为准。
 - Fresh repository pre-gate完整通过4.1的scope/source/Info/test/authority/OpenSpec/generator/retained evidence/opt-in/diff门，唯一失败轮仅是零命中计数编排错误。4.1可以勾选；4.2完整per-scene UI bindings仍是下一独立实现边界。
 - Final diff audit确认4.1没有暗中实现owning-window close或session transfer；`RootView`顶层已接scene workspace，但`navigationSelection`、host selection及host/catalog/pairing panels仍显式走primary compatibility projection，正是4.2的下一范围。新增7项测试均为直接行为/source contract，无删除或skip绕过。
+
+### Stage 19 Task 4.2 workspace-local binding audit (2026-08-22)
+
+- `RootView`的`workspace`目前只覆盖top-level Add Host draft、stream view与stop confirmation；`NavigationSplitView`/`TabView`仍绑定`appModel.navigationSelection`，LibraryDashboard仍绑定`appModel.selectedHostID`。
+- `HostLibraryPanel`、`PairingPanel`、`AppCatalogPanel`与`StreamLaunchPanel`各自在body重新取`primaryWorkspaceReference`，并使用primary-derived `selectedHost`、`selectedApps`、`selectedAppID`或`selectedApp`，所以4.1创建的第二scene仍会呈现首scene的host/catalog/pairing/launch状态。
+- Add Host使用RootView局部`@State Bool`而不是已有`ProductWorkspacePresentationState.sheet`；host destructive request虽写workspace dialog，但SwiftUI confirmation getter/cancel仍回到primary。manual validation、retry、pairing、catalog和overlay底层API本身已接workspace，问题主要是view injection。
+- 4.2最小正确实现是提供checked workspace navigation/host selection与selected-value APIs，sheet present/dismiss API和`loadInitialState(in:)`；所有RootView workflow child显式接收同一reference。4.3 shared mutation reconcile、4.4 close policy与4.6完整two-workspace矩阵不在本项提前实现。
+- 最终实现保留legacy `navigationSelection`、`selectedHostID`、`selectedAppID`、`selectedHost`、`selectedApps`、`selectedApp`与无参`loadInitialState()`作为primary compatibility projection，但RootView及其workflow panels不再读取`primaryWorkspaceReference`。这既保持单窗口调用者兼容，也确保native scene路径不会暗中跨窗口。
+- Add Host sheet必须同时满足presentation ownership和提交原子性：scene-local sheet值打开时只重置该workspace draft/result；提交进行中dismiss fail closed；成功、Cancel或interactive disappear最终只清理同一workspace。host destructive confirmation也必须让typed destructive confirmation与`presentation.dialog`完全一致，避免另一workspace状态驱动当前窗口dialog。
+- 4.2最终离线证据闭合为focused `5/5`、related `161/161`、normal `1234/1233/1/0`和四平台generic Debug `4/4`，所有structured build diagnostics全零且macOS universal。它不替代4.3 shared repository mutation reconcile、4.4 owning-window close、4.6完整two-workspace application matrix或真实macOS/iPadOS窗口交互证明。
+- Fresh repository pre-gate以pre-mark `21/48 next 4.2`完整复读当前源码和retained xcresult，没有依赖首轮失败矩阵作为验收：最终related必须独立为`161/161`，targeted `2/2`只证明陈旧断言修正与visionOS timeout可恢复。4.2可勾选，下一实现边界为4.3 shared repository mutation reconciliation，仍禁止隐式session ownership transfer。
+- Post-mark最终权威为`22/48 next 4.3`。两次final-state失败都发生在Git unified-diff checkbox索引且位于OpenSpec/status/scope通过之后；第三次使用已从实际diff验证的`-- [ ]`/`+- [x]`前缀通过，未重跑production验证，因此不改变4.2产品证据口径。
+- Final authority audit不能只搜索新增4.2段落：既有host/catalog/pairing/surface章节仍可能保留旧的primary/pending描述。本次发现并修正5处runtime contract与一处design时态；完成后的合同明确RootView scene路径使用explicit workspace，compatibility projection只供旧单窗口调用者，shared mutation/close/accessibility/privacy仍分别属于4.3/4.4/5.x/6.x。
+- 最终代码/合同审读没有发现需要扩大4.2范围的问题：checked setter对stale reference返回false，derived getter返回空值；Add Host dismiss在submission active时拒绝；host confirmation要求destructive/dialog一致；overlay仍只有既有session owner。完整shared mutation broadcast和窗口close策略必须留给4.3/4.4，不能借4.2兼容projection推断已完成。

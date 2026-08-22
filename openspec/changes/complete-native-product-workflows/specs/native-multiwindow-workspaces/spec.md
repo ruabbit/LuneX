@@ -41,6 +41,14 @@ Transient presentation state including sheets, confirmation dialogs, navigation 
 - **WHEN** one window selects another host
 - **THEN** another window's selected host and visible catalog remain unchanged
 
+#### Scenario: Scene-local workflow binding
+- **WHEN** a supported scene changes navigation, presents Add Host, validates input, retries a workflow, or opens a confirmation dialog
+- **THEN** the action reads and mutates only that scene's checked workspace presentation and selection state
+
+#### Scenario: Replaced scene binding
+- **WHEN** a view attempts to mutate navigation, selection, sheet, or dialog state through a replaced workspace generation
+- **THEN** the mutation fails closed without changing the replacement workspace or another live scene
+
 ### Requirement: Shared data consistency
 Host records, trust state, cached apps, and settings SHALL remain shared repository data, and repository mutations SHALL publish reconciled updates to every live workspace without copying session ownership.
 

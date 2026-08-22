@@ -288,7 +288,9 @@ final class ProductCatalogWorkspaceTests: XCTestCase {
         XCTAssertTrue(source.contains("appModel.catalogState(for: workspace)"))
         XCTAssertTrue(source.contains("refreshAppsForSelectedHost(in: workspace)"))
         XCTAssertTrue(source.contains("appModel.select(app: app, in: workspace)"))
-        XCTAssertTrue(source.contains("isSelected: appModel.selectedAppID == app.id"))
+        XCTAssertTrue(source.contains(
+            "isSelected: appModel.selectedAppID(in: workspace) == app.id"
+        ))
         XCTAssertTrue(source.contains("Text(issue.presentation.message)"))
         XCTAssertFalse(source.contains("appModel.appCatalogUI"))
         XCTAssertFalse(source.contains("appModel.streamLaunchUI.selectedAppID"))

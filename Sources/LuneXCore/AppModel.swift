@@ -173,34 +173,15 @@ final class AppModel: ApplicationInputSink {
         workspaceSceneCoordinator.primaryWorkspaceReference
     }
     var navigationSelection: AppNavigationSelection {
-        get {
-            workspaceRegistry.state(for: primaryWorkspaceReference)?
-                .navigationSelection ?? .library
-        }
-        set {
-            let oldValue = navigationSelection
-            guard oldValue != newValue else { return }
-            updatePrimaryWorkspace { $0.navigationSelection = newValue }
-            updateTVRemoteNavigationSelection()
-        }
+        get { navigationSelection(in: primaryWorkspaceReference) }
+        set { _ = setNavigationSelection(newValue, in: primaryWorkspaceReference) }
     }
     var selectedHostID: MoonlightHost.ID? {
-        get {
-            workspaceRegistry.state(for: primaryWorkspaceReference)?
-                .selectedHostID
-        }
-        set {
-            updatePrimaryWorkspace { state in
-                guard state.selectedHostID != newValue else { return }
-                state.selectedHostID = newValue
-                applyCachedCatalog(to: &state)
-            }
-            invalidateActivePairingIfOwnerStale()
-        }
+        get { selectedHostID(in: primaryWorkspaceReference) }
+        set { _ = setSelectedHostID(newValue, in: primaryWorkspaceReference) }
     }
     var selectedAppID: RemoteApp.ID? {
-        workspaceRegistry.state(for: primaryWorkspaceReference)?
-            .selectedAppID
+        selectedAppID(in: primaryWorkspaceReference)
     }
     var appsByHostID: [MoonlightHost.ID: [RemoteApp]] = [:]
     private var appCatalogUpdatedAtByHostID: [MoonlightHost.ID: Date] = [:]
@@ -770,8 +751,7 @@ final class AppModel: ApplicationInputSink {
     }
 
     var selectedHost: MoonlightHost? {
-        guard let selectedHostID else { return nil }
-        return hosts.first { $0.id == selectedHostID }
+        selectedHost(in: primaryWorkspaceReference)
     }
 
     var primaryWorkspaceState: ProductWorkspaceState? {
@@ -782,6 +762,133 @@ final class AppModel: ApplicationInputSink {
         for reference: ProductWorkspaceReference
     ) -> ProductWorkspaceState? {
         workspaceRegistry.state(for: reference)
+    }
+
+    func navigationSelection(
+        in workspace: ProductWorkspaceReference
+    ) -> AppNavigationSelection {
+        workspaceRegistry.state(for: workspace)?.navigationSelection ?? .library
+    }
+
+    @discardableResult
+    func setNavigationSelection(
+        _ selection: AppNavigationSelection,
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        guard let state = workspaceRegistry.state(for: workspace) else {
+            return false
+        }
+        guard state.navigationSelection != selection else { return true }
+        do {
+            try workspaceRegistry.update(workspace) {
+                $0.navigationSelection = selection
+            }
+        } catch {
+            return false
+        }
+        if workspace == primaryWorkspaceReference {
+            updateTVRemoteNavigationSelection()
+        }
+        return true
+    }
+
+    func selectedHostID(
+        in workspace: ProductWorkspaceReference
+    ) -> MoonlightHost.ID? {
+        workspaceRegistry.state(for: workspace)?.selectedHostID
+    }
+
+    @discardableResult
+    func setSelectedHostID(
+        _ hostID: MoonlightHost.ID?,
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        guard let state = workspaceRegistry.state(for: workspace) else {
+            return false
+        }
+        guard state.selectedHostID != hostID else { return true }
+        do {
+            try workspaceRegistry.update(workspace) { state in
+                state.selectedHostID = hostID
+                applyCachedCatalog(to: &state)
+            }
+        } catch {
+            return false
+        }
+        invalidateActivePairingIfOwnerStale()
+        return true
+    }
+
+    func selectedAppID(
+        in workspace: ProductWorkspaceReference
+    ) -> RemoteApp.ID? {
+        workspaceRegistry.state(for: workspace)?.selectedAppID
+    }
+
+    func selectedHost(
+        in workspace: ProductWorkspaceReference
+    ) -> MoonlightHost? {
+        guard let hostID = selectedHostID(in: workspace) else { return nil }
+        return hosts.first { $0.id == hostID }
+    }
+
+    func selectedApps(
+        in workspace: ProductWorkspaceReference
+    ) -> [RemoteApp] {
+        guard let hostID = selectedHostID(in: workspace) else { return [] }
+        return appsByHostID[hostID] ?? []
+    }
+
+    func selectedApp(
+        in workspace: ProductWorkspaceReference
+    ) -> RemoteApp? {
+        let apps = selectedApps(in: workspace)
+        let appID = selectedAppID(in: workspace)
+        return apps.first { $0.id == appID } ?? apps.first
+    }
+
+    func workspaceSheet(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductWorkspaceSheet? {
+        workspaceRegistry.state(for: workspace)?.presentation.sheet
+    }
+
+    @discardableResult
+    func presentAddHostSheet(
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        do {
+            try workspaceRegistry.update(workspace) { state in
+                state.hostLibrary.manualHostDraft = ManualHostDraft()
+                state.hostLibrary.manualHostSubmission = .idle
+                state.presentation.sheet = .addHost
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    func dismissAddHostSheet(
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        guard let state = workspaceRegistry.state(for: workspace),
+              state.presentation.sheet == .addHost,
+              !state.hostLibrary.manualHostSubmission.isSubmitting else {
+            return false
+        }
+        do {
+            try workspaceRegistry.update(workspace) { current in
+                guard current.presentation.sheet == .addHost else { return }
+                current.presentation.sheet = nil
+                current.hostLibrary.manualHostDraft = ManualHostDraft()
+                current.hostLibrary.manualHostSubmission = .idle
+            }
+            return true
+        } catch {
+            return false
+        }
     }
 
     func connectProductWorkspaceScene(
@@ -942,21 +1049,6 @@ final class AppModel: ApplicationInputSink {
         workspaceState(for: reference)?.hostLibrary.destructiveAction
     }
 
-    private func updatePrimaryWorkspace(
-        _ mutation: (inout ProductWorkspaceState) -> Void
-    ) {
-        do {
-            try workspaceRegistry.update(primaryWorkspaceReference, mutation)
-        } catch {
-            diagnostics.record(
-                "The current window state could not be updated.",
-                subsystem: "workspace",
-                severity: .error,
-                code: "workspace_primary_update_failed"
-            )
-        }
-    }
-
     private func reconcileWorkspaceSelections() {
         workspaceRegistry.reconcile(
             availableHostIDs: hosts.map(\.id),
@@ -1112,12 +1204,11 @@ final class AppModel: ApplicationInputSink {
     }
 
     var selectedApps: [RemoteApp] {
-        guard let hostID = selectedHostID else { return [] }
-        return appsByHostID[hostID] ?? []
+        selectedApps(in: primaryWorkspaceReference)
     }
 
     var selectedApp: RemoteApp? {
-        selectedApps.first { $0.id == selectedAppID } ?? selectedApps.first
+        selectedApp(in: primaryWorkspaceReference)
     }
 
     var spatialAudioPreferences: SessionSpatialAudioPreferences {
@@ -1332,10 +1423,17 @@ final class AppModel: ApplicationInputSink {
     }
 
     func loadInitialState() async {
+        await loadInitialState(in: primaryWorkspaceReference)
+    }
+
+    func loadInitialState(
+        in workspace: ProductWorkspaceReference
+    ) async {
+        guard workspaceRegistry.state(for: workspace) != nil else { return }
         await loadClientIdentity()
         await loadSettings()
-        await loadHosts()
-        await loadCachedApps()
+        await loadHosts(in: workspace)
+        await loadCachedApps(in: workspace)
     }
 
     func loadClientIdentity() async {

@@ -4,15 +4,14 @@ struct RootView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let workspace: ProductWorkspaceReference
-    @State private var isShowingAddHost = false
     #if os(macOS)
     @State private var platformLifecycle = PlatformLifecycleState()
     #endif
 
     var body: some View {
         platformRoot
-            .task {
-                await appModel.loadInitialState()
+            .task(id: workspace) {
+                await appModel.loadInitialState(in: workspace)
             }
             .confirmationDialog(
                 "Disconnect Stream?",
@@ -32,7 +31,7 @@ struct RootView: View {
             } message: {
                 Text("Remote input and media playback will stop on this device.")
             }
-            .sheet(isPresented: $isShowingAddHost) {
+            .sheet(isPresented: addHostSheetPresented) {
                 AddHostSheet(workspace: workspace)
             }
     }
@@ -67,10 +66,8 @@ struct RootView: View {
     }
 
     private var splitNavigation: some View {
-        @Bindable var appModel = appModel
-
-        return NavigationSplitView {
-            SidebarNavigationList(selection: $appModel.navigationSelection)
+        NavigationSplitView {
+            SidebarNavigationList(selection: navigationSelectionBinding)
                 .navigationTitle("LuneX")
                 #if os(macOS)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
@@ -101,11 +98,12 @@ struct RootView: View {
 
     #if os(iOS)
     private var compactNavigation: some View {
-        @Bindable var appModel = appModel
-
-        return TabView(selection: $appModel.navigationSelection) {
+        TabView(selection: navigationSelectionBinding) {
             NavigationStack {
-                LibraryDashboardView(onAddHost: presentAddHost)
+                LibraryDashboardView(
+                    workspace: workspace,
+                    onAddHost: presentAddHost
+                )
                     .navigationTitle("Library")
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
@@ -168,9 +166,12 @@ struct RootView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch appModel.navigationSelection {
+        switch appModel.navigationSelection(in: workspace) {
         case .library:
-            LibraryDashboardView(onAddHost: presentAddHost)
+            LibraryDashboardView(
+                workspace: workspace,
+                onAddHost: presentAddHost
+            )
         case .stream:
             #if os(macOS)
             StreamWorkspaceView(
@@ -190,7 +191,7 @@ struct RootView: View {
     }
 
     private var title: String {
-        switch appModel.navigationSelection {
+        switch appModel.navigationSelection(in: workspace) {
         case .library: "Library"
         case .stream: "Stream"
         case .diagnostics: "Diagnostics"
@@ -199,11 +200,27 @@ struct RootView: View {
     }
 
     private func presentAddHost() {
-        appModel.setManualHostDraft(
-            ManualHostDraft(),
-            in: workspace
+        _ = appModel.presentAddHostSheet(in: workspace)
+    }
+
+    private var navigationSelectionBinding: Binding<AppNavigationSelection> {
+        Binding(
+            get: { appModel.navigationSelection(in: workspace) },
+            set: { selection in
+                _ = appModel.setNavigationSelection(selection, in: workspace)
+            }
         )
-        isShowingAddHost = true
+    }
+
+    private var addHostSheetPresented: Binding<Bool> {
+        Binding(
+            get: { appModel.workspaceSheet(in: workspace) == .addHost },
+            set: { isPresented in
+                if !isPresented {
+                    _ = appModel.dismissAddHostSheet(in: workspace)
+                }
+            }
+        )
     }
 
     private var stopStreamConfirmationBinding: Binding<Bool> {
@@ -326,8 +343,7 @@ private struct AddHostSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        clearDraft()
-                        dismiss()
+                        dismissSheet()
                     }
                     .disabled(isSubmitting)
                 }
@@ -336,7 +352,7 @@ private struct AddHostSheet: View {
                         Task {
                             let result = await appModel.addManualHost(in: workspace)
                             if result.shouldDismissSheet {
-                                dismiss()
+                                dismissSheet()
                             } else if result.fieldIssue != nil {
                                 focusedField = .address
                             }
@@ -348,7 +364,7 @@ private struct AddHostSheet: View {
             .interactiveDismissDisabled(isSubmitting)
             .onDisappear {
                 guard !isSubmitting else { return }
-                clearDraft()
+                _ = appModel.dismissAddHostSheet(in: workspace)
             }
             #if os(macOS)
             .frame(
@@ -398,74 +414,85 @@ private struct AddHostSheet: View {
         )
     }
 
-    private func clearDraft() {
-        appModel.setManualHostDraft(ManualHostDraft(), in: workspace)
+    private func dismissSheet() {
+        guard appModel.dismissAddHostSheet(in: workspace) else { return }
+        dismiss()
     }
 }
 
 private struct LibraryDashboardView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let workspace: ProductWorkspaceReference
     let onAddHost: () -> Void
 
     var body: some View {
-        @Bindable var appModel = appModel
-
         ScrollView {
             #if os(iOS)
             if horizontalSizeClass == .compact {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     HostLibraryPanel(
-                        selectedHostID: $appModel.selectedHostID,
+                        workspace: workspace,
+                        selectedHostID: selectedHostBinding,
                         onAddHost: onAddHost
                     )
-                    AppCatalogPanel()
-                    PairingPanel()
-                    StreamLaunchPanel()
+                    AppCatalogPanel(workspace: workspace)
+                    PairingPanel(workspace: workspace)
+                    StreamLaunchPanel(workspace: workspace)
                 }
                 .padding(.horizontal)
                 .padding(.top)
                 .padding(.bottom, 96)
             } else {
-                dashboardGrid(selectedHostID: $appModel.selectedHostID)
+                dashboardGrid
             }
             #else
-            dashboardGrid(selectedHostID: $appModel.selectedHostID)
+            dashboardGrid
             #endif
         }
     }
 
-    private func dashboardGrid(selectedHostID: Binding<MoonlightHost.ID?>) -> some View {
+    private var dashboardGrid: some View {
         Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
             GridRow {
                 HostLibraryPanel(
-                    selectedHostID: selectedHostID,
+                    workspace: workspace,
+                    selectedHostID: selectedHostBinding,
                     onAddHost: onAddHost
                 )
-                AppCatalogPanel()
+                AppCatalogPanel(workspace: workspace)
             }
             GridRow {
-                PairingPanel()
-                StreamLaunchPanel()
+                PairingPanel(workspace: workspace)
+                StreamLaunchPanel(workspace: workspace)
             }
         }
         .padding()
+    }
+
+    private var selectedHostBinding: Binding<MoonlightHost.ID?> {
+        Binding(
+            get: { appModel.selectedHostID(in: workspace) },
+            set: { hostID in
+                _ = appModel.setSelectedHostID(hostID, in: workspace)
+            }
+        )
     }
 }
 
 private struct HostLibraryPanel: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
     @Binding var selectedHostID: MoonlightHost.ID?
     let onAddHost: () -> Void
 
     var body: some View {
-        let workspace = appModel.primaryWorkspaceReference
         let library = appModel.workspaceState(for: workspace)?.hostLibrary
             ?? ProductHostLibraryWorkspaceState()
         let surface = ProductHostLibrarySurface(
             library: library,
             hostCount: appModel.hosts.count,
-            selectedHost: appModel.selectedHost
+            selectedHost: appModel.selectedHost(in: workspace)
         )
 
         Panel {
@@ -587,7 +614,7 @@ private struct HostLibraryPanel: View {
                     Button {
                         Task {
                             await appModel.retryHostLibraryLoad(
-                                in: appModel.primaryWorkspaceReference
+                                in: workspace
                             )
                         }
                     } label: {
@@ -651,8 +678,18 @@ private struct HostLibraryPanel: View {
     private var currentHostConfirmation: ProductHostDestructiveConfirmation? {
         guard case let .awaitingConfirmation(confirmation) =
             appModel.hostDestructiveState(
-                for: appModel.primaryWorkspaceReference
+                for: workspace
             ) else { return nil }
+        guard let state = appModel.workspaceState(for: workspace) else {
+            return nil
+        }
+        switch state.presentation.dialog {
+        case let .removeHost(dialogConfirmation),
+             let .resetHostTrust(dialogConfirmation):
+            guard dialogConfirmation == confirmation else { return nil }
+        case .stopStream, nil:
+            return nil
+        }
         return confirmation
     }
 
@@ -662,10 +699,10 @@ private struct HostLibraryPanel: View {
             set: { isPresented in
                 guard !isPresented,
                       appModel.hostDestructiveState(
-                        for: appModel.primaryWorkspaceReference
+                        for: workspace
                       )?.isPerforming != true else { return }
                 appModel.cancelHostDestructiveAction(
-                    in: appModel.primaryWorkspaceReference
+                    in: workspace
                 )
             }
         )
@@ -732,12 +769,13 @@ private struct HostRow: View {
 
 private struct PairingPanel: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
 
     var body: some View {
-        let workspace = appModel.primaryWorkspaceReference
+        let selectedHost = appModel.selectedHost(in: workspace)
         let pairing = appModel.pairingState(for: workspace) ?? PairingUIState()
         let surface = ProductPairingSurface(
-            selectedHost: appModel.selectedHost,
+            selectedHost: selectedHost,
             pairing: pairing,
             transportAvailable: appModel.isPairingTransportAvailable,
             isPINValid: appModel.isPairingPINValid(in: workspace)
@@ -747,7 +785,7 @@ private struct PairingPanel: View {
             VStack(alignment: .leading, spacing: 12) {
                 PanelHeader(title: "Pairing", systemImage: "key")
 
-                if let host = appModel.selectedHost {
+                if let host = selectedHost {
                     Text(host.name)
                         .font(.headline)
                     pairingContent(
@@ -923,15 +961,16 @@ private struct PairingPanel: View {
 
 private struct AppCatalogPanel: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
 
     var body: some View {
-        let workspace = appModel.primaryWorkspaceReference
+        let selectedHost = appModel.selectedHost(in: workspace)
         let catalog = appModel.catalogState(for: workspace)
             ?? ProductAppCatalogWorkspaceState()
         let surface = ProductAppCatalogSurface(
             catalog: catalog,
-            selectedHost: appModel.selectedHost,
-            appCount: appModel.selectedApps.count
+            selectedHost: selectedHost,
+            appCount: appModel.selectedApps(in: workspace).count
         )
 
         Panel {
@@ -1081,13 +1120,13 @@ private struct AppCatalogPanel: View {
             columns: [GridItem(.adaptive(minimum: 150), spacing: 12)],
             spacing: 12
         ) {
-            ForEach(appModel.selectedApps) { app in
+            ForEach(appModel.selectedApps(in: workspace)) { app in
                 Button {
                     appModel.select(app: app, in: workspace)
                 } label: {
                     RemoteAppTile(
                         app: app,
-                        isSelected: appModel.selectedAppID == app.id
+                        isSelected: appModel.selectedAppID(in: workspace) == app.id
                     )
                 }
                 .buttonStyle(.plain)
@@ -1143,15 +1182,17 @@ private struct RemoteAppTile: View {
 
 private struct StreamLaunchPanel: View {
     @Environment(AppModel.self) private var appModel
+    let workspace: ProductWorkspaceReference
 
     var body: some View {
-        let workspace = appModel.primaryWorkspaceReference
+        let selectedHost = appModel.selectedHost(in: workspace)
+        let selectedApp = appModel.selectedApp(in: workspace)
         let commands = appModel.sessionCommandState(in: workspace)
         Panel {
             VStack(alignment: .leading, spacing: 12) {
                 PanelHeader(title: "Launch", systemImage: "play.fill")
 
-                if let host = appModel.selectedHost, let app = appModel.selectedApp {
+                if let host = selectedHost, let app = selectedApp {
                     LabeledContent("Host", value: host.name)
                     LabeledContent("App", value: app.name)
                     LabeledContent("Mode", value: "\(appModel.settings.stream.width)x\(appModel.settings.stream.height)x\(appModel.settings.stream.frameRate)")

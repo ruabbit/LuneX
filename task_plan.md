@@ -47,6 +47,11 @@
 
 ### 阶段19错误记录
 
+- Task 4.2首次evidence cleanup在任何删除前退出：zsh的特殊数组变量`path`会联动覆盖`PATH`，循环赋值后无法解析`find`。只读复核确认22个已枚举目标全数仍存在；改用普通变量`target`与绝对`/usr/bin/find`逐项删除，不使用宽泛匹配删除。
+- Task 4.2第二轮post-mark仍只在checkbox diff索引退出：Git unified diff会在原Markdown列表前再加diff标记，实际行为`-- [ ]`与`+- [x]`。已用只读`od`和独立awk确认精确计数`1:1`，第三轮改用该已验证表达式；前两轮均已先通过strict/status/scope且无runtime副作用。
+- Task 4.2首轮post-mark final-state已通过strict、`22/48 next 4.3`与13文件scope，随后checkbox diff断言因正则漏写Markdown `-`后的空格而误判退出；未运行generator/test/build或产生设备副作用。修正为精确`^- \[ \]`/`^\+ \[x\]`后从fresh目录只读复核。
+- Task 4.2 authority后检索generator历史命令时，zsh因不存在的`Makefile*` glob触发`nomatch`并在`rg`前退出；没有写入、generator、test、build或设备副作用。已直接使用仓库确认存在的`Tools/generate_xcodeproj.rb`，不再传裸glob。
+- Task 4.2首轮related为`161/159/0/2`且build diagnostics全零：一项catalog source contract仍期待旧primary `selectedAppID`字符串，另一项既有visionOS长流程等待application session超时。先更新source断言，再单独复验vision用例区分时序抖动与真实回归，不原样重复失败矩阵；失败证据不计验收。
 - Task 4.1首轮repository pre-gate通过精确15文件scope与coordinator detach-only语义后，在scene-root零命中断言退出：`rg -c ... || true`对顶层`primaryWorkspaceReference`零匹配输出空字符串而不是字符`0`。源码实际满足零命中，未运行测试/build/generator或设备操作；下一轮用`awk`显式计数并从fresh目录完整重跑。
 - 2026-08-22续接时再次调用`create_goal`，接口在`get_goal`报告旧goal为`blocked`的同时以“unfinished goal”拒绝重建；该控制面状态矛盾没有修改仓库或运行任何测试/设备操作，执行继续以OpenSpec与三份planning为权威，不错误地完成旧goal。
 - Task 3.3 final pre-gate的scope包装器在functions JavaScript解析阶段把shell环境变量展开误作模板表达式，以`Missing } in template expression`拒绝；shell未启动，仓库、测试、设备与evidence无副作用。后续改用无模板插值的`env | rg`断言，不重复原包装器。
@@ -1847,3 +1852,28 @@
 - **evidence cleanup：** 13个明确`/private/tmp/LuneX-19-4_1-*`目录与marker已逐项用`find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有`build/DerivedData`。下一步final diff audit与cleanup final record。
 - **final audit：** 完整审读确认coordinator只管理scene attachment与registry generation，disconnect没有close/stop/ownership transfer；RootView仅迁移顶层scene workspace命令，4.2 global navigation/host/panel bindings仍清晰可见且未提前实现4.4。最终16文件scope、7新增/0删除/0 skip测试、唯一4.1 checkbox、strict `21/48 next 4.2`、稳定project、零task artifact和proof boundary全部一致。下一步cleanup final record与独立commit/push/fetch。
 - **cleanup final record：** 通过基线`HEAD == origin/main == remote == 8fcb737`、strict `21/48 next 4.2`、最终16文件scope、唯一4.1 checkbox、稳定project、零task artifact、disabled opt-ins及diff/proof边界。准备精确stage并以独立提交推送4.1。
+
+## 2026-08-22 阶段 19 任务 4.2 启动
+
+- **状态：** `complete`；Task 4.2已通过实现、focused/related/normal、四平台build、authority、generator、strict与repository门禁并勾选；OpenSpec预期为`22/48 next 4.3`。
+- **审计缺口：** scene workspace已到达`RootView`，但navigation/tab selection、selected host/app、Add Host sheet、host destructive dialog和host/pairing/catalog/launch panels仍读取primary compatibility projection，第二窗口会显示或修改首窗口状态。
+- **已有基础：** manual-host validation/submission、host destructive action、pairing attempt、catalog retry、stream issue/dialog/overlay均已存于`ProductWorkspaceState`并带checked owner/generation；4.2应迁移SwiftUI bindings，不复制runtime/repository或另建presentation owner。
+- **实现范围：** 为AppModel增加workspace-scoped navigation、host/app selection、selected values、sheet presentation及initial-load overload；`RootView`移除局部Add Host Boolean并以`ProductWorkspaceSheet.addHost`驱动native sheet，把workspace显式传到LibraryDashboard和四个workflow panel，host dialog从该workspace presentation读取。
+- **边界：** stream overlay已由3.5/4.1按workspace接线，本项只保证RootView全链路不回退primary。共享repository mutation reconciliation仍属4.3，owning-window close属4.4，tvOS/visionOS command visibility属4.5，完整双workspace应用矩阵属4.6。
+- **验收计划：** 新增focused AppModel binding isolation与RootView source contracts，运行workspace/workflow related矩阵、serial normal及四平台generic Debug；真实opt-in保持unset，不操作Simulator，离线结果不宣称真实窗口/Stage Manager交互。
+- **首轮实现：** AppModel新增checked workspace navigation、host/app selection、derived selected values、Add Host sheet present/dismiss与`loadInitialState(in:)`；legacy属性只投影primary。RootView移除局部sheet Boolean并把workspace显式传到LibraryDashboard及host/pairing/catalog/launch panels，host dialog同时核对workspace presentation。
+- **macOS compile：** fresh `/private/tmp/LuneX-19-4_2-compile.yIqgzB` generic Debug warnings-as-errors一次通过，structured build为`succeeded / 0 error / 0 warning / 0 analyzer warning`，universal executable为`x86_64 arm64`。
+- **focused：** fresh `/private/tmp/LuneX-19-4_2-focused.HVX1et/Focused.xcresult`中workspace binding isolation、legacy compatibility、Add Host sheet、RootView和scene source合同`5/5`通过，零skip/failure且build diagnostics全零。下一步运行workspace/host/catalog/pairing/destructive/session/surface related矩阵。
+- **related修复：** 首轮`161/159/0/2`中的catalog失败是source test仍期待旧primary字符串；更新为workspace getter。既有visionOS长流程session等待超时在与修正source test合并的针对性复验中`2/2`通过，确认是时序抖动而非4.2回归。
+- **最终related：** fresh `/private/tmp/LuneX-19-4_2-related-final.YjENtl/Related.xcresult`七簇矩阵`161/161`通过、零skip/failure且build diagnostics全零；失败首轮和`2/2`仅保留诊断，不作为最终矩阵证据。
+- **最终normal：** 独立fresh `/private/tmp/LuneX-19-4_2-normal-final.MmYrfq/Normal.xcresult`通过`1234 total / 1233 passed / 1 skipped / 0 failed / 0 expected failure`且build diagnostics全零；唯一skip精确为真实Keychain round-trip，两个真实opt-in unset并继续文件fallback。下一步四平台generic Debug。
+- **四平台build：** 原会话`/private/tmp/LuneX-19-4_2-platform-builds-final.bWTC1q`顺序完成macOS、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`；四份structured summary均为`succeeded / 0 error / 0 warning / 0 analyzer warning`，macOS executable为`x86_64 arm64`。未创建、启动、关闭或接管Simulator。
+- **源码审计：** RootView全文件`primaryWorkspaceReference`零命中；navigation、host/app selection/derivation、sheet、host dialog、validation/retry panels和既有overlay均消费传入scene workspace。legacy primary属性仅保留compatibility，未提前实现4.3 shared repository reconciliation、4.4 close policy或4.6完整双窗口矩阵。
+- **authority同步：** 已更新OpenSpec design/multiwindow spec、runtime contract、completion roadmap与三份planning，记录workspace-local binding语义、stale fail-closed、最终`5/161/1234/4`证据和真实窗口/Stage Manager/signed/live proof边界。task保持pre-mark `21/48 next 4.2`，下一步generator双跑、strict与repository pre-gate。
+- **generator/strict：** project在运行generator前、第一次与第二次后SHA-256均为`60e6966fc42bbe0facbb8adfdf66794746948039ba1f190ac13dc0438a9d2224`，工程零diff且OpenSpec strict通过。
+- **repository pre-gate：** `/private/tmp/LuneX-19-4_2-repository-pre.xJWEX2`完整通过remote baseline、精确12文件scope、source/test/authority、strict `21/48 next 4.2`、stable project、retained `5/2/161/1234/4` evidence、唯一Keychain skip、disabled opt-ins、零build/test process与diff/artifact边界。现已仅勾选4.2，预期`22/48 next 4.3`。
+- **post-mark final-state：** 两轮只读wrapper因checkbox unified-diff前缀索引错误退出后，fresh r3 `/private/tmp/LuneX-19-4_2-final-state-r3.VHGzxH`完整确认strict、OpenSpec `22/48 next 4.3`、最终13文件scope、唯一4.2 checkbox、稳定project、retained evidence、disabled opt-ins与零build/test process；未重复generator/test/build或操作Simulator。下一步逐路径清理4.2 evidence。
+- **evidence cleanup：** 首轮因zsh特殊`path`变量在删除前退出后，22个明确`/private/tmp/LuneX-19-4_2-*`目录、marker与generator log已用普通`target`变量和绝对`/usr/bin/find <exact-path> -depth -delete`逐项清理，task prefix零残留；未使用宽泛删除或触碰仓库`build/DerivedData`。
+- **authority final audit：** 清理后审计发现runtime contract仍有5处把Add Host/catalog/pairing/host panel/per-scene injection写成4.2 pending，并有一处design迁移时态。已精确更新为explicit scene workspace已完成，同时保留4.3 shared reconcile、4.4 close、5.x accessibility与6.x strings边界；production/test不变，不重复test/build/generator。
+- **final audit：** 修正旧时态后完整只读门通过最终13文件scope、RootView primary fallback零命中、authority 4.2 pending零残留、1新增/0删除/0 skip测试、唯一4.2 checkbox、strict `22/48 next 4.3`、稳定project、零task artifact、disabled opt-ins与`74faaba`三方基线；未发现需追加production/test修改。下一步cleanup final record与独立commit/push/fetch。
+- **cleanup final record：** 通过`HEAD == origin/main == remote == 74faaba`、最终13文件、strict `22/48 next 4.3`、稳定project、source/authority/diff边界、零4.2 artifact、disabled opt-ins与零build/test进程。Task 4.2准备精确stage并以独立提交推送。

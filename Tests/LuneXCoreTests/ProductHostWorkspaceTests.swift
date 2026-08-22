@@ -2,6 +2,62 @@ import XCTest
 
 @MainActor
 final class ProductHostWorkspaceTests: XCTestCase {
+    func testWorkspaceBindingsKeepNavigationSelectionSheetAndDialogLocal()
+        async throws
+    {
+        let firstHost = makeHost(idSuffix: 30, address: "first.local")
+        let secondHost = makeHost(idSuffix: 31, address: "second.local")
+        let model = makeModel(repository: InMemoryHostRepository(
+            hosts: [firstHost, secondHost]
+        ))
+        await model.loadHosts()
+
+        let primary = model.primaryWorkspaceReference
+        let secondary = try model.workspaceRegistry.create()
+        XCTAssertTrue(model.setNavigationSelection(.settings, in: secondary))
+        XCTAssertTrue(model.setSelectedHostID(secondHost.id, in: secondary))
+
+        XCTAssertEqual(model.navigationSelection(in: primary), .library)
+        XCTAssertEqual(model.navigationSelection(in: secondary), .settings)
+        XCTAssertEqual(model.selectedHost(in: primary)?.id, firstHost.id)
+        XCTAssertEqual(model.selectedHost(in: secondary)?.id, secondHost.id)
+
+        XCTAssertTrue(model.presentAddHostSheet(in: secondary))
+        model.setManualHostDraft(
+            ManualHostDraft(name: "Second", address: "invalid address"),
+            in: secondary
+        )
+        XCTAssertNil(model.workspaceSheet(in: primary))
+        XCTAssertEqual(model.workspaceSheet(in: secondary), .addHost)
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.hostLibrary.manualHostDraft.name,
+            "Second"
+        )
+        XCTAssertTrue(model.dismissAddHostSheet(in: secondary))
+        XCTAssertNil(model.workspaceSheet(in: secondary))
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.hostLibrary.manualHostDraft,
+            ManualHostDraft()
+        )
+
+        let confirmation = try XCTUnwrap(
+            model.requestHostRemoval(in: secondary)
+        )
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.presentation.dialog,
+            .removeHost(confirmation)
+        )
+        XCTAssertNil(model.workspaceState(for: primary)?.presentation.dialog)
+        model.cancelHostDestructiveAction(in: secondary)
+        XCTAssertNil(model.workspaceState(for: secondary)?.presentation.dialog)
+
+        _ = try model.workspaceRegistry.replace(secondary)
+        XCTAssertFalse(model.setNavigationSelection(.stream, in: secondary))
+        XCTAssertFalse(model.setSelectedHostID(firstHost.id, in: secondary))
+        XCTAssertFalse(model.presentAddHostSheet(in: secondary))
+        XCTAssertFalse(model.dismissAddHostSheet(in: secondary))
+    }
+
     func testPrimaryWorkspaceProjectsLegacyNavigationAndHostSelection() async throws {
         let host = makeHost(idSuffix: 1, address: "moon.local")
         let model = makeModel(repository: InMemoryHostRepository(hosts: [host]))
