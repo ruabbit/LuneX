@@ -2,6 +2,87 @@ import XCTest
 
 @MainActor
 final class ProductHostWorkspaceTests: XCTestCase {
+    func testSharedHostAddPublishesAvailabilityWithoutOverwritingLocalPresentation()
+        async throws
+    {
+        let repository = RecordingProductHostRepository()
+        let model = makeModel(repository: repository)
+        let primary = model.primaryWorkspaceReference
+        let secondary = try model.workspaceRegistry.create()
+
+        await model.loadHosts(in: primary)
+        XCTAssertEqual(
+            model.workspaceState(for: primary)?.hostLibrary.phase,
+            .firstUse
+        )
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.hostLibrary.phase,
+            .firstUse
+        )
+
+        XCTAssertTrue(model.setNavigationSelection(.settings, in: secondary))
+        XCTAssertTrue(model.presentAddHostSheet(in: secondary))
+        let secondaryDraft = ManualHostDraft(
+            name: "Keep Local",
+            address: "secondary.local"
+        )
+        model.setManualHostDraft(secondaryDraft, in: secondary)
+        model.setManualHostDraft(
+            ManualHostDraft(name: "Studio", address: "shared.local"),
+            in: primary
+        )
+
+        guard case let .succeeded(hostID) = await model.addManualHost(in: primary)
+        else {
+            return XCTFail("Expected the shared host mutation to succeed")
+        }
+
+        XCTAssertEqual(model.hosts.map(\.id), [hostID])
+        XCTAssertEqual(
+            model.workspaceState(for: primary)?.hostLibrary.phase,
+            .available
+        )
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.hostLibrary.phase,
+            .available
+        )
+        XCTAssertEqual(model.selectedHostID(in: primary), hostID)
+        XCTAssertEqual(model.selectedHostID(in: secondary), hostID)
+        XCTAssertEqual(model.navigationSelection(in: secondary), .settings)
+        XCTAssertEqual(model.workspaceSheet(in: secondary), .addHost)
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.hostLibrary.manualHostDraft,
+            secondaryDraft
+        )
+    }
+
+    func testSettingsRepositoryRemainsSharedWithoutCopyingWorkspaceState()
+        async throws
+    {
+        let settingsRepository = InMemoryAppSettingsRepository()
+        let model = makeModel(
+            repository: InMemoryHostRepository(),
+            settingsRepository: settingsRepository
+        )
+        let primary = model.primaryWorkspaceReference
+        let secondary = try model.workspaceRegistry.create()
+        XCTAssertTrue(model.setNavigationSelection(.settings, in: secondary))
+
+        model.settings.stream.frameRate = 240
+        model.settings.input.showVirtualController = true
+        await model.saveSettings()
+
+        let persisted = try await settingsRepository.loadSettings()
+        XCTAssertEqual(persisted, model.settings)
+        XCTAssertEqual(persisted.stream.frameRate, 240)
+        XCTAssertTrue(persisted.input.showVirtualController)
+        XCTAssertEqual(model.workspaceState(for: primary)?.reference, primary)
+        XCTAssertEqual(model.workspaceState(for: secondary)?.reference, secondary)
+        XCTAssertEqual(model.navigationSelection(in: primary), .library)
+        XCTAssertEqual(model.navigationSelection(in: secondary), .settings)
+        XCTAssertNil(model.activeProductSessionOwner)
+    }
+
     func testWorkspaceBindingsKeepNavigationSelectionSheetAndDialogLocal()
         async throws
     {
@@ -357,13 +438,16 @@ final class ProductHostWorkspaceTests: XCTestCase {
         )
     }
 
-    private func makeModel(repository: any HostRepository) -> AppModel {
+    private func makeModel(
+        repository: any HostRepository,
+        settingsRepository: any AppSettingsRepository = InMemoryAppSettingsRepository()
+    ) -> AppModel {
         AppModel(
             hostLibraryManager: HostLibraryManager(
                 repository: repository,
                 serverInfoClient: ProductHostServerInfoClient()
             ),
-            settingsRepository: InMemoryAppSettingsRepository(),
+            settingsRepository: settingsRepository,
             appCatalogManager: AppCatalogManager(
                 appListClient: ProductHostAppListClient(),
                 artworkCache: InMemoryArtworkCache()

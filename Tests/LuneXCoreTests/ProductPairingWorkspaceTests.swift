@@ -2,6 +2,44 @@ import XCTest
 
 @MainActor
 final class ProductPairingWorkspaceTests: XCTestCase {
+    func testAuthenticatedTrustMutationClearsOtherWorkspacePairingPresentation()
+        async throws
+    {
+        let host = makeHost(idSuffix: 8, name: "Shared Trust")
+        let provider = PairingWorkspaceProvider()
+        let model = makeModel(
+            hosts: [host],
+            provider: provider,
+            identityProvisioner: FixedPairingWorkspaceIdentityProvisioner(
+                identity: makeIdentity()
+            )
+        )
+        await model.loadHosts()
+        let primary = model.primaryWorkspaceReference
+        let secondary = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(selectedHostID: host.id)
+        )
+        try model.workspaceRegistry.update(secondary) { state in
+            state.pairing = PairingUIState(
+                stage: .failed,
+                message: "Stale local failure"
+            )
+        }
+
+        await model.beginPairing(host: host, in: primary)
+        model.updatePairingPIN("1234", in: primary)
+        let submit = Task { await model.submitPairingPIN(in: primary) }
+        let request = try await provider.waitForLatestRequest()
+        await provider.completeAuthenticated(request)
+        await submit.value
+
+        XCTAssertEqual(model.pairingState(for: primary)?.stage, .paired)
+        XCTAssertEqual(model.pairingState(for: secondary), PairingUIState())
+        XCTAssertEqual(model.selectedHost(in: secondary)?.pairingState, .paired)
+        XCTAssertNotNil(model.selectedHost(in: secondary)?.pinnedIdentity)
+        XCTAssertNil(model.activeProductSessionOwner)
+    }
+
     func testFailureAndRetryRotateCheckedAttemptGeneration() async throws {
         let host = makeHost(idSuffix: 1, name: "Retry")
         let provider = PairingWorkspaceProvider()

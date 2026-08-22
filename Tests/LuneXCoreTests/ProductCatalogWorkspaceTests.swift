@@ -2,6 +2,37 @@ import XCTest
 
 @MainActor
 final class ProductCatalogWorkspaceTests: XCTestCase {
+    func testCatalogRefreshPublishesSharedAppsWithoutOverwritingLocalPresentation()
+        async throws
+    {
+        let host = makeHost(idSuffix: 20, name: "Shared")
+        let apps = makeApps()
+        let model = makeModel(
+            hosts: [host],
+            appListClient: FixedProductCatalogClient(apps: apps)
+        )
+        await model.loadHosts()
+        let primary = model.primaryWorkspaceReference
+        let secondary = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                navigationSelection: .settings,
+                selectedHostID: host.id
+            )
+        )
+        XCTAssertTrue(model.presentAddHostSheet(in: secondary))
+
+        await model.refreshAppsForSelectedHost(in: primary)
+
+        XCTAssertEqual(model.selectedApps(in: primary), apps)
+        XCTAssertEqual(model.selectedApps(in: secondary), apps)
+        XCTAssertEqual(model.catalogState(for: primary)?.phase, .current)
+        XCTAssertEqual(model.catalogState(for: secondary)?.phase, .cached)
+        XCTAssertEqual(model.selectedAppID(in: primary), apps.first?.id)
+        XCTAssertEqual(model.selectedAppID(in: secondary), apps.first?.id)
+        XCTAssertEqual(model.navigationSelection(in: secondary), .settings)
+        XCTAssertEqual(model.workspaceSheet(in: secondary), .addHost)
+    }
+
     func testHostSelectionGenerationChangesAcrossABAAndCatalogOwnerTracksIt() async throws {
         let first = makeHost(idSuffix: 1, name: "A")
         let second = makeHost(idSuffix: 2, name: "B")

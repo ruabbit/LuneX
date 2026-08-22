@@ -56,6 +56,18 @@ Host records, trust state, cached apps, and settings SHALL remain shared reposit
 - **WHEN** a host is removed from one inactive workspace
 - **THEN** all workspaces remove that shared record and independently select a valid fallback or empty state
 
+#### Scenario: Shared trust mutation
+- **WHEN** pairing succeeds or trust is reset for a host selected in multiple workspaces
+- **THEN** every workspace observes the shared trust record, stale matching pairing presentation is cleared, and only the initiating pairing owner may publish its completed state
+
+#### Scenario: Shared catalog and settings mutation
+- **WHEN** one workspace persists a catalog or settings change
+- **THEN** every live workspace observes the same shared value while retaining its local navigation, sheet, dialog, validation, and retry presentation
+
+#### Scenario: Reconciliation during an unrelated session
+- **WHEN** an inactive workspace mutates a host that does not own another workspace's active session
+- **THEN** shared data is reconciled without stopping, replacing, or transferring the active session owner
+
 ### Requirement: Unsupported multiwindow behavior
 Platforms or configurations without product multiwindow support SHALL use one workspace without exposing nonfunctional window commands, while preserving the same checked ownership contracts internally.
 

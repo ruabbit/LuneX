@@ -3396,3 +3396,17 @@
 - Post-mark最终权威为`22/48 next 4.3`。两次final-state失败都发生在Git unified-diff checkbox索引且位于OpenSpec/status/scope通过之后；第三次使用已从实际diff验证的`-- [ ]`/`+- [x]`前缀通过，未重跑production验证，因此不改变4.2产品证据口径。
 - Final authority audit不能只搜索新增4.2段落：既有host/catalog/pairing/surface章节仍可能保留旧的primary/pending描述。本次发现并修正5处runtime contract与一处design时态；完成后的合同明确RootView scene路径使用explicit workspace，compatibility projection只供旧单窗口调用者，shared mutation/close/accessibility/privacy仍分别属于4.3/4.4/5.x/6.x。
 - 最终代码/合同审读没有发现需要扩大4.2范围的问题：checked setter对stale reference返回false，derived getter返回空值；Add Host dismiss在submission active时拒绝；host confirmation要求destructive/dialog一致；overlay仍只有既有session owner。完整shared mutation broadcast和窗口close策略必须留给4.3/4.4，不能借4.2兼容projection推断已完成。
+
+### Stage 19 Task 4.3 shared repository reconciliation audit (2026-08-22)
+
+- `loadCachedApps(in:)`成功后已经调用`reconcileWorkspaceSelections()`和`publishCatalogStateToWorkspaces()`；`refreshAppsForSelectedHost(in:)`成功后以initiating owner标记current，其余选择同host的workspace得到cached/empty cached状态。catalog shared mutation基本链路已存在，4.3需要补明确two-workspace回归而不是重写owner模型。
+- `settings`只存在于process-level AppModel且SettingsView直接绑定同一observable value，repository save/load不会复制per-workspace state；两窗口天然看到同一值。4.3应测试共享可见性和session owner保持，而不是把settings塞入`ProductWorkspaceState`。
+- host shared mutation存在presentation漂移：`loadHosts(in:)`、`addManualHost(in:)`和remove success只更新initiator的`hostLibrary.phase`或依赖selection reconcile；另一live workspace可继续显示`.loading`/`.firstUse`。`resetHostTrust`和`applyPairingCompletion`只更新shared host及initiator pairing，另一workspace对同host的terminal pairing state可能陈旧。
+- 正确helper应只同步由shared host集合派生的`.firstUse`/`.available`，不覆盖非发起workspace的`isRefreshing`、refresh issue、manual draft/submission、sheet/dialog或navigation。trust reset应清理所有选择目标host的pairing state；pairing success应清理非owner同hostpairing state后让initiator发布自己的`.paired`结果。任何路径都不得写session/media/input owner。
+- 首轮实现/focused证明上述边界可在不修改workspace value shape、catalog owner或session reducer的情况下闭合。尤其inactive workspace删除非streaming host后，`activeProductSessionOwner`完整值与`session.activeHostID`保持不变，最终仍由原owner clean stop；这比仅断言host数组更新更直接证明没有隐式transfer。
+- 七簇related `167/167`与serial normal `1240/1239/1/0`说明helper没有破坏既有stale-generation、retry、destructive sequencing或session teardown；唯一skip仍是显式真实Keychain测试。catalog/settings没有production重写是有意边界：现有shared publish/process observable合同已由新增two-workspace tests直接闭合。
+- Production pairing不是仅内存trust：`PersistingPairingProvider`在向AppModel yield `.completed`之前已经把authenticated host保存到HostRepository。4.3 helper因此应在completion阶段做workspace projection，不能再创建第二次repository写入，否则会引入重复提交与rollback竞态。
+- 四平台generic Debug `4/4`与helper source audit确认新增路径无条件编译且对`activeProductSessionOwner`、session ID、scene attachment、media/input owner零写入。实际两个native窗口同时可见、Stage Manager和live Sunshine mutation仍是更高证明层，不能由offline tests推断。
+- Fresh repository pre-gate在pre-mark `22/48 next 4.3`结构化复读全部最终证据，并确认helper精确1个定义/5个mutation calls、owner写入零、6新增/0删除/0 skip测试。4.3可勾选；4.4必须单独定义owning-window close policy，不能把“reconciliation不转移owner”误当成“关闭窗口已正确stop/retain”。
+- Cleanup后的authority复读发现三处历史段落仍将4.3写为later/pending；这些是文档时态漂移，不是实现缺口。修正后shared host/trust/catalog/settings reconcile明确为已完成，owning-window close仍唯一属于4.4，4.5/4.6边界不变。
+- Corrected final audit未发现阻止4.3提交的问题：最终13文件、helper调用与owner零写入、6项测试增量、唯一checkbox、strict状态、稳定project、artifact/opt-in/process及三方remote基线全部一致。4.3可以独立提交，4.4 close policy必须继续按session phase和owner generation单独实现。

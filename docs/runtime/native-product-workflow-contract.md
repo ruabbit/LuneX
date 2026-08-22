@@ -152,7 +152,8 @@ dialog, product issue, and stream-overlay visibility. Copying or mutating one
 state does not mutate another. It deliberately contains no session provider,
 media environment, renderer, decoder, audio graph, input transport,
 repository, or settings copy. The registry and `AppModel` remain responsible
-for checking references and reconciling shared data in later tasks.
+for checking references and reconciling shared host, trust, catalog, and
+settings repository projections across every live workspace.
 
 `ProductWorkspaceRegistry` is a main-actor observable composition object that
 owns only those values. It creates distinct workspaces, restores or replaces a
@@ -242,6 +243,45 @@ simultaneous native windows, Stage Manager interaction, shared repository mutati
 reconciliation, owning-window close policy, signed/physical behavior, or live
 Sunshine streaming.
 
+### Shared repository reconciliation
+
+Hosts, trust, cached apps, and settings remain process-level shared values; no
+workspace owns a repository or a settings copy. After a successful host load,
+manual add, remove, trust reset, or authenticated pairing completion,
+`reconcileSharedHostRepositoryState` first applies the registry's checked host
+and app selection repair. It then publishes only the host-count-derived
+`.firstUse` or `.available` library phase to every live workspace. Local
+navigation, sheet/dialog, manual draft/submission, refresh activity/issue, and
+unrelated destructive presentation are preserved.
+
+Trust reset clears pairing presentation in every workspace that still selects
+the changed host. Authenticated pairing preserves the exact current initiating
+`ProductPairingOwner` until its `.paired` state is published, while clearing
+stale matching pairing presentation elsewhere. The production
+`PersistingPairingProvider` commits authenticated trust before it emits the
+completion consumed by AppModel. Host removal continues to remove the target
+catalog snapshot and lets each workspace independently select a valid fallback.
+
+Catalog load and refresh retain the existing owner-keyed broadcast: the exact
+refresh owner receives current presentation and every other workspace derives
+cached/empty-cached presentation from the same saved apps. Settings remains the
+single observable `AppModel.settings` value backed by one repository, so every
+scene sees the same mutation without adding settings to `ProductWorkspaceState`.
+These publication paths do not write `activeProductSessionOwner`, the session
+identifier, scene attachments, media generation, or input ownership.
+
+Task 4.3 deterministic evidence is `6/6` focused two-workspace application
+tests and `167/167` related registry/workflow tests. The independent serial
+normal suite is `1240 total / 1239 passed / 1 skipped / 0 failed`; the sole skip
+is the explicitly disabled real-Keychain round trip and ordinary tests continue
+through the JSON file identity fallback. Unsigned generic Debug builds for
+macOS universal, iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured
+compiler, analyzer, or build warnings. No Simulator lifecycle was used. These
+receipts prove offline shared-state publication and that inactive-host removal
+does not transfer an unrelated active session owner; they do not prove actual
+simultaneous macOS/iPadOS windows, Stage Manager, signed/physical interaction,
+live Sunshine repository changes, or the task 4.4 owning-window close policy.
+
 ### Host library workspace migration
 
 `AppModel` now creates one checked primary workspace in the process registry.
@@ -288,7 +328,8 @@ Opening or cancelling Add Host clears only the initiating workspace draft and
 submission result. Root presentation is driven by that checked workspace's
 `ProductWorkspaceSheet.addHost`; submission in progress rejects dismissal, and
 success or an admitted cancel clears only the same workspace. Shared repository
-reconciliation and owning-window close policy remain tasks 4.3 and 4.4.
+reconciliation is implemented without transferring session ownership; the
+owning-window close policy remains task 4.4.
 Deterministic tests and unsigned generic builds do not prove Simulator
 interaction, signed artifacts, physical devices, or live Sunshine behavior.
 

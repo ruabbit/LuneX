@@ -106,6 +106,49 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
         XCTAssertEqual(persisted.first { $0.id == hosts[1].id }, hosts[1])
     }
 
+    func testTrustResetClearsMatchingPairingStateInEveryWorkspace() async throws {
+        let hosts = [makeHost(1), makeHost(2)]
+        let model = makeModel(
+            hostRepository: DestructiveHostRepository(hosts: hosts),
+            catalogRepository: DestructiveCatalogRepository(
+                snapshots: makeSnapshots(hosts: hosts)
+            )
+        )
+        await model.loadInitialState()
+        let primary = model.primaryWorkspaceReference
+        XCTAssertTrue(model.setSelectedHostID(hosts[0].id, in: primary))
+        let secondary = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                navigationSelection: .diagnostics,
+                selectedHostID: hosts[0].id
+            )
+        )
+        XCTAssertTrue(model.presentAddHostSheet(in: secondary))
+        try model.workspaceRegistry.update(secondary) { state in
+            state.pairing = PairingUIState(
+                stage: .failed,
+                message: "Stale trust presentation"
+            )
+        }
+
+        _ = try XCTUnwrap(model.requestHostTrustReset(in: primary))
+        let result = await model.confirmHostDestructiveAction(in: primary)
+
+        XCTAssertEqual(
+            result,
+            .succeeded(kind: .resetTrust, hostID: hosts[0].id)
+        )
+        XCTAssertEqual(model.pairingState(for: secondary), PairingUIState())
+        XCTAssertEqual(model.selectedHostID(in: primary), hosts[0].id)
+        XCTAssertEqual(model.selectedHostID(in: secondary), hosts[0].id)
+        XCTAssertEqual(model.navigationSelection(in: secondary), .diagnostics)
+        XCTAssertEqual(model.workspaceSheet(in: secondary), .addHost)
+        XCTAssertEqual(
+            model.workspaceState(for: secondary)?.hostLibrary.phase,
+            .available
+        )
+    }
+
     func testHostRepositoryFailurePreservesHostAndRestoresCatalog() async throws {
         let hosts = [makeHost(1), makeHost(2)]
         let snapshots = makeSnapshots(hosts: hosts)
@@ -203,6 +246,63 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
         let saveCount = await hostRepository.saveAttemptCount()
         XCTAssertEqual(saveCount, 0)
         model.cancelHostDestructiveAction(in: ownerWorkspace)
+    }
+
+    func testInactiveWorkspaceRemovalDoesNotTransferUnrelatedSessionOwnership()
+        async throws
+    {
+        let hosts = [makeHost(1), makeHost(2)]
+        let recorder = DestructiveEventRecorder()
+        let control = DestructiveSessionControlProvider(recorder: recorder)
+        let model = makeStreamingModel(
+            hostRepository: DestructiveHostRepository(hosts: hosts),
+            catalogRepository: DestructiveCatalogRepository(
+                snapshots: makeSnapshots(hosts: hosts)
+            ),
+            control: control
+        )
+        await model.loadInitialState()
+        let ownerWorkspace = model.primaryWorkspaceReference
+        XCTAssertTrue(model.setSelectedHostID(hosts[1].id, in: ownerWorkspace))
+        let inactiveWorkspace = try model.workspaceRegistry.create(
+            restoration: ProductWorkspaceRestorationState(
+                navigationSelection: .diagnostics,
+                selectedHostID: hosts[0].id
+            )
+        )
+
+        let launch = Task { await model.launchSelectedApp(in: ownerWorkspace) }
+        await control.waitUntilStarted()
+        let originalOwner = try XCTUnwrap(model.activeProductSessionOwner)
+        XCTAssertEqual(originalOwner.workspace, ownerWorkspace)
+        XCTAssertEqual(model.session.activeHostID, hosts[1].id)
+
+        _ = try XCTUnwrap(model.requestHostRemoval(in: inactiveWorkspace))
+        let result = await model.confirmHostDestructiveAction(
+            in: inactiveWorkspace
+        )
+
+        XCTAssertEqual(
+            result,
+            .succeeded(kind: .remove, hostID: hosts[0].id)
+        )
+        XCTAssertEqual(model.activeProductSessionOwner, originalOwner)
+        XCTAssertEqual(model.session.activeHostID, hosts[1].id)
+        XCTAssertEqual(model.hosts, [hosts[1]])
+        XCTAssertEqual(model.selectedHostID(in: ownerWorkspace), hosts[1].id)
+        XCTAssertEqual(model.selectedHostID(in: inactiveWorkspace), hosts[1].id)
+        XCTAssertEqual(
+            model.navigationSelection(in: inactiveWorkspace),
+            .diagnostics
+        )
+        XCTAssertEqual(
+            model.workspaceState(for: inactiveWorkspace)?.hostLibrary.phase,
+            .available
+        )
+
+        let stopped = await model.stopStream(in: ownerWorkspace)
+        XCTAssertTrue(stopped)
+        await launch.value
     }
 
     func testWorkspaceReplacementDuringRepositoryLoadRejectsAndPreservesHost()

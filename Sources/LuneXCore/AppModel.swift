@@ -1059,6 +1059,29 @@ final class AppModel: ApplicationInputSink {
         invalidateActivePairingIfOwnerStale()
     }
 
+    private func reconcileSharedHostRepositoryState(
+        trustChangedHostID: MoonlightHost.ID? = nil,
+        preservingPairingOwner: ProductPairingOwner? = nil
+    ) {
+        reconcileWorkspaceSelections()
+        let phase: ProductHostLibraryPhase = hosts.isEmpty
+            ? .firstUse
+            : .available
+        for workspace in workspaceRegistry.states {
+            _ = try? workspaceRegistry.update(workspace.reference) { state in
+                state.hostLibrary.phase = phase
+                guard let trustChangedHostID,
+                      state.selectedHostID == trustChangedHostID else { return }
+                if let preservingPairingOwner,
+                   state.reference == preservingPairingOwner.workspace,
+                   state.pairing.owner == preservingPairingOwner {
+                    return
+                }
+                state.pairing = PairingUIState()
+            }
+        }
+    }
+
     private func applyCachedCatalog(
         to state: inout ProductWorkspaceState
     ) {
@@ -2079,7 +2102,7 @@ final class AppModel: ApplicationInputSink {
             let loadedHosts = try await hostLibraryManager.loadHosts()
             guard workspaceRegistry.state(for: workspace) != nil else { return }
             hosts = loadedHosts
-            reconcileWorkspaceSelections()
+            reconcileSharedHostRepositoryState()
             _ = try? workspaceRegistry.update(workspace) { state in
                 state.hostLibrary.phase = loadedHosts.isEmpty ? .firstUse : .available
                 state.hostLibrary.isRefreshing = false
@@ -2278,7 +2301,7 @@ final class AppModel: ApplicationInputSink {
                 return .failed(ProductIssue(code: .staleAction))
             }
             hosts = updatedHosts
-            reconcileWorkspaceSelections()
+            reconcileSharedHostRepositoryState()
             let addedHostID = updatedHosts.first {
                 $0.addresses.contains { $0.rawValue == submission.normalizedAddress }
             }?.id
@@ -2575,7 +2598,7 @@ final class AppModel: ApplicationInputSink {
         hosts = updatedHosts
         appsByHostID[owner.hostID] = nil
         appCatalogUpdatedAtByHostID[owner.hostID] = nil
-        reconcileWorkspaceSelections()
+        reconcileSharedHostRepositoryState()
         publishCatalogStateToWorkspaces()
         diagnostics.record("Removed host", subsystem: "hosts", code: "host_removed")
     }
@@ -2596,7 +2619,9 @@ final class AppModel: ApplicationInputSink {
             throw HostDestructiveApplicationError.staleOwner
         }
         hosts = updatedHosts
-        reconcileWorkspaceSelections()
+        reconcileSharedHostRepositoryState(
+            trustChangedHostID: owner.hostID
+        )
         diagnostics.record(
             "Reset host trust",
             subsystem: "hosts",
@@ -3620,7 +3645,10 @@ final class AppModel: ApplicationInputSink {
         } else {
             hosts.append(result.host)
         }
-        reconcileWorkspaceSelections()
+        reconcileSharedHostRepositoryState(
+            trustChangedHostID: owner.hostID,
+            preservingPairingOwner: owner
+        )
         _ = try? workspaceRegistry.update(owner.workspace) { state in
             guard state.selectedHostID == owner.hostID,
                   state.hostSelectionGeneration == owner.hostSelectionGeneration,
