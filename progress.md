@@ -3959,3 +3959,15 @@
 - 2026-08-22：post-mark `/private/tmp/LuneX-19-4_5-final-state.wYwO7N`只读通过strict、`25/48 next 4.6`、12文件scope、唯一4.5 checkbox、稳定project、retained evidence与disabled opt-ins；下一步精确清理4.5临时证据。
 - 2026-08-22：12个明确`/private/tmp/LuneX-19-4_5-*`目录/log已逐项用绝对`find <exact> -depth -delete`清理，prefix零残留；未使用宽泛删除或触碰仓库cache。下一步final diff/authority audit。
 - 2026-08-22：cleanup final audit通过12文件scope、scene/adapter source、2新增/0删除/0 skip测试、唯一4.5 checkbox、strict `25/48 next 4.6`、稳定project、零artifact、disabled opt-ins、零进程与`b60779b`三方基线；准备精确stage、commit、push、fetch。
+- 2026-08-22：Task 4.5以`4ffdd43 Enforce single workspace platform ownership`提交推送，三方SHA一致且工作树clean；OpenSpec `25/48 next 4.6`。启动4.6，确认缺口是同一AppModel双live-workspace组合矩阵，而非新的runtime owner或production UI能力。
+- 2026-08-22：4.6 focused首轮两项中1项通过；唯一失败是测试直接registry replacement仍保留scene attachment token，旧close实际`.detached`。已改为真实scene disconnect/reconnect replacement路径并补replacement detach断言；production不变，下一步从fresh evidence重跑focused。
+- 2026-08-22：fresh 4.6 focused r2结构化通过`2/2`且build diagnostics全零；双workspace local/shared/replacement与non-owner/owner-close组合均闭合，production零修改。下一步相关workspace/workflow/session/scene-close矩阵。
+- 2026-08-22：fresh related矩阵结构化通过`259/259`且build diagnostics全零，覆盖11个workspace/workflow/session/scene-close完整测试类。下一步独立serial normal，真实Keychain/live-host opt-in继续unset。
+- 2026-08-22：fresh serial normal通过`1250/1249/1/0`且structured build diagnostics全零；唯一skip为真实Keychain opt-in，文件fallback继续。下一步四平台unsigned generic Debug，不操作Simulator lifecycle。
+- 2026-08-22：四平台unsigned generic Debug顺序通过`4/4`且structured diagnostics全零，macOS为`x86_64 arm64`；未操作Simulator。覆盖审计确认两条application timeline闭合4.6五类要求且production/project graph零修改；已同步OpenSpec design/spec、runtime contract、roadmap与三份planning，task保持pre-mark。下一步generator/strict/repository pre-gate。
+- 2026-08-22：generator前后双跑project SHA-256稳定为`60e6966f...d2224`且工程零diff，OpenSpec strict `1/1` valid；4.6仍未勾选。下一步fresh repository pre-gate。
+- 2026-08-22：fresh repository pre-gate `/private/tmp/LuneX-19-4_6-repository-pre.4lEziF`完整通过十组检查；现已只勾选4.6，预期OpenSpec `26/48 next 5.1`。下一步只读post-mark，不重复test/build/generator或操作Simulator。
+- 2026-08-22：post-mark `/private/tmp/LuneX-19-4_6-final-state.B018Gb`只读通过strict、`26/48 next 5.1`、9文件scope、唯一4.6 checkbox、稳定project、retained evidence与disabled opt-ins；下一步精确清理4.6临时证据。
+- 2026-08-22：15个明确`/private/tmp/LuneX-19-4_6-*`路径已逐项用绝对`find <exact> -depth -delete`清理，prefix零残留；未使用宽泛删除或触碰仓库cache。下一步cleanup后final diff/authority audit。
+- 2026-08-22：cleanup后authority复读发现runtime contract仍把multiwindow close列作later work；已精确改为4.4 close和4.6 matrix均完成offline evidence，只保留5.x/7.x后续。production/test不变，下一步完整只读final audit。
+- 2026-08-22：corrected cleanup final audit通过最终9文件、production/project零diff、2新增/0删除/0 skip测试、authority current-state、strict `26/48 next 5.1`、稳定project、零artifact/opt-in/process及`4ffdd43`三方基线。准备精确stage、commit、push、fetch。

@@ -7960,6 +7960,218 @@ final class AppModelWorkflowTests: XCTestCase {
         }
     }
 
+    func testTwoWorkspaceApplicationMatrixKeepsLocalStateAndSharesRepositories()
+        async throws
+    {
+        let settingsRepository = InMemoryAppSettingsRepository()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: ControlledSessionControlProvider(),
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: []),
+            settingsRepository: settingsRepository
+        )
+        let primaryScene = try model.connectProductWorkspaceScene(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+        let secondaryScene = try model.connectProductWorkspaceScene(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+        XCTAssertNotEqual(primaryScene.workspace, secondaryScene.workspace)
+
+        await model.loadInitialState(in: primaryScene.workspace)
+        await model.refreshAppsForSelectedHost(in: primaryScene.workspace)
+        let originalHostID = try XCTUnwrap(
+            model.selectedHostID(in: primaryScene.workspace)
+        )
+        let sharedApps = model.selectedApps(in: primaryScene.workspace)
+        XCTAssertFalse(sharedApps.isEmpty)
+        XCTAssertEqual(
+            model.selectedApps(in: secondaryScene.workspace),
+            sharedApps
+        )
+        XCTAssertEqual(
+            model.catalogState(for: primaryScene.workspace)?.phase,
+            .current
+        )
+        XCTAssertEqual(
+            model.catalogState(for: secondaryScene.workspace)?.phase,
+            .cached
+        )
+
+        XCTAssertTrue(model.setNavigationSelection(
+            .stream,
+            in: primaryScene.workspace
+        ))
+        XCTAssertTrue(model.setNavigationSelection(
+            .settings,
+            in: secondaryScene.workspace
+        ))
+        XCTAssertTrue(model.presentAddHostSheet(in: secondaryScene.workspace))
+        let secondaryDraft = ManualHostDraft(
+            name: "Secondary Draft",
+            address: "secondary.local"
+        )
+        model.setManualHostDraft(
+            secondaryDraft,
+            in: secondaryScene.workspace
+        )
+        XCTAssertEqual(
+            model.navigationSelection(in: primaryScene.workspace),
+            .stream
+        )
+        XCTAssertEqual(
+            model.navigationSelection(in: secondaryScene.workspace),
+            .settings
+        )
+        XCTAssertNil(model.workspaceSheet(in: primaryScene.workspace))
+        XCTAssertEqual(
+            model.workspaceSheet(in: secondaryScene.workspace),
+            .addHost
+        )
+
+        model.settings.stream.frameRate = 144
+        await model.saveSettings()
+        let persistedSettings = try await settingsRepository.loadSettings()
+        XCTAssertEqual(persistedSettings.stream.frameRate, 144)
+        XCTAssertEqual(
+            model.navigationSelection(in: secondaryScene.workspace),
+            .settings
+        )
+
+        XCTAssertTrue(model.presentAddHostSheet(in: primaryScene.workspace))
+        model.setManualHostDraft(
+            ManualHostDraft(name: "Shared Host", address: "shared.local"),
+            in: primaryScene.workspace
+        )
+        guard case let .succeeded(sharedHostID) = await model.addManualHost(
+            in: primaryScene.workspace
+        ) else {
+            return XCTFail("Expected shared host mutation to succeed")
+        }
+        XCTAssertEqual(model.hosts.count, 2)
+        XCTAssertTrue(model.hosts.contains { $0.id == sharedHostID })
+        XCTAssertEqual(
+            model.selectedHostID(in: primaryScene.workspace),
+            sharedHostID
+        )
+        XCTAssertEqual(
+            model.selectedHostID(in: secondaryScene.workspace),
+            originalHostID
+        )
+        XCTAssertEqual(
+            model.workspaceState(for: secondaryScene.workspace)?
+                .hostLibrary.manualHostDraft,
+            secondaryDraft
+        )
+        XCTAssertEqual(
+            model.workspaceSheet(in: secondaryScene.workspace),
+            .addHost
+        )
+
+        let initialSecondaryClose = await model.disconnectProductWorkspaceScene(
+            secondaryScene
+        )
+        XCTAssertEqual(initialSecondaryClose, .detached)
+        let replacementScene = try model.connectProductWorkspaceScene(
+            restoring: secondaryScene.identity,
+            supportsMultipleWindows: true
+        )
+        let replacement = replacementScene.workspace
+        XCTAssertEqual(model.navigationSelection(in: replacement), .settings)
+        XCTAssertEqual(model.selectedHostID(in: replacement), originalHostID)
+        XCTAssertNil(model.workspaceSheet(in: replacement))
+        XCTAssertFalse(model.setNavigationSelection(
+            .diagnostics,
+            in: secondaryScene.workspace
+        ))
+        XCTAssertFalse(model.setSelectedHostID(
+            sharedHostID,
+            in: secondaryScene.workspace
+        ))
+        XCTAssertFalse(model.presentAddHostSheet(in: secondaryScene.workspace))
+        XCTAssertNil(model.requestHostRemoval(in: secondaryScene.workspace))
+        let staleClose = await model.disconnectProductWorkspaceScene(
+            secondaryScene
+        )
+        let replacementClose = await model.disconnectProductWorkspaceScene(
+            replacementScene
+        )
+        let primaryClose = await model.disconnectProductWorkspaceScene(
+            primaryScene
+        )
+        XCTAssertEqual(staleClose, .rejectedStaleAttachment)
+        XCTAssertEqual(replacementClose, .detached)
+        XCTAssertEqual(primaryClose, .detached)
+    }
+
+    func testTwoWorkspaceApplicationMatrixRejectsNonOwnerCommandsAndClosesOwner()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 72,
+                    key: Data(repeating: 0x72, count: 16)
+                ))
+            ])
+        )
+        let nonOwnerScene = try model.connectProductWorkspaceScene(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+        let ownerScene = try model.connectProductWorkspaceScene(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+        await model.loadInitialState(in: nonOwnerScene.workspace)
+        await model.refreshAppsForSelectedHost(in: nonOwnerScene.workspace)
+
+        let launch = Task {
+            await model.launchSelectedApp(in: ownerScene.workspace)
+        }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+        let owner = try XCTUnwrap(model.activeProductSessionOwner)
+        XCTAssertEqual(owner.workspace, ownerScene.workspace)
+        XCTAssertEqual(
+            model.sessionCommandState(in: nonOwnerScene.workspace).stop,
+            .unavailable(.ownedByAnotherWorkspace)
+        )
+        XCTAssertFalse(model.setStreamOverlayVisibility(
+            .visible,
+            in: nonOwnerScene.workspace
+        ))
+        let nonOwnerStop = await model.stopStream(in: nonOwnerScene.workspace)
+        XCTAssertFalse(nonOwnerStop)
+        XCTAssertEqual(model.activeProductSessionOwner, owner)
+        XCTAssertTrue(provider.currentStoppedSessionIDs().isEmpty)
+
+        let nonOwnerClose = await model.disconnectProductWorkspaceScene(
+            nonOwnerScene
+        )
+        XCTAssertEqual(nonOwnerClose, .detached)
+        XCTAssertEqual(model.activeProductSessionOwner, owner)
+        XCTAssertTrue(provider.currentStoppedSessionIDs().isEmpty)
+
+        let ownerClose = await model.disconnectProductWorkspaceScene(ownerScene)
+        XCTAssertEqual(ownerClose, .stoppedSession)
+        await launch.value
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(
+            environment.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+    }
+
     private func makeLaunchReadyModel(
         sessionControlProvider: any SessionControlProvider,
         sessionMediaEnvironment: any SessionMediaEnvironment =

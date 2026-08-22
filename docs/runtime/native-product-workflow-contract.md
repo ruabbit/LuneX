@@ -362,6 +362,36 @@ receipts prove offline scene source and checked adapter ownership; they do not
 prove actual Apple TV or Vision Pro window/focus/input interaction, signed or
 physical installation, assistive technology, or live Sunshine behavior.
 
+### Two-workspace application matrix
+
+Task 4.6 adds two application timelines to one process-level `AppModel`; it does
+not add production state or a second session/media/input owner. The first
+connects two supported scene attachments and proves independent navigation,
+host selection, Add Host sheet, and draft state. Catalog publication is current
+for its initiating workspace and cached for the other, settings persist through
+the shared repository, and a host added in one workspace appears in the shared
+library without changing the other workspace's local selection or presentation.
+
+That second scene is then disconnected and restored from its serialized identity.
+The next generation preserves navigation and host selection, clears the transient
+sheet, rejects navigation, selection, sheet, destructive action, and close calls
+from the old generation, and allows the replacement and unrelated primary scene
+to detach normally. The second timeline starts the one streaming session from a
+different workspace, rejects the non-owner overlay and stop commands, detaches
+the non-owner without affecting the session, and makes owner close await the
+existing clean control and media teardown exactly once.
+
+Fresh deterministic evidence is `2/2` focused and `259/259` related tests. The
+independent serial normal suite is `1250 total / 1249 passed / 1 skipped / 0
+failed`; the only skip is the explicitly disabled real-Keychain round trip,
+ordinary tests continue through the JSON file identity fallback, and both real
+opt-ins are unset. Unsigned generic Debug builds for macOS universal,
+iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured compiler,
+analyzer, or build warnings. No Simulator lifecycle was used. These receipts
+prove offline composition-root behavior, not actual simultaneous macOS/iPadOS
+windows, Stage Manager, signed or physical interaction, system continuity, or
+live Sunshine streaming.
+
 ### Host library workspace migration
 
 `AppModel` now creates one checked primary workspace in the process registry.
@@ -749,8 +779,9 @@ explicit real-Keychain opt-in; ordinary testing continues through the JSON
 file identity fallback with both real opt-ins unset. These are offline
 deterministic application receipts. They do not prove a live Sunshine session,
 signed installation, physical platform behavior, assistive technology, or the
-later multiwindow close/accessibility/cross-product work. Task 4.4 now supplies
-the offline close contract above; Tasks 5.x and 7.x remain separate.
+later accessibility/cross-product work. Task 4.4 supplies the offline close
+contract above, Task 4.6 supplies the two-workspace application matrix, and
+Tasks 5.x and 7.x remain separate.
 
 ### Host, pairing, and catalog product surfaces
 

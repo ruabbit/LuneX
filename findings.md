@@ -3451,3 +3451,19 @@
 - post-mark只读门确认4.5唯一checkbox将权威进度推进至`25/48 next 4.6`，最终12文件和所有retained证据一致；不需要重复任何行为门。
 - 4.5全部raw evidence在提交前按12个显式绝对路径逐项清理；后续最终审计只依赖已同步的稳定计数、合同与proof boundary，不再假设xcresult仍存在。
 - cleanup final audit确认4.5实现没有触及4.4 teardown、工程/配置/依赖/reference，且4.6仍未勾选。最终12文件可作为独立提交。
+
+## 2026-08-22 阶段 19 Task 4.6 发现
+
+- 现有测试覆盖面充足但分散：`ProductHostWorkspaceTests`覆盖local binding/shared host/settings，`ProductCatalogWorkspaceTests`覆盖shared catalog，registry覆盖stale generation，`AppModelWorkflowTests`覆盖non-owner commands与close policy。Task 4.6的实际缺口是同一composition root内两workspace的组合application证据。
+- 组合测试应复用唯一AppModel/runtime owner，不创建第二Moonlight session owner；两workspace只分离presentation/selection，shared repository mutation仍广播projection。最终session必须由一个workspace持有，另一个workspace命令fail closed，close按4.4策略执行。
+- 4.6 focused首轮为`2 total / 1 passed / 1 failed`；失败不是production close缺口，而是测试用`workspaceRegistry.replace`绕过scene coordinator，导致旧attachment token仍合法存在并按合同detach。真实scene generation replacement必须先disconnect旧attachment，再用其serialized identity reconnect；这样恢复durable local state、清空transient presentation并使旧attachment close返回`.rejectedStaleAttachment`。失败bundle不计最终验收。
+- 修正版fresh focused `/private/tmp/LuneX-19-4_6-focused-r2.32vX2N`通过`2/2`且structured build diagnostics全零。两条测试在同一AppModel下覆盖双workspace local/shared/replacement时序及唯一session owner的non-owner command/close policy，未增加production seam或第二runtime owner。
+- 4.6 related选择11个完整测试类而不是重复两项focused selector，结构化通过`259/259`且build diagnostics全零；覆盖workspace mutation/replacement、完整product workflows与session cancellation/recovery/media teardown，不依赖Simulator或真实host。
+- 两项新增组合测试使normal从4.5的`1248 total / 1247 passed`增长为`1250 total / 1249 passed`；唯一skip仍是`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`，两个真实opt-in保持unset，证明测试期文件fallback未被改动。运行日志中的Contacts CoreData/XPC不可用消息没有成为xcresult build warning/error或XCTest failure。
+- 4.6四平台unsigned generic Debug顺序通过`4/4`且每份structured diagnostics全零，macOS主可执行文件为`x86_64 arm64`；未操作Simulator。完整覆盖复核确认两条组合测试逐项闭合任务要求，production/project graph零修改；权威文档只将其表述为offline composition-root证据，不提升为真实双窗口、signed/physical或live-host验收。
+- authority同步后generator双跑前/后project hash稳定为`60e6966fc42bbe0facbb8adfdf66794746948039ba1f190ac13dc0438a9d2224`且工程零diff，OpenSpec strict为`1/1` valid；4.6 checkbox仍保持pre-mark，必须等repository gate通过后才勾选。
+- 4.6 repository pre-gate `/private/tmp/LuneX-19-4_6-repository-pre.4lEziF`完整通过十组remote/scope/test/authority/OpenSpec/project/evidence/safety/diff检查，确认pre-mark `25/48 next 4.6`和8文件范围；4.6可单独勾选并推进5.1，但整个change仍有22项后续任务，不得archive。
+- 4.6 post-mark final-state `/private/tmp/LuneX-19-4_6-final-state.B018Gb`只读确认`26/48 next 5.1`、strict valid、最终9文件、唯一4.6 checkbox、stable project与全部retained evidence/safety边界；不需要也不应为记录更新重复test/build/generator。
+- 4.6全部15个task-specific evidence路径已逐项精确清理且prefix零残留；后续final audit只复核已同步权威记录、最终diff和仓库状态，不再假设xcresult存在，也不重复行为门。
+- cleanup后authority复读发现runtime contract一处3.7历史段落仍把multiwindow close写为later work；这是文档时态漂移而非实现缺口。修正后明确4.4已提供offline close合同、4.6已提供two-workspace matrix，只有5.x accessibility和7.x cross-product仍后续。
+- corrected cleanup final audit通过9文件scope、production/project零diff、test `2 add / 0 delete / 0 skip`、authority current-state、OpenSpec strict `26/48 next 5.1`、stable project、零task artifact、disabled opt-ins/process与`4ffdd43`三方基线；4.6可作为纯test/authority提交。

@@ -46,6 +46,8 @@ Session start records the initiating workspace identity/generation alongside the
 
 tvOS focus and remote-command presentation and visionOS input/presentation admission additionally pass through one single-workspace platform-owner check. It accepts only the current active session owner whose checked workspace reference equals the current primary reference. A test-only or internal session started from another live workspace can still use the ordinary checked stop path, but it cannot create a second platform focus/input owner, change the primary overlay/focus state, or serialize input through the product adapter.
 
+The deterministic application matrix uses one `AppModel` with two actual scene attachments rather than parallel runtime owners. It proves independent navigation, selection, sheet, and draft state while catalog, settings, and host mutations remain shared. Disconnecting and restoring the second scene advances its workspace generation, preserves durable local values, clears transient presentation, and makes the prior bindings and attachment inert. A separate timeline starts the only session from one workspace, rejects overlay and stop commands from the other, detaches the non-owner without affecting the session, and closes the owner through the existing clean-stop operation.
+
 This is preferred over broadcasting one session to every window because command and input ownership would be ambiguous. Supporting concurrent remote sessions is deferred because the existing runtime is intentionally single-owner.
 
 ### Keep stream controls local to the owning workspace

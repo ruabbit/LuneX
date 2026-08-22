@@ -84,6 +84,10 @@ Host records, trust state, cached apps, and settings SHALL remain shared reposit
 - **WHEN** an inactive workspace mutates a host that does not own another workspace's active session
 - **THEN** shared data is reconciled without stopping, replacing, or transferring the active session owner
 
+#### Scenario: Two-workspace application matrix
+- **WHEN** two live scene workspaces independently change navigation, selection, and presentation while one mutates shared catalog, settings, or host data and later becomes a replacement generation
+- **THEN** deterministic application tests verify local isolation, shared projections, stale binding and attachment rejection, non-owner command rejection, and owner-keyed close behavior without creating a second runtime owner
+
 ### Requirement: Unsupported multiwindow behavior
 Platforms or configurations without product multiwindow support SHALL use one workspace without exposing nonfunctional window commands, while preserving the same checked ownership contracts internally.
 
