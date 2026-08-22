@@ -23,6 +23,7 @@ struct RootView: View {
                         in: workspace
                     )
                 }
+                .productActionTarget()
                 .accessibilityLabel("Disconnect Stream")
                 Button("Cancel", role: .cancel) {
                     _ = appModel.cancelStopStreamConfirmation(
@@ -32,6 +33,7 @@ struct RootView: View {
                 #if os(macOS) || os(iOS)
                 .keyboardShortcut(.cancelAction)
                 #endif
+                .productActionTarget()
                 .accessibilityLabel("Cancel Disconnect")
             } message: {
                 Text("Remote input and media playback will stop on this device.")
@@ -87,6 +89,7 @@ struct RootView: View {
                         } label: {
                             Label("Add Host", systemImage: "plus")
                         }
+                        .productActionTarget()
 
                         Button {
                             _ = appModel.requestStopStreamConfirmation(
@@ -95,6 +98,7 @@ struct RootView: View {
                         } label: {
                             Label("Disconnect", systemImage: "stop.fill")
                         }
+                        .productActionTarget()
                         .disabled(appModel.session.phase == .disconnected)
                     }
                 }
@@ -117,6 +121,7 @@ struct RootView: View {
                             } label: {
                                 Label("Add Host", systemImage: "plus")
                             }
+                            .productActionTarget()
                         }
                     }
             }
@@ -139,6 +144,7 @@ struct RootView: View {
                             } label: {
                                 Label("Disconnect", systemImage: "stop.fill")
                             }
+                            .productActionTarget()
                             .disabled(appModel.session.phase == .disconnected)
                         }
                     }
@@ -261,21 +267,25 @@ private struct SidebarNavigationList: View {
             } label: {
                 NavigationRow(label: "Library", systemImage: "rectangle.grid.2x2", isSelected: selection == .library)
             }
+            .productActionTarget()
             Button {
                 selection = .stream
             } label: {
                 NavigationRow(label: "Stream", systemImage: "play.rectangle", isSelected: selection == .stream)
             }
+            .productActionTarget()
             Button {
                 selection = .diagnostics
             } label: {
                 NavigationRow(label: "Diagnostics", systemImage: "waveform.path.ecg", isSelected: selection == .diagnostics)
             }
+            .productActionTarget()
             Button {
                 selection = .settings
             } label: {
                 NavigationRow(label: "Settings", systemImage: "slider.horizontal.3", isSelected: selection == .settings)
             }
+            .productActionTarget()
         }
         #endif
     }
@@ -299,9 +309,17 @@ private struct NavigationRow: View {
     let isSelected: Bool
 
     var body: some View {
-        Label(label, systemImage: systemImage)
+        HStack(spacing: 8) {
+            Label(label, systemImage: systemImage)
+            Spacer(minLength: 8)
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .accessibilityHidden(true)
+            }
+        }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 }
 
@@ -348,6 +366,7 @@ private struct AddHostSheet: View {
                         dismissSheet()
                     }
                     .disabled(isSubmitting)
+                    .productActionTarget()
                     #if os(macOS) || os(iOS)
                     .keyboardShortcut(.cancelAction)
                     #endif
@@ -365,6 +384,7 @@ private struct AddHostSheet: View {
                         }
                     }
                     .disabled(isSubmitting)
+                    .productActionTarget()
                     #if os(macOS) || os(iOS)
                     .keyboardShortcut(.defaultAction)
                     #endif
@@ -576,6 +596,7 @@ private struct HostLibraryPanel: View {
                         } label: {
                             Label("Retry Host Refresh", systemImage: "arrow.clockwise")
                         }
+                        .productActionTarget()
                     }
                 }
 
@@ -599,6 +620,7 @@ private struct HostLibraryPanel: View {
                         await appModel.performHostDestructiveAction(admitted)
                     }
                 }
+                .productActionTarget()
                 .accessibilityLabel(Text(destructiveActionLabel(confirmation)))
             }
             Button("Cancel", role: .cancel) {
@@ -607,6 +629,7 @@ private struct HostLibraryPanel: View {
             #if os(macOS) || os(iOS)
             .keyboardShortcut(.cancelAction)
             #endif
+            .productActionTarget()
             .accessibilityLabel("Cancel Host Action")
         } message: {
             if let confirmation = currentHostConfirmation {
@@ -622,6 +645,7 @@ private struct HostLibraryPanel: View {
         Button(action: onAddHost) {
             Label("Add Host", systemImage: "plus")
         }
+        .productActionTarget()
         .disabled(!surface.canAddHost)
 
         Button {
@@ -631,6 +655,7 @@ private struct HostLibraryPanel: View {
         } label: {
             Label("Refresh", systemImage: "arrow.clockwise")
         }
+        .productActionTarget()
         .disabled(!surface.canRefresh)
 
         Button {
@@ -638,6 +663,7 @@ private struct HostLibraryPanel: View {
         } label: {
             Label("Reset Trust", systemImage: "checkmark.shield")
         }
+        .productActionTarget()
         .disabled(!surface.canResetTrust)
 
         Button(role: .destructive) {
@@ -645,6 +671,7 @@ private struct HostLibraryPanel: View {
         } label: {
             Label("Remove", systemImage: "trash")
         }
+        .productActionTarget()
         .disabled(!surface.canRemove)
     }
 
@@ -670,6 +697,7 @@ private struct HostLibraryPanel: View {
                     } label: {
                         Label("Retry", systemImage: "arrow.clockwise")
                     }
+                    .productActionTarget()
                 }
             }
             .frame(minHeight: 180)
@@ -704,6 +732,7 @@ private struct HostLibraryPanel: View {
                 } label: {
                     Label("Retry Host Action", systemImage: "arrow.clockwise")
                 }
+                .productActionTarget()
             }
         case let .completed(kind):
             Label(
@@ -958,6 +987,7 @@ private struct PairingPanel: View {
                 } label: {
                     Label("Retry Pairing", systemImage: "arrow.clockwise")
                 }
+                .productActionTarget()
                 #if os(macOS) || os(iOS)
                 .keyboardShortcut(.defaultAction)
                 #endif
@@ -1008,6 +1038,7 @@ private struct PairingPanel: View {
             Label("Submit PIN", systemImage: "checkmark")
         }
         .disabled(!enabled)
+        .productActionTarget()
         #if os(macOS) || os(iOS)
         .keyboardShortcut(.defaultAction)
         #endif
@@ -1025,6 +1056,7 @@ private struct PairingPanel: View {
         } label: {
             Label("Start Pairing", systemImage: "lock.open")
         }
+        .productActionTarget()
         #if os(macOS) || os(iOS)
         .keyboardShortcut(.defaultAction)
         #endif
@@ -1044,6 +1076,7 @@ private struct PairingPanel: View {
         } label: {
             Label("Cancel", systemImage: "xmark")
         }
+        .productActionTarget()
         #if os(macOS) || os(iOS)
         .keyboardShortcut(.cancelAction)
         #endif
@@ -1153,6 +1186,7 @@ private struct AppCatalogPanel: View {
         } label: {
             Label("Refresh Apps", systemImage: "arrow.down.circle")
         }
+        .productActionTarget()
         .disabled(!surface.canRefresh)
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -1213,6 +1247,7 @@ private struct AppCatalogPanel: View {
                         } label: {
                             Label("Retry", systemImage: "arrow.clockwise")
                         }
+                        .productActionTarget()
                     }
                 }
                 .frame(minHeight: 240)
@@ -1259,6 +1294,7 @@ private struct AppCatalogPanel: View {
                 } label: {
                     Label("Retry App Refresh", systemImage: "arrow.clockwise")
                 }
+                .productActionTarget()
             }
         default:
             EmptyView()
@@ -1282,6 +1318,12 @@ private struct AppCatalogPanel: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .productActionTarget()
+                .accessibilityValue(
+                    appModel.selectedAppID(in: workspace) == app.id
+                        ? "Selected"
+                        : "Not selected"
+                )
             }
         }
         .frame(minHeight: 240, alignment: .top)
@@ -1314,8 +1356,11 @@ private struct RemoteAppTile: View {
             }
             Text(app.name)
                 .font(.headline)
-                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+            if isSelected {
+                Label("Selected", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+            }
             if app.supportsHDR {
                 Label("HDR", systemImage: "sun.max")
                     .font(.caption)
@@ -1360,6 +1405,7 @@ private struct StreamLaunchPanel: View {
                             } label: {
                                 Label("Stop Stream", systemImage: "stop.circle")
                             }
+                            .productActionTarget()
                             .disabled(commands.stop != .available)
                         } else {
                             Button {
@@ -1373,6 +1419,7 @@ private struct StreamLaunchPanel: View {
                                 )
                             }
                             .buttonStyle(.borderedProminent)
+                            .productActionTarget()
                             .disabled(commands.launch != .available || host.pairingState != .paired)
                         }
                     } else {
@@ -1407,6 +1454,7 @@ private struct StreamLaunchPanel: View {
                                 Image(systemName: "arrow.forward.circle")
                             }
                         }
+                        .productActionTarget()
                         .disabled(!appModel.canPerformProductAction(action))
                     }
                 }
@@ -1419,6 +1467,7 @@ private struct StreamWorkspaceView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
     let workspace: ProductWorkspaceReference
     #if os(macOS)
     let platformLifecycle: PlatformLifecycleState
@@ -1544,6 +1593,7 @@ private struct StreamWorkspaceView: View {
                         workspace: workspace,
                         layout: layout
                     )
+                    .transition(streamOverlayTransition)
                     .frame(maxWidth: streamOverlayMaximumWidth(
                         in: geometry.size,
                         layout: layout
@@ -1569,6 +1619,7 @@ private struct StreamWorkspaceView: View {
                         Image(systemName: "eye")
                     }
                     .buttonStyle(.bordered)
+                    .productActionTarget()
                     .accessibilityLabel("Show Stream Controls")
                     .frame(
                         maxWidth: .infinity,
@@ -1592,6 +1643,10 @@ private struct StreamWorkspaceView: View {
                 }
             }
             .background(Color.black)
+            .animation(
+                streamOverlayAnimation,
+                value: appModel.streamOverlayVisibility(in: workspace)
+            )
             #if os(tvOS)
             .onAppear {
                 appModel.setTVStreamWorkspaceVisible(true, in: workspace)
@@ -1609,6 +1664,28 @@ private struct StreamWorkspaceView: View {
                 isTVStreamSurfaceFocused = visibility == .hidden
             }
             #endif
+        }
+    }
+
+    private var streamOverlayTransition: AnyTransition {
+        switch ProductInteractionAccessibilityPolicy.transitionStyle(
+            reduceMotionEnabled: reduceMotionEnabled
+        ) {
+        case .immediate:
+            .identity
+        case .opacity:
+            .opacity
+        }
+    }
+
+    private var streamOverlayAnimation: Animation? {
+        switch ProductInteractionAccessibilityPolicy.transitionStyle(
+            reduceMotionEnabled: reduceMotionEnabled
+        ) {
+        case .immediate:
+            nil
+        case .opacity:
+            .easeInOut(duration: 0.18)
         }
     }
 
@@ -1763,6 +1840,7 @@ private struct StreamStatusOverlay: View {
         } label: {
             Label("Hide Controls", systemImage: "eye.slash")
         }
+        .productActionTarget()
         #if os(macOS) || os(iOS)
         .keyboardShortcut(.cancelAction)
         #endif
@@ -1775,6 +1853,7 @@ private struct StreamStatusOverlay: View {
         } label: {
             Label("Disconnect", systemImage: "xmark.circle")
         }
+        .productActionTarget()
         .disabled(appModel.session.phase == .disconnected)
         .accessibilityLabel("Disconnect Stream")
         #if os(macOS) || os(iOS)
@@ -2200,6 +2279,8 @@ private struct DiagnosticsView: View {
                                 Label(event.category.label, systemImage: event.category.systemImage)
                                     .font(.caption)
                                     .foregroundStyle(color(for: event.severity))
+                                Text(severityLabel(for: event.severity))
+                                    .font(.caption2.weight(.semibold))
                                 Text(event.code)
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(.secondary)
@@ -2234,6 +2315,7 @@ private struct DiagnosticsView: View {
                     Label("Export Diagnostics", systemImage: "square.and.arrow.up")
                 }
                 .disabled(appModel.diagnostics.events.isEmpty)
+                .productActionTarget()
                 .accessibilityLabel("Export Diagnostics")
                 .accessibilityHint("Shares a privacy-redacted diagnostics report.")
                 #endif
@@ -2246,6 +2328,17 @@ private struct DiagnosticsView: View {
         case .debug, .info: .secondary
         case .warning: .orange
         case .error: .red
+        }
+    }
+
+    private func severityLabel(
+        for severity: RuntimeDiagnosticSeverity
+    ) -> LocalizedStringResource {
+        switch severity {
+        case .debug: "Debug"
+        case .info: "Information"
+        case .warning: "Warning"
+        case .error: "Error"
         }
     }
 }
@@ -2315,6 +2408,7 @@ private struct SettingsView: View {
                     Label("Save Settings", systemImage: "checkmark.circle")
                 }
                 .buttonStyle(.borderedProminent)
+                .productActionTarget()
                 #if os(macOS) || os(iOS)
                 .keyboardShortcut("s", modifiers: .command)
                 #endif
@@ -2606,7 +2700,11 @@ private struct MobilePictureInPictureCommandButton: View {
                 .frame(width: 18, height: 18)
         }
         .buttonStyle(.bordered)
-        .frame(width: 36, height: 32)
+        .frame(
+            minWidth: ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension,
+            minHeight: ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension
+        )
+        .productActionTarget()
         .help(label)
         .accessibilityLabel(Text(label))
         .accessibilityValue(value)
@@ -3013,6 +3111,23 @@ private struct NumberSettingRow: View {
         }
         #else
         Stepper("\(title): \(value) \(suffix)", value: $value, in: range, step: step)
+        #endif
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func productActionTarget() -> some View {
+        #if os(iOS)
+        self
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(
+                minWidth: ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension,
+                minHeight: ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension
+            )
+            .contentShape(Rectangle())
+        #else
+        self
         #endif
     }
 }

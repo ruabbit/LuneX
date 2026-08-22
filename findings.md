@@ -3521,3 +3521,16 @@
 - tvOS条件编译修正后的single fresh最终macOS候选再次闭合focused `7/7`、related `218/217/1/0`和normal `1259/1258/1/0`，三份build diagnostics全零；related/normal唯一skip的结构化test node均精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。因此最终验收不依赖条件编译修正前的旧测试证据，也没有重新触发Keychain授权。
 - 最终repository pre-gate以实际源码格式验证10个`keyboardShortcut` modifier均紧邻macOS/iOS guard，且default/runtime/lower adapter三层都拒绝system-reserved forwarding；旧`captureSystemShortcuts`仍可解码但不能改变runtime。5.3可独立完成，5.4 touch target/text/state/reduced motion与5.5 tvOS/visionOS focus仍保持pending。
 - post-mark最终审计没有发现5.3阻断项：Add Host、Pairing和stream overlay的initial/transition focus目标均落在可见控件或显式result/progress focus surface，default/cancel/Command-S无tvOS/visionOS编译泄漏，Settings不再呈现可开启的shortcut forwarding。该离线结论仍不替代物理hardware keyboard、Voice Control/VoiceOver、Stage Manager、signed或live-host验收。
+
+### Stage 19 Task 5.4 touch, text, non-color state, and motion audit (2026-08-22)
+
+- SwiftUI root当前没有任何`accessibilityReduceMotion`环境读取或product transition animation；task 5.4必须形成actual view接线，不能只写spec或测试pure flag。
+- 自定义PiP命令明确为`36x32`，RemoteAppTile和多组workflow Button使用plain/custom composition；统一modifier应在iOS提供至少44x44 hit frame并让label纵向扩展，系统Toggle/Stepper/Picker继续使用原生控件尺寸。
+- RemoteAppTile的selected状态目前只改变accent background/border，app name还用`.lineLimit(2)`；应增加可见checkmark+Selected文本、accessibility value并移除截断。Host pairing已有lock/checkmark图标和状态文本，issue/HDR/audio/session状态已有文字+systemImage，不需重写。
+- diagnostics event header虽然有category/code/message，但severity差异主要使用颜色；增加固定Debug/Information/Warning/Error文本可闭合non-color状态，不暴露provider或identity数据。
+- 统一`productActionTarget()`只在iOS分支扩展hit frame/label vertical sizing，其他平台返回原view，因此不会改变5.5的tvOS/visionOS focus geometry。当前源码有38个调用点，覆盖toolbar/confirmation、host/pairing/catalog/launch/stream、app tile、diagnostics export、settings save和PiP custom commands；原生Toggle/Stepper/Picker不替换。
+- 非macOS Sidebar由Button和自定义NavigationRow构成，不能只依赖foreground accent表达selected；显式checkmark与accessibility value让iPadOS宽窗口、tvOS/visionOS单workspace导航在不辨色时仍可读。该改动不改变focus order或restoration。
+- 最终离线矩阵闭合为focused `2/2`、related `244/244`、normal `1261/1260/1/0`与四平台generic Debug `4/4`，所有structured diagnostics全零、macOS为`x86_64 arm64`；唯一skip仍是显式真实Keychain opt-in。generic build证明iOS-only modifier和所有条件分支可编译，不证明实际44pt hit testing、物理touch、contrast、Reduce Motion视觉效果或assistive technology。
+- generator双跑保持`project.pbxproj` hash `4214a283c9e353456098dba5504f2cef3cf7cabd78ff2d4c51a2d34060b2f04f`且strict OpenSpec通过。repository gate前两轮分别暴露零匹配`rg -c`空输出与进程检索自匹配的脚本问题；均无源码/runtime副作用，改用`awk`确定性计数和`pgrep -x`后fresh r3完整通过。
+- 最终pre-gate确认5.4没有新增任何tvOS/visionOS focus production modifier，selection、severity和Reduce Motion合同均来自actual RootView wiring；因此可标记5.4，但5.5 focus order/restoration和5.6完整可访问性矩阵仍必须独立实现与验收。
+- 5.4所有17个task-specific临时证据路径已在post-mark后逐项精确清理，prefix零残留；后续final audit只依赖已同步的仓库权威记录，不再假设raw xcresult或generator日志存在，也不重复行为门。

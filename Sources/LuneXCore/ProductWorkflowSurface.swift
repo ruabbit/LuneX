@@ -42,6 +42,21 @@ enum ProductLibraryDashboardLayout: Hashable, Sendable {
     }
 }
 
+enum ProductWorkflowTransitionStyle: Equatable, Sendable {
+    case immediate
+    case opacity
+}
+
+enum ProductInteractionAccessibilityPolicy {
+    static let minimumTouchTargetDimension: CGFloat = 44
+
+    static func transitionStyle(
+        reduceMotionEnabled: Bool
+    ) -> ProductWorkflowTransitionStyle {
+        reduceMotionEnabled ? .immediate : .opacity
+    }
+}
+
 enum ProductKeyboardFocusTarget: Hashable, Sendable {
     case manualHostName
     case manualHostAddress

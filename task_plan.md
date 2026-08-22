@@ -2043,3 +2043,23 @@
 - **evidence cleanup：** 先枚举再用绝对`find <exact-path> -depth -delete`逐项清理25个5.3 task-specific路径，并显式清理2个辅助test-tree JSON；prefix与辅助路径均为0，未扩大删除范围或触碰仓库cache。下一步cleanup final audit，通过后独立提交推送。
 - **cleanup final audit首轮错误：** 测试完整性正则把`testForwardedCommandKeyEquivalentIsCapturedWithoutLocalHandling`到`testCommandKeyEquivalentAlwaysRemainsLocalWithoutRemoteSamples`的语义重命名误作无替代删除并退出；新测试已在三层行为门通过且normal总数增加2。r2精确验证这一对rename并拒绝其他测试删除或新增skip，不重复过宽断言。
 - **cleanup final audit：** corrected r2 `/private/tmp/LuneX-19-5_3-cleanup-final-audit-r2.ydYwap`完整通过最终21文件、strict/OpenSpec `29/48 next 5.4`、stable project、10处平台guard、focus/reserved-local合同、精确test rename、零skip新增、disabled opt-ins、零process与remote baseline。删除audit临时路径并做零残留检查后即可独立提交推送。
+
+## 2026-08-22 阶段 19 任务 5.4 启动
+
+- **状态：** `in_progress`；Task 5.3已以`43802f1 Add native keyboard workflow focus`提交推送，`HEAD == origin/main == remote`且工作树clean，OpenSpec为`29/48 next 5.4`。
+- **审计缺口：** product UI没有`accessibilityReduceMotion`接线；`MobilePictureInPictureCommandButton`明确固定为`36x32`，其他custom/plain workflow buttons也没有统一44pt touch target；RemoteAppTile selection只靠accent background/border且app name限制两行；diagnostic severity主要靠颜色。
+- **实现边界：** 新增pure touch/motion policy、统一SwiftUI action target/text expansion modifier、non-color selection/severity marker及stream overlay reduced-motion transition。5.5 tvOS/visionOS focus order/restoration与5.6完整矩阵保持pending，不把离线source/behavior证据描述为物理touch、contrast或assistive-technology验收。
+- **重复glob错误：** 5.4首轮并行检索再次传入不存在的`Tests/LuneXCoreTests/*Accessibility*`裸glob，zsh在该子命令执行前以`no matches found`退出；其他明确路径读取成功且仓库无变化。后续只用`rg --files`或明确文件名，不再传任何可空裸glob。
+- **实现补丁首轮错误：** 首个core/RootView组合补丁在RootView多段上下文匹配失败，`apply_patch`原子拒绝且两个production文件均未修改。随后拆为pure policy、stream motion、tile、diagnostics、PiP、modifier和action groups的小补丁，不重复大上下文。
+- **首轮实现：** `ProductInteractionAccessibilityPolicy`固定44pt并纯值选择opacity/immediate；RootView在iOS custom actions使用统一target modifier，PiP从`36x32`改为策略最小值，RemoteAppTile移除两行截断并显示Selected/checkmark/accessibility value，diagnostics显示severity文本，stream overlay按Reduce Motion选择无动画或0.18秒opacity。5.5 focus未改；新增pure/source focused测试，下一步fresh warnings-as-errors编译与执行。
+- **focused首轮与补强：** fresh macOS focused `2/2`、零structured diagnostics；审读发现非macOS Sidebar NavigationRow的custom selection仍只改变accent color。新增可见checkmark和Selected/Not selected accessibility value并扩展source合同，首轮证据不作为最终候选，下一步fresh r2。
+- **最终行为门：** 补强后fresh focused r2 `2/2`、13类serial related `244/244`、serial normal `1261/1260/1/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`全部结构化零diagnostic，macOS为`x86_64 arm64`；唯一skip精确为真实Keychain opt-in，两个真实opt-in unset且未操作Simulator。
+- **authority同步：** 已同步design/accessibility spec、native product workflow contract、completion roadmap与三份planning，记录44pt/action text、non-color state、Reduce Motion接线、最终`2/244/1261/4`证据和physical touch/contrast/assistive-technology边界。5.4仍保持pre-mark `29/48 next 5.4`；下一步generator双跑、strict与repository pre-gate。
+- **目标工具限制：** 本轮按用户既有“重新创建目标”要求调用`create_goal`，但工具仍把旧`blocked`目标视为unfinished且拒绝替换；仓库、Keychain、live host、Simulator和runtime均无副作用。继续以OpenSpec与三份planning为执行权威，不误标旧目标complete。
+- **generator/strict：** generator连续两次运行后`project.pbxproj` SHA-256稳定为`4214a283c9e353456098dba5504f2cef3cf7cabd78ff2d4c51a2d34060b2f04f`且工程零drift；`openspec validate complete-native-product-workflows --strict`通过。
+- **repository gate错误与修正：** 首轮fresh gate在零focus新增时使用`rg -c`得到空字符串而非`0`并退出；r2改为`awk`后通过该组，但宽泛进程检索匹配脚本自身报告文本而误判。两轮均只读且无仓库/runtime副作用；r3改为确定性`awk`计数和`pgrep -x`精确进程名，从fresh目录完整重跑。
+- **repository pre-gate：** r3 `/private/tmp/LuneX-19-5_4-repository-pre-r3.84UClZ`完整通过三方remote基线、10文件pre-mark scope、44pt/38处modifier/PiP、selection/severity/text、Reduce Motion、5.5隔离、OpenSpec `29/48 next 5.4` strict、stable project、retained `2/244/1261/4`证据、唯一Keychain skip、disabled opt-ins与零active build/test process。5.4可单独勾选，5.5以后保持pending且change不得archive。
+- **post-mark final-state：** `/private/tmp/LuneX-19-5_4-final-state.mwPuZ4`只读确认OpenSpec `30/48 next 5.5 ready`、strict valid、最终11文件、tasks仅5.4 checkbox变化、stable project、38处modifier、5.5隔离与安全边界；不为记录更新重复test/build/generator。下一步精确清理全部5.4 task artifact并做cleanup final audit。
+- **cleanup命令拒绝：** 首个清理脚本因末尾使用`rm -f`删除临时清单而在进程创建前被策略拒绝，零路径删除、零仓库/runtime副作用；改用受限`find <exact-path> -delete`后执行。
+- **evidence cleanup：** 受限枚举并逐路径删除17个`/private/tmp/LuneX-19-5_4*` task artifact，变量使用`target_path`且每项校验精确前缀；prefix残留为0，未触碰仓库`build/DerivedData`。下一步cleanup final audit，通过后独立提交推送。
+- **cleanup final audit：** `/private/tmp/LuneX-19-5_4-cleanup-final-audit.8vAuuY`完整通过最终11文件、OpenSpec `30/48 next 5.5` strict、stable project、touch/text/non-color/motion合同、5.5 focus隔离、测试`2 add / 0 delete / 0 new skip`、authority、零其他artifact、disabled opt-ins、零active process与三方baseline。删除当前audit路径并完成提交前零残留检查后即可独立提交推送。

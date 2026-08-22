@@ -430,9 +430,10 @@ accessibility modifier wiring, physical VoiceOver or Voice Control behavior,
 hardware keyboard/touch/remote/focus, signed installation, or live Sunshine.
 Task 5.2 supplies the adaptive dashboard and primary-command reflow described
 below. Task 5.3 now supplies the macOS/iPadOS focus, default/cancel, Voice
-Control naming, and system-shortcut-local contracts described below. Touch and
-reduced-motion behavior, tvOS/visionOS focus, and the complete matrix remain
-tasks 5.4 through 5.6 and the later physical acceptance gate.
+Control naming, and system-shortcut-local contracts described below. Task 5.4
+supplies iOS touch targets, text expansion, non-color state markers, and
+reduced-motion behavior. tvOS/visionOS focus and the complete matrix remain
+tasks 5.5 and 5.6 and the later physical acceptance gate.
 
 ### Adaptive workflow layout
 
@@ -467,8 +468,9 @@ regression behavior, and platform compilation. They do not prove physical
 window resizing, Stage Manager, every longest localization, SwiftUI snapshot
 geometry, physical VoiceOver or Voice Control, signed installation, or live
 Sunshine. Task 5.3 adds deterministic keyboard and Voice Control naming
-contracts below; tasks 5.4 through 5.6 and the later physical gate retain the
-remaining interaction and acceptance work.
+contracts below, and Task 5.4 adds deterministic touch/text/non-color/motion
+contracts below. Tasks 5.5, 5.6, and the later physical gate retain the
+remaining focus, matrix, and acceptance work.
 
 ### Native keyboard and Voice Control operation
 
@@ -515,6 +517,49 @@ related regression behavior, and platform compilation. They do not prove
 physical keyboard focus movement, VoiceOver or Voice Control recognition,
 iPad Stage Manager behavior, signed installation, or live Sunshine input.
 Those remain explicit physical acceptance work.
+
+### Touch, text, non-color state, and reduced motion
+
+Task 5.4 adds `ProductInteractionAccessibilityPolicy`. Its touch minimum is 44
+points and its pure transition resolver selects `.opacity` normally or
+`.immediate` when Reduce Motion is enabled. `productActionTarget()` applies
+vertical label expansion, the 44-by-44 minimum frame, and a rectangular hit
+shape only in the iOS/iPadOS branch. The other platform branches return the
+original view, so this task does not change tvOS/visionOS focus geometry or
+restoration. Native `Toggle`, `Stepper`, and `Picker` controls retain their
+system sizing rather than being replaced by custom controls.
+
+The modifier covers custom host, pairing, catalog, launch, stream,
+confirmation, navigation, app-selection, diagnostics export, Settings save,
+and Picture in Picture commands. The PiP icon command no longer fixes its
+interactive frame to 36 by 32 points. Remote app names no longer have a
+two-line limit. Selected navigation rows and app tiles expose a visible
+checkmark and Selected/Not selected accessibility value, and diagnostic events
+show Debug, Information, Warning, or Error text in addition to severity color.
+Existing host, pairing, reachability, HDR, audio, and session surfaces retain
+their text plus system-image markers.
+
+`StreamWorkspaceView` reads `accessibilityReduceMotion`. Overlay visibility
+uses a bounded 0.18-second opacity transition in the normal policy and an
+identity transition with a nil animation in the reduced policy. Failure and
+state content remain textual and reachable in both policies; animation is not
+required to discover or invoke a recovery action.
+
+Fresh deterministic evidence is `2/2` focused policy/source tests and a serial
+`244/244` related workflow, diagnostics, HDR, spatial, mobile, tvOS, and
+visionOS presentation matrix. The independent serial normal suite is `1261
+total / 1260 passed / 1 skipped / 0 failed`; the sole skip is the explicitly
+disabled real-Keychain round trip, ordinary tests continue through the JSON
+file identity fallback, and both real opt-ins are unset. Unsigned generic Debug
+builds for macOS universal (`x86_64 arm64`), iOS/iPadOS, tvOS, and visionOS pass
+`4/4` with zero structured compiler, analyzer, or build warnings. No Simulator
+lifecycle was used.
+
+These receipts prove pure policy values, source wiring, related regression
+behavior, and platform compilation. They do not prove physical touch geometry,
+Switch Control, contrast perception, VoiceOver/Voice Control, a signed build,
+iPad Stage Manager, or live Sunshine. tvOS/visionOS focus restoration and the
+complete accessibility matrix remain tasks 5.5 and 5.6.
 
 ### Host library workspace migration
 
@@ -946,9 +991,10 @@ These reducers and source contracts provide deterministic offline presentation
 coverage only. Task 5.1 provides their typed localized accessibility
 descriptors, Task 5.2 provides actual-width and accessibility Dynamic Type
 dashboard/primary-command reflow, and Task 5.3 provides the macOS/iPadOS
-keyboard/focus policy and stable Voice Control names. Touch and reduced-motion
-behavior, tvOS/visionOS focus, the complete matrix, and physical assistive
-technology remain tasks 5.4 through 5.6 and the later physical gate.
+keyboard/focus policy and stable Voice Control names. Task 5.4 provides iOS
+touch targets, text expansion, non-color state markers, and reduced-motion
+overlay behavior. tvOS/visionOS focus, the complete matrix, and physical
+assistive technology remain tasks 5.5, 5.6, and the later physical gate.
 Direct per-scene injection is complete for
 these surfaces; retained legacy workflow strings remain within the explicit
 tasks 6.1/6.2 migration boundary.

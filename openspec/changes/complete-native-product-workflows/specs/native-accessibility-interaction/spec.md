@@ -60,6 +60,10 @@ macOS and iPadOS workflows SHALL support predictable keyboard focus, default and
 ### Requirement: Touch and focus targets
 iOS/iPadOS actions SHALL meet native touch target expectations, and tvOS/visionOS actions SHALL expose deterministic focus order, focus restoration, and reachability consistent with actual command eligibility.
 
+#### Scenario: iOS workflow action target
+- **WHEN** an iPhone or iPad user invokes a custom host, pairing, catalog, launch, stream, diagnostics, settings, navigation, app-selection, or Picture in Picture action
+- **THEN** its interactive frame is at least 44 by 44 points and its visible label can expand vertically without changing command ownership or eligibility
+
 #### Scenario: tvOS overlay focus
 - **WHEN** the stream overlay opens on tvOS
 - **THEN** focus moves to an eligible local command and returns to the declared prior destination when the overlay closes
@@ -70,6 +74,14 @@ iOS/iPadOS actions SHALL meet native touch target expectations, and tvOS/visionO
 
 ### Requirement: Reduced motion and contrast independence
 The application SHALL respect Reduce Motion and SHALL not communicate pairing, reachability, failure, HDR, audio, or session state by color or animation alone.
+
+#### Scenario: Stream overlay motion
+- **WHEN** stream controls appear or disappear
+- **THEN** the overlay may use a bounded opacity transition normally and uses an immediate identity transition with no animation when Reduce Motion is enabled
+
+#### Scenario: Selected and diagnostic state without color
+- **WHEN** navigation or app selection changes, or a diagnostic event is presented
+- **THEN** a visible text or symbol marker and semantic value communicate the selected or severity state without requiring color perception
 
 #### Scenario: Failure presentation
 - **WHEN** a workflow fails with Reduce Motion enabled

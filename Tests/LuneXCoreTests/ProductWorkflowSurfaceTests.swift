@@ -105,6 +105,25 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         }
     }
 
+    func testInteractionAccessibilityPolicyUsesNativeTouchAndMotionBounds() {
+        XCTAssertEqual(
+            ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension,
+            44
+        )
+        XCTAssertEqual(
+            ProductInteractionAccessibilityPolicy.transitionStyle(
+                reduceMotionEnabled: false
+            ),
+            .opacity
+        )
+        XCTAssertEqual(
+            ProductInteractionAccessibilityPolicy.transitionStyle(
+                reduceMotionEnabled: true
+            ),
+            .immediate
+        )
+    }
+
     func testHostLibraryMapsLoadingFirstUseAvailableAndFailure() {
         let host = makeHost(pairingState: .paired)
 
@@ -1110,6 +1129,47 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             )
         }
         XCTAssertFalse(source.contains("Forward system shortcuts"))
+    }
+
+    func testRootViewEnforcesTouchTextNonColorAndReducedMotionContracts()
+        throws
+    {
+        let source = try String(contentsOf: rootViewURL, encoding: .utf8)
+        let requiredContracts = [
+            "@Environment(\\.accessibilityReduceMotion) private var reduceMotionEnabled",
+            "ProductInteractionAccessibilityPolicy.transitionStyle(",
+            ".transition(streamOverlayTransition)",
+            ".animation(",
+            "case .immediate:",
+            ".identity",
+            "func productActionTarget() -> some View",
+            "#if os(iOS)",
+            ".fixedSize(horizontal: false, vertical: true)",
+            "ProductInteractionAccessibilityPolicy.minimumTouchTargetDimension",
+            ".contentShape(Rectangle())",
+            "Image(systemName: \"checkmark\")",
+            ".accessibilityHidden(true)",
+            "Label(\"Selected\", systemImage: \"checkmark.circle.fill\")",
+            ".accessibilityValue(",
+            "? \"Selected\"",
+            ": \"Not selected\"",
+            "Text(severityLabel(for: event.severity))",
+            "case .warning: \"Warning\"",
+            "case .error: \"Error\""
+        ]
+        for contract in requiredContracts {
+            XCTAssertTrue(
+                source.contains(contract),
+                "Missing interaction accessibility contract: \(contract)"
+            )
+        }
+
+        let actionTargetCount = source.components(
+            separatedBy: ".productActionTarget()"
+        ).count - 1
+        XCTAssertGreaterThanOrEqual(actionTargetCount, 30)
+        XCTAssertFalse(source.contains(".frame(width: 36, height: 32)"))
+        XCTAssertFalse(source.contains(".lineLimit(2)"))
     }
 
     func testLibraryDashboardAndCommandsReflowWithoutPlatformAssumptions() throws {
