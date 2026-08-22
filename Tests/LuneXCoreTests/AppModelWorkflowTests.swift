@@ -7096,6 +7096,73 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    func testStaleTerminationCannotRelabelOrStopReplacementSession()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider(
+            retainsStoppedContinuation: true
+        )
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 45,
+                    key: Data(repeating: 0x45, count: 16)
+                )),
+                .success(RemoteInputKeyMaterial(
+                    keyID: 46,
+                    key: Data(repeating: 0x46, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        let workspace = model.primaryWorkspaceReference
+
+        let firstLaunch = Task { await model.launchSelectedApp(in: workspace) }
+        let first = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: first)
+        await waitUntil { model.productSessionActualPhase == .streaming }
+
+        let firstDidStop = await model.stopStream(in: workspace)
+        XCTAssertTrue(firstDidStop)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [first.sessionID])
+
+        let secondLaunch = Task { await model.launchSelectedApp(in: workspace) }
+        await waitUntil { provider.currentStartRecords().count == 2 }
+        let second = try XCTUnwrap(provider.currentStartRecords().last)
+        driveSessionToStreaming(provider, record: second)
+        await waitUntil {
+            model.activeProductSessionOwner?.sessionID == second.sessionID
+                && model.productSessionActualPhase == .streaming
+        }
+
+        provider.yield(.terminated(reason: nil), sessionID: first.sessionID)
+        await firstLaunch.value
+        provider.finish(sessionID: first.sessionID)
+
+        XCTAssertEqual(
+            model.activeProductSessionOwner,
+            ProductSessionOwner(workspace: workspace, sessionID: second.sessionID)
+        )
+        XCTAssertEqual(model.productSessionActualPhase, .streaming)
+        XCTAssertTrue(model.session.isStreaming)
+        XCTAssertNil(model.streamProductIssue(in: workspace))
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [first.sessionID])
+
+        let secondDidStop = await model.stopStream(in: workspace)
+        XCTAssertTrue(secondDidStop)
+        provider.finish(sessionID: second.sessionID)
+        await secondLaunch.value
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertEqual(
+            provider.currentStoppedSessionIDs(),
+            [first.sessionID, second.sessionID]
+        )
+    }
+
     func testWorkspaceReplacementCannotClaimOwnerAndTriggersCheckedCleanup()
         async throws
     {
@@ -9070,12 +9137,17 @@ private final class ControlledSessionControlProvider: SessionControlProvider, @u
 
     private let lock = NSLock()
     private let automaticallyCompletes: Bool
+    private let retainsStoppedContinuation: Bool
     private var startRecords: [StartRecord] = []
     private var continuations: [UUID: Continuation] = [:]
     private var stoppedSessionIDs: [UUID] = []
 
-    init(automaticallyCompletes: Bool = false) {
+    init(
+        automaticallyCompletes: Bool = false,
+        retainsStoppedContinuation: Bool = false
+    ) {
         self.automaticallyCompletes = automaticallyCompletes
+        self.retainsStoppedContinuation = retainsStoppedContinuation
     }
 
     func start(
@@ -9114,8 +9186,12 @@ private final class ControlledSessionControlProvider: SessionControlProvider, @u
     func stop(sessionID: UUID) async {
         let continuation = withLock {
             stoppedSessionIDs.append(sessionID)
+            guard !retainsStoppedContinuation else {
+                return continuations[sessionID]
+            }
             return continuations.removeValue(forKey: sessionID)
         }
+        guard !retainsStoppedContinuation else { return }
         continuation?.finish()
     }
 

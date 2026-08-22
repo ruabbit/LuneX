@@ -532,7 +532,37 @@ tvOS, and visionOS pass `4/4` with zero structured compiler, analyzer, or build
 warnings. These are offline source/test/build receipts with the JSON identity
 fallback and both real opt-ins unset. They do not prove signed installation,
 physical resize/touch/focus, assistive technology, live Sunshine, or device
-performance, and Task 3.7 retains the broader session application matrix.
+performance. Task 3.7's broader session application matrix is recorded below.
+
+### Session recovery application matrix
+
+Task 3.7 completes the deterministic application matrix for required-provider
+absence, duplicate launch, owner and non-owner commands, recoverable
+interruption, remote termination, stale termination, reconnect exhaustion,
+repeated stop, and clean teardown. The audit reused existing direct `AppModel`
+coverage for eight categories instead of duplicating lower-level tests under new
+names. The only missing race was a first generation delivering termination
+after clean local stop and after a second generation had reached streaming.
+
+`ControlledSessionControlProvider` therefore has a test-only
+`retainsStoppedContinuation` option whose default is `false`. The regression
+enables it for the first generation, stops that generation cleanly, starts the
+replacement through streaming, injects the first generation's late terminal
+event, and verifies that the replacement owner, phase, active state, and issue
+presentation remain unchanged before the replacement also stops cleanly. No
+production source, project, configuration, dependency, vendor, or reference
+file changes are required.
+
+Fresh warnings-as-errors evidence is `1/1` for the new race, `10/10` for the
+nine-category application matrix, and `1226 total / 1225 passed / 1 skipped /
+0 failed` for the serial normal suite. All three structured build results have
+zero compiler errors, warnings, or analyzer warnings. The only skip is the
+explicit real-Keychain opt-in; ordinary testing continues through the JSON
+file identity fallback with both real opt-ins unset. These are offline
+deterministic application receipts. They do not prove a live Sunshine session,
+signed installation, physical platform behavior, assistive technology, or the
+multiwindow close/accessibility/cross-product work still assigned to Tasks 4.4,
+5.x, and 7.x.
 
 ### Host, pairing, and catalog product surfaces
 

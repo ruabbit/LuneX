@@ -3861,3 +3861,18 @@
 - 2026-08-18：32个已枚举`/private/tmp/LuneX-19-3_6-*`路径已逐个`find <exact> -depth -delete`，task prefix零残留；仓库既有ignored `build/DerivedData`未触碰。下一步final diff audit与record。
 - 2026-08-18：首轮final audit确认product hunk全在stream UI、tests无删除/skip、OpenSpec `19/48 next 3.7`，并发现roadmap一句“3.6仍负责”的stale时态；已精确改为3.6完成、3.7仍负责完整矩阵，不重跑test/build。下一步重跑只读final audit。
 - 2026-08-18：corrected final audit通过11文件scope、RootView stream-only hunk范围、core `21+/0-`、1新增/0删除测试函数、无skip/disable、唯一3.6 checkbox、strict `19/48 next 3.7`、零stale authority wording及privacy/opt-in/process/artifact/project/diff边界。下一步final record后提交推送。
+- 2026-08-18：3.6已以`fec4ec5 Adapt stream controls to window size`提交推送，fetch与ls-remote确认三方SHA一致、工作树clean。启动3.7 application session矩阵审计，真实opt-in继续unset且不操作Simulator。
+- 2026-08-18：3.7覆盖审计确认九项中八项已有明确application tests，唯一缺口是旧session termination在replacement streaming后到达。已仅修改`AppModelWorkflowTests.swift`：测试provider可选保留stopped continuation，并新增stale termination不改写/停止第二代及最终clean stop回归；production零修改。下一步warnings-as-errors compile与focused测试。
+- 2026-08-18：fresh focused `/private/tmp/LuneX-19-3_7-focused.MMLiAG`结构化通过新增竞态`1/1`，零skip/failure且build diagnostics全零。下一步将九类合同对应的10个application tests作为expanded focused统一执行。
+- 2026-08-18：首个expanded wrapper在shell启动前因外层JavaScript误解析Bash数组展开而拒绝，无evidence/build/test副作用；改用10个显式only-testing参数后继续。
+- 2026-08-18：fresh expanded `/private/tmp/LuneX-19-3_7-expanded.iCdzYN`结构化通过九类合同对应的`10/10` application tests，零skip/failure且build diagnostics全零；production无需修改。下一步独立fresh serial normal。
+- 2026-08-18：fresh serial normal `/private/tmp/LuneX-19-3_7-normal.NxftSs`结构化通过`1226/1225/1/0`，build diagnostics全零；唯一skip精确为真实Keychain round-trip，两个真实opt-in unset、文件fallback继续。工作树仅test与三份planning，3.7仍未勾选；下一步authority与pre-gate。
+- 2026-08-22：恢复确认`fec4ec5` remote parity、OpenSpec `19/48 next 3.7`及精确4文件工作树不变；`/private/tmp/LuneX-19-3_7-*`已被系统清理。为最终pre-gate重建当前源码的focused/expanded/normal retained证据，继续unset真实opt-in且不操作Simulator。
+- 2026-08-22：当前未变源码的fresh final focused `/private/tmp/LuneX-19-3_7-focused-final.wADFi6`通过`1/1`，expanded `/private/tmp/LuneX-19-3_7-expanded-final.GOhNqB`通过九类矩阵`10/10`，normal `/private/tmp/LuneX-19-3_7-normal-final.0qbP0I`通过`1226/1225/1/0`；三份build diagnostics全零，唯一skip仍为真实Keychain opt-in测试，文件fallback继续。
+- 2026-08-22：已同步3.7 OpenSpec design/session spec、runtime contract、completion roadmap与三份planning，记录test-only stale-generation竞态、production零diff、九类application合同和offline proof boundary。task仍保持pre-mark `19/48 next 3.7`，下一步静态/generator/strict/repository pre-gate。
+- 2026-08-22：首轮静态wrapper在确认新增测试/default false各一次及新增skip零匹配后，因`rg`零结果与`pipefail`组合提前退出；属于只读编排错误且无项目/runtime副作用。下一轮改用显式零计数后完整重跑。
+- 2026-08-22：corrected静态门与三份structured build复读通过；generator前后双跑SHA-256稳定为`60e6966f...d2224`，strict通过。repository pre-gate `/private/tmp/LuneX-19-3_7-repository-pre.CvoM5e`完成10组scope/source/evidence/privacy/opt-in/process/diff检查后，已仅勾选3.7并同步planning，预期OpenSpec `20/48 next 4.1`。
+- 2026-08-22：post-mark `/private/tmp/LuneX-19-3_7-final-state.TnfZO2`只读确认strict、`20/48 next 4.1`、最终9文件scope、唯一3.7 checkbox、稳定project、retained `1/10/1226` evidence、disabled opt-ins及零build/test进程；未重复generator/test/build或操作Simulator。下一步逐路径清理3.7 evidence。
+- 2026-08-22：12个明确`/private/tmp/LuneX-19-3_7-*`路径已逐项以`find <exact> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有cache。下一步final diff audit与record后独立提交推送。
+- 2026-08-22：final diff audit通过最终9文件分类、test double默认行为、replacement session全部断言、1新增/0删除测试函数、0新增skip、唯一3.7 checkbox、authority/proof边界、稳定project及零task artifact；未发现需要追加修改。下一步final record后精确stage、commit、push、fetch。
+- 2026-08-22：cleanup final record通过`fec4ec5`三方基线、strict、OpenSpec `20/48 next 4.1`、最终9文件、稳定project、source/authority、artifact/opt-in/process/diff边界。准备精确stage并以独立提交推送3.7。

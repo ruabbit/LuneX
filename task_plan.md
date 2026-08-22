@@ -1788,3 +1788,26 @@
 - **evidence cleanup：** 已枚举的32个`/private/tmp/LuneX-19-3_6-*`目录/路径文件全部逐项以`find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除，也未触碰仓库既有ignored `build/DerivedData`。下一步最终diff audit与final record。
 - **final audit文档修复：** 首轮最终审计确认product diff只涉及stream workspace/overlay/tvOS/visionOS controls、tests只新增且OpenSpec为`19/48 next 3.7`，同时发现roadmap在3.6完成记录前仍写“3.6仍负责compact/wide”。已精确改为3.6现已完成、3.7仍负责完整矩阵；只改文档时态，不重跑test/build。
 - **final audit：** corrected只读审计通过最终11文件scope、RootView hunk仅1224...1710 stream范围、layout core `21+/0-`、tests新增1函数且无函数删除/skip/disable、唯一3.6 checkbox、strict `19/48 next 3.7`、零stale authority wording、privacy/opt-in/process/artifact/project/reference/diff边界。下一步final record与精确stage/commit/push/fetch。
+- **提交：** 3.6已以`fec4ec5 Adapt stream controls to window size`提交推送，fetch与`git ls-remote`确认`HEAD == origin/main == fec4ec58588a9f6ba962c981aad5bd244894e5fe`且工作树clean；OpenSpec为`19/48 ready`、next 3.7。
+
+## 2026-08-18 阶段 19 任务 3.7 启动
+
+- **状态：** `complete`；九类application session矩阵已闭合并通过当前源码的focused、expanded、normal与repository门禁，OpenSpec 3.7已勾选。
+- **边界：** 3.7只补确定性application tests及测试暴露的最小正确性修复；不提前实现4.4 owning-window close policy、5.x无障碍收尾或7.x完整跨产品workflow。真实Keychain/live-host opt-in保持unset，不操作Simulator lifecycle。
+- **覆盖审计：** 现有application tests已覆盖required provider absence、duplicate launch、owner/non-owner command、recoverable reconnect、remote termination、reconnect exhaustion、concurrent repeated stop与clean teardown；缺口是旧session terminal event在replacement已streaming后到达的明确回归。
+- **候选修改：** 仅测试provider新增默认关闭的`retainsStoppedContinuation`能力，并新增`testStaleTerminationCannotRelabelOrStopReplacementSession`：先clean stop第一代、启动第二代到streaming，再投递第一代termination，要求第二代owner/phase/UI不变且最终仍能clean stop。production未修改。
+- **新增用例focused：** fresh `/private/tmp/LuneX-19-3_7-focused.MMLiAG/Focused.xcresult`在warnings-as-errors下结构化通过`1/1`、零skip/failure且build `succeeded/0 error/0 warning/0 analyzer warning`；证明测试double与新竞态用例编译运行成立。下一步九类合同expanded focused。
+- **expanded编排错误：** 首个10测试命令在shell启动前因functions JavaScript误解析Bash `${args[@]}`数组展开而拒绝；未创建evidence或运行xcodebuild。改为10个显式`-only-testing:`参数后从fresh目录执行，不重复数组写法。
+- **expanded focused：** fresh `/private/tmp/LuneX-19-3_7-expanded.iCdzYN/Expanded.xcresult`在warnings-as-errors下结构化通过`10/10`、零skip/failure/expected failure，build `succeeded/0 error/0 warning/0 analyzer warning`；九类3.7合同全部在当前AppModel application path闭合且production无需修改。下一步独立fresh serial normal。
+- **serial normal：** fresh `/private/tmp/LuneX-19-3_7-normal.NxftSs/Normal.xcresult`结构化通过`1226 total / 1225 passed / 1 skipped / 0 failed / 0 expected failure`，build `succeeded/0 error/0 warning/0 analyzer warning`；唯一skip精确为显式关闭的真实Keychain round-trip，两个真实opt-in unset且继续文件fallback。当前工作树精确4文件、production零修改；下一步同步3.7 authority并运行generator/strict/repository pre-gate，未通过前不勾选。
+- **2026-08-22恢复：** `HEAD == origin/main == fec4ec5`、OpenSpec仍为`19/48 next 3.7`、工作树仍精确test+三份planning且源码未漂移；两个真实opt-in unset、无活动build/test进程、未操作Simulator。四天后全部`/private/tmp/LuneX-19-3_7-*`被系统清理，上一轮计数只保留为历史记录，最终pre-gate前必须从当前源码重建retained focused/expanded/normal证据。
+- **最终focused重建：** `/private/tmp/LuneX-19-3_7-focused-final.wADFi6/Focused.xcresult`结构化通过`1/1`、零skip/failure，build为`succeeded / 0 error / 0 warning / 0 analyzer warning`。
+- **最终expanded重建：** `/private/tmp/LuneX-19-3_7-expanded-final.GOhNqB/Expanded.xcresult`结构化通过九类合同的`10/10`、零skip/failure，build diagnostics全零。
+- **最终normal重建：** `/private/tmp/LuneX-19-3_7-normal-final.0qbP0I/Normal.xcresult`串行通过`1226/1225/1/0`且build diagnostics全零；唯一skip为显式关闭的真实Keychain round-trip，两个真实opt-in unset并继续JSON文件fallback。
+- **当前门：** production/project/config/dependency/vendor/reference零修改；已同步3.7 design/spec/runtime contract/roadmap与planning。下一步运行静态语义、generator稳定性、strict validation和repository pre-gate，通过前保持`19/48 next 3.7`。
+- **静态wrapper错误：** 首轮脚本确认stale测试和provider默认值各精确一次，并得到新增skip为零；随后`rg`的预期零匹配在`pipefail`下提前退出，未完成后续只读断言。没有源码、测试、构建、Keychain、live host或Simulator副作用；改用`awk`/显式容错计数从头重跑完整静态门。
+- **repository pre-gate：** `/private/tmp/LuneX-19-3_7-repository-pre.CvoM5e`完整通过remote baseline、精确8文件pre-mark scope、strict `19/48 next 3.7`、稳定generator、10-test identifier/source integrity、retained `1/10/1226` evidence、唯一Keychain skip、privacy/proof、disabled opt-ins、零build/test process与diff/artifact边界。现已勾选3.7，预期`20/48 next 4.1`。
+- **post-mark final-state：** `/private/tmp/LuneX-19-3_7-final-state.TnfZO2`只读通过strict、OpenSpec `20/48 next 4.1`、精确9文件scope、唯一3.7 checkbox、稳定project与retained `1/10/1226`证据；未重复generator/test/build或操作Keychain、live host、Simulator。下一步定向清理3.7 raw evidence。
+- **evidence cleanup：** 12个明确`/private/tmp/LuneX-19-3_7-*`目录、marker与generator log已逐项用`find <exact-path> -depth -delete`清理，task prefix零残留；未触碰仓库既有ignored `build/DerivedData`。下一步final diff audit与cleanup final record。
+- **final audit：** 完整审读确认test double默认仍移除并finish continuation，只有新竞态显式保留旧generation；replacement owner/phase/active/issue与两代clean stop断言闭合。最终9文件scope中production/project/config/dependency/vendor/reference零diff，1个新增/0删除测试函数、0新增skip、唯一3.7 checkbox、authority时态与4.4/5.x/7.x边界正确，task artifact零残留。下一步final record与独立commit/push/fetch。
+- **final record：** cleanup后只读门确认`HEAD == origin/main == remote == fec4ec5`、strict、OpenSpec `20/48 next 4.1`、最终9文件、稳定project、test/authority完整性、零task artifact、两个opt-in unset及零build/test进程。Task 3.7准备精确stage、独立commit/push/fetch。

@@ -3350,3 +3350,14 @@
 - Post-mark完成后，32个明确task evidence目录与current-path文件已逐项删除，`/private/tmp/LuneX-19-3_6-*`零残留；既有ignored workspace cache未被删除或更改。
 - Final diff audit确认RootView所有hunk均在stream workspace/status/tvOS/visionOS controls范围，layout core与tests只新增；未删除测试函数或加入skip。唯一发现是roadmap的一句3.6旧时态，已改为3.6完成且3.7仍负责完整矩阵。
 - Corrected final audit通过11文件分类、RootView旧行范围1224...1710、core `21+/0-`、1个新增测试函数/0删除/0 skip、唯一3.6 checkbox、strict `19/48 next 3.7`及全部privacy/repository边界；未发现新的产品正确性或UI合同问题。
+- Task 3.6已以`fec4ec5`提交推送，remote parity确认。Task 3.7将以现有`AppModelWorkflowTests`为应用级入口，先按九项session情形建立覆盖清单，避免把已有单点测试重复包装成虚假新增矩阵。
+- 3.7九项中八项已有直接application tests：`testEveryMissingRequiredStreamProviderStopsBeforeAnySessionSideEffect`、`testDuplicateLaunchDoesNotStartAnotherSessionGeneration`、`testExplicitWorkspaceOwnerRejectsNonOwnerStop`、`testSessionCommandStateTracksReconnectAndRemoteTermination`、`testRemoteTerminationClearsWorkspaceSessionAndMediaOwnership`、`testReconnectExhaustionBecomesTerminalReconnectCommandState`、`testConcurrentStopActionAndDirectCallersShareOneTeardownResult`及多项clean teardown integration。
+- 缺失的stale termination不能由“remote termination后再launch”替代，因为旧control stream通常已finish。测试double需选择性保留stop后的旧continuation，才能在第二代已streaming时注入第一代terminal event并证明完整owner guard；默认行为保持不变，避免影响既有测试。
+- 新增竞态用例fresh `1/1`通过且build diagnostics全零：旧first continuation在local stop后保留，second进入streaming后投递first `.terminated`，first consumer的current-owner guard退出且没有停止/重标第二代，随后第二代正常clean stop。
+- 10-test expanded matrix fresh `10/10`通过且build diagnostics全零，统一覆盖provider absence、duplicate launch、owner/non-owner、recoverable interruption、remote/stale termination、reconnect exhaustion、repeated stop与clean teardown；没有暴露production缺陷。
+- Fresh serial normal为`1226/1225/1/0`且build diagnostics全零，唯一skip仍为真实Keychain round-trip；相对3.6 normal精确新增1个测试，无其他回归。当前3.7只有test与planning变化，尚未同步authority或勾选task。
+- 2026-08-22恢复时仓库/test diff与OpenSpec状态未变，但`/private/tmp`中的3.7 xcresult已由系统清理；计划中的上一轮结果可说明历史，不可替代本轮final retained evidence。因此需要重跑相同三道macOS deterministic门，不需要重复四平台product build，因为3.7 production/project/config均为零diff。
+- 2026-08-22当前源码的最终证据已重建：stale termination竞态`1/1`、九类application matrix `10/10`、serial normal `1226/1225/1/0`，三份structured build diagnostics全零。唯一skip仍为显式关闭的真实Keychain round-trip，普通测试继续JSON文件identity fallback。
+- Task 3.7是test-only coverage completion：production/project/config/dependency/vendor/reference零修改。它证明旧generation迟到termination无法污染replacement session的离线确定性owner guard，不证明live Sunshine、signed/physical平台、真实媒体/输入或多窗口关闭和无障碍行为；4.4、5.x与7.x继续pending。
+- Task 3.7 repository pre-gate通过精确scope、OpenSpec pre-mark、generator、test integrity、三份retained evidence、privacy/proof、opt-in/process和diff边界；没有发现需要修改production的缺陷。3.7可以标记完成，下一项为4.1 scene/workspace creation与restoration接线。
+- Final diff audit确认`retainsStoppedContinuation`默认关闭路径与原行为一致，新用例只保留第一代旧continuation并完整断言第二代不受污染和两代clean stop；没有测试删除、skip绕过或production漂移。权威文档已把3.7改为完成，同时保持4.4、5.x、7.x pending和离线证明边界。

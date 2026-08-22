@@ -74,6 +74,8 @@ Semantic/source tests prove deterministic contracts only. Physical assistive-tec
 
 Extend application tests around workspace generation, action revalidation, host parsing, destructive sequencing, pairing/catalog staleness, session recovery, diagnostics redaction, accessibility descriptors, and adaptive presentation state. Platform builds and the fixed Simulator inventory are separate gates. A real XCUITest target is considered only if it exercises bounded product workflows; a launch-only target will not be created to manufacture a UI-test claim.
 
+The session application matrix covers provider absence, duplicate launch, owner and non-owner commands, recoverable interruption, remote and stale termination, reconnect exhaustion, repeated stop, and clean teardown. Existing application tests already covered every case except a stopped generation delivering a late terminal event after its replacement had reached streaming. A test-only provider option, disabled by default, retains that stopped continuation so the race can be injected deterministically; production ownership and teardown code remain unchanged. Offline application tests prove checked generation behavior only and do not replace live-host, signed, physical-device, or platform interaction evidence.
+
 ## Risks / Trade-offs
 
 - [Migrating global UI fields can regress existing single-window behavior] -> Introduce a compatibility projection, migrate one workflow at a time, and keep deterministic equivalence tests until direct fields are removed.

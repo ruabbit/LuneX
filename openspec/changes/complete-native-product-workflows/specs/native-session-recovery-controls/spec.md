@@ -23,8 +23,8 @@ The application SHALL distinguish local stop, remote termination, recoverable tr
 - **THEN** media and input ownership are released, the session returns to a non-streaming state, and the user can relaunch when prerequisites remain valid
 
 #### Scenario: Stale termination
-- **WHEN** termination arrives from a replaced generation
-- **THEN** it cannot stop or relabel the replacement session
+- **WHEN** termination arrives from a cleanly stopped generation after its replacement has reached streaming
+- **THEN** it cannot stop, relabel, clear the owner of, or publish an issue into the replacement session
 
 ### Requirement: Stream command ownership
 The application SHALL route stream overlay commands through the owning workspace and active session generation, and SHALL keep system-reserved commands local on macOS, iOS/iPadOS, tvOS, and visionOS.
@@ -78,3 +78,7 @@ The application SHALL make repeated stop, cancel, and recovery commands idempote
 #### Scenario: Repeated stop
 - **WHEN** stop is invoked concurrently from window close and an overlay command
 - **THEN** one teardown owner completes and all callers observe the same terminal result
+
+#### Scenario: Clean teardown
+- **WHEN** the current owning generation completes local stop after streaming
+- **THEN** session, media, input, presentation, and stop-operation ownership clear without leaving a stale command or preventing a later launch
