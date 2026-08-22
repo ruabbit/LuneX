@@ -3410,3 +3410,19 @@
 - Fresh repository pre-gate在pre-mark `22/48 next 4.3`结构化复读全部最终证据，并确认helper精确1个定义/5个mutation calls、owner写入零、6新增/0删除/0 skip测试。4.3可勾选；4.4必须单独定义owning-window close policy，不能把“reconciliation不转移owner”误当成“关闭窗口已正确stop/retain”。
 - Cleanup后的authority复读发现三处历史段落仍将4.3写为later/pending；这些是文档时态漂移，不是实现缺口。修正后shared host/trust/catalog/settings reconcile明确为已完成，owning-window close仍唯一属于4.4，4.5/4.6边界不变。
 - Corrected final audit未发现阻止4.3提交的问题：最终13文件、helper调用与owner零写入、6项测试增量、唯一checkbox、strict状态、稳定project、artifact/opt-in/process及三方remote基线全部一致。4.3可以独立提交，4.4 close policy必须继续按session phase和owner generation单独实现。
+
+### Stage 19 Task 4.4 owning-window close audit (2026-08-22)
+
+- 现有`ProductWorkspaceSceneRoot.onDisappear`只同步调用scene coordinator `disconnect`；registry state保留用于restoration，但active owner完全不处理。现有幂等stop已经有`ProductSessionStopOperation`共享任务，可复用而不创建第二teardown reducer。
+- OpenSpec design要求只有另一声明式presentation仍attached时保留session，否则clean stop，且绝不transfer owner。实际可验证的retained presentation包括同一workspace的另一scene attachment，以及当前active session已经解析为PiP或audio-only的mobile continuity path；普通另一workspace不能成为retain理由。
+- Stop operation当前在async `stopStreamInternally`入口内建立。窗口关闭若先detach再异步调用会留下reconnect/replacement竞态；应抽出MainActor同步begin helper，在当前actor turn内安装唯一operation，随后才detach并await共享结果。
+- Replaced/stale attachment必须在任何session判断前按token拒绝；already-stopping可能已经清空`activeProductSessionOwner`但`productSessionStopOperation.owner`仍存在，因此close owner判定必须取active owner或in-flight stop owner。
+- 首轮focused暴露既有reconnecting teardown幂等缺口：reconnect event已调用`stopMediaEnvironment`并清空active media owner，随后窗口close的terminal stop再次无条件调用environment stop。应以调用入口捕获的`activeMediaSessionID == sessionID`约束底层stop；launching无media资源无需stop，streaming一次，reconnecting保留已完成的一次。
+- 第二轮证明owner布尔快照仍会由两个MainActor调用在各自首次await前同时取true；media teardown reservation必须像session stop reservation一样在首个suspension前撤销。保存local generation后立即清空active media ID/generation，既阻止重复stop，也避免后续await恢复时误清replacement generation。
+- Related矩阵否定了把media environment stop调用数等同于session teardown次数：reconnect先停止旧media generation，随后session close仍执行terminal cleanup；pending start还必须先取消并在late start返回后再次清理。tvOS/visionOS stop presentation也不能被active-media guard跳过。4.4真正必须唯一的是session stop operation与control provider stop，media environment保持既有幂等多代/late-start语义。
+- 最终4.4证据闭合为focused `7/7`、六簇related `150/150`、serial normal `1246/1245/1/0`与四平台unsigned generic Debug `4/4`，所有structured build diagnostics全零且macOS universal。唯一skip仍为显式关闭的真实Keychain round-trip，普通测试继续JSON文件fallback，两个真实opt-in unset。
+- OpenSpec/runtime authority明确把另一同workspace attachment与当前实际PiP/audio-only列为仅有retention surface；不同workspace、desired background状态、inactive/foreground continuity都不能保留owner。离线测试没有操作Simulator，也不能证明真实macOS window close/minimize、iPad Stage Manager/system PiP、signed physical background continuity或live Sunshine teardown。
+- Fresh repository pre-gate以pre-mark `23/48 next 4.4`完整复读12文件scope、close/stop source顺序、6新增/0删除/0 skip测试、authority、stable generator、最终`7/150/1246/4` evidence、唯一Keychain skip、opt-in/process/diff边界。门禁通过后4.4可勾选；下一实现边界是4.5的tvOS/visionOS窗口命令可见性与typed single-workspace focus/input owner，不应改写4.4 teardown。
+- Post-mark final-state只读确认4.4唯一checkbox已推进为`24/48 next 4.5`，最终13文件scope和全部保留证据一致；没有重复generator/test/build或设备操作。Task临时证据可在提交前逐路径清理，planning中的纯计数与proof boundary保留。
+- 14个4.4临时目录/log已在显式白名单内逐路径清理且prefix零残留；首轮Bash 3.2 `mapfile`失败发生在删除前，没有产生部分清理。最终审计应只依赖仓库中的计数/合同记录，不再假设raw xcresult存在。
+- Corrected cleanup-final audit确认实现与合同一致：close先验证attachment，owner stop reservation先于detach，actual PiP/audio-only与同workspace attachment是唯一retention输入，already-stopping共享operation，stale replacement不受影响；底层media cleanup没有保留失败的active-media early return。最终13文件可独立提交，下一任务为4.5。

@@ -43,10 +43,12 @@
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`21/48`、next `4.2`。Group 1、2.x、3.x与4.1已完成；4.1以typed scene identity建立supported primary/distinct/reconnect generation、duplicate fail-closed与unsupported single-workspace fallback，最终focused `8/8`、related `160/160`、normal `1233/1232/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断通过。下一项4.2迁移完整per-scene bindings；4.4 owning-window close、5.x无障碍收尾与6.1/6.2 legacy字符串迁移继续pending。
+阶段19当前权威进度`24/48`、next `4.5`。Group 1、2.x、3.x与4.1–4.4已完成；4.4以typed close reducer、stale/non-owner fail-closed、actual retained presentation和同步共享stop reservation完成owning-scene close合同，并通过focused `7/7`、related `150/150`、normal `1246/1245/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断。下一项4.5隐藏tvOS/visionOS不支持的窗口命令并保持typed single-workspace focus/input ownership；5.x无障碍收尾与6.1/6.2 legacy字符串迁移继续pending。
 
 ### 阶段19错误记录
 
+- Task 4.4 cleanup-final audit的旧时态正则跨过同一行分号，把“4.4已完成；4.5/4.6 pending”误判为“4.4 pending”并退出；此前scope/OpenSpec/checkbox/test/source断言已通过，无仓库或runtime副作用。改用精确旧短语列表后从完整只读门重跑。
+- Task 4.4首次evidence cleanup在任何删除前退出：系统`/bin/bash`为3.2且不提供`mapfile` builtin，14个已枚举目标全部仍存在。改用显式路径列表与绝对`/usr/bin/find <exact-path> -depth -delete`逐项清理，不扩大匹配范围。
 - Task 4.2首次evidence cleanup在任何删除前退出：zsh的特殊数组变量`path`会联动覆盖`PATH`，循环赋值后无法解析`find`。只读复核确认22个已枚举目标全数仍存在；改用普通变量`target`与绝对`/usr/bin/find`逐项删除，不使用宽泛匹配删除。
 - Task 4.2第二轮post-mark仍只在checkbox diff索引退出：Git unified diff会在原Markdown列表前再加diff标记，实际行为`-- [ ]`与`+- [x]`。已用只读`od`和独立awk确认精确计数`1:1`，第三轮改用该已验证表达式；前两轮均已先通过strict/status/scope且无runtime副作用。
 - Task 4.2首轮post-mark final-state已通过strict、`22/48 next 4.3`与13文件scope，随后checkbox diff断言因正则漏写Markdown `-`后的空格而误判退出；未运行generator/test/build或产生设备副作用。修正为精确`^- \[ \]`/`^\+ \[x\]`后从fresh目录只读复核。
@@ -1901,3 +1903,25 @@
 - **final audit编排修正：** 首轮只读门已通过13文件scope、helper owner零写入和OpenSpec strict，随后在读取apply进度时因zsh只读变量名`status`退出；未改仓库、未运行generator/test/build或操作设备。改用`apply_json`并从完整只读门重跑。
 - **final audit：** corrected完整只读门通过最终13文件scope、helper 1定义/5 calls/0 owner writes、6新增/0删除/0 skip测试、唯一4.3 checkbox、strict与`23/48 next 4.4`、稳定project、零4.3 artifact、disabled opt-ins、零build/test进程及`a6af2c8`三方基线。下一步cleanup final record与独立commit/push/fetch。
 - **cleanup final record：** Task 4.3最终状态保持上述全部门禁，production/test未在cleanup后变化，文档旧时态已归零；准备精确stage 13文件并提交`Reconcile shared workspace repositories`，提交后直接进入4.4且不archive change。
+
+## 2026-08-22 阶段 19 任务 4.4 启动
+
+- **状态：** `in_progress`；Task 4.3已以`1c9d348 Reconcile shared workspace repositories`提交推送并确认三方SHA一致、工作树clean，OpenSpec为`23/48 next 4.4`。
+- **合同：** owning scene close先验证attachment token；inactive/non-owner只detach，current owner在另一声明式presentation仍存在时保留原owner，否则launching/waiting/streaming/reconnecting执行既有幂等clean stop，already-stopping加入同一stop operation，replaced/stale attachment fail closed。任何分支都不隐式transfer owner。
+- **实现设计：** 在`ProductWorkflowState`增加纯close reducer与typed outcome，scene coordinator增加只读attachment查询；AppModel把stop operation reservation提取为同步begin helper，使close能先保留唯一teardown、再detach并await。mobile retention仅接受同一active session的actual PiP/audio-only continuity，另一attachment也必须属于同一workspace。
+- **验收计划：** 纯policy矩阵加AppModel inactive、launching、streaming、reconnecting、retained presentation、replaced attachment、already-stopping应用测试；随后warnings-as-errors compile、focused、相关scene/session矩阵、serial normal与四平台generic Debug。两个真实opt-in保持unset，不操作Simulator lifecycle。
+- **production首轮：** 已增加typed close disposition/outcome、纯policy、scene attachment只读查询；AppModel close同步保留或建立唯一stop operation后detach并await，PiP/audio-only只在active owner/media generation一致时允许retain；SwiftUI onDisappear启动MainActor unstructured close task。下一步补全phase/application tests后首次编译。
+- **compile gate修正：** 首轮fresh macOS generic Debug在Swift编译前因命令漏传`CODE_SIGNING_ALLOWED=NO`而被development entitlement signing要求拒绝；没有源码诊断、测试或设备副作用，该轮不计验收。按既有unsigned gate补齐设置并从新目录重跑。
+- **focused首轮：** 7项中6项通过；active-phase组合用例在reconnecting发现environment stop记录为同一session两次。根因是reconnect事件已teardown media generation，terminal close又无条件调用environment stop；provider仍只stop一次。已收紧`stopMediaEnvironment`只对仍匹配`activeMediaSessionID`的session调用环境stop，launching预期0次、streaming/reconnecting各1次，fresh focused从头复验。
+- **focused第二轮：** 仍为6/7且同一reconnect断言，证明仅捕获owner布尔值不能关闭首次suspension前的并发窗口。现改为函数进入时先guard并原子撤销active media ID/generation reservation，再以本地generation完成清理；并发close的第二调用在任何await前no-op。下一轮fresh focused验证真正的single-owner teardown。
+- **最终focused：** fresh r3结构化通过`7/7`、0 skip/failure/expected failure，build为`succeeded / 0 error / 0 warning / 0 analyzer warning`；compile r2同样diagnostics全零且macOS executable为`x86_64 arm64`。下一步运行scene/session/recovery/teardown相关扩大矩阵。
+- **related首轮修正：** 扩大矩阵发现8项pending-start/tvOS/visionOS回归，证明active-media early return破坏既有平台stop/input/presentation清理；pending media start合同也需要取消与late-start cleanup两次幂等environment stop。已完整恢复既有media cleanup，close唯一性继续由single `ProductSessionStopOperation`和control-provider stop证明；focused reconnect预期两次generation cleanup但provider仍精确一次。首轮related不计验收。
+- **final focused/related：** 恢复原media cleanup后的fresh focused为`7/7`，六簇related为`150/150`；两份build均`succeeded / 0 error / 0 warning / 0 analyzer warning`且零skip/failure。pending startup、cancellation/recovery及tvOS/visionOS presentation/input teardown全部回归通过。下一步独立serial normal。
+- **serial normal：** fresh suite结构化通过`1246 total / 1245 passed / 1 skipped / 0 failed / 0 expected failure`，build diagnostics全零；唯一skip精确为显式关闭的真实Keychain round-trip，两个opt-in unset且文件fallback继续。下一步四平台generic Debug。
+- **四平台build：** `/private/tmp/LuneX-19-4_4-platform-builds.4oV89T`顺序完成macOS、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`；四份structured summary均为`succeeded / 0 error / 0 warning / 0 analyzer warning`，macOS executable为`x86_64 arm64`。未操作Simulator lifecycle。
+- **authority同步：** 已更新OpenSpec design/multiwindow spec、runtime contract、completion roadmap与三份planning，记录close reducer、stale/non-owner detach、actual retained presentation、同步stop reservation、already-stopping共享teardown、media cleanup generation边界、最终`7/150/1246/4`证据和未证明的真实窗口/Stage Manager/signed/live层级。task保持pre-mark `23/48 next 4.4`，下一步generator双跑、strict与repository pre-gate。
+- **repository pre-gate：** `/private/tmp/LuneX-19-4_4-repository-pre.ih2WRB`完整通过三方baseline、精确12文件scope、source close语义、6新增/0删除/0 skip测试、authority、strict `23/48 next 4.4` pre-mark、稳定project、retained `7/150/1246/4` evidence、唯一Keychain skip、disabled opt-ins、零build/test process与diff/artifact边界。现已仅勾选4.4并同步planning，权威进度为`24/48 next 4.5`。
+- **post-mark final-state：** `/private/tmp/LuneX-19-4_4-final-state.T71IuP`只读确认strict、OpenSpec `24/48 next 4.5`、最终13文件scope、唯一4.4 checkbox、稳定project、retained evidence、disabled opt-ins与零build/test process；未重复generator/test/build或操作Simulator。下一步精确清理全部4.4临时证据。
+- **evidence cleanup：** 首轮`mapfile`兼容性错误后，14个明确`/private/tmp/LuneX-19-4_4-*`目录与generator log已逐项以绝对`/usr/bin/find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库`build/DerivedData`。下一步final diff/authority audit。
+- **final audit：** corrected完整只读门通过最终13文件scope、begin-stop-before-detach、actual continuity/attachment retention、stale/already-stopping语义、media cleanup基线、6新增/0删除/0 skip测试、唯一4.4 checkbox、strict `24/48 next 4.5`、稳定project、零task artifact、disabled opt-ins、零build/test进程及`1c9d348`三方基线。未发现需追加production/test修改，准备cleanup final record后独立提交推送。
+- **cleanup final record：** Task 4.4最终状态保持上述全部门禁，production/test在行为验收后未变化，authority旧时态与task artifact均归零；准备精确stage 13文件并提交`Apply owning window close policy`，提交后直接进入4.5且不archive change。

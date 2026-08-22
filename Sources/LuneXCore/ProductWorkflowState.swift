@@ -143,6 +143,37 @@ enum ProductSessionActualPhase: Equatable, Sendable {
     case failed
 }
 
+enum ProductWorkspaceSceneCloseDisposition: Equatable, Sendable {
+    case rejectStaleAttachment
+    case detach
+    case retainSession
+    case stopSession
+    case awaitSessionStop
+}
+
+enum ProductWorkspaceSceneCloseOutcome: Equatable, Sendable {
+    case rejectedStaleAttachment
+    case detached
+    case retainedSession
+    case stoppedSession
+    case stopFailed
+}
+
+enum ProductWorkspaceSceneClosePolicy {
+    static func resolve(
+        isAttachmentCurrent: Bool,
+        ownsSession: Bool,
+        phase: ProductSessionActualPhase?,
+        hasRetainedPresentationSurface: Bool
+    ) -> ProductWorkspaceSceneCloseDisposition {
+        guard isAttachmentCurrent else { return .rejectStaleAttachment }
+        guard ownsSession else { return .detach }
+        if phase == .stopping { return .awaitSessionStop }
+        if hasRetainedPresentationSurface { return .retainSession }
+        return .stopSession
+    }
+}
+
 enum ProductSessionWorkspaceOwnership: Equatable, Sendable {
     case none
     case current
@@ -1045,6 +1076,19 @@ final class ProductWorkspaceSceneCoordinator {
             supportedAttachmentByWorkspaceID[attachment.workspace.id] = nil
         }
         return true
+    }
+
+    func isAttached(_ attachment: ProductWorkspaceSceneAttachment) -> Bool {
+        attachmentsByToken[attachment.token] == attachment
+    }
+
+    func hasOtherAttachment(
+        for workspace: ProductWorkspaceReference,
+        excluding attachment: ProductWorkspaceSceneAttachment
+    ) -> Bool {
+        attachmentsByToken.values.contains {
+            $0.token != attachment.token && $0.workspace == workspace
+        }
     }
 
     private func connectPrimaryScene(

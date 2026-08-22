@@ -189,9 +189,10 @@ the generation. Durable navigation, selected host, and selected app survive;
 sheet, dialog, issue, overlay, validation, and retry presentation are cleared.
 
 An ID already attached to a live scene is rejected before restoration can
-replace its generation. Disconnect removes only the ephemeral attachment; it
-does not call registry close, stop the current session, or transfer ownership.
-Those decisions remain in the task 4.4 owning-window policy. The
+replace its generation. Scene close validates the exact attachment token
+before inspecting session state; a stale or replaced attachment fails closed,
+while an inactive or non-owning scene removes only its ephemeral attachment.
+The coordinator never closes registry state or transfers ownership. The
 `AppModel.primaryWorkspaceReference` compatibility projection follows the
 coordinator's adopted primary so a restored first scene does not leave legacy
 single-window APIs pointing at an invisible startup workspace.
@@ -278,9 +279,56 @@ through the JSON file identity fallback. Unsigned generic Debug builds for
 macOS universal, iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured
 compiler, analyzer, or build warnings. No Simulator lifecycle was used. These
 receipts prove offline shared-state publication and that inactive-host removal
-does not transfer an unrelated active session owner; they do not prove actual
-simultaneous macOS/iPadOS windows, Stage Manager, signed/physical interaction,
-live Sunshine repository changes, or the task 4.4 owning-window close policy.
+does not transfer an unrelated active session owner; considered alone, they do
+not prove actual simultaneous macOS/iPadOS windows, Stage Manager,
+signed/physical interaction, live Sunshine repository changes, or the separate
+owning-scene close behavior documented below.
+
+### Owning-scene close policy
+
+`ProductWorkspaceSceneClosePolicy` is a pure reducer over current attachment,
+checked session ownership, actual session phase, and whether a declared
+presentation remains. `ProductWorkspaceSceneCloseOutcome` reports stale
+rejection, detach, retained session, stopped session, or stop failure without
+exposing provider text. The reducer and `AppModel` never transfer a session to
+another workspace.
+
+A current inactive or non-owning scene only detaches. A current owning scene
+retains the original session owner when another attachment for that exact
+workspace remains, or when the same active stream/media owner has actual mobile
+continuity in picture-in-picture or audio-only. A scene for another workspace,
+desired continuity, background activity alone, stale media state, and inactive
+or foreground continuity are not retention surfaces.
+
+Without retained presentation, an owning scene in launching, streaming, or
+reconnecting state performs the existing clean stop. `beginProductSessionStop`
+installs or retrieves the owner-keyed `ProductSessionStopOperation`
+synchronously on the main actor before the scene detaches; an already-stopping
+close therefore joins the same task and terminal result. A replaced attachment
+is rejected before it can reserve stop, detach its replacement, or affect the
+replacement session. SwiftUI clears its local attachment before scheduling the
+awaited main-actor close, so repeated `onDisappear` callbacks cannot initiate a
+second close through the same scene root.
+
+The unique contract applies to the session stop operation and control-provider
+stop, not to every media-environment cleanup call. Reconnect replacement,
+pending media startup cancellation followed by late-start cleanup, and
+tvOS/visionOS presentation/input teardown may legitimately invoke the existing
+idempotent media cleanup more than once across generations. An attempted
+active-media early-return optimization regressed those paths and is not part of
+the close policy.
+
+Task 4.4 deterministic evidence is `7/7` focused policy/application tests and
+`150/150` related scene/session/recovery/teardown tests. The independent serial
+normal suite is `1246 total / 1245 passed / 1 skipped / 0 failed`; the sole skip
+is the explicitly disabled real-Keychain round trip, and ordinary tests continue
+through the JSON file identity fallback with both real opt-ins unset. Unsigned
+generic Debug builds for macOS universal, iOS/iPadOS, tvOS, and visionOS pass
+`4/4` with zero structured compiler, analyzer, or build warnings. No Simulator
+lifecycle was used. These receipts prove offline close ownership and teardown
+coordination; they do not prove physical macOS window close/minimize behavior,
+iPad Stage Manager or system PiP transitions, signed installation, device
+background continuity, or live Sunshine teardown.
 
 ### Host library workspace migration
 
@@ -328,8 +376,8 @@ Opening or cancelling Add Host clears only the initiating workspace draft and
 submission result. Root presentation is driven by that checked workspace's
 `ProductWorkspaceSheet.addHost`; submission in progress rejects dismissal, and
 success or an admitted cancel clears only the same workspace. Shared repository
-reconciliation is implemented without transferring session ownership; the
-owning-window close policy remains task 4.4.
+reconciliation is implemented without transferring session ownership;
+owning-scene close applies the separate checked policy documented above.
 Deterministic tests and unsigned generic builds do not prove Simulator
 interaction, signed artifacts, physical devices, or live Sunshine behavior.
 
@@ -463,7 +511,7 @@ stop-and-reset, disables duplicate performing actions, and exposes typed retry
 presentation. The panel consumes its scene workspace, and confirmation is shown
 only when the typed destructive state agrees with that workspace's dialog.
 The destructive path uses the checked product session owner described below;
-full owning-window close policy remains task 4.4.
+owning-scene close uses the same owner-keyed stop operation described above.
 
 ### Checked workspace and session ownership
 
@@ -596,11 +644,11 @@ callers cannot create another provider request, and late completion cannot
 publish into a replaced workspace. Terminal reconnect actions still reserve a
 new session owner before provider work and reject replay of the old token.
 
-Task 3.4 provides the underlying command coordination but does not choose an
-owning-window retain-versus-stop policy. Tasks 3.5 and 3.6 now wire checked
-overlay ownership and adaptive stream composition as described below. The
-owning-window close policy remains task 4.4, and broader mapping/removal of
-legacy host, pairing, diagnostics, and runtime strings remains tasks 6.1/6.2.
+Task 3.4 provides the underlying command coordination; Task 4.4 now applies it
+to owning-scene retain-versus-stop decisions and joins already-running stops.
+Tasks 3.5 and 3.6 wire checked overlay ownership and adaptive stream composition
+as described below. Broader mapping/removal of legacy host, pairing,
+diagnostics, and runtime strings remains tasks 6.1/6.2.
 
 ### Checked stream overlay and adaptive composition
 
@@ -669,8 +717,8 @@ explicit real-Keychain opt-in; ordinary testing continues through the JSON
 file identity fallback with both real opt-ins unset. These are offline
 deterministic application receipts. They do not prove a live Sunshine session,
 signed installation, physical platform behavior, assistive technology, or the
-multiwindow close/accessibility/cross-product work still assigned to Tasks 4.4,
-5.x, and 7.x.
+later multiwindow close/accessibility/cross-product work. Task 4.4 now supplies
+the offline close contract above; Tasks 5.x and 7.x remain separate.
 
 ### Host, pairing, and catalog product surfaces
 

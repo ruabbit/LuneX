@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
     func testSceneConnectionsRestoreThroughAppModelAndKeepUnsupportedPrimary()
-        throws
+        async throws
     {
         let model = AppModel()
         let initialPrimary = model.primaryWorkspaceReference
@@ -23,7 +23,8 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(first.workspace.id, restoredID)
         XCTAssertNil(model.workspaceState(for: initialPrimary))
 
-        XCTAssertTrue(model.disconnectProductWorkspaceScene(first))
+        let firstClose = await model.disconnectProductWorkspaceScene(first)
+        XCTAssertEqual(firstClose, .detached)
         let replacement = try model.connectProductWorkspaceScene(
             restoring: first.identity,
             supportsMultipleWindows: true
@@ -6691,6 +6692,280 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(model.hasActiveStreamSession)
     }
 
+    func testOwningSceneCloseStopsLaunchingStreamingAndReconnectingSessions()
+        async throws
+    {
+        let phases: [ProductSessionActualPhase] = [
+            .launching,
+            .streaming,
+            .reconnecting(attempt: 1)
+        ]
+
+        for (index, phase) in phases.enumerated() {
+            let fixture = try await makeSceneCloseFixture(keyID: 60 + index)
+            let launch = Task {
+                await fixture.model.launchSelectedApp(
+                    in: fixture.attachment.workspace
+                )
+            }
+            let record = try await waitForSessionStart(fixture.provider)
+            if phase != .launching {
+                driveSessionToStreaming(fixture.provider, record: record)
+                await waitUntil {
+                    fixture.model.productSessionActualPhase == .streaming
+                }
+            }
+            if case .reconnecting = phase {
+                fixture.provider.yield(
+                    .reconnecting(
+                        attempt: 1,
+                        reason: "control_unavailable"
+                    ),
+                    sessionID: record.sessionID
+                )
+                await waitUntil {
+                    fixture.model.productSessionActualPhase
+                        == .reconnecting(attempt: 1)
+                }
+            }
+
+            XCTAssertEqual(fixture.model.productSessionActualPhase, phase)
+            let close = await fixture.model.disconnectProductWorkspaceScene(
+                fixture.attachment
+            )
+            XCTAssertEqual(close, .stoppedSession)
+            await launch.value
+
+            XCTAssertNil(fixture.model.activeProductSessionOwner)
+            XCTAssertEqual(
+                fixture.provider.currentStoppedSessionIDs(),
+                [record.sessionID]
+            )
+            XCTAssertEqual(
+                fixture.environment.currentStoppedSessionIDs(),
+                phase == .reconnecting(attempt: 1)
+                    ? [record.sessionID, record.sessionID]
+                    : [record.sessionID]
+            )
+        }
+    }
+
+    func testOwningSceneCloseRetainsActualMobileContinuityPresentation()
+        async throws
+    {
+        struct Mode {
+            let pictureInPicture: MobilePictureInPictureLifecycle?
+            let audioActive: Bool?
+            let expectedPath: MobileContinuityPath
+        }
+        let modes = [
+            Mode(
+                pictureInPicture: .active,
+                audioActive: nil,
+                expectedPath: .pictureInPicture
+            ),
+            Mode(
+                pictureInPicture: nil,
+                audioActive: true,
+                expectedPath: .audioOnly
+            )
+        ]
+
+        for (index, mode) in modes.enumerated() {
+            let fixture = try await makeSceneCloseFixture(keyID: 64 + index)
+            let launch = Task {
+                await fixture.model.launchSelectedApp(
+                    in: fixture.attachment.workspace
+                )
+            }
+            let record = try await waitForSessionStart(fixture.provider)
+            driveSessionToStreaming(fixture.provider, record: record)
+            await waitUntil {
+                fixture.model.productSessionActualPhase == .streaming
+            }
+            let runtime = try makeMobileRuntimeState(
+                sessionID: record.sessionID,
+                mediaGeneration: 1,
+                revision: 1,
+                sceneActivity: .background,
+                pictureInPictureLifecycle: mode.pictureInPicture,
+                isAudioSessionActive: mode.audioActive,
+                includesActualSceneAndDisplay: true
+            )
+            fixture.environment.yieldMobileRuntime(
+                runtime,
+                sessionID: record.sessionID
+            )
+            await waitUntil { fixture.model.mobileRuntimeState == runtime }
+            XCTAssertEqual(
+                fixture.model.mobileRuntimeState?.continuityPath,
+                mode.expectedPath
+            )
+
+            let owner = try XCTUnwrap(
+                fixture.model.activeProductSessionOwner
+            )
+            let close = await fixture.model.disconnectProductWorkspaceScene(
+                fixture.attachment
+            )
+            XCTAssertEqual(close, .retainedSession)
+            XCTAssertEqual(fixture.model.activeProductSessionOwner, owner)
+            XCTAssertTrue(fixture.provider.currentStoppedSessionIDs().isEmpty)
+            XCTAssertTrue(
+                fixture.environment.currentStoppedSessionIDs().isEmpty
+            )
+
+            let didStop = await fixture.model.stopStream(
+                in: fixture.attachment.workspace
+            )
+            XCTAssertTrue(didStop)
+            await launch.value
+            XCTAssertEqual(
+                fixture.provider.currentStoppedSessionIDs(),
+                [record.sessionID]
+            )
+        }
+    }
+
+    func testOwningSceneCloseRetainsSessionForAnotherSameWorkspaceAttachment()
+        async throws
+    {
+        let fixture = try await makeSceneCloseFixture(
+            keyID: 66,
+            supportsMultipleWindows: false
+        )
+        let second = try fixture.model.connectProductWorkspaceScene(
+            restoring: nil,
+            supportsMultipleWindows: false
+        )
+        XCTAssertEqual(second.workspace, fixture.attachment.workspace)
+        let launch = Task {
+            await fixture.model.launchSelectedApp(
+                in: fixture.attachment.workspace
+            )
+        }
+        let record = try await waitForSessionStart(fixture.provider)
+        driveSessionToStreaming(fixture.provider, record: record)
+        await waitUntil {
+            fixture.model.productSessionActualPhase == .streaming
+        }
+
+        let firstClose = await fixture.model.disconnectProductWorkspaceScene(
+            fixture.attachment
+        )
+        XCTAssertEqual(firstClose, .retainedSession)
+        XCTAssertEqual(
+            fixture.model.activeProductSessionOwner?.sessionID,
+            record.sessionID
+        )
+        XCTAssertTrue(fixture.provider.currentStoppedSessionIDs().isEmpty)
+
+        let secondClose = await fixture.model.disconnectProductWorkspaceScene(
+            second
+        )
+        XCTAssertEqual(secondClose, .stoppedSession)
+        await launch.value
+        XCTAssertEqual(
+            fixture.provider.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+    }
+
+    func testReplacedSceneCloseCannotStopReplacementWorkspaceSession()
+        async throws
+    {
+        let fixture = try await makeSceneCloseFixture(keyID: 67)
+        let initialClose = await fixture.model.disconnectProductWorkspaceScene(
+            fixture.attachment
+        )
+        XCTAssertEqual(initialClose, .detached)
+        let replacement = try fixture.model.connectProductWorkspaceScene(
+            restoring: fixture.attachment.identity,
+            supportsMultipleWindows: true
+        )
+        XCTAssertNotEqual(
+            replacement.workspace.generation,
+            fixture.attachment.workspace.generation
+        )
+        let launch = Task {
+            await fixture.model.launchSelectedApp(in: replacement.workspace)
+        }
+        let record = try await waitForSessionStart(fixture.provider)
+        driveSessionToStreaming(fixture.provider, record: record)
+        await waitUntil {
+            fixture.model.productSessionActualPhase == .streaming
+        }
+
+        let staleClose = await fixture.model.disconnectProductWorkspaceScene(
+            fixture.attachment
+        )
+        XCTAssertEqual(staleClose, .rejectedStaleAttachment)
+        XCTAssertEqual(
+            fixture.model.activeProductSessionOwner,
+            ProductSessionOwner(
+                workspace: replacement.workspace,
+                sessionID: record.sessionID
+            )
+        )
+        XCTAssertTrue(fixture.provider.currentStoppedSessionIDs().isEmpty)
+
+        let replacementClose = await fixture.model
+            .disconnectProductWorkspaceScene(replacement)
+        XCTAssertEqual(replacementClose, .stoppedSession)
+        await launch.value
+        XCTAssertEqual(
+            fixture.provider.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+    }
+
+    func testAlreadyStoppingOwnerSceneCloseJoinsExistingTeardown()
+        async throws
+    {
+        let fixture = try await makeSceneCloseFixture(keyID: 68)
+        let launch = Task {
+            await fixture.model.launchSelectedApp(
+                in: fixture.attachment.workspace
+            )
+        }
+        let record = try await waitForSessionStart(fixture.provider)
+        driveSessionToStreaming(fixture.provider, record: record)
+        await waitUntil {
+            fixture.model.productSessionActualPhase == .streaming
+        }
+
+        fixture.environment.blockNextStop()
+        let directStop = Task {
+            await fixture.model.stopStream(in: fixture.attachment.workspace)
+        }
+        await waitUntil { fixture.environment.hasBlockedStop() }
+        XCTAssertNil(fixture.model.activeProductSessionOwner)
+        XCTAssertEqual(fixture.model.productSessionActualPhase, .stopping)
+
+        let close = Task {
+            await fixture.model.disconnectProductWorkspaceScene(
+                fixture.attachment
+            )
+        }
+        for _ in 0..<3 { await Task.yield() }
+        XCTAssertTrue(fixture.provider.currentStoppedSessionIDs().isEmpty)
+        fixture.environment.resumeBlockedStop()
+
+        let directStopResult = await directStop.value
+        let closeResult = await close.value
+        XCTAssertTrue(directStopResult)
+        XCTAssertEqual(closeResult, .stoppedSession)
+        await launch.value
+        XCTAssertEqual(
+            fixture.environment.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+        XCTAssertEqual(
+            fixture.provider.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+    }
+
     func testExplicitWorkspaceOwnerRejectsNonOwnerStop() async throws {
         let provider = ControlledSessionControlProvider()
         let model = makeLaunchReadyModel(
@@ -7625,6 +7900,37 @@ final class AppModelWorkflowTests: XCTestCase {
             clientUniqueID: "test-client",
             remoteInputKeyGenerator: remoteInputKeyGenerator
         )
+    }
+
+    private func makeSceneCloseFixture(
+        keyID: Int,
+        supportsMultipleWindows: Bool = true
+    ) async throws -> (
+        model: AppModel,
+        provider: ControlledSessionControlProvider,
+        environment: ControlledSessionMediaEnvironment,
+        attachment: ProductWorkspaceSceneAttachment
+    ) {
+        let provider = ControlledSessionControlProvider()
+        let environment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: environment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: keyID,
+                    key: Data(repeating: UInt8(keyID), count: 16)
+                ))
+            ])
+        )
+        let attachment = try model.connectProductWorkspaceScene(
+            restoring: nil,
+            supportsMultipleWindows: supportsMultipleWindows
+        )
+        await model.loadInitialState(in: attachment.workspace)
+        await model.refreshAppsForSelectedHost(in: attachment.workspace)
+        return (model, provider, environment, attachment)
     }
 
     private func makePlatformLifecycle(

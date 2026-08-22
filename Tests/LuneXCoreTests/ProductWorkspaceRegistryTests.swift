@@ -2,6 +2,81 @@ import XCTest
 
 @MainActor
 final class ProductWorkspaceRegistryTests: XCTestCase {
+    func testSceneClosePolicyCoversInactiveOwnedRetainedAndStaleStates() {
+        struct Case {
+            let current: Bool
+            let ownsSession: Bool
+            let phase: ProductSessionActualPhase?
+            let retainedPresentation: Bool
+            let expected: ProductWorkspaceSceneCloseDisposition
+        }
+
+        let cases = [
+            Case(
+                current: true,
+                ownsSession: false,
+                phase: nil,
+                retainedPresentation: false,
+                expected: .detach
+            ),
+            Case(
+                current: true,
+                ownsSession: true,
+                phase: .launching,
+                retainedPresentation: false,
+                expected: .stopSession
+            ),
+            Case(
+                current: true,
+                ownsSession: true,
+                phase: .streaming,
+                retainedPresentation: false,
+                expected: .stopSession
+            ),
+            Case(
+                current: true,
+                ownsSession: true,
+                phase: .reconnecting(attempt: 2),
+                retainedPresentation: false,
+                expected: .stopSession
+            ),
+            Case(
+                current: true,
+                ownsSession: true,
+                phase: .streaming,
+                retainedPresentation: true,
+                expected: .retainSession
+            ),
+            Case(
+                current: true,
+                ownsSession: true,
+                phase: .stopping,
+                retainedPresentation: true,
+                expected: .awaitSessionStop
+            ),
+            Case(
+                current: false,
+                ownsSession: true,
+                phase: .streaming,
+                retainedPresentation: false,
+                expected: .rejectStaleAttachment
+            )
+        ]
+
+        for testCase in cases {
+            XCTAssertEqual(
+                ProductWorkspaceSceneClosePolicy.resolve(
+                    isAttachmentCurrent: testCase.current,
+                    ownsSession: testCase.ownsSession,
+                    phase: testCase.phase,
+                    hasRetainedPresentationSurface:
+                        testCase.retainedPresentation
+                ),
+                testCase.expected
+            )
+        }
+    }
+
     func testCreateUsesDistinctIdentityAndInitialGeneration() throws {
         let registry = ProductWorkspaceRegistry()
         let first = try registry.create()

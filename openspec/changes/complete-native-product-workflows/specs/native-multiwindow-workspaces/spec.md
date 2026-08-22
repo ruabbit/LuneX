@@ -30,6 +30,22 @@ An active session SHALL have one checked workspace owner, and a non-owning windo
 - **WHEN** the owning window closes during an active session
 - **THEN** the application follows the declared close policy to retain or stop the session without silently transferring ownership
 
+#### Scenario: Owner window retains another presentation
+- **WHEN** the owning scene closes while another attachment for the same workspace or actual current-session picture-in-picture/audio-only continuity remains
+- **THEN** the session retains its original checked owner without assigning ownership to another workspace
+
+#### Scenario: Owner window requires clean stop
+- **WHEN** the owning scene closes while launching, streaming, or reconnecting and no declared retained presentation remains
+- **THEN** the application reserves the existing owner-keyed stop operation before detaching and awaits clean teardown
+
+#### Scenario: Owner window closes during stop
+- **WHEN** the owning scene closes after the same owner has already begun stopping
+- **THEN** the close joins the in-flight stop operation rather than creating another session teardown
+
+#### Scenario: Stale scene close
+- **WHEN** a replaced or otherwise stale scene attachment closes after a replacement workspace or session becomes current
+- **THEN** the close fails closed without detaching the replacement or stopping its session
+
 ### Requirement: Window-local presentation state
 Transient presentation state including sheets, confirmation dialogs, navigation selection, overlay visibility, validation, and retry state SHALL be stored per workspace rather than globally.
 

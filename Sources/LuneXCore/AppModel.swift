@@ -901,11 +901,77 @@ final class AppModel: ApplicationInputSink {
         )
     }
 
-    @discardableResult
     func disconnectProductWorkspaceScene(
         _ attachment: ProductWorkspaceSceneAttachment
+    ) async -> ProductWorkspaceSceneCloseOutcome {
+        let isAttachmentCurrent = workspaceSceneCoordinator
+            .isAttached(attachment)
+        let closeOwner = activeProductSessionOwner
+            ?? productSessionStopOperation?.owner
+        let ownsSession = closeOwner?.workspace == attachment.workspace
+        let hasRetainedPresentationSurface = closeOwner.map {
+            hasRetainedProductSessionPresentation(
+                for: $0,
+                excluding: attachment
+            )
+        } ?? false
+        let disposition = ProductWorkspaceSceneClosePolicy.resolve(
+            isAttachmentCurrent: isAttachmentCurrent,
+            ownsSession: ownsSession,
+            phase: ownsSession ? productSessionActualPhase : nil,
+            hasRetainedPresentationSurface: hasRetainedPresentationSurface
+        )
+
+        switch disposition {
+        case .rejectStaleAttachment:
+            return .rejectedStaleAttachment
+        case .detach:
+            return workspaceSceneCoordinator.disconnect(attachment)
+                ? .detached
+                : .rejectedStaleAttachment
+        case .retainSession:
+            return workspaceSceneCoordinator.disconnect(attachment)
+                ? .retainedSession
+                : .rejectedStaleAttachment
+        case .stopSession, .awaitSessionStop:
+            guard let closeOwner,
+                  let operation = beginProductSessionStop(
+                    expectedOwner: closeOwner,
+                    actionToken: currentStopActionToken(for: closeOwner)
+                  ) else {
+                _ = workspaceSceneCoordinator.disconnect(attachment)
+                return .stopFailed
+            }
+            guard workspaceSceneCoordinator.disconnect(attachment) else {
+                return .rejectedStaleAttachment
+            }
+            return await awaitProductSessionStopOperation(operation)
+                ? .stoppedSession
+                : .stopFailed
+        }
+    }
+
+    private func hasRetainedProductSessionPresentation(
+        for owner: ProductSessionOwner,
+        excluding attachment: ProductWorkspaceSceneAttachment
     ) -> Bool {
-        workspaceSceneCoordinator.disconnect(attachment)
+        if workspaceSceneCoordinator.hasOtherAttachment(
+            for: owner.workspace,
+            excluding: attachment
+        ) {
+            return true
+        }
+        guard activeProductSessionOwner == owner,
+              activeStreamSessionID == owner.sessionID,
+              activeMediaSessionID == owner.sessionID else {
+            return false
+        }
+        switch mobileRuntimeState?.continuityPath {
+        case .pictureInPicture, .audioOnly:
+            return true
+        case .inactive, .foreground, .unavailable, nil:
+            return false
+        }
     }
 
     func streamOverlayVisibility(
@@ -3402,18 +3468,29 @@ final class AppModel: ApplicationInputSink {
         expectedOwner: ProductSessionOwner? = nil,
         actionToken: ProductActionToken? = nil
     ) async -> Bool {
+        guard let operation = beginProductSessionStop(
+            expectedOwner: expectedOwner,
+            actionToken: actionToken
+        ) else { return false }
+        return await awaitProductSessionStopOperation(operation)
+    }
+
+    private func beginProductSessionStop(
+        expectedOwner: ProductSessionOwner? = nil,
+        actionToken: ProductActionToken? = nil
+    ) -> ProductSessionStopOperation? {
         if let operation = productSessionStopOperation {
             guard expectedOwner == nil || expectedOwner == operation.owner else {
-                return false
+                return nil
             }
-            return await awaitProductSessionStopOperation(operation)
+            return operation
         }
         guard let owner = activeProductSessionOwner,
               expectedOwner == nil || expectedOwner == owner,
               let sessionID = activeStreamSessionID,
               owner.sessionID == sessionID,
               let sessionControlProvider = runtimeProviders.sessionControl else {
-            return false
+            return nil
         }
         let operationID = UUID()
         let admittedActionToken = actionToken ?? currentStopActionToken(for: owner)
@@ -3431,7 +3508,7 @@ final class AppModel: ApplicationInputSink {
             task: task
         )
         productSessionStopOperation = operation
-        return await awaitProductSessionStopOperation(operation)
+        return operation
     }
 
     private func awaitProductSessionStopOperation(

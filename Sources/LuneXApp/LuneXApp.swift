@@ -84,8 +84,10 @@ private struct ProductWorkspaceSceneRoot: View {
 
     private func disconnect() {
         guard let attachment else { return }
-        _ = appModel.disconnectProductWorkspaceScene(attachment)
         self.attachment = nil
+        Task { @MainActor in
+            _ = await appModel.disconnectProductWorkspaceScene(attachment)
+        }
     }
 }
 #endif
