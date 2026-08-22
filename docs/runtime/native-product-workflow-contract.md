@@ -392,6 +392,44 @@ prove offline composition-root behavior, not actual simultaneous macOS/iPadOS
 windows, Stage Manager, signed or physical interaction, system continuity, or
 live Sunshine streaming.
 
+### Typed localized accessibility semantics
+
+Task 5.1 introduces `ProductSemanticDescriptor` as the value contract shared by
+host, pairing, catalog, stream, settings, and diagnostics semantics. Every
+descriptor carries `LocalizedStringResource` label, value, and hint fields, a
+closed `ProductSemanticRole`, actual `ProductSemanticEligibility`, and an
+explicit destructive flag. Each surface returns stable typed item IDs instead
+of asking SwiftUI to infer semantics from visible strings or icons.
+
+Eligibility distinguishes enabled, in-progress, and disabled with a localized
+reason. Stream command descriptors map every actual session phase and typed
+unavailable reason, and Show/Hide Controls fail closed when there is no session
+or the workspace owner is non-current or stale. Head tracking is disabled when
+spatial audio is off. Diagnostics distinguish empty, export-supported,
+export-unsupported, and debug/info/warning/error event states. Remove Host,
+Reset Trust, and Stop Stream are destructive actions; a status describing those
+workflows is not itself destructive.
+
+Semantic state is privacy bounded at construction. Pairing descriptors never
+include the entered PIN, host item descriptors never include an address or
+endpoint, and the semantic types have no field for a key, certificate, device
+identifier, or arbitrary provider string. This is a presentation contract, not
+a second action authority: checked workspace/session owners and the existing
+surface reducers remain the invocation boundary.
+
+Fresh deterministic evidence is `5/5` focused descriptor tests and `238/238`
+related workflow/runtime tests. The independent serial normal suite is `1255
+total / 1254 passed / 1 skipped / 0 failed`; the sole skip is the explicitly
+disabled real-Keychain round trip, ordinary tests continue through the JSON file
+identity fallback, and both real opt-ins are unset. Unsigned generic Debug builds
+for macOS universal (`x86_64 arm64`), iOS/iPadOS, tvOS, and visionOS pass `4/4`
+with zero structured compiler, analyzer, or build warnings. No Simulator
+lifecycle was used. These receipts prove typed/localized semantic construction,
+privacy shape, and platform compilation only. They do not prove SwiftUI
+accessibility modifier wiring, physical VoiceOver or Voice Control behavior,
+hardware keyboard/touch/remote/focus, signed installation, or live Sunshine.
+Those remain tasks 5.2 through 5.6 and the later physical acceptance gate.
+
 ### Host library workspace migration
 
 `AppModel` now creates one checked primary workspace in the process registry.
@@ -781,7 +819,8 @@ deterministic application receipts. They do not prove a live Sunshine session,
 signed installation, physical platform behavior, assistive technology, or the
 later accessibility/cross-product work. Task 4.4 supplies the offline close
 contract above, Task 4.6 supplies the two-workspace application matrix, and
-Tasks 5.x and 7.x remain separate.
+Task 5.1 now supplies the typed semantic descriptor layer above. Tasks 5.2
+through 5.6 and 7.x remain separate.
 
 ### Host, pairing, and catalog product surfaces
 
@@ -818,11 +857,13 @@ native buttons rather than gesture-only containers, and selection still passes
 through the checked catalog membership API.
 
 These reducers and source contracts provide deterministic offline presentation
-coverage only. Full localization/accessibility descriptors, narrow-window and
-accessibility Dynamic Type reflow, keyboard/focus policy, physical assistive
-technology remain tasks 5.x. Direct per-scene injection is complete for these
-surfaces; retained legacy workflow strings remain within the explicit tasks
-6.1/6.2 migration boundary.
+coverage only. Task 5.1 now provides their typed localized accessibility
+descriptors. Narrow-window and accessibility Dynamic Type reflow,
+keyboard/focus policy, touch and reduced-motion behavior, tvOS/visionOS focus,
+the complete matrix, and physical assistive technology remain tasks 5.2 through
+5.6 and the later physical gate. Direct per-scene injection is complete for
+these surfaces; retained legacy workflow strings remain within the explicit
+tasks 6.1/6.2 migration boundary.
 
 ### Host workflow application matrix
 

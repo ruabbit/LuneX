@@ -472,6 +472,338 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertEqual(noControl.stop, .unavailable(.providersUnavailable))
     }
 
+    func testHostPairingAndCatalogSemanticsExposeCompleteLocalizedActions() throws {
+        let host = makeHost(pairingState: .paired)
+        let hostSurface = ProductHostLibrarySurface(
+            library: ProductHostLibraryWorkspaceState(phase: .available),
+            hostCount: 1,
+            selectedHost: host
+        )
+        let hostSemantics = ProductHostSemanticSurface(
+            surface: hostSurface,
+            hostCount: 1
+        )
+        XCTAssertEqual(
+            Set(hostSemantics.items.map(\.id)),
+            Set(ProductHostSemanticID.allCases)
+        )
+        XCTAssertTrue(localized(try semantic(.libraryStatus, in: hostSemantics.items).value).contains("1"))
+        XCTAssertTrue(try semantic(.removeHost, in: hostSemantics.items).isDestructive)
+        XCTAssertTrue(try semantic(.resetTrust, in: hostSemantics.items).isDestructive)
+        XCTAssertFalse(try semantic(.destructiveStatus, in: hostSemantics.items).isDestructive)
+        XCTAssertEqual(
+            try semantic(.refreshHosts, in: hostSemantics.items).eligibility,
+            .enabled
+        )
+        let hostItem = ProductHostSemanticSurface.hostItem(host, isSelected: true)
+        XCTAssertEqual(hostItem.role, .selectableItem)
+        XCTAssertTrue(localized(hostItem.value).contains("Selected"))
+        XCTAssertFalse(localized(hostItem.label).contains(host.address))
+
+        let pairingOwner = pairingOwner(hostID: host.id)
+        let waitingPairing = ProductPairingSurface(
+            selectedHost: MoonlightHost(
+                id: host.id,
+                name: host.name,
+                address: host.address,
+                pairingState: .unpaired,
+                reachability: .online
+            ),
+            pairing: PairingUIState(
+                owner: pairingOwner,
+                stage: .waitingForPIN,
+                pin: "1234"
+            ),
+            transportAvailable: true,
+            isPINValid: true
+        )
+        let pairingSemantics = ProductPairingSemanticSurface(surface: waitingPairing)
+        XCTAssertEqual(
+            Set(pairingSemantics.items.map(\.id)),
+            Set(ProductPairingSemanticID.allCases)
+        )
+        XCTAssertEqual(
+            try semantic(.status, in: pairingSemantics.items).eligibility,
+            .inProgress
+        )
+        XCTAssertEqual(
+            try semantic(.submitPIN, in: pairingSemantics.items).eligibility,
+            .enabled
+        )
+        XCTAssertFalse(
+            localized(try semantic(.pin, in: pairingSemantics.items).value)
+                .contains("1234")
+        )
+
+        let catalogSurface = ProductAppCatalogSurface(
+            catalog: ProductAppCatalogWorkspaceState(
+                owner: catalogOwner(hostID: host.id),
+                phase: .current
+            ),
+            selectedHost: host,
+            appCount: 3
+        )
+        let catalogSemantics = ProductCatalogSemanticSurface(
+            surface: catalogSurface,
+            appCount: 3
+        )
+        XCTAssertEqual(
+            Set(catalogSemantics.items.map(\.id)),
+            Set(ProductCatalogSemanticID.allCases)
+        )
+        XCTAssertTrue(localized(try semantic(.status, in: catalogSemantics.items).value).contains("3"))
+        XCTAssertEqual(
+            try semantic(.refresh, in: catalogSemantics.items).eligibility,
+            .enabled
+        )
+        let appItem = ProductCatalogSemanticSurface.appItem(
+            name: "Desktop",
+            isSelected: false,
+            isEnabled: true
+        )
+        XCTAssertEqual(appItem.role, .selectableItem)
+        XCTAssertTrue(localized(appItem.label).contains("Desktop"))
+    }
+
+    func testEveryPairingAndCatalogStateHasNonemptyLocalizedSemantics() throws {
+        let host = makeHost(pairingState: .unpaired)
+        let owner = pairingOwner(hostID: host.id)
+        let pairingStates: [ProductPairingSurface] = [
+            ProductPairingSurface(
+                selectedHost: nil,
+                pairing: PairingUIState(),
+                transportAvailable: true,
+                isPINValid: false
+            ),
+            ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(),
+                transportAvailable: true,
+                isPINValid: false
+            ),
+            ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(),
+                transportAvailable: false,
+                isPINValid: false
+            )
+        ] + [
+            (PairingStage.idle, true),
+            (.waitingForPIN, false),
+            (.exchangingSecrets, true),
+            (.verifyingServer, true),
+            (.pinningIdentity, true),
+            (.paired, false),
+            (.cancelled, false),
+            (.failed, false)
+        ].map { stage, running in
+            ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: stage,
+                    isRunning: running,
+                    issue: stage == .failed
+                        ? ProductIssue(code: .pairingFailed, actionScope: .pairing(owner))
+                        : nil
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            )
+        }
+        for surface in pairingStates {
+            let status = try semantic(
+                .status,
+                in: ProductPairingSemanticSurface(surface: surface).items
+            )
+            XCTAssertFalse(localized(status.label).isEmpty)
+            XCTAssertFalse(localized(status.value).isEmpty)
+            XCTAssertEqual(status.role, .status)
+        }
+
+        let catalogOwner = catalogOwner(hostID: host.id)
+        var pairedHost = host
+        pairedHost.pairingState = .paired
+        let catalogCases: [(ProductAppCatalogPhase, Int)] = [
+            (.unavailable, 0),
+            (.idle, 0),
+            (.loading(hasCachedApps: false), 0),
+            (.loading(hasCachedApps: true), 2),
+            (.empty(source: .cached), 0),
+            (.empty(source: .current), 0),
+            (.cached, 2),
+            (.current, 2),
+            (.failed(hasCachedApps: false), 0),
+            (.failed(hasCachedApps: true), 2)
+        ]
+        for (phase, count) in catalogCases {
+            let surface = ProductAppCatalogSurface(
+                catalog: ProductAppCatalogWorkspaceState(
+                    owner: catalogOwner,
+                    phase: phase,
+                    issue: phase == .failed(hasCachedApps: count > 0)
+                        ? ProductIssue(
+                            code: .catalogRefreshFailed,
+                            actionScope: .catalog(catalogOwner)
+                        )
+                        : nil
+                ),
+                selectedHost: pairedHost,
+                appCount: count
+            )
+            let status = try semantic(
+                .status,
+                in: ProductCatalogSemanticSurface(
+                    surface: surface,
+                    appCount: count
+                ).items
+            )
+            XCTAssertFalse(localized(status.value).isEmpty)
+        }
+    }
+
+    func testStreamSemanticsMapEveryPhaseReasonAndDestructiveStop() throws {
+        let phaseStates: [ProductSessionCommandState] = [
+            sessionCommandState(phase: .idle),
+            sessionCommandState(phase: .launching, ownership: .current),
+            sessionCommandState(phase: .waitingForTransport, ownership: .current),
+            sessionCommandState(phase: .streaming, ownership: .current),
+            sessionCommandState(phase: .reconnecting(attempt: 2), ownership: .current),
+            sessionCommandState(phase: .stopping, ownership: .current),
+            sessionCommandState(phase: .remoteTerminated),
+            sessionCommandState(phase: .reconnectExhausted),
+            sessionCommandState(phase: .failed)
+        ]
+        for commands in phaseStates {
+            let semantics = ProductStreamSemanticSurface(
+                commands: commands,
+                controlsVisible: true
+            )
+            XCTAssertEqual(
+                Set(semantics.items.map(\.id)),
+                Set(ProductStreamSemanticID.allCases)
+            )
+            let status = try semantic(.status, in: semantics.items)
+            XCTAssertFalse(localized(status.value).isEmpty)
+            XCTAssertEqual(status.role, .status)
+            let stop = try semantic(.stop, in: semantics.items)
+            XCTAssertTrue(stop.isDestructive)
+            XCTAssertEqual(stop.role, .button)
+        }
+
+        let reasonStates = [
+            sessionCommandState(phase: .idle, workspaceIsCurrent: false),
+            sessionCommandState(phase: .idle, canLaunchTransport: false),
+            sessionCommandState(phase: .idle, hasLaunchSelection: false),
+            sessionCommandState(phase: .streaming, ownership: .otherWorkspace),
+            sessionCommandState(phase: .streaming, ownership: .staleReservation),
+            sessionCommandState(phase: .idle),
+            sessionCommandState(phase: .streaming, ownership: .current),
+            sessionCommandState(phase: .stopping, ownership: .current),
+            sessionCommandState(phase: .remoteTerminated),
+            sessionCommandState(phase: .streaming)
+        ]
+        let unavailableValues = try reasonStates.map { commands -> String in
+            let semantics = ProductStreamSemanticSurface(
+                commands: commands,
+                controlsVisible: false
+            )
+            let descriptor: ProductSemanticDescriptor
+            if commands.launch == .available {
+                descriptor = try semantic(.stop, in: semantics.items)
+            } else if commands.launch == .inProgress {
+                descriptor = try semantic(.reconnect, in: semantics.items)
+            } else {
+                descriptor = try semantic(.launch, in: semantics.items)
+            }
+            return localized(descriptor.value)
+        }
+        XCTAssertEqual(unavailableValues.count, 10)
+        XCTAssertTrue(unavailableValues.allSatisfy { !$0.isEmpty })
+
+        let nonOwner = ProductStreamSemanticSurface(
+            commands: sessionCommandState(
+                phase: .streaming,
+                ownership: .otherWorkspace
+            ),
+            controlsVisible: false
+        )
+        guard case .disabled = try semantic(.showControls, in: nonOwner.items).eligibility,
+              case .disabled = try semantic(.hideControls, in: nonOwner.items).eligibility else {
+            return XCTFail("Expected non-owner controls to expose disabled eligibility")
+        }
+        XCTAssertFalse(try semantic(.status, in: nonOwner.items).isDestructive)
+    }
+
+    func testSettingsSemanticsCoverEveryValueRoleAndEligibility() throws {
+        var settings = AppSettings.defaults
+        settings.audio.spatialAudioEnabled = false
+        settings.audio.headTrackingEnabled = true
+        let surface = ProductSettingsSemanticSurface(
+            settings: settings,
+            saveInProgress: true
+        )
+        XCTAssertEqual(
+            Set(surface.items.map(\.id)),
+            Set(ProductSettingsSemanticID.allCases)
+        )
+        XCTAssertEqual(surface.items.count, ProductSettingsSemanticID.allCases.count)
+        XCTAssertEqual(try semantic(.width, in: surface.items).role, .adjustable)
+        XCTAssertEqual(try semantic(.scaleMode, in: surface.items).role, .picker)
+        XCTAssertEqual(try semantic(.hdr, in: surface.items).role, .toggle)
+        XCTAssertEqual(try semantic(.save, in: surface.items).eligibility, .inProgress)
+        guard case .disabled = try semantic(.headTracking, in: surface.items).eligibility else {
+            return XCTFail("Expected head tracking to expose disabled eligibility")
+        }
+        for item in surface.items {
+            XCTAssertFalse(localized(item.descriptor.label).isEmpty)
+            XCTAssertFalse(localized(item.descriptor.value).isEmpty)
+            XCTAssertFalse(localized(item.descriptor.hint).isEmpty)
+            XCTAssertFalse(item.descriptor.isDestructive)
+        }
+    }
+
+    func testDiagnosticsSemanticsDistinguishEmptySupportedAndSeverityStates() throws {
+        let empty = ProductDiagnosticsSemanticSurface(
+            eventCount: 0,
+            exportSupported: true
+        )
+        XCTAssertEqual(
+            Set(empty.items.map(\.id)),
+            Set(ProductDiagnosticsSemanticID.allCases)
+        )
+        guard case .disabled = try semantic(.export, in: empty.items).eligibility else {
+            return XCTFail("Expected empty diagnostics export to be disabled")
+        }
+
+        let populated = ProductDiagnosticsSemanticSurface(
+            eventCount: 4,
+            exportSupported: true
+        )
+        XCTAssertEqual(try semantic(.export, in: populated.items).eligibility, .enabled)
+        XCTAssertTrue(localized(try semantic(.status, in: populated.items).value).contains("4"))
+
+        let unsupported = ProductDiagnosticsSemanticSurface(
+            eventCount: 4,
+            exportSupported: false
+        )
+        guard case .disabled = try semantic(.export, in: unsupported.items).eligibility else {
+            return XCTFail("Expected unsupported diagnostics export to be disabled")
+        }
+
+        let severities: [RuntimeDiagnosticSeverity] = [.debug, .info, .warning, .error]
+        for severity in severities {
+            let descriptor = ProductDiagnosticsSemanticSurface.event(
+                category: "Stream",
+                severity: severity,
+                hasAction: severity == .error
+            )
+            XCTAssertEqual(descriptor.role, .status)
+            XCTAssertFalse(localized(descriptor.value).isEmpty)
+            XCTAssertFalse(descriptor.isDestructive)
+        }
+    }
+
     func testRootViewConsumesSurfaceContractsAndNativeAppButtons() throws {
         let source = try String(contentsOf: rootViewURL, encoding: .utf8)
 
@@ -673,6 +1005,17 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             canLaunchTransport: canLaunchTransport,
             canControlSession: canControlSession
         ))
+    }
+
+    private func semantic<ID>(
+        _ id: ID,
+        in items: [ProductSemanticItem<ID>]
+    ) throws -> ProductSemanticDescriptor where ID: Hashable & Sendable {
+        try XCTUnwrap(items.first { $0.id == id }?.descriptor)
+    }
+
+    private func localized(_ resource: LocalizedStringResource) -> String {
+        String(localized: resource)
     }
 
     private var workspace: ProductWorkspaceReference {

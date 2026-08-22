@@ -3971,3 +3971,18 @@
 - 2026-08-22：15个明确`/private/tmp/LuneX-19-4_6-*`路径已逐项用绝对`find <exact> -depth -delete`清理，prefix零残留；未使用宽泛删除或触碰仓库cache。下一步cleanup后final diff/authority audit。
 - 2026-08-22：cleanup后authority复读发现runtime contract仍把multiwindow close列作later work；已精确改为4.4 close和4.6 matrix均完成offline evidence，只保留5.x/7.x后续。production/test不变，下一步完整只读final audit。
 - 2026-08-22：corrected cleanup final audit通过最终9文件、production/project零diff、2新增/0删除/0 skip测试、authority current-state、strict `26/48 next 5.1`、稳定project、零artifact/opt-in/process及`4ffdd43`三方基线。准备精确stage、commit、push、fetch。
+- 2026-08-22：Task 4.6以`a2386ea Cover two workspace application matrix`提交推送，fetch/ls-remote确认三方SHA一致且工作树clean；OpenSpec `26/48 next 5.1`。已启动5.1 semantic descriptor审计，先定义typed/localized role/value/eligibility/destructive合同，不提前做5.2-5.6。
+- 2026-08-22：5.1首轮focused `/private/tmp/LuneX-19-5_1-focused.JABMVl`在测试编译阶段因`PairingUIState`参数顺序错误退出65，0项测试执行；production零Swift诊断。失败bundle不计最终证据，已仅重排测试参数，下一步从fresh目录重跑5项focused。
+- 2026-08-22：fresh focused r2通过`5/5`且build diagnostics全零；审计后将805行semantic实现拆入独立源文件，并收紧destructive status与non-owner/stale/no-session stream-control eligibility，新增对应focused断言。下一步运行generator并从fresh evidence重跑focused。
+- 2026-08-22：generator纳入独立语义文件后的fresh focused r3通过`5/5`；destructive status与non-owner controls断言通过。下一步运行12类related回归矩阵。
+- 2026-08-22：fresh 5.1 related通过`238/238`，零skip/failure且build diagnostics全零；下一步独立fresh serial normal，两个真实opt-in继续unset。
+- 2026-08-22：fresh serial normal通过`1255/1254/1/0`且build diagnostics全零，唯一skip为真实Keychain opt-in测试；文件fallback继续。下一步四平台unsigned generic Debug，不操作Simulator。
+- 2026-08-22：串行读回`Normal.xcresult` tests tree，确认唯一skip精确为`HostAndPersistenceTests.testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`；上轮summary/build-result与tests tree并发读取同一bundle触发内部`database.sqlite3`移动竞争，测试本身不受影响，本轮未重跑suite。
+- 2026-08-22：四平台unsigned generic Debug `/private/tmp/LuneX-19-5_1-platform-builds.Om075Y`顺序通过`4/4`；四份structured build result串行确认`succeeded / 0 error / 0 warning / 0 analyzer warning`。首次universal定位脚本错误假定`LuneX.app`而未找到产物；修正为实际`LuneX-macOS.app/Contents/MacOS/LuneX-macOS`后确认`x86_64 arm64`，没有重复build或操作Simulator。
+- 2026-08-22：已同步Task 5.1 OpenSpec design/accessibility spec、native product workflow contract、completion roadmap与三份planning，记录typed/localized semantic descriptor、稳定ID、role/value/hint/eligibility/destructive、PIN/endpoint隐私、`5/238/1255/4`证据与physical VoiceOver/Voice Control边界。Task仍保持pre-mark `26/48 next 5.1`，下一步generator双跑、strict与repository pre-gate。
+- 2026-08-22：generator前后连续两次`project.pbxproj` SHA-256稳定为`4214a283c9e353456098dba5504f2cef3cf7cabd78ff2d4c51a2d34060b2f04f`，OpenSpec strict validation通过；5.1仍未勾选，下一步fresh repository pre-gate。
+- 2026-08-22：fresh repository pre-gate `/private/tmp/LuneX-19-5_1-repository-pre.2vaeVN`完整通过remote baseline、11文件scope、source membership、semantic completeness/privacy、authority、strict pre-mark `26/48 next 5.1`、stable project、retained `5/238/1255/4`、唯一Keychain skip、disabled opt-ins、零LuneX build/test进程与diff检查。现已仅勾选5.1，预期`27/48 next 5.2`。
+- 2026-08-22：fresh post-mark `/private/tmp/LuneX-19-5_1-final-state.cLptxe`只读通过strict、`27/48 next 5.2`、12文件scope、唯一5.1 checkbox、稳定project、retained evidence与disabled opt-ins；下一步精确清理5.1临时证据。
+- 2026-08-22：19个明确`/private/tmp/LuneX-19-5_1-*`路径已逐项用绝对`find <exact> -depth -delete`清理，prefix零残留；未使用宽泛删除或触碰仓库cache。下一步cleanup后final diff/authority audit。
+- 2026-08-22：cleanup后authority复读发现runtime contract两处和roadmap一处仍把整个5.x列作later/pending；已精确改为5.1 typed semantic descriptor完成、5.2至5.6与physical gate仍pending。production/test不变，下一步完整只读final audit。
+- 2026-08-22：cleanup final audit通过最终12文件、846行semantic source、六类ID/surface、5新增/0删除/0 skip测试、privacy/destructive/eligibility、唯一5.1 checkbox、strict `27/48 next 5.2`、稳定project、零artifact/opt-in/process及`a2386ea`三方基线；准备精确stage、commit、push、fetch。

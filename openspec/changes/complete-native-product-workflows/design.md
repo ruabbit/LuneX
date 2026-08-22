@@ -80,7 +80,11 @@ This is preferred over immediate toolbar deletion because removing trust or host
 
 ### Keep accessibility derived from command and actual state
 
-Views expose localized semantic labels, values, roles, focus order, and disabled states from the same product action eligibility used for invocation. Adaptive layouts use stable grid/list constraints and switch to vertical composition at bounded container states rather than viewport-scaled fonts. Reduce Motion selects reduced transitions, and state never relies on color alone.
+`ProductSemanticDescriptor` is the typed presentation contract for an accessibility label, value, hint, stable role, actual eligibility, and destructive status. Host, pairing, catalog, stream, settings, and diagnostics surfaces expose stable typed item IDs so views do not reconstruct semantic state from display strings. Labels, values, and hints are `LocalizedStringResource` values. Eligibility distinguishes enabled, in-progress, and disabled with a localized reason; it derives from the same product surface or checked command disposition used for invocation.
+
+Host removal, trust reset, and stream stop descriptors are destructive actions, but a status that describes one of those workflows is not itself a destructive action. Stream controls fail closed for a missing session, non-owner, or stale workspace. Head tracking is disabled when spatial audio is off, diagnostics export distinguishes empty from unsupported state, pairing PIN semantics never include the PIN value, and host semantics never include an address or endpoint.
+
+Views expose those localized semantic labels, values, roles, focus order, and disabled states rather than relying on visual icon recognition. Adaptive layouts use stable grid/list constraints and switch to vertical composition at bounded container states rather than viewport-scaled fonts. Reduce Motion selects reduced transitions, and state never relies on color alone. Task 5.1 establishes only the typed/localized descriptor layer; view modifier wiring, adaptive layout, focus/default/cancel behavior, touch targets, reduced motion, tvOS/visionOS focus, and the complete accessibility matrix remain tasks 5.2 through 5.6.
 
 Semantic/source tests prove deterministic contracts only. Physical assistive-technology and hardware input evidence remains a separate acceptance tier.
 

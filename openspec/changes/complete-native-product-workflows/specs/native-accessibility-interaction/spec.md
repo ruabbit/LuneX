@@ -11,6 +11,14 @@ Every interactive product action SHALL have a localized accessibility label, val
 - **WHEN** the actual stream state changes
 - **THEN** the owning view exposes the updated state without repeatedly announcing frame-level telemetry
 
+#### Scenario: Semantic privacy and checked eligibility
+- **WHEN** a host, pairing, stream, settings, or diagnostics action is unavailable or in progress
+- **THEN** its stable semantic descriptor exposes the actual eligibility and a localized reason without including an endpoint, PIN, key, certificate, device identity, or arbitrary provider text
+
+#### Scenario: Destructive workflow status
+- **WHEN** a destructive host, trust, or stream operation is represented as both an action and a workflow status
+- **THEN** only the actionable command carries destructive status while the descriptive status remains non-destructive
+
 ### Requirement: Scalable nonoverlapping layout
 Workflow views SHALL support accessibility Dynamic Type, localized text expansion, compact iPhone and resized iPad/macOS windows without clipped controls, incoherent overlap, or horizontal scrolling for primary commands.
 
