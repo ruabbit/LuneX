@@ -58,7 +58,7 @@ enum ProductActionKind: String, CaseIterable, Hashable, Sendable {
     }
 }
 
-struct ProductWorkspaceID: Hashable, Sendable {
+struct ProductWorkspaceID: Codable, Hashable, Sendable {
     let rawValue: UUID
 
     init(rawValue: UUID = UUID()) {
@@ -955,5 +955,136 @@ final class ProductWorkspaceRegistry {
             selectedHostID: restoration.selectedHostID,
             selectedAppID: restoration.selectedAppID
         )
+    }
+}
+
+struct ProductWorkspaceSceneIdentity: Codable, Hashable, Sendable {
+    let workspaceID: ProductWorkspaceID
+
+    init(workspaceID: ProductWorkspaceID = ProductWorkspaceID()) {
+        self.workspaceID = workspaceID
+    }
+}
+
+struct ProductWorkspaceSceneAttachment: Equatable, Sendable {
+    fileprivate let token: UUID
+    let identity: ProductWorkspaceSceneIdentity
+    let workspace: ProductWorkspaceReference
+    let supportsMultipleWindows: Bool
+}
+
+enum ProductWorkspaceSceneFailure: Error, Equatable, Sendable {
+    case workspaceAlreadyAttached(ProductWorkspaceID)
+}
+
+@MainActor
+@Observable
+final class ProductWorkspaceSceneCoordinator {
+    private(set) var primaryWorkspaceReference: ProductWorkspaceReference
+
+    @ObservationIgnored private let registry: ProductWorkspaceRegistry
+    @ObservationIgnored private var hasAssignedPrimaryScene = false
+    @ObservationIgnored private var attachmentsByToken:
+        [UUID: ProductWorkspaceSceneAttachment] = [:]
+    @ObservationIgnored private var supportedAttachmentByWorkspaceID:
+        [ProductWorkspaceID: UUID] = [:]
+
+    init(
+        registry: ProductWorkspaceRegistry,
+        primaryWorkspaceReference: ProductWorkspaceReference
+    ) {
+        self.registry = registry
+        self.primaryWorkspaceReference = primaryWorkspaceReference
+    }
+
+    func connect(
+        restoring identity: ProductWorkspaceSceneIdentity?,
+        supportsMultipleWindows: Bool
+    ) throws -> ProductWorkspaceSceneAttachment {
+        guard supportsMultipleWindows else {
+            return recordAttachment(
+                workspace: primaryWorkspaceReference,
+                supportsMultipleWindows: false
+            )
+        }
+
+        if let identity,
+           supportedAttachmentByWorkspaceID[identity.workspaceID] != nil {
+            throw ProductWorkspaceSceneFailure
+                .workspaceAlreadyAttached(identity.workspaceID)
+        }
+
+        let workspace: ProductWorkspaceReference
+        if !hasAssignedPrimaryScene {
+            workspace = try connectPrimaryScene(restoring: identity)
+            hasAssignedPrimaryScene = true
+        } else if let identity {
+            workspace = try restoreWorkspace(for: identity.workspaceID)
+            if identity.workspaceID == primaryWorkspaceReference.id {
+                primaryWorkspaceReference = workspace
+            }
+        } else {
+            workspace = try registry.create()
+        }
+
+        return recordAttachment(
+            workspace: workspace,
+            supportsMultipleWindows: true
+        )
+    }
+
+    @discardableResult
+    func disconnect(_ attachment: ProductWorkspaceSceneAttachment) -> Bool {
+        guard attachmentsByToken[attachment.token] == attachment else {
+            return false
+        }
+        attachmentsByToken[attachment.token] = nil
+        if attachment.supportsMultipleWindows,
+           supportedAttachmentByWorkspaceID[attachment.workspace.id]
+            == attachment.token {
+            supportedAttachmentByWorkspaceID[attachment.workspace.id] = nil
+        }
+        return true
+    }
+
+    private func connectPrimaryScene(
+        restoring identity: ProductWorkspaceSceneIdentity?
+    ) throws -> ProductWorkspaceReference {
+        guard let identity,
+              identity.workspaceID != primaryWorkspaceReference.id else {
+            return primaryWorkspaceReference
+        }
+
+        let previousPrimary = primaryWorkspaceReference
+        let restored = try restoreWorkspace(for: identity.workspaceID)
+        _ = try registry.close(previousPrimary)
+        primaryWorkspaceReference = restored
+        return restored
+    }
+
+    private func restoreWorkspace(
+        for id: ProductWorkspaceID
+    ) throws -> ProductWorkspaceReference {
+        let restoration = registry.currentState(for: id).map {
+            ProductWorkspaceRestorationState($0)
+        } ?? ProductWorkspaceRestorationState()
+        return try registry.restore(id: id, restoration: restoration)
+    }
+
+    private func recordAttachment(
+        workspace: ProductWorkspaceReference,
+        supportsMultipleWindows: Bool
+    ) -> ProductWorkspaceSceneAttachment {
+        let attachment = ProductWorkspaceSceneAttachment(
+            token: UUID(),
+            identity: ProductWorkspaceSceneIdentity(workspaceID: workspace.id),
+            workspace: workspace,
+            supportsMultipleWindows: supportsMultipleWindows
+        )
+        attachmentsByToken[attachment.token] = attachment
+        if supportsMultipleWindows {
+            supportedAttachmentByWorkspaceID[workspace.id] = attachment.token
+        }
+        return attachment
     }
 }

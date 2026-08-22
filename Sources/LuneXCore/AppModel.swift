@@ -167,7 +167,11 @@ final class AppModel: ApplicationInputSink {
     var renderState = StreamRenderState()
     var diagnostics = DiagnosticsStore()
     let workspaceRegistry: ProductWorkspaceRegistry
-    let primaryWorkspaceReference: ProductWorkspaceReference
+    @ObservationIgnored private let workspaceSceneCoordinator:
+        ProductWorkspaceSceneCoordinator
+    var primaryWorkspaceReference: ProductWorkspaceReference {
+        workspaceSceneCoordinator.primaryWorkspaceReference
+    }
     var navigationSelection: AppNavigationSelection {
         get {
             workspaceRegistry.state(for: primaryWorkspaceReference)?
@@ -712,12 +716,17 @@ final class AppModel: ApplicationInputSink {
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator()
     ) {
         let primaryWorkspaceID = ProductWorkspaceID()
-        workspaceRegistry = ProductWorkspaceRegistry(
+        let workspaceRegistry = ProductWorkspaceRegistry(
             primaryWorkspaceID: primaryWorkspaceID
         )
-        primaryWorkspaceReference = ProductWorkspaceReference(
+        let primaryWorkspaceReference = ProductWorkspaceReference(
             id: primaryWorkspaceID,
             generation: .initial
+        )
+        self.workspaceRegistry = workspaceRegistry
+        workspaceSceneCoordinator = ProductWorkspaceSceneCoordinator(
+            registry: workspaceRegistry,
+            primaryWorkspaceReference: primaryWorkspaceReference
         )
         self.hostLibraryManager = hostLibraryManager
         self.settingsRepository = settingsRepository
@@ -773,6 +782,23 @@ final class AppModel: ApplicationInputSink {
         for reference: ProductWorkspaceReference
     ) -> ProductWorkspaceState? {
         workspaceRegistry.state(for: reference)
+    }
+
+    func connectProductWorkspaceScene(
+        restoring identity: ProductWorkspaceSceneIdentity?,
+        supportsMultipleWindows: Bool
+    ) throws -> ProductWorkspaceSceneAttachment {
+        try workspaceSceneCoordinator.connect(
+            restoring: identity,
+            supportsMultipleWindows: supportsMultipleWindows
+        )
+    }
+
+    @discardableResult
+    func disconnectProductWorkspaceScene(
+        _ attachment: ProductWorkspaceSceneAttachment
+    ) -> Bool {
+        workspaceSceneCoordinator.disconnect(attachment)
     }
 
     func streamOverlayVisibility(

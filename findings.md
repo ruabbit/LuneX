@@ -3361,3 +3361,24 @@
 - Task 3.7是test-only coverage completion：production/project/config/dependency/vendor/reference零修改。它证明旧generation迟到termination无法污染replacement session的离线确定性owner guard，不证明live Sunshine、signed/physical平台、真实媒体/输入或多窗口关闭和无障碍行为；4.4、5.x与7.x继续pending。
 - Task 3.7 repository pre-gate通过精确scope、OpenSpec pre-mark、generator、test integrity、三份retained evidence、privacy/proof、opt-in/process和diff边界；没有发现需要修改production的缺陷。3.7可以标记完成，下一项为4.1 scene/workspace creation与restoration接线。
 - Final diff audit确认`retainsStoppedContinuation`默认关闭路径与原行为一致，新用例只保留第一代旧continuation并完整断言第二代不受污染和两代clean stop；没有测试删除、skip绕过或production漂移。权威文档已把3.7改为完成，同时保持4.4、5.x、7.x pending和离线证明边界。
+
+### Stage 19 Task 4.1 scene/workspace wiring audit (2026-08-22)
+
+- `LuneXApp`当前按平台建立`WindowGroup`，但所有窗口都渲染同一个无参数`rootView`；scene/window identity尚未映射为独立`ProductWorkspaceReference`，因此底层checked workspace registry并未成为真实macOS/iPadOS scene边界。
+- 4.1要求macOS与iPadOS scene创建/恢复workspace，并在unsupported配置保留单一checked workspace。4.2的全部navigation/sheet/dialog binding迁移、4.4 owning-window close policy及tvOS/visionOS window commands仍是独立后续任务。
+- `ProductWorkspaceRegistry.restore`已经为同一workspace ID推进generation、恢复navigation/host/app值并清空sheet/dialog/issue/overlay等transient state；`close`保留tombstone。这正好支撑scene reconnect，但目前没有scene attachment owner或SwiftUI serialization入口。
+- SwiftUI 26 SDK提供`WindowGroup(id:for:content:)`的`Binding<D?>`恢复值、`EnvironmentValues.supportsMultipleWindows`和typed `openWindow`。使用optional binding可让初始/新窗口从nil分配identity，并把分配结果回写给系统；iPhone等unsupported配置可在同一scene root中fail closed为primary。
+- 4.1 scene detach不应调用registry `close`或session stop，否则会提前决定4.4 owning-window policy。它只撤销ephemeral attachment；同一serialized identity下次attach时用当前state生成restoration并推进generation，使旧async owner失效。
+- 首个restored scene若ID不同于AppModel启动时随机primary，应让coordinator采用该restored ID为primary，避免compatibility projection指向无可见窗口的workspace。后续4.2再移除UI对primary projection的依赖。
+- 首轮实现采用现有文件，无新依赖/源成员；iOS plist显式声明`UIApplicationSupportsMultipleScenes = true`。macOS warnings-as-errors generic build结构化零diagnostic且universal，SwiftUI 26 typed WindowGroup与scene root接线编译成立。
+- 新增7项focused coordinator/source合同全部通过，默认unsupported路径只返回primary且不创建registry state；supported duplicate serialized ID在改变generation前失败，disconnect重复调用fail closed，restored scene保留navigation/host/app但清空transient presentation。
+- iOS/iPadOS generic target编译`#if os(iOS)` typed WindowGroup成功且structured diagnostics全零；实际生成Info同时包含multiple scenes true与原有background audio，说明plist变更没有覆盖连续性配置。该generic build仍不是Simulator或物理Stage Manager多窗口证明。
+- 六簇workspace related回归`77/77`通过。进一步审计发现scene coordinator已有直接单测、LuneXApp有source contract，但AppModel attach/detach composition root仅靠编译覆盖；补一条无网络application test可直接关闭该证明空档，production无需变化。
+- 补强后的fresh focused为`8/8`且build diagnostics全零；AppModel采用restored primary后旧primary reference失效，disconnect/reconnect同ID推进至generation 2，unsupported identity仍只返回当前primary且registry保持单state。
+- 加入完整AppModelWorkflowTests的七簇related为`160/160`，现有single-session owner、stream overlay、host/catalog/pairing和destructive workflow没有被scene primary改为computed projection或generation restore破坏。
+- Serial normal按7个新增测试增至`1233/1232/1/0`，唯一skip仍为真实Keychain opt-in且build diagnostics全零；文件fallback边界保持。该结果证明离线应用合同，不证明实际macOS/iPadOS窗口恢复或Stage Manager交互。
+- 当前最终源码的macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug四平台均结构化零diagnostic；tvOS/visionOS编译普通single-workspace `WindowGroup`，iOS生成Info保留multiple scenes/background audio。未操作Simulator或设备，不能升格为真实多窗口恢复、窗口关闭或Stage Manager证明。
+- Authority同步确认4.1只把scene identity与顶层workspace命令接入真实SwiftUI scene；完整navigation/selected host/sheet/dialog/validation/retry/child surface binding仍明确留在4.2。detach不调用registry close或session stop，避免提前决定4.4 owning-window policy。
+- 续接时`create_goal`仍因旧goal同时呈现`blocked`与“unfinished”而拒绝；这是控制面跟踪矛盾，不是LuneX/OpenSpec blocker。当前执行状态继续以`20/48 next 4.1`和仓库planning记录为准。
+- Fresh repository pre-gate完整通过4.1的scope/source/Info/test/authority/OpenSpec/generator/retained evidence/opt-in/diff门，唯一失败轮仅是零命中计数编排错误。4.1可以勾选；4.2完整per-scene UI bindings仍是下一独立实现边界。
+- Final diff audit确认4.1没有暗中实现owning-window close或session transfer；`RootView`顶层已接scene workspace，但`navigationSelection`、host selection及host/catalog/pairing panels仍显式走primary compatibility projection，正是4.2的下一范围。新增7项测试均为直接行为/source contract，无删除或skip绕过。

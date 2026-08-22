@@ -11,6 +11,14 @@ Each macOS and iPadOS window SHALL own a stable workspace identifier and a monot
 - **WHEN** a scene reconnects with a replacement generation
 - **THEN** async results from the prior generation cannot mutate the replacement workspace
 
+#### Scenario: Native scene restoration
+- **WHEN** a disconnected supported scene reconnects with its serialized workspace identifier
+- **THEN** the scene restores durable navigation, host, and app values at the next generation while transient presentation is cleared
+
+#### Scenario: Duplicate active scene identity
+- **WHEN** a second live scene presents an identifier already attached to another live scene
+- **THEN** attachment fails closed before replacing or mutating the current workspace generation
+
 ### Requirement: Session ownership isolation
 An active session SHALL have one checked workspace owner, and a non-owning window SHALL not stop, reconnect, present controls for, or claim input for that session without an explicit transfer contract.
 
@@ -42,6 +50,10 @@ Host records, trust state, cached apps, and settings SHALL remain shared reposit
 
 ### Requirement: Unsupported multiwindow behavior
 Platforms or configurations without product multiwindow support SHALL use one workspace without exposing nonfunctional window commands, while preserving the same checked ownership contracts internally.
+
+#### Scenario: Unsupported runtime configuration
+- **WHEN** the native scene environment reports that multiple windows are unsupported
+- **THEN** external scene restoration identity is ignored and the checked primary workspace remains the only workspace
 
 #### Scenario: tvOS root scene
 - **WHEN** LuneX runs on tvOS

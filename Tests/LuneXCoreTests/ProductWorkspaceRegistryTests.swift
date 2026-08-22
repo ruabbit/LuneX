@@ -264,6 +264,150 @@ final class ProductWorkspaceRegistryTests: XCTestCase {
         XCTAssertEqual(registry.states.map(\.reference), [first])
     }
 
+    func testSceneCoordinatorCreatesDistinctWindowAndRestoresGeneration() throws {
+        let primaryID = workspaceID(15)
+        let registry = ProductWorkspaceRegistry(primaryWorkspaceID: primaryID)
+        let primary = ProductWorkspaceReference(
+            id: primaryID,
+            generation: .initial
+        )
+        let coordinator = ProductWorkspaceSceneCoordinator(
+            registry: registry,
+            primaryWorkspaceReference: primary
+        )
+
+        let first = try coordinator.connect(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+        let second = try coordinator.connect(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+        XCTAssertEqual(first.workspace, primary)
+        XCTAssertNotEqual(second.workspace.id, primary.id)
+        XCTAssertEqual(second.workspace.generation, .initial)
+
+        let hostID = UUID(uuidString: "4D000000-0000-0000-0000-000000000001")!
+        try registry.update(second.workspace) {
+            $0.navigationSelection = .settings
+            $0.selectedHostID = hostID
+            $0.selectedAppID = "restored-app"
+            $0.presentation.sheet = .addHost
+        }
+        XCTAssertTrue(coordinator.disconnect(second))
+
+        let restored = try coordinator.connect(
+            restoring: second.identity,
+            supportsMultipleWindows: true
+        )
+        XCTAssertEqual(restored.workspace.id, second.workspace.id)
+        XCTAssertEqual(restored.workspace.generation.rawValue, 2)
+        XCTAssertNil(registry.state(for: second.workspace))
+        let state = try XCTUnwrap(registry.state(for: restored.workspace))
+        XCTAssertEqual(state.navigationSelection, .settings)
+        XCTAssertEqual(state.selectedHostID, hostID)
+        XCTAssertEqual(state.selectedAppID, "restored-app")
+        XCTAssertEqual(state.presentation, ProductWorkspacePresentationState())
+    }
+
+    func testSceneCoordinatorRejectsDuplicateSupportedIdentity() throws {
+        let primaryID = workspaceID(16)
+        let registry = ProductWorkspaceRegistry(primaryWorkspaceID: primaryID)
+        let coordinator = ProductWorkspaceSceneCoordinator(
+            registry: registry,
+            primaryWorkspaceReference: ProductWorkspaceReference(
+                id: primaryID,
+                generation: .initial
+            )
+        )
+        let first = try coordinator.connect(
+            restoring: nil,
+            supportsMultipleWindows: true
+        )
+
+        XCTAssertThrowsError(try coordinator.connect(
+            restoring: first.identity,
+            supportsMultipleWindows: true
+        )) {
+            XCTAssertEqual(
+                $0 as? ProductWorkspaceSceneFailure,
+                .workspaceAlreadyAttached(primaryID)
+            )
+        }
+        XCTAssertEqual(registry.states.map(\.reference), [first.workspace])
+    }
+
+    func testUnsupportedScenesAlwaysUsePrimaryWorkspace() throws {
+        let primaryID = workspaceID(17)
+        let registry = ProductWorkspaceRegistry(primaryWorkspaceID: primaryID)
+        let primary = ProductWorkspaceReference(
+            id: primaryID,
+            generation: .initial
+        )
+        let coordinator = ProductWorkspaceSceneCoordinator(
+            registry: registry,
+            primaryWorkspaceReference: primary
+        )
+        let ignoredIdentity = ProductWorkspaceSceneIdentity(
+            workspaceID: workspaceID(18)
+        )
+
+        let first = try coordinator.connect(
+            restoring: ignoredIdentity,
+            supportsMultipleWindows: false
+        )
+        let second = try coordinator.connect(
+            restoring: nil,
+            supportsMultipleWindows: false
+        )
+
+        XCTAssertEqual(first.workspace, primary)
+        XCTAssertEqual(second.workspace, primary)
+        XCTAssertEqual(first.identity.workspaceID, primaryID)
+        XCTAssertEqual(second.identity.workspaceID, primaryID)
+        XCTAssertEqual(registry.states.map(\.reference), [primary])
+        XCTAssertTrue(coordinator.disconnect(first))
+        XCTAssertFalse(coordinator.disconnect(first))
+        XCTAssertTrue(coordinator.disconnect(second))
+    }
+
+    func testFirstRestoredSceneBecomesCompatibilityPrimary() throws {
+        let initialID = workspaceID(19)
+        let restoredID = workspaceID(20)
+        let registry = ProductWorkspaceRegistry(primaryWorkspaceID: initialID)
+        let coordinator = ProductWorkspaceSceneCoordinator(
+            registry: registry,
+            primaryWorkspaceReference: ProductWorkspaceReference(
+                id: initialID,
+                generation: .initial
+            )
+        )
+
+        let attachment = try coordinator.connect(
+            restoring: ProductWorkspaceSceneIdentity(workspaceID: restoredID),
+            supportsMultipleWindows: true
+        )
+
+        XCTAssertEqual(attachment.workspace.id, restoredID)
+        XCTAssertEqual(coordinator.primaryWorkspaceReference, attachment.workspace)
+        XCTAssertNil(registry.currentState(for: initialID))
+        XCTAssertEqual(registry.states.map(\.reference), [attachment.workspace])
+    }
+
+    func testSceneIdentityRoundTripsThroughCodableValue() throws {
+        let identity = ProductWorkspaceSceneIdentity(workspaceID: workspaceID(21))
+        let encoded = try JSONEncoder().encode(identity)
+
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                ProductWorkspaceSceneIdentity.self,
+                from: encoded
+            ),
+            identity
+        )
+    }
+
     private func workspaceID(_ suffix: UInt8) -> ProductWorkspaceID {
         ProductWorkspaceID(rawValue: UUID(uuidString: String(
             format: "40000000-0000-0000-0000-%012d",

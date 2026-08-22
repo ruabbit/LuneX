@@ -36,17 +36,19 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`19/48`；adaptive stream layout完成，继续3.7 session application matrix |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`21/48`；4.1 scene/workspace wiring完成，继续4.2 workspace-local UI bindings |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`19/48`。Group 1、2.x及3.1-3.6已完成；3.5把requested overlay与stop confirmation绑定到完整workspace/session owner，3.6再以actual geometry、size class和accessibility text归约compact/wide stream controls，保持non-hover恢复、virtual-controller排他及tvOS/visionOS内部reflow。3.6最终focused `4/4`、related `176/176`、normal `1225/1224/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断通过。下一项3.7补完整session应用矩阵；owning-window close属于4.4，完整无障碍收尾属于5.x，legacy全局字符串迁移属于6.1/6.2。
+阶段19当前权威进度`21/48`、next `4.2`。Group 1、2.x、3.x与4.1已完成；4.1以typed scene identity建立supported primary/distinct/reconnect generation、duplicate fail-closed与unsupported single-workspace fallback，最终focused `8/8`、related `160/160`、normal `1233/1232/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断通过。下一项4.2迁移完整per-scene bindings；4.4 owning-window close、5.x无障碍收尾与6.1/6.2 legacy字符串迁移继续pending。
 
 ### 阶段19错误记录
 
+- Task 4.1首轮repository pre-gate通过精确15文件scope与coordinator detach-only语义后，在scene-root零命中断言退出：`rg -c ... || true`对顶层`primaryWorkspaceReference`零匹配输出空字符串而不是字符`0`。源码实际满足零命中，未运行测试/build/generator或设备操作；下一轮用`awk`显式计数并从fresh目录完整重跑。
+- 2026-08-22续接时再次调用`create_goal`，接口在`get_goal`报告旧goal为`blocked`的同时以“unfinished goal”拒绝重建；该控制面状态矛盾没有修改仓库或运行任何测试/设备操作，执行继续以OpenSpec与三份planning为权威，不错误地完成旧goal。
 - Task 3.3 final pre-gate的scope包装器在functions JavaScript解析阶段把shell环境变量展开误作模板表达式，以`Missing } in template expression`拒绝；shell未启动，仓库、测试、设备与evidence无副作用。后续改用无模板插值的`env | rg`断言，不重复原包装器。
 - Task 3.2定向cleanup已删除全部显式artifact后，零残留验证使用zsh unmatched glob并因`nomatch`返回1；删除已完成且没有项目/设备副作用。后续改用`find /private/tmp -maxdepth 1 -name`验证零残留，不重复glob。
 - Task 3.2 repository pre-gate首个隐私扫描把包含反引号的长正则放入双引号，zsh在命令启动前以`unmatched \"`退出；没有项目、测试、设备或artifact副作用。后续改用多个固定单引号pattern，不重复该包装器。
@@ -1811,3 +1813,37 @@
 - **evidence cleanup：** 12个明确`/private/tmp/LuneX-19-3_7-*`目录、marker与generator log已逐项用`find <exact-path> -depth -delete`清理，task prefix零残留；未触碰仓库既有ignored `build/DerivedData`。下一步final diff audit与cleanup final record。
 - **final audit：** 完整审读确认test double默认仍移除并finish continuation，只有新竞态显式保留旧generation；replacement owner/phase/active/issue与两代clean stop断言闭合。最终9文件scope中production/project/config/dependency/vendor/reference零diff，1个新增/0删除测试函数、0新增skip、唯一3.7 checkbox、authority时态与4.4/5.x/7.x边界正确，task artifact零残留。下一步final record与独立commit/push/fetch。
 - **final record：** cleanup后只读门确认`HEAD == origin/main == remote == fec4ec5`、strict、OpenSpec `20/48 next 4.1`、最终9文件、稳定project、test/authority完整性、零task artifact、两个opt-in unset及零build/test进程。Task 3.7准备精确stage、独立commit/push/fetch。
+
+## 2026-08-22 阶段 19 任务 4.1 启动
+
+- **状态：** `in_progress`；为macOS与iPadOS添加真实scene/workspace创建和恢复接线，在不支持的配置继续单一checked workspace。
+- **基线：** Task 3.7已以`8fcb737 Cover stale session termination`提交推送，`HEAD == origin/main == remote`且工作树clean；OpenSpec为`20/48 next 4.1`。
+- **初步缺口：** 当前所有平台`WindowGroup`都复用同一个无参数`rootView`，没有在SwiftUI scene identity边界创建/恢复独立workspace；底层registry和checked generation合同已存在。
+- **范围：** 4.1只接scene identity、workspace creation/restoration与unsupported single-workspace fallback；不提前迁移4.2全部workspace-local bindings、不实现4.4 owning-window close policy，也不暴露tvOS/visionOS非功能窗口命令。
+- **下一步：** 精读`LuneXApp.swift`、`RootView` workspace输入、`ProductWorkspaceRegistry`/`AppModel` create/restore API与现有tests，设计可确定性测试的scene binding值合同。
+- **既有能力：** registry的`restore(id:restoration:)`会为已存在或tombstoned ID推进generation，以明确restoration values重建workspace并清空transient presentation；`close`保留generation tombstone，stale reference fail closed。
+- **实现设计：** 在现有product state中增加Codable scene identity、attachment与MainActor coordinator。supported scene首次使用primary、后续nil scene创建distinct ID、恢复scene按ID推进generation；active duplicate identity fail closed。unsupported配置忽略scene identity并始终附着primary。
+- **SwiftUI接线：** macOS/iOS使用`WindowGroup(id:for:)`的可恢复optional binding，scene root读取`supportsMultipleWindows`并在appear/disappear成对attach/detach；tvOS/visionOS保留普通`WindowGroup`与primary。断开只撤销scene attachment，不close workspace或stop session，保持4.4边界。
+- **Root边界：** `RootView`接收scene workspace并将顶层stop/add-host/stream命令路由到它；navigation/selection与子surface的完整workspace binding迁移仍属于4.2。
+- **首轮实现：** 已在现有文件加入scene identity/coordinator、AppModel attach API、macOS/iOS typed `WindowGroup`、RootView顶层workspace路由与iOS multiple-scene manifest；registry/surface tests覆盖distinct、restore generation、duplicate、unsupported primary、first restored primary、Codable和source wiring。
+- **macOS compile：** fresh `/private/tmp/LuneX-19-4_1-compile.aXHxvO` generic Debug warnings-as-errors一次通过，structured build为`succeeded / 0 error / 0 warning / 0 analyzer warning`，universal executable为`x86_64 arm64`。
+- **focused：** 同一fresh evidence中的scene/coordinator/source合同`7/7`通过、零skip/failure，structured build diagnostics全零。覆盖distinct/restore generation/duplicate/single fallback/first restored primary/Codable及Root/App/Info wiring。
+- **下一门：** 先运行iOS/iPadOS generic warnings-as-errors build，直接编译`#if os(iOS)` typed WindowGroup分支并检查生成Info中的multiple-scene声明，再扩展related矩阵。
+- **iOS/iPadOS build：** generic Debug warnings-as-errors结构化通过`succeeded / 0 error / 0 warning / 0 analyzer warning`；从实际app Info读回`UIApplicationSupportsMultipleScenes = true`与既有`UIBackgroundModes[0] = audio`，没有操作Simulator。
+- **下一门：** workspace registry、Product surface、host/catalog/pairing/destructive六簇related回归，随后审计scene lifecycle竞态与AppModel application边界。
+- **related：** workspace registry、Product surface、host/catalog/pairing/destructive六簇`77/77`通过，零skip/failure且build diagnostics全零。
+- **审计补强：** coordinator行为正确但AppModel wrapper尚无直接application test；新增一条composition-root回归覆盖restored primary采用、disconnect/reconnect generation推进与unsupported primary fallback，并移除未使用failure case。production行为不变，下一步fresh focused复验。
+- **最终focused：** 补强后fresh `/private/tmp/LuneX-19-4_1-focused-final.wXwWF7/Focused.xcresult`结构化通过`8/8`、零skip/failure，build diagnostics全零；早先`7/7`作为补强前辅助证据。
+- **下一门：** 六簇workspace suites加完整`AppModelWorkflowTests`的七簇related矩阵，验证scene wrapper与既有session/pairing/catalog/overlay owner guards共同工作。
+- **最终related：** 七簇`160/160`通过、零skip/failure且build diagnostics全零，scene wrapper未破坏session/overlay/host/catalog/pairing/destructive owner guards。
+- **下一门：** 独立fresh serial normal，两个真实opt-in保持unset并继续文件identity fallback；相对3.7预期新增7项至`1233` total。
+- **最终normal：** `/private/tmp/LuneX-19-4_1-normal-final.MHuuST/Normal.xcresult`通过`1233 total / 1232 passed / 1 skipped / 0 failed / 0 expected failure`，build diagnostics全零；唯一skip精确为真实Keychain round-trip，普通测试继续文件fallback。
+- **下一门：** 当前最终源码的macOS、iOS/iPadOS、tvOS、visionOS四平台generic Debug warnings-as-errors顺序build；不操作Simulator，检查unsupported targets仍只编译single workspace root。
+- **最终四平台build：** `/private/tmp/LuneX-19-4_1-platform-builds-final.RFvm5d`中macOS、iOS/iPadOS、tvOS、visionOS全部`succeeded / 0 error / 0 warning / 0 analyzer warning`；macOS为`x86_64 arm64`，iOS实际Info为multiple scenes true且background audio保留。
+- **authority同步：** OpenSpec design/multiwindow spec、runtime contract、roadmap与planning现已记录typed scene ID、runtime fallback、primary/distinct/reconnect/duplicate语义、detach边界、最终证据与未证明的真实窗口/Stage Manager层级。
+- **repository pre-gate：** 首轮零命中编排错误后，fresh `/private/tmp/LuneX-19-4_1-repository-pre-r2.03qeW4`完整通过精确15文件scope、scene/coordinator/RootView/Info语义、7新增/0删除/0 skip测试、authority、strict pre-mark `20/48 next 4.1`、稳定generator、retained `8/160/1233`测试、四平台`4/4`及opt-in/diff边界。
+- **状态：** `complete`；4.1已勾选，预期权威状态`21/48 ready`、next `4.2`。下一步只读post-mark final-state，不重复generator/test/build或操作Simulator。
+- **post-mark final-state：** `/private/tmp/LuneX-19-4_1-final-state.HvXjF0`只读通过strict、`21/48 next 4.2`、最终16文件scope、唯一4.1 checkbox、稳定project、retained evidence及disabled opt-ins；未重复generator/test/build或操作Simulator。下一步精确清理全部4.1临时证据。
+- **evidence cleanup：** 13个明确`/private/tmp/LuneX-19-4_1-*`目录与marker已逐项用`find <exact-path> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有`build/DerivedData`。下一步final diff audit与cleanup final record。
+- **final audit：** 完整审读确认coordinator只管理scene attachment与registry generation，disconnect没有close/stop/ownership transfer；RootView仅迁移顶层scene workspace命令，4.2 global navigation/host/panel bindings仍清晰可见且未提前实现4.4。最终16文件scope、7新增/0删除/0 skip测试、唯一4.1 checkbox、strict `21/48 next 4.2`、稳定project、零task artifact和proof boundary全部一致。下一步cleanup final record与独立commit/push/fetch。
+- **cleanup final record：** 通过基线`HEAD == origin/main == remote == 8fcb737`、strict `21/48 next 4.2`、最终16文件scope、唯一4.1 checkbox、稳定project、零task artifact、disabled opt-ins及diff/proof边界。准备精确stage并以独立提交推送4.1。

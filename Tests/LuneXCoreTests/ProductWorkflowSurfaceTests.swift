@@ -490,6 +490,13 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(source.contains("Button {\n                    appModel.select(app: app, in: workspace)"))
         XCTAssertFalse(source.contains(".onTapGesture"))
 
+        let rootEnd = try XCTUnwrap(
+            source.range(of: "private struct SidebarNavigationList: View")
+        )
+        let root = String(source[..<rootEnd.lowerBound])
+        XCTAssertTrue(root.contains("let workspace: ProductWorkspaceReference"))
+        XCTAssertFalse(root.contains("appModel.primaryWorkspaceReference"))
+
         let workspaceStart = try XCTUnwrap(
             source.range(of: "private struct StreamWorkspaceView: View")
         )
@@ -541,6 +548,23 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             "VisionStreamControls(workspace: workspace, workspaceLayout: layout)"
         ))
         XCTAssertFalse(streamOverlay.contains(".onHover"))
+    }
+
+    func testAppSceneUsesRestorableWorkspaceIdentityAndSingleFallback() throws {
+        let appSource = try String(contentsOf: appSourceURL, encoding: .utf8)
+        let infoSource = try String(contentsOf: iOSInfoURL, encoding: .utf8)
+
+        XCTAssertTrue(appSource.contains("for: ProductWorkspaceSceneIdentity.self"))
+        XCTAssertTrue(appSource.contains("@Environment(\\.supportsMultipleWindows)"))
+        XCTAssertTrue(appSource.contains("RootView(workspace: attachment.workspace)"))
+        XCTAssertTrue(appSource.contains(
+            "RootView(workspace: appModel.primaryWorkspaceReference)"
+        ))
+        XCTAssertTrue(appSource.contains(".onAppear(perform: connect)"))
+        XCTAssertTrue(appSource.contains(".onDisappear(perform: disconnect)"))
+        XCTAssertTrue(infoSource.contains("UIApplicationSceneManifest"))
+        XCTAssertTrue(infoSource.contains("UIApplicationSupportsMultipleScenes"))
+        XCTAssertTrue(infoSource.contains("<true/>"))
     }
 
     private func surface(
@@ -619,5 +643,17 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/LuneXApp/RootView.swift")
+    }
+
+    private var appSourceURL: URL {
+        rootViewURL.deletingLastPathComponent()
+            .appendingPathComponent("LuneXApp.swift")
+    }
+
+    private var iOSInfoURL: URL {
+        rootViewURL.deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Configuration/Info/LuneX-iOS.plist")
     }
 }

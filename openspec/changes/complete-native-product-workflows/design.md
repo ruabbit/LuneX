@@ -30,6 +30,12 @@ Add a value-oriented `ProductWorkspaceState` identified by `ProductWorkspaceID` 
 
 This is preferred over one `AppModel` per window because duplicating `AppModel` would duplicate runtime observers and session/media/input ownership. Retaining the current global UI fields is rejected because one window can currently affect another and stale async completion has no window boundary.
 
+### Attach serialized native scenes to checked workspaces
+
+macOS and iOS/iPadOS use a typed `WindowGroup` restoration value containing the `ProductWorkspaceID`. A main-actor scene coordinator owns only ephemeral scene attachments: the first supported scene uses or adopts the primary workspace, later scenes without a restoration value create distinct workspaces, and a disconnected scene that reconnects with the same serialized ID restores the durable navigation/host/app values at the next workspace generation while clearing transient presentation. An ID already attached to a live scene fails closed before registry replacement.
+
+The scene root reads `supportsMultipleWindows` at runtime. Unsupported configurations ignore external scene identities and continue through the one checked primary workspace; tvOS and visionOS retain an ordinary single-workspace `WindowGroup`. Scene detach does not close the workspace, stop a session, or transfer ownership because the owning-window policy remains a separate task. This separates native scene identity from repository/runtime ownership and keeps compatibility projections valid while full per-scene view binding is migrated.
+
 ### Make one workspace the explicit active-session owner
 
 Session start records the initiating workspace identity/generation alongside the existing session generation. Stop, reconnect, overlay, and input-capture commands validate both owners. Closing an owning window follows an explicit policy: retain the session only when another declared presentation surface remains attached; otherwise perform idempotent clean stop. There is no implicit ownership transfer in this change.

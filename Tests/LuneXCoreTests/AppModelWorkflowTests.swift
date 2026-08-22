@@ -6,6 +6,41 @@ import XCTest
 
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
+    func testSceneConnectionsRestoreThroughAppModelAndKeepUnsupportedPrimary()
+        throws
+    {
+        let model = AppModel()
+        let initialPrimary = model.primaryWorkspaceReference
+        let restoredID = ProductWorkspaceID(
+            rawValue: UUID(uuidString: "49000000-0000-0000-0000-000000000001")!
+        )
+
+        let first = try model.connectProductWorkspaceScene(
+            restoring: ProductWorkspaceSceneIdentity(workspaceID: restoredID),
+            supportsMultipleWindows: true
+        )
+        XCTAssertEqual(model.primaryWorkspaceReference, first.workspace)
+        XCTAssertEqual(first.workspace.id, restoredID)
+        XCTAssertNil(model.workspaceState(for: initialPrimary))
+
+        XCTAssertTrue(model.disconnectProductWorkspaceScene(first))
+        let replacement = try model.connectProductWorkspaceScene(
+            restoring: first.identity,
+            supportsMultipleWindows: true
+        )
+        XCTAssertEqual(replacement.workspace.id, restoredID)
+        XCTAssertEqual(replacement.workspace.generation.rawValue, 2)
+        XCTAssertEqual(model.primaryWorkspaceReference, replacement.workspace)
+        XCTAssertNil(model.workspaceState(for: first.workspace))
+
+        let unsupported = try model.connectProductWorkspaceScene(
+            restoring: ProductWorkspaceSceneIdentity(),
+            supportsMultipleWindows: false
+        )
+        XCTAssertEqual(unsupported.workspace, replacement.workspace)
+        XCTAssertEqual(model.workspaceRegistry.states.count, 1)
+    }
+
     func testProviderAvailabilityIsDerivedFromInjectedInventory() {
         let unavailable = RuntimeProviderInventory.unavailable
         XCTAssertEqual(unavailable.availability, [])

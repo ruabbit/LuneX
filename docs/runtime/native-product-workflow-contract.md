@@ -174,7 +174,46 @@ failures, accepted and rejected endpoint matrices, generation zero/max,
 replacement and close staleness, close/reopen tombstones, generated-ID
 collisions, empty-host reconciliation, known catalog pruning, and unknown
 catalog preservation. These tests prove deterministic value and registry
-semantics only; they do not prove scene wiring or native multiwindow behavior.
+semantics only; task 4.1 adds the native scene wiring described below.
+
+### Native scene attachment and restoration
+
+`ProductWorkspaceSceneIdentity` serializes only a `ProductWorkspaceID` for the
+typed SwiftUI restoration value. `ProductWorkspaceSceneCoordinator` is a
+main-actor attachment owner above the existing registry: the first supported
+scene uses or adopts the primary workspace, each later scene without a
+restoration value creates a distinct checked workspace, and a disconnected
+scene that reconnects with the same ID uses registry restoration to advance
+the generation. Durable navigation, selected host, and selected app survive;
+sheet, dialog, issue, overlay, validation, and retry presentation are cleared.
+
+An ID already attached to a live scene is rejected before restoration can
+replace its generation. Disconnect removes only the ephemeral attachment; it
+does not call registry close, stop the current session, or transfer ownership.
+Those decisions remain in the task 4.4 owning-window policy. The
+`AppModel.primaryWorkspaceReference` compatibility projection follows the
+coordinator's adopted primary so a restored first scene does not leave legacy
+single-window APIs pointing at an invisible startup workspace.
+
+macOS and iOS/iPadOS compile a typed `WindowGroup` and each scene root reads
+SwiftUI `supportsMultipleWindows`. Unsupported runtime configurations ignore
+the serialized identity and use the one checked primary workspace. tvOS and
+visionOS keep the ordinary single-workspace `WindowGroup`. The iOS application
+manifest enables multiple scenes while retaining the existing background-audio
+mode. `RootView` receives the scene workspace for top-level Add Host, stream,
+Disconnect, and stop-confirmation commands; complete navigation, selection,
+sheet, dialog, validation, retry, and child-surface bindings remain task 4.2.
+
+Fresh deterministic evidence is `8/8` focused scene/coordinator/application
+contracts and `160/160` related workspace/workflow tests. The serial normal
+suite is `1233 total / 1232 passed / 1 skipped / 0 failed`; the only skip is
+the explicitly disabled real-Keychain round trip and ordinary testing uses the
+JSON file identity fallback. Unsigned generic Debug builds for macOS universal,
+iOS/iPadOS, tvOS, and visionOS pass `4/4` with zero structured compiler,
+analyzer, or build warnings. Generated iOS Info contains both multiple-scene
+support and background audio. These receipts do not prove actual macOS window
+restoration, iPad Stage Manager, signed/physical interaction, window-close
+policy, assistive technology, or live Sunshine behavior.
 
 ### Host library workspace migration
 

@@ -3876,3 +3876,21 @@
 - 2026-08-22：12个明确`/private/tmp/LuneX-19-3_7-*`路径已逐项以`find <exact> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有cache。下一步final diff audit与record后独立提交推送。
 - 2026-08-22：final diff audit通过最终9文件分类、test double默认行为、replacement session全部断言、1新增/0删除测试函数、0新增skip、唯一3.7 checkbox、authority/proof边界、稳定project及零task artifact；未发现需要追加修改。下一步final record后精确stage、commit、push、fetch。
 - 2026-08-22：cleanup final record通过`fec4ec5`三方基线、strict、OpenSpec `20/48 next 4.1`、最终9文件、稳定project、source/authority、artifact/opt-in/process/diff边界。准备精确stage并以独立提交推送3.7。
+- 2026-08-22：Task 3.7以`8fcb737 Cover stale session termination`提交推送，fetch与ls-remote确认三方一致且工作树clean。进入4.1，OpenSpec `20/48 next 4.1`；初步确认现有`WindowGroup`没有把scene identity接到workspace创建/恢复，范围保持scene wiring与unsupported single-workspace fallback，不提前做4.2/4.4。
+- 2026-08-22：4.1设计确定为`WindowGroup(for:)`可恢复workspace ID + MainActor scene attachment coordinator；supported首次primary/后续distinct/reconnect generation replacement/duplicate fail closed，unsupported始终primary。scene detach不close/stop，RootView只接顶层scene workspace，完整字段迁移留给4.2。
+- 2026-08-22：4.1首轮production/test实现完成；fresh macOS generic Debug warnings-as-errors `/private/tmp/LuneX-19-4_1-compile.aXHxvO`一次通过，structured build diagnostics全零且产物为`x86_64 arm64`。下一步focused scene/coordinator/source tests。
+- 2026-08-22：4.1 focused scene/coordinator/source合同`7/7`通过、0 skip/failure且build diagnostics全零。下一步iOS/iPadOS generic warnings-as-errors build验证iOS条件分支与Info manifest，不操作Simulator。
+- 2026-08-22：iOS/iPadOS generic Debug warnings-as-errors build通过且structured diagnostics全零，实际app Info读回multiple scenes为true、background audio仍为audio；未操作Simulator。下一步六簇workspace related回归。
+- 2026-08-22：六簇workspace related `77/77`通过且build diagnostics全零。审计后新增AppModel wrapper application test覆盖restored primary、generation reconnect与unsupported fallback，并删除未使用failure枚举项；下一步fresh focused复验，既有证据降为补强前辅助证据。
+- 2026-08-22：补强后fresh focused `/private/tmp/LuneX-19-4_1-focused-final.wXwWF7`通过`8/8`、0 skip/failure且build diagnostics全零。下一步加入完整AppModelWorkflowTests运行七簇related矩阵。
+- 2026-08-22：七簇related结构化通过`160/160`、0 skip/failure且build diagnostics全零。下一步独立fresh serial normal，Keychain/live-host opt-in继续unset并使用文件fallback。
+- 2026-08-22：独立fresh serial normal `/private/tmp/LuneX-19-4_1-normal-final.MHuuST`通过`1233/1232/1/0`且build diagnostics全零；唯一skip为真实Keychain opt-in测试。下一步最终四平台generic Debug builds，不操作Simulator。
+- 2026-08-22：最终四平台generic Debug `/private/tmp/LuneX-19-4_1-platform-builds-final.RFvm5d`顺序通过macOS、iOS/iPadOS、tvOS、visionOS `4/4`且每份structured diagnostics全零；macOS universal，iOS actual Info保留multiple scenes true与background audio。下一步authority同步与repository门禁。
+- 2026-08-22：续接时`create_goal`因旧goal同时被报告为`blocked`与“unfinished”而拒绝重建，无仓库/runtime副作用；继续以OpenSpec `20/48 next 4.1`为执行权威。
+- 2026-08-22：已同步4.1 OpenSpec design/multiwindow spec、runtime contract、completion roadmap与三份planning，记录typed scene ID、runtime fallback、primary/distinct/reconnect/duplicate语义、detach不close/stop、最终`8/160/1233/4`证据及真实窗口/Stage Manager/signed physical proof边界。task保持pre-mark，下一步静态/generator/strict/repository门禁。
+- 2026-08-22：首轮repository pre-gate通过15文件scope与coordinator语义后，因`rg -c`零匹配输出为空而非`0`误判顶层RootView断言并退出；源码实际零命中，未重复test/build/generator或设备操作。改用`awk`显式零计数后从fresh目录完整重跑。
+- 2026-08-22：fresh repository pre-gate `/private/tmp/LuneX-19-4_1-repository-pre-r2.03qeW4`完整通过11组scope、coordinator、scene root、Info、test integrity、authority、strict pre-mark、stable generator、retained tests、四平台build及opt-in门。现已仅勾选4.1并同步planning，预期OpenSpec `21/48 next 4.2`。
+- 2026-08-22：post-mark `/private/tmp/LuneX-19-4_1-final-state.HvXjF0`只读确认strict、`21/48 next 4.2`、最终16文件scope、唯一4.1 checkbox、稳定project、retained evidence及disabled opt-ins；未重复generator/test/build或操作Simulator。下一步逐路径清理4.1 evidence。
+- 2026-08-22：13个明确`/private/tmp/LuneX-19-4_1-*`路径已逐项以`find <exact> -depth -delete`清理，task prefix零残留；未使用宽泛删除或触碰仓库既有cache。下一步final diff audit与cleanup final record。
+- 2026-08-22：final diff audit通过最终16文件scope、scene attachment/generation/detach语义、RootView 4.1/4.2边界、7新增/0删除/0 skip测试、唯一4.1 checkbox、strict `21/48 next 4.2`、稳定project、零task artifact与proof边界；未发现需追加修改。下一步cleanup final record后精确stage、commit、push、fetch。
+- 2026-08-22：cleanup final record通过`8fcb737`三方基线、strict `21/48 next 4.2`、最终16文件scope、稳定project、零4.1 artifact、两个opt-in unset及source/authority/diff/proof边界。准备精确stage并独立提交推送4.1。

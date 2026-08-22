@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let workspace: ProductWorkspaceReference
     @State private var isShowingAddHost = false
     #if os(macOS)
     @State private var platformLifecycle = PlatformLifecycleState()
@@ -20,19 +21,19 @@ struct RootView: View {
             ) {
                 Button("Disconnect", role: .destructive) {
                     _ = appModel.beginConfirmedStopStream(
-                        in: appModel.primaryWorkspaceReference
+                        in: workspace
                     )
                 }
                 Button("Cancel", role: .cancel) {
                     _ = appModel.cancelStopStreamConfirmation(
-                        in: appModel.primaryWorkspaceReference
+                        in: workspace
                     )
                 }
             } message: {
                 Text("Remote input and media playback will stop on this device.")
             }
             .sheet(isPresented: $isShowingAddHost) {
-                AddHostSheet(workspace: appModel.primaryWorkspaceReference)
+                AddHostSheet(workspace: workspace)
             }
     }
 
@@ -87,7 +88,7 @@ struct RootView: View {
 
                         Button {
                             _ = appModel.requestStopStreamConfirmation(
-                                in: appModel.primaryWorkspaceReference
+                                in: workspace
                             )
                         } label: {
                             Label("Disconnect", systemImage: "stop.fill")
@@ -123,14 +124,14 @@ struct RootView: View {
 
             NavigationStack {
                 StreamWorkspaceView(
-                    workspace: appModel.primaryWorkspaceReference
+                    workspace: workspace
                 )
                     .navigationTitle("Stream")
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             Button {
                                 _ = appModel.requestStopStreamConfirmation(
-                                    in: appModel.primaryWorkspaceReference
+                                    in: workspace
                                 )
                             } label: {
                                 Label("Disconnect", systemImage: "stop.fill")
@@ -173,12 +174,12 @@ struct RootView: View {
         case .stream:
             #if os(macOS)
             StreamWorkspaceView(
-                workspace: appModel.primaryWorkspaceReference,
+                workspace: workspace,
                 platformLifecycle: platformLifecycle
             )
             #else
             StreamWorkspaceView(
-                workspace: appModel.primaryWorkspaceReference
+                workspace: workspace
             )
             #endif
         case .diagnostics:
@@ -200,7 +201,7 @@ struct RootView: View {
     private func presentAddHost() {
         appModel.setManualHostDraft(
             ManualHostDraft(),
-            in: appModel.primaryWorkspaceReference
+            in: workspace
         )
         isShowingAddHost = true
     }
@@ -209,13 +210,13 @@ struct RootView: View {
         Binding(
             get: {
                 appModel.stopStreamConfirmationSessionID(
-                    in: appModel.primaryWorkspaceReference
+                    in: workspace
                 ) != nil
             },
             set: { isPresented in
                 if !isPresented {
                     _ = appModel.cancelStopStreamConfirmation(
-                        in: appModel.primaryWorkspaceReference
+                        in: workspace
                     )
                 }
             }
