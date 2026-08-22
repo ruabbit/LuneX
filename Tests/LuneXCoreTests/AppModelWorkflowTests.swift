@@ -6401,10 +6401,10 @@ final class AppModelWorkflowTests: XCTestCase {
 
         XCTAssertTrue(model.macInputSurfacePolicy.cursorPolicy.capturesRelativePointer)
         XCTAssertTrue(model.macInputSurfacePolicy.cursorPolicy.hidesSystemCursor)
-        XCTAssertTrue(model.macInputSurfacePolicy.forwardsSystemShortcuts)
+        XCTAssertFalse(model.macInputSurfacePolicy.forwardsSystemShortcuts)
 
         model.settings.input.preferRelativeMouseMode = false
-        model.settings.input.captureSystemShortcuts = false
+        model.settings.input.captureSystemShortcuts = true
         XCTAssertTrue(model.macInputSurfacePolicy.admitsInput)
         XCTAssertFalse(model.macInputSurfacePolicy.cursorPolicy.capturesRelativePointer)
         XCTAssertFalse(model.macInputSurfacePolicy.cursorPolicy.hidesSystemCursor)

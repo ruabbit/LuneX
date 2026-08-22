@@ -37,6 +37,22 @@ macOS and iPadOS workflows SHALL support predictable keyboard focus, default and
 - **WHEN** a keyboard user enters a valid PIN and invokes the default action
 - **THEN** pairing submission occurs once and focus moves to meaningful progress or result content
 
+#### Scenario: Initial workflow focus
+- **WHEN** Add Host, pairing, or the owning stream overlay becomes available on macOS or iPadOS
+- **THEN** focus moves respectively to the address field, the current pairing action or status, or Hide Stream Controls without changing remote input ownership
+
+#### Scenario: Pairing focus transition
+- **WHEN** pairing moves between ready, PIN entry, progress, retryable failure, and terminal result phases
+- **THEN** focus follows a typed phase policy to Start Pairing, Pairing PIN, progress status, Retry Pairing, or result content
+
+#### Scenario: Native default and cancel actions
+- **WHEN** a macOS or iPadOS user invokes the native default or cancel action in Add Host, pairing, stream controls, or a confirmation workflow
+- **THEN** the visible eligible primary or cancellation command executes once and stale ownership checks remain unchanged
+
+#### Scenario: Voice Control name
+- **WHEN** a keyboard workflow field or primary command is visible
+- **THEN** it exposes an explicit localized accessibility name that remains stable when its icon or label composition changes
+
 #### Scenario: System shortcut
 - **WHEN** the user invokes a system-reserved window or accessibility shortcut
 - **THEN** it remains local and is not forwarded as remote keyboard input

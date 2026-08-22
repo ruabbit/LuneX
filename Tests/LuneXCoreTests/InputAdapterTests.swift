@@ -187,7 +187,10 @@ final class InputAdapterTests: XCTestCase {
             isRepeat: false
         ))
 
-        XCTAssertEqual(output.policy, .reserveLocally(reason: "Command-Tab remains local until explicit system shortcut forwarding is enabled"))
+        XCTAssertEqual(
+            output.policy,
+            .reserveLocally(reason: MacReservedShortcut.commandTab.reason)
+        )
         XCTAssertNil(output.event)
     }
 
@@ -266,14 +269,11 @@ final class InputAdapterTests: XCTestCase {
         var forwardingAdapter = adapter
         forwardingAdapter.forwardsSystemShortcuts = true
         XCTAssertEqual(
-            forwardingAdapter.keyboard(keyUp).event,
-            .keyboard(KeyboardInputEvent(
-                rawKeyCode: 0x51,
-                characters: "q",
-                isDown: false,
-                modifiers: [],
-                isRepeat: false
-            ))
+            forwardingAdapter.keyboard(keyUp),
+            InputAdapterOutput(
+                event: nil,
+                policy: .reserveLocally(reason: MacReservedShortcut.commandQ.reason)
+            )
         )
 
         XCTAssertEqual(

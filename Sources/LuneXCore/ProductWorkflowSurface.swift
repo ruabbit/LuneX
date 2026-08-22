@@ -42,6 +42,40 @@ enum ProductLibraryDashboardLayout: Hashable, Sendable {
     }
 }
 
+enum ProductKeyboardFocusTarget: Hashable, Sendable {
+    case manualHostName
+    case manualHostAddress
+    case pairingStart
+    case pairingPIN
+    case pairingProgress
+    case pairingRetry
+    case pairingResult
+    case streamHideControls
+    case streamDisconnect
+}
+
+enum ProductKeyboardFocusPolicy {
+    static let addHostInitialTarget = ProductKeyboardFocusTarget.manualHostAddress
+    static let streamOverlayInitialTarget = ProductKeyboardFocusTarget.streamHideControls
+
+    static func pairingTarget(
+        for surface: ProductPairingSurface
+    ) -> ProductKeyboardFocusTarget {
+        switch surface.phase {
+        case .ready, .cancelled:
+            .pairingStart
+        case .waitingForPIN:
+            .pairingPIN
+        case .preparing, .exchangingSecrets, .verifyingServer, .savingIdentity:
+            .pairingProgress
+        case .failed where surface.canRetry:
+            .pairingRetry
+        case .noHost, .unavailable, .completed, .failed:
+            .pairingResult
+        }
+    }
+}
+
 enum ProductHostLibraryContentSurface: Equatable, Sendable {
     case loading
     case firstUse

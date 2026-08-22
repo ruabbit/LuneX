@@ -58,6 +58,7 @@ final class HostAndPersistenceTests: XCTestCase {
         XCTAssertEqual(settings.stream.frameRate, 120)
         XCTAssertEqual(settings.stream.scaleMode, .fit)
         XCTAssertTrue(settings.input.preferRelativeMouseMode)
+        XCTAssertFalse(settings.input.captureSystemShortcuts)
         XCTAssertEqual(settings.audio, .defaults)
         XCTAssertEqual(
             settings.audio.sessionPreferences,

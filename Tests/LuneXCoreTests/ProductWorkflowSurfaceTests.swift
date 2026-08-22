@@ -301,6 +301,134 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertFalse(stale.canRetry)
     }
 
+    func testKeyboardFocusPolicyCoversEveryPairingSurfacePhase() {
+        let host = makeHost(pairingState: .unpaired)
+        let owner = pairingOwner(hostID: host.id)
+        let retryIssue = ProductIssue(
+            code: .pairingFailed,
+            actionScope: .pairing(owner)
+        )
+        let cases: [(ProductPairingSurface, ProductKeyboardFocusTarget)] = [
+            (ProductPairingSurface(
+                selectedHost: nil,
+                pairing: PairingUIState(),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingResult),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingStart),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .waitingForPIN
+                ),
+                transportAvailable: true,
+                isPINValid: true
+            ), .pairingPIN),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .idle,
+                    isRunning: true
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingProgress),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .exchangingSecrets,
+                    isRunning: true
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingProgress),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .verifyingServer,
+                    isRunning: true
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingProgress),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .pinningIdentity,
+                    isRunning: true
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingProgress),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .failed,
+                    issue: retryIssue
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingRetry),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .failed
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingResult),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(
+                    owner: owner,
+                    stage: .cancelled
+                ),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingStart),
+            (ProductPairingSurface(
+                selectedHost: host,
+                pairing: PairingUIState(),
+                transportAvailable: false,
+                isPINValid: false
+            ), .pairingResult),
+            (ProductPairingSurface(
+                selectedHost: makeHost(pairingState: .paired),
+                pairing: PairingUIState(),
+                transportAvailable: true,
+                isPINValid: false
+            ), .pairingResult)
+        ]
+
+        XCTAssertEqual(
+            ProductKeyboardFocusPolicy.addHostInitialTarget,
+            .manualHostAddress
+        )
+        XCTAssertEqual(
+            ProductKeyboardFocusPolicy.streamOverlayInitialTarget,
+            .streamHideControls
+        )
+        for (surface, expectedTarget) in cases {
+            XCTAssertEqual(
+                ProductKeyboardFocusPolicy.pairingTarget(for: surface),
+                expectedTarget,
+                "Unexpected focus for \(surface.phase)"
+            )
+        }
+    }
+
     func testCatalogDistinguishesLoadingEmptyCachedCurrentAndFailure() {
         let host = makeHost(pairingState: .paired)
         let owner = catalogOwner(hostID: host.id)
@@ -804,6 +932,12 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertEqual(try semantic(.width, in: surface.items).role, .adjustable)
         XCTAssertEqual(try semantic(.scaleMode, in: surface.items).role, .picker)
         XCTAssertEqual(try semantic(.hdr, in: surface.items).role, .toggle)
+        let systemShortcuts = try semantic(.systemShortcuts, in: surface.items)
+        XCTAssertEqual(systemShortcuts.role, .status)
+        XCTAssertEqual(localized(systemShortcuts.value), "Always local")
+        guard case .disabled = systemShortcuts.eligibility else {
+            return XCTFail("Expected system shortcuts to remain local")
+        }
         XCTAssertEqual(try semantic(.save, in: surface.items).eligibility, .inProgress)
         guard case .disabled = try semantic(.headTracking, in: surface.items).eligibility else {
             return XCTFail("Expected head tracking to expose disabled eligibility")
@@ -943,6 +1077,39 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             "VisionStreamControls(workspace: workspace, workspaceLayout: layout)"
         ))
         XCTAssertFalse(streamOverlay.contains(".onHover"))
+    }
+
+    func testRootViewDeclaresNativeKeyboardAndVoiceControlContracts() throws {
+        let source = try String(contentsOf: rootViewURL, encoding: .utf8)
+        let requiredContracts = [
+            "@FocusState private var focusedField: ProductKeyboardFocusTarget?",
+            "focusedField = ProductKeyboardFocusPolicy.addHostInitialTarget",
+            ".focused($focusedField, equals: .manualHostAddress)",
+            ".keyboardShortcut(.defaultAction)",
+            ".keyboardShortcut(.cancelAction)",
+            "ProductKeyboardFocusPolicy.pairingTarget(for: surface)",
+            ".focused($focusedControl, equals: .pairingPIN)",
+            ".focused($focusedControl, equals: .pairingProgress)",
+            ".focused($focusedControl, equals: .pairingResult)",
+            "focusedControl = ProductKeyboardFocusPolicy.streamOverlayInitialTarget",
+            ".focused($focusedControl, equals: .streamHideControls)",
+            ".keyboardShortcut(\"s\", modifiers: .command)",
+            ".accessibilityLabel(\"Host Address\")",
+            ".accessibilityLabel(\"Start Pairing\")",
+            ".accessibilityLabel(\"Submit Pairing PIN\")",
+            ".accessibilityLabel(\"Cancel Pairing\")",
+            ".accessibilityLabel(\"Hide Stream Controls\")",
+            ".accessibilityLabel(\"Disconnect Stream\")",
+            ".accessibilityLabel(\"Save Settings\")",
+            "LabeledContent(\"System shortcuts\", value: \"Always local\")"
+        ]
+        for contract in requiredContracts {
+            XCTAssertTrue(
+                source.contains(contract),
+                "Missing native keyboard contract: \(contract)"
+            )
+        }
+        XCTAssertFalse(source.contains("Forward system shortcuts"))
     }
 
     func testLibraryDashboardAndCommandsReflowWithoutPlatformAssumptions() throws {

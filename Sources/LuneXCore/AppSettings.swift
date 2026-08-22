@@ -76,7 +76,7 @@ struct InputPreferences: Codable, Equatable, Sendable {
 
     static let defaults = InputPreferences(
         preferRelativeMouseMode: true,
-        captureSystemShortcuts: true,
+        captureSystemShortcuts: false,
         showVirtualController: false
     )
 }

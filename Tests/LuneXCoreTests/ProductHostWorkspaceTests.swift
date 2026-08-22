@@ -303,7 +303,7 @@ final class ProductHostWorkspaceTests: XCTestCase {
         XCTAssertTrue(source.contains("if result.shouldDismissSheet"))
         XCTAssertTrue(source.contains(".interactiveDismissDisabled(isSubmitting)"))
         XCTAssertTrue(source.contains("Text(issue.presentation.message)"))
-        XCTAssertTrue(source.contains("focusedField = .address"))
+        XCTAssertTrue(source.contains("focusedField = .manualHostAddress"))
         XCTAssertFalse(source.contains("let onAdd: (String?, String) -> Void"))
     }
 

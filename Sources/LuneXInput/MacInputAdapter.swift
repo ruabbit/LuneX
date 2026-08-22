@@ -110,18 +110,18 @@ enum MacReservedShortcut: String, Codable, Equatable, Sendable {
     var reason: String {
         switch self {
         case .commandQ:
-            return "Command-Q remains local until explicit system shortcut forwarding is enabled"
+            return "Command-Q always stays on this Mac"
         case .commandTab:
-            return "Command-Tab remains local until explicit system shortcut forwarding is enabled"
+            return "Command-Tab always stays on this Mac"
         case .commandH:
-            return "Command-H remains local until explicit system shortcut forwarding is enabled"
+            return "Command-H always stays on this Mac"
         case .escapeCapture:
             return "Escape remains local while it exits remote pointer capture"
         }
     }
 
     var canBeForwarded: Bool {
-        self != .escapeCapture
+        false
     }
 
     static func classify(

@@ -428,10 +428,11 @@ lifecycle was used. These receipts prove typed/localized semantic construction,
 privacy shape, and platform compilation only. They do not prove SwiftUI
 accessibility modifier wiring, physical VoiceOver or Voice Control behavior,
 hardware keyboard/touch/remote/focus, signed installation, or live Sunshine.
-Task 5.2 now supplies the adaptive dashboard and primary-command reflow
-described below. Accessibility modifier wiring, focus/default/cancel behavior,
-touch and reduced-motion behavior, tvOS/visionOS focus, and the complete matrix
-remain tasks 5.3 through 5.6 and the later physical acceptance gate.
+Task 5.2 supplies the adaptive dashboard and primary-command reflow described
+below. Task 5.3 now supplies the macOS/iPadOS focus, default/cancel, Voice
+Control naming, and system-shortcut-local contracts described below. Touch and
+reduced-motion behavior, tvOS/visionOS focus, and the complete matrix remain
+tasks 5.4 through 5.6 and the later physical acceptance gate.
 
 ### Adaptive workflow layout
 
@@ -465,7 +466,55 @@ These receipts prove the pure layout threshold, source composition, related
 regression behavior, and platform compilation. They do not prove physical
 window resizing, Stage Manager, every longest localization, SwiftUI snapshot
 geometry, physical VoiceOver or Voice Control, signed installation, or live
-Sunshine. Those remain in tasks 5.3 through 5.6 and the later physical gate.
+Sunshine. Task 5.3 adds deterministic keyboard and Voice Control naming
+contracts below; tasks 5.4 through 5.6 and the later physical gate retain the
+remaining interaction and acceptance work.
+
+### Native keyboard and Voice Control operation
+
+Task 5.3 adds `ProductKeyboardFocusTarget` and a pure
+`ProductKeyboardFocusPolicy`. Add Host initially focuses Host Address. Pairing
+maps ready and cancelled state to Start Pairing, PIN entry to Pairing PIN, every
+owned intermediate stage to its progress status, a retryable failure to Retry
+Pairing, and unavailable, completed, or non-retryable terminal state to result
+content. The owning stream overlay initially focuses Hide Stream Controls.
+Focus state exists only in macOS/iOS SwiftUI branches, so this task does not
+replace the tvOS/visionOS focus restoration work reserved for task 5.5.
+
+Add Host, Start Pairing, Submit PIN, and Retry Pairing use the native default
+action. Add Host cancel, pairing cancel, stream control hiding, and confirmation
+cancellation use the native cancel action. Settings keeps Command-S local as a
+native Save Settings command. All shortcut modifiers are compiled only on
+macOS/iOS because tvOS marks them unavailable; labels and eligibility remain
+shared across platforms. Host fields and the primary Add, pairing, stream,
+confirmation, and save commands expose explicit accessibility labels so their
+Voice Control names do not depend on an icon or `Label` composition detail.
+
+System-reserved shortcuts are local at every admission layer. New settings
+default `captureSystemShortcuts` to false, `AppModel` always publishes
+`forwardsSystemShortcuts: false`, and every `MacReservedShortcut` reports that
+it cannot be forwarded even if an old decoded settings value or lower-level
+fixture still supplies true. Settings presents `System shortcuts: Always local`
+as a disabled status rather than a toggle. The persisted field is retained only
+to decode and round-trip existing JSON settings without a schema migration.
+
+Fresh deterministic evidence is `7/7` focused tests and a final serial related
+matrix of `218 total / 217 passed / 1 skipped / 0 failed`. The independent
+serial normal suite is `1259 total / 1258 passed / 1 skipped / 0 failed`; the
+sole skip is the explicitly disabled real-Keychain round trip, ordinary tests
+continue through the JSON file identity fallback, and both real opt-ins are
+unset. After a first tvOS build exposed unavailable unguarded shortcut
+modifiers, a fresh corrected build matrix passed macOS universal (`x86_64
+arm64`), iOS/iPadOS, tvOS, and visionOS unsigned generic Debug `4/4`, with zero
+structured compiler, analyzer, or build warnings. No Simulator lifecycle was
+used.
+
+These receipts prove typed focus decisions, source modifier/name contracts,
+lower-adapter shortcut rejection, application policy, settings semantics,
+related regression behavior, and platform compilation. They do not prove
+physical keyboard focus movement, VoiceOver or Voice Control recognition,
+iPad Stage Manager behavior, signed installation, or live Sunshine input.
+Those remain explicit physical acceptance work.
 
 ### Host library workspace migration
 
@@ -894,11 +943,12 @@ native buttons rather than gesture-only containers, and selection still passes
 through the checked catalog membership API.
 
 These reducers and source contracts provide deterministic offline presentation
-coverage only. Task 5.1 now provides their typed localized accessibility
-descriptors, and Task 5.2 provides actual-width and accessibility Dynamic Type
-dashboard/primary-command reflow. Keyboard/focus policy, touch and
-reduced-motion behavior, tvOS/visionOS focus, the complete matrix, and physical
-assistive technology remain tasks 5.3 through 5.6 and the later physical gate.
+coverage only. Task 5.1 provides their typed localized accessibility
+descriptors, Task 5.2 provides actual-width and accessibility Dynamic Type
+dashboard/primary-command reflow, and Task 5.3 provides the macOS/iPadOS
+keyboard/focus policy and stable Voice Control names. Touch and reduced-motion
+behavior, tvOS/visionOS focus, the complete matrix, and physical assistive
+technology remain tasks 5.4 through 5.6 and the later physical gate.
 Direct per-scene injection is complete for
 these surfaces; retained legacy workflow strings remain within the explicit
 tasks 6.1/6.2 migration boundary.

@@ -36,14 +36,14 @@
 | 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
 | 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
 | 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`21/48`；4.1 scene/workspace wiring完成，继续4.2 workspace-local UI bindings |
+| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`29/48`；5.3 keyboard/Voice Control/system-shortcut合同完成，继续5.4 touch target/text/state/reduced motion |
 | 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
 
 ## 当前焦点
 
 阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
 
-阶段19当前权威进度`24/48`、next `4.5`。Group 1、2.x、3.x与4.1–4.4已完成；4.4以typed close reducer、stale/non-owner fail-closed、actual retained presentation和同步共享stop reservation完成owning-scene close合同，并通过focused `7/7`、related `150/150`、normal `1246/1245/1 exact Keychain skip/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断。下一项4.5隐藏tvOS/visionOS不支持的窗口命令并保持typed single-workspace focus/input ownership；5.x无障碍收尾与6.1/6.2 legacy字符串迁移继续pending。
+阶段19当前权威进度`29/48`、next `5.4`。Group 1–4与5.1–5.3已完成；5.3实现typed Add Host/Pairing/stream focus policy、native default/cancel/Command-S、显式Voice Control名称与system-reserved-local三层强制，并通过最终focused `7/7`、related `218/217/1/0`、normal `1259/1258/1/0`及macOS universal、iOS/iPadOS、tvOS、visionOS generic Debug `4/4`结构化零诊断。5.4 touch target/text expansion/state/reduced motion、5.5 tvOS/visionOS focus与后续任务继续pending。
 
 ### 阶段19错误记录
 
@@ -2018,3 +2018,28 @@
 - **最终post-mark：** 修正后只读门确认strict、`28/48 next 5.3`、最终11文件scope、唯一5.2 checkbox、稳定project、disabled opt-ins与零build/test process；Task 5.2最终状态`complete`，整个change仍有20项且不可archive。下一步精确清理single fresh evidence root。
 - **最终evidence cleanup：** 修正后的single fresh root及path文件已分别用绝对`/usr/bin/find <exact-path> -depth -delete`清理，`/private/tmp`下5.2 prefix再次为零；未触碰仓库cache。下一步只读cleanup final audit，通过后提交推送。
 - **cleanup final audit：** 完整只读门通过最终11文件scope、pure layout与Apps整体fallback、94新增/0删除测试行、authority current-state、strict `28/48 next 5.3`、稳定project、零task artifact、disabled opt-ins、零process与`6a94c68`三方基线。准备精确stage并独立提交推送。
+
+## 2026-08-22 阶段 19 任务 5.3 启动
+
+- **状态：** `in_progress`；Task 5.2已以`82fd471 Adapt workflow layouts to narrow windows`提交推送，三方SHA一致且工作树clean，OpenSpec为`28/48 next 5.3`。
+- **审计缺口：** Add Host虽有局部FocusState但没有initial/default/cancel合同；Pairing没有PIN到progress/result的focus handoff；主要键盘命令依赖隐式visible-label Voice Control名称。stream overlay在macOS/iPadOS也没有明确initial hardware-keyboard focus。
+- **system shortcut冲突：** `captureSystemShortcuts`默认true且AppModel把它传入macOS input surface，Command-Q/Tab/H可被远端捕获；这违反当前5.3 OpenSpec“preserving system-reserved shortcuts locally”和阶段14“initial implementation keeps them local”合同。字段需保留持久化兼容，但production admission、UI和semantic状态必须改为Always local。
+- **实现边界：** 新增pure focus policy并接线Add Host、Pairing、stream overlay，补default/cancel/Command-S与明确accessibility labels；system-reserved shortcuts无条件local。5.4 touch/reduced-motion、5.5 tvOS/visionOS focus restoration和5.6完整矩阵不提前完成。
+- **工具错误：** 首轮测试定位命令末尾使用不存在的`Tests/LuneXCoreTests/*Accessibility*`裸glob，zsh以`no matches found`退出；此前明确文件读取已完成且仓库无变化。后续改用`rg --files`或明确文件名，不重复裸glob。
+- **focused：** fresh `/private/tmp/LuneX-19-5_3-focused.kHW6Tc`在macOS、串行、warnings-as-errors和两个真实opt-in unset下通过7个focus/settings/default/reserved-shortcut受影响测试；structured为`7/7`、0 skip/failure且build `succeeded / 0 error / 0 warning / 0 analyzer warning`。下一步fresh serial related矩阵。
+- **related首轮失败：** fresh串行 `/private/tmp/LuneX-19-5_3-related-serial.dOPeTZ`结构化为`218 total / 216 passed / 1 skipped / 1 failed`且build diagnostics全零；唯一失败是`ProductHostWorkspaceTests`旧source-contract仍期待局部focus枚举`.address`，production已迁移typed `.manualHostAddress`。更新该断言后从fresh目录完整重跑相同8类矩阵，本轮不计验收。
+- **最终related：** fresh串行 `/private/tmp/LuneX-19-5_3-related-serial-r2.B0WeOQ`覆盖相同8个完整测试类并结构化通过`218 total / 217 passed / 1 skipped / 0 failed`，build `succeeded / 0 error / 0 warning / 0 analyzer warning`；唯一skip精确为显式真实Keychain测试。下一步独立fresh serial normal。
+- **serial normal：** fresh `/private/tmp/LuneX-19-5_3-normal-serial.lUkIxy`结构化通过`1259 total / 1258 passed / 1 skipped / 0 failed / 0 expected failure`，build diagnostics全零；唯一skip仍为显式真实Keychain测试，两个真实opt-in unset并继续使用文件identity fallback。下一步四平台unsigned generic Debug。
+- **四平台build首轮失败：** `/private/tmp/LuneX-19-5_3-platform-builds.FSXIpy`中macOS universal和iOS/iPadOS generic成功且structured diagnostics全零；tvOS因10处新`keyboardShortcut` modifier在SDK上明确unavailable而编译失败，structured为10 errors/0 warnings，fail-fast下visionOS未运行。本轮不计最终验收；将native shortcut modifier精确限制为macOS/iOS，保留全平台accessibility label并从fresh根完整重跑4平台。
+- **修复补丁首轮错误：** 首个跨文件条件编译补丁假设Add Host Cancel使用`role: .cancel`，实际源码没有该参数，`apply_patch`校验失败并原子拒绝全部修改。随后读取精确行块并按当前modifier顺序重建补丁，不重复旧上下文。
+- **最终四平台build：** fresh `/private/tmp/LuneX-19-5_3-platform-builds-r2.bF0V1U`顺序通过macOS universal、iOS/iPadOS、tvOS、visionOS unsigned generic Debug `4/4`；四份structured build均`succeeded / 0 error / 0 warning / 0 analyzer warning`，macOS executable为`x86_64 arm64`。未操作Simulator lifecycle；下一步authority、generator、strict与repository pre-gate。
+- **权威补丁错误：** 首个跨六份authority/tracking文件的大补丁因native workflow合同的实际换行与预期不同被`apply_patch`原子拒绝，零文件修改；已拆成按文件小补丁并以精确当前段落同步，不重复旧换行假设。
+- **权威同步：** 已同步OpenSpec design/accessibility spec、native product workflow contract、macOS input lifecycle contract、completion roadmap与三份planning，记录typed focus/shortcut/name策略、legacy JSON兼容、三层system shortcut fail-closed、完整fresh证据及physical assistive-technology/live边界。5.3仍保持pre-mark `28/48 next 5.3`。
+- **最终macOS候选：** tvOS条件编译修正后的single fresh root `/private/tmp/LuneX-19-5_3-final-verification.gvmj1Y`重新通过focused `7/7`、related `218/217/1/0`和normal `1259/1258/1/0`；三份structured diagnostics全零且唯一skip精确为真实Keychain opt-in。未复用修正前测试证据，两个真实opt-in unset且未操作Simulator。
+- **repository gate首轮错误：** 首个包装器的条件正则未对alternation分组，把任意`#if os(tvOS)`误作shortcut modifier泄漏并在只读断言退出；后续BSD `find -perm +111`也不能可靠定位旧四平台证据的macOS executable。仓库、checkbox、测试与runtime均无副作用；corrected gate改为逐个shortcut检查最近平台guard及直接app executable路径。记录错误的首个跨planning补丁又因task plan上下文错误被原子拒绝，随后按精确当前段落修正。
+- **repository gate r2错误：** corrected包装器在scope/remote/shortcut guard后，仍用显式类型与点语法匹配focus常量，未接受实际等价的`ProductKeyboardFocusTarget.manualHostAddress/streamHideControls`而退出。逐项诊断首轮使用zsh只读变量`status`也在任何产品断言前退出；改为`rc`后确认只有这两个pattern过窄。r3按实际源码格式完整重跑，不重复旧表达式。
+- **repository pre-gate：** fresh r3 `/private/tmp/LuneX-19-5_3-repository-pre-r3.DyVGzn`完整通过remote baseline、20文件精确scope、typed focus与10处macOS/iOS shortcut guard、三层reserved-local、测试/authority、stable generator、最终`7/218/1259/4` evidence、唯一Keychain skip、disabled opt-ins、零build/test process与diff边界。现只勾选5.3并推进至`29/48 next 5.4`；下一步只读post-mark，不重复行为门。
+- **post-mark与最终审计：** fresh `/private/tmp/LuneX-19-5_3-final-state.1Yy8NN`只读确认strict、`29/48 next 5.4`、最终21文件、唯一5.3 checkbox、stable project、retained evidence、disabled opt-ins与零process。逐层diff审计确认focus lifecycle、10处平台guard、legacy decode/runtime fail-closed、测试增量和authority一致，5.4/5.5只有pending边界；下一步定向清理task evidence，不重复test/build/generator。
+- **evidence cleanup：** 先枚举再用绝对`find <exact-path> -depth -delete`逐项清理25个5.3 task-specific路径，并显式清理2个辅助test-tree JSON；prefix与辅助路径均为0，未扩大删除范围或触碰仓库cache。下一步cleanup final audit，通过后独立提交推送。
+- **cleanup final audit首轮错误：** 测试完整性正则把`testForwardedCommandKeyEquivalentIsCapturedWithoutLocalHandling`到`testCommandKeyEquivalentAlwaysRemainsLocalWithoutRemoteSamples`的语义重命名误作无替代删除并退出；新测试已在三层行为门通过且normal总数增加2。r2精确验证这一对rename并拒绝其他测试删除或新增skip，不重复过宽断言。
+- **cleanup final audit：** corrected r2 `/private/tmp/LuneX-19-5_3-cleanup-final-audit-r2.ydYwap`完整通过最终21文件、strict/OpenSpec `29/48 next 5.4`、stable project、10处平台guard、focus/reserved-local合同、精确test rename、零skip新增、disabled opt-ins、零process与remote baseline。删除audit临时路径并做零残留检查后即可独立提交推送。

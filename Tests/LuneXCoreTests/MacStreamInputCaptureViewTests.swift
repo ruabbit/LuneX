@@ -103,7 +103,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         )
     }
 
-    func testForwardedCommandKeyEquivalentIsCapturedWithoutLocalHandling() throws {
+    func testCommandKeyEquivalentAlwaysRemainsLocalWithoutRemoteSamples() throws {
         let recorder = MacInputSampleRecorder()
         let view = makeView(recorder: recorder)
         let commandQ = try keyEvent(
@@ -113,18 +113,8 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             modifiers: [.command]
         )
 
-        XCTAssertTrue(view.performKeyEquivalent(with: commandQ))
-        view.keyUp(with: try keyEvent(
-            type: .keyUp,
-            keyCode: 12,
-            characters: "q",
-            modifiers: []
-        ))
-        XCTAssertEqual(recorder.keyboardSamples.map(\.isDown), [true, false])
-        XCTAssertEqual(
-            recorder.keyboardSamples.map(\.reservedShortcut),
-            [.commandQ, .commandQ]
-        )
+        XCTAssertFalse(view.performKeyEquivalent(with: commandQ))
+        XCTAssertTrue(recorder.samples.isEmpty)
 
         let localRecorder = MacInputSampleRecorder()
         let localView = MacStreamInputCaptureView(

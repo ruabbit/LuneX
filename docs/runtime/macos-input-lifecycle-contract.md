@@ -64,9 +64,10 @@ retained and passed to `NSEvent.removeMonitor` during detach.
 - `flagsChanged` generates balanced modifier transitions. Auto-repeat is
   represented from `isARepeat` without manufacturing an extra key-up.
 - Command-Q, Command-Tab, Command-H, Escape-to-exit-capture, and other declared
-  local/system shortcuts remain local unless a later explicit user setting and
-  specification allow forwarding. Secure-input fields and global events are
-  outside this stage.
+  local/system shortcuts always remain local. The legacy
+  `captureSystemShortcuts` persistence field remains decodable for repository
+  compatibility, but it does not open runtime admission or lower-adapter
+  forwarding. Secure-input fields and global events are outside this stage.
 - Focus loss, failure, stop, detach, and replacement converge on the same
   held-input release barrier; no callback creates an unordered task that can
   overtake earlier key transitions.

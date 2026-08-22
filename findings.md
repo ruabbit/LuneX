@@ -3509,3 +3509,15 @@
 - 修正后最终post-mark再次确认5.2唯一checkbox与OpenSpec `28/48 next 5.3`，没有为记录更新重复任何行为门；最终候选是single fresh root验证的代码，不复用cleanup前旧证据。
 - 修正后single fresh evidence root与path已精确清理，5.2 prefix零残留；最终审计只复核仓库内计数/合同、源码结构、OpenSpec与三方基线，不再假设任何raw result bundle存在。
 - cleanup final audit确认最终实现与authority一致：dashboard由actual width/size class/accessibility text选择布局，四组固定命令区可vertical fallback，Apps header整体HStack具有intrinsic width锚点；OpenSpec为`28/48 next 5.3`且change不可archive。最终11文件可独立提交。
+
+### Stage 19 Task 5.3 keyboard focus and local shortcut audit (2026-08-22)
+
+- Task 5.2已提交推送为`82fd471`且三方SHA一致。RootView只有Add Host两个field的FocusState与tvOS既有focus；macOS/iPadOS Pairing、stream overlay没有typed focus handoff，Add/Submit/Cancel/Save也没有明确default/cancel/native shortcut合同。
+- visible `Label`通常可形成Voice Control名称，但5.3需要把关键workflow field/action名称锁为显式accessibility labels，避免icon/localization结构变化改变command target。
+- `InputPreferences.captureSystemShortcuts`默认true，AppModel把它发布为`MacInputSurfacePolicy.forwardsSystemShortcuts`；lower adapter允许Command-Q/Tab/H在true时deliver，仅Escape永久local。这与当前change的system-reserved-local要求及阶段14初始合同冲突。兼容字段可保留decode/schema，但新默认、AppModel policy、lower `canBeForwarded`、Settings可见状态与semantic descriptor应一致为Always local。
+- 最终实现以`ProductKeyboardFocusPolicy`覆盖Add Host初始Address、pairing ready/PIN/progress/retry/result与stream Hide Controls；macOS/iOS分支接native default/cancel/Command-S，主要field/action使用显式accessibility names。tvOS SDK不支持keyboardShortcut modifier，首轮build暴露后已精确限定平台且fresh四平台重跑闭合，不提前改写5.5 focus。
+- legacy `captureSystemShortcuts`字段只保留JSON兼容：default false、AppModel runtime false、lower `canBeForwarded` false、Settings/semantic `Always local`。测试证明即使旧值或fixture仍传true，Command-Q key-up和key-equivalent也不产生remote event。
+- fresh focused `7/7`、修正后related `218/217/1/0`、normal `1259/1258/1/0`与四平台generic Debug `4/4`全部结构化零diagnostic，macOS为`x86_64 arm64`；唯一skip为真实Keychain opt-in，文件fallback继续且未操作Simulator。该证据不等于物理keyboard focus、VoiceOver/Voice Control、Stage Manager、signed或live Sunshine验收。
+- tvOS条件编译修正后的single fresh最终macOS候选再次闭合focused `7/7`、related `218/217/1/0`和normal `1259/1258/1/0`，三份build diagnostics全零；related/normal唯一skip的结构化test node均精确为`testRealKeychainIdentityRoundTripWhenExplicitlyEnabled()`。因此最终验收不依赖条件编译修正前的旧测试证据，也没有重新触发Keychain授权。
+- 最终repository pre-gate以实际源码格式验证10个`keyboardShortcut` modifier均紧邻macOS/iOS guard，且default/runtime/lower adapter三层都拒绝system-reserved forwarding；旧`captureSystemShortcuts`仍可解码但不能改变runtime。5.3可独立完成，5.4 touch target/text/state/reduced motion与5.5 tvOS/visionOS focus仍保持pending。
+- post-mark最终审计没有发现5.3阻断项：Add Host、Pairing和stream overlay的initial/transition focus目标均落在可见控件或显式result/progress focus surface，default/cancel/Command-S无tvOS/visionOS编译泄漏，Settings不再呈现可开启的shortcut forwarding。该离线结论仍不替代物理hardware keyboard、Voice Control/VoiceOver、Stage Manager、signed或live-host验收。

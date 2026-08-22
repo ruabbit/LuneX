@@ -682,8 +682,18 @@ struct ProductSettingsSemanticSurface: Equatable, Sendable {
                        "Chooses whether video fits inside or fills the stream surface."),
             Self.toggle(.relativeMouse, "Prefer relative mouse", settings.input.preferRelativeMouseMode,
                         "Controls relative pointer mode when eligible."),
-            Self.toggle(.systemShortcuts, "Forward system shortcuts", settings.input.captureSystemShortcuts,
-                        "Controls forwarding of eligible non-reserved shortcuts."),
+            ProductSemanticItem(
+                id: .systemShortcuts,
+                descriptor: ProductSemanticDescriptor(
+                    label: "System shortcuts",
+                    value: "Always local",
+                    hint: "System-reserved shortcuts stay on this device.",
+                    role: .status,
+                    eligibility: .disabled(
+                        reason: "System-reserved shortcuts cannot be forwarded."
+                    )
+                )
+            ),
             Self.toggle(.virtualController, "Virtual controller", settings.input.showVirtualController,
                         "Controls the on-screen virtual controller."),
             Self.toggle(.spatialAudio, "Spatial audio", settings.audio.spatialAudioEnabled,

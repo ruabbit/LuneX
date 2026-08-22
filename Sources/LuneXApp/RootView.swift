@@ -23,11 +23,16 @@ struct RootView: View {
                         in: workspace
                     )
                 }
+                .accessibilityLabel("Disconnect Stream")
                 Button("Cancel", role: .cancel) {
                     _ = appModel.cancelStopStreamConfirmation(
                         in: workspace
                     )
                 }
+                #if os(macOS) || os(iOS)
+                .keyboardShortcut(.cancelAction)
+                #endif
+                .accessibilityLabel("Cancel Disconnect")
             } message: {
                 Text("Remote input and media playback will stop on this device.")
             }
@@ -301,14 +306,9 @@ private struct NavigationRow: View {
 }
 
 private struct AddHostSheet: View {
-    private enum Field: Hashable {
-        case name
-        case address
-    }
-
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var focusedField: Field?
+    @FocusState private var focusedField: ProductKeyboardFocusTarget?
     let workspace: ProductWorkspaceReference
 
     var body: some View {
@@ -316,12 +316,14 @@ private struct AddHostSheet: View {
             Form {
                 Section {
                     TextField("Name", text: nameBinding)
-                        .focused($focusedField, equals: .name)
+                        .focused($focusedField, equals: .manualHostName)
                         .disabled(isSubmitting)
+                        .accessibilityLabel("Host Name")
 
                     TextField("Address", text: addressBinding)
-                        .focused($focusedField, equals: .address)
+                        .focused($focusedField, equals: .manualHostAddress)
                         .disabled(isSubmitting)
+                        .accessibilityLabel("Host Address")
                     #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -346,6 +348,10 @@ private struct AddHostSheet: View {
                         dismissSheet()
                     }
                     .disabled(isSubmitting)
+                    #if os(macOS) || os(iOS)
+                    .keyboardShortcut(.cancelAction)
+                    #endif
+                    .accessibilityLabel("Cancel Add Host")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
@@ -354,14 +360,21 @@ private struct AddHostSheet: View {
                             if result.shouldDismissSheet {
                                 dismissSheet()
                             } else if result.fieldIssue != nil {
-                                focusedField = .address
+                                focusedField = .manualHostAddress
                             }
                         }
                     }
                     .disabled(isSubmitting)
+                    #if os(macOS) || os(iOS)
+                    .keyboardShortcut(.defaultAction)
+                    #endif
+                    .accessibilityLabel("Add Host")
                 }
             }
             .interactiveDismissDisabled(isSubmitting)
+            .onAppear {
+                focusedField = ProductKeyboardFocusPolicy.addHostInitialTarget
+            }
             .onDisappear {
                 guard !isSubmitting else { return }
                 _ = appModel.dismissAddHostSheet(in: workspace)
@@ -586,10 +599,15 @@ private struct HostLibraryPanel: View {
                         await appModel.performHostDestructiveAction(admitted)
                     }
                 }
+                .accessibilityLabel(Text(destructiveActionLabel(confirmation)))
             }
             Button("Cancel", role: .cancel) {
                 appModel.cancelHostDestructiveAction(in: workspace)
             }
+            #if os(macOS) || os(iOS)
+            .keyboardShortcut(.cancelAction)
+            #endif
+            .accessibilityLabel("Cancel Host Action")
         } message: {
             if let confirmation = currentHostConfirmation {
                 Text(destructiveActionMessage(confirmation))
@@ -801,6 +819,9 @@ private struct HostRow: View {
 
 private struct PairingPanel: View {
     @Environment(AppModel.self) private var appModel
+    #if os(macOS) || os(iOS)
+    @FocusState private var focusedControl: ProductKeyboardFocusTarget?
+    #endif
     let workspace: ProductWorkspaceReference
 
     var body: some View {
@@ -830,6 +851,15 @@ private struct PairingPanel: View {
                 }
             }
         }
+        #if os(macOS) || os(iOS)
+        .focusable(
+            ProductKeyboardFocusPolicy.pairingTarget(for: surface) == .pairingResult
+        )
+        .focused($focusedControl, equals: .pairingResult)
+        .onChange(of: surface, initial: true) { _, surface in
+            focusedControl = ProductKeyboardFocusPolicy.pairingTarget(for: surface)
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -928,6 +958,13 @@ private struct PairingPanel: View {
                 } label: {
                     Label("Retry Pairing", systemImage: "arrow.clockwise")
                 }
+                #if os(macOS) || os(iOS)
+                .keyboardShortcut(.defaultAction)
+                #endif
+                .accessibilityLabel("Retry Pairing")
+                #if os(macOS) || os(iOS)
+                .focused($focusedControl, equals: .pairingRetry)
+                #endif
             }
         }
     }
@@ -953,6 +990,10 @@ private struct PairingPanel: View {
             .textFieldStyle(.roundedBorder)
             #endif
             .frame(maxWidth: maxWidth)
+            .accessibilityLabel("Pairing PIN")
+            #if os(macOS) || os(iOS)
+            .focused($focusedControl, equals: .pairingPIN)
+            #endif
     }
 
     private func submitPairingPINButton(
@@ -967,6 +1008,10 @@ private struct PairingPanel: View {
             Label("Submit PIN", systemImage: "checkmark")
         }
         .disabled(!enabled)
+        #if os(macOS) || os(iOS)
+        .keyboardShortcut(.defaultAction)
+        #endif
+        .accessibilityLabel("Submit Pairing PIN")
     }
 
     private func startPairingButton(
@@ -980,6 +1025,13 @@ private struct PairingPanel: View {
         } label: {
             Label("Start Pairing", systemImage: "lock.open")
         }
+        #if os(macOS) || os(iOS)
+        .keyboardShortcut(.defaultAction)
+        #endif
+        .accessibilityLabel("Start Pairing")
+        #if os(macOS) || os(iOS)
+        .focused($focusedControl, equals: .pairingStart)
+        #endif
     }
 
     private func cancelPairingButton(
@@ -992,6 +1044,10 @@ private struct PairingPanel: View {
         } label: {
             Label("Cancel", systemImage: "xmark")
         }
+        #if os(macOS) || os(iOS)
+        .keyboardShortcut(.cancelAction)
+        #endif
+        .accessibilityLabel("Cancel Pairing")
     }
 
     private func pairingProgress(
@@ -1001,19 +1057,33 @@ private struct PairingPanel: View {
     ) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) {
-                ProgressView(title)
-                    .controlSize(.small)
+                pairingProgressStatus(title)
                 cancelPairingButton(workspace: workspace)
                     .disabled(!surface.canCancel)
             }
             .fixedSize(horizontal: true, vertical: false)
             VStack(alignment: .leading, spacing: 8) {
-                ProgressView(title)
-                    .controlSize(.small)
+                pairingProgressStatus(title)
                 cancelPairingButton(workspace: workspace)
                     .disabled(!surface.canCancel)
             }
         }
+    }
+
+    @ViewBuilder
+    private func pairingProgressStatus(
+        _ title: LocalizedStringKey
+    ) -> some View {
+        #if os(macOS) || os(iOS)
+        ProgressView(title)
+            .controlSize(.small)
+            .focusable()
+            .focused($focusedControl, equals: .pairingProgress)
+            .accessibilityLabel(Text(title))
+        #else
+        ProgressView(title)
+            .controlSize(.small)
+        #endif
     }
 
     private func issueLabel(_ issue: ProductIssue) -> some View {
@@ -1585,6 +1655,9 @@ private struct StreamWorkspaceView: View {
 
 private struct StreamStatusOverlay: View {
     @Environment(AppModel.self) private var appModel
+    #if os(macOS) || os(iOS)
+    @FocusState private var focusedControl: ProductKeyboardFocusTarget?
+    #endif
     let workspace: ProductWorkspaceReference
     let layout: ProductStreamWorkspaceLayout
 
@@ -1604,6 +1677,11 @@ private struct StreamStatusOverlay: View {
         .padding(12)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        #if os(macOS) || os(iOS)
+        .onAppear {
+            focusedControl = ProductKeyboardFocusPolicy.streamOverlayInitialTarget
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -1685,12 +1763,23 @@ private struct StreamStatusOverlay: View {
         } label: {
             Label("Hide Controls", systemImage: "eye.slash")
         }
+        #if os(macOS) || os(iOS)
+        .keyboardShortcut(.cancelAction)
+        #endif
+        .accessibilityLabel("Hide Stream Controls")
+        #if os(macOS) || os(iOS)
+        .focused($focusedControl, equals: .streamHideControls)
+        #endif
         Button {
             _ = appModel.requestStopStreamConfirmation(in: workspace)
         } label: {
             Label("Disconnect", systemImage: "xmark.circle")
         }
         .disabled(appModel.session.phase == .disconnected)
+        .accessibilityLabel("Disconnect Stream")
+        #if os(macOS) || os(iOS)
+        .focused($focusedControl, equals: .streamDisconnect)
+        #endif
     }
 
     @ViewBuilder
@@ -2201,7 +2290,10 @@ private struct SettingsView: View {
                 platformSettingStatusRow(.controllers)
                 #else
                 Toggle("Prefer relative mouse", isOn: $appModel.settings.input.preferRelativeMouseMode)
-                Toggle("Forward system shortcuts", isOn: $appModel.settings.input.captureSystemShortcuts)
+                LabeledContent("System shortcuts", value: "Always local")
+                    .accessibilityLabel("System shortcuts")
+                    .accessibilityValue("Always local")
+                    .accessibilityHint("System-reserved shortcuts stay on this device.")
                 Toggle("Virtual controller", isOn: $appModel.settings.input.showVirtualController)
                 #endif
             }
@@ -2223,6 +2315,10 @@ private struct SettingsView: View {
                     Label("Save Settings", systemImage: "checkmark.circle")
                 }
                 .buttonStyle(.borderedProminent)
+                #if os(macOS) || os(iOS)
+                .keyboardShortcut("s", modifiers: .command)
+                #endif
+                .accessibilityLabel("Save Settings")
             }
         }
     }

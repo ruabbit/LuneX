@@ -4703,7 +4703,7 @@ final class AppModel: ApplicationInputSink {
                 isFocused: admitsInput,
                 prefersRemotePointer: settings.input.preferRelativeMouseMode
             ),
-            forwardsSystemShortcuts: settings.input.captureSystemShortcuts
+            forwardsSystemShortcuts: false
         )
 #if os(macOS)
         publishMacInputDiagnosticState()
