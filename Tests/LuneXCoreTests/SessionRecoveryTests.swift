@@ -127,14 +127,27 @@ final class SessionRecoveryTests: XCTestCase {
             sessionID: UUID(),
             request: initialRequest
         ))
+        let negotiatedConfigurations = events.compactMap { event in
+            if case let .negotiated(configuration) = event {
+                return configuration
+            }
+            return nil
+        }
+        XCTAssertEqual(negotiatedConfigurations.count, 2)
+        XCTAssertEqual(
+            negotiatedConfigurations.map(\.input.keyMaterial),
+            [initialRequest.remoteInputKey, freshKey]
+        )
 
         XCTAssertEqual(events, [
             .launchAccepted(launchResponse(path: "initial")),
             .rtspReady,
+            .negotiated(negotiatedConfigurations[0]),
             .channelsReady(.control),
             .channelsReady([]),
             .reconnecting(attempt: 1, reason: "control_unavailable"),
             .rtspReady,
+            .negotiated(negotiatedConfigurations[1]),
             .channelsReady(.control),
             .terminated(reason: "The host ended the streaming session.")
         ])
@@ -220,7 +233,7 @@ final class SessionRecoveryTests: XCTestCase {
         XCTAssertEqual(result.events.filter { if case .reconnecting = $0 { return true }; return false }.count, 3)
         XCTAssertGreaterThanOrEqual(controlStops, 4)
         XCTAssertGreaterThanOrEqual(rtspStops, 4)
-        XCTAssertEqual(result.events.firstIndex(of: .channelsReady([])), 3)
+        XCTAssertEqual(result.events.firstIndex(of: .channelsReady([])), 4)
     }
 
     func testAuthenticatedFrameFailureDoesNotRetryOrResume() async {
@@ -354,6 +367,14 @@ final class SessionRecoveryTests: XCTestCase {
         let firstEvents = await firstCollector.value
         let launchResponses = await launchClient.recordedResponses()
         let remoteCancelCount = await launchClient.stopCount()
+        let replacementConfiguration = try XCTUnwrap(
+            secondEvents.compactMap { event in
+                if case let .negotiated(configuration) = event {
+                    return configuration
+                }
+                return nil
+            }.first
+        )
 
         XCTAssertEqual(firstEvents, [.launchAccepted(launchResponses[0])])
         XCTAssertFalse(firstEvents.contains(.rtspReady))
@@ -361,6 +382,7 @@ final class SessionRecoveryTests: XCTestCase {
         XCTAssertEqual(secondEvents, [
             .launchAccepted(launchResponses[1]),
             .rtspReady,
+            .negotiated(replacementConfiguration),
             .channelsReady(.control),
             .terminated(reason: "The host ended the streaming session.")
         ])

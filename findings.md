@@ -3569,3 +3569,16 @@
 - iOS/iPadOS `35/36`与tvOS/visionOS `49/50`的历史实现和证明保留，唯一物理/live任务继续pending；macOS冻结前标记`deferred/frozen pending macOS freeze`。共享代码变化只运行必要generic build兼容门，不能称为这些平台的产品推进。
 - 证明层级统一为deterministic、generic build、Simulator、signed artifact、physical hardware、assistive technology、live Sunshine与externally blocked。相邻层级不可互相替代，物理/live receipt必须绑定exact Git SHA，M6以后还必须绑定candidate hash。
 - 新OpenSpec `prioritize-macos-product-completion`承载macOS-exclusive priority、non-macOS maintenance freeze、proof-tier integrity、macOS completion/native acceptance与reproducible freeze合同；具体审计矩阵和M0-M9门见`docs/macos-first-completion-plan.md`。
+
+## M1 Task 2.1 production media receive audit（2026-08-26）
+
+- 默认`ProductionRuntimeProviderFactory.makeDefault()`只安装pairing、session control和remote input provider；`SessionMediaEnvironment.start()`在缺少video/audio receiver时明确fail closed，因此当前默认macOS App无法进入真实媒体消费路径。
+- `MoonlightSessionControlProvider.establishTransport()`当前完成OPTIONS/DESCRIBE和audio/video/control SETUP并只发布control readiness；它没有发布`SessionControlEvent.negotiated`，因此即使把receiver安装到inventory，session仍不会启动media environment。Task 2.1必须同时闭合可验证的negotiated configuration生产路径，且不能把control-only readiness伪装为all-ready。
+- 仓库已有独立实现的Sunshine video 32-byte datagram parser、video processor、audio jitter buffer、bounded `NetworkByteChannel`和RTSP setup endpoint/ping payload解析，可作为production receiver的本地构件；Moonlight参考仓库只用于wire行为事实，不复制或链接GPL实现。
+- M1最低媒体wire合同为：video数据包转换为`ReceivedVideoPacket`并显式丢弃尚未恢复的parity；audio只接收标准12-byte RTP、payload type 97 Opus并显式丢弃payload type 127 FEC；runt、扩展、CSRC、padding、空载荷和oversize输入fail closed。不得把未实现的Reed-Solomon/audio FEC恢复写成已支持。
+- UDP媒体接收需要bounded receive、约500ms周期ping、stream cancellation触发socket cancel、stop幂等且等待receive task退出、旧session晚到完成不能清理replacement。RTSP自定义ping payload仅在恰好16 ASCII bytes时采用，并追加4-byte big-endian sequence；否则使用legacy ASCII `PING`。
+- 当前negotiated model没有媒体加密key/IV合同。若Sunshine协商实际要求video/audio encryption，Task 2.1必须明确fail closed，不能把encrypted datagram送入明文parser或声称完成加密媒体支持；独立媒体加密实现与向量验证应另行闭环。
+- Task 2.1实现后，default inventory实际安装`MoonlightVideoReceiveProvider`和`MoonlightAudioReceiveProvider`；RTSP按audio/video/control SETUP结果发布完整`.negotiated`配置，仍只把当时真实就绪的control发布为`.channelsReady(.control)`，由media environment聚合实际video/audio/input就绪状态。
+- production receiver以generation/token隔离replacement，使用bounded `AsyncThrowingStream` buffer、UDP connect/send/receive timeout、500ms ping、stream cancellation到channel cancel传播、幂等stop和等待receive task退出。video parity与audio FEC被显式忽略而非伪称恢复；非UDP、runt/oversize/未知RTP布局及buffer overflow均fail closed。
+- Sunshine请求control-v2 encryption时允许继续；请求video/audio或未知媒体加密bit时明确失败。当前能力不包括Reed-Solomon video FEC、audio FEC恢复或媒体解密，必须在live矩阵和known limitations中保留。
+- 新增可选`pingPayload`对旧JSON缺字段保持可解码为`nil`，video/audio配置均拒绝非16-byte payload。fresh focused结构化结果为`127/127/0/0`，编译error/warning/analyzer warning均为0。

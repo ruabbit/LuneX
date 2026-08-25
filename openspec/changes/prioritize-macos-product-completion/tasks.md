@@ -8,7 +8,7 @@
 
 ## 2. M1 Production Session And Live Transport
 
-- [ ] 2.1 Implement concrete production `VideoReceiveProvider` and `AudioReceiveProvider` paths, install them in the default macOS runtime inventory, and verify bounded cancellation and teardown deterministically.
+- [x] 2.1 Implement concrete production `VideoReceiveProvider` and `AudioReceiveProvider` paths, install them in the default macOS runtime inventory, and verify bounded cancellation and teardown deterministically.
 - [ ] 2.2 Record the authorized Sunshine version and privacy-bounded live test matrix without mutating unrelated host state.
 - [ ] 2.3 Prove live pairing, catalog, launch, negotiated channels, sustained decoded video, audible synchronized audio, actual remote input/feedback, reconnect, remote termination, repeated stop, and clean teardown on macOS.
 

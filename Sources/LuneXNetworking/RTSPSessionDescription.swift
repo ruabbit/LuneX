@@ -16,6 +16,8 @@ enum SunshineRTSPNegotiationError: Error, Equatable, Sendable {
     case invalidServerPort
     case missingControlConnectData
     case invalidExtensionValue(String)
+    case inconsistentEncryptionCapabilities
+    case unsupportedMediaEncryption(UInt32)
 }
 
 struct SunshineOpusConfiguration: Equatable, Sendable {
@@ -74,6 +76,20 @@ struct SunshineSessionDescription: Equatable, Sendable {
         let matches = opusConfigurations.filter { $0.channelCount == channelCount }
         return highQuality ? matches.last : matches.first
     }
+}
+
+struct SunshineEncryptionFeatures: OptionSet, Equatable, Sendable {
+    let rawValue: UInt32
+
+    static let controlV2 = SunshineEncryptionFeatures(rawValue: 1 << 0)
+    static let video = SunshineEncryptionFeatures(rawValue: 1 << 1)
+    static let audio = SunshineEncryptionFeatures(rawValue: 1 << 2)
+    static let known: SunshineEncryptionFeatures = [
+        .controlV2,
+        .video,
+        .audio
+    ]
+    static let media: SunshineEncryptionFeatures = [.video, .audio]
 }
 
 enum SunshineSessionDescriptionParser {
@@ -216,7 +232,7 @@ struct RTSPSetupStreamParameters: Equatable, Sendable {
     var kind: RTSPSetupStreamKind
     var sessionToken: String
     var serverPort: UInt16
-    var pingPayload: String?
+    var pingPayload: Data?
     var controlConnectData: UInt32?
 
     func endpoint(host: String) -> RuntimeNetworkEndpoint {
@@ -251,11 +267,22 @@ enum RTSPSetupResponseParser {
             throw SunshineRTSPNegotiationError.missingTransport
         }
         let port = try parseServerPort(transport)
-        let pingPayload = try optionalASCIIHeader(
+        let pingPayloadString = try optionalASCIIHeader(
             "X-SS-Ping-Payload",
             response: response,
-            maximumBytes: 64
+            maximumBytes: 16
         )
+        let pingPayload: Data?
+        if let pingPayloadString {
+            guard pingPayloadString.utf8.count == 16 else {
+                throw SunshineRTSPNegotiationError.invalidExtensionValue(
+                    "X-SS-Ping-Payload"
+                )
+            }
+            pingPayload = Data(pingPayloadString.utf8)
+        } else {
+            pingPayload = nil
+        }
         let connectValue = try uniqueHeader("X-SS-Connect-Data", response: response)
         let connectData: UInt32?
         if let connectValue {

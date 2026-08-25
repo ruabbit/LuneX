@@ -153,7 +153,7 @@ final class RTSPBootstrapTests: XCTestCase {
         ))
     }
 
-    func testBootstrapSetsUpAndPublishesControlReadinessWithoutClaimingAllChannels() async throws {
+    func testBootstrapPublishesNegotiatedMediaBeforeControlOnlyReadiness() async throws {
         let sessionID = UUID()
         let launchResponse = StreamLaunchResponse(
             sessionURL: "rtsp://moon.local/session",
@@ -167,8 +167,18 @@ final class RTSPBootstrapTests: XCTestCase {
                 cSeq: "2",
                 body: Data("v=0\r\na=x-ss-general.featureFlags:0\r\nsprop-parameter-sets=AAAAAU\r\n".utf8)
             ),
-            setupResponse(cSeq: "3", session: "session-token", port: 48_000),
-            setupResponse(cSeq: "4", session: "session-token", port: 47_998),
+            setupResponse(
+                cSeq: "3",
+                session: "session-token",
+                port: 48_000,
+                pingPayload: "audio-ping-00000"
+            ),
+            setupResponse(
+                cSeq: "4",
+                session: "session-token",
+                port: 47_998,
+                pingPayload: "video-ping-00000"
+            ),
             setupResponse(
                 cSeq: "5",
                 session: "session-token",
@@ -213,9 +223,16 @@ final class RTSPBootstrapTests: XCTestCase {
             request: makeRequest(supportsHDR: true)
         ))
 
+        let configuration = try XCTUnwrap(events.compactMap { event in
+            if case let .negotiated(configuration) = event {
+                return configuration
+            }
+            return nil
+        }.first)
         XCTAssertEqual(events, [
             .launchAccepted(launchResponse),
             .rtspReady,
+            .negotiated(configuration),
             .channelsReady(.control),
             .videoColorMetadata(expectedColorMetadata),
             .terminated(reason: "The host ended the streaming session.")
@@ -257,6 +274,28 @@ final class RTSPBootstrapTests: XCTestCase {
         ))
         XCTAssertEqual(controlConnect?.connectData, 0x1234_5678)
         XCTAssertEqual(controlConnect?.encryptionKey, Data((0..<16).map(UInt8.init)))
+        XCTAssertEqual(configuration.sessionID, sessionID)
+        XCTAssertEqual(configuration.requiredChannels, .all)
+        XCTAssertEqual(configuration.controlEndpoint, controlConnect?.endpoint)
+        XCTAssertEqual(configuration.inputEndpoint, controlConnect?.endpoint)
+        XCTAssertEqual(configuration.videoEndpoint.port, 47_998)
+        XCTAssertEqual(configuration.audioEndpoint.port, 48_000)
+        XCTAssertEqual(configuration.video.codec, .hevc)
+        XCTAssertEqual(configuration.video.width, StreamPreferences.defaults.width)
+        XCTAssertEqual(configuration.video.height, StreamPreferences.defaults.height)
+        XCTAssertEqual(configuration.video.frameRate, StreamPreferences.defaults.frameRate)
+        XCTAssertEqual(configuration.video.colorMetadata, .hdr10VideoRange())
+        XCTAssertEqual(
+            configuration.video.pingPayload,
+            Data("video-ping-00000".utf8)
+        )
+        XCTAssertEqual(configuration.audio.channelLayout, .stereo)
+        XCTAssertEqual(configuration.audio.samplesPerFrame, 240)
+        XCTAssertEqual(
+            configuration.audio.pingPayload,
+            Data("audio-ping-00000".utf8)
+        )
+        XCTAssertEqual(configuration.input.keyMaterial, makeRequest().remoteInputKey)
         let controlStops = await control.stopCount()
         let rtspCancellations = await connection.cancelCount()
         let remoteCancellations = await launchClient.stopCount()
@@ -265,9 +304,42 @@ final class RTSPBootstrapTests: XCTestCase {
         XCTAssertEqual(remoteCancellations, 0)
         XCTAssertFalse(events.contains { event in
             if case .channelsReady(.all) = event { return true }
-            if case .negotiated = event { return true }
             return false
         })
+    }
+
+    func testBootstrapFailsClosedWhenMediaEncryptionIsRequested() async {
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            response(
+                cSeq: "2",
+                body: Data(
+                    "a=x-ss-general.encryptionSupported:7\r\na=x-ss-general.encryptionRequested:3\r\n"
+                        .utf8
+                )
+            )
+        ])
+        let provider = MoonlightSessionControlProvider(
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: BootstrapStubControlChannel(events: [])
+        )
+
+        let result = await collectFailure(await provider.start(
+            sessionID: UUID(),
+            request: makeRequest()
+        ))
+
+        XCTAssertEqual(result.events, [.launchAccepted(launchResponse)])
+        XCTAssertEqual(
+            result.error as? SunshineRTSPNegotiationError,
+            .unsupportedMediaEncryption(2)
+        )
     }
 
     func testBootstrapPersistsDeterministicAV1FallbackSelection() async throws {
@@ -563,6 +635,7 @@ final class RTSPBootstrapTests: XCTestCase {
         cSeq: String,
         session: String,
         port: UInt16,
+        pingPayload: String? = nil,
         connectData: UInt32? = nil
     ) -> RTSPResponse {
         var headers = [
@@ -572,6 +645,11 @@ final class RTSPBootstrapTests: XCTestCase {
         ]
         if let connectData {
             headers.append(RTSPHeader(name: "X-SS-Connect-Data", value: String(connectData)))
+        }
+        if let pingPayload {
+            headers.append(
+                RTSPHeader(name: "X-SS-Ping-Payload", value: pingPayload)
+            )
         }
         return RTSPResponse(statusCode: 200, reasonPhrase: "OK", headers: headers)
     }

@@ -244,6 +244,8 @@ actor NetworkRTSPConnection: RTSPConnectionExecuting {
 
 actor MoonlightSessionControlProvider: SessionControlProvider {
     private static let clientVersion = "14"
+    private static let maximumMediaPacketSize = 1_400
+    private static let audioSamplesPerFrame = 240
 
     private struct ActiveSession {
         var sessionID: UUID
@@ -561,6 +563,22 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             expectedCSeq: "2"
         )
         let description = try SunshineSessionDescriptionParser.parse(describe)
+        let supportedEncryption = SunshineEncryptionFeatures(
+            rawValue: description.encryptionSupported
+        )
+        let requestedEncryption = SunshineEncryptionFeatures(
+            rawValue: description.encryptionRequested
+        )
+        guard requestedEncryption.subtracting(supportedEncryption).isEmpty else {
+            throw SunshineRTSPNegotiationError
+                .inconsistentEncryptionCapabilities
+        }
+        let unknownOrMediaEncryption = requestedEncryption.rawValue
+            & ~SunshineEncryptionFeatures.controlV2.rawValue
+        guard unknownOrMediaEncryption == 0 else {
+            throw SunshineRTSPNegotiationError
+                .unsupportedMediaEncryption(unknownOrMediaEncryption)
+        }
         let hdrRequested = request.preferences.hdrEnabled && request.app.supportsHDR
         let videoSelection = try videoCodecSelectionPolicy.select(
             hostCodecs: description.availableVideoCodecs,
@@ -616,6 +634,49 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             endpoint: controlSetup.endpoint(host: endpoint.networkEndpoint.host),
             connectData: connectData,
             encryptionKey: request.remoteInputKey.key
+        )
+        let host = endpoint.networkEndpoint.host
+        let controlEndpoint = controlSetup.endpoint(host: host)
+        guard let audioProfile = description.opusConfiguration(
+            channelCount: 2,
+            highQuality: false
+        ) else {
+            throw SunshineRTSPNegotiationError.invalidOpusConfiguration
+        }
+        var audioConfiguration = try audioProfile.makeRuntimeConfiguration(
+            samplesPerFrame: Self.audioSamplesPerFrame,
+            maximumPacketSize: Self.maximumMediaPacketSize
+        )
+        audioConfiguration.pingPayload = audioSetup.pingPayload
+        let videoConfiguration = NegotiatedVideoStreamConfiguration(
+            codec: videoSelection.codec,
+            width: request.preferences.width,
+            height: request.preferences.height,
+            frameRate: request.preferences.frameRate,
+            colorMetadata: colorMetadata,
+            maximumPacketSize: Self.maximumMediaPacketSize,
+            pingPayload: videoSetup.pingPayload
+        )
+        let configuration = NegotiatedSessionConfiguration(
+            sessionID: activeSession.sessionID,
+            controlEndpoint: controlEndpoint,
+            videoEndpoint: videoSetup.endpoint(host: host),
+            audioEndpoint: audioSetup.endpoint(host: host),
+            inputEndpoint: controlEndpoint,
+            video: videoConfiguration,
+            audio: audioConfiguration,
+            input: NegotiatedInputConfiguration(
+                keyMaterial: request.remoteInputKey,
+                encrypted: true,
+                maximumMessageSize: RemoteInputWireCodec.maximumPacketSize
+            ),
+            requiredChannels: .all
+        )
+        try configuration.validate()
+        try yield(
+            .negotiated(configuration),
+            token: token,
+            continuation: continuation
         )
         try yield(.channelsReady(.control), token: token, continuation: continuation)
     }

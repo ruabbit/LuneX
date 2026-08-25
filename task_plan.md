@@ -24,15 +24,15 @@
 | 2. 本机环境检查 | complete | Xcode/Swift/OpenSpec/模拟器/SDK 能力清单 |
 | 3. OpenSpec 需求整理 | complete | 全平台客户端 spec、第一阶段 change、任务清单 |
 | 4. 项目脚手架 | complete | SwiftUI 多平台 App 工程、共享核心模块、平台适配层、单测 target |
-| 5. macOS 核心体验 | partial | window/input/Metal/HDR/audio已完成确定性production接线；仍缺默认video/audio network receiver及physical/live验收 |
+| 5. macOS 核心体验 | partial | window/input/Metal/HDR/audio及默认video/audio network receiver已完成确定性production接线；仍缺physical/live验收 |
 | 6. iOS/iPadOS 核心体验 | deferred/frozen | 保留已有policy/model、原生UI与历史证明；macOS冻结前不推进移动产品功能 |
-| 7. 流媒体协议与会话核心 | partial | pairing、RTSP/control、decode/audio/input runtime已有；默认production inventory仍缺具体video/audio receive provider且live E2E未验收 |
+| 7. 流媒体协议与会话核心 | partial | pairing、RTSP/control、production video/audio receive、decode/audio/input runtime已有；live E2E未验收 |
 | 8. tvOS/visionOS 适配 | deferred/frozen | 保留target、UI、adapter和历史证明；macOS冻结前只接受必要兼容构建 |
 | 9. 验证与迭代 | partial | build/unit gates 已有；缺少真实 Sunshine 和真机端到端、性能、功耗与长时验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
-| 13. 真实 Moonlight session runtime | P0 / in_progress | OpenSpec `54/61`；M1第一阻塞是默认production runtime缺少具体video/audio receive provider，随后完成授权Sunshine全链路 |
+| 13. 真实 Moonlight session runtime | P0 / in_progress | OpenSpec `54/61`；production video/audio receive与negotiated configuration已完成确定性验收，下一步登记授权Sunshine并完成live全链路 |
 | 14. macOS 原生输入与生命周期闭环 | P0 / in_progress | OpenSpec `28/29`；确定性实现已完成，M2-M3等待授权Sunshine/物理输入/窗口/多显示器验收 |
 | 15. 原生 HDR/EDR 管线 | P0 / in_progress | OpenSpec `32/33`；确定性实现已完成，M3等待物理HDR/SDR与live compositor验收 |
 | 16. 空间音频运行接线 | P0 macOS subset / in_progress | OpenSpec `34/35`；M3先完成macOS签名、物理route、可听同步与head-tracking验收，其他平台子集冻结 |
@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0正在完成权威审计与计划迁移；M0验收后下一执行点不是阶段19 task 6.2，而是M1：为默认production runtime实现并安装具体`VideoReceiveProvider`与`AudioReceiveProvider`，随后闭合授权Sunshine从pairing到clean stop的完整macOS会话。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。当前进入Task 2.2：记录授权Sunshine版本和privacy-bounded live测试矩阵；随后Task 2.3执行pairing到clean stop的完整macOS会话。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -52,7 +52,7 @@
 | 里程碑 | 状态 | 完成门 |
 |---|---|---|
 | M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
-| M1 Production session与live transport | pending / next | 具体video/audio receiver进入默认runtime；授权Sunshine pairing、持续视频、可听同步音频、输入、重连、终止、停止全通过 |
+| M1 Production session与live transport | in_progress (Task 2.2) | production video/audio receiver确定性路径已完成；授权Sunshine pairing、持续视频、可听同步音频、输入、重连、终止、停止全通过 |
 | M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
 | M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
 | M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
@@ -66,6 +66,12 @@
 
 - M0收口首个`apply_patch`在文件写入前拒绝同一patch中两个独立`task_plan.md` update block；仓库零部分修改。修正为单一合并block后成功，不重复验证或runtime操作。
 - 新macOS-first计划完成后按用户先前要求调用`create_goal`，但控制面仍把已有`blocked`旧目标视为unfinished并拒绝替换；仓库和runtime零副作用。继续以新OpenSpec与planning files为执行权威，不伪造goal已重建。
+
+### M1 Task 2.1 错误记录
+
+- 首轮warnings-as-errors编译因新增文件两个internal typealias引用private generic runtime而失败；拆出独立internal channel/time typealias后从fresh evidence重跑通过。
+- 首轮focused的replacement fixture丢弃stream并触发合法consumer cancellation；测试改为保留消费两代stream，不放宽production。首轮related还有3个旧control-only恢复序列断言；更新为验证每代negotiated configuration后fresh矩阵通过。
+- authority同步后的辅助旧时态`rg`把含反引号模式放入zsh双引号，命令在检索前以`unmatched quote`退出且零副作用；改用不含反引号的单引号模式完成pre-mark复核。
 
 ### 阶段19错误记录
 
@@ -106,7 +112,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation阶段级自验收通过，但production仍缺具体video/audio network receiver与9.2 live-host XCTest。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；等待授权host/hardware期间，下一可执行工作为创建并实施阶段14 `integrate-macos-native-input-lifecycle` OpenSpec change，不用后续离线工作替代阶段13 live证据。
+当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation以及production video/audio network receiver已通过确定性验收，但9.2 live-host XCTest仍未执行。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；下一执行点为macOS-first M1 Task 2.2/2.3，不用后续离线工作替代阶段13 live证据。
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
@@ -594,7 +600,7 @@
 ## 当前执行点（2026-07-30）
 
 - 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
-- production inventory继续因缺video/audio receiver而truthfully unavailable；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
+- production inventory已安装具体video/audio receiver并通过确定性取消/teardown验收；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。
 - production graph现在以session/media/decoder generation和presentation revision连接negotiated/decoded metadata、真实lifecycle display snapshot/current headroom、user preference、resolver与actual Metal surface transition，并以presenter UUID lease隔离diagnostic replacement ownership；实际HDR状态也已进入可访问的stream overlay和Settings。该离线证据不证明compositor实际进入EDR、live Sunshine HDR、物理亮度/颜色或跨显示器视觉一致性；6.5物理显示器验收保持未完成。

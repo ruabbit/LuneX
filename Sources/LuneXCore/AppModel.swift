@@ -95,6 +95,8 @@ enum ProductionRuntimeProviderFactory {
         return RuntimeProviderInventory(
             pairing: pairingProvider,
             sessionControl: MoonlightSessionControlProvider(controlChannel: controlChannel),
+            videoReceive: MoonlightVideoReceiveProvider(),
+            audioReceive: MoonlightAudioReceiveProvider(),
             remoteInput: MoonlightRemoteInputProvider(
                 sender: controlChannel,
                 feedbackSource: controlChannel

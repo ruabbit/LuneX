@@ -49,9 +49,15 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(unavailable.availability.streamTransportAvailable)
 
         let production = ProductionRuntimeProviderFactory.makeDefault()
-        XCTAssertEqual(production.availability, [.pairing, .sessionControl, .remoteInput])
+        XCTAssertEqual(production.availability, [
+            .pairing,
+            .sessionControl,
+            .videoReceive,
+            .audioReceive,
+            .remoteInput
+        ])
         XCTAssertTrue(production.availability.pairingTransportAvailable)
-        XCTAssertFalse(production.availability.streamTransportAvailable)
+        XCTAssertTrue(production.availability.streamTransportAvailable)
 
         let complete = RuntimeProviderInventory(
             pairing: production.pairing,

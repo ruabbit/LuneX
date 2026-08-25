@@ -51,6 +51,7 @@ struct NegotiatedVideoStreamConfiguration: Codable, Equatable, Sendable {
     var frameRate: Int
     var colorMetadata: VideoColorMetadata
     var maximumPacketSize: Int
+    var pingPayload: Data? = nil
 
     var bitDepth: Int { colorMetadata.bitDepth }
     var isHDR: Bool { colorMetadata.isHDR }
@@ -59,7 +60,9 @@ struct NegotiatedVideoStreamConfiguration: Codable, Equatable, Sendable {
         guard width > 0,
               height > 0,
               frameRate > 0,
-              maximumPacketSize > 0 else {
+              maximumPacketSize > 0,
+              maximumPacketSize <= 1_400,
+              pingPayload == nil || pingPayload?.count == 16 else {
             throw RuntimeContractError.invalidVideoConfiguration
         }
         do {
@@ -81,6 +84,7 @@ struct NegotiatedAudioStreamConfiguration: Codable, Equatable, Sendable {
     var samplesPerFrame: Int
     var channelMapping: [UInt8]
     var maximumPacketSize: Int
+    var pingPayload: Data? = nil
 
     var channelCount: Int {
         channelLayout.channelCount
@@ -101,7 +105,8 @@ struct NegotiatedAudioStreamConfiguration: Codable, Equatable, Sendable {
               channelMapping.count == channelCount,
               channelMapping.allSatisfy({ Int($0) < codedChannelCount }),
               maximumPacketSize > 0,
-              maximumPacketSize <= 1_400 else {
+              maximumPacketSize <= 1_400,
+              pingPayload == nil || pingPayload?.count == 16 else {
             throw RuntimeContractError.invalidAudioConfiguration
         }
     }

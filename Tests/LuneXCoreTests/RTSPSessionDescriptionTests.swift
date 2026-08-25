@@ -47,7 +47,7 @@ final class RTSPSessionDescriptionTests: XCTestCase {
 
         XCTAssertEqual(audio.sessionToken, "DEADBEEFCAFE")
         XCTAssertEqual(audio.serverPort, 48_000)
-        XCTAssertEqual(audio.pingPayload, "synthetic-ping")
+        XCTAssertEqual(audio.pingPayload, Data("synthetic-ping!!".utf8))
         XCTAssertEqual(video.serverPort, 47_998)
         XCTAssertEqual(control.serverPort, 47_999)
         XCTAssertEqual(control.controlConnectData, 305_419_896)
@@ -91,6 +91,22 @@ final class RTSPSessionDescriptionTests: XCTestCase {
         var invalidPort = base
         invalidPort.headers.append(RTSPHeader(name: "Transport", value: "server_port=0"))
         XCTAssertThrowsError(try RTSPSetupResponseParser.parse(invalidPort, kind: .audio))
+
+        var invalidPing = base
+        invalidPing.headers.append(
+            RTSPHeader(name: "Transport", value: "server_port=48000")
+        )
+        invalidPing.headers.append(
+            RTSPHeader(name: "X-SS-Ping-Payload", value: "too-short")
+        )
+        XCTAssertThrowsError(
+            try RTSPSetupResponseParser.parse(invalidPing, kind: .audio)
+        ) { error in
+            XCTAssertEqual(
+                error as? SunshineRTSPNegotiationError,
+                .invalidExtensionValue("X-SS-Ping-Payload")
+            )
+        }
     }
 
     private func loadFixture() throws -> NegotiationFixture {

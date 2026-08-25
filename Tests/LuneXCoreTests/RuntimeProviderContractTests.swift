@@ -96,6 +96,46 @@ final class RuntimeProviderContractTests: XCTestCase {
         }
     }
 
+    func testMediaContractsRejectNonSixteenBytePingPayloads() {
+        var video = makeSessionConfiguration().video
+        video.pingPayload = Data(repeating: 0x56, count: 15)
+        XCTAssertThrowsError(try video.validate()) { error in
+            XCTAssertEqual(
+                error as? RuntimeContractError,
+                .invalidVideoConfiguration
+            )
+        }
+
+        var audio = makeAudio(channels: 2, streams: 1, coupled: 1)
+        audio.pingPayload = Data(repeating: 0x41, count: 17)
+        XCTAssertThrowsError(try audio.validate()) { error in
+            XCTAssertEqual(
+                error as? RuntimeContractError,
+                .invalidAudioConfiguration
+            )
+        }
+    }
+
+    func testNegotiatedSessionDecodesLegacyJSONWithoutPingPayloads() throws {
+        let expected = makeSessionConfiguration()
+        let encoded = try JSONEncoder().encode(expected)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        let video = try XCTUnwrap(object["video"] as? [String: Any])
+        let audio = try XCTUnwrap(object["audio"] as? [String: Any])
+        XCTAssertNil(video["pingPayload"])
+        XCTAssertNil(audio["pingPayload"])
+
+        let decoded = try JSONDecoder().decode(
+            NegotiatedSessionConfiguration.self,
+            from: encoded
+        )
+        XCTAssertEqual(decoded, expected)
+        XCTAssertNil(decoded.video.pingPayload)
+        XCTAssertNil(decoded.audio.pingPayload)
+    }
+
     private func makeSessionConfiguration() -> NegotiatedSessionConfiguration {
         let control = RuntimeNetworkEndpoint(host: "moon.test", port: 47_999, transport: .tcp)
         return NegotiatedSessionConfiguration(
