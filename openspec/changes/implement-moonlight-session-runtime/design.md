@@ -61,7 +61,7 @@ The first task compares system AudioToolbox/AVFoundation Opus support with the p
 
 ## Risks / Trade-offs
 
-- [Risk] Clean-room protocol work is larger than wrapping the existing C core. → Mitigation: implement current Sunshine compatibility first, use fixture-first boundaries, and keep GPL reuse as a separate explicit decision.
+- [Risk] Clean-room protocol work is larger than wrapping the existing C core. → Mitigation: implement advertised Moonlight/GameStream capability paths first, use fixture-first boundaries, and keep GPL reuse as a separate explicit decision; never use a Sunshine package-version allowlist.
 - [Risk] Certificate construction may need an external ASN.1 dependency. → Mitigation: perform a bounded spike and require a permissive license and minimal API surface before adoption.
 - [Risk] Raw Opus delivery may not fit system decoder APIs. → Mitigation: prove AudioToolbox first, then use a narrowly isolated libopus fallback.
 - [Risk] UDP loss and decoder resynchronization can create false streaming states. → Mitigation: readiness and health are channel-derived, with IDR requests, bounded queues, and sustained-frame live gates.
@@ -80,7 +80,7 @@ The first task compares system AudioToolbox/AVFoundation Opus support with the p
 
 ## Open Questions
 
-- Whether Security framework plus a small DER layer is sufficient for the exact client certificate accepted by the target Sunshine version.
+- Whether Security framework plus a small DER layer covers every certificate constraint advertised or enforced by compatible Sunshine protocol paths.
 - Whether system Opus decoding accepts Sunshine's negotiated packet framing on every target platform.
 - Which AV1 hardware/software fallback policy is acceptable on devices without supported VideoToolbox AV1 decode.
 - Whether the deterministic 100/250/500 ms reconnect delays should be tuned after authorized live LAN measurements; the three-attempt bound remains mandatory.

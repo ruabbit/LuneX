@@ -3363,9 +3363,10 @@ pending.
 ## Physical and live acceptance boundary
 
 Task 8.7 remains pending until authorized signed Apple TV and Apple Vision Pro
-hardware is available. A valid privacy-bounded receipt must correlate client
-commit, OS/Xcode, device class, signing configuration class, sanitized
-Sunshine version, scenario, expected result, actual bounded runtime state,
+hardware is available. A valid secret-safe receipt must correlate client
+commit, OS/Xcode, device class, signing configuration class,
+server-advertised capabilities, optional Sunshine package-version diagnostic
+metadata, scenario, expected result, actual bounded runtime state,
 observable result, resource observation, and clean teardown.
 
 Apple TV acceptance must cover:
@@ -3414,12 +3415,12 @@ contains only category counts, booleans, and blocking classes.
 | Simulator | Task 8.5 fixed 26.4 identities are unique/available/Shutdown; task 8.6 has zero existing and zero executed bounded UI targets | App launch/navigation and all physical behavior |
 | Signed artifact | No task 8.7 signed artifact inspection or installation receipt exists | Signing, entitlements at runtime, installation, launch |
 | Physical device | One discoverable Apple TV class is not an acceptance receipt; no Vision Pro class is present | Required Apple TV and Vision Pro input, window/focus, HDR, audio, comfort, resource, and teardown matrix |
-| Live host | Live-host opt-in and sanitized Sunshine receipt are absent | Pairing/stream/reconnect/termination, latency, drops, synchronization, performance, power, thermal behavior |
+| Live host | Live-host opt-in and secret-safe Sunshine receipt are absent | Pairing/stream/reconnect/termination, latency, drops, synchronization, performance, power, thermal behavior |
 
 Task 8.8 records these boundaries and does not waive them. Task 8.7 remains the
 only physical/live acceptance task. The OpenSpec change must remain active and
 unarchived, and stage 18 must remain `in_progress`, until one authorized signed
-Apple TV and one authorized signed Vision Pro complete the required sanitized
+Apple TV and one authorized signed Vision Pro complete the required secret-safe
 live Sunshine matrix. Later stage evidence cannot substitute for that receipt.
 
 Receipts and diagnostics must not contain host endpoints, credentials, keys,

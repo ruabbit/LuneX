@@ -1,6 +1,6 @@
 ## 1. Protocol and dependency decisions
 
-- [ ] 1.1 Inventory the exact Sunshine version and protocol features used by the designated local test host without changing host state
+- [x] 1.1 Inventory the server-advertised protocol and codec capabilities of the designated local test host without changing host state or applying a Sunshine package-version allowlist
 - [x] 1.2 Document clean-room protocol boundaries and confirm no GPL source or linked artifact enters the production target
 - [x] 1.3 Create sanitized pairing, RTSP, control, media, and input fixture directories with redaction checks
 - [x] 1.4 Spike Security-framework client key operations and Sunshine-compatible self-signed certificate encoding

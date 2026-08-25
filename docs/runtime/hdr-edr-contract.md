@@ -731,10 +731,13 @@ complete task 6.5 or change the physical-display proof boundary.
 - Clean stop, sleep/wake, display disconnect/reconnect, and no surviving EDR
   surface ownership.
 
-The final evidence package must identify the authorized Sunshine version,
-LuneX commit, test application, reference-pattern provenance, display class,
-and timestamps while redacting host/app endpoint data and display serial
-identity. It must correlate the client's bounded HDR status with an observable
+The final evidence package must identify server-advertised protocol/capability
+data, the LuneX commit, host and test application, reference-pattern provenance,
+display class, and timestamps. A known Sunshine package version may be included
+as optional diagnostic metadata but is not an allowlist or prerequisite. The
+package must exclude credentials, private keys, certificate bytes, tokens,
+unreviewed raw payloads, and display serial identity. It must correlate the
+client's bounded HDR status with an observable
 compositor/display state and either a reference-pattern capture or repeatable
 luminance/color measurement. Separate rows are required for SDR on HDR, HDR on
 SDR fallback, HDR on HDR, same-display headroom reduction/recovery,

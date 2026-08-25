@@ -1357,7 +1357,8 @@ OpenSpec task 6.6 remains incomplete until authorized physical evidence covers:
   media-generation ownership.
 
 The acceptance receipt must identify the LuneX commit, OS/Xcode versions,
-device class, signed configuration class, sanitized Sunshine version, scenario,
+device class, signed configuration class, server-advertised capabilities,
+optional Sunshine package-version diagnostic metadata, scenario,
 expected result, observed result, bounded runtime state, and teardown result.
 It must not contain host endpoints, secrets, profile UUIDs, certificates,
 device serial numbers, raw scene/display identities, or media payloads.

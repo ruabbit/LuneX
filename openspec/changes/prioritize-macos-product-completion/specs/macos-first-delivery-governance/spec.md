@@ -44,6 +44,16 @@ The project SHALL classify every completion claim as deterministic implementatio
 ### Requirement: macOS completion gate
 The macOS client SHALL NOT be declared functionally complete until an authorized live Sunshine workflow proves pairing, catalog, launch, sustained video, audible synchronized audio, remote input, reconnect, termination, stop, and clean resource teardown through the production runtime.
 
+The client SHALL NOT restrict users through a Sunshine package-version allowlist. Compatibility SHALL be selected from server-advertised protocol and codec capabilities and validated by actual negotiation and live behavior. A Sunshine package version MAY be recorded as diagnostic metadata when available, but SHALL NOT be a prerequisite for attempting a compatible session.
+
+#### Scenario: Sunshine package version is unknown or new
+- **WHEN** a paired host does not expose its package version, or reports a version not previously recorded by LuneX
+- **THEN** LuneX SHALL continue capability-based negotiation and SHALL fail only for an unsupported advertised requirement or observed protocol/runtime incompatibility, not for the package version itself
+
+#### Scenario: Diagnostic version metadata is available
+- **WHEN** a Sunshine package version is available without changing host state
+- **THEN** it MAY be attached to a defect or acceptance receipt for reproducibility without changing compatibility eligibility
+
 #### Scenario: Production video or audio provider is absent
 - **WHEN** the default macOS runtime inventory cannot create both concrete video and audio receive providers
 - **THEN** macOS remains incomplete even if packet parsers, decoders, renderers, audio processors, mocks, or fixtures pass

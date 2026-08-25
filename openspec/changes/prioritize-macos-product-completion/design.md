@@ -61,7 +61,8 @@ Completed checkboxes remain unchanged. Active platform-specific changes remain o
 ## Risks / Trade-offs
 
 - [Shared code may drift on frozen platforms] -> Run generic non-macOS target builds only when shared code or project generation changes could break them; do not treat those builds as product progress.
-- [macOS hardware/live acceptance can block the lane] -> Surface the blocker explicitly and prepare deterministic tooling and redacted evidence templates, but do not switch to unrelated platform features to manufacture progress.
+- [macOS hardware/live acceptance can block the lane] -> Surface the blocker explicitly and prepare deterministic tooling and secret-safe evidence templates, but do not switch to unrelated platform features to manufacture progress.
+- [Sunshine releases evolve independently of LuneX] -> Never gate users through a Sunshine package-version allowlist. Select protocol paths from server-advertised capabilities and validate actual negotiation/behavior; record a package version only when it is readily available and useful for reproducing a defect.
 - [Existing stage documents may conflict] -> Make the macOS-first plan the precedence rule and synchronize all four planning authorities in one reviewed change.
 - [A macOS-specific shortcut could damage portability] -> Keep shared protocol/media abstractions platform-neutral and require a written macOS blocker rationale for conditional platform changes.
 - [Freeze criteria may expand indefinitely] -> Record measurable thresholds before the release-candidate run and require explicit change control for new gates.
@@ -79,5 +80,5 @@ Rollback is documentation-only: revert this governance change and restore the pr
 ## Open Questions
 
 - Exact performance, power, thermal, weak-network, and long-run thresholds must be fixed before M8 begins.
-- The Sunshine version matrix and available physical HDR/SDR displays, audio routes, input devices, and assistive-technology setup must be recorded before M7.
+- The server-advertised protocol/capability matrix and available physical HDR/SDR displays, audio routes, input devices, and assistive-technology setup must be recorded before M7. Sunshine package versions are optional diagnostic metadata, not acceptance prerequisites.
 - Freeze tag and release branch names require user confirmation after M8 passes.

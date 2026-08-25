@@ -1304,7 +1304,7 @@
 
 - 路线图、HDR合同和三份规划文件现统一记录阶段15 production、normal/十配置五平台build、strict/generator/dependency/四SDK Metal、analyzer/ASan/TSan/malloc/resource与独立simulator证据；OpenSpec权威进度为`32/33 in_progress`。
 - 1.1至6.4与6.6已完成并逐项独立提交推送；6.5没有授权Sunshine HDR、compositor EDR signaling、物理HDR/SDR参考图或测量、动态headroom、跨显示器及display reconnect证据，因此change不可archive且阶段不得标记`complete`。
-- 6.5硬件清单明确要求Sunshine版本/LuneX commit/test app/reference pattern、SDR-on-HDR、HDR-on-SDR fallback、HDR-on-HDR、同屏headroom下降/恢复、跨屏、sleep/wake或display reconnect及clean stop；证据必须脱敏并关联客户端状态与可观察compositor/display结果。
+- 6.5硬件清单要求server-advertised protocol/capabilities、LuneX commit、host/test app/reference pattern、SDR-on-HDR、HDR-on-SDR fallback、HDR-on-HDR、同屏headroom下降/恢复、跨屏、sleep/wake或display reconnect及clean stop；Sunshine package version若已知只是可选诊断元数据。证据必须关联客户端状态与可观察compositor/display结果，并排除真正的secret。
 - 阶段16及后续确定性实现可以继续推进，但空间音频、移动连续性、tvOS/visionOS编译或Release门禁都不能回填阶段15物理HDR证据。
 
 ## 2026-07-29 阶段 15 离线阶段级自验
@@ -3582,3 +3582,12 @@
 - production receiver以generation/token隔离replacement，使用bounded `AsyncThrowingStream` buffer、UDP connect/send/receive timeout、500ms ping、stream cancellation到channel cancel传播、幂等stop和等待receive task退出。video parity与audio FEC被显式忽略而非伪称恢复；非UDP、runt/oversize/未知RTP布局及buffer overflow均fail closed。
 - Sunshine请求control-v2 encryption时允许继续；请求video/audio或未知媒体加密bit时明确失败。当前能力不包括Reed-Solomon video FEC、audio FEC恢复或媒体解密，必须在live矩阵和known limitations中保留。
 - 新增可选`pingPayload`对旧JSON缺字段保持可解码为`nil`，video/audio配置均拒绝非16-byte payload。fresh focused结构化结果为`127/127/0/0`，编译error/warning/analyzer warning均为0。
+
+## M1 Task 2.2 authorized Sunshine inventory（2026-08-26）
+
+- LuneX本地持久化有3个从Moonlight导入的paired/pinned host记录和对应cached catalog：`PC-20260610OBZH`、`tanmy-deck`、`tanmy-white`。host名和app名在本测试环境中不是需要隐去的秘密；真正需保护的是private key、certificate bytes、credentials、token和raw payload/log中的敏感内容。
+- `PC-20260610OBZH`和`tanmy-deck`在有界只读探测中timeout；已知当时只有一个host在线，所以这两项是预期离线结果，不是失败、异常或Task 2.2阻塞。唯一在线host `tanmy-white`的configured endpoint解析为IPv4、TCP可达且`GET /serverinfo`为200；Web TLS peer certificate SHA-256与现有导入pin匹配，未重写trust state。
+- `tanmy-white`只读广告GameStream `appversion 7.1.431.-1`、`GfeVersion 3.23.0.74`、codec mask `0x00070301`，对应H.264、HEVC Main8/Main10、AV1 Main8/Main10与H.264 High8 4:4:4。这些是兼容判断的协议/能力输入；Sunshine package version只是可选诊断和问题复现信息，不得作为allowlist、用户限制或live gate前置条件。
+- `tanmy-white`缓存catalog明确包含`Desktop`、`Steam Big Picture`和`War Thunder`；`Desktop`已指定为Task 2.3的无破坏测试app。`PC-20260610OBZH`缓存`Desktop`、`Steam Big Picture`，`tanmy-deck`缓存`Desktop`。
+- pinned Web TLS上的未认证`GET /`和`GET /api/config`均返回401，未猜测或读取credentials。无法从这两个endpoint取得package version不影响兼容资格。host当时报告busy/nonzero current game，只意味着Task 2.3要等现有session结束；本轮没有launch/resume/cancel/stop或干扰既有session。
+- `docs/macos-sunshine-live-matrix.md`记录Task 2.3的pairing/catalog/`Desktop` launch/RTSP/sustained video/audible sync audio/input/reconnect/remote termination/repeated stop/clean teardown矩阵，以及禁止unpair-all、配置/password/service/display/driver变更和干扰现有session的边界。

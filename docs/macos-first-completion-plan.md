@@ -45,7 +45,7 @@ Evidence is non-substitutable. Every physical or live receipt must bind to the e
 
 | Area | Current evidence | Highest current tier | Blocking gap | Milestone |
 |---|---|---|---|---|
-| A. Identity, trust, pairing, host, catalog | Native identity, pinned HTTPS, pairing state machine, imported local data, deterministic workflow tests | Deterministic implementation | Authorized Sunshine version inventory, live pair/re-pair, catalog/launch continuity | M1 |
+| A. Identity, trust, pairing, host, catalog | Native identity, pinned HTTPS, pairing state machine, imported local data, deterministic workflow tests | Deterministic implementation | Server-advertised capability inventory, live pair/re-pair, catalog/launch continuity | M1 |
 | B. RTSP and control | Concrete `MoonlightSessionControlProvider`, RTSP negotiation, control/keepalive/reconnect/teardown tests | Deterministic implementation | Exact-host live negotiation, keepalive, reconnect, remote termination, repeated stop | M1 |
 | C. Video network receive | Concrete default `MoonlightVideoReceiveProvider`, bounded UDP receive/ping, packet mapping, parity skip, replacement/cancellation/teardown, decoder and presenter | Deterministic production path | Sustained live frames, packet-loss behavior, live FEC recovery gap and clean host stop | M1 |
 | D. Audio network receive | Concrete default `MoonlightAudioReceiveProvider`, bounded UDP receive/ping, strict Opus RTP mapping, FEC skip, cancellation/teardown, jitter/PCM/audio graph | Deterministic production path | Audible synchronized live audio, packet-loss behavior, live FEC recovery gap and route transitions | M1 |
@@ -95,6 +95,13 @@ Work order:
 3. Close remaining `implement-moonlight-session-runtime` live tasks: host inventory, pair/re-pair, sustained video, audible synchronized audio, actual input/feedback, live interoperability, reconnect, remote termination, stop, and cleanup.
 
 Exit gate: one authorized Sunshine matrix proves pairing through clean stop with sustained decoded video, audible synchronized audio, and host-observed input on the production path.
+
+The current inventory and execution matrix is maintained in
+`docs/macos-sunshine-live-matrix.md`. It designates `tanmy-white` and its cached
+`Desktop` entry for the non-destructive live path. Compatibility is determined
+from server-advertised protocol/codec capabilities and observed behavior; a
+Sunshine package version is optional diagnostic metadata and never an allowlist
+or Task 2.3 precondition.
 
 ### M2: Native macOS media and input integration
 

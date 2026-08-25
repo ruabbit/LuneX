@@ -32,7 +32,7 @@
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
-| 13. 真实 Moonlight session runtime | P0 / in_progress | OpenSpec `54/61`；production video/audio receive与negotiated configuration已完成确定性验收，下一步登记授权Sunshine并完成live全链路 |
+| 13. 真实 Moonlight session runtime | P0 / in_progress | OpenSpec `55/61`；production video/audio receive与negotiated configuration已完成确定性验收，服务端广告协议/codec能力已登记，下一步执行live全链路 |
 | 14. macOS 原生输入与生命周期闭环 | P0 / in_progress | OpenSpec `28/29`；确定性实现已完成，M2-M3等待授权Sunshine/物理输入/窗口/多显示器验收 |
 | 15. 原生 HDR/EDR 管线 | P0 / in_progress | OpenSpec `32/33`；确定性实现已完成，M3等待物理HDR/SDR与live compositor验收 |
 | 16. 空间音频运行接线 | P0 macOS subset / in_progress | OpenSpec `34/35`；M3先完成macOS签名、物理route、可听同步与head-tracking验收，其他平台子集冻结 |
@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。当前进入Task 2.2：记录授权Sunshine版本和privacy-bounded live测试矩阵；随后Task 2.3执行pairing到clean stop的完整macOS会话。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前进入Task 2.3 live全链路，等待`tanmy-white`现有busy session结束后执行。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -52,7 +52,7 @@
 | 里程碑 | 状态 | 完成门 |
 |---|---|---|
 | M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
-| M1 Production session与live transport | in_progress (Task 2.2) | production video/audio receiver确定性路径已完成；授权Sunshine pairing、持续视频、可听同步音频、输入、重连、终止、停止全通过 |
+| M1 Production session与live transport | in_progress (Task 2.3) | production video/audio receiver及server-advertised capability inventory已完成；待`tanmy-white` `Desktop` pairing/身份复用、持续视频、可听同步音频、输入、重连、终止、停止全通过 |
 | M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
 | M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
 | M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
@@ -72,6 +72,12 @@
 - 首轮warnings-as-errors编译因新增文件两个internal typealias引用private generic runtime而失败；拆出独立internal channel/time typealias后从fresh evidence重跑通过。
 - 首轮focused的replacement fixture丢弃stream并触发合法consumer cancellation；测试改为保留消费两代stream，不放宽production。首轮related还有3个旧control-only恢复序列断言；更新为验证每代negotiated configuration后fresh矩阵通过。
 - authority同步后的辅助旧时态`rg`把含反引号模式放入zsh双引号，命令在检索前以`unmatched quote`退出且零副作用；改用不含反引号的单引号模式完成pre-mark复核。
+- Task 2.1提交后的首个cleanup wrapper以`path`作为zsh循环变量，覆盖`PATH`并使末尾`git status`未执行；第二个wrapper又使用只读变量`status`而提前退出。两轮SHA读取或定向cleanup没有仓库副作用；第三轮改用显式Bash、绝对工具路径和`git_state`，确认三方SHA一致、工作树clean。
+
+### M1 Task 2.2 错误记录
+
+- 首次整文件替换`docs/macos-sunshine-live-matrix.md`的`apply_patch`在写入前因同一请求对同一路径同时delete/add而被拒绝，仓库零部分修改。拆成两个明确patch后完成，未重复任何host查询或runtime操作。
+- 后续路线图/合同/计划组合patch因`task_plan.md`大范围锚点不匹配而整体拒绝，零文件写入。改为路线图、合同、计划三组小patch后继续，不重复只读host inventory。
 
 ### 阶段19错误记录
 
@@ -112,7 +118,7 @@
 
 后续从阶段 13 开始，当前第一优先级为 OpenSpec `implement-moonlight-session-runtime`。完成口径改为生产路径接线 + 确定性测试 + 授权 live Sunshine 端到端证据；策略类型、编译成功、launch response 或首帧都不能单独标记产品功能完成。完整依赖与验收门见 `docs/runtime-completion-roadmap.md`。
 
-当前 change 权威进度为 `54/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation以及production video/audio network receiver已通过确定性验收，但9.2 live-host XCTest仍未执行。1.1、3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；下一执行点为macOS-first M1 Task 2.2/2.3，不用后续离线工作替代阶段13 live证据。
+当前 change 权威进度为 `55/61`：9.7已同步计划、证据与阶段14–20路线图，阶段13的离线/runtime foundation、production video/audio network receiver及`tanmy-white`服务端广告协议/codec inventory已完成。3.7、5.8、6.7、7.7、9.2与9.3保持未完成，因此阶段13仍为`in_progress`；下一执行点为macOS-first M1 Task 2.3，不用后续离线工作替代阶段13 live证据。
 
 阶段14 OpenSpec `integrate-macos-native-input-lifecycle`权威进度`28/29`。确定性production integration、normal/五平台Debug+Release、strict/generator/analyzer/ASan/TSan/malloc和独立simulator门均通过，且已推送HEAD上的阶段级离线自验再次通过`470 total / 469 passed / 1 Keychain skip / 0 failed`。6.5仍需授权Sunshine host、物理键盘/鼠标和多显示器，change保持`in_progress`且不可archive；下一可执行工作为创建阶段15 `implement-native-hdr-edr-pipeline`，不以阶段15证据替代6.5。
 
@@ -599,7 +605,7 @@
 
 ## 当前执行点（2026-07-30）
 
-- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`54/61`；9.7已完成。阶段级离线/runtime foundation验收通过，但7项live/hardware证据仍未通过，阶段保持`in_progress`；下一可执行项为阶段14 OpenSpec提案与实现。
+- 阶段13 / OpenSpec `implement-moonlight-session-runtime` 当前权威进度为`55/61`；1.1已按server-advertised protocol/capability inventory完成，不使用Sunshine package-version allowlist。6项live/hardware证据仍未通过，阶段保持`in_progress`；下一执行项为macOS-first M1 Task 2.3。
 - production inventory已安装具体video/audio receiver并通过确定性取消/teardown验收；3.7/5.8/6.7/7.7/9.2/9.3所需授权host或硬件证据保持未完成，不用fixture、编译或离线测试替代。
 - 阶段14 `integrate-macos-native-input-lifecycle` 当前权威进度`28/29`；阶段级离线自验通过，唯一剩余6.5为授权Sunshine/物理输入/多显示器，不得archive。
 - 阶段15 `implement-native-hdr-edr-pipeline` 权威进度`32/33 in_progress`；1.1至6.4与6.6均完成并封版，已推送HEAD上的阶段级离线自验通过，唯一剩余6.5为授权Sunshine与物理HDR/SDR显示器验收，change不可archive。

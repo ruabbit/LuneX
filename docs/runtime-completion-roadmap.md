@@ -39,7 +39,7 @@ flowchart LR
 
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
-| 13 | `in_progress`，OpenSpec `54/61` | identity、pairing/RTSP/control协议实现，production video/audio network receiver、video/audio处理管线、remote input runtime，统一session ownership，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | 指定Sunshine版本清单、live pairing、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据；媒体FEC恢复与加密媒体仍未实现 |
+| 13 | `in_progress`，OpenSpec `55/61` | identity、pairing/RTSP/control协议实现，production video/audio network receiver、video/audio处理管线、remote input runtime，统一session ownership，`tanmy-white`服务端广告协议/codec能力清单，离线fixture、五平台Debug/Release、ASan/TSan/resource gates | live pairing、`Desktop`启动、持续视频、可听同步音频、host实际接收输入/feedback和完整E2E均无授权证据；媒体FEC恢复与加密媒体仍未实现 |
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
 | 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
@@ -48,7 +48,7 @@ flowchart LR
 | 19 | `in_progress`，OpenSpec `complete-native-product-workflows` | host/pairing/catalog/session恢复、多窗口ownership、typed semantics、adaptive/accessibility矩阵及6.1 privacy-bounded failure mapping已有确定性实现和任务级离线验收 | 6.2 workflow string migration、6.3-6.5 diagnostics/export、7.x跨产品回归及signed/physical/live验收仍未完成 |
 | 20 | `pending` | Release配置与sanitizer静态门禁可执行 | 尚无签名发布包、端到端延迟、功耗、热状态、弱网、内存基线与长时真机证据 |
 
-阶段13现在是M1第一执行点：默认production runtime必须先获得具体video/audio receive provider，再闭合`1.1`、`3.7`、`5.8`、`6.7`、`7.7`、`9.2`、`9.3`。阶段14–16和19只按M2-M5的macOS依赖顺序推进；阶段17–18冻结。任何后续离线工作都不得把依赖真实host、显示器、音频route、物理输入、assistive technology、签名账户或发布候选的证明标记为通过。
+阶段13现在是M1第一执行点：production video/audio receive provider和服务端广告能力inventory已完成，下一步闭合`3.7`、`5.8`、`6.7`、`7.7`、`9.2`、`9.3`。Sunshine package version不是allowlist或前置门；按广告能力和实际行为验证。阶段14–16和19只按M2-M5的macOS依赖顺序推进；阶段17–18冻结。任何后续离线工作都不得把依赖真实host、显示器、音频route、物理输入、assistive technology、签名账户或发布候选的证明标记为通过。
 
 ## 实施阶段
 
@@ -91,8 +91,8 @@ flowchart LR
 - normal macOS suite为`470 total / 469 passed / 1 explicit Keychain skip / 0 failed`；唯一skip是已完成一次授权验证后禁用的真实Keychain round-trip，不存在被禁用后冒充通过的live-host XCTest。
 - macOS及固定iPhone/iPad/tvOS/visionOS的Debug/Release十构建零编译诊断；ASan和TSan完整suite各为`469 passed + 1 Keychain skip`且零sanitizer报告，malloc/resource选择集`250/250`。固定ENet analyzer风险仍为两配置一致的4项，仓库自有bridge为0项。
 - simulator构建前、构建后和独立读回三份规范化快照逐字节一致；固定四个名称/UUID各唯一、可用且`Shutdown`，全部available simulator的`Booted=0`，未创建或显式启动设备。
-- 6.5必须在授权Sunshine版本和测试app上，用物理键盘与鼠标逐项确认key down/up、direct/relative移动、按钮、双轴scroll、focus release、occlusion后台节流与visible resume、连续resize和至少两个不同scale/display的坐标映射；同时关联客户端隐私诊断与host实际receipt。没有该证据时，fixture/fake provider、编译、模拟器、窗口通知单测和本机UI观察都不能替代通过。
-- 阶段15至20的确定性实现可继续推进，但不得借后续HDR、音频、移动或产品工作流测试回填6.5，也不得改变阶段13的7项live/hardware未完成状态。
+- 6.5必须在记录了服务端广告协议/能力的`tanmy-white` `Desktop`会话上，用物理键盘与鼠标逐项确认key down/up、direct/relative移动、按钮、双轴scroll、focus release、occlusion后台节流与visible resume、连续resize和至少两个不同scale/display的坐标映射；同时关联客户端诊断与host实际receipt。Sunshine package version可作为可选诊断元数据，不是兼容门。没有该live证据时，fixture/fake provider、编译、模拟器、窗口通知单测和本机UI观察都不能替代通过。
+- 阶段15至20的确定性实现可继续推进，但不得借后续HDR、音频、移动或产品工作流测试回填6.5，也不得改变阶段13的6项live/hardware未完成状态。
 - 独立阶段级离线自验在已推送`3ef99ee`上通过：全新DerivedData完整macOS suite为`470 total / 469 passed / 1 Keychain skip / 0 failed`且日志零诊断，OpenSpec strict `5/5`、project generator hash稳定、固定simulator仍全部`Shutdown`。该自验不改变6.5 pending或阶段`in_progress`状态。
 
 ## 阶段 15：HDR 和 EDR
@@ -115,7 +115,7 @@ flowchart LR
 ### 阶段 15 当前验收边界
 
 - 离线门证明显式BT.2020/PQ到SDR/EDR映射、actual Metal surface transaction、current-headroom/display revision ownership、可访问状态、五平台编译、sanitizer和资源释放；不证明Sunshine实时HDR数据已经到达，也不证明Apple compositor或面板进入目标HDR状态。
-- 6.5需要记录授权Sunshine版本、客户端提交、测试app和HDR/SDR参考图来源；host、app、endpoint、显示器序列号和原始frame不得进入普通诊断或公开证据。
+- 6.5需要记录server-advertised protocol/capability、客户端提交、host/app名和HDR/SDR参考图来源；Sunshine package version若已知可作为可选诊断元数据。endpoint credentials、private keys、certificate bytes、token、显示器序列号和未审查原始frame不得进入仓库证据。
 - 在HDR物理显示器上分别验证SDR参考白/Rec.709外观、HDR10 EDR激活和高光保留；在SDR显示器上验证typed HDR-to-SDR fallback且无异常亮度、剪裁或偏色。
 - 在同一HDR显示器上触发current headroom下降与恢复，关联隐私受限的客户端状态、compositor可观察状态和参考图或测量结果，确认不继续使用旧headroom。
 - 在代表性HDR/SDR或不同headroom显示器间移动窗口，验证first opaque clear、无旧revision闪帧、drawable填满窗口且input映射仍正确；再覆盖sleep/wake、display disconnect/reconnect和clean stop后无残留EDR surface ownership。
@@ -136,7 +136,7 @@ flowchart LR
 
 - 已完成的离线门证明production ownership、确定性route/recovery、实际状态UI、SDK编译、静态边界、sanitizer/resource和simulator identity；不证明Apple签名/profile允许head-pose entitlement，也不证明AirPods或物理输出实际按预期工作。
 - 6.6必须在授权signed candidate和物理设备上覆盖entitlement granted/missing、AirPods head tracking开关、fixed/nonspatial fallback、built-in speaker、wired/USB/HDMI 5.1/7.1逐声道识别、route transition、interruption/media reset、live Sunshine音画同步和clean teardown。
-- 物理收据必须关联OS/Xcode、client commit、签名configuration、脱敏Sunshine版本、negotiated layout、route类别、desired/actual状态、操作/预期/实际和teardown；不得保存secret、endpoint、profile UUID、证书/设备序列号或原始音频。
+- 物理收据必须关联OS/Xcode、client commit、签名configuration、server-advertised capabilities、negotiated layout、route类别、desired/actual状态、操作/预期/实际和teardown；已知Sunshine package version可作为可选诊断元数据。不得保存secret、endpoint credentials、profile UUID、证书/设备序列号或原始音频。
 - 当前没有6.6授权收据，任务保持pending。change为`34/35 in_progress`，不可archive、阶段不可标记`complete`；阶段17至20可以继续，但其证据不得回填6.6。
 
 ## 阶段 17：iOS/iPadOS 连续性
@@ -153,7 +153,7 @@ flowchart LR
 ### 阶段 17 当前验收边界
 
 - 已完成合同/静态、unsigned build、deterministic normal/analyzer/sanitizer/resource与fixed simulator identity/build层；这些层级不能提升为signed artifact或physical/live证明。
-- 6.6必须关联LuneX commit、OS/Xcode、device class、签名配置类别、脱敏Sunshine版本、场景、预期/实际、bounded runtime state和clean teardown；不得记录endpoint、secret、profile UUID、证书、设备序列号、raw scene/display identity或媒体payload。
+- 6.6必须关联LuneX commit、OS/Xcode、device class、签名配置类别、server-advertised capabilities、场景、预期/实际、bounded runtime state和clean teardown；已知Sunshine package version可作为可选诊断元数据。不得记录endpoint credentials、secret、profile UUID、证书、设备序列号、raw scene/display identity或媒体payload。
 - 授权iPhone/iPad矩阵必须覆盖system PiP possible/start/active/stop/restore/failure、前后台/锁屏/中断/route或media reset、audio-only/PiP合法连续性及最后路径丢失、iPad Stage Manager resize/rotation、external-display drawable/input、SDR/HDR-to-SDR/mobile EDR、空间音频共存、live Sunshine、CPU/GPU/memory/power/thermal与无残留teardown。
 - 当前没有6.6 signed physical receipt，change不可archive、阶段不可标记`complete`。阶段18–20可以继续，但其编译、simulator或离线测试不得回填6.6。
 - 已推送`c7c9089`上的独立阶段级离线自验通过：fresh macOS normal `/tmp/LuneX-17-stage-acceptance.xnt9je`为`909/908/1 exact Keychain skip/0`且结构化诊断为0，组合门`/tmp/LuneX-17-stage-acceptance-final.k8BdmF`通过strict `8/8`、generator、`35/36 only 6.6 pending`、Git parity与fixed simulator no-launch/no-mutation读回；不改变6.6 pending。
