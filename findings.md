@@ -3558,3 +3558,14 @@
 - 6.1应增加closed `streamRequiresPairing`、`mediaPresentationFailed`与`platformPresentationFailed`，并让pure mapper只读取`ApplicationDiagnosticCategory`和`ApplicationDiagnosticAction`。adversarial diagnostic即使携带endpoint、PIN、certificate、provider body等任意`code/summary`，映射输出也必须完全相同且presentation不含这些值。
 - 最终实现把closed code从25扩展到28；AppModel保留negotiation/provider特例后统一调用pure mapper，真实host-not-paired terminal用session-scoped Choose Host and App token返回library，media terminal与unknown application/platform不再伪装成settings validation或transport interruption。
 - fresh focused `14/14`、serial related `237/237`、serial normal `1268/1267/1/0`与四平台generic Debug `4/4`全部structured diagnostics为0，macOS为`x86_64 arm64` universal；唯一skip为真实Keychain opt-in，两个真实opt-in unset且未操作Simulator。6.2 observable string migration和6.3-6.5 retention/export仍独立pending。
+
+## macOS-First 项目与计划审计（2026-08-26）
+
+- Git审计起点为`main == origin/main == remote 74dda0593f58190650b9b8fcc045bf60393bb9dd`且工作树clean；本轮调整前OpenSpec有10个change，其中3个complete、7个in-progress。`complete-native-product-workflows`为`33/48`，但旧的`next 6.2`不再等同于全项目下一执行点。
+- 仓库当前有120个source文件、90个Swift test文件和原生C/Objective-C/Metal桥接。它不是UI-only骨架：pairing、RTSP/control、remote input、VideoToolbox/Metal/HDR、AVAudioEngine/spatial audio、AppKit lifecycle、SwiftUI workflows和diagnostics均有production类型与大量确定性测试。
+- 当前第一生产阻塞可由源码直接证明：`ProductionRuntimeProviderFactory.makeDefault()`只安装pairing、`MoonlightSessionControlProvider`与`MoonlightRemoteInputProvider`，没有安装`VideoReceiveProvider`或`AudioReceiveProvider`；`SessionMediaEnvironment.start()`又对两者显式fail closed。因此packet/parser/decoder/audio graph通过不能让默认App进入完整stream，M1必须先实现并安装具体网络receiver。
+- 用户最初指定的macOS细节不是文档占位：`AppKitLifecycleMonitor`实际监听window occlusion、become/resign key、resize/live-resize、screen/backing、minimize/deminiaturize以及application screen-parameter/active状态；`DisplayHeadroomReader`读取`maximumExtendedDynamicRangeColorComponentValue`；`AudioSessionPipeline`设置并读回`AVAudioEnvironmentNode.isListenerHeadTrackingEnabled`。这些当前最高只到确定性实现/generic build层，物理窗口/显示/音频route、签名entitlement与live Sunshine仍未证明。
+- 当前计划的结构性问题是阶段13的live/production核心未闭合时，阶段14-19仍轮转推进了大量跨平台离线工作，导致`next task`优化局部checkbox而不是最短发布路径。新权威顺序改为M0-M9串行macOS lane：transport -> native media/input -> lifecycle/HDR/audio -> product workflows -> deterministic regression -> signed/notarized candidate -> physical/live -> performance/endurance -> freeze。
+- iOS/iPadOS `35/36`与tvOS/visionOS `49/50`的历史实现和证明保留，唯一物理/live任务继续pending；macOS冻结前标记`deferred/frozen pending macOS freeze`。共享代码变化只运行必要generic build兼容门，不能称为这些平台的产品推进。
+- 证明层级统一为deterministic、generic build、Simulator、signed artifact、physical hardware、assistive technology、live Sunshine与externally blocked。相邻层级不可互相替代，物理/live receipt必须绑定exact Git SHA，M6以后还必须绑定candidate hash。
+- 新OpenSpec `prioritize-macos-product-completion`承载macOS-exclusive priority、non-macOS maintenance freeze、proof-tier integrity、macOS completion/native acceptance与reproducible freeze合同；具体审计矩阵和M0-M9门见`docs/macos-first-completion-plan.md`。

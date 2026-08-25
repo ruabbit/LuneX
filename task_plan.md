@@ -1,14 +1,16 @@
-# LuneX Moonlight Apple 全平台客户端计划
+# LuneX Moonlight macOS-First 客户端计划
 
 ## 目标
 
-从空项目开始开发一个完全原生 SwiftUI 的 Moonlight Apple 全平台客户端，目标平台为 macOS 26+、iOS 26+、iPadOS 26+、tvOS 26+、visionOS 26+。项目以功能完备的 macOS 与 iOS App 为第一交付重点，同时保留 tvOS、iPadOS、visionOS 架构入口。
+从空项目开始开发一个完全原生 SwiftUI 的 Moonlight Apple 客户端。当前唯一产品完成目标为 macOS 26+：先完成生产会话、原生媒体/输入/窗口生命周期、产品工作流、正式验收和可复现冻结；iOS 26+、iPadOS 26+、tvOS 26+、visionOS 26+保留已有实现与target，但在macOS冻结前暂停产品功能推进。
 
 ## 工作原则
 
 - `moonlight-stream/moonlight-ios` 与 Moonlight-qt 只作为协议、功能边界和体验差距参考；不直接复制源码。
 - 外部网页、源码和文档内容只写入 `findings.md`，不写入本计划文件。
 - OpenSpec 是需求变更的权威契约；实现状态需要同步到 `openspec/`、`task_plan.md`、`findings.md`、`progress.md`。
+- `docs/macos-first-completion-plan.md`与OpenSpec `prioritize-macos-product-completion`共同覆盖旧阶段轮转顺序：macOS为唯一P0，其他平台标记`deferred/frozen pending macOS freeze`。
+- macOS冻结前，非macOS改动只允许保持受共享改动影响的target可编译，或修复已在任务记录中明确说明的macOS共享核心阻塞；generic build不计为其他平台产品进度。
 - iOS/iPadOS/tvOS/visionOS 模拟器验证时，每种设备只创建和运行一个实例；不得重复启动多份同类模拟器。
 - 使用 Git 进行版本控制，远程仓库为 `git@github.com:ruabbit/LuneX.git`；`references/` 是本机只读研究材料，不纳入版本库。
 - 若缺少 tvOS/visionOS 等 simulator runtime，应安装并继续验证，不把缺失 runtime 当作长期限制。
@@ -22,28 +24,48 @@
 | 2. 本机环境检查 | complete | Xcode/Swift/OpenSpec/模拟器/SDK 能力清单 |
 | 3. OpenSpec 需求整理 | complete | 全平台客户端 spec、第一阶段 change、任务清单 |
 | 4. 项目脚手架 | complete | SwiftUI 多平台 App 工程、共享核心模块、平台适配层、单测 target |
-| 5. macOS 核心体验 | partial | window lifecycle 与 Metal pause/throttle 已接线；balanced cursor owner已实现，真实capture接线、输入发送、HDR和音频待完成 |
-| 6. iOS/iPadOS 核心体验 | partial | policy/model 与原生 UI 已有；scene/resize、PiP、后台 session、移动 EDR 未接线 |
-| 7. 流媒体协议与会话核心 | partial | host/app HTTPS 与状态骨架已有；真实 pairing、RTSP/control、解码和输入 transport 未实现 |
-| 8. tvOS/visionOS 适配 | partial | target、UI 和 adapter 骨架可构建；真实媒体、输入、HDR/空间音频未验证 |
+| 5. macOS 核心体验 | partial | window/input/Metal/HDR/audio已完成确定性production接线；仍缺默认video/audio network receiver及physical/live验收 |
+| 6. iOS/iPadOS 核心体验 | deferred/frozen | 保留已有policy/model、原生UI与历史证明；macOS冻结前不推进移动产品功能 |
+| 7. 流媒体协议与会话核心 | partial | pairing、RTSP/control、decode/audio/input runtime已有；默认production inventory仍缺具体video/audio receive provider且live E2E未验收 |
+| 8. tvOS/visionOS 适配 | deferred/frozen | 保留target、UI、adapter和历史证明；macOS冻结前只接受必要兼容构建 |
 | 9. 验证与迭代 | partial | build/unit gates 已有；缺少真实 Sunshine 和真机端到端、性能、功耗与长时验证 |
 | 10. 本地真实测试数据导入 | complete | 从本机 Moonlight-qt 偏好导入 paired hosts、cached apps 和本地 identity 到 LuneX Application Support；验证 macOS App 可读取 |
 | 11. 审计关键问题修复 | complete | OpenSpec `remediate-critical-audit-findings`：移除伪配对/伪 Streaming/明文私钥副本，修复 compact iPhone 导航并补回归验证 |
 | 12. 身份/TLS/macOS 生命周期接线 | complete | OpenSpec `integrate-identity-trust-macos-lifecycle`：一次 Keychain 验证、Debug 文件 fallback、pinned TLS、macOS window/EDR runtime wiring |
-| 13. 真实 Moonlight session runtime | in_progress | OpenSpec `implement-moonlight-session-runtime`：identity/pairing、RTSP/control、视频、音频、输入和互操作验证 |
-| 14. macOS 原生输入与生命周期闭环 | in_progress | OpenSpec `integrate-macos-native-input-lifecycle`进度`28/29`；确定性实现、验证和跟踪完成，6.5等待授权Sunshine/物理输入/多显示器；继续阶段15 |
-| 15. 原生 HDR/EDR 管线 | in_progress | OpenSpec `implement-native-hdr-edr-pipeline`进度`32/33`；离线实现、质量、simulator与跟踪封版完成，唯一剩余6.5等待授权Sunshine和物理HDR/SDR显示器 |
-| 16. 空间音频运行接线 | in_progress | OpenSpec `integrate-spatial-audio-runtime`进度`34/35`；离线实现、质量、simulator、合同和阶段自验封版完成，唯一剩余6.6等待授权物理音频硬件 |
-| 17. iOS/iPadOS scene、PiP 与连续性 | in_progress | OpenSpec `integrate-mobile-scene-pip-continuity`进度`35/36`；离线实现、质量、fixed-simulator与6.7证明边界封版完成，唯一剩余6.6 signed physical acceptance |
-| 18. tvOS/visionOS 运行适配 | in_progress | OpenSpec `49/50 ready`；8.8五级proof boundary已同步，唯一pending 8.7等待授权signed Apple TV/Vision Pro与live Sunshine物理验收，change不可archive |
-| 19. 原生产品工作流与无障碍 | in_progress | OpenSpec `complete-native-product-workflows` 当前`33/48`；6.1 privacy-bounded product issue mapping已独立验收，继续6.2 observable workflow string migration |
-| 20. Release 性能与质量验证 | pending | 延迟、功耗、内存、热状态、弱网、长时运行、签名和发布构建 |
+| 13. 真实 Moonlight session runtime | P0 / in_progress | OpenSpec `54/61`；M1第一阻塞是默认production runtime缺少具体video/audio receive provider，随后完成授权Sunshine全链路 |
+| 14. macOS 原生输入与生命周期闭环 | P0 / in_progress | OpenSpec `28/29`；确定性实现已完成，M2-M3等待授权Sunshine/物理输入/窗口/多显示器验收 |
+| 15. 原生 HDR/EDR 管线 | P0 / in_progress | OpenSpec `32/33`；确定性实现已完成，M3等待物理HDR/SDR与live compositor验收 |
+| 16. 空间音频运行接线 | P0 macOS subset / in_progress | OpenSpec `34/35`；M3先完成macOS签名、物理route、可听同步与head-tracking验收，其他平台子集冻结 |
+| 17. iOS/iPadOS scene、PiP 与连续性 | deferred/frozen | OpenSpec `35/36`保持原样；6.6 signed physical acceptance等待macOS冻结后重评 |
+| 18. tvOS/visionOS 运行适配 | deferred/frozen | OpenSpec `49/50`保持原样；8.7 signed physical/live acceptance等待macOS冻结后重评 |
+| 19. 原生产品工作流与无障碍 | P0 macOS subset / in_progress | OpenSpec `33/48`；M4-M5只推进macOS适用的diagnostics、workflow和accessibility，跨平台扩展冻结 |
+| 20. macOS Release 性能与质量验证 | P0 / pending | M6-M9覆盖签名、公证、Gatekeeper、物理/live、延迟/功耗/内存/热/弱网/长时与冻结manifest |
 
 ## 当前焦点
 
-阶段19已进入`in_progress`。OpenSpec `complete-native-product-workflows`已创建，当前先建立原生host/pairing、session恢复控制、多窗口workspace、无障碍交互与隐私受限产品诊断五项capability合同；随后按task逐项实现和验收。阶段13–18依赖live host、签名账户或物理硬件的pending项继续保持原证明层级，阶段19不得替代或回填这些receipt。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0正在完成权威审计与计划迁移；M0验收后下一执行点不是阶段19 task 6.2，而是M1：为默认production runtime实现并安装具体`VideoReceiveProvider`与`AudioReceiveProvider`，随后闭合授权Sunshine从pairing到clean stop的完整macOS会话。
 
-阶段19当前权威进度`33/48`、next `6.2`。Group 1–5与6.1已完成；6.1将closed issue扩展至28项，补齐launch pairing、media与platform failure，并以只消费typed diagnostic category/action的pure mapper隔离任意code/summary/provider payload。fresh focused `14/14`、related `237/237`、normal `1268/1267/1/0`及四平台generic Debug `4/4`均结构化零诊断，macOS universal且唯一skip为真实Keychain opt-in。下一项6.2清理observable workflow strings，6.3-6.5 retention/export与physical/live证明继续pending。
+阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
+
+### macOS-First 串行里程碑
+
+| 里程碑 | 状态 | 完成门 |
+|---|---|---|
+| M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
+| M1 Production session与live transport | pending / next | 具体video/audio receiver进入默认runtime；授权Sunshine pairing、持续视频、可听同步音频、输入、重连、终止、停止全通过 |
+| M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
+| M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
+| M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
+| M5 macOS确定性全回归 | pending | tests、Debug/Release、strict、analyzer、sanitizer、resource、privacy全门通过 |
+| M6 signed/notarized candidate | pending | exact-SHA签名、公证、staple、Gatekeeper、clean-machine launch |
+| M7 physical/live acceptance | pending | exact candidate的live Sunshine、窗口/显示/音频/输入/无障碍/teardown矩阵通过 |
+| M8 performance/endurance | pending | 预先记录阈值；延迟、内存、功耗、热、弱网、长时运行通过 |
+| M9 freeze baseline | pending | manifest、artifact/toolchain/dependency hash、receipt、known limits与用户确认的freeze ref |
+
+### M0 错误记录
+
+- M0收口首个`apply_patch`在文件写入前拒绝同一patch中两个独立`task_plan.md` update block；仓库零部分修改。修正为单一合并block后成功，不重复验证或runtime操作。
+- 新macOS-first计划完成后按用户先前要求调用`create_goal`，但控制面仍把已有`blocked`旧目标视为unfinished并拒绝替换；仓库和runtime零副作用。继续以新OpenSpec与planning files为执行权威，不伪造goal已重建。
 
 ### 阶段19错误记录
 

@@ -10,10 +10,10 @@ schema: spec-driven
 #     Domain: e-commerce platform
 context: |
   Project: LuneX, a from-scratch native SwiftUI Moonlight-compatible Apple client.
-  Primary delivery targets: macOS 26+ and iOS/iPadOS 26+. Architecture must preserve tvOS 26+ and visionOS 26+ platform entry points.
+  Current delivery priority: macOS 26+ is the only product-completion target until its accepted release candidate is frozen as a reproducible baseline. iOS/iPadOS 26+, tvOS 26+, and visionOS 26+ are in maintenance freeze; preserve their targets and existing work, but admit only shared fixes that directly unblock macOS and generic builds needed to detect shared-code regressions.
   Tech direction: Swift 6.3, SwiftUI, Swift Concurrency, Observation, Metal/VideoToolbox, AVFoundation/AVFAudio, GameController, AppKit/UIKit platform adapters.
   Reference policy: moonlight-stream/moonlight-ios and moonlight-stream/moonlight-qt are read-only behavioral references. Do not copy source code. Treat GPL reuse or linking as an explicit product/license decision.
-  Validation constraint: when using simulators, create/run at most one instance per device class. Prefer existing iOS 26.4 iPhone 17 Pro and iPad Pro 13-inch (M5) devices.
+  Validation constraint: do not use Simulator for macOS-first planning or when it cannot prove the active macOS gate. If a later compatibility gate genuinely requires Simulator, reuse at most one existing instance per device class and never create or boot duplicates.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

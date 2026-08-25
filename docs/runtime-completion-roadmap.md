@@ -2,6 +2,12 @@
 
 > 当前 App 仍处于 fail-closed 状态。已有类型、策略、编译通过或单元测试通过，不等同于真实 Moonlight 工作流完成。
 
+## macOS-First 执行权威（2026-08-26）
+
+`docs/macos-first-completion-plan.md`与OpenSpec `prioritize-macos-product-completion`覆盖下方旧阶段轮转顺序。macOS 26+是唯一产品完成目标；iOS/iPadOS、tvOS、visionOS在macOS正式验收并冻结前进入maintenance freeze，只保留共享改动后的必要generic build兼容门和直接阻塞macOS的共享核心修复。
+
+当前串行顺序为M0审计迁移 -> M1 production session/live transport -> M2 macOS媒体/输入 -> M3窗口/显示/HDR/音频生命周期 -> M4 macOS产品工作流 -> M5确定性全回归 -> M6签名公证候选 -> M7物理/live验收 -> M8性能长时验收 -> M9可复现冻结。旧阶段和已完成checkbox继续作为历史证据，但不得改变该执行顺序或替代任一proof tier。
+
 ## 完成口径
 
 任何功能只有同时满足以下条件才可标记完成：
@@ -13,24 +19,23 @@
 5. 涉及 Sunshine 互操作时，有显式授权的 live-host 端到端证据。
 6. 构建通过、首次帧出现或策略 resolver 返回预期值都不能单独作为完成证明。
 
-## 依赖顺序
+## 依赖顺序（macOS-First）
 
 ```mermaid
 flowchart LR
-    R["13. Moonlight session runtime"] --> M["14. macOS input and lifecycle"]
-    R --> H["15. HDR and EDR pipeline"]
-    R --> A["16. Audio and spatial audio"]
-    R --> C["17. iOS and iPadOS continuity"]
-    R --> T["18. tvOS and visionOS adaptation"]
-    M --> U["19. Native UI and UX completion"]
-    H --> U
-    A --> U
-    C --> U
-    T --> U
-    U --> V["20. Release and performance validation"]
+    M0["M0 Audit and priority migration"] --> M1["M1 Production session and live transport"]
+    M1 --> M2["M2 macOS media and input"]
+    M2 --> M3["M3 Window, display, HDR and audio"]
+    M3 --> M4["M4 Native macOS workflows"]
+    M4 --> M5["M5 Deterministic regression"]
+    M5 --> M6["M6 Signed and notarized candidate"]
+    M6 --> M7["M7 Physical and live acceptance"]
+    M7 --> M8["M8 Performance and endurance"]
+    M8 --> M9["M9 Freeze baseline"]
+    M9 --> P["Post-freeze platform reassessment"]
 ```
 
-## 当前执行状态（2026-07-30）
+## 当前执行状态（2026-08-26审计）
 
 | 阶段 | 状态 | 已证明 | 尚未证明/阻塞条件 |
 |---|---|---|---|
@@ -38,12 +43,12 @@ flowchart LR
 | 14 | `in_progress`，OpenSpec `28/29` | 完成AppKit合同、共享坐标、闭合directive、generation-scoped lifecycle、AppModel/media application、active input coordinator、actual direct/relative capture、balanced cursor ownership、responder/dismantle、stream-view backing/display/live-resize检测、privacy-bounded diagnostics、application/normal/五平台Debug+Release、strict/generator/analyzer/sanitizer/resource及simulator独立门 | 授权Sunshine与鼠标/多显示器硬件证明尚未完成 |
 | 15 | `in_progress`，OpenSpec `32/33` | color/luminance、decoded/Metal frame、shader/readback、surface/display/resolver/presenter、macOS transition矩阵、四平台typed capability/fallback、5.1–5.5 integration、6.1–6.4验证及6.6跟踪封版完成 | 唯一剩余6.5：授权Sunshine、live compositor与物理HDR/SDR显示器证据 |
 | 16 | `in_progress`，OpenSpec `34/35` | canonical布局、真实environment graph/fallback、平台route/entitlement策略、runtime recovery、generation-owned processor/media/AppModel接线、实际状态UI、normal/十配置build、strict/API/analyzer、ASan/TSan/malloc、simulator、合同和阶段自验完成 | 唯一剩余6.6尚无signed provisioning、AirPods、built-in/wired/HDMI、route transition、可听声道/同步和live Sunshine物理证据 |
-| 17 | `in_progress`，OpenSpec `35/36` | actual UIKit scene/window/geometry/input、actual-window mobile EDR、sample-buffer PiP runtime、actual-state continuity policy、serialized mobile media owner、media environment/AppModel application与bounded diagnostics、stop/failure/replacement清理、iPhone/iPad单值`audio`配置、UI/回归、normal/build/repository/analyzer/sanitizer/resource/fixed-simulator，以及6.7合同/证明边界封版均已完成 | 唯一剩余6.6 signed/physical PiP/background/Stage Manager/EDR/live Sunshine验收；固定ENet保留4项已归属analyzer finding |
-| 18 | `in_progress`，OpenSpec `45/50 ready` | 1.1–8.3已完成task级离线验收；8.3 strict/fixture/generator/membership/clean-room/license/entitlement/configuration/privacy/API/repository门通过，fresh Debug/Release Analyze均为`0 error/0 compiler warning/4 identical fixed ENet findings`且first-party为0 | next 8.4；8.4-8.8、Simulator runtime、signed/物理/live HDR/audio/input及性能功耗证据未完成 |
+| 17 | `deferred/frozen`，OpenSpec `35/36` | actual UIKit scene/window/geometry/input、actual-window mobile EDR、sample-buffer PiP runtime、actual-state continuity policy、serialized mobile media owner、media environment/AppModel application与bounded diagnostics、stop/failure/replacement清理、iPhone/iPad单值`audio`配置、UI/回归、normal/build/repository/analyzer/sanitizer/resource/fixed-simulator，以及6.7合同/证明边界封版均已完成 | 唯一剩余6.6 signed/physical PiP/background/Stage Manager/EDR/live Sunshine验收；macOS冻结前不推进，固定ENet保留4项已归属analyzer finding |
+| 18 | `deferred/frozen`，OpenSpec `49/50` | 1.1–8.6与8.8离线/Simulator边界已完成；已有实现和证据保留 | 唯一pending 8.7 signed physical Apple TV/Vision Pro和live Sunshine；macOS冻结前不推进 |
 | 19 | `in_progress`，OpenSpec `complete-native-product-workflows` | host/pairing/catalog/session恢复、多窗口ownership、typed semantics、adaptive/accessibility矩阵及6.1 privacy-bounded failure mapping已有确定性实现和任务级离线验收 | 6.2 workflow string migration、6.3-6.5 diagnostics/export、7.x跨产品回归及signed/physical/live验收仍未完成 |
 | 20 | `pending` | Release配置与sanitizer静态门禁可执行 | 尚无签名发布包、端到端延迟、功耗、热状态、弱网、内存基线与长时真机证据 |
 
-阶段 14–20 的确定性实现和离线测试可以在阶段 13 的 live gate 等待期间推进，但不得因此把依赖真实host、显示器、音频route、移动设备或签名账户的完成证明标记为通过。阶段 13 保持 `in_progress`，直到 `1.1`、`3.7`、`5.8`、`6.7`、`7.7`、`9.2`、`9.3` 全部取得授权证据。
+阶段13现在是M1第一执行点：默认production runtime必须先获得具体video/audio receive provider，再闭合`1.1`、`3.7`、`5.8`、`6.7`、`7.7`、`9.2`、`9.3`。阶段14–16和19只按M2-M5的macOS依赖顺序推进；阶段17–18冻结。任何后续离线工作都不得把依赖真实host、显示器、音频route、物理输入、assistive technology、签名账户或发布候选的证明标记为通过。
 
 ## 实施阶段
 
