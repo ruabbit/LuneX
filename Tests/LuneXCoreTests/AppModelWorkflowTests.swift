@@ -74,6 +74,82 @@ private actor LiveRecordingStreamLaunchClient: StreamLaunchClient {
     }
 }
 
+private struct LiveSessionControlReceipt: Sendable {
+    var events: [String]
+    var failure: String?
+}
+
+private actor LiveRecordingSessionControlProvider: SessionControlProvider {
+    private let base: any SessionControlProvider
+    private var events: [String] = []
+    private var failure: String?
+
+    init(base: any SessionControlProvider) {
+        self.base = base
+    }
+
+    func start(
+        sessionID: UUID,
+        request: StreamLaunchRequest
+    ) async -> AsyncThrowingStream<SessionControlEvent, Error> {
+        let upstream = await base.start(sessionID: sessionID, request: request)
+        return AsyncThrowingStream { continuation in
+            let forwarding = Task {
+                do {
+                    for try await event in upstream {
+                        self.record(event)
+                        if case .terminated = continuation.yield(event) {
+                            break
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    self.record(error)
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { @Sendable _ in
+                forwarding.cancel()
+            }
+        }
+    }
+
+    func requestIDR(sessionID: UUID) async throws {
+        try await base.requestIDR(sessionID: sessionID)
+    }
+
+    func applyMobileControl(
+        _ application: SessionMobileControlApplication
+    ) async throws {
+        try await base.applyMobileControl(application)
+    }
+
+    func stop(sessionID: UUID) async {
+        await base.stop(sessionID: sessionID)
+    }
+
+    func receipt() -> LiveSessionControlReceipt {
+        LiveSessionControlReceipt(events: events, failure: failure)
+    }
+
+    private func record(_ event: SessionControlEvent) {
+        let code = switch event {
+        case .launchAccepted: "launch_accepted"
+        case .rtspReady: "rtsp_ready"
+        case .videoColorMetadata: "video_color_metadata"
+        case .negotiated: "negotiated"
+        case let .channelsReady(readiness): "channels_\(readiness.rawValue)"
+        case let .reconnecting(attempt, _): "reconnecting_\(attempt)"
+        case .terminated: "terminated"
+        }
+        events.append(code)
+    }
+
+    private func record(_ error: Error) {
+        failure = "\(String(reflecting: type(of: error))):\(String(describing: error))"
+    }
+}
+
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
     func testLiveSunshineAcceptanceRequiresExactOptIns() {
@@ -184,10 +260,11 @@ final class AppModelWorkflowTests: XCTestCase {
             launchTask.cancel()
             await launchTask.value
             let calls = await liveRuntime.launchClient.counts()
+            let control = await liveRuntime.controlProvider.receipt()
             let issueCode = model.streamProductIssue?.code.rawValue ?? "none"
             let diagnostic = model.diagnostics.latestStreamActionableEvent
             XCTFail(
-                "The production session did not reach streaming; phase=\(model.productSessionActualPhase), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops)."
+                "The production session did not reach streaming; phase=\(model.productSessionActualPhase), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure ?? "none")."
             )
             return
         }
@@ -272,6 +349,8 @@ final class AppModelWorkflowTests: XCTestCase {
             XCTAssertEqual(calls.resumes, 0)
         }
         XCTAssertEqual(calls.stops, 0)
+        let control = await liveRuntime.controlProvider.receipt()
+        XCTAssertNil(control.failure)
 #else
         throw XCTSkip(
             "The live harness is limited to macOS Debug so it always uses the explicit file identity fallback."
@@ -9702,7 +9781,8 @@ final class AppModelWorkflowTests: XCTestCase {
 
     private func makeLiveSunshineProductionModel() -> (
         model: AppModel,
-        launchClient: LiveRecordingStreamLaunchClient
+        launchClient: LiveRecordingStreamLaunchClient,
+        controlProvider: LiveRecordingSessionControlProvider
     ) {
         let identityStore = JSONFileClientIdentityStore(
             fileURL: AppStorageLocations.debugClientIdentityFile
@@ -9714,11 +9794,14 @@ final class AppModelWorkflowTests: XCTestCase {
             base: HTTPStreamLaunchClient(requestExecutor: requestExecutor)
         )
         let controlChannel = MoonlightControlChannel()
-        let runtimeProviders = RuntimeProviderInventory(
-            sessionControl: MoonlightSessionControlProvider(
+        let controlProvider = LiveRecordingSessionControlProvider(
+            base: MoonlightSessionControlProvider(
                 launchClient: launchClient,
                 controlChannel: controlChannel
-            ),
+            )
+        )
+        let runtimeProviders = RuntimeProviderInventory(
+            sessionControl: controlProvider,
             videoReceive: MoonlightVideoReceiveProvider(),
             audioReceive: MoonlightAudioReceiveProvider(),
             remoteInput: MoonlightRemoteInputProvider(
@@ -9740,7 +9823,7 @@ final class AppModelWorkflowTests: XCTestCase {
             runtimeProviders: runtimeProviders,
             clientIdentityStore: identityStore
         )
-        return (model, launchClient)
+        return (model, launchClient, controlProvider)
     }
 
     private func fetchLiveServerInfoOnce(
