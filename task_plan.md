@@ -2266,3 +2266,16 @@
 - **host-state build门：** generic placeholder五build均`succeeded/0/0/0`并各有Metal AIR/metallib；macOS Debug/Release均为`x86_64 arm64` universal，iOS+iPadOS/tvOS/visionOS结果只记冻结平台compile compatibility。进入OpenSpec strict、privacy/cancel/opt-in/process、project hash、scope与人工diff终审。
 - **repository wrapper错误：** 首轮final gate的strict命令成功生成11项有效JSON，但汇总器沿用不存在的`.results/.summary.total`路径，在任何后续检查前以jq error退出。实际schema为`.items`与`.summary.totals`；仓库/runtime零副作用，不重复test/build/generator，修正解析后从头运行只读gate。
 - **最终repository gate：** 修正汇总器后输出`FINAL_HOST_ADMISSION_REPOSITORY_GATE_OK`：OpenSpec strict `11/11`、apply `7/27 next 2.3 pending`、精确8文件、focused `35/35`、normal `1316/1314/2/0`、五build `5/5`与Metal `5/5`、双macOS universal、stable project、零privacy/普通remote-cancel/opt-in/process均通过。Task 2.3继续不勾选，准备独立提交推送。
+- **exact-SHA live回执：** host-state批次已以`5a4d1e650ef7cce87bb40b427037acf68c5f86fa`提交推送并三方一致。该SHA唯一双opt-in gate在6.472秒后以xctest exit `1`返回`stream_interrupted / transport_failed / stream.transport`；`launch/resume/cancel=0/1/0`、control events到`video_color_metadata`且无control failure，typed media receipt精确为`audio_receive:network_receive_timed_out`。这证明Sunshine接受并发`/resume`，故不是free/busy或客户端容量问题；四state文件`0600`且mode/size/SHA不变，零process残留，本SHA不重跑。
+
+## 2026-08-27 M1 Task 2.3 media receive idle semantics 修复
+
+- **状态：** `in_progress`；OpenSpec保持`7/27 next 2.3 pending`。对照`moonlight-common-c`确认audio/video UDP receive timeout只是非致命poll结果，上游会继续等待显式停止或真实socket错误；LuneX却把每次5秒无包升级为永久transport failure并取消整个Network.framework channel。
+- **实现边界：** 只移除长生命周期video/audio UDP receive loop的人为deadline；connect/send timeout、真实Network.framework错误、packet bounds、buffer overflow、consumer termination、显式取消与TCP/RTSP超时/EOF语义保持fail closed。不能靠延长5秒掩盖协议或网络空闲，也不改变ping payload wire format。
+- **验收顺序：** 先补确定性测试证明无deadline媒体receive可跨越等价空闲后接收数据、显式stop仍有界取消、TCP deadline仍失败；再运行focused、related、serial normal、共享源码要求的五build、generator/OpenSpec/repository gate，独立提交推送后新SHA最多一次live gate。真实Keychain和Simulator保持不操作，Task 2.3继续不勾选。
+- **当前测试验收：** 最终显式API上的focused为`25/25/0/0`，related为`230/229/1 live skip/0`，serial normal为`1317/1315/2 exact opt-in skips/0`；三份structured build均`succeeded/0/0/0`。下一步五产品generic compatibility build与repository gates，不运行live/Keychain或操作Simulator。
+- **产品build：** fresh五build全部`succeeded/0/0/0`并生成Metal AIR/metallib；macOS Debug/Release均为`x86_64 arm64` universal，iOS+iPadOS/tvOS/visionOS generic Debug只证明共享兼容。下一步generator、OpenSpec strict、privacy/scope/teardown/process与人工diff终审。
+- **取消终审与normal波动：** pre-gate审阅补齐typed `.cancelled`状态归类后，最终focused为`26/26`、related为`231/230/1 live skip/0`。首个final normal唯一失败是Vision resize用例在固定1秒test helper等待超时，同用例fresh隔离`0.020s`通过且build diagnostics全零；该轮不计验收，执行一次fresh full normal复核，再现才修改夹具。
+- **final normal：** fresh full normal复核通过`1318/1316/2 exact opt-in skips/0`，Vision resize同轮正常通过；focused/related/normal structured build均`succeeded/0/0/0`。开始最终源码的五build与repository gates。
+- **final build：** 最终源码五build均`succeeded/0/0/0`，每项生成AIR/metallib；macOS Debug/Release均为`x86_64 arm64` universal。下一步只读repository final gate与人工diff终审。
+- **最终repository gate：** 输出`FINAL_MEDIA_IDLE_REPOSITORY_GATE_OK`，确认三方`5a4d1e65`基线、stable project `783a7494...5944`、OpenSpec `11/11`与`7/27 next 2.3 pending`、精确9文件、最终`26/26`、`231/230/1/0`、`1318/1316/2/0`、五build/Metal、双universal及零privacy/普通remote-cancel/opt-in/process。Task 2.3继续pending，准备独立提交推送。

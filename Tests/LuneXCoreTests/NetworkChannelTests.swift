@@ -142,6 +142,41 @@ final class NetworkChannelTests: XCTestCase {
         XCTAssertEqual(stateAfterSecond, .ready)
     }
 
+    func testReceiveWithoutDeadlineWaitsUntilExplicitCancellation() async throws {
+        let driver = InMemoryNetworkDriver(blockReceiveUntilCancelled: true)
+        let channel = try NetworkByteChannel(
+            driver: driver,
+            limits: .moonlightDatagram,
+            transport: .udp
+        )
+        try await channel.connect(timeout: .seconds(1))
+
+        let receive = Task {
+            try await channel.receiveWithoutDeadline(maximumLength: 1_500)
+        }
+        let didStart = await waitUntil {
+            await driver.receiveCallCount == 1
+        }
+        XCTAssertTrue(didStart)
+        try await Task.sleep(for: .milliseconds(30))
+        let stateWhileWaiting = await channel.state
+        let cancelledWhileWaiting = await driver.isCancelled
+        XCTAssertEqual(stateWhileWaiting, .ready)
+        XCTAssertFalse(cancelledWhileWaiting)
+
+        receive.cancel()
+        do {
+            _ = try await receive.value
+            XCTFail("Explicit cancellation must end an unbounded receive.")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        let stateAfterCancellation = await channel.state
+        let driverCancelled = await driver.isCancelled
+        XCTAssertEqual(stateAfterCancellation, .cancelled)
+        XCTAssertTrue(driverCancelled)
+    }
+
     func testDriverPreservesNonemptyBytesDeliveredWithTerminalError() throws {
         let payload = Data("RTSP/1.0 200 OK\r\n\r\n".utf8)
 
@@ -184,6 +219,29 @@ final class NetworkChannelTests: XCTestCase {
         XCTAssertEqual(state, .closed)
         let cancelled = await driver.isCancelled
         XCTAssertFalse(cancelled)
+    }
+
+    func testDriverCancellationKeepsChannelCancelled() async throws {
+        let driver = ThrowingReceiveNetworkDriver(
+            error: NetworkChannelError.cancelled
+        )
+        let channel = try NetworkByteChannel(
+            driver: driver,
+            limits: .moonlightDatagram,
+            transport: .udp
+        )
+        try await channel.connect(timeout: .seconds(1))
+
+        do {
+            _ = try await channel.receiveWithoutDeadline()
+            XCTFail("Expected driver cancellation.")
+        } catch let error as NetworkChannelError {
+            XCTAssertEqual(error, .cancelled)
+        }
+        let state = await channel.state
+        let driverCancelled = await driver.isCancelled
+        XCTAssertEqual(state, .cancelled)
+        XCTAssertTrue(driverCancelled)
     }
 
     func testRealTCPDriverRoundTripsBoundedLoopbackPayload() async throws {
@@ -335,6 +393,16 @@ final class NetworkChannelTests: XCTestCase {
             XCTAssertEqual(stateAfterPeerClose, .closed)
         }
         await channel.cancel()
+    }
+
+    private func waitUntil(
+        _ predicate: @escaping () async -> Bool
+    ) async -> Bool {
+        for _ in 0..<100 {
+            if await predicate() { return true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return false
     }
 }
 

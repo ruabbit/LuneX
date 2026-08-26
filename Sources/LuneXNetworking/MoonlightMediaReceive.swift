@@ -135,10 +135,9 @@ enum MoonlightAudioRTPPacketParser {
 protocol MoonlightDatagramChannel: Sendable {
     func connect(timeout: Duration) async throws
     func send(_ data: Data, timeout: Duration) async throws
-    func receive(
+    func receiveWithoutDeadline(
         minimumLength: Int,
-        maximumLength: Int?,
-        timeout: Duration
+        maximumLength: Int?
     ) async throws -> NetworkReceiveChunk
     func cancel() async
 }
@@ -155,20 +154,17 @@ typealias MoonlightMediaReceiveTimeProvider = @Sendable () -> UInt64
 struct MoonlightMediaReceiveTiming: Equatable, Sendable {
     var connectTimeout: Duration
     var sendTimeout: Duration
-    var receiveTimeout: Duration
     var pingInterval: Duration
 
     static let production = MoonlightMediaReceiveTiming(
         connectTimeout: .seconds(5),
         sendTimeout: .seconds(2),
-        receiveTimeout: .seconds(5),
         pingInterval: .milliseconds(500)
     )
 
     func validate() throws {
         guard connectTimeout > .zero,
               sendTimeout > .zero,
-              receiveTimeout > .zero,
               pingInterval > .zero else {
             throw MoonlightMediaReceiveError.invalidLimits
         }
@@ -335,7 +331,6 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                         channel: channel,
                         continuation: continuation,
                         maximumDatagramBytes: maximumDatagramBytes,
-                        receiveTimeout: self.timing.receiveTimeout,
                         timeProvider: self.timeProvider,
                         transform: transform
                     )
@@ -399,16 +394,14 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         channel: any MoonlightDatagramChannel,
         continuation: AsyncThrowingStream<Event, Error>.Continuation,
         maximumDatagramBytes: Int,
-        receiveTimeout: Duration,
         timeProvider: @escaping MoonlightMediaReceiveTimeProvider,
         transform: @escaping Transform
     ) async throws {
         while true {
             try Task.checkCancellation()
-            let chunk = try await channel.receive(
+            let chunk = try await channel.receiveWithoutDeadline(
                 minimumLength: 1,
-                maximumLength: maximumDatagramBytes,
-                timeout: receiveTimeout
+                maximumLength: maximumDatagramBytes
             )
             guard !chunk.data.isEmpty else {
                 throw NetworkChannelError.closed

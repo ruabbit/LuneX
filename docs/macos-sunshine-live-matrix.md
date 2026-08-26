@@ -463,3 +463,43 @@ are universal `x86_64 arm64`, and each build produced its Metal AIR and
 metallib. The generic compatibility builds do not advance frozen-platform
 product status. No new live attempt has been made, so these results do not
 complete Task 2.3.
+
+## Exact-SHA Audio Receive Timeout Receipt
+
+The host-state admission correction was committed and pushed as exact SHA
+`5a4d1e650ef7cce87bb40b427037acf68c5f86fa`. Its fresh warnings-as-errors live
+bundle build succeeded with zero structured errors, warnings, or analyzer
+warnings. The only double-opt-in gate for that SHA returned XCTest exit `1`
+after 6.472 seconds with `issue=stream_interrupted`,
+`diagnostic=transport_failed`, and `subsystem=stream.transport`. The bounded
+recorder isolated the failure as
+`audio_receive:network_receive_timed_out`; it recorded no video receive
+failure.
+
+The production receipt was `launch=0`, `resume=1`, `cancel=0`, with control
+events `launch_accepted,rtsp_ready,negotiated,channels_1,video_color_metadata`
+and no control failure. Sunshine therefore accepted the concurrent `/resume`
+and completed the RTSP, control, and negotiated-media path; free/busy state and
+client-side admission are not the failure. All four local state files retained
+identical `0600` mode, size, and SHA-256, and no xctest or xcodebuild process
+remained. This exact attempt must not be repeated.
+
+Upstream `moonlight-common-c` treats UDP receive timeouts as non-fatal poll
+results and continues waiting until explicit stop or an actual socket error.
+LuneX instead imposed a five-second deadline on each media receive and
+cancelled the entire Network.framework channel when that deadline elapsed.
+The deterministic repair removes the artificial receive deadline only
+from the long-lived video/audio UDP loops. Connect and send deadlines, actual
+transport failures, bounded packet limits, cancellation, and all TCP/RTSP
+timeout and terminal semantics remain unchanged. This receipt does not prove
+audible audio or complete Task 2.3.
+
+Final deterministic evidence for the repair passed `26/26` focused tests, a
+related session/media matrix at `231 total / 230 passed / 1 explicit live skip
+/ 0 failed`, and the complete macOS suite at `1318 total / 1316 passed / 2
+explicit opt-in skips / 0 failed`. Every xcresult had zero structured errors,
+warnings, and analyzer warnings. macOS Debug/Release plus generic iOS/iPadOS,
+tvOS, and visionOS builds all succeeded with Metal output; both macOS products
+are universal `x86_64 arm64`. The generic builds do not advance frozen-platform
+status. A new exact-SHA live attempt is still required to prove that audio
+actually arrives and remains synchronized.

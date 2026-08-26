@@ -101,6 +101,12 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **AND** an unsupported required control-encryption capability or a rejected ANNOUNCE or PLAY SHALL fail closed before ENet connection
 - **AND** the SDP feature mask SHALL advertise only protocol features whose corresponding client behavior LuneX actually implements
 
+#### Scenario: Long-lived media UDP is temporarily idle
+- **WHEN** a negotiated video or audio UDP receiver is waiting and no datagram arrives within an arbitrary polling window
+- **THEN** LuneX SHALL keep the media channel active instead of cancelling the Network.framework connection or publishing a terminal transport failure solely because the receive was idle
+- **AND** explicit session stop, consumer cancellation, send failure, actual receive failure, invalid or oversized data, and buffer overflow SHALL retain bounded fail-closed teardown
+- **AND** connect and send deadlines plus every TCP/RTSP transaction deadline and terminal-close rule SHALL remain unchanged
+
 #### Scenario: Local client disconnect preserves the remote application
 - **WHEN** the user disconnects, a stream consumer cancels, a generation is replaced, or local session setup fails
 - **THEN** LuneX SHALL release only that client's control, RTSP, media, audio, decoder, and input resources and SHALL NOT call Sunshine `/cancel`

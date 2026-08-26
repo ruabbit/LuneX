@@ -282,7 +282,7 @@ actor NetworkByteChannel {
             }
             state = .ready
         } catch {
-            state = error is CancellationError ? .cancelled : .failed
+            state = Self.isCancellation(error) ? .cancelled : .failed
             await driver.cancel()
             throw error
         }
@@ -300,7 +300,7 @@ actor NetworkByteChannel {
                 try await self.driver.send(data)
             }
         } catch {
-            state = error is CancellationError ? .cancelled : .failed
+            state = Self.isCancellation(error) ? .cancelled : .failed
             await driver.cancel()
             throw error
         }
@@ -310,6 +310,29 @@ actor NetworkByteChannel {
         minimumLength: Int = 1,
         maximumLength: Int? = nil,
         timeout: Duration
+    ) async throws -> NetworkReceiveChunk {
+        try await receiveValidated(
+            minimumLength: minimumLength,
+            maximumLength: maximumLength,
+            timeout: timeout
+        )
+    }
+
+    func receiveWithoutDeadline(
+        minimumLength: Int = 1,
+        maximumLength: Int? = nil
+    ) async throws -> NetworkReceiveChunk {
+        try await receiveValidated(
+            minimumLength: minimumLength,
+            maximumLength: maximumLength,
+            timeout: nil
+        )
+    }
+
+    private func receiveValidated(
+        minimumLength: Int,
+        maximumLength: Int?,
+        timeout: Duration?
     ) async throws -> NetworkReceiveChunk {
         guard state == .ready else {
             throw NetworkChannelError.invalidState
@@ -323,8 +346,19 @@ actor NetworkByteChannel {
         }
 
         do {
-            let chunk = try await Self.withTimeout(timeout, operationName: "receive") {
-                try await self.driver.receive(
+            let chunk: NetworkReceiveChunk
+            if let timeout {
+                chunk = try await Self.withTimeout(
+                    timeout,
+                    operationName: "receive"
+                ) {
+                    try await self.driver.receive(
+                        minimumLength: minimumLength,
+                        maximumLength: maximumLength
+                    )
+                }
+            } else {
+                chunk = try await driver.receive(
                     minimumLength: minimumLength,
                     maximumLength: maximumLength
                 )
@@ -348,7 +382,7 @@ actor NetworkByteChannel {
             if error as? NetworkChannelError == .closed {
                 state = .closed
             } else if state != .closed {
-                state = error is CancellationError ? .cancelled : .failed
+                state = Self.isCancellation(error) ? .cancelled : .failed
                 await driver.cancel()
             }
             throw error
@@ -381,5 +415,10 @@ actor NetworkByteChannel {
             }
             return result
         }
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError
+            || error as? NetworkChannelError == .cancelled
     }
 }

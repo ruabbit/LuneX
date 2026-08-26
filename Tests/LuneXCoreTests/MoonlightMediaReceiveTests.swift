@@ -350,7 +350,6 @@ final class MoonlightMediaReceiveTests: XCTestCase {
         MoonlightMediaReceiveTiming(
             connectTimeout: .seconds(1),
             sendTimeout: .seconds(1),
-            receiveTimeout: .seconds(1),
             pingInterval: .milliseconds(10)
         )
     }
@@ -510,14 +509,12 @@ private final class MediaReceiveStubChannel: MoonlightDatagramChannel,
         }
     }
 
-    func receive(
+    func receiveWithoutDeadline(
         minimumLength: Int,
-        maximumLength: Int?,
-        timeout: Duration
+        maximumLength: Int?
     ) async throws -> NetworkReceiveChunk {
         _ = minimumLength
         _ = maximumLength
-        _ = timeout
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let immediate: Result<NetworkReceiveChunk, Error>? = lock.withLock {
