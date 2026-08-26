@@ -66,9 +66,9 @@ or arbitrary application requiring a separate approval gate.
 | Host inventory | `tanmy-white` advertised protocol/codec modes and current application state | Capabilities recorded; matching busy `Desktop` permits a concurrent `/resume` session |
 | Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Passed at 18:14 CST: the imported Moonlight-qt identity completed live production pinned-mTLS authentication without pairing or local-state mutation |
 | Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | Passed at 18:14 CST: production `/applist` became current and contained exactly one matching `Desktop` entry with app ID `881448767` |
-| Initial session | Exactly one `Desktop` client session starts through production `/launch` or `/resume` routing | Not run |
-| RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Not run |
-| Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Not run |
+| Initial session | Exactly one `Desktop` client session starts through production `/launch` or `/resume` routing | Passed on exact SHA `05aa877`: matching busy selected one `/resume`, zero `/launch`, zero `/cancel` |
+| RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Passed on exact SHA `05aa877`: ANNOUNCE, PLAY, ENet, negotiated configuration, control readiness, and video color metadata completed |
+| Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Failed before streaming on exact SHA `05aa877`; the UDP complete-message defect now passes deterministic gates in the current candidate, with exact-SHA live confirmation still pending |
 | Audible synchronized audio | Audio is audible, synchronized, and stops cleanly on the selected route | Not run |
 | Remote input and feedback | Harmless keyboard, pointer, scroll, controller, and feedback sequence is observed in `Desktop` | Not run |
 | Reconnect | One bounded interruption uses fresh authenticated material and resumes without a second launch | Not run |
@@ -324,3 +324,40 @@ negotiated port extraction completed. The next isolated failure is the ENet
 control-channel connection. The four local state files retained identical
 mode, size, and SHA-256 before and after the attempt, and no xctest process
 remained. This exact attempt must not be rerun before the ENet stage is fixed.
+
+## Exact-SHA ANNOUNCE And PLAY Receipt
+
+The ANNOUNCE/PLAY fix was committed and pushed as exact SHA
+`05aa8771a15446ae82d925782fc6947b9dc4901b`. A fresh warnings-as-errors live
+bundle build had zero structured errors, warnings, or analyzer warnings. The
+single double-opt-in session gate used `pipefail`, returned XCTest exit `1`
+after 4.703 seconds, and recorded `launch=0`, `resume=1`, `cancel=0`,
+`controlEvents=launch_accepted,rtsp_ready,negotiated,channels_1,video_color_metadata`,
+and `controlFailure=none`.
+
+This proves the production path completed pinned-mTLS catalog, matching-busy
+`/resume`, OPTIONS, DESCRIBE, all three SETUP transactions, ANNOUNCE, PLAY,
+ENet control connection, negotiated session publication, control readiness,
+and video color metadata publication. It does not prove streaming, decoded
+video, audible audio, input delivery, reconnect, host-side termination, or
+repeated-stop acceptance. The automated failure cleanup issued zero `/cancel`,
+all four local state files retained identical `0600` mode, size, and SHA-256,
+and no xctest process remained.
+
+The next deterministic defect is in the generic byte-channel state machine.
+Network.framework reports `isComplete=true` for each complete UDP datagram,
+but LuneX interpreted that flag as TCP end-of-stream and changed the media
+channel to `closed`; the following receive therefore failed before media could
+become ready. TCP must retain its current close semantics, while UDP complete
+messages must leave the channel ready for subsequent datagrams. No further
+live attempt is permitted until this transport distinction passes fresh tests,
+normal regression, product builds, and repository gates on a new exact SHA.
+
+The current repair passes that deterministic boundary: focused network-channel
+tests are `17/17`, the related media/session matrix is `225 total / 224 passed /
+1 explicit live skip / 0 failed`, and macOS normal is `1311 total / 1309 passed /
+2 explicit opt-in skips / 0 failed`. All associated structured build diagnostics
+are zero, five product compatibility builds succeed, both macOS executables are
+universal `x86_64 arm64`, the project generator is stable, and the repository
+gate ends in `FINAL_UDP_REPOSITORY_GATE_OK`. These results do not replace the
+next single bounded exact-SHA live attempt or any still-pending Task 2.3 row.

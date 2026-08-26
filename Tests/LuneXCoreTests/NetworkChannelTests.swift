@@ -117,6 +117,31 @@ final class NetworkChannelTests: XCTestCase {
         XCTAssertEqual(state, .closed)
     }
 
+    func testCompleteDatagramsKeepChannelReadyAcrossReceives() async throws {
+        let first = Data("first-datagram".utf8)
+        let second = Data("second-datagram".utf8)
+        let driver = InMemoryNetworkDriver(receiveChunks: [
+            NetworkReceiveChunk(data: first, isComplete: true),
+            NetworkReceiveChunk(data: second, isComplete: true)
+        ])
+        let channel = try NetworkByteChannel(
+            driver: driver,
+            limits: .moonlightDatagram,
+            transport: .udp
+        )
+        try await channel.connect(timeout: .seconds(1))
+
+        let firstChunk = try await channel.receive(timeout: .seconds(1))
+        let stateAfterFirst = await channel.state
+        let secondChunk = try await channel.receive(timeout: .seconds(1))
+        let stateAfterSecond = await channel.state
+
+        XCTAssertEqual(firstChunk, NetworkReceiveChunk(data: first, isComplete: true))
+        XCTAssertEqual(secondChunk, NetworkReceiveChunk(data: second, isComplete: true))
+        XCTAssertEqual(stateAfterFirst, .ready)
+        XCTAssertEqual(stateAfterSecond, .ready)
+    }
+
     func testDriverPreservesNonemptyBytesDeliveredWithTerminalError() throws {
         let payload = Data("RTSP/1.0 200 OK\r\n\r\n".utf8)
 
@@ -290,6 +315,25 @@ final class NetworkChannelTests: XCTestCase {
             timeout: .seconds(2)
         )
         XCTAssertEqual(response.data, payload)
+        let stateAfterReceive = await channel.state
+        if transport == .udp {
+            XCTAssertEqual(stateAfterReceive, .ready)
+        } else if response.isComplete {
+            XCTAssertEqual(stateAfterReceive, .closed)
+        } else {
+            XCTAssertEqual(stateAfterReceive, .ready)
+            do {
+                _ = try await channel.receive(
+                    maximumLength: 128,
+                    timeout: .seconds(2)
+                )
+                XCTFail("Expected the TCP peer close after its echoed payload")
+            } catch let error as NetworkChannelError {
+                XCTAssertEqual(error, .closed)
+            }
+            let stateAfterPeerClose = await channel.state
+            XCTAssertEqual(stateAfterPeerClose, .closed)
+        }
         await channel.cancel()
     }
 }

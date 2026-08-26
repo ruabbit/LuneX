@@ -247,6 +247,7 @@ actor NetworkByteChannel {
 
     private let driver: any NetworkConnectionDriving
     private let limits: NetworkChannelLimits
+    private let treatsCompleteReceiveAsClosed: Bool
     private(set) var state: State = .idle
 
     init(
@@ -256,15 +257,18 @@ actor NetworkByteChannel {
         try limits.validate()
         driver = try NWConnectionDriver(endpoint: endpoint)
         self.limits = limits
+        treatsCompleteReceiveAsClosed = endpoint.transport == .tcp
     }
 
     init(
         driver: any NetworkConnectionDriving,
-        limits: NetworkChannelLimits
+        limits: NetworkChannelLimits,
+        transport: RuntimeTransportKind = .tcp
     ) throws {
         try limits.validate()
         self.driver = driver
         self.limits = limits
+        treatsCompleteReceiveAsClosed = transport == .tcp
     }
 
     func connect(timeout: Duration) async throws {
@@ -330,11 +334,13 @@ actor NetworkByteChannel {
                 await driver.cancel()
                 throw NetworkChannelError.payloadTooLarge(maximum: maximumLength)
             }
-            if chunk.isComplete && chunk.data.isEmpty {
+            if treatsCompleteReceiveAsClosed,
+               chunk.isComplete,
+               chunk.data.isEmpty {
                 state = .closed
                 throw NetworkChannelError.closed
             }
-            if chunk.isComplete {
+            if treatsCompleteReceiveAsClosed, chunk.isComplete {
                 state = .closed
             }
             return chunk
