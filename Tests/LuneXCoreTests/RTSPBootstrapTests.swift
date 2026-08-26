@@ -238,6 +238,164 @@ final class RTSPBootstrapTests: XCTestCase {
         ))
     }
 
+    func testNetworkRTSPConnectionUsesFreshChannelForEveryTransaction() async throws {
+        let firstChannel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(
+                data: try serializedResponse(cSeq: "1"),
+                isComplete: true
+            )
+        ])
+        let secondChannel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(
+                data: try serializedResponse(cSeq: "2"),
+                isComplete: true
+            )
+        ])
+        let factory = NetworkRTSPChannelFactoryStub(channels: [
+            firstChannel,
+            secondChannel
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { endpoint in
+            try factory.makeChannel(endpoint: endpoint)
+        })
+        let endpoint = try RTSPSessionEndpoint.parse("rtsp://moon.local/session")
+        try await connection.connect(endpoint: endpoint, encryptionKey: Data())
+
+        let options = try await connection.transact(networkRequest(
+            method: "OPTIONS",
+            cSeq: "1"
+        ))
+        let describe = try await connection.transact(networkRequest(
+            method: "DESCRIBE",
+            cSeq: "2"
+        ))
+
+        XCTAssertEqual(options.headerValues(named: "CSeq"), ["1"])
+        XCTAssertEqual(describe.headerValues(named: "CSeq"), ["2"])
+        XCTAssertEqual(factory.recordedEndpoints(), [
+            endpoint.networkEndpoint,
+            endpoint.networkEndpoint
+        ])
+        let firstSnapshot = await firstChannel.snapshot()
+        let secondSnapshot = await secondChannel.snapshot()
+        XCTAssertEqual(firstSnapshot.connects, 1)
+        XCTAssertEqual(firstSnapshot.cancellations, 1)
+        XCTAssertEqual(secondSnapshot.connects, 1)
+        XCTAssertEqual(secondSnapshot.cancellations, 1)
+        XCTAssertEqual(
+            try RTSPMessageCodec.decodeExact(firstSnapshot.sent[0]),
+            .request(networkRequest(method: "OPTIONS", cSeq: "1"))
+        )
+        XCTAssertEqual(
+            try RTSPMessageCodec.decodeExact(secondSnapshot.sent[0]),
+            .request(networkRequest(method: "DESCRIBE", cSeq: "2"))
+        )
+    }
+
+    func testEncryptedRTSPSequenceContinuesAcrossFreshChannels() async throws {
+        let key = Data((0..<16).map(UInt8.init))
+        let firstResponse = try EncryptedRTSPFrameCodec.seal(
+            serializedResponse(cSeq: "1"),
+            sequence: 100,
+            key: key,
+            origin: .host
+        )
+        let secondResponse = try EncryptedRTSPFrameCodec.seal(
+            serializedResponse(cSeq: "2"),
+            sequence: 101,
+            key: key,
+            origin: .host
+        )
+        let firstChannel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(data: firstResponse, isComplete: true)
+        ])
+        let secondChannel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(data: secondResponse, isComplete: true)
+        ])
+        let factory = NetworkRTSPChannelFactoryStub(channels: [
+            firstChannel,
+            secondChannel
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { endpoint in
+            try factory.makeChannel(endpoint: endpoint)
+        })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtspenc://moon.local/session"),
+            encryptionKey: key
+        )
+
+        _ = try await connection.transact(networkRequest(method: "OPTIONS", cSeq: "1"))
+        _ = try await connection.transact(networkRequest(method: "DESCRIBE", cSeq: "2"))
+
+        let firstSnapshot = await firstChannel.snapshot()
+        let secondSnapshot = await secondChannel.snapshot()
+        let firstSent = try XCTUnwrap(firstSnapshot.sent.first)
+        let secondSent = try XCTUnwrap(secondSnapshot.sent.first)
+        let firstOpened = try EncryptedRTSPFrameCodec.open(
+            firstSent,
+            key: key,
+            origin: .client
+        )
+        let secondOpened = try EncryptedRTSPFrameCodec.open(
+            secondSent,
+            key: key,
+            origin: .client
+        )
+        XCTAssertEqual(firstOpened.sequence, 1)
+        XCTAssertEqual(secondOpened.sequence, 2)
+        XCTAssertEqual(
+            try RTSPMessageCodec.decodeExact(firstOpened.plaintext),
+            .request(networkRequest(method: "OPTIONS", cSeq: "1"))
+        )
+        XCTAssertEqual(
+            try RTSPMessageCodec.decodeExact(secondOpened.plaintext),
+            .request(networkRequest(method: "DESCRIBE", cSeq: "2"))
+        )
+        XCTAssertThrowsError(try EncryptedRTSPFrameCodec.open(
+            secondSent,
+            key: key,
+            origin: .host
+        ))
+    }
+
+    func testCancellingNetworkRTSPConnectionCancelsCurrentTransaction() async throws {
+        let channel = NetworkRTSPChannelStub(chunks: [], blocksReceive: true)
+        let factory = NetworkRTSPChannelFactoryStub(channels: [channel])
+        let connection = NetworkRTSPConnection(channelFactory: { endpoint in
+            try factory.makeChannel(endpoint: endpoint)
+        })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+        let request = networkRequest(method: "OPTIONS", cSeq: "1")
+        let transaction = Task {
+            try await connection.transact(request)
+        }
+        try await channel.waitUntilReceiveStarts()
+
+        await connection.cancel()
+
+        do {
+            _ = try await transaction.value
+            XCTFail("Expected the active RTSP transaction to be cancelled.")
+        } catch {
+            XCTAssertTrue(
+                error is CancellationError
+                    || error as? NetworkChannelError == .cancelled
+            )
+        }
+        let snapshot = await channel.snapshot()
+        XCTAssertEqual(snapshot.cancellations, 1)
+        do {
+            _ = try await connection.transact(networkRequest(method: "DESCRIBE", cSeq: "2"))
+            XCTFail("A cancelled RTSP session must reject later transactions.")
+        } catch let error as NetworkChannelError {
+            XCTAssertEqual(error, .invalidState)
+        }
+        XCTAssertEqual(factory.recordedEndpoints().count, 1)
+    }
+
     func testBootstrapPublishesNegotiatedMediaBeforeControlOnlyReadiness() async throws {
         let sessionID = UUID()
         let launchResponse = StreamLaunchResponse(
@@ -725,6 +883,18 @@ final class RTSPBootstrapTests: XCTestCase {
         )
     }
 
+    private func serializedResponse(cSeq: String) throws -> Data {
+        try RTSPMessageCodec.serialize(.response(response(cSeq: cSeq)))
+    }
+
+    private func networkRequest(method: String, cSeq: String) -> RTSPRequest {
+        RTSPRequest(
+            method: method,
+            target: "rtsp://moon.local/session",
+            headers: [RTSPHeader(name: "CSeq", value: cSeq)]
+        )
+    }
+
     private func setupResponse(
         cSeq: String,
         session: String,
@@ -770,6 +940,104 @@ final class RTSPBootstrapTests: XCTestCase {
         } catch {
             return (events, error)
         }
+    }
+}
+
+private struct NetworkRTSPChannelSnapshot: Sendable {
+    var connects: Int
+    var sent: [Data]
+    var receiveCalls: Int
+    var cancellations: Int
+}
+
+private actor NetworkRTSPChannelStub: RTSPByteChannel {
+    private var chunks: [NetworkReceiveChunk]
+    private let blocksReceive: Bool
+    private var connects = 0
+    private var sent: [Data] = []
+    private var receiveCalls = 0
+    private var cancellations = 0
+    private var isCancelled = false
+
+    init(chunks: [NetworkReceiveChunk], blocksReceive: Bool = false) {
+        self.chunks = chunks
+        self.blocksReceive = blocksReceive
+    }
+
+    func connect(timeout: Duration) async throws {
+        _ = timeout
+        connects += 1
+    }
+
+    func send(_ data: Data, timeout: Duration) async throws {
+        _ = timeout
+        guard !isCancelled else { throw NetworkChannelError.cancelled }
+        sent.append(data)
+    }
+
+    func receive(
+        minimumLength: Int,
+        maximumLength: Int?,
+        timeout: Duration
+    ) async throws -> NetworkReceiveChunk {
+        _ = minimumLength
+        _ = maximumLength
+        _ = timeout
+        receiveCalls += 1
+        if blocksReceive {
+            while !isCancelled {
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            throw NetworkChannelError.cancelled
+        }
+        guard !chunks.isEmpty else { throw NetworkChannelError.closed }
+        return chunks.removeFirst()
+    }
+
+    func cancel() async {
+        cancellations += 1
+        isCancelled = true
+    }
+
+    func waitUntilReceiveStarts() async throws {
+        for _ in 0..<1_000 {
+            if receiveCalls > 0 { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        throw NetworkChannelError.timedOut(operation: "test receive admission")
+    }
+
+    func snapshot() -> NetworkRTSPChannelSnapshot {
+        NetworkRTSPChannelSnapshot(
+            connects: connects,
+            sent: sent,
+            receiveCalls: receiveCalls,
+            cancellations: cancellations
+        )
+    }
+}
+
+private final class NetworkRTSPChannelFactoryStub: @unchecked Sendable {
+    private let lock = NSLock()
+    private var channels: [NetworkRTSPChannelStub]
+    private var endpoints: [RuntimeNetworkEndpoint] = []
+
+    init(channels: [NetworkRTSPChannelStub]) {
+        self.channels = channels
+    }
+
+    func makeChannel(endpoint: RuntimeNetworkEndpoint) throws -> any RTSPByteChannel {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !channels.isEmpty else { throw NetworkChannelError.invalidState }
+        endpoints.append(endpoint)
+        return channels.removeFirst()
+    }
+
+    func recordedEndpoints() -> [RuntimeNetworkEndpoint] {
+        lock.lock()
+        defer { lock.unlock() }
+        return endpoints
     }
 }
 

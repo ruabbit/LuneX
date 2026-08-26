@@ -78,6 +78,13 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **WHEN** the host reports busy and `currentgame` identifies a different application
 - **THEN** LuneX SHALL reject the selection without calling `/cancel` or disrupting the running application
 
+#### Scenario: RTSP transactions follow Sunshine connection lifetime
+- **WHEN** LuneX negotiates OPTIONS, DESCRIBE, or SETUP with Sunshine
+- **THEN** each RTSP request SHALL use a fresh TCP connection and consume the complete response delivered before or with peer close
+- **AND** a terminal Network.framework error SHALL NOT discard nonempty response bytes delivered by the same receive callback
+- **AND** encrypted RTSP send sequence and client/host nonce direction SHALL remain continuous across those per-request TCP connections
+- **AND** cancellation SHALL close the current transaction connection and prevent any later request from that cancelled RTSP session
+
 #### Scenario: Local client disconnect preserves the remote application
 - **WHEN** the user disconnects, a stream consumer cancels, a generation is replaced, or local session setup fails
 - **THEN** LuneX SHALL release only that client's control, RTSP, media, audio, decoder, and input resources and SHALL NOT call Sunshine `/cancel`

@@ -203,6 +203,19 @@ then-current, now-invalidated free-host gate, and no
 launch, input, cancel, or stop request was sent. M1 remains at Task 2.3 until
 the matching busy `Desktop` session passes the corrected `/resume` live matrix.
 
+The third bounded session attempt was run from exact pushed SHA
+`74056ca92d1067742969496ab83517e3c7db6494`. Its production recorder reported
+`launch=0`, `resume=1`, `cancel=0`, and session-control stage
+`launch_accepted`, followed by `NetworkChannelError.posixFailure(96)` before
+`rtspReady`. Darwin errno 96 is `ENODATA`. This is positive live evidence that
+Sunshine accepted the additional-client `/resume`; it is not a busy-host or
+concurrency rejection. The remaining failure is in the first RTSP transaction:
+LuneX reused one TCP channel while Sunshine closes each RTSP response
+connection, and its Network.framework adapter could discard response bytes
+when terminal error and data arrived together. A further live attempt is held
+until the per-transaction connection and terminal-byte behavior pass fresh
+deterministic and build gates.
+
 ## Debug Identity Reuse
 
 Normal Debug testing uses the file fallback and does not access Keychain. The

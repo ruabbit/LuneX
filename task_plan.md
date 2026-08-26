@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；17:41 catalog-only preflight因`HostEndpoint.serverInfoURL`遗漏默认`47989`端口而实际请求了TCP 80，不能证明host不可达或TCC拒绝。endpoint与macOS Local Network/Bonjour产品配置现已修复并完成确定性验收；18:14 revised catalog-only gate已通过production pinned-mTLS `/applist`并精确取得唯一`Desktop`，四个本地状态文件完全不变。后续上游审计纠正了“busy须等待free”的错误假设：`SUNSHINE_SERVER_BUSY/currentgame=881448767`表示`Desktop`已运行，初始客户端会话应走`/resume`；free才走`/launch`。普通本地断开必须保持远程应用并产生零`/cancel`。下一执行点是对当前matching-busy `Desktop`直接运行live session和人工媒体/输入/重连/终止矩阵；actual App稳定签名身份的Local Network TCC仍须独立验收。Task 2.3保持pending。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；17:41 catalog-only preflight因`HostEndpoint.serverInfoURL`遗漏默认`47989`端口而实际请求了TCP 80，不能证明host不可达或TCC拒绝。endpoint与macOS Local Network/Bonjour产品配置现已修复并完成确定性验收；18:14 revised catalog-only gate已通过production pinned-mTLS `/applist`并精确取得唯一`Desktop`，四个本地状态文件完全不变。后续上游审计纠正了“busy须等待free”的错误假设：`SUNSHINE_SERVER_BUSY/currentgame=881448767`表示`Desktop`已运行，初始客户端会话应走`/resume`；free才走`/launch`。普通本地断开必须保持远程应用并产生零`/cancel`。精确提交`74056ca`的第三次live gate已取得`launch=0/resume=1/cancel=0`和`launch_accepted`，随后第一笔RTSP事务以POSIX `ENODATA(96)`失败；这证明并行session admission正确。现已将RTSP改为每个请求独立TCP连接、优先消费伴随终止错误到达的响应字节，并保持加密sequence和取消generation连续性；fresh `59/59`、normal `1297/1295/2/0`、macOS Debug/Release与三冻结平台generic build及repository gate全部通过。下一执行点是独立提交推送后对精确SHA运行一次live session，继续验证RTSP、持续媒体、输入、重连、终止和重复停止；actual App稳定签名身份的Local Network TCC仍须独立验收。Task 2.3保持pending。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -52,7 +52,7 @@
 | 里程碑 | 状态 | 完成门 |
 |---|---|---|
 | M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
-| M1 Production session与live transport | in_progress (Task 2.3; catalog passed, busy Desktop is valid resume target) | production video/audio receiver、server-advertised capability inventory、identity/mTLS接线、server-info端口、macOS Local Network/Bonjour声明及显式live harness已完成确定性验收；production pinned-mTLS catalog已通过，待当前matching-busy `Desktop`经`/resume`通过持续视频、可听同步音频、输入、重连、终止、零`/cancel`本地停止全矩阵 |
+| M1 Production session与live transport | in_progress (Task 2.3; `/resume` accepted, RTSP lifecycle fixed deterministically) | production video/audio receiver、server-advertised capability inventory、identity/mTLS接线、server-info端口、macOS Local Network/Bonjour声明及显式live harness已完成确定性验收；production pinned-mTLS catalog与matching-busy `/resume`已获live接受，每请求RTSP TCP修复已通过完整离线门，待精确SHA live持续视频、可听同步音频、输入、重连、终止、零`/cancel`本地停止全矩阵 |
 | M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
 | M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
 | M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
@@ -81,6 +81,8 @@
 
 ### M1 Task 2.3 错误记录
 
+- RTSP lifecycle repository gate的OpenSpec汇总jq再次缺少子表达式括号；`.items | length`改变了后续array-constructor的输入，因而在验证命令已成功并保存JSON后报`Cannot index array with string items`。没有重复OpenSpec验证；对已保存对象使用三个独立括号表达式后确认`11/11`。仓库/runtime无副作用。
+- RTSP lifecycle修复首轮warnings-as-errors focused在测试执行前被Swift 6并发检查拒绝：取消测试的`Task`闭包通过实例helper构造request并间接捕获了`XCTestCase self`。production源码无诊断、0 tests执行且未访问Keychain/host/Simulator；改为在Task外构造独立`Sendable RTSPRequest`并从fresh DerivedData完整重跑同组测试。
 - live harness final repository gate已解析focused与normal xcresult以及build diagnostics，随后错误假设当前`openspec validate --all --strict --json`顶层为`.results`，`jq`因实际`.items`结构而在generator前退出；OpenSpec原始输出本身为`11 passed / 0 failed`，仓库/runtime零变化。修正为`.items`后从OpenSpec开始完整重跑剩余gate，不重复测试。
 - normal回归后direct xctest在仓库根生成未跟踪coverage文件`default.profraw`；首个精确`rm -f`清理命令被工具安全层在执行前拒绝且文件仍在。随后仅对`./default.profraw`使用精确`find -delete`成功，后续direct runner固定`LLVM_PROFILE_FILE`到`/private/tmp` evidence路径，避免再次污染仓库。
 - direct catalog-only live gate正确继承opt-in后只发送一次请求并在5秒边界timeout；后续读取原始NSError确认失败URL为`http://10.1.100.69/serverinfo`，即`HostEndpoint.serverInfoURL`把用于持久化显示的无端口地址误当网络authority，实际连接TCP 80而非Sunshine `47989`。因此该轮只能证明错误endpoint超时，不能证明host不可达或TCC拒绝；测试未进入pinned mTLS catalog、launch/resume/cancel/stop/input，四个本地数据文件SHA/权限前后相同。修复必须使默认/显式端口及IPv6 URL都保留真实port，并为macOS产品声明Local Network用途与`_nvstream._tcp` Bonjour service。

@@ -171,16 +171,17 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
                     minimumIncompleteLength: minimumLength,
                     maximumLength: maximumLength
                 ) { data, _, isComplete, error in
-                    if let error {
-                        gate.resume(continuation, with: .failure(Self.map(error)))
-                    } else {
+                    do {
                         gate.resume(
                             continuation,
-                            with: .success(NetworkReceiveChunk(
-                                data: data ?? Data(),
-                                isComplete: isComplete
+                            with: .success(try Self.resolveReceive(
+                                data: data,
+                                isComplete: isComplete,
+                                error: error
                             ))
                         )
+                    } catch {
+                        gate.resume(continuation, with: .failure(error))
                     }
                 }
             }
@@ -191,6 +192,23 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
 
     func cancel() async {
         connection.cancel()
+    }
+
+    static func resolveReceive(
+        data: Data?,
+        isComplete: Bool,
+        error: NWError?
+    ) throws -> NetworkReceiveChunk {
+        if let data, !data.isEmpty {
+            return NetworkReceiveChunk(
+                data: data,
+                isComplete: isComplete || error != nil
+            )
+        }
+        if let error {
+            throw map(error)
+        }
+        return NetworkReceiveChunk(data: data ?? Data(), isComplete: isComplete)
     }
 
     private static func map(_ error: NWError) -> NetworkChannelError {
@@ -307,6 +325,9 @@ actor NetworkByteChannel {
             if chunk.isComplete && chunk.data.isEmpty {
                 state = .closed
                 throw NetworkChannelError.closed
+            }
+            if chunk.isComplete {
+                state = .closed
             }
             return chunk
         } catch {

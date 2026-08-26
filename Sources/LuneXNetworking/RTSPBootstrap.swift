@@ -146,76 +146,150 @@ protocol RTSPConnectionExecuting: Sendable {
     func cancel() async
 }
 
+protocol RTSPByteChannel: Sendable {
+    func connect(timeout: Duration) async throws
+    func send(_ data: Data, timeout: Duration) async throws
+    func receive(
+        minimumLength: Int,
+        maximumLength: Int?,
+        timeout: Duration
+    ) async throws -> NetworkReceiveChunk
+    func cancel() async
+}
+
+extension NetworkByteChannel: RTSPByteChannel {}
+
 actor NetworkRTSPConnection: RTSPConnectionExecuting {
-    private var channel: NetworkByteChannel?
+    typealias ChannelFactory = @Sendable (
+        RuntimeNetworkEndpoint
+    ) throws -> any RTSPByteChannel
+
+    private struct ActiveTransaction: Sendable {
+        var id: UUID
+        var channel: any RTSPByteChannel
+    }
+
+    private let channelFactory: ChannelFactory
     private var endpoint: RTSPSessionEndpoint?
     private var encryptionKey = Data()
     private var sendSequence: UInt32 = 0
-    private var receiveBuffer = Data()
+    private var activeTransaction: ActiveTransaction?
+
+    init(
+        channelFactory: @escaping ChannelFactory = { endpoint in
+            try NetworkByteChannel(
+                endpoint: endpoint,
+                limits: .moonlightControl
+            )
+        }
+    ) {
+        self.channelFactory = channelFactory
+    }
 
     func connect(endpoint: RTSPSessionEndpoint, encryptionKey: Data) async throws {
-        guard channel == nil else { throw NetworkChannelError.invalidState }
+        guard self.endpoint == nil, activeTransaction == nil else {
+            throw NetworkChannelError.invalidState
+        }
         if endpoint.encrypted, encryptionKey.count != 16 {
             throw RTSPBootstrapError.invalidEncryptionKey
         }
-        let channel = try NetworkByteChannel(
-            endpoint: endpoint.networkEndpoint,
-            limits: .moonlightControl
-        )
-        try await channel.connect(timeout: .seconds(10))
-        self.channel = channel
         self.endpoint = endpoint
         self.encryptionKey = encryptionKey
         sendSequence = 0
-        receiveBuffer.removeAll(keepingCapacity: true)
     }
 
     func transact(_ request: RTSPRequest) async throws -> RTSPResponse {
-        guard let channel, let endpoint else { throw NetworkChannelError.invalidState }
-        let plaintext = try RTSPMessageCodec.serialize(.request(request))
-        let outbound: Data
-        if endpoint.encrypted {
-            guard sendSequence < UInt32.max else { throw RTSPBootstrapError.sequenceExhausted }
-            sendSequence += 1
-            outbound = try EncryptedRTSPFrameCodec.seal(
-                plaintext,
-                sequence: sendSequence,
-                key: encryptionKey,
-                origin: .client
-            )
-        } else {
-            outbound = plaintext
+        guard let endpoint, activeTransaction == nil else {
+            throw NetworkChannelError.invalidState
         }
-        try await channel.send(outbound, timeout: .seconds(10))
+        let channel = try channelFactory(endpoint.networkEndpoint)
+        let transactionID = UUID()
+        activeTransaction = ActiveTransaction(id: transactionID, channel: channel)
+        var receiveBuffer = Data()
 
-        while true {
-            if let response = try decodeResponse(encrypted: endpoint.encrypted) {
-                return response
+        do {
+            try await channel.connect(timeout: .seconds(10))
+            try ensureActiveTransaction(transactionID)
+
+            let plaintext = try RTSPMessageCodec.serialize(.request(request))
+            let outbound: Data
+            if endpoint.encrypted {
+                guard sendSequence < UInt32.max else {
+                    throw RTSPBootstrapError.sequenceExhausted
+                }
+                sendSequence += 1
+                outbound = try EncryptedRTSPFrameCodec.seal(
+                    plaintext,
+                    sequence: sendSequence,
+                    key: encryptionKey,
+                    origin: .client
+                )
+            } else {
+                outbound = plaintext
             }
-            let chunk = try await channel.receive(
-                maximumLength: 65_536,
-                timeout: .seconds(15)
-            )
-            receiveBuffer.append(chunk.data)
-            guard receiveBuffer.count <= RTSPParserLimits.moonlight.maximumMessageBytes + 24 else {
-                throw RTSPMessageError.messageTooLarge
+            try await channel.send(outbound, timeout: .seconds(10))
+            try ensureActiveTransaction(transactionID)
+
+            while true {
+                let chunk = try await channel.receive(
+                    minimumLength: 1,
+                    maximumLength: 65_536,
+                    timeout: .seconds(15)
+                )
+                try ensureActiveTransaction(transactionID)
+                receiveBuffer.append(chunk.data)
+                guard receiveBuffer.count
+                        <= RTSPParserLimits.moonlight.maximumMessageBytes + 24 else {
+                    throw RTSPMessageError.messageTooLarge
+                }
+                if let response = try decodeResponse(
+                    from: &receiveBuffer,
+                    encrypted: endpoint.encrypted
+                ) {
+                    guard await finishTransaction(transactionID) else {
+                        throw NetworkChannelError.cancelled
+                    }
+                    return response
+                }
+                if chunk.isComplete {
+                    throw RTSPBootstrapError.connectionClosed
+                }
             }
-            if chunk.isComplete && chunk.data.isEmpty {
-                throw RTSPBootstrapError.connectionClosed
-            }
+        } catch {
+            await finishTransaction(transactionID)
+            throw error
         }
     }
 
     func cancel() async {
-        await channel?.cancel()
-        channel = nil
+        let channel = activeTransaction?.channel
+        activeTransaction = nil
         endpoint = nil
         encryptionKey.removeAll(keepingCapacity: false)
         sendSequence = 0
-        receiveBuffer.removeAll(keepingCapacity: false)
+        await channel?.cancel()
     }
 
-    private func decodeResponse(encrypted: Bool) throws -> RTSPResponse? {
+    private func ensureActiveTransaction(_ transactionID: UUID) throws {
+        guard activeTransaction?.id == transactionID else {
+            throw NetworkChannelError.cancelled
+        }
+    }
+
+    @discardableResult
+    private func finishTransaction(_ transactionID: UUID) async -> Bool {
+        guard activeTransaction?.id == transactionID else { return false }
+        let channel = activeTransaction?.channel
+        await channel?.cancel()
+        guard activeTransaction?.id == transactionID else { return false }
+        activeTransaction = nil
+        return true
+    }
+
+    private func decodeResponse(
+        from receiveBuffer: inout Data,
+        encrypted: Bool
+    ) throws -> RTSPResponse? {
         let message: RTSPMessage
         let consumed: Int
         if encrypted {

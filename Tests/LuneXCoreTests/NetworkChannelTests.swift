@@ -99,6 +99,43 @@ final class NetworkChannelTests: XCTestCase {
         XCTAssertEqual(state, .closed)
     }
 
+    func testNonemptyCompleteReceiveReturnsBytesBeforeMarkingChannelClosed() async throws {
+        let payload = Data("terminal-response".utf8)
+        let driver = InMemoryNetworkDriver(
+            receiveChunks: [NetworkReceiveChunk(data: payload, isComplete: true)]
+        )
+        let channel = try NetworkByteChannel(
+            driver: driver,
+            limits: .moonlightControl
+        )
+        try await channel.connect(timeout: .seconds(1))
+
+        let chunk = try await channel.receive(timeout: .seconds(1))
+
+        XCTAssertEqual(chunk, NetworkReceiveChunk(data: payload, isComplete: true))
+        let state = await channel.state
+        XCTAssertEqual(state, .closed)
+    }
+
+    func testDriverPreservesNonemptyBytesDeliveredWithTerminalError() throws {
+        let payload = Data("RTSP/1.0 200 OK\r\n\r\n".utf8)
+
+        let chunk = try NWConnectionDriver.resolveReceive(
+            data: payload,
+            isComplete: false,
+            error: .posix(.ENODATA)
+        )
+
+        XCTAssertEqual(chunk, NetworkReceiveChunk(data: payload, isComplete: true))
+        XCTAssertThrowsError(try NWConnectionDriver.resolveReceive(
+            data: Data(),
+            isComplete: false,
+            error: .posix(.ENODATA)
+        )) { error in
+            XCTAssertEqual(error as? NetworkChannelError, .posixFailure(code: 96))
+        }
+    }
+
     func testRealTCPDriverRoundTripsBoundedLoopbackPayload() async throws {
         try await assertLoopbackRoundTrip(transport: .tcp)
     }
