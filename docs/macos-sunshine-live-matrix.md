@@ -64,8 +64,8 @@ or arbitrary application requiring a separate approval gate.
 | Scenario | Required observation | Current result |
 |---|---|---|
 | Host inventory | `tanmy-white` advertised protocol/codec modes and host-free precondition | Capabilities recorded; host was busy at inventory time |
-| Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Moonlight-qt identity imported and validated locally; production pinned HTTPS now loads and presents it for mTLS, but live authentication has not run |
-| Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | 2026-08-26 18:03 CST: the corrected production URL reached `:47989` and returned `SUNSHINE_SERVER_BUSY` with current `Desktop` in 0.020 seconds; the gate skipped before catalog, so cached `Desktop` is not counted as live evidence |
+| Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Passed at 18:14 CST: the imported Moonlight-qt identity completed live production pinned-mTLS authentication without pairing or local-state mutation |
+| Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | Passed at 18:14 CST: production `/applist` became current and contained exactly one matching `Desktop` entry with app ID `881448767` |
 | Launch | Exactly one `Desktop` session launches through the production runtime | Not run |
 | RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Not run |
 | Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Not run |
@@ -78,15 +78,17 @@ or arbitrary application requiring a separate approval gate.
 
 ## Task 2.3 Preconditions
 
-Task 2.3 may start only after all of these are true:
+The read-only catalog portion may run while the host is busy. A `Desktop`
+session may start only after all of these are true:
 
 1. `tanmy-white` reports free and the existing unrelated session has ended
    without LuneX intervention.
 2. Reuse the imported Moonlight-qt identity from the Debug file fallback. The
    fallback has passed local Codable, certificate/private-key match, and
-   signing verification. Live mTLS authentication remains pending; perform one
-   bounded pairing operation only if certificate reuse fails. No existing
-   client may be removed or disabled.
+   signing verification plus live production pinned-mTLS catalog
+   authentication. Do not pair again unless a later authenticated request
+   actually rejects this identity. No existing client may be removed or
+   disabled.
 3. The harmless input sequence, reconnect interruption, remote-termination
    action, sustained-media duration, and abort conditions are fixed before the
    first `Desktop` launch.
@@ -102,11 +104,12 @@ is the only automated Task 2.3 entry point. It hard-codes the persisted
 name. With neither opt-in set it skips before loading local state. The normal
 suite therefore keeps both live variables unset.
 
-The catalog-only gate performs exactly one HTTP server-info preflight. A busy
-host skips before catalog; an unreachable or malformed response fails. Only a
-free host proceeds to the production pinned-mTLS catalog client. The catalog
-snapshot repository is in memory so the gate does not rewrite hosts, settings,
-catalog, or identity files:
+The catalog-only gate performs exactly one HTTP server-info preflight. An
+unreachable or malformed response fails. A correctly identified host proceeds
+to the production pinned-mTLS catalog client even when busy because `/applist`
+is read-only and does not alter the existing session. The catalog snapshot
+repository is in memory so the gate does not rewrite hosts, settings, catalog,
+or identity files:
 
 ```bash
 LLVM_PROFILE_FILE=/private/tmp/LuneX-live-catalog-%p.profraw \
@@ -116,7 +119,8 @@ xcrun xctest \
   /path/to/DerivedData/Build/Products/Debug/LuneXCoreTests.xctest
 ```
 
-The `Desktop` session is admitted only when both exact opt-ins equal `1`:
+The `Desktop` session is admitted only when both exact opt-ins equal `1` and
+the preflight state is `SUNSHINE_SERVER_FREE`:
 
 ```bash
 LLVM_PROFILE_FILE=/private/tmp/LuneX-live-session-%p.profraw \
@@ -162,6 +166,25 @@ identical before and after. This proves the corrected URL is reachable in the
 direct test context; it does not substitute for stable signed-App TCC or live
 catalog/session acceptance.
 
+The 18:12 CST continuation preflight again returned
+`SUNSHINE_SERVER_BUSY/currentgame=881448767` and skipped before catalog under
+the original conservative gate. That result prompted the narrower admission
+rule above: busy no longer blocks the read-only catalog tier, but it still
+blocks every launch, resume, input, cancel, or stop path.
+
+At 18:14 CST, the revised catalog-only gate passed through the production
+pinned HTTPS provider in 0.053 seconds. The test requires server-info to
+identify `tanmy-white`, requires the production catalog to become current with
+no catalog issue, and requires exactly one app matching ID `881448767` and name
+`Desktop`; therefore the passing result proves the imported Moonlight-qt
+identity was accepted for live mTLS and `/applist` returned that exact entry.
+The in-memory catalog repository prevented persistence, and SHA-256 plus mode
+receipts for `hosts.json`, `settings.json`, `app_catalog.json`, and
+`client_identity.debug.json` were identical before and after. No launch,
+resume, input, cancel, or stop path ran. This direct XCTest evidence still does
+not prove Local Network TCC acceptance by the actual App under a stable signing
+identity.
+
 ## Debug Identity Reuse
 
 Normal Debug testing uses the file fallback and does not access Keychain. The
@@ -188,10 +211,11 @@ round trip, and the expected certificate subject. The production pinned HTTPS
 executor now requires this persisted identity, validates it before network
 access, preserves the server leaf pin, and answers the client-certificate TLS
 challenge for catalog, artwork, launch, resume, and cancel. Deterministic tests
-also prove missing or invalid material fails before network access. This is
-local identity and production-wiring evidence only. It does not prove Sunshine
-accepted the mTLS identity; the live matrix row remains pending until the host
-is free and pinned catalog access succeeds through the production provider.
+also prove missing or invalid material fails before network access. The 18:14
+CST live catalog acceptance proves Sunshine accepted this identity for the
+production pinned-mTLS `/applist` request. It does not yet prove authenticated
+launch/resume/cancel, a full session, or Local Network TCC acceptance by the
+actual App under a stable signing identity.
 
 ## Permitted And Prohibited Operations
 

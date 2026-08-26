@@ -66,6 +66,10 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **WHEN** catalog, artwork, launch, resume, or cancel needs pinned HTTPS authentication but the selected identity store cannot return valid client material
 - **THEN** the production request SHALL fail before network access without silently using unauthenticated TLS, generating a replacement identity, or weakening the server certificate pin
 
+#### Scenario: Paired host is busy during catalog acceptance
+- **WHEN** the designated host is already running an unrelated session and the catalog-only live gate is explicitly enabled
+- **THEN** LuneX MAY perform the read-only pinned-mTLS server-info and catalog requests, but SHALL NOT launch, resume, send input, cancel, or stop any session until the host reports free and the separate session opt-in is enabled
+
 #### Scenario: LuneX identity is restored after restart
 - **WHEN** an existing LuneX identity is decoded from the backward-compatible file or Keychain representation
 - **THEN** catalog, artwork, launch, resume, and cancel SHALL use the same protocol client identifier as pairing rather than the stored UUID string

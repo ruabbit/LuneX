@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；17:41 catalog-only preflight因`HostEndpoint.serverInfoURL`遗漏默认`47989`端口而实际请求了TCP 80，不能证明host不可达或TCC拒绝。endpoint与macOS Local Network/Bonjour产品配置现已修复并完成确定性验收；18:03 corrected preflight确认`:47989/serverinfo`网络可达，但host仍在运行`Desktop`。下一执行点是在host自然free后运行production mTLS catalog及唯一`Desktop` live session和人工矩阵。Task 2.3保持pending。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；17:41 catalog-only preflight因`HostEndpoint.serverInfoURL`遗漏默认`47989`端口而实际请求了TCP 80，不能证明host不可达或TCC拒绝。endpoint与macOS Local Network/Bonjour产品配置现已修复并完成确定性验收；18:14 revised catalog-only gate已通过production pinned-mTLS `/applist`并精确取得唯一`Desktop`，四个本地状态文件完全不变。下一执行点是在host自然free后运行唯一`Desktop` live session和人工媒体/输入/重连/终止矩阵；actual App稳定签名身份的Local Network TCC仍须独立验收。Task 2.3保持pending。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -52,7 +52,7 @@
 | 里程碑 | 状态 | 完成门 |
 |---|---|---|
 | M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
-| M1 Production session与live transport | in_progress (Task 2.3; host reachable but busy) | production video/audio receiver、server-advertised capability inventory、identity/mTLS接线、server-info端口、macOS Local Network/Bonjour声明及显式live harness已完成确定性验收；待`tanmy-white`自然free并通过`Desktop` catalog、持续视频、可听同步音频、输入、重连、终止、停止全矩阵 |
+| M1 Production session与live transport | in_progress (Task 2.3; catalog passed, host session still busy) | production video/audio receiver、server-advertised capability inventory、identity/mTLS接线、server-info端口、macOS Local Network/Bonjour声明及显式live harness已完成确定性验收；production pinned-mTLS catalog已通过，待`tanmy-white`自然free并通过`Desktop`持续视频、可听同步音频、输入、重连、终止、停止全矩阵 |
 | M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
 | M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
 | M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
