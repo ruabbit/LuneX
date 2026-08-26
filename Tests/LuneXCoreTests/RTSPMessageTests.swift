@@ -27,6 +27,30 @@ final class RTSPMessageTests: XCTestCase {
         XCTAssertEqual(decoded, response)
     }
 
+    func testCloseDelimitedDecoderPreservesBodyWithoutWeakeningExactDecoder() throws {
+        let body = Data("v=0\r\na=x-ss-general.featureFlags:5\r\n".utf8)
+        let wire = Data("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n".utf8) + body
+
+        guard case let .response(response) = try RTSPMessageCodec
+            .decodeCloseDelimitedExact(wire) else {
+            return XCTFail("Expected response")
+        }
+
+        XCTAssertEqual(response.body, body)
+        XCTAssertThrowsError(try RTSPMessageCodec.decodeExact(wire)) { error in
+            XCTAssertEqual(error as? RTSPMessageError, .trailingBytes)
+        }
+
+        let explicit = Data(
+            "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Length: 3\r\n\r\nabcx".utf8
+        )
+        XCTAssertThrowsError(
+            try RTSPMessageCodec.decodeCloseDelimitedExact(explicit)
+        ) { error in
+            XCTAssertEqual(error as? RTSPMessageError, .trailingBytes)
+        }
+    }
+
     func testPrefixDecoderHandlesFragmentedAndCoalescedMessages() throws {
         let fixture = try loadFixture()
         let first = Data(fixture.optionsRequest.utf8)

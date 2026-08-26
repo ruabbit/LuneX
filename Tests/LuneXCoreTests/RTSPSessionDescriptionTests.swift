@@ -72,6 +72,28 @@ final class RTSPSessionDescriptionTests: XCTestCase {
         )))
     }
 
+    func testDescriptionDistinguishesEmptyAndOversizedBodies() throws {
+        XCTAssertThrowsError(try SunshineSessionDescriptionParser.parse(RTSPResponse(
+            statusCode: 200,
+            reasonPhrase: "OK"
+        ))) { error in
+            XCTAssertEqual(
+                error as? SunshineRTSPNegotiationError,
+                .emptyDescription
+            )
+        }
+        XCTAssertThrowsError(try SunshineSessionDescriptionParser.parse(RTSPResponse(
+            statusCode: 200,
+            reasonPhrase: "OK",
+            body: Data(repeating: 65, count: 262_145)
+        ))) { error in
+            XCTAssertEqual(
+                error as? SunshineRTSPNegotiationError,
+                .descriptionTooLarge
+            )
+        }
+    }
+
     func testSetupRejectsMissingConflictingAndInvalidNegotiatedFields() throws {
         let base = RTSPResponse(
             statusCode: 200,

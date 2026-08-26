@@ -231,20 +231,39 @@ actor NetworkRTSPConnection: RTSPConnectionExecuting {
             try ensureActiveTransaction(transactionID)
 
             while true {
-                let chunk = try await channel.receive(
-                    minimumLength: 1,
-                    maximumLength: 65_536,
-                    timeout: .seconds(15)
-                )
+                let chunk: NetworkReceiveChunk
+                do {
+                    chunk = try await channel.receive(
+                        minimumLength: 1,
+                        maximumLength: 65_536,
+                        timeout: .seconds(15)
+                    )
+                } catch let error as NetworkChannelError where error == .closed {
+                    try ensureActiveTransaction(transactionID)
+                    guard !receiveBuffer.isEmpty,
+                          let response = try decodeResponse(
+                            from: &receiveBuffer,
+                            encrypted: endpoint.encrypted,
+                            isTerminal: true
+                          ) else {
+                        throw RTSPBootstrapError.connectionClosed
+                    }
+                    guard await finishTransaction(transactionID) else {
+                        throw NetworkChannelError.cancelled
+                    }
+                    return response
+                }
                 try ensureActiveTransaction(transactionID)
                 receiveBuffer.append(chunk.data)
                 guard receiveBuffer.count
-                        <= RTSPParserLimits.moonlight.maximumMessageBytes + 24 else {
+                        <= RTSPParserLimits.moonlight.maximumMessageBytes
+                            + (endpoint.encrypted ? 24 : 0) else {
                     throw RTSPMessageError.messageTooLarge
                 }
                 if let response = try decodeResponse(
                     from: &receiveBuffer,
-                    encrypted: endpoint.encrypted
+                    encrypted: endpoint.encrypted,
+                    isTerminal: chunk.isComplete
                 ) {
                     guard await finishTransaction(transactionID) else {
                         throw NetworkChannelError.cancelled
@@ -288,7 +307,8 @@ actor NetworkRTSPConnection: RTSPConnectionExecuting {
 
     private func decodeResponse(
         from receiveBuffer: inout Data,
-        encrypted: Bool
+        encrypted: Bool,
+        isTerminal: Bool
     ) throws -> RTSPResponse? {
         let message: RTSPMessage
         let consumed: Int
@@ -304,9 +324,24 @@ actor NetworkRTSPConnection: RTSPConnectionExecuting {
             message = try RTSPMessageCodec.decodeExact(opened.plaintext)
             consumed = length
         } else {
-            guard let decoded = try RTSPMessageCodec.decodePrefix(receiveBuffer) else { return nil }
-            message = decoded.message
-            consumed = decoded.consumedBytes
+            guard let decoded = try RTSPMessageCodec.decodePrefix(receiveBuffer) else {
+                if isTerminal { throw RTSPMessageError.incomplete }
+                return nil
+            }
+            let hasContentLength = decoded.message.headers.contains {
+                $0.name.caseInsensitiveCompare("Content-Length") == .orderedSame
+            }
+            if hasContentLength {
+                guard decoded.consumedBytes == receiveBuffer.count else {
+                    throw RTSPMessageError.trailingBytes
+                }
+                message = decoded.message
+                consumed = decoded.consumedBytes
+            } else {
+                guard isTerminal else { return nil }
+                message = try RTSPMessageCodec.decodeCloseDelimitedExact(receiveBuffer)
+                consumed = receiveBuffer.count
+            }
         }
         receiveBuffer.removeFirst(consumed)
         guard case let .response(response) = message else {

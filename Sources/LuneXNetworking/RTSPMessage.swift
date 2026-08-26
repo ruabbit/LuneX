@@ -155,6 +155,32 @@ enum RTSPMessageCodec {
         return decoded.message
     }
 
+    static func decodeCloseDelimitedExact(
+        _ data: Data,
+        limits: RTSPParserLimits = .moonlight
+    ) throws -> RTSPMessage {
+        guard let decoded = try decodePrefix(data, limits: limits) else {
+            throw RTSPMessageError.incomplete
+        }
+        if decoded.message.headers.contains(where: {
+            $0.name.caseInsensitiveCompare("Content-Length") == .orderedSame
+        }) {
+            return try decodeExact(data, limits: limits)
+        }
+
+        let bodyLength = data.count - decoded.consumedBytes
+        guard bodyLength <= limits.maximumBodyBytes else {
+            throw RTSPMessageError.bodyTooLarge
+        }
+        guard data.count <= limits.maximumMessageBytes else {
+            throw RTSPMessageError.messageTooLarge
+        }
+        return replacingBody(
+            in: decoded.message,
+            with: Data(data.suffix(bodyLength))
+        )
+    }
+
     static func serialize(
         _ message: RTSPMessage,
         limits: RTSPParserLimits = .moonlight
@@ -261,6 +287,20 @@ enum RTSPMessageCodec {
             headers: headers,
             body: body
         ))
+    }
+
+    private static func replacingBody(
+        in message: RTSPMessage,
+        with body: Data
+    ) -> RTSPMessage {
+        switch message {
+        case .request(var request):
+            request.body = body
+            return .request(request)
+        case .response(var response):
+            response.body = body
+            return .response(response)
+        }
     }
 
     private static func parseHeader(

@@ -130,10 +130,35 @@ final class NetworkChannelTests: XCTestCase {
         XCTAssertThrowsError(try NWConnectionDriver.resolveReceive(
             data: Data(),
             isComplete: false,
+            error: .posix(.ENODATA),
+            treatsNoDataAsClosed: true
+        )) { error in
+            XCTAssertEqual(error as? NetworkChannelError, .closed)
+        }
+        XCTAssertThrowsError(try NWConnectionDriver.resolveReceive(
+            data: Data(),
+            isComplete: false,
             error: .posix(.ENODATA)
         )) { error in
             XCTAssertEqual(error as? NetworkChannelError, .posixFailure(code: 96))
         }
+    }
+
+    func testChannelPreservesClosedStateWhenDriverReportsGracefulClose() async throws {
+        let driver = ThrowingReceiveNetworkDriver(error: NetworkChannelError.closed)
+        let channel = try NetworkByteChannel(driver: driver, limits: .moonlightControl)
+        try await channel.connect(timeout: .seconds(1))
+
+        do {
+            _ = try await channel.receive(timeout: .seconds(1))
+            XCTFail("Expected graceful close")
+        } catch let error as NetworkChannelError {
+            XCTAssertEqual(error, .closed)
+        }
+        let state = await channel.state
+        XCTAssertEqual(state, .closed)
+        let cancelled = await driver.isCancelled
+        XCTAssertFalse(cancelled)
     }
 
     func testRealTCPDriverRoundTripsBoundedLoopbackPayload() async throws {
@@ -374,6 +399,31 @@ private actor InMemoryNetworkDriver: NetworkConnectionDriving {
             return NetworkReceiveChunk(data: Data(), isComplete: true)
         }
         return receiveChunks.removeFirst()
+    }
+
+    func cancel() async {
+        isCancelled = true
+    }
+}
+
+private actor ThrowingReceiveNetworkDriver: NetworkConnectionDriving {
+    private let error: NetworkChannelError
+    private(set) var isCancelled = false
+
+    init(error: NetworkChannelError) {
+        self.error = error
+    }
+
+    func start() async throws {}
+    func send(_ data: Data) async throws { _ = data }
+
+    func receive(
+        minimumLength: Int,
+        maximumLength: Int
+    ) async throws -> NetworkReceiveChunk {
+        _ = minimumLength
+        _ = maximumLength
+        throw error
     }
 
     func cancel() async {

@@ -82,6 +82,9 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **WHEN** LuneX negotiates OPTIONS, DESCRIBE, or SETUP with Sunshine
 - **THEN** each RTSP request SHALL use a fresh TCP connection and consume the complete response delivered before or with peer close
 - **AND** a terminal Network.framework error SHALL NOT discard nonempty response bytes delivered by the same receive callback
+- **AND** a plaintext response without `Content-Length` SHALL treat every byte after the header terminator through peer close as its body
+- **AND** a plaintext response with `Content-Length` SHALL consume exactly that declared body without accepting trailing or incomplete bytes
+- **AND** an encrypted response SHALL remain authenticated-frame-length delimited without waiting unnecessarily for peer close
 - **AND** encrypted RTSP send sequence and client/host nonce direction SHALL remain continuous across those per-request TCP connections
 - **AND** cancellation SHALL close the current transaction connection and prevent any later request from that cancelled RTSP session
 

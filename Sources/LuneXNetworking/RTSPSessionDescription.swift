@@ -2,6 +2,7 @@ import Foundation
 
 enum SunshineRTSPNegotiationError: Error, Equatable, Sendable {
     case unexpectedResponse
+    case emptyDescription
     case descriptionTooLarge
     case tooManyDescriptionLines
     case descriptionLineTooLarge
@@ -101,8 +102,10 @@ enum SunshineSessionDescriptionParser {
         guard response.statusCode == 200 else {
             throw SunshineRTSPNegotiationError.unexpectedResponse
         }
-        guard !response.body.isEmpty,
-              response.body.count <= maximumDescriptionBytes else {
+        guard !response.body.isEmpty else {
+            throw SunshineRTSPNegotiationError.emptyDescription
+        }
+        guard response.body.count <= maximumDescriptionBytes else {
             throw SunshineRTSPNegotiationError.descriptionTooLarge
         }
         guard let text = String(data: response.body, encoding: .utf8) else {

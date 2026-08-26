@@ -102,6 +102,7 @@ private final class ContinuationGate<Success: Sendable>: @unchecked Sendable {
 
 final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
     private let connection: NWConnection
+    private let treatsNoDataAsClosed: Bool
     private let queue = DispatchQueue(label: "dev.lunex.network.connection")
 
     init(endpoint: RuntimeNetworkEndpoint) throws {
@@ -110,6 +111,7 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
             throw NetworkChannelError.invalidEndpoint
         }
         let parameters: NWParameters = endpoint.transport == .tcp ? .tcp : .udp
+        treatsNoDataAsClosed = endpoint.transport == .tcp
         connection = NWConnection(
             host: NWEndpoint.Host(endpoint.host),
             port: port,
@@ -164,6 +166,7 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
         maximumLength: Int
     ) async throws -> NetworkReceiveChunk {
         let connection = connection
+        let treatsNoDataAsClosed = treatsNoDataAsClosed
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let gate = ContinuationGate<NetworkReceiveChunk>()
@@ -177,7 +180,8 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
                             with: .success(try Self.resolveReceive(
                                 data: data,
                                 isComplete: isComplete,
-                                error: error
+                                error: error,
+                                treatsNoDataAsClosed: treatsNoDataAsClosed
                             ))
                         )
                     } catch {
@@ -197,7 +201,8 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
     static func resolveReceive(
         data: Data?,
         isComplete: Bool,
-        error: NWError?
+        error: NWError?,
+        treatsNoDataAsClosed: Bool = false
     ) throws -> NetworkReceiveChunk {
         if let data, !data.isEmpty {
             return NetworkReceiveChunk(
@@ -206,6 +211,9 @@ final class NWConnectionDriver: NetworkConnectionDriving, @unchecked Sendable {
             )
         }
         if let error {
+            if treatsNoDataAsClosed, case .posix(.ENODATA) = error {
+                throw NetworkChannelError.closed
+            }
             throw map(error)
         }
         return NetworkReceiveChunk(data: data ?? Data(), isComplete: isComplete)
@@ -331,7 +339,9 @@ actor NetworkByteChannel {
             }
             return chunk
         } catch {
-            if state != .closed {
+            if error as? NetworkChannelError == .closed {
+                state = .closed
+            } else if state != .closed {
                 state = error is CancellationError ? .cancelled : .failed
                 await driver.cancel()
             }

@@ -282,3 +282,30 @@ counts/durations, typed result, and cleanup outcome. Evidence may include
 names, dimensions, frame/audio/input counters, and stable error codes. It must
 exclude credentials, private keys, certificate bytes, tokens, pairing material,
 and unreviewed raw payloads or logs.
+
+## Exact-SHA RTSP Close-Delimited Receipt
+
+The next bounded session attempt ran from exact pushed SHA
+`92e9d9e7fb19ecda0361f6d0fd5d2253a0ae7b16`. The production recorder reported
+`launch=0`, `resume=1`, `cancel=0`, `controlEvents=launch_accepted`, and
+`controlFailure=SunshineRTSPNegotiationError.descriptionTooLarge`. This proves
+the per-request connection and terminal-byte fix advanced past the preceding
+first-transaction `ENODATA(96)`: Sunshine accepted `/resume`, and RTSP OPTIONS
+and DESCRIBE transport completed. It does not prove a negotiated session or any
+video, audio, input, reconnect, termination, or repeated-stop acceptance row.
+
+The new failure is a plaintext response-delimiting defect. Sunshine's DESCRIBE
+response omits `Content-Length` and uses closure of that request's TCP
+connection to delimit the SDP payload. LuneX currently publishes the response
+as soon as its headers are complete, so the generic parser supplies an empty
+body and later SDP bytes are discarded. The session-description parser then
+mislabels that empty body as `descriptionTooLarge`. The fix must preserve exact
+`Content-Length` semantics when the header exists, accumulate absent-length
+plaintext bodies through peer close, and leave encrypted RTSP frame-length
+handling unchanged.
+
+The wrapper for this attempt used `xctest ... | tee` without `pipefail`; its
+shell exit `0` was therefore the status of `tee`, while XCTest itself clearly
+reported failure. This receipt is recorded as a failed live attempt. It will
+not be rerun, and subsequent live wrappers must propagate the upstream XCTest
+exit status with `set -o pipefail` or an equivalent explicit status capture.

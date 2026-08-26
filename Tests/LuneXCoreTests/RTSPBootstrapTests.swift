@@ -292,6 +292,188 @@ final class RTSPBootstrapTests: XCTestCase {
         )
     }
 
+    func testPlaintextDescribeWithoutContentLengthUsesTerminalBody() async throws {
+        let body = Data("v=0\r\na=x-ss-general.featureFlags:5\r\n".utf8)
+        let wire = Data("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n".utf8) + body
+        let channel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(data: wire, isComplete: true)
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { _ in channel })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+
+        let response = try await connection.transact(
+            networkRequest(method: "DESCRIBE", cSeq: "2")
+        )
+
+        XCTAssertEqual(response.headerValues(named: "CSeq"), ["2"])
+        XCTAssertEqual(response.body, body)
+    }
+
+    func testPlaintextOptionsWithoutBodyCompletesWhenPeerCloses() async throws {
+        let wire = Data("RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n".utf8)
+        let channel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(data: wire, isComplete: false)
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { _ in channel })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+
+        let response = try await connection.transact(
+            networkRequest(method: "OPTIONS", cSeq: "1")
+        )
+
+        XCTAssertEqual(response.body, Data())
+        let snapshot = await channel.snapshot()
+        XCTAssertEqual(snapshot.receiveCalls, 2)
+    }
+
+    func testFragmentedCloseDelimitedBodyWaitsForPeerClose() async throws {
+        let header = Data("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n".utf8)
+        let firstBody = Data("v=0\r\n".utf8)
+        let secondBody = Data("a=x-ss-general.featureFlags:5\r\n".utf8)
+        let channel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(data: header, isComplete: false),
+            NetworkReceiveChunk(data: firstBody, isComplete: false),
+            NetworkReceiveChunk(data: secondBody, isComplete: false)
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { _ in channel })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+
+        let response = try await connection.transact(
+            networkRequest(method: "DESCRIBE", cSeq: "2")
+        )
+
+        XCTAssertEqual(response.body, firstBody + secondBody)
+        let snapshot = await channel.snapshot()
+        XCTAssertEqual(snapshot.receiveCalls, 4)
+    }
+
+    func testCloseDelimitedResponseRejectsEmptyAndIncompleteMessages() async throws {
+        let emptyChannel = NetworkRTSPChannelStub(chunks: [])
+        let incompleteChannel = NetworkRTSPChannelStub(chunks: [
+            NetworkReceiveChunk(
+                data: Data("RTSP/1.0 200 OK\r\nCSeq: 2\r\n".utf8),
+                isComplete: false
+            )
+        ])
+        let factory = NetworkRTSPChannelFactoryStub(channels: [
+            emptyChannel,
+            incompleteChannel
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { endpoint in
+            try factory.makeChannel(endpoint: endpoint)
+        })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+
+        do {
+            _ = try await connection.transact(
+                networkRequest(method: "OPTIONS", cSeq: "1")
+            )
+            XCTFail("Expected empty response to fail closed")
+        } catch let error as RTSPBootstrapError {
+            XCTAssertEqual(error, .connectionClosed)
+        }
+        do {
+            _ = try await connection.transact(
+                networkRequest(method: "DESCRIBE", cSeq: "2")
+            )
+            XCTFail("Expected incomplete response to fail closed")
+        } catch let error as RTSPMessageError {
+            XCTAssertEqual(error, .incomplete)
+        }
+    }
+
+    func testExplicitContentLengthIsExactAndRejectsTrailingOrMismatch() async throws {
+        let valid = Data(
+            "RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Length: 3\r\n\r\nabc".utf8
+        )
+        let trailing = valid + Data("x".utf8)
+        let mismatch = Data(
+            "RTSP/1.0 200 OK\r\nCSeq: 3\r\nContent-Length: 4\r\n\r\nabc".utf8
+        )
+        let factory = NetworkRTSPChannelFactoryStub(channels: [
+            NetworkRTSPChannelStub(chunks: [
+                NetworkReceiveChunk(data: valid, isComplete: false)
+            ]),
+            NetworkRTSPChannelStub(chunks: [
+                NetworkReceiveChunk(data: trailing, isComplete: true)
+            ]),
+            NetworkRTSPChannelStub(chunks: [
+                NetworkReceiveChunk(data: mismatch, isComplete: false)
+            ])
+        ])
+        let connection = NetworkRTSPConnection(channelFactory: { endpoint in
+            try factory.makeChannel(endpoint: endpoint)
+        })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+
+        let response = try await connection.transact(
+            networkRequest(method: "OPTIONS", cSeq: "1")
+        )
+        XCTAssertEqual(response.body, Data("abc".utf8))
+        do {
+            _ = try await connection.transact(
+                networkRequest(method: "DESCRIBE", cSeq: "2")
+            )
+            XCTFail("Expected trailing bytes to be rejected")
+        } catch let error as RTSPMessageError {
+            XCTAssertEqual(error, .trailingBytes)
+        }
+        do {
+            _ = try await connection.transact(
+                networkRequest(method: "SETUP", cSeq: "3")
+            )
+            XCTFail("Expected mismatched content length to be rejected")
+        } catch let error as RTSPMessageError {
+            XCTAssertEqual(error, .incomplete)
+        }
+    }
+
+    func testCancellationWinsWhileTerminalResponseIsFinishing() async throws {
+        let channel = NetworkRTSPChannelStub(
+            chunks: [
+                NetworkReceiveChunk(
+                    data: try serializedResponse(cSeq: "1"),
+                    isComplete: true
+                )
+            ],
+            blocksFirstCancellation: true
+        )
+        let connection = NetworkRTSPConnection(channelFactory: { _ in channel })
+        try await connection.connect(
+            endpoint: try RTSPSessionEndpoint.parse("rtsp://moon.local/session"),
+            encryptionKey: Data()
+        )
+        let request = networkRequest(method: "OPTIONS", cSeq: "1")
+        let transaction = Task { try await connection.transact(request) }
+        try await channel.waitUntilCancellationStarts()
+
+        await connection.cancel()
+
+        do {
+            _ = try await transaction.value
+            XCTFail("A response must not escape after session cancellation")
+        } catch let error as NetworkChannelError {
+            XCTAssertEqual(error, .cancelled)
+        }
+        let snapshot = await channel.snapshot()
+        XCTAssertEqual(snapshot.cancellations, 2)
+    }
+
     func testEncryptedRTSPSequenceContinuesAcrossFreshChannels() async throws {
         let key = Data((0..<16).map(UInt8.init))
         let firstResponse = try EncryptedRTSPFrameCodec.seal(
@@ -953,15 +1135,21 @@ private struct NetworkRTSPChannelSnapshot: Sendable {
 private actor NetworkRTSPChannelStub: RTSPByteChannel {
     private var chunks: [NetworkReceiveChunk]
     private let blocksReceive: Bool
+    private let blocksFirstCancellation: Bool
     private var connects = 0
     private var sent: [Data] = []
     private var receiveCalls = 0
     private var cancellations = 0
     private var isCancelled = false
 
-    init(chunks: [NetworkReceiveChunk], blocksReceive: Bool = false) {
+    init(
+        chunks: [NetworkReceiveChunk],
+        blocksReceive: Bool = false,
+        blocksFirstCancellation: Bool = false
+    ) {
         self.chunks = chunks
         self.blocksReceive = blocksReceive
+        self.blocksFirstCancellation = blocksFirstCancellation
     }
 
     func connect(timeout: Duration) async throws {
@@ -997,6 +1185,11 @@ private actor NetworkRTSPChannelStub: RTSPByteChannel {
     func cancel() async {
         cancellations += 1
         isCancelled = true
+        if blocksFirstCancellation && cancellations == 1 {
+            while cancellations < 2 {
+                await Task.yield()
+            }
+        }
     }
 
     func waitUntilReceiveStarts() async throws {
@@ -1005,6 +1198,14 @@ private actor NetworkRTSPChannelStub: RTSPByteChannel {
             try await Task.sleep(for: .milliseconds(1))
         }
         throw NetworkChannelError.timedOut(operation: "test receive admission")
+    }
+
+    func waitUntilCancellationStarts() async throws {
+        for _ in 0..<1_000 {
+            if cancellations > 0 { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        throw NetworkChannelError.timedOut(operation: "test cancellation admission")
     }
 
     func snapshot() -> NetworkRTSPChannelSnapshot {
