@@ -2,9 +2,9 @@ import Foundation
 import XCTest
 
 final class RTSPBootstrapTests: XCTestCase {
-    func testInitialSessionOperationLaunchesWhenHostIsFree() throws {
+    func testInitialSessionOperationLaunchesWhenHostIsFree() {
         XCTAssertEqual(
-            try MoonlightSessionControlProvider.initialSessionOperation(
+            MoonlightSessionControlProvider.initialSessionOperation(
                 serverInfo: SessionServerInfoClient.freeInfo,
                 requestedAppID: "881448767"
             ),
@@ -12,9 +12,9 @@ final class RTSPBootstrapTests: XCTestCase {
         )
     }
 
-    func testInitialSessionOperationResumesMatchingBusyApplication() throws {
+    func testInitialSessionOperationResumesMatchingBusyApplication() {
         XCTAssertEqual(
-            try MoonlightSessionControlProvider.initialSessionOperation(
+            MoonlightSessionControlProvider.initialSessionOperation(
                 serverInfo: SessionServerInfoClient.busyInfo(
                     currentGameID: "881448767"
                 ),
@@ -24,24 +24,21 @@ final class RTSPBootstrapTests: XCTestCase {
         )
     }
 
-    func testInitialSessionOperationRejectsDifferentBusyApplication() {
-        XCTAssertThrowsError(
-            try MoonlightSessionControlProvider.initialSessionOperation(
+    func testInitialSessionOperationLaunchesDifferentBusyApplication() {
+        XCTAssertEqual(
+            MoonlightSessionControlProvider.initialSessionOperation(
                 serverInfo: SessionServerInfoClient.busyInfo(
                     currentGameID: "different-app"
                 ),
                 requestedAppID: "881448767"
-            )
-        ) { error in
-            let failure = error as? StreamNegotiationFailure
-            XCTAssertEqual(failure?.code, .resumeRejected)
-            XCTAssertEqual(failure?.subsystem, "resume")
-        }
+            ),
+            .launch
+        )
     }
 
-    func testInitialSessionOperationRejectsMissingState() {
-        XCTAssertThrowsError(
-            try MoonlightSessionControlProvider.initialSessionOperation(
+    func testInitialSessionOperationLaunchesWhenStateIsMissing() {
+        XCTAssertEqual(
+            MoonlightSessionControlProvider.initialSessionOperation(
                 serverInfo: ServerInfo(
                     name: "Test Host",
                     uniqueID: "test-host",
@@ -51,12 +48,9 @@ final class RTSPBootstrapTests: XCTestCase {
                     rawValues: [:]
                 ),
                 requestedAppID: "881448767"
-            )
-        ) { error in
-            let failure = error as? StreamNegotiationFailure
-            XCTAssertEqual(failure?.code, .launchRejected)
-            XCTAssertEqual(failure?.subsystem, "server_info")
-        }
+            ),
+            .launch
+        )
     }
 
     func testBusyMatchingApplicationRoutesInitialProviderRequestThroughResume() async {

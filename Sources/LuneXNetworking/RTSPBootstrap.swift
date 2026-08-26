@@ -895,7 +895,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         let serverInfo = try await serverInfoClient.fetchServerInfo(
             from: endpoint
         )
-        switch try Self.initialSessionOperation(
+        switch Self.initialSessionOperation(
             serverInfo: serverInfo,
             requestedAppID: request.app.id
         ) {
@@ -915,25 +915,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     static func initialSessionOperation(
         serverInfo: ServerInfo,
         requestedAppID: String
-    ) throws -> InitialSessionOperation {
-        guard let state = serverInfo.state, !state.isEmpty else {
-            throw StreamNegotiationFailure(
-                code: .launchRejected,
-                subsystem: "server_info",
-                message: "Host did not advertise a session state."
-            )
-        }
-        guard state.hasSuffix("_SERVER_BUSY") else {
-            return .launch
-        }
-        guard serverInfo.rawValues["currentgame"] == requestedAppID else {
-            throw StreamNegotiationFailure(
-                code: .resumeRejected,
-                subsystem: "resume",
-                message: "The selected application is not the host's current application."
-            )
-        }
-        return .resume
+    ) -> InitialSessionOperation {
+        let selectedApplicationIsRunning =
+            serverInfo.state?.hasSuffix("_SERVER_BUSY") == true
+                && serverInfo.rawValues["currentgame"] == requestedAppID
+        return selectedApplicationIsRunning ? .resume : .launch
     }
 
     private func freshKeyMaterial(

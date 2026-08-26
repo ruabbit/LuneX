@@ -41,6 +41,12 @@ The project SHALL classify every completion claim as deterministic implementatio
 - **WHEN** hardware or live-host acceptance is performed
 - **THEN** the receipt binds the result to the exact Git SHA, candidate artifact where applicable, environment class, scenario, and privacy-bounded outcome
 
+#### Scenario: Live media failure remains diagnosable and privacy bounded
+- **WHEN** an exact-SHA live session fails before sustained video and audible synchronized audio are accepted
+- **THEN** the test receipt identifies `video_receive` or `audio_receive` and a finite enumerated transport, media-runtime, or packet-parser cause
+- **AND** the receipt excludes endpoint values, payload bytes, credentials, certificates, numeric transport details, arbitrary operation names, and arbitrary error descriptions
+- **AND** consumer termination, task cancellation, and an explicitly cancelled network channel are not recorded as production media failures
+
 ### Requirement: macOS completion gate
 The macOS client SHALL NOT be declared functionally complete until an authorized live Sunshine workflow proves pairing, catalog, launch, sustained video, audible synchronized audio, remote input, reconnect, termination, stop, and clean resource teardown through the production runtime.
 
@@ -70,13 +76,12 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **WHEN** the designated host already has an application running and the catalog-only live gate is explicitly enabled
 - **THEN** LuneX MAY perform the read-only pinned-mTLS server-info and catalog requests without treating the busy state as a client-session mutex
 
-#### Scenario: Initial session selects launch or resume from application state
-- **WHEN** the separate session opt-in is enabled and the host reports free
-- **THEN** LuneX SHALL start the selected application through `/launch`
-- **WHEN** the host reports busy and `currentgame` matches the selected application ID
-- **THEN** LuneX SHALL create another client streaming session for that running application through `/resume`
-- **WHEN** the host reports busy and `currentgame` identifies a different application
-- **THEN** LuneX SHALL reject the selection without calling `/cancel` or disrupting the running application
+#### Scenario: Initial session does not treat host state as client capacity
+- **WHEN** the separate session opt-in is enabled, the host explicitly reports an application running, and `currentgame` matches the selected application ID
+- **THEN** LuneX SHALL create another client streaming session for that application through `/resume`
+- **WHEN** `currentgame` does not identify the selected application, or the advertised host state is free, unknown, missing, or inconsistent
+- **THEN** LuneX SHALL attempt the selected application through `/launch` and let the authenticated server response determine whether that operation is supported
+- **AND** LuneX SHALL NOT reject a user-selected application solely because the host reports busy, assume that busy represents exclusive client capacity, or call `/cancel` to make the host appear free
 
 #### Scenario: RTSP transactions follow Sunshine connection lifetime
 - **WHEN** LuneX negotiates OPTIONS, DESCRIBE, or SETUP with Sunshine
