@@ -728,7 +728,7 @@ final class AppModel: ApplicationInputSink {
         tvVisionPlatform: TVVisionPlatform? = nil,
         clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
         clientIdentityProvisioner: (any ClientIdentityProvisioning)? = nil,
-        clientUniqueID: String = "LuneX-\(UUID().uuidString)",
+        clientUniqueID: String = ClientIdentityMaterial.protocolUniqueID,
         remoteInputKey: RemoteInputKeyMaterial? = nil,
         remoteInputKeyGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator()
     ) {
@@ -1568,7 +1568,7 @@ final class AppModel: ApplicationInputSink {
                 logger.info("No persisted client identity in selected store")
                 return
             }
-            clientUniqueID = identity.id.uuidString
+            clientUniqueID = identity.protocolUniqueID
             diagnostics.record("Loaded persisted client identity", subsystem: "identity")
             logger.info("Loaded persisted client identity")
         } catch {
@@ -2854,7 +2854,7 @@ final class AppModel: ApplicationInputSink {
                 owner: owner,
                 material: identity
             )
-            clientUniqueID = identity.id.uuidString
+            clientUniqueID = identity.protocolUniqueID
             _ = try? workspaceRegistry.update(workspace) { state in
                 guard state.pairing.owner == owner else { return }
                 state.pairing.stage = .waitingForPIN

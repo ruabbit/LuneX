@@ -46,6 +46,20 @@ The macOS client SHALL NOT be declared functionally complete until an authorized
 
 The client SHALL NOT restrict users through a Sunshine package-version allowlist. Compatibility SHALL be selected from server-advertised protocol and codec capabilities and validated by actual negotiation and live behavior. A Sunshine package version MAY be recorded as diagnostic metadata when available, but SHALL NOT be a prerequisite for attempting a compatible session.
 
+All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
+
+#### Scenario: Existing Moonlight-qt identity is reused
+- **WHEN** the user explicitly imports the local Moonlight-qt client certificate/private key into the Debug file fallback
+- **THEN** LuneX SHALL validate the material, preserve private file permissions, send `0123456789ABCDEF` for every Moonlight HTTP command, present the persisted client identity during pinned HTTPS catalog/launch/resume/cancel authentication, and rely on the paired client certificate for live authorization without requiring re-pairing unless authentication actually fails
+
+#### Scenario: Persisted client identity is missing or invalid
+- **WHEN** catalog, artwork, launch, resume, or cancel needs pinned HTTPS authentication but the selected identity store cannot return valid client material
+- **THEN** the production request SHALL fail before network access without silently using unauthenticated TLS, generating a replacement identity, or weakening the server certificate pin
+
+#### Scenario: LuneX identity is restored after restart
+- **WHEN** an existing LuneX identity is decoded from the backward-compatible file or Keychain representation
+- **THEN** catalog, artwork, launch, resume, and cancel SHALL use the same protocol client identifier as pairing rather than the stored UUID string
+
 #### Scenario: Sunshine package version is unknown or new
 - **WHEN** a paired host does not expose its package version, or reports a version not previously recorded by LuneX
 - **THEN** LuneX SHALL continue capability-based negotiation and SHALL fail only for an unsupported advertised requirement or observed protocol/runtime incompatibility, not for the package version itself

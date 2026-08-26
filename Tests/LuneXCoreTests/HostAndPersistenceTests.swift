@@ -50,6 +50,26 @@ final class HostAndPersistenceTests: XCTestCase {
         XCTAssertNil(deleted)
     }
 
+    func testClientIdentityUsesStableMoonlightProtocolIDWithoutPersistingIt() throws {
+        let identity = ClientIdentityMaterial(
+            id: UUID(uuidString: "88C33C52-6F54-46BE-AD58-D3FB0C7C7895")!,
+            certificateDER: Data([10, 11, 12]),
+            privateKeyDER: Data([20, 21, 22]),
+            createdAt: Date(timeIntervalSince1970: 300)
+        )
+
+        let encoded = try JSONEncoder().encode(identity)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        let decoded = try JSONDecoder().decode(ClientIdentityMaterial.self, from: encoded)
+
+        XCTAssertEqual(identity.protocolUniqueID, "0123456789ABCDEF")
+        XCTAssertEqual(decoded.protocolUniqueID, identity.protocolUniqueID)
+        XCTAssertEqual(decoded, identity)
+        XCTAssertNil(object["protocolUniqueID"])
+    }
+
     func testSettingsDefaultsRepresentNativeHighQualityStream() {
         let settings = AppSettings.defaults
 

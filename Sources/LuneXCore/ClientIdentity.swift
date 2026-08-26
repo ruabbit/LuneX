@@ -1,10 +1,16 @@
 import Foundation
 
 struct ClientIdentityMaterial: Codable, Equatable, Sendable {
+    static let protocolUniqueID = "0123456789ABCDEF"
+
     var id: UUID
     var certificateDER: Data
     var privateKeyDER: Data
     var createdAt: Date
+
+    var protocolUniqueID: String {
+        Self.protocolUniqueID
+    }
 
     init(
         id: UUID = UUID(),

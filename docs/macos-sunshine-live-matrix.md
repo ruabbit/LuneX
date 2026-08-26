@@ -64,7 +64,7 @@ or arbitrary application requiring a separate approval gate.
 | Scenario | Required observation | Current result |
 |---|---|---|
 | Host inventory | `tanmy-white` advertised protocol/codec modes and host-free precondition | Capabilities recorded; host was busy at inventory time |
-| Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Not run |
+| Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Moonlight-qt identity imported and validated locally; production pinned HTTPS now loads and presents it for mTLS, but live authentication has not run |
 | Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | Cached catalog contains `Desktop`; live read not run |
 | Launch | Exactly one `Desktop` session launches through the production runtime | Not run |
 | RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Not run |
@@ -82,15 +82,48 @@ Task 2.3 may start only after all of these are true:
 
 1. `tanmy-white` reports free and the existing unrelated session has ended
    without LuneX intervention.
-2. The identity policy is fixed: reuse the existing isolated LuneX test
-   identity or perform one bounded pairing operation. No existing client may be
-   removed or disabled.
+2. Reuse the imported Moonlight-qt identity from the Debug file fallback. The
+   fallback has passed local Codable, certificate/private-key match, and
+   signing verification. Live mTLS authentication remains pending; perform one
+   bounded pairing operation only if certificate reuse fails. No existing
+   client may be removed or disabled.
 3. The harmless input sequence, reconnect interruption, remote-termination
    action, sustained-media duration, and abort conditions are fixed before the
    first `Desktop` launch.
 
 A Sunshine package version is not a precondition. The two expected offline-host
 timeouts are not preconditions or failures either.
+
+## Debug Identity Reuse
+
+Normal Debug testing uses the file fallback and does not access Keychain. The
+existing Moonlight-qt client identity is imported explicitly and without
+rewriting current LuneX hosts, settings, or catalog data:
+
+```bash
+python3 Tools/import_moonlight_qt_data.py \
+  --include-client-identity \
+  --identity-only
+```
+
+Without `--include-client-identity`, the importer does not copy private-key
+material. `--identity-only` is rejected unless the explicit identity flag is
+also present. The importer converts the Qt PKCS#8 PEM private key to the DER
+format consumed by Security, checks the certificate/private-key public-key
+match and expected subject, then atomically writes
+`~/Library/Application Support/LuneX/client_identity.debug.json`. The directory
+mode is `0700` and the file mode is `0600`.
+
+Local acceptance on 2026-08-26 proved Foundation decoding, Security certificate
+and private-key parsing, matching public keys, a fresh signature/verification
+round trip, and the expected certificate subject. The production pinned HTTPS
+executor now requires this persisted identity, validates it before network
+access, preserves the server leaf pin, and answers the client-certificate TLS
+challenge for catalog, artwork, launch, resume, and cancel. Deterministic tests
+also prove missing or invalid material fails before network access. This is
+local identity and production-wiring evidence only. It does not prove Sunshine
+accepted the mTLS identity; the live matrix row remains pending until the host
+is free and pinned catalog access succeeds through the production provider.
 
 ## Permitted And Prohibited Operations
 

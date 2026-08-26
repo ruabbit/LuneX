@@ -5,6 +5,8 @@ enum PinnedTransportError: Error, Equatable, Sendable {
     case missingPinnedIdentity
     case invalidPinnedCertificate
     case certificateMismatch
+    case missingClientIdentity
+    case invalidClientIdentity
 }
 
 enum PinnedCertificateValidator {
@@ -37,6 +39,17 @@ protocol PinnedHTTPSRequestExecuting: Sendable {
 }
 
 struct PinnedHTTPSRequestExecutor: PinnedHTTPSRequestExecuting {
+    private let clientIdentityStore: any ClientIdentityStore
+    private let clientIdentityValidator: any ClientIdentityValidating
+
+    init(
+        clientIdentityStore: any ClientIdentityStore = ClientIdentityStoreFactory.makeDefault(),
+        clientIdentityValidator: any ClientIdentityValidating = SecurityClientIdentityValidator()
+    ) {
+        self.clientIdentityStore = clientIdentityStore
+        self.clientIdentityValidator = clientIdentityValidator
+    }
+
     func data(for request: URLRequest, pinnedIdentity: PinnedHostIdentity?) async throws -> (Data, URLResponse) {
         guard let pinnedIdentity else {
             throw PinnedTransportError.missingPinnedIdentity
@@ -47,7 +60,28 @@ struct PinnedHTTPSRequestExecutor: PinnedHTTPSRequestExecuting {
             throw PinnedTransportError.invalidPinnedCertificate
         }
 
-        let delegate = PinnedCertificateSessionDelegate(expectedLeafDER: expectedLeafDER)
+        let clientIdentity: ClientIdentityMaterial
+        do {
+            guard let storedIdentity = try await clientIdentityStore.loadIdentity() else {
+                throw PinnedTransportError.missingClientIdentity
+            }
+            try clientIdentityValidator.validate(storedIdentity)
+            clientIdentity = storedIdentity
+        } catch let error as PinnedTransportError {
+            throw error
+        } catch {
+            throw PinnedTransportError.invalidClientIdentity
+        }
+
+        let delegate: PinnedCertificateSessionDelegate
+        do {
+            delegate = try PinnedCertificateSessionDelegate(
+                expectedLeafDER: expectedLeafDER,
+                clientIdentity: clientIdentity
+            )
+        } catch {
+            throw PinnedTransportError.invalidClientIdentity
+        }
         let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         do {
@@ -63,6 +97,8 @@ struct PinnedHTTPSRequestExecutor: PinnedHTTPSRequestExecuting {
 
 final class PinnedCertificateSessionDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
     private let expectedLeafDER: Data
+    private let identity: SecIdentity
+    private let certificate: SecCertificate
     private let lock = NSLock()
     private var recordedTransportError: PinnedTransportError?
 
@@ -70,8 +106,14 @@ final class PinnedCertificateSessionDelegate: NSObject, URLSessionDelegate, @unc
         lock.withLock { recordedTransportError }
     }
 
-    init(expectedLeafDER: Data) {
+    init(
+        expectedLeafDER: Data,
+        clientIdentity: ClientIdentityMaterial
+    ) throws {
         self.expectedLeafDER = expectedLeafDER
+        let tlsIdentity = try PairingTLSIdentityFactory.make(clientIdentity)
+        identity = tlsIdentity.identity
+        certificate = tlsIdentity.certificate
     }
 
     func urlSession(
@@ -79,11 +121,20 @@ final class PinnedCertificateSessionDelegate: NSObject, URLSessionDelegate, @unc
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
+        switch challenge.protectionSpace.authenticationMethod {
+        case NSURLAuthenticationMethodServerTrust:
+            handleServerTrust(challenge, completionHandler: completionHandler)
+        case NSURLAuthenticationMethodClientCertificate:
+            completionHandler(.useCredential, clientCredential())
+        default:
             completionHandler(.performDefaultHandling, nil)
-            return
         }
+    }
 
+    private func handleServerTrust(
+        _ challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
         guard let trust = challenge.protectionSpace.serverTrust,
               let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
               let leaf = chain.first
@@ -104,6 +155,14 @@ final class PinnedCertificateSessionDelegate: NSObject, URLSessionDelegate, @unc
         }
 
         completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    func clientCredential() -> URLCredential {
+        URLCredential(
+            identity: identity,
+            certificates: [certificate],
+            persistence: .forSession
+        )
     }
 
     private func record(_ error: PinnedTransportError) {

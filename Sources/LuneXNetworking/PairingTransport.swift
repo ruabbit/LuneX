@@ -564,7 +564,7 @@ actor MoonlightPairingProvider: PairingRuntimeProvider {
         components.port = endpoint.port
         components.path = "/pair"
         var queryItems = [
-            URLQueryItem(name: "uniqueid", value: Self.protocolUniqueID(identity.id)),
+            URLQueryItem(name: "uniqueid", value: identity.protocolUniqueID),
             URLQueryItem(name: "devicename", value: "LuneX"),
             URLQueryItem(name: "updateState", value: "1")
         ]
@@ -595,10 +595,6 @@ actor MoonlightPairingProvider: PairingRuntimeProvider {
             return nil
         }
         return port
-    }
-
-    private static func protocolUniqueID(_ id: UUID) -> String {
-        String(id.uuidString.replacingOccurrences(of: "-", with: "").prefix(16)).uppercased()
     }
 
     private static func pemCertificate(_ der: Data) -> Data {

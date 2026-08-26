@@ -1473,6 +1473,51 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(identityProvisioningStarted)
     }
 
+    func testPersistedIdentityRestoresMoonlightProtocolIDForCatalogRequests() async throws {
+        let identity = ClientIdentityMaterial(
+            id: UUID(uuidString: "7C84A0AB-69D4-40AA-949D-4345BF5DD75B")!,
+            certificateDER: Data([1, 2, 3]),
+            privateKeyDER: Data([4, 5, 6]),
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        let client = RecordingUniqueIDAppListClient()
+        let host = MoonlightHost(
+            name: "Test Host",
+            address: "moon.local",
+            pairingState: .paired,
+            reachability: .online,
+            pinnedIdentity: PinnedHostIdentity(
+                certificateSHA256: "existing-cert",
+                serverCertificateDER: Data([7, 8, 9]),
+                pairedAt: Date(timeIntervalSince1970: 10)
+            )
+        )
+        let model = AppModel(
+            hostLibraryManager: HostLibraryManager(
+                repository: InMemoryHostRepository(hosts: [host]),
+                serverInfoClient: StubServerInfoClient()
+            ),
+            settingsRepository: InMemoryAppSettingsRepository(),
+            appCatalogManager: AppCatalogManager(
+                appListClient: client,
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(
+                launchClient: StubStreamLaunchClient()
+            ),
+            runtimeProviders: .unavailable,
+            clientIdentityStore: InMemoryClientIdentityStore(identity: identity),
+            clientUniqueID: "preload-value"
+        )
+
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+
+        let recordedUniqueIDs = await client.recordedUniqueIDs()
+        XCTAssertEqual(recordedUniqueIDs, [identity.protocolUniqueID])
+    }
+
     func testPairingUIConsumesProgressAndAuthenticatedCompletion() async throws {
         let host = makeUnpairedHost()
         let identity = makePairingIdentity()
@@ -10173,6 +10218,38 @@ private struct StubAppListClient: AppListClient {
 
     func fetchArtwork(for app: RemoteApp, from endpoint: HostEndpoint, clientUniqueID: String, pinnedIdentity: PinnedHostIdentity?) async throws -> RemoteAppArtwork? {
         nil
+    }
+}
+
+private actor RecordingUniqueIDAppListClient: AppListClient {
+    private var uniqueIDs: [String] = []
+
+    func fetchApps(
+        from endpoint: HostEndpoint,
+        clientUniqueID: String,
+        pinnedIdentity: PinnedHostIdentity?
+    ) async throws -> [RemoteApp] {
+        _ = endpoint
+        _ = pinnedIdentity
+        uniqueIDs.append(clientUniqueID)
+        return [RemoteApp(id: "0", name: "Desktop", supportsHDR: false, installPath: nil)]
+    }
+
+    func fetchArtwork(
+        for app: RemoteApp,
+        from endpoint: HostEndpoint,
+        clientUniqueID: String,
+        pinnedIdentity: PinnedHostIdentity?
+    ) async throws -> RemoteAppArtwork? {
+        _ = app
+        _ = endpoint
+        _ = clientUniqueID
+        _ = pinnedIdentity
+        return nil
+    }
+
+    func recordedUniqueIDs() -> [String] {
+        uniqueIDs
     }
 }
 

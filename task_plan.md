@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前进入Task 2.3 live全链路，等待`tanmy-white`现有busy session结束后执行。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前进入Task 2.3 live全链路；Qt identity导入、wire ID continuity及production pinned HTTPS客户端身份接线正在收口，随后等待`tanmy-white`现有busy session自然结束再执行live矩阵。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -78,6 +78,26 @@
 
 - 首次整文件替换`docs/macos-sunshine-live-matrix.md`的`apply_patch`在写入前因同一请求对同一路径同时delete/add而被拒绝，仓库零部分修改。拆成两个明确patch后完成，未重复任何host查询或runtime操作。
 - 后续路线图/合同/计划组合patch因`task_plan.md`大范围锚点不匹配而整体拒绝，零文件写入。改为路线图、合同、计划三组小patch后继续，不重复只读host inventory。
+
+### M1 Task 2.3 错误记录
+
+- 用户恢复工作后再次按先前明确要求调用`create_goal`，控制面仍以已有`blocked`目标为unfinished拒绝创建；仓库、Keychain、host、Simulator和runtime零副作用。继续以当前OpenSpec和planning files为执行权威，不伪造目标已重建。
+- identity相关测试定位命令包含不存在的`Tests/LuneXCoreTests/*Application*`裸glob，zsh在该并行只读命令末尾以`no matches found`退出；同一命令此前的指定文件读取已完成，仓库和runtime无副作用。后续改用`rg --files`过滤实际文件，不重复裸glob。
+- identity store编码定位沿用不存在的`Sources/LuneXCore/Persistence.swift`假设路径并返回`No such file or directory`；零文件/runtime副作用。后续先用`rg --files Sources/LuneXCore`取得实际定义文件，不重复错误路径。
+- identity修复首轮warnings-as-errors命令误用不存在的`LuneX` scheme，xcodebuild在编译前退出且0 source/test执行；仓库、Keychain、host和Simulator零副作用。后续先读`xcodebuild -list`并用实际scheme从fresh evidence重跑。
+- importer文档定位包含不存在的根`README.md`，rg报告`No such file or directory`但仍完成其余现有文档检索；仓库/runtime零副作用。后续在现有`docs/macos-sunshine-live-matrix.md`记录显式导入流程，不创建无关README。
+- 真实Qt identity写入后的首个只读Security验证脚本因Swift字符串插值内转义引号报`unterminated string literal`，在脚本编译阶段退出且未读取/打印identity材料；文件已按0700/0600成功写入。后续先计算subject布尔值再打印，从同一文件验证而不重复导入。
+- identity验收后的host状态命令使用`curl ... | plutil ... || curl ...`，由于XML提取分支失败可能执行了两次相同的有界只读`GET /serverinfo`；结果均无host mutation，但请求计数不可证明为1。已保守记为2次并停止本轮host查询，后续先将单次响应保存到受限临时文件再离线解析，禁止网络fallback。
+- generic build后的universal binary只读检查误用Bash 4小写展开`${var,,}`，系统Bash 3.2以`bad substitution`在`find/lipo`前退出；5个build结果和日志不受影响。后续使用显式Debug/Release tag/path读取现有产物，不重复构建。
+- 修正Bash展开后仍假设app产物名为`LuneX.app`，实际`find`返回空且两个`lipo`对空路径报`No such file`；build与产物未修改。后续先枚举现有Products文件名，再对实际binary执行一次lipo，不重复空路径命令。
+- identity repository首轮wrapper的cache删除只匹配目录，非空`__pycache__`未删除；隐私扫描命中importer/fixture合法PEM标签字面量；进程扫描匹配当前shell参数中的`xctest`。OpenSpec、protocol、fallback权限与diff此前已通过，产品/runtime无副作用。后续精确删除已枚举cache路径、扫描疑似Base64材料而非标签、按process executable筛选并从头重跑gate。
+- identity continuity最终人工审阅发现`PinnedHTTPSRequestExecutor`只处理server-trust pin而未加载客户端identity或响应client-certificate challenge；因此先前Qt导入、wire ID和URL断言不能证明production catalog/launch会使用mTLS。Task 2.3未勾选；已补production双向TLS、missing/invalid identity网络前fail-closed和credential级测试，必须从fresh evidence重新验证后再提交。
+- mTLS修复首轮focused命令中的4个跨类`-only-testing` selector使用了交接摘要中的描述性名称而非源码实际XCTest方法名；Xcode不报错但结构化结果仅执行`AppCatalogTests 11/11`。该轮只计executor focused，不计完整identity矩阵；后续先以`rg`读取实际方法名并从新evidence目录补跑，不重复错误selector。
+- 最终定向清理wrapper再次误用zsh特殊数组名`path`作为循环变量并覆盖`PATH`，在首个`find`执行前以`command not found`退出；这是计划中已有同类错误，属于不应重复的脚本失误。仓库/evidence/runtime零变化；修正为显式`/bin/bash`、`evidence_path`和绝对`/usr/bin/find`，不再使用zsh特殊变量名。
+- corrected Bash清理虽删除本轮指定evidence，却再次沿用“只匹配非空`__pycache__`目录再`-delete`”的旧错误predicate，因此两个cache目录和其`.pyc`仍存在；源码/runtime无变化。这同样是不应重复的已知错误；最终改为先枚举`cache_dir`，再对每个目录整棵`-depth -delete`并立即断言零残留。
+- 最终repository gate的OpenSpec严格验证先通过`11/11`，随后jq断言缺少括号，因运算符优先级把布尔值传给`contains("2.3")`并在generator/Git/权限/远程步骤前退出；仓库/runtime零变化。修正为对`.tasks[7].description | contains(...)`单独加括号并从头重跑完整gate，不拼接部分结果。
+- 第二轮repository gate确认OpenSpec `11/11`与`7/27 next 2.3 pending`后，在`login:false` Bash中因PATH不含Homebrew而找不到`xcodegen`，generator尚未运行且仓库/runtime零变化。后续先只读确认绝对binary路径并在完整gate中固定使用，不依赖shell profile。
+- 继续只读核对确认仓库没有`project.yml`且Homebrew也未实际安装XcodeGen；文档明确`Tools/generate_xcodeproj.rb`才是唯一project-membership authority。最终gate改用绝对`/usr/bin/ruby Tools/generate_xcodeproj.rb`双跑并比较project SHA，不再寻找或安装无关`xcodegen`。
 
 ### 阶段19错误记录
 

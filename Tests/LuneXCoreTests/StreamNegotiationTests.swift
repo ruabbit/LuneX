@@ -70,22 +70,31 @@ final class StreamNegotiationTests: XCTestCase {
     }
 
     func testHTTPLaunchAndStopRoutePinnedIdentityToExecutor() async throws {
-        let request = try makeRequest()
+        let request = try makeRequest(
+            clientUniqueID: ClientIdentityMaterial.protocolUniqueID
+        )
         let parameters = try StreamNegotiator().makeParameters(from: request)
         let executor = RecordingPinnedStreamRequestExecutor()
         let client = HTTPStreamLaunchClient(requestExecutor: executor)
 
         let response = try await client.launch(request, parameters: parameters)
+        _ = try await client.resume(request, parameters: parameters)
         try await client.stop(host: request.host, clientUniqueID: request.clientUniqueID)
         let calls = await executor.recordedCalls()
 
         XCTAssertEqual(response.gameSessionID, "123")
-        XCTAssertEqual(calls.map(\.url.path), ["/launch", "/cancel"])
-        XCTAssertEqual(calls.map(\.pin), [request.host.pinnedIdentity, request.host.pinnedIdentity])
+        XCTAssertEqual(calls.map(\.url.path), ["/launch", "/resume", "/cancel"])
+        XCTAssertEqual(
+            calls.map(\.pin),
+            Array(repeating: request.host.pinnedIdentity, count: 3)
+        )
         XCTAssertTrue(calls.allSatisfy { $0.url.scheme == "https" })
         XCTAssertTrue(calls.allSatisfy { $0.url.port == HostEndpoint.defaultHTTPSPort })
-        XCTAssertEqual(URLComponents(url: calls[1].url, resolvingAgainstBaseURL: false)?
-            .queryItems?.first(where: { $0.name == "uniqueid" })?.value, request.clientUniqueID)
+        XCTAssertTrue(calls.allSatisfy { call in
+            URLComponents(url: call.url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "uniqueid" })?.value
+                == request.clientUniqueID
+        })
     }
 
     func testCancelResponseRequiresExplicitSunshineConfirmation() throws {
@@ -126,7 +135,8 @@ final class StreamNegotiationTests: XCTestCase {
 
     private func makeRequest(
         app: RemoteApp = RemoteApp(id: "0", name: "Desktop", supportsHDR: false, installPath: nil),
-        preferences: StreamPreferences = .defaults
+        preferences: StreamPreferences = .defaults,
+        clientUniqueID: String = "client"
     ) throws -> StreamLaunchRequest {
         StreamLaunchRequest(
             host: MoonlightHost(
@@ -143,7 +153,7 @@ final class StreamNegotiationTests: XCTestCase {
             ),
             app: app,
             preferences: preferences,
-            clientUniqueID: "client",
+            clientUniqueID: clientUniqueID,
             remoteInputKey: RemoteInputKeyMaterial(
                 keyID: 7,
                 key: Data(repeating: 0x0A, count: 16)
@@ -169,6 +179,8 @@ private actor RecordingPinnedStreamRequestExecutor: PinnedHTTPSRequestExecuting 
         let data: Data
         if url.path == "/launch" {
             data = Data("<root status_code=\"200\"><gamesession>123</gamesession></root>".utf8)
+        } else if url.path == "/resume" {
+            data = Data("<root status_code=\"200\"><resume>1</resume></root>".utf8)
         } else {
             data = Data("<root status_code=\"200\"><cancel>1</cancel></root>".utf8)
         }

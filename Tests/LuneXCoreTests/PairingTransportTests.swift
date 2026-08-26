@@ -83,6 +83,10 @@ final class PairingTransportTests: XCTestCase {
         XCTAssertTrue(snapshot.clientSecretVerified)
         XCTAssertTrue(snapshot.finalRequestUsedTemporaryPin)
         XCTAssertTrue(snapshot.finalRequestUsedClientIdentity)
+        XCTAssertEqual(
+            snapshot.requestUniqueIDs,
+            Array(repeating: clientIdentity.protocolUniqueID, count: 5)
+        )
     }
 
     func testTemporaryPinMismatchFailsWithoutCompletion() async throws {
@@ -266,6 +270,7 @@ final class PairingTransportTests: XCTestCase {
 
 private struct SunshinePairingStubSnapshot: Sendable {
     var requestStages: [String]
+    var requestUniqueIDs: [String]
     var clientSecretVerified: Bool
     var finalRequestUsedTemporaryPin: Bool
     var finalRequestUsedClientIdentity: Bool
@@ -284,6 +289,7 @@ private actor SunshinePairingStub: PairingRequestExecuting {
     private var clientCertificateDER: Data?
     private var clientResponseHash: Data?
     private var requestStages: [String] = []
+    private var requestUniqueIDs: [String] = []
     private var clientSecretVerified = false
     private var finalRequestUsedTemporaryPin = false
     private var finalRequestUsedClientIdentity = false
@@ -322,6 +328,10 @@ private actor SunshinePairingStub: PairingRequestExecuting {
         )?.queryItems?.compactMap { item in
             item.value.map { (item.name, $0) }
         } ?? [])
+        guard let requestUniqueID = query["uniqueid"] else {
+            throw PairingTransportTestError.invalidRequest
+        }
+        requestUniqueIDs.append(requestUniqueID)
         if query["phrase"] == "getservercert" {
             requestStages.append("getservercert")
             try await blockIfNeeded("getservercert")
@@ -426,6 +436,7 @@ private actor SunshinePairingStub: PairingRequestExecuting {
     func snapshot() -> SunshinePairingStubSnapshot {
         SunshinePairingStubSnapshot(
             requestStages: requestStages,
+            requestUniqueIDs: requestUniqueIDs,
             clientSecretVerified: clientSecretVerified,
             finalRequestUsedTemporaryPin: finalRequestUsedTemporaryPin,
             finalRequestUsedClientIdentity: finalRequestUsedClientIdentity

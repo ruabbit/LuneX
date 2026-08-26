@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import XCTest
 
 final class AppCatalogTests: XCTestCase {
@@ -35,6 +36,71 @@ final class AppCatalogTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? PinnedTransportError, .missingPinnedIdentity)
         }
+    }
+
+    func testPinnedRequestExecutorRequiresPersistedClientIdentityBeforeNetworkAccess() async {
+        let request = URLRequest(url: URL(string: "https://moon.local:47984/applist")!)
+        let executor = PinnedHTTPSRequestExecutor(
+            clientIdentityStore: InMemoryClientIdentityStore(),
+            clientIdentityValidator: AcceptingClientIdentityValidator()
+        )
+        let pin = PinnedHostIdentity(
+            certificateSHA256: "pin",
+            serverCertificateDER: Data([9, 8, 7]),
+            pairedAt: Date(timeIntervalSince1970: 1)
+        )
+
+        do {
+            _ = try await executor.data(for: request, pinnedIdentity: pin)
+            XCTFail("Expected a missing-client-identity failure")
+        } catch {
+            XCTAssertEqual(error as? PinnedTransportError, .missingClientIdentity)
+        }
+    }
+
+    func testPinnedRequestExecutorRejectsInvalidClientIdentityBeforeNetworkAccess() async {
+        let request = URLRequest(url: URL(string: "https://moon.local:47984/applist")!)
+        let identity = ClientIdentityMaterial(
+            certificateDER: Data([1]),
+            privateKeyDER: Data([2]),
+            createdAt: Date(timeIntervalSince1970: 1)
+        )
+        let executor = PinnedHTTPSRequestExecutor(
+            clientIdentityStore: InMemoryClientIdentityStore(identity: identity),
+            clientIdentityValidator: RejectingClientIdentityValidator()
+        )
+        let pin = PinnedHostIdentity(
+            certificateSHA256: "pin",
+            serverCertificateDER: Data([9, 8, 7]),
+            pairedAt: Date(timeIntervalSince1970: 1)
+        )
+
+        do {
+            _ = try await executor.data(for: request, pinnedIdentity: pin)
+            XCTFail("Expected an invalid-client-identity failure")
+        } catch {
+            XCTAssertEqual(error as? PinnedTransportError, .invalidClientIdentity)
+        }
+    }
+
+    func testPinnedDelegateBuildsClientCertificateCredentialFromPersistedMaterial() throws {
+        let material = try SecurityClientIdentityGenerator().generateIdentity(
+            createdAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let delegate = try PinnedCertificateSessionDelegate(
+            expectedLeafDER: Data([9, 8, 7]),
+            clientIdentity: material
+        )
+        let credential = delegate.clientCredential()
+        let identity = try XCTUnwrap(credential.identity)
+        var certificate: SecCertificate?
+
+        XCTAssertEqual(SecIdentityCopyCertificate(identity, &certificate), errSecSuccess)
+        XCTAssertEqual(
+            certificate.map { SecCertificateCopyData($0) as Data },
+            material.certificateDER
+        )
+        XCTAssertEqual(credential.persistence, .forSession)
     }
 
     func testHTTPAppListClientRoutesPinnedIdentityToExecutor() async throws {
@@ -158,6 +224,19 @@ final class AppCatalogTests: XCTestCase {
 
         let artworkFetchCount = await client.currentArtworkFetchCount()
         XCTAssertEqual(artworkFetchCount, 2)
+    }
+}
+
+private struct AcceptingClientIdentityValidator: ClientIdentityValidating {
+    func validate(_ identity: ClientIdentityMaterial) throws {
+        _ = identity
+    }
+}
+
+private struct RejectingClientIdentityValidator: ClientIdentityValidating {
+    func validate(_ identity: ClientIdentityMaterial) throws {
+        _ = identity
+        throw ClientIdentityValidationError.certificateParsingFailed
     }
 }
 
