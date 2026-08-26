@@ -2314,3 +2314,10 @@
 - **下一步：** 新增 metadata-drift/conflicting-shard 回归，执行 fresh focused、media/session related、macOS normal、必要的五产品构建及 generator/OpenSpec/repository gate；最终源码提交新 SHA 后才允许一次双 opt-in live gate。不得重跑任何旧 SHA live gate。
 - **focused/related/normal：** fresh focused `/private/tmp/LuneX-M2-video-fec-focused-final.fpj07t/Focused.xcresult` 通过 `3/3`；视频媒体相关矩阵 `/private/tmp/LuneX-M2-video-fec-related-final.bQkVXL/Related.xcresult` 通过 `94/94`；完整 macOS normal `/private/tmp/LuneX-M2-video-fec-normal-final.wOFT9w/Normal.xcresult` 通过 `1330 total / 1328 passed / 2 exact skips / 0 failed`，skip 为 live Sunshine 与 real Keychain。三份 structured diagnostics 均为 `succeeded / 0 error / 0 warning / 0 analyzer warning`，无残留 build/test 进程。
 - **兼容 build/generator/OpenSpec：** fresh 五产品 generic build `/private/tmp/LuneX-M2-video-fec-builds-final.q1a74B` 全部 `succeeded / 0 / 0 / 0`，macOS Debug/Release 为 `x86_64 arm64` universal，Metal 输出 `10` 个；generator 连续两次生成前后 `project.pbxproj` SHA-256 均为 `783a7494...5944`；OpenSpec strict 为 `11/11`。下一步执行最终只读 repository gate，提交推送后才允许本新 SHA 唯一一次双 opt-in live gate。
+
+## 2026-08-27 M2 FEC exact-SHA live result
+
+- **提交：** FEC hardening 已以 `212958ffd2bf7cfdd50a3cf281ef8661f1446c94` 提交并推送，三方 `HEAD == origin/main`，工作树干净。
+- **live gate：** 新 SHA 仅执行一次双 opt-in macOS gate。arm64 live bundle 构建成功；`tanmy-white/Desktop` 的匹配运行应用走 `/resume`，`launch=0`、`resume=1`、`cancel=0`，control/RTSP/ENet readiness 到达 `channels_1` 和 video color metadata。视频在 46 秒窗口收到 `26578` 个 datagram 并产生 `20144` 个 parser event，证明本轮 FEC 组装修复未阻断视频到达。
+- **阻塞：** 音频通道连接且发送 `87` 个 custom ping，但收到 `0` 个 datagram、`0` 个 parser event；没有 decoded audio readiness，模型停留 `waitingForTransport`，harness 执行有界本地 stop 并以 `stream.video` 失败退出。`spatial_audio_missing_entitlement` 仅表示当前运行环境的空间音频能力缺失，不作为音频 UDP 根因。该 SHA 不重跑，不能以视频活动或 control readiness 替代可听同步音频。
+- **清理与边界：** 四个 LuneX 状态文件仍为 `0600` 且 SHA 未变化，未发送 remote `/cancel`，xcodebuild/xctest 残留为零；Task 2.3 继续保持 `7/27 next 2.3 pending`。下一步先取得不改变 host 状态的音频发送/配置证据，再决定新的源码修复和后续验收门。
