@@ -245,6 +245,8 @@ enum MoonlightControlProtocol {
     static let channelCount: UInt8 = 0x30
     static let genericChannel: UInt8 = 0x00
     static let urgentChannel: UInt8 = 0x01
+    static let periodicPingInterval: Duration = .milliseconds(100)
+    static let periodicPingType: UInt16 = 0x0200
     static let requestIDRType: UInt16 = 0x0302
     static let startBType: UInt16 = 0x0307
     static let terminationType: UInt16 = 0x0109
@@ -253,6 +255,10 @@ enum MoonlightControlProtocol {
     static let triggerRumbleType: UInt16 = 0x5500
     static let motionRateType: UInt16 = 0x5501
     static let controllerLEDType: UInt16 = 0x5502
+    static let periodicPing = MoonlightControlMessage(
+        type: periodicPingType,
+        payload: Data([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    )
     static let requestIDR = MoonlightControlMessage(type: requestIDRType, payload: Data([0, 0]))
     static let startA = requestIDR
     static let startB = MoonlightControlMessage(type: startBType, payload: Data([0]))
@@ -442,14 +448,20 @@ protocol MoonlightControlChannelManaging: Sendable {
 actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInputFrameSending,
     RemoteControllerFeedbackStreaming {
     private let driver: any ENetConnectionDriving
+    private let keepaliveInterval: Duration
     private var encryptionKey = Data()
     private var nextSequence: UInt32 = 0
     private var connected = false
+    private var nextKeepaliveDeadline: ContinuousClock.Instant?
     private var inputContext: AuthenticatedRemoteInputContext?
     private var feedbackContinuations: [UUID: AsyncStream<RemoteControllerFeedbackMessage>.Continuation] = [:]
 
-    init(driver: any ENetConnectionDriving = ENetConnectionDriver()) {
+    init(
+        driver: any ENetConnectionDriving = ENetConnectionDriver(),
+        keepaliveInterval: Duration = MoonlightControlProtocol.periodicPingInterval
+    ) {
         self.driver = driver
+        self.keepaliveInterval = keepaliveInterval
     }
 
     func connect(
@@ -480,6 +492,11 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
             connected = true
             try await send(MoonlightControlProtocol.startA, channelID: MoonlightControlProtocol.genericChannel)
             try await send(MoonlightControlProtocol.startB, channelID: MoonlightControlProtocol.genericChannel)
+            try await send(
+                MoonlightControlProtocol.periodicPing,
+                channelID: MoonlightControlProtocol.genericChannel
+            )
+            nextKeepaliveDeadline = ContinuousClock.now + keepaliveInterval
         } catch {
             await stop()
             throw error
@@ -488,6 +505,7 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
 
     func nextEvent() async throws -> MoonlightControlEvent {
         guard connected else { throw ControlChannelError.invalidState }
+        try await sendKeepaliveIfDue()
         let event = try await driver.service(timeoutMilliseconds: 100)
         guard connected else { throw ControlChannelError.invalidState }
         switch event {
@@ -572,6 +590,7 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
     func stop() async {
         connected = false
         nextSequence = 0
+        nextKeepaliveDeadline = nil
         inputContext = nil
         encryptionKey.removeAll(keepingCapacity: false)
         finishFeedbackStreams()
@@ -591,6 +610,16 @@ actor MoonlightControlChannel: MoonlightControlChannelManaging, AuthenticatedInp
         nextSequence += 1
         try await driver.send(frame, channelID: channelID, reliable: true)
         guard connected else { throw ControlChannelError.invalidState }
+    }
+
+    private func sendKeepaliveIfDue() async throws {
+        guard let deadline = nextKeepaliveDeadline,
+              ContinuousClock.now >= deadline else { return }
+        nextKeepaliveDeadline = ContinuousClock.now + keepaliveInterval
+        try await send(
+            MoonlightControlProtocol.periodicPing,
+            channelID: MoonlightControlProtocol.genericChannel
+        )
     }
 
     private func broadcast(_ message: RemoteControllerFeedbackMessage) {

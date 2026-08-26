@@ -289,14 +289,18 @@ final class RemoteInputDeliveryTests: XCTestCase {
         let opened = try sends.map {
             try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
         }
-        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2, 3])
+        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2, 3, 4])
         XCTAssertEqual(opened.map(\.message.type), [
             MoonlightControlProtocol.startA.type,
             MoonlightControlProtocol.startB.type,
+            MoonlightControlProtocol.periodicPing.type,
             MoonlightControlProtocol.requestIDR.type,
             AuthenticatedRemoteInputContext.inputControlType
         ])
-        XCTAssertEqual(sends.map(\.channelID), [0, 0, 1, RemoteInputWireCodec.keyboardChannel])
+        XCTAssertEqual(
+            sends.map(\.channelID),
+            [0, 0, 0, 1, RemoteInputWireCodec.keyboardChannel]
+        )
         XCTAssertTrue(sends.allSatisfy(\.reliable))
         await channel.stop()
     }
@@ -331,7 +335,7 @@ final class RemoteInputDeliveryTests: XCTestCase {
 
     func testUncertainInputSendConsumesSharedSequence() async throws {
         let key = Data(repeating: 0x44, count: 16)
-        let driver = InputControlDriverStub(failingSendCalls: [3])
+        let driver = InputControlDriverStub(failingSendCalls: [4])
         let channel = MoonlightControlChannel(driver: driver)
         try await channel.connect(
             endpoint: RuntimeNetworkEndpoint(host: "example.invalid", port: 47_999, transport: .udp),
@@ -352,7 +356,7 @@ final class RemoteInputDeliveryTests: XCTestCase {
         let opened = try sends.map {
             try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
         }
-        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2, 3])
+        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2, 3, 4])
         XCTAssertEqual(opened.suffix(2).map(\.message.type), [
             AuthenticatedRemoteInputContext.inputControlType,
             MoonlightControlProtocol.requestIDR.type

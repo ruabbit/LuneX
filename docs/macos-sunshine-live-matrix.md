@@ -503,3 +503,58 @@ tvOS, and visionOS builds all succeeded with Metal output; both macOS products
 are universal `x86_64 arm64`. The generic builds do not advance frozen-platform
 status. A new exact-SHA live attempt is still required to prove that audio
 actually arrives and remains synchronized.
+
+## Exact-SHA Control Readiness Loss Receipt
+
+The media idle-receive repair was committed and pushed as exact SHA
+`edb75bf26f02b54da51945a2d44b5742ed31d31b`. A fresh warnings-as-errors Debug
+XCTest bundle at `/private/tmp/LuneX-M1-media-idle-live-build.2IhDz9` built as
+`succeeded / 0 errors / 0 warnings / 0 analyzer warnings`. The only
+double-opt-in gate for that SHA returned XCTest exit `1` after 13.355 test
+seconds. It did not reproduce the prior media timeout: the bounded receipt was
+`mediaFailures=none`.
+
+The production path used `launch=0`, `resume=1`, and `cancel=0`. Control events
+were
+`launch_accepted,rtsp_ready,negotiated,channels_1,video_color_metadata,channels_0,reconnecting_1`
+with no recorded control bootstrap failure. The terminal product receipt was
+`issue=input_unavailable`, `diagnostic=input_stream_ended`, and
+`subsystem=stream.input`. This narrows the next defect to the established ENet
+control/input stream becoming unavailable after negotiated media startup; it
+does not support a free/busy, client-capacity, catalog, RTSP, media receive, or
+ordinary `/cancel` explanation.
+
+All four local state files retained identical mode `0600`, size, and SHA-256,
+and the post-run audit found zero `xctest` and `xcodebuild` processes. The live
+wrapper correctly used `pipefail` and captured the XCTest failure, but its
+reporting tail exited after the gate because `pgrep` returned no match under
+`set -e`; an independent read-only post-check completed the state and process
+receipt without rerunning the gate. This exact SHA must not be run again.
+Task 2.3 remains pending: sustained decoded video, physically audible and
+synchronized audio, visible host input feedback, real reconnect, remote
+termination, repeated stop, and complete teardown still require acceptance.
+
+## Offline Control Keepalive Repair Acceptance
+
+Source comparison with Sunshine and `moonlight-common-c` identified the exact
+10-second control loss: Sunshine extends its application-level control deadline
+only after receiving client control data, while ENet protocol ping traffic does
+not reach that receive path. LuneX now sends the reliable encrypted `0x0200`
+periodic-ping message immediately after START A/B and then every 100 ms on the
+generic control channel. Periodic ping, IDR, and remote input share the same
+monotonic client sequence; stop clears the deadline and generation state.
+
+Fresh retained evidence passed lifecycle focused `11/11`, related
+`318 total / 317 passed / 1 live skip / 0 failed`, and macOS normal
+`1321 total / 1319 passed / 2 exact opt-in skips / 0 failed`. All three builds
+reported zero errors, warnings, and analyzer warnings. macOS Debug/Release plus
+iOS+iPadOS, tvOS, and visionOS generic compatibility builds passed `5/5`, each
+with Metal AIR/metallib output; both macOS executables are universal
+`x86_64 arm64`. The generator was byte-stable and the final repository gate
+reported OpenSpec `11/11`, current change `7/27 next 2.3 pending`, exact scope,
+exact skip names, file-fallback `0700/0600`, and zero secret material, ordinary
+remote cancel, enabled real opt-ins, or residual build/test process.
+
+This is deterministic and generic-build evidence, not a live result for the
+new code. Task 2.3 remains pending until a newly committed exact SHA receives
+its single bounded live attempt and the remaining physical/live matrix is met.

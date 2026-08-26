@@ -129,15 +129,16 @@ final class ControlChannelTests: XCTestCase {
             timeoutMilliseconds: 10_000
         ))
         let sends = await driver.recordedSends()
-        XCTAssertEqual(sends.map(\.channelID), [0, 0, 1])
+        XCTAssertEqual(sends.map(\.channelID), [0, 0, 0, 1])
         XCTAssertTrue(sends.allSatisfy(\.reliable))
         let opened = try sends.map {
             try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
         }
-        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2])
+        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2, 3])
         XCTAssertEqual(opened.map(\.message), [
             MoonlightControlProtocol.startA,
             MoonlightControlProtocol.startB,
+            MoonlightControlProtocol.periodicPing,
             MoonlightControlProtocol.requestIDR
         ])
         let serviceTimeouts = await driver.recordedServiceTimeouts()
@@ -165,9 +166,122 @@ final class ControlChannelTests: XCTestCase {
         XCTAssertEqual(disconnects, 1)
     }
 
+    func testControlKeepaliveRepeatsOnTheGenericReliableChannelAndStops() async throws {
+        XCTAssertEqual(
+            MoonlightControlProtocol.periodicPingInterval,
+            .milliseconds(100)
+        )
+        let key = Data(repeating: 0x2A, count: 16)
+        let driver = ControlDriverStub(serviceEvents: [.idle, .idle])
+        let channel = MoonlightControlChannel(
+            driver: driver,
+            keepaliveInterval: .zero
+        )
+        try await channel.connect(
+            endpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 47_999,
+                transport: .udp
+            ),
+            connectData: 0,
+            encryptionKey: key
+        )
+
+        let firstEvent = try await channel.nextEvent()
+        let secondEvent = try await channel.nextEvent()
+        XCTAssertEqual(firstEvent, .idle)
+        XCTAssertEqual(secondEvent, .idle)
+        await channel.stop()
+        await assertAsyncError(.invalidState) {
+            _ = try await channel.nextEvent()
+        }
+
+        let sends = await driver.recordedSends()
+        let opened = try sends.map {
+            try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
+        }
+        XCTAssertEqual(opened.map(\.sequence), [0, 1, 2, 3, 4])
+        XCTAssertEqual(opened.suffix(3).map(\.message), [
+            MoonlightControlProtocol.periodicPing,
+            MoonlightControlProtocol.periodicPing,
+            MoonlightControlProtocol.periodicPing
+        ])
+        XCTAssertEqual(opened.suffix(3).map { $0.message.payload }, [
+            Data([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            Data([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            Data([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        ])
+        XCTAssertEqual(sends.suffix(3).map(\.channelID), [0, 0, 0])
+        XCTAssertTrue(sends.suffix(3).allSatisfy(\.reliable))
+    }
+
+    func testStopInvalidatesAControlEventBlockedInServiceWithoutLateKeepalive() async throws {
+        let key = Data(repeating: 0x6D, count: 16)
+        let driver = SuspendedServiceControlDriverStub()
+        let channel = MoonlightControlChannel(driver: driver)
+        try await channel.connect(
+            endpoint: RuntimeNetworkEndpoint(
+                host: "example.invalid",
+                port: 47_999,
+                transport: .udp
+            ),
+            connectData: 0,
+            encryptionKey: key
+        )
+
+        let eventTask = Task { try await channel.nextEvent() }
+        await driver.waitUntilServiceStarts()
+        await channel.stop()
+
+        do {
+            _ = try await eventTask.value
+            XCTFail("A stopped control generation must not publish a late event.")
+        } catch let error as ControlChannelError {
+            XCTAssertEqual(error, .invalidState)
+        }
+
+        let sends = await driver.recordedSends()
+        let opened = try sends.map {
+            try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
+        }
+        XCTAssertEqual(opened.map(\.message), [
+            MoonlightControlProtocol.startA,
+            MoonlightControlProtocol.startB,
+            MoonlightControlProtocol.periodicPing
+        ])
+        let disconnects = await driver.disconnectCount()
+        XCTAssertEqual(disconnects, 1)
+    }
+
+    func testInitialKeepaliveFailureRollsBackTheControlConnection() async throws {
+        let driver = ControlDriverStub(serviceEvents: [], failingSendCalls: [3])
+        let channel = MoonlightControlChannel(driver: driver)
+
+        do {
+            try await channel.connect(
+                endpoint: RuntimeNetworkEndpoint(
+                    host: "example.invalid",
+                    port: 47_999,
+                    transport: .udp
+                ),
+                connectData: 0,
+                encryptionKey: Data(repeating: 0x33, count: 16)
+            )
+            XCTFail("The scripted initial keepalive send must fail.")
+        } catch let error as ENetTransportError {
+            XCTAssertEqual(error, .sendFailed)
+        }
+
+        let disconnects = await driver.disconnectCount()
+        XCTAssertEqual(disconnects, 1)
+        await assertAsyncError(.invalidState) {
+            try await channel.requestIDR()
+        }
+    }
+
     func testUncertainSendFailureConsumesSequenceBeforeRetry() async throws {
         let key = Data(repeating: 0x5A, count: 16)
-        let driver = ControlDriverStub(serviceEvents: [], failingSendCalls: [3])
+        let driver = ControlDriverStub(serviceEvents: [], failingSendCalls: [4])
         let channel = MoonlightControlChannel(driver: driver)
         try await channel.connect(
             endpoint: RuntimeNetworkEndpoint(host: "example.invalid", port: 47_999, transport: .udp),
@@ -177,7 +291,7 @@ final class ControlChannelTests: XCTestCase {
 
         do {
             try await channel.requestIDR()
-            XCTFail("The scripted third send must fail.")
+            XCTFail("The scripted IDR send must fail.")
         } catch let error as ENetTransportError {
             XCTAssertEqual(error, .sendFailed)
         }
@@ -187,7 +301,7 @@ final class ControlChannelTests: XCTestCase {
         let frames = try sends.map {
             try EncryptedControlFrameCodec.open($0.payload, key: key, origin: .client)
         }
-        XCTAssertEqual(frames.map(\.sequence), [0, 1, 2, 3])
+        XCTAssertEqual(frames.map(\.sequence), [0, 1, 2, 3, 4])
         XCTAssertEqual(frames.suffix(2).map(\.message), [
             MoonlightControlProtocol.requestIDR,
             MoonlightControlProtocol.requestIDR
@@ -297,6 +411,20 @@ final class ControlChannelTests: XCTestCase {
         ))
     }
 
+    private func assertAsyncError(
+        _ expected: ControlChannelError,
+        operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+            XCTFail("Expected \(expected).")
+        } catch let error as ControlChannelError {
+            XCTAssertEqual(error, expected)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     private func loadFixture() throws -> ControlFixture {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -398,6 +526,57 @@ private actor ControlDriverStub: ENetConnectionDriving {
 
     func recordedServiceTimeouts() -> [UInt32] {
         serviceTimeouts
+    }
+
+    func disconnectCount() -> Int {
+        disconnects
+    }
+}
+
+private actor SuspendedServiceControlDriverStub: ENetConnectionDriving {
+    private var sends: [ControlSendCall] = []
+    private var serviceContinuation: CheckedContinuation<ENetServiceEvent, Never>?
+    private var serviceStartWaiters: [CheckedContinuation<Void, Never>] = []
+    private var disconnects = 0
+
+    func connect(
+        host: String,
+        port: UInt16,
+        channelCount: UInt8,
+        connectData: UInt32,
+        timeoutMilliseconds: UInt32
+    ) async throws {}
+
+    func send(_ payload: Data, channelID: UInt8, reliable: Bool) async throws {
+        sends.append(ControlSendCall(payload: payload, channelID: channelID, reliable: reliable))
+    }
+
+    func service(timeoutMilliseconds: UInt32) async throws -> ENetServiceEvent {
+        await withCheckedContinuation { continuation in
+            serviceContinuation = continuation
+            let waiters = serviceStartWaiters
+            serviceStartWaiters.removeAll(keepingCapacity: false)
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+    }
+
+    func disconnect() async {
+        disconnects += 1
+        serviceContinuation?.resume(returning: .idle)
+        serviceContinuation = nil
+    }
+
+    func waitUntilServiceStarts() async {
+        guard serviceContinuation == nil else { return }
+        await withCheckedContinuation { continuation in
+            serviceStartWaiters.append(continuation)
+        }
+    }
+
+    func recordedSends() -> [ControlSendCall] {
+        sends
     }
 
     func disconnectCount() -> Int {

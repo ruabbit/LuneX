@@ -101,6 +101,12 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **AND** an unsupported required control-encryption capability or a rejected ANNOUNCE or PLAY SHALL fail closed before ENet connection
 - **AND** the SDP feature mask SHALL advertise only protocol features whose corresponding client behavior LuneX actually implements
 
+#### Scenario: Established Sunshine control session remains alive
+- **WHEN** encrypted ENet control transport completes START A and START B
+- **THEN** LuneX SHALL immediately send the reliable `0x0200` periodic-ping message on the generic control channel and continue sending it at the Moonlight 100-millisecond interval while that control generation remains active
+- **AND** periodic ping, IDR, and remote-input frames SHALL share one monotonic authenticated client sequence
+- **AND** keepalive send failure SHALL fail or reconnect the current generation, while stop, replacement, and teardown SHALL prevent any later keepalive from that generation
+
 #### Scenario: Long-lived media UDP is temporarily idle
 - **WHEN** a negotiated video or audio UDP receiver is waiting and no datagram arrives within an arbitrary polling window
 - **THEN** LuneX SHALL keep the media channel active instead of cancelling the Network.framework connection or publishing a terminal transport failure solely because the receive was idle
