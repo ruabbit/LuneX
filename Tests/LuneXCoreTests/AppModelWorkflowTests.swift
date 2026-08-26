@@ -1,11 +1,241 @@
 @preconcurrency import CoreVideo
 @preconcurrency import Metal
+import Foundation
 import MetalKit
 import QuartzCore
 import XCTest
 
+private enum LiveSunshineAcceptanceScope: Equatable {
+    case disabled
+    case catalog
+    case desktopSession
+}
+
+private enum LiveSunshineAcceptanceConfiguration {
+    static let hostID = UUID(
+        uuidString: "494b1a48-cccc-5e5d-9eef-4edfcea7205e"
+    )!
+    static let hostName = "tanmy-white"
+    static let hostAddress = "10.1.100.69"
+    static let appID = "881448767"
+    static let appName = "Desktop"
+
+    static func scope(
+        environment: [String: String]
+    ) -> LiveSunshineAcceptanceScope {
+        guard environment["LUNEX_RUN_LIVE_HOST_TEST"] == "1" else {
+            return .disabled
+        }
+        guard environment["LUNEX_RUN_LIVE_DESKTOP_SESSION"] == "1" else {
+            return .catalog
+        }
+        return .desktopSession
+    }
+}
+
+private enum LiveSunshineAcceptanceError: Error {
+    case invalidServerInfoResponse
+}
+
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
+    func testLiveSunshineAcceptanceRequiresExactOptIns() {
+        XCTAssertEqual(
+            LiveSunshineAcceptanceConfiguration.scope(environment: [:]),
+            .disabled
+        )
+        XCTAssertEqual(
+            LiveSunshineAcceptanceConfiguration.scope(environment: [
+                "LUNEX_RUN_LIVE_DESKTOP_SESSION": "1"
+            ]),
+            .disabled
+        )
+        XCTAssertEqual(
+            LiveSunshineAcceptanceConfiguration.scope(environment: [
+                "LUNEX_RUN_LIVE_HOST_TEST": "true",
+                "LUNEX_RUN_LIVE_DESKTOP_SESSION": "1"
+            ]),
+            .disabled
+        )
+        XCTAssertEqual(
+            LiveSunshineAcceptanceConfiguration.scope(environment: [
+                "LUNEX_RUN_LIVE_HOST_TEST": "1"
+            ]),
+            .catalog
+        )
+        XCTAssertEqual(
+            LiveSunshineAcceptanceConfiguration.scope(environment: [
+                "LUNEX_RUN_LIVE_HOST_TEST": "1",
+                "LUNEX_RUN_LIVE_DESKTOP_SESSION": "true"
+            ]),
+            .catalog
+        )
+        XCTAssertEqual(
+            LiveSunshineAcceptanceConfiguration.scope(environment: [
+                "LUNEX_RUN_LIVE_HOST_TEST": "1",
+                "LUNEX_RUN_LIVE_DESKTOP_SESSION": "1"
+            ]),
+            .desktopSession
+        )
+    }
+
+    func testLiveTanmyWhiteProductionAcceptanceWhenExplicitlyEnabled()
+        async throws
+    {
+        let scope = LiveSunshineAcceptanceConfiguration.scope(
+            environment: ProcessInfo.processInfo.environment
+        )
+        guard scope != .disabled else {
+            throw XCTSkip(
+                "Set LUNEX_RUN_LIVE_HOST_TEST=1 for the bounded live catalog gate."
+            )
+        }
+
+#if os(macOS) && DEBUG
+        let model = makeLiveSunshineProductionModel()
+        await model.loadInitialState()
+
+        let matchingHosts = model.hosts.filter {
+            $0.id == LiveSunshineAcceptanceConfiguration.hostID
+                && $0.name == LiveSunshineAcceptanceConfiguration.hostName
+                && $0.address == LiveSunshineAcceptanceConfiguration.hostAddress
+        }
+        guard matchingHosts.count == 1,
+              let host = matchingHosts.first,
+              host.pairingState == .paired,
+              host.pinnedIdentity != nil else {
+            XCTFail("The fixed paired and pinned tanmy-white host was not found.")
+            return
+        }
+
+        let endpoint = try HostEndpointParser.parse(host.address)
+        let serverInfo = try await fetchLiveServerInfoOnce(from: endpoint)
+        guard serverInfo.name == LiveSunshineAcceptanceConfiguration.hostName else {
+            XCTFail("The fixed endpoint did not identify itself as tanmy-white.")
+            return
+        }
+        guard serverInfo.state == "SUNSHINE_SERVER_FREE" else {
+            let currentGame = serverInfo.rawValues["currentgame"] ?? "unknown"
+            throw XCTSkip(
+                "tanmy-white is not free (state=\(serverInfo.state ?? "unknown"), currentgame=\(currentGame)); no catalog or session request was sent."
+            )
+        }
+
+        model.select(host: host)
+        await model.refreshAppsForSelectedHost()
+        guard model.primaryWorkspaceState?.catalog.phase == .current,
+              model.primaryWorkspaceState?.catalog.issue == nil else {
+            XCTFail("The production pinned-mTLS catalog did not become current.")
+            return
+        }
+
+        let matchingApps = model.selectedApps.filter {
+            $0.id == LiveSunshineAcceptanceConfiguration.appID
+                && $0.name == LiveSunshineAcceptanceConfiguration.appName
+        }
+        let desktop = try XCTUnwrap(matchingApps.first)
+        XCTAssertEqual(matchingApps.count, 1)
+        guard scope == .desktopSession else { return }
+        model.select(app: desktop)
+
+        let framesBeforeLaunch = model.videoPresentationSource
+            .snapshot().publishedFrameCount
+        let launchTask = Task { await model.launchSelectedApp() }
+        let reachedStreaming = await waitForLiveSunshineCondition(
+            timeout: .seconds(45)
+        ) {
+            model.session.isStreaming
+                || [.failed, .remoteTerminated, .reconnectExhausted]
+                    .contains(model.productSessionActualPhase)
+        }
+        guard reachedStreaming, model.session.isStreaming else {
+            _ = await model.stopStream(in: model.primaryWorkspaceReference)
+            launchTask.cancel()
+            await launchTask.value
+            XCTFail(
+                "The production session did not reach streaming; phase=\(model.productSessionActualPhase)."
+            )
+            return
+        }
+
+        let mediaBecameActive = await waitForLiveSunshineCondition(
+            timeout: .seconds(20)
+        ) {
+            model.videoPresentationSource.snapshot().publishedFrameCount
+                > framesBeforeLaunch
+                && model.audioRuntimeState?.runtime.stage == .running
+        }
+        guard mediaBecameActive else {
+            _ = await model.stopStream(in: model.primaryWorkspaceReference)
+            launchTask.cancel()
+            await launchTask.value
+            XCTFail("Production video/audio runtime signals did not become active.")
+            return
+        }
+
+        let firstSustainedFrameCount = model.videoPresentationSource
+            .snapshot().publishedFrameCount
+        do {
+            try await model.sendRemoteInput(.pointer(.relativeMove(
+                deltaX: 1,
+                deltaY: 0,
+                buttons: []
+            )))
+            try await model.sendRemoteInput(.pointer(.relativeMove(
+                deltaX: -1,
+                deltaY: 0,
+                buttons: []
+            )))
+            try await model.releaseRemoteInput()
+        } catch {
+            _ = await model.stopStream(in: model.primaryWorkspaceReference)
+            launchTask.cancel()
+            await launchTask.value
+            throw error
+        }
+
+        let sustainedVideo = await waitForLiveSunshineCondition(
+            timeout: .seconds(10)
+        ) {
+            model.videoPresentationSource.snapshot().publishedFrameCount
+                >= firstSustainedFrameCount + 30
+        }
+        XCTAssertTrue(sustainedVideo)
+        XCTAssertEqual(model.audioRuntimeState?.runtime.stage, .running)
+
+        let stopped = await model.stopStream(
+            in: model.primaryWorkspaceReference
+        )
+        guard stopped else {
+            launchTask.cancel()
+            await launchTask.value
+            XCTFail("The production session did not accept its bounded stop.")
+            return
+        }
+        launchTask.cancel()
+        await launchTask.value
+        let teardownCompleted = await waitForLiveSunshineCondition(
+            timeout: .seconds(10)
+        ) {
+            !model.hasActiveStreamSession
+                && model.activeProductSessionOwner == nil
+                && model.productSessionActualPhase == .idle
+                && !model.session.isStreaming
+                && model.audioRuntimeState == nil
+                && model.videoPresentationSource.snapshot().sessionID == nil
+        }
+        XCTAssertTrue(teardownCompleted)
+        let repeatedStop = await model.stopStream(
+            in: model.primaryWorkspaceReference
+        )
+        XCTAssertFalse(repeatedStop)
+#else
+        throw XCTSkip(
+            "The live harness is limited to macOS Debug so it always uses the explicit file identity fallback."
+        )
+#endif
+    }
+
     func testSceneConnectionsRestoreThroughAppModelAndKeepUnsupportedPrimary()
         async throws
     {
@@ -9425,6 +9655,78 @@ final class AppModelWorkflowTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    private func makeLiveSunshineProductionModel() -> AppModel {
+        let identityStore = JSONFileClientIdentityStore(
+            fileURL: AppStorageLocations.debugClientIdentityFile
+        )
+        let requestExecutor = PinnedHTTPSRequestExecutor(
+            clientIdentityStore: identityStore
+        )
+        let launchClient = HTTPStreamLaunchClient(
+            requestExecutor: requestExecutor
+        )
+        let controlChannel = MoonlightControlChannel()
+        let runtimeProviders = RuntimeProviderInventory(
+            sessionControl: MoonlightSessionControlProvider(
+                launchClient: launchClient,
+                controlChannel: controlChannel
+            ),
+            videoReceive: MoonlightVideoReceiveProvider(),
+            audioReceive: MoonlightAudioReceiveProvider(),
+            remoteInput: MoonlightRemoteInputProvider(
+                sender: controlChannel,
+                feedbackSource: controlChannel
+            )
+        )
+        return AppModel(
+            appCatalogManager: AppCatalogManager(
+                appListClient: HTTPAppListClient(
+                    requestExecutor: requestExecutor
+                ),
+                artworkCache: InMemoryArtworkCache()
+            ),
+            appCatalogRepository: InMemoryAppCatalogSnapshotRepository(),
+            streamSessionCoordinator: StreamSessionCoordinator(
+                launchClient: launchClient
+            ),
+            runtimeProviders: runtimeProviders,
+            clientIdentityStore: identityStore
+        )
+    }
+
+    private func fetchLiveServerInfoOnce(
+        from endpoint: HostEndpoint
+    ) async throws -> ServerInfo {
+        guard let url = endpoint.serverInfoURL else {
+            throw LiveSunshineAcceptanceError.invalidServerInfoResponse
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        let session = URLSession(configuration: configuration)
+        defer { session.finishTasksAndInvalidate() }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse,
+              response.statusCode == 200 else {
+            throw LiveSunshineAcceptanceError.invalidServerInfoResponse
+        }
+        return ServerInfoParser.parse(data)
+    }
+
+    private func waitForLiveSunshineCondition(
+        timeout: Duration,
+        condition: () -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return condition()
     }
 
     private func waitForApplicationIntegrationState(

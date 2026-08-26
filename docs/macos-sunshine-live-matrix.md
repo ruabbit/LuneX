@@ -65,7 +65,7 @@ or arbitrary application requiring a separate approval gate.
 |---|---|---|
 | Host inventory | `tanmy-white` advertised protocol/codec modes and host-free precondition | Capabilities recorded; host was busy at inventory time |
 | Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Moonlight-qt identity imported and validated locally; production pinned HTTPS now loads and presents it for mTLS, but live authentication has not run |
-| Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | Cached catalog contains `Desktop`; live read not run |
+| Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | 2026-08-26 17:41 CST: the single bounded server-info preflight timed out after 5 seconds, so no catalog request was sent; cached `Desktop` is not counted as live evidence |
 | Launch | Exactly one `Desktop` session launches through the production runtime | Not run |
 | RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Not run |
 | Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Not run |
@@ -93,6 +93,53 @@ Task 2.3 may start only after all of these are true:
 
 A Sunshine package version is not a precondition. The two expected offline-host
 timeouts are not preconditions or failures either.
+
+## Explicit Live Harness
+
+`AppModelWorkflowTests.testLiveTanmyWhiteProductionAcceptanceWhenExplicitlyEnabled`
+is the only automated Task 2.3 entry point. It hard-codes the persisted
+`tanmy-white` host ID, name, and address plus the exact `Desktop` app ID and
+name. With neither opt-in set it skips before loading local state. The normal
+suite therefore keeps both live variables unset.
+
+The catalog-only gate performs exactly one HTTP server-info preflight. A busy
+host skips before catalog; an unreachable or malformed response fails. Only a
+free host proceeds to the production pinned-mTLS catalog client. The catalog
+snapshot repository is in memory so the gate does not rewrite hosts, settings,
+catalog, or identity files:
+
+```bash
+LLVM_PROFILE_FILE=/private/tmp/LuneX-live-catalog-%p.profraw \
+LUNEX_RUN_LIVE_HOST_TEST=1 \
+xcrun xctest \
+  -XCTest AppModelWorkflowTests/testLiveTanmyWhiteProductionAcceptanceWhenExplicitlyEnabled \
+  /path/to/DerivedData/Build/Products/Debug/LuneXCoreTests.xctest
+```
+
+The `Desktop` session is admitted only when both exact opt-ins equal `1`:
+
+```bash
+LLVM_PROFILE_FILE=/private/tmp/LuneX-live-session-%p.profraw \
+LUNEX_RUN_LIVE_HOST_TEST=1 \
+LUNEX_RUN_LIVE_DESKTOP_SESSION=1 \
+xcrun xctest \
+  -XCTest AppModelWorkflowTests/testLiveTanmyWhiteProductionAcceptanceWhenExplicitlyEnabled \
+  /path/to/DerivedData/Build/Products/Debug/LuneXCoreTests.xctest
+```
+
+That automated session observes production launch/negotiation, streaming state,
+decoded-frame growth, a running audio runtime, a no-button relative-pointer
+`+1/-1` round trip, input release, one remote cancel, repeated local stop, and
+observable model teardown. It does not prove that audio was physically audible
+and synchronized, that the host visibly received the pointer movement, or that
+real reconnect and host-side termination worked. Those rows remain manual live
+acceptance requirements even if the automated session passes.
+
+The first actual catalog-only run at 17:41 CST on 2026-08-26 inherited the
+explicit opt-in and made one request to the fixed server-info endpoint. It timed
+out at the five-second boundary. No pinned catalog, launch, resume, cancel,
+stop, or input request followed, and the four local data-file hashes and modes
+were unchanged. The host was not queried again in that run.
 
 ## Debug Identity Reuse
 
