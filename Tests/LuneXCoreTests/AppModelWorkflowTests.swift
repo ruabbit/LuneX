@@ -32,12 +32,6 @@ private enum LiveSunshineAcceptanceConfiguration {
         return .desktopSession
     }
 
-    static func allowsDesktopSession(
-        scope: LiveSunshineAcceptanceScope,
-        serverState: String?
-    ) -> Bool {
-        scope == .desktopSession && serverState == "SUNSHINE_SERVER_FREE"
-    }
 }
 
 private enum LiveSunshineAcceptanceError: Error {
@@ -84,18 +78,6 @@ final class AppModelWorkflowTests: XCTestCase {
             ]),
             .desktopSession
         )
-        XCTAssertFalse(LiveSunshineAcceptanceConfiguration.allowsDesktopSession(
-            scope: .catalog,
-            serverState: "SUNSHINE_SERVER_FREE"
-        ))
-        XCTAssertFalse(LiveSunshineAcceptanceConfiguration.allowsDesktopSession(
-            scope: .desktopSession,
-            serverState: "SUNSHINE_SERVER_BUSY"
-        ))
-        XCTAssertTrue(LiveSunshineAcceptanceConfiguration.allowsDesktopSession(
-            scope: .desktopSession,
-            serverState: "SUNSHINE_SERVER_FREE"
-        ))
     }
 
     func testLiveTanmyWhiteProductionAcceptanceWhenExplicitlyEnabled()
@@ -148,15 +130,6 @@ final class AppModelWorkflowTests: XCTestCase {
         let desktop = try XCTUnwrap(matchingApps.first)
         XCTAssertEqual(matchingApps.count, 1)
         guard scope == .desktopSession else { return }
-        guard LiveSunshineAcceptanceConfiguration.allowsDesktopSession(
-            scope: scope,
-            serverState: serverInfo.state
-        ) else {
-            let currentGame = serverInfo.rawValues["currentgame"] ?? "unknown"
-            throw XCTSkip(
-                "The live catalog succeeded, but tanmy-white is not free (state=\(serverInfo.state ?? "unknown"), currentgame=\(currentGame)); no session request was sent."
-            )
-        }
         model.select(app: desktop)
 
         let framesBeforeLaunch = model.videoPresentationSource

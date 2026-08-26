@@ -115,6 +115,7 @@ final class SessionRecoveryTests: XCTestCase {
         ])
         let sleeper = RecoverySleeper()
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: connection,
             controlChannel: control,
@@ -175,6 +176,7 @@ final class SessionRecoveryTests: XCTestCase {
             ]
         )
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: RecoveryRTSPConnection(
                 responses: setupSequence(session: "initial") + setupSequence(session: "recovered")
@@ -211,6 +213,7 @@ final class SessionRecoveryTests: XCTestCase {
             .failure(ControlChannelError.disconnected(data: 0))
         ])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: connection,
             controlChannel: control,
@@ -219,17 +222,22 @@ final class SessionRecoveryTests: XCTestCase {
             keyMaterialGenerator: ScriptedKeyGenerator(materials: keys)
         )
 
-        let result = await collectFailure(await provider.start(sessionID: UUID(), request: makeRequest()))
+        let sessionID = UUID()
+        let result = await collectFailure(
+            await provider.start(sessionID: sessionID, request: makeRequest())
+        )
         let failure = result.error as? StreamNegotiationFailure
         let calls = await launchClient.recordedCalls()
         let controlStops = await control.stopCount()
         let rtspStops = await connection.cancelCount()
+        let teardown = await provider.teardownSnapshot(sessionID: sessionID)
 
         XCTAssertEqual(failure?.code, .reconnectExhausted)
         XCTAssertEqual(failure?.subsystem, "reconnect")
         XCTAssertEqual(calls.launchRequests.count, 1)
         XCTAssertEqual(calls.resumeRequests.count, 3)
-        XCTAssertEqual(calls.stopCount, 1)
+        XCTAssertEqual(calls.stopCount, 0)
+        XCTAssertEqual(teardown?.report?.remoteCancelResult, .notRequested)
         XCTAssertEqual(result.events.filter { if case .reconnecting = $0 { return true }; return false }.count, 3)
         XCTAssertGreaterThanOrEqual(controlStops, 4)
         XCTAssertGreaterThanOrEqual(rtspStops, 4)
@@ -242,6 +250,7 @@ final class SessionRecoveryTests: XCTestCase {
             resumeResults: []
         )
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: RecoveryRTSPConnection(responses: setupSequence(session: "initial")),
             controlChannel: RecoveryControlChannel(results: [
@@ -269,6 +278,7 @@ final class SessionRecoveryTests: XCTestCase {
             resumeResults: []
         )
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: RecoveryRTSPConnection(responses: setupSequence(session: "initial")),
             controlChannel: RecoveryControlChannel(results: [
@@ -332,6 +342,7 @@ final class SessionRecoveryTests: XCTestCase {
             secondAttemptResponses: setupSequence(session: "replacement")
         )
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: connection,
             controlChannel: RecoveryControlChannel(results: [
@@ -386,7 +397,7 @@ final class SessionRecoveryTests: XCTestCase {
             .channelsReady(.control),
             .terminated(reason: "The host ended the streaming session.")
         ])
-        XCTAssertEqual(remoteCancelCount, 1)
+        XCTAssertEqual(remoteCancelCount, 0)
     }
 
     private func makeRequest() -> StreamLaunchRequest {

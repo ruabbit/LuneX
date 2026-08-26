@@ -243,6 +243,11 @@ actor NetworkRTSPConnection: RTSPConnectionExecuting {
 }
 
 actor MoonlightSessionControlProvider: SessionControlProvider {
+    enum InitialSessionOperation: Equatable, Sendable {
+        case launch
+        case resume
+    }
+
     private static let clientVersion = "14"
     private static let maximumMediaPacketSize = 1_400
     private static let audioSamplesPerFrame = 240
@@ -264,6 +269,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     }
 
     private let launchClient: any StreamLaunchClient
+    private let serverInfoClient: any ServerInfoClient
     private let connection: any RTSPConnectionExecuting
     private let controlChannel: any MoonlightControlChannelManaging
     private let reconnectPolicy: SessionReconnectPolicy
@@ -284,6 +290,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private var mobileControlApplication: SessionMobileControlApplication?
 
     init(
+        serverInfoClient: any ServerInfoClient = HTTPServerInfoClient(),
         launchClient: any StreamLaunchClient = HTTPStreamLaunchClient(),
         connection: any RTSPConnectionExecuting = NetworkRTSPConnection(),
         controlChannel: any MoonlightControlChannelManaging = MoonlightControlChannel(),
@@ -294,6 +301,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         videoCodecSelectionPolicy: VideoCodecSelectionPolicy = VideoCodecSelectionPolicy()
     ) {
         self.launchClient = launchClient
+        self.serverInfoClient = serverInfoClient
         self.connection = connection
         self.controlChannel = controlChannel
         self.reconnectPolicy = reconnectPolicy
@@ -393,7 +401,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             await cancelSession(
                 activeSession,
                 trigger: .localStop,
-                cancelRemoteSession: true
+                cancelRemoteSession: false
             )
         } else if let lastSession, lastSession.sessionID == sessionID {
             _ = await lastSession.teardown.teardown(
@@ -432,7 +440,10 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         do {
             try reconnectPolicy.validate()
             let parameters = try StreamNegotiator().makeParameters(from: request)
-            let launch = try await launchClient.launch(request, parameters: parameters)
+            let launch = try await startInitialSession(
+                request,
+                parameters: parameters
+            )
             try yield(.launchAccepted(launch), token: token, continuation: continuation)
             try await establishTransport(
                 request: request,
@@ -507,14 +518,14 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             let terminalSession = claimTerminalSession(
                 token: token,
                 trigger: .failure,
-                cancelRemoteSession: true
+                cancelRemoteSession: false
             )
             if let terminalSession {
                 _ = await executeTeardown(terminalSession)
             } else {
                 _ = await teardown.teardown(
                     trigger: .failure,
-                    cancelRemoteSession: true
+                    cancelRemoteSession: false
                 )
             }
             if cancelled {
@@ -731,6 +742,55 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         )
     }
 
+    private func startInitialSession(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        let endpoint = try HostEndpointParser.parse(request.host.address)
+        let serverInfo = try await serverInfoClient.fetchServerInfo(
+            from: endpoint
+        )
+        switch try Self.initialSessionOperation(
+            serverInfo: serverInfo,
+            requestedAppID: request.app.id
+        ) {
+        case .launch:
+            return try await launchClient.launch(
+                request,
+                parameters: parameters
+            )
+        case .resume:
+            return try await launchClient.resume(
+                request,
+                parameters: parameters
+            )
+        }
+    }
+
+    static func initialSessionOperation(
+        serverInfo: ServerInfo,
+        requestedAppID: String
+    ) throws -> InitialSessionOperation {
+        guard let state = serverInfo.state, !state.isEmpty else {
+            throw StreamNegotiationFailure(
+                code: .launchRejected,
+                subsystem: "server_info",
+                message: "Host did not advertise a session state."
+            )
+        }
+        guard state.hasSuffix("_SERVER_BUSY") else {
+            return .launch
+        }
+        guard serverInfo.rawValues["currentgame"] == requestedAppID else {
+            throw StreamNegotiationFailure(
+                code: .resumeRejected,
+                subsystem: "resume",
+                message: "The selected application is not the host's current application."
+            )
+        }
+        return .resume
+    }
+
     private func freshKeyMaterial(
         excluding usedKeyMaterial: inout Set<RemoteInputKeyMaterial>
     ) throws -> RemoteInputKeyMaterial {
@@ -806,7 +866,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private func cancelSession(
         _ session: ActiveSession,
         trigger: SessionControlTeardownTrigger,
-        cancelRemoteSession: Bool = true
+        cancelRemoteSession: Bool = false
     ) async {
         guard let terminalSession = claimTerminalSession(
             token: session.token,

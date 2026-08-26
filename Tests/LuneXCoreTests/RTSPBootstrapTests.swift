@@ -2,6 +2,90 @@ import Foundation
 import XCTest
 
 final class RTSPBootstrapTests: XCTestCase {
+    func testInitialSessionOperationLaunchesWhenHostIsFree() throws {
+        XCTAssertEqual(
+            try MoonlightSessionControlProvider.initialSessionOperation(
+                serverInfo: SessionServerInfoClient.freeInfo,
+                requestedAppID: "881448767"
+            ),
+            .launch
+        )
+    }
+
+    func testInitialSessionOperationResumesMatchingBusyApplication() throws {
+        XCTAssertEqual(
+            try MoonlightSessionControlProvider.initialSessionOperation(
+                serverInfo: SessionServerInfoClient.busyInfo(
+                    currentGameID: "881448767"
+                ),
+                requestedAppID: "881448767"
+            ),
+            .resume
+        )
+    }
+
+    func testInitialSessionOperationRejectsDifferentBusyApplication() {
+        XCTAssertThrowsError(
+            try MoonlightSessionControlProvider.initialSessionOperation(
+                serverInfo: SessionServerInfoClient.busyInfo(
+                    currentGameID: "different-app"
+                ),
+                requestedAppID: "881448767"
+            )
+        ) { error in
+            let failure = error as? StreamNegotiationFailure
+            XCTAssertEqual(failure?.code, .resumeRejected)
+            XCTAssertEqual(failure?.subsystem, "resume")
+        }
+    }
+
+    func testInitialSessionOperationRejectsMissingState() {
+        XCTAssertThrowsError(
+            try MoonlightSessionControlProvider.initialSessionOperation(
+                serverInfo: ServerInfo(
+                    name: "Test Host",
+                    uniqueID: "test-host",
+                    macAddress: nil,
+                    state: nil,
+                    supportsHDR: true,
+                    rawValues: [:]
+                ),
+                requestedAppID: "881448767"
+            )
+        ) { error in
+            let failure = error as? StreamNegotiationFailure
+            XCTAssertEqual(failure?.code, .launchRejected)
+            XCTAssertEqual(failure?.subsystem, "server_info")
+        }
+    }
+
+    func testBusyMatchingApplicationRoutesInitialProviderRequestThroughResume() async {
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: nil,
+            rawValues: ["resume": "1"]
+        )
+        let launchClient = BootstrapStubLaunchClient(response: launchResponse)
+        let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(
+                info: SessionServerInfoClient.busyInfo(currentGameID: "1")
+            ),
+            launchClient: launchClient,
+            connection: BootstrapStubRTSPConnection(responses: [])
+        )
+
+        let result = await collectFailure(
+            await provider.start(sessionID: UUID(), request: makeRequest())
+        )
+        let counts = await launchClient.counts()
+
+        XCTAssertEqual(result.events, [.launchAccepted(launchResponse)])
+        XCTAssertEqual(result.error as? RTSPBootstrapError, .connectionClosed)
+        XCTAssertEqual(counts.launches, 0)
+        XCTAssertEqual(counts.resumes, 1)
+        XCTAssertEqual(counts.stops, 0)
+    }
+
     func testProductionControlProviderAppliesGenerationScopedMobileGate()
         async throws {
         let sessionID = UUID()
@@ -12,6 +96,7 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let control = BootstrapStubControlChannel(events: [])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapSleepingLaunchClient(
                 response: launchResponse
             ),
@@ -210,6 +295,7 @@ final class RTSPBootstrapTests: XCTestCase {
             .terminated(HostTerminationReason(code: 0x8003_0023, kind: .graceful))
         ])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: connection,
             controlChannel: control,
@@ -325,6 +411,7 @@ final class RTSPBootstrapTests: XCTestCase {
             )
         ])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection,
             controlChannel: BootstrapStubControlChannel(events: [])
@@ -368,6 +455,7 @@ final class RTSPBootstrapTests: XCTestCase {
             )
         ])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection,
             controlChannel: BootstrapStubControlChannel(events: [
@@ -411,6 +499,7 @@ final class RTSPBootstrapTests: XCTestCase {
         ])
         let control = BootstrapStubControlChannel(events: [])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection,
             controlChannel: control,
@@ -453,6 +542,7 @@ final class RTSPBootstrapTests: XCTestCase {
         ])
         let control = BootstrapStubControlChannel(events: [])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection,
             controlChannel: control
@@ -484,6 +574,7 @@ final class RTSPBootstrapTests: XCTestCase {
         ])
         let control = BootstrapStubControlChannel(events: [])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection,
             controlChannel: control
@@ -508,6 +599,7 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let connection = BootstrapStubRTSPConnection(responses: [])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection
         )
@@ -531,6 +623,7 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let connection = BootstrapStubRTSPConnection(responses: [response(cSeq: "99")])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection
         )
@@ -560,6 +653,7 @@ final class RTSPBootstrapTests: XCTestCase {
             )
         ])
         let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: BootstrapStubLaunchClient(response: launchResponse),
             connection: connection
         )
@@ -679,6 +773,45 @@ final class RTSPBootstrapTests: XCTestCase {
     }
 }
 
+struct SessionServerInfoClient: ServerInfoClient {
+    static let freeInfo = ServerInfo(
+        name: "Test Host",
+        uniqueID: "test-host",
+        macAddress: nil,
+        state: "SUNSHINE_SERVER_FREE",
+        supportsHDR: true,
+        rawValues: [
+            "state": "SUNSHINE_SERVER_FREE",
+            "currentgame": "0"
+        ]
+    )
+
+    let info: ServerInfo
+
+    init(info: ServerInfo = Self.freeInfo) {
+        self.info = info
+    }
+
+    static func busyInfo(currentGameID: String) -> ServerInfo {
+        ServerInfo(
+            name: "Test Host",
+            uniqueID: "test-host",
+            macAddress: nil,
+            state: "SUNSHINE_SERVER_BUSY",
+            supportsHDR: true,
+            rawValues: [
+                "state": "SUNSHINE_SERVER_BUSY",
+                "currentgame": currentGameID
+            ]
+        )
+    }
+
+    func fetchServerInfo(from endpoint: HostEndpoint) async throws -> ServerInfo {
+        _ = endpoint
+        return info
+    }
+}
+
 private struct BootstrapVideoDecoderCapabilities: VideoDecoderCapabilityProviding {
     var supportedCodecs: Set<NegotiatedVideoCodec>
 
@@ -773,6 +906,8 @@ private struct BootstrapSleepingLaunchClient: StreamLaunchClient {
 
 private actor BootstrapStubLaunchClient: StreamLaunchClient {
     private let response: StreamLaunchResponse
+    private var launches = 0
+    private var resumes = 0
     private var stops = 0
 
     init(response: StreamLaunchResponse) {
@@ -783,14 +918,16 @@ private actor BootstrapStubLaunchClient: StreamLaunchClient {
         _ request: StreamLaunchRequest,
         parameters: StreamNegotiationParameters
     ) async throws -> StreamLaunchResponse {
-        response
+        launches += 1
+        return response
     }
 
     func resume(
         _ request: StreamLaunchRequest,
         parameters: StreamNegotiationParameters
     ) async throws -> StreamLaunchResponse {
-        response
+        resumes += 1
+        return response
     }
 
     func stop(host: MoonlightHost, clientUniqueID: String) async throws {
@@ -799,6 +936,10 @@ private actor BootstrapStubLaunchClient: StreamLaunchClient {
 
     func stopCount() -> Int {
         stops
+    }
+
+    func counts() -> (launches: Int, resumes: Int, stops: Int) {
+        (launches, resumes, stops)
     }
 }
 

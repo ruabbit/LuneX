@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 
 final class SessionCancellationTests: XCTestCase {
-    func testRepeatedLocalStopDuringLaunchExecutesOneTeardownAndOneRemoteCancel() async throws {
+    func testRepeatedLocalStopDuringLaunchExecutesOneLocalTeardownWithoutRemoteCancel() async throws {
         let probe = CancellationProbe()
         let launchClient = CancellationLaunchClient(blockPoint: .launch, probe: probe)
         let connection = CancellationRTSPConnection(responses: [], probe: probe)
@@ -28,16 +28,16 @@ final class SessionCancellationTests: XCTestCase {
         )
         let teardownSnapshot = await provider.teardownSnapshot(sessionID: sessionID)
         let teardown = try XCTUnwrap(teardownSnapshot)
-        XCTAssertEqual(counts.remoteCancels, 1)
+        XCTAssertEqual(counts.remoteCancels, 0)
         XCTAssertEqual(counts.rtspCancellations, 1)
         XCTAssertEqual(counts.controlStops, 1)
         XCTAssertEqual(teardown.executionCount, 1)
         XCTAssertGreaterThanOrEqual(teardown.requestCount, 2)
         XCTAssertEqual(teardown.report?.trigger, .localStop)
-        XCTAssertEqual(teardown.report?.remoteCancelResult, .succeeded)
+        XCTAssertEqual(teardown.report?.remoteCancelResult, .notRequested)
     }
 
-    func testStreamConsumerCancellationDuringLaunchConvergesToRemoteCancel() async throws {
+    func testStreamConsumerCancellationDuringLaunchConvergesToLocalTeardown() async throws {
         let probe = CancellationProbe()
         let launchClient = CancellationLaunchClient(blockPoint: .launch, probe: probe)
         let connection = CancellationRTSPConnection(responses: [], probe: probe)
@@ -58,11 +58,11 @@ final class SessionCancellationTests: XCTestCase {
 
         XCTAssertEqual(teardown.executionCount, 1)
         XCTAssertEqual(teardown.report?.trigger, .streamCancellation)
-        XCTAssertEqual(teardown.report?.remoteCancelResult, .succeeded)
-        XCTAssertEqual(remoteCancels, 1)
+        XCTAssertEqual(teardown.report?.remoteCancelResult, .notRequested)
+        XCTAssertEqual(remoteCancels, 0)
     }
 
-    func testLocalStopDuringRTSPTransactionUnblocksAndCancelsRemoteSession() async throws {
+    func testLocalStopDuringRTSPTransactionUnblocksWithoutCancellingRemoteApplication() async throws {
         let probe = CancellationProbe()
         let launchClient = CancellationLaunchClient(blockPoint: .none, probe: probe)
         let connection = CancellationRTSPConnection(
@@ -87,10 +87,10 @@ final class SessionCancellationTests: XCTestCase {
         let rtspCancellations = await connection.cancelCount()
         let teardownSnapshot = await provider.teardownSnapshot(sessionID: sessionID)
         let teardown = try XCTUnwrap(teardownSnapshot)
-        XCTAssertEqual(remoteCancels, 1)
+        XCTAssertEqual(remoteCancels, 0)
         XCTAssertEqual(rtspCancellations, 1)
         XCTAssertEqual(teardown.executionCount, 1)
-        XCTAssertEqual(teardown.report?.remoteCancelResult, .succeeded)
+        XCTAssertEqual(teardown.report?.remoteCancelResult, .notRequested)
     }
 
     func testLocalStopDuringReconnectSleepDoesNotContinueToResume() async throws {
@@ -117,7 +117,7 @@ final class SessionCancellationTests: XCTestCase {
         let teardown = try XCTUnwrap(teardownSnapshot)
         XCTAssertEqual(counts.launches, 1)
         XCTAssertEqual(counts.resumes, 0)
-        XCTAssertEqual(counts.stops, 1)
+        XCTAssertEqual(counts.stops, 0)
         XCTAssertEqual(teardown.executionCount, 1)
     }
 
@@ -144,7 +144,7 @@ final class SessionCancellationTests: XCTestCase {
         let teardown = try XCTUnwrap(teardownSnapshot)
         XCTAssertEqual(counts.launches, 1)
         XCTAssertEqual(counts.resumes, 1)
-        XCTAssertEqual(counts.stops, 1)
+        XCTAssertEqual(counts.stops, 0)
         XCTAssertEqual(teardown.executionCount, 1)
     }
 
@@ -172,10 +172,11 @@ final class SessionCancellationTests: XCTestCase {
         let teardown = try XCTUnwrap(teardownSnapshot)
         XCTAssertEqual(controlStops, 1)
         XCTAssertEqual(rtspCancellations, 1)
-        XCTAssertLessThanOrEqual(remoteCancels, 1)
+        XCTAssertEqual(remoteCancels, 0)
         XCTAssertEqual(teardown.executionCount, 1)
         let trigger = try XCTUnwrap(teardown.report?.trigger)
         XCTAssertTrue([.localStop, .remoteTermination].contains(trigger))
+        XCTAssertEqual(teardown.report?.remoteCancelResult, .notRequested)
     }
 
     func testLocalStopAfterRemoteTerminationPreservesNoCancelDecision() async throws {
@@ -218,7 +219,7 @@ final class SessionCancellationTests: XCTestCase {
         XCTAssertEqual(teardown.report?.remoteCancelResult, .notRequested)
     }
 
-    func testRemoteCancelFailureStillReleasesEveryLocalResource() async throws {
+    func testConfiguredRemoteCancelFailureIsNotInvokedAndLocalResourcesRelease() async throws {
         let probe = CancellationProbe()
         let launchClient = CancellationLaunchClient(
             blockPoint: .launch,
@@ -246,11 +247,11 @@ final class SessionCancellationTests: XCTestCase {
         )
         let teardownSnapshot = await provider.teardownSnapshot(sessionID: sessionID)
         let teardown = try XCTUnwrap(teardownSnapshot)
-        XCTAssertEqual(counts.remoteCancels, 1)
+        XCTAssertEqual(counts.remoteCancels, 0)
         XCTAssertEqual(counts.rtspCancellations, 1)
         XCTAssertEqual(counts.controlStops, 1)
         XCTAssertEqual(teardown.executionCount, 1)
-        XCTAssertEqual(teardown.report?.remoteCancelResult, .failed)
+        XCTAssertEqual(teardown.report?.remoteCancelResult, .notRequested)
         XCTAssertEqual(teardown.report?.releasedLocalResources, true)
     }
 
@@ -261,6 +262,7 @@ final class SessionCancellationTests: XCTestCase {
         sleeper: CancellationSleeper? = nil
     ) -> MoonlightSessionControlProvider {
         MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
             launchClient: launchClient,
             connection: connection,
             controlChannel: control,

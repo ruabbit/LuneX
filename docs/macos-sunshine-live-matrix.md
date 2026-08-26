@@ -56,17 +56,17 @@ or arbitrary application requiring a separate approval gate.
 | Video codec modes | `0x00070301`: H.264, HEVC Main8/Main10, AV1 Main8/Main10, H.264 High8 4:4:4 | Advertised capability recorded |
 | HEVC luma limit | `1869449984` | Advertised capability recorded |
 | Sunshine package version | Not exposed by the read-only unauthenticated pinned endpoints | Not required; optional diagnostic metadata only |
-| Host state | Server reported busy with a nonzero current-game identifier during inventory | Wait for the existing session to end before Task 2.3; not a Task 2.2 failure |
+| Host state | Server reported busy with `currentgame=881448767`, matching `Desktop` | Valid Task 2.3 `/resume` target; busy describes application state, not exclusive client ownership |
 | Web configuration API | Pinned TLS succeeded; unauthenticated `GET /` and `GET /api/config` returned `401` | No credentials guessed, requested, or retrieved |
 
 ## M1 Live Matrix
 
 | Scenario | Required observation | Current result |
 |---|---|---|
-| Host inventory | `tanmy-white` advertised protocol/codec modes and host-free precondition | Capabilities recorded; host was busy at inventory time |
+| Host inventory | `tanmy-white` advertised protocol/codec modes and current application state | Capabilities recorded; matching busy `Desktop` permits a concurrent `/resume` session |
 | Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Passed at 18:14 CST: the imported Moonlight-qt identity completed live production pinned-mTLS authentication without pairing or local-state mutation |
 | Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | Passed at 18:14 CST: production `/applist` became current and contained exactly one matching `Desktop` entry with app ID `881448767` |
-| Launch | Exactly one `Desktop` session launches through the production runtime | Not run |
+| Initial session | Exactly one `Desktop` client session starts through production `/launch` or `/resume` routing | Not run |
 | RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Not run |
 | Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Not run |
 | Audible synchronized audio | Audio is audible, synchronized, and stops cleanly on the selected route | Not run |
@@ -79,10 +79,11 @@ or arbitrary application requiring a separate approval gate.
 ## Task 2.3 Preconditions
 
 The read-only catalog portion may run while the host is busy. A `Desktop`
-session may start only after all of these are true:
+session may start after all of these are true:
 
-1. `tanmy-white` reports free and the existing unrelated session has ended
-   without LuneX intervention.
+1. `tanmy-white` is reachable and reports either free or busy with
+   `currentgame=881448767`. Free selects `/launch`; matching busy selects
+   `/resume`. A different current application is rejected without `/cancel`.
 2. Reuse the imported Moonlight-qt identity from the Debug file fallback. The
    fallback has passed local Codable, certificate/private-key match, and
    signing verification plus live production pinned-mTLS catalog
@@ -91,7 +92,11 @@ session may start only after all of these are true:
    disabled.
 3. The harmless input sequence, reconnect interruption, remote-termination
    action, sustained-media duration, and abort conditions are fixed before the
-   first `Desktop` launch.
+   first `Desktop` launch or resume.
+4. Normal disconnect, consumer cancellation, replacement, and local failure
+   cleanup release only this client's resources. They must issue zero Sunshine
+   `/cancel` requests; quitting the shared remote application is a separate,
+   explicitly confirmed action and is not part of the automated session stop.
 
 A Sunshine package version is not a precondition. The two expected offline-host
 timeouts are not preconditions or failures either.
@@ -119,8 +124,9 @@ xcrun xctest \
   /path/to/DerivedData/Build/Products/Debug/LuneXCoreTests.xctest
 ```
 
-The `Desktop` session is admitted only when both exact opt-ins equal `1` and
-the preflight state is `SUNSHINE_SERVER_FREE`:
+The `Desktop` session is admitted only when both exact opt-ins equal `1`.
+Server state then selects `/launch` for free or `/resume` for matching busy
+`Desktop`; it is not used as a global connection-availability gate:
 
 ```bash
 LLVM_PROFILE_FILE=/private/tmp/LuneX-live-session-%p.profraw \
@@ -131,9 +137,10 @@ xcrun xctest \
   /path/to/DerivedData/Build/Products/Debug/LuneXCoreTests.xctest
 ```
 
-That automated session observes production launch/negotiation, streaming state,
+That automated session observes production launch-or-resume negotiation,
+streaming state,
 decoded-frame growth, a running audio runtime, a no-button relative-pointer
-`+1/-1` round trip, input release, one remote cancel, repeated local stop, and
+`+1/-1` round trip, input release, zero remote cancels, repeated local stop, and
 observable model teardown. It does not prove that audio was physically audible
 and synchronized, that the host visibly received the pointer movement, or that
 real reconnect and host-side termination worked. Those rows remain manual live
@@ -150,8 +157,10 @@ request followed, and the four local data-file hashes and modes were unchanged.
 At 17:51 CST, one read-only terminal request to the correct
 `http://10.1.100.69:47989/serverinfo` endpoint returned HTTP `200` and reported
 `SUNSHINE_SERVER_BUSY` with current game `881448767` (`Desktop`). LuneX did not
-send catalog or session operations and must wait for that session to end
-naturally. The endpoint fix keeps the UI/persistence form unchanged while
+send catalog or session operations. The earlier conclusion that LuneX had to
+wait for that application to end was invalidated: this matching busy state is a
+valid `/resume` target for another client session. The endpoint fix keeps the
+UI/persistence form unchanged while
 always including the actual port in the network URL. The macOS product also
 declares its Local Network purpose and `_nvstream._tcp` Bonjour browse type;
 final live evidence must still run under the actual app's stable signed identity
@@ -169,8 +178,9 @@ catalog/session acceptance.
 The 18:12 CST continuation preflight again returned
 `SUNSHINE_SERVER_BUSY/currentgame=881448767` and skipped before catalog under
 the original conservative gate. That result prompted the narrower admission
-rule above: busy no longer blocks the read-only catalog tier, but it still
-blocks every launch, resume, input, cancel, or stop path.
+rule above. The further assumption that busy must block the session tier was
+also invalidated after upstream Qt, iOS, and Sunshine source review: matching
+busy selects `/resume`, while normal local stop never selects `/cancel`.
 
 At 18:14 CST, the revised catalog-only gate passed through the production
 pinned HTTPS provider in 0.053 seconds. The test requires server-info to
@@ -188,9 +198,10 @@ identity.
 After the catalog-admission batch was committed and pushed as
 `f9cefd74f8584de123541724b952e4b0d4650208`, one bounded read-only preflight
 again identified `tanmy-white` as `SUNSHINE_SERVER_BUSY` with current game
-`881448767`. The double-opt-in session gate was therefore not run, and no
+`881448767`. The double-opt-in session gate was therefore not run under the
+then-current, now-invalidated free-host gate, and no
 launch, input, cancel, or stop request was sent. M1 remains at Task 2.3 until
-the existing `Desktop` session ends naturally.
+the matching busy `Desktop` session passes the corrected `/resume` live matrix.
 
 ## Debug Identity Reuse
 
@@ -230,10 +241,11 @@ Permitted for the explicit Task 2.3 gate:
 
 - bounded pinned reads of `tanmy-white` server info and live app catalog;
 - at most one identity operation if the imported identity cannot authenticate;
-- exactly one initial launch of `Desktop`;
+- exactly one initial `/launch` when free or `/resume` when `Desktop` is already
+  running;
 - the predeclared harmless input sequence and one bounded reconnect scenario;
-- local stop, one remote termination, repeated local stop, and teardown
-  verification.
+- local stop with zero `/cancel`, one host-side remote termination, repeated
+  local stop, and teardown verification.
 
 Prohibited:
 
@@ -243,6 +255,8 @@ Prohibited:
   display changes, or driver installation;
 - launching a non-`Desktop` application during this matrix or interrupting the
   session that was already active during inventory;
+- calling `/cancel` as part of disconnect, cancellation, replacement, failure
+  cleanup, or automated teardown;
 - copying credentials, private keys, certificate bytes, tokens, pairing
   material, or unreviewed raw payloads/logs into the repository.
 

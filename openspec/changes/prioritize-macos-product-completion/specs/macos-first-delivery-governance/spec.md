@@ -67,8 +67,21 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **THEN** the production request SHALL fail before network access without silently using unauthenticated TLS, generating a replacement identity, or weakening the server certificate pin
 
 #### Scenario: Paired host is busy during catalog acceptance
-- **WHEN** the designated host is already running an unrelated session and the catalog-only live gate is explicitly enabled
-- **THEN** LuneX MAY perform the read-only pinned-mTLS server-info and catalog requests, but SHALL NOT launch, resume, send input, cancel, or stop any session until the host reports free and the separate session opt-in is enabled
+- **WHEN** the designated host already has an application running and the catalog-only live gate is explicitly enabled
+- **THEN** LuneX MAY perform the read-only pinned-mTLS server-info and catalog requests without treating the busy state as a client-session mutex
+
+#### Scenario: Initial session selects launch or resume from application state
+- **WHEN** the separate session opt-in is enabled and the host reports free
+- **THEN** LuneX SHALL start the selected application through `/launch`
+- **WHEN** the host reports busy and `currentgame` matches the selected application ID
+- **THEN** LuneX SHALL create another client streaming session for that running application through `/resume`
+- **WHEN** the host reports busy and `currentgame` identifies a different application
+- **THEN** LuneX SHALL reject the selection without calling `/cancel` or disrupting the running application
+
+#### Scenario: Local client disconnect preserves the remote application
+- **WHEN** the user disconnects, a stream consumer cancels, a generation is replaced, or local session setup fails
+- **THEN** LuneX SHALL release only that client's control, RTSP, media, audio, decoder, and input resources and SHALL NOT call Sunshine `/cancel`
+- **AND** terminating the shared remote application through `/cancel` SHALL require a separate explicitly confirmed product action
 
 #### Scenario: LuneX identity is restored after restart
 - **WHEN** an existing LuneX identity is decoded from the backward-compatible file or Keychain representation
