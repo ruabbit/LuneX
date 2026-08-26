@@ -156,6 +156,11 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **THEN** LuneX SHALL validate its FEC block, data/total shard counts, percentage, and shard index without requiring the data-shard `multiFecFlags=0x10` marker from the Reed-Solomon-generated parity byte
 - **AND** every data shard SHALL still require `multiFecFlags=0x10`, valid frame flags, and consistent packet sequencing before codec payload admission
 
+#### Scenario: FEC parity gaps do not break data assembly
+- **WHEN** parity shards are discarded and their original stream sequence numbers leave gaps between valid data shards
+- **THEN** LuneX SHALL assemble a frame by validated FEC block/shard order rather than requiring raw sequence-number contiguity
+- **AND** a frame with missing data shards, block-envelope violations, metadata drift, or conflicting shard content SHALL fail closed and request recovery instead of emitting a partial access unit
+
 #### Scenario: End-to-end workflow passes
 - **WHEN** the exact candidate completes the full authorized Sunshine workflow with sustained media and actual host-received input
 - **THEN** the live session gate may pass only if reconnect, termination, repeated stop, and resource cleanup receipts also pass

@@ -549,6 +549,7 @@ actor MoonlightVideoReceiveProvider: VideoReceiveProvider {
                 limits: limits
             )
             guard !packet.isParity else { return nil }
+            let hasFEC = packet.parityShardCount > 0
             return .packet(ReceivedVideoPacket(
                 sequenceNumber: packet.streamSequenceNumber,
                 frameIndex: packet.frameIndex,
@@ -556,7 +557,13 @@ actor MoonlightVideoReceiveProvider: VideoReceiveProvider {
                 receiveTimeNanoseconds: packet.receiveTimeNanoseconds,
                 isFirstPacket: packet.isTrueFrameStart,
                 isLastPacket: packet.isTrueFrameEnd,
-                payload: packet.payload
+                payload: packet.payload,
+                fecBlockIndex: hasFEC ? packet.fecBlockIndex : 0,
+                lastFECBlockIndex: hasFEC ? packet.lastFECBlockIndex : 0,
+                fecShardIndex: hasFEC ? packet.fecShardIndex : 0,
+                dataShardCount: hasFEC ? packet.dataShardCount : 0,
+                parityShardCount: hasFEC ? packet.parityShardCount : 0,
+                fecPercentage: hasFEC ? packet.fecPercentage : 0
             ))
         }
     }

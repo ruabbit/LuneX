@@ -302,6 +302,15 @@ struct ReceivedVideoPacket: Equatable, Sendable {
     var isFirstPacket: Bool
     var isLastPacket: Bool
     var payload: Data
+    /// Retained because Sunshine data packets have sequence gaps where
+    /// discarded parity shards were transmitted.
+    var fecBlockIndex: UInt8 = 0
+    var lastFECBlockIndex: UInt8 = 0
+    var fecShardIndex: Int = 0
+    /// Zero denotes the legacy/no-FEC shape used by simple providers.
+    var dataShardCount: Int = 0
+    var parityShardCount: Int = 0
+    var fecPercentage: Int = 0
 }
 
 enum VideoReceiveEvent: Equatable, Sendable {

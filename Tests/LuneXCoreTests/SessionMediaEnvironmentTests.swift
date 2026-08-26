@@ -3209,6 +3209,137 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertEqual(accessUnit.payload, Data([0x12, 0x34, 0x56]))
     }
 
+    func testNormalizedAssemblerCompletesAcrossDiscardedFECParityGaps() throws {
+        var assembler = try NormalizedVideoAccessUnitAssembler(codec: .h264)
+        let header = Data([0x01, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00])
+        func packet(
+            sequence: UInt32,
+            block: UInt8,
+            shard: Int,
+            payload: Data,
+            first: Bool = false,
+            last: Bool = false
+        ) -> ReceivedVideoPacket {
+            ReceivedVideoPacket(
+                sequenceNumber: sequence,
+                frameIndex: 12,
+                rtpTimestamp: 180_000,
+                receiveTimeNanoseconds: UInt64(sequence),
+                isFirstPacket: first,
+                isLastPacket: last,
+                payload: payload,
+                fecBlockIndex: block,
+                lastFECBlockIndex: 1,
+                fecShardIndex: shard,
+                dataShardCount: 2,
+                parityShardCount: 1,
+                fecPercentage: 50
+            )
+        }
+
+        // Sequence 102 and 105 are parity shards and are intentionally absent.
+        let packets = [
+            packet(sequence: 104, block: 1, shard: 1, payload: Data([0x04]), last: true),
+            packet(sequence: 100, block: 0, shard: 0, payload: header + Data([0x01]), first: true),
+            packet(sequence: 103, block: 1, shard: 0, payload: Data([0x03])),
+            packet(sequence: 101, block: 0, shard: 1, payload: Data([0x02]))
+        ]
+        let events = packets.flatMap { assembler.ingest($0) }
+        let accessUnits = events.compactMap { event -> VideoAccessUnit? in
+            guard case let .accessUnit(value) = event else { return nil }
+            return value
+        }
+        let accessUnit = try XCTUnwrap(accessUnits.first)
+        XCTAssertEqual(accessUnit.packetCount, 4)
+        XCTAssertEqual(accessUnit.payload, Data([0x01, 0x02, 0x03, 0x04]))
+        XCTAssertFalse(events.contains { event in
+            if case .frameLost = event { return true }
+            return false
+        })
+    }
+
+    func testNormalizedAssemblerRejectsFECMetadataDriftAndConflictingShards() throws {
+        let header = Data([0x01, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00])
+        func packet(
+            sequence: UInt32,
+            shard: Int,
+            payload: Data,
+            percentage: Int = 50
+        ) -> ReceivedVideoPacket {
+            ReceivedVideoPacket(
+                sequenceNumber: sequence,
+                frameIndex: 20,
+                rtpTimestamp: 240_000,
+                receiveTimeNanoseconds: UInt64(sequence),
+                isFirstPacket: shard == 0,
+                isLastPacket: false,
+                payload: payload,
+                fecBlockIndex: 0,
+                lastFECBlockIndex: 1,
+                fecShardIndex: shard,
+                dataShardCount: 2,
+                parityShardCount: 1,
+                fecPercentage: percentage
+            )
+        }
+
+        var metadataAssembler = try NormalizedVideoAccessUnitAssembler(codec: .h264)
+        XCTAssertTrue(metadataAssembler.ingest(packet(
+            sequence: 200,
+            shard: 0,
+            payload: header + Data([0x01])
+        )).isEmpty)
+        let metadataEvents = metadataAssembler.ingest(packet(
+            sequence: 201,
+            shard: 1,
+            payload: Data([0x02]),
+            percentage: 100
+        ))
+        XCTAssertTrue(metadataEvents.contains { event in
+            guard case let .frameLost(loss) = event else { return false }
+            return loss.reason == .inconsistentFrameMetadata
+        })
+
+        var duplicateAssembler = try NormalizedVideoAccessUnitAssembler(codec: .h264)
+        XCTAssertTrue(duplicateAssembler.ingest(packet(
+            sequence: 300,
+            shard: 0,
+            payload: header + Data([0x03])
+        )).isEmpty)
+        let duplicateEvents = duplicateAssembler.ingest(packet(
+            sequence: 301,
+            shard: 0,
+            payload: Data([0x04])
+        ))
+        XCTAssertTrue(duplicateEvents.contains { event in
+            guard case let .frameLost(loss) = event else { return false }
+            return loss.reason == .conflictingDuplicate
+        })
+    }
+
+    func testNormalizedAssemblerRejectsFECBlockOutsideEnvelope() throws {
+        var assembler = try NormalizedVideoAccessUnitAssembler(codec: .h264)
+        let events = assembler.ingest(ReceivedVideoPacket(
+            sequenceNumber: 400,
+            frameIndex: 21,
+            rtpTimestamp: 300_000,
+            receiveTimeNanoseconds: 400,
+            isFirstPacket: true,
+            isLastPacket: false,
+            payload: Data([0x01, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00, 0x01]),
+            fecBlockIndex: 2,
+            lastFECBlockIndex: 1,
+            fecShardIndex: 0,
+            dataShardCount: 2,
+            parityShardCount: 1,
+            fecPercentage: 50
+        ))
+        XCTAssertTrue(events.contains { event in
+            guard case let .frameLost(loss) = event else { return false }
+            return loss.reason == .inconsistentFrameMetadata
+        })
+    }
+
     func testPresentationSourceRejectsStaleDecoderAndSessionFrames() throws {
         let source = StreamVideoPresentationSource()
         let sessionID = UUID()

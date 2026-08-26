@@ -265,6 +265,11 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
         var firstReceiveTimeNanoseconds: UInt64
         var lastReceiveTimeNanoseconds: UInt64
         var payloadBytes: Int
+        var usesFEC: Bool
+        var lastFECBlockIndex: UInt8
+        var fecDataShardCount: Int
+        var fecParityShardCount: Int
+        var fecPercentage: Int
         var firstSequenceNumber: UInt32?
         var lastSequenceNumber: UInt32?
         var packets: [UInt32: ReceivedVideoPacket]
@@ -329,6 +334,11 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
                 firstReceiveTimeNanoseconds: packet.receiveTimeNanoseconds,
                 lastReceiveTimeNanoseconds: packet.receiveTimeNanoseconds,
                 payloadBytes: 0,
+                usesFEC: packet.parityShardCount > 0,
+                lastFECBlockIndex: packet.lastFECBlockIndex,
+                fecDataShardCount: packet.dataShardCount,
+                fecParityShardCount: packet.parityShardCount,
+                fecPercentage: packet.fecPercentage,
                 firstSequenceNumber: nil,
                 lastSequenceNumber: nil,
                 packets: [:]
@@ -345,9 +355,44 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
             expectedFrameIndex = frame.frameIndex &+ 1
             return events
         }
+        guard frame.usesFEC == (packet.parityShardCount > 0),
+              !frame.usesFEC || (
+                  packet.lastFECBlockIndex == frame.lastFECBlockIndex
+                  && packet.lastFECBlockIndex <= 3
+                  && packet.fecBlockIndex <= packet.lastFECBlockIndex
+                  && packet.dataShardCount > 0
+                  && packet.parityShardCount > 0
+                  && packet.fecPercentage >= 0
+                  && packet.fecPercentage <= 255
+                  && packet.fecShardIndex >= 0
+                  && packet.fecShardIndex < packet.dataShardCount
+                  && packet.dataShardCount == frame.fecDataShardCount
+                  && packet.parityShardCount == frame.fecParityShardCount
+                  && packet.fecPercentage == frame.fecPercentage
+              ) else {
+            return invalidate(&events, frame: frame, reason: .inconsistentFrameMetadata)
+        }
 
         if let existing = frame.packets[packet.sequenceNumber] {
-            if existing == packet {
+            if hasSameWireContent(existing, packet) {
+                events.append(.packetDiscarded(.duplicate))
+            } else {
+                events.append(.frameLost(loss(
+                    first: frame.frameIndex,
+                    last: frame.frameIndex,
+                    reason: .conflictingDuplicate
+                )))
+                currentFrame = nil
+                expectedFrameIndex = frame.frameIndex &+ 1
+            }
+            return events
+        }
+        if frame.usesFEC,
+           let existing = frame.packets.values.first(where: {
+               $0.fecBlockIndex == packet.fecBlockIndex
+                   && $0.fecShardIndex == packet.fecShardIndex
+           }) {
+            if hasSameWireContent(existing, packet) {
                 events.append(.packetDiscarded(.duplicate))
             } else {
                 events.append(.frameLost(loss(
@@ -446,6 +491,28 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
     }
 
     private func isComplete(_ frame: FrameAssembly) -> Bool {
+        if frame.usesFEC {
+            for blockIndex in 0...frame.lastFECBlockIndex {
+                let blockPackets = frame.packets.values.filter {
+                    $0.fecBlockIndex == blockIndex
+                }
+                guard let first = blockPackets.first,
+                      blockPackets.count == first.dataShardCount,
+                      first.dataShardCount > 0,
+                      blockPackets.allSatisfy({
+                      $0.dataShardCount == first.dataShardCount
+                              && $0.parityShardCount == first.parityShardCount
+                              && $0.fecPercentage == first.fecPercentage
+                      }) else { return false }
+                for shardIndex in 0..<first.dataShardCount {
+                    guard blockPackets.contains(where: {
+                        $0.fecShardIndex == shardIndex
+                    }) else { return false }
+                }
+            }
+            return frame.firstSequenceNumber != nil
+                && frame.lastSequenceNumber != nil
+        }
         guard let first = frame.firstSequenceNumber,
               let last = frame.lastSequenceNumber else { return false }
         let distance = last &- first
@@ -459,23 +526,35 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
     }
 
     private func assemble(_ frame: FrameAssembly) throws -> VideoAccessUnit {
-        guard let firstSequence = frame.firstSequenceNumber,
-              let lastSequence = frame.lastSequenceNumber,
-              let firstPacket = frame.packets[firstSequence],
-              let lastPacket = frame.packets[lastSequence],
+        let orderedPackets: [ReceivedVideoPacket]
+        if frame.usesFEC {
+            orderedPackets = (0...frame.lastFECBlockIndex).flatMap { blockIndex in
+                frame.packets.values
+                    .filter { $0.fecBlockIndex == blockIndex }
+                    .sorted { $0.fecShardIndex < $1.fecShardIndex }
+            }
+        } else {
+            guard let firstSequence = frame.firstSequenceNumber,
+                  let lastSequence = frame.lastSequenceNumber,
+                  lastSequence &- firstSequence
+                      < UInt32(limits.maximumPacketsPerFrame) else {
+                throw NormalizedVideoAssemblyError.invalidPacket
+            }
+            orderedPackets = (0...Int(lastSequence &- firstSequence)).compactMap {
+                frame.packets[firstSequence &+ UInt32($0)]
+            }
+        }
+        guard let firstPacket = orderedPackets.first,
+              let lastPacket = orderedPackets.last,
               firstPacket.isFirstPacket,
-              lastPacket.isLastPacket else {
+              lastPacket.isLastPacket,
+              orderedPackets.count <= limits.maximumPacketsPerFrame else {
             throw NormalizedVideoAssemblyError.invalidPacket
         }
         let header = try SunshineShortFrameHeader.parse(firstPacket.payload)
-        let packetCount = Int(lastSequence &- firstSequence &+ 1)
         var payload = Data()
         payload.reserveCapacity(max(0, frame.payloadBytes - SunshineShortFrameHeader.byteCount))
-        for offset in 0..<packetCount {
-            let sequence = firstSequence &+ UInt32(offset)
-            guard let packet = frame.packets[sequence] else {
-                throw NormalizedVideoAssemblyError.invalidPacket
-            }
+        for packet in orderedPackets {
             var fragment = packet.payload
             if packet.isLastPacket, codec == .av1 {
                 guard header.lastPayloadLength <= fragment.count else {
@@ -503,7 +582,7 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
                 header.hostProcessingLatencyTenthsOfMillisecond,
             firstReceiveTimeNanoseconds: frame.firstReceiveTimeNanoseconds,
             lastReceiveTimeNanoseconds: frame.lastReceiveTimeNanoseconds,
-            packetCount: packetCount,
+            packetCount: orderedPackets.count,
             payload: payload
         )
     }
@@ -534,5 +613,16 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
             reason: reason,
             requiresIDR: true
         )
+    }
+
+    private func hasSameWireContent(
+        _ lhs: ReceivedVideoPacket,
+        _ rhs: ReceivedVideoPacket
+    ) -> Bool {
+        var lhs = lhs
+        var rhs = rhs
+        lhs.receiveTimeNanoseconds = 0
+        rhs.receiveTimeNanoseconds = 0
+        return lhs == rhs
     }
 }

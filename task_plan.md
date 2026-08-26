@@ -2306,3 +2306,11 @@
 - **唯一 live gate：** 新源码 SHA `3889cfb` 的双 opt-in macOS 运行完成 RTSP/ANNOUNCE/PLAY/ENet；视频通道收到 `10058` 个 datagram，音频通道连接并发送 `86` 个 custom ping，但收到 `0` 个 datagram，因此没有进入音频 parser/decryptor，也没有 decoded audio readiness。该 SHA 已按约束消耗唯一 live gate，不得重跑。
 - **根因边界：** Sunshine 与 `moonlight-common-c` 的 custom `SS_PING` 形状、audio server port `48000`、client ping sequence 和 audioThread 等待逻辑与 LuneX 当前实现一致；视频同会话可收包，当前证据更支持主机音频 capture/stream 配置或主机到音频 UDP 发送路径未产生包，而不是客户端 AES、端口解析或 readiness 代码错误。
 - **后续门：** 保持 `Task 2.3` pending，不把视频 datagram 或 control readiness 视为完整 streaming；下一次源码变更前先取得不改变 host 状态的主机音频配置/日志证据，或在新的 exact SHA 上增加明确的音频发送路径验证。不得通过移除 audio readiness 要求来掩盖音频缺失。
+
+## 2026-08-27 M2 FEC parity-gap assembly hardening
+
+- **状态：** `in_progress`；本轮在未触发 live、Keychain、Simulator 或 host 操作的前提下继续修复生产视频 access-unit 组装。工作树仅含 `ReceivedVideoPacket` FEC 元数据、production video provider 透传、`NormalizedVideoAccessUnitAssembler` 及对应测试改动；OpenSpec Task 2.3 继续保持 `7/27` pending。
+- **已确认：** Sunshine data shard 的 stream sequence 会因丢弃 parity shard 产生空洞；normalized assembler 已按 FEC block/shard 组装，不再错误要求原始 sequence 连续。当前补强还要求帧内 data/parity/FEC 百分比一致、block index 不超过 last block 且采用 2-bit 合法范围、同一 FEC shard 的冲突重复立即 fail closed；legacy/no-FEC 路径保持原有连续 sequence 合同。
+- **下一步：** 新增 metadata-drift/conflicting-shard 回归，执行 fresh focused、media/session related、macOS normal、必要的五产品构建及 generator/OpenSpec/repository gate；最终源码提交新 SHA 后才允许一次双 opt-in live gate。不得重跑任何旧 SHA live gate。
+- **focused/related/normal：** fresh focused `/private/tmp/LuneX-M2-video-fec-focused-final.fpj07t/Focused.xcresult` 通过 `3/3`；视频媒体相关矩阵 `/private/tmp/LuneX-M2-video-fec-related-final.bQkVXL/Related.xcresult` 通过 `94/94`；完整 macOS normal `/private/tmp/LuneX-M2-video-fec-normal-final.wOFT9w/Normal.xcresult` 通过 `1330 total / 1328 passed / 2 exact skips / 0 failed`，skip 为 live Sunshine 与 real Keychain。三份 structured diagnostics 均为 `succeeded / 0 error / 0 warning / 0 analyzer warning`，无残留 build/test 进程。
+- **兼容 build/generator/OpenSpec：** fresh 五产品 generic build `/private/tmp/LuneX-M2-video-fec-builds-final.q1a74B` 全部 `succeeded / 0 / 0 / 0`，macOS Debug/Release 为 `x86_64 arm64` universal，Metal 输出 `10` 个；generator 连续两次生成前后 `project.pbxproj` SHA-256 均为 `783a7494...5944`；OpenSpec strict 为 `11/11`。下一步执行最终只读 repository gate，提交推送后才允许本新 SHA 唯一一次双 opt-in live gate。

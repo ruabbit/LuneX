@@ -47,7 +47,13 @@ final class MoonlightMediaReceiveTests: XCTestCase {
             receiveTimeNanoseconds: 123_456,
             isFirstPacket: true,
             isLastPacket: true,
-            payload: Data([0x01, 0x02, 0x03])
+            payload: Data([0x01, 0x02, 0x03]),
+            fecBlockIndex: 0,
+            lastFECBlockIndex: 0,
+            fecShardIndex: 0,
+            dataShardCount: 1,
+            parityShardCount: 1,
+            fecPercentage: 100
         )))
         let sentLegacyPing = await waitUntil {
             await channel.sentDatagrams().contains(Data("PING".utf8))
