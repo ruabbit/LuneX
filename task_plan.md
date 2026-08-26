@@ -2299,3 +2299,10 @@
 - **确定性验收：** final focused `5/5`、完整AppModel workflow `102/101/1 exact live skip/0`、macOS normal `1322/1320/2 exact opt-in skips/0`；三份structured build均`succeeded/0/0/0`。live、real Keychain和Simulator均未运行；仅test/OpenSpec/planning/docs变化，不需要冻结平台generic build。
 - **下一门：** 完成OpenSpec strict、generator/diff/privacy/Git审计并提交推送新exact SHA，之后才允许一次新的bounded live gate；`9516a557`不得重跑。
 - **最终repository gate：** 输出`FINAL_MEDIA_ACTIVITY_LOCK_REPOSITORY_GATE_OK`，确认基线`9516a557`、stable project `783a7494...5944`、OpenSpec `11/11`与`7/27 next 2.3 pending`、精确6文件且零product source/pbx drift、最终三层证据、fallback权限、receipt privacy及零process。下一步提交推送新exact SHA，再执行该SHA唯一bounded live gate。
+
+## 2026-08-27 M1 Task 2.3 encrypted audio live follow-up
+
+- **实现状态：** `3889cfb` 已实现 Sunshine control-v2 + audio encryption 协商、AES-128-CBC Opus payload 解密、内存态 key material 和音频域 typed diagnostics；focused `82/82`、normal `1327/1325/2`、OpenSpec strict `11/11` 均通过。
+- **唯一 live gate：** 新源码 SHA `3889cfb` 的双 opt-in macOS 运行完成 RTSP/ANNOUNCE/PLAY/ENet；视频通道收到 `10058` 个 datagram，音频通道连接并发送 `86` 个 custom ping，但收到 `0` 个 datagram，因此没有进入音频 parser/decryptor，也没有 decoded audio readiness。该 SHA 已按约束消耗唯一 live gate，不得重跑。
+- **根因边界：** Sunshine 与 `moonlight-common-c` 的 custom `SS_PING` 形状、audio server port `48000`、client ping sequence 和 audioThread 等待逻辑与 LuneX 当前实现一致；视频同会话可收包，当前证据更支持主机音频 capture/stream 配置或主机到音频 UDP 发送路径未产生包，而不是客户端 AES、端口解析或 readiness 代码错误。
+- **后续门：** 保持 `Task 2.3` pending，不把视频 datagram 或 control readiness 视为完整 streaming；下一次源码变更前先取得不改变 host 状态的主机音频配置/日志证据，或在新的 exact SHA 上增加明确的音频发送路径验证。不得通过移除 audio readiness 要求来掩盖音频缺失。
