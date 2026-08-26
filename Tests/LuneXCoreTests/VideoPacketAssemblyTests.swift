@@ -161,6 +161,48 @@ final class VideoPacketAssemblyTests: XCTestCase {
         }
     }
 
+    func testParserAcceptsGeneratedParityFlagsButRequiresDataShardMarker() throws {
+        let parity = makeDatagram(
+            rtpSequence: 11,
+            streamSequence: 99,
+            frameIndex: 1,
+            shardIndex: 1,
+            dataShardCount: 1,
+            fecPercentage: 100,
+            flags: [],
+            multiFECFlags: 0xA7,
+            payload: Data([0xAA])
+        )
+        let parsedParity = try MoonlightVideoPacketParser.parse(
+            parity,
+            receiveTimeNanoseconds: 2,
+            limits: packetLimits()
+        )
+        XCTAssertTrue(parsedParity.isParity)
+        XCTAssertEqual(parsedParity.fecShardIndex, 1)
+        XCTAssertEqual(parsedParity.dataShardCount, 1)
+        XCTAssertEqual(parsedParity.parityShardCount, 1)
+
+        let data = makeDatagram(
+            rtpSequence: 9,
+            streamSequence: 9,
+            frameIndex: 1,
+            shardIndex: 0,
+            dataShardCount: 1,
+            fecPercentage: 100,
+            flags: [.containsPictureData, .startOfFrame, .endOfFrame],
+            multiFECFlags: 0xA7,
+            payload: shortHeader(lastPayloadLength: 9) + Data([0x65])
+        )
+        assertPacketError(.invalidFECEnvelope) {
+            _ = try MoonlightVideoPacketParser.parse(
+                data,
+                receiveTimeNanoseconds: 3,
+                limits: packetLimits()
+            )
+        }
+    }
+
     func testMultiBlockFrameUsesTrueBoundariesAndIgnoresParity() throws {
         var assembler = try VideoAccessUnitAssembler(codec: .hevc)
         let blockOne = makePacket(
@@ -576,6 +618,7 @@ private func makeDatagram(
     dataShardCount: Int,
     fecPercentage: Int = 0,
     flags: MoonlightVideoPacketFlags,
+    multiFECFlags: UInt8 = 0x10,
     payload: Data
 ) -> Data {
     var bytes = [UInt8](repeating: 0, count: 32)
@@ -588,7 +631,7 @@ private func makeDatagram(
     writeLittleEndian32((streamSequence & 0x00FF_FFFF) << 8, to: &bytes, at: 16)
     writeLittleEndian32(frameIndex, to: &bytes, at: 20)
     bytes[24] = flags.rawValue
-    bytes[26] = 0x10
+    bytes[26] = multiFECFlags
     bytes[27] = (blockIndex << 4) | (lastBlockIndex << 6)
     let fecInfo = UInt32(shardIndex << 12)
         | UInt32(dataShardCount << 22)

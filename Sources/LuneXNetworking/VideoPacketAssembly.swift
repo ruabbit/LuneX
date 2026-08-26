@@ -149,8 +149,9 @@ enum MoonlightVideoPacketParser {
         let totalShardCount = dataShardCount + parityShardCount
         let blockIndex = (multiFECBlocks >> 4) & 0x03
         let lastBlockIndex = (multiFECBlocks >> 6) & 0x03
+        let isParity = fecShardIndex >= dataShardCount
 
-        guard multiFECFlags == 0x10,
+        guard (isParity || multiFECFlags == 0x10),
               blockIndex <= lastBlockIndex,
               dataShardCount > 0,
               dataShardCount <= limits.maximumDataShardsPerBlock,
@@ -160,7 +161,6 @@ enum MoonlightVideoPacketParser {
             throw MoonlightVideoPacketError.invalidFECEnvelope
         }
 
-        let isParity = fecShardIndex >= dataShardCount
         if !isParity {
             guard flags.subtracting(.known).isEmpty,
                   flags.contains(.containsPictureData),
