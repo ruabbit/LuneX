@@ -699,6 +699,9 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             throw SunshineRTSPNegotiationError
                 .unsupportedMediaEncryption(unknownOrMediaEncryption)
         }
+        guard supportedEncryption.contains(.controlV2) else {
+            throw SunshineRTSPAnnounceError.unsupportedControlEncryption
+        }
         let hdrRequested = request.preferences.hdrEnabled && request.app.supportsHDR
         let videoSelection = try videoCodecSelectionPolicy.select(
             hostCodecs: description.availableVideoCodecs,
@@ -750,6 +753,39 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         guard let connectData = controlSetup.controlConnectData else {
             throw SunshineRTSPNegotiationError.missingControlConnectData
         }
+        let announceConfiguration = SunshineRTSPAnnounceConfiguration(
+            width: request.preferences.width,
+            height: request.preferences.height,
+            frameRate: request.preferences.frameRate,
+            bitrateKbps: request.preferences.bitrateKbps,
+            codec: videoSelection.codec,
+            isHDR: videoSelection.isHDR,
+            videoPort: videoSetup.serverPort
+        )
+        let announceBody = try announceConfiguration.serialize()
+        _ = try await transact(
+            RTSPRequest(
+                method: "ANNOUNCE",
+                target: "streamid=control/13/0",
+                headers: requestHeaders(cSeq: "6", endpoint: endpoint) + [
+                    RTSPHeader(name: "Session", value: audioSetup.sessionToken),
+                    RTSPHeader(name: "Content-Type", value: "application/sdp"),
+                    RTSPHeader(name: "Content-Length", value: String(announceBody.count))
+                ],
+                body: announceBody
+            ),
+            expectedCSeq: "6"
+        )
+        _ = try await transact(
+            RTSPRequest(
+                method: "PLAY",
+                target: "/",
+                headers: requestHeaders(cSeq: "7", endpoint: endpoint) + [
+                    RTSPHeader(name: "Session", value: audioSetup.sessionToken)
+                ]
+            ),
+            expectedCSeq: "7"
+        )
         try await controlChannel.connect(
             endpoint: controlSetup.endpoint(host: endpoint.networkEndpoint.host),
             connectData: connectData,

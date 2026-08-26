@@ -346,10 +346,15 @@ final class SessionCancellationTests: XCTestCase {
     private func setupSequence() -> [RTSPResponse] {
         [
             response(cSeq: "1"),
-            response(cSeq: "2", body: Data("v=0\r\n".utf8)),
+            response(
+                cSeq: "2",
+                body: Data("v=0\r\na=x-ss-general.encryptionSupported:1\r\n".utf8)
+            ),
             setupResponse(cSeq: "3", port: 48_000),
             setupResponse(cSeq: "4", port: 47_998),
-            setupResponse(cSeq: "5", port: 47_999, connectData: 7)
+            setupResponse(cSeq: "5", port: 47_999, connectData: 7),
+            response(cSeq: "6"),
+            response(cSeq: "7")
         ]
     }
 

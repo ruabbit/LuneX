@@ -88,6 +88,14 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **AND** encrypted RTSP send sequence and client/host nonce direction SHALL remain continuous across those per-request TCP connections
 - **AND** cancellation SHALL close the current transaction connection and prevent any later request from that cancelled RTSP session
 
+#### Scenario: RTSP establishes the Sunshine stream session before control transport
+- **WHEN** OPTIONS, DESCRIBE, and the audio, video, and control SETUP transactions succeed
+- **THEN** LuneX SHALL send ANNOUNCE with the negotiated session token and a bounded Sunshine-compatible SDP description
+- **AND** LuneX SHALL send PLAY only after ANNOUNCE succeeds
+- **AND** LuneX SHALL connect the ENet control transport only after PLAY succeeds
+- **AND** an unsupported required control-encryption capability or a rejected ANNOUNCE or PLAY SHALL fail closed before ENet connection
+- **AND** the SDP feature mask SHALL advertise only protocol features whose corresponding client behavior LuneX actually implements
+
 #### Scenario: Local client disconnect preserves the remote application
 - **WHEN** the user disconnects, a stream consumer cancels, a generation is replaced, or local session setup fails
 - **THEN** LuneX SHALL release only that client's control, RTSP, media, audio, decoder, and input resources and SHALL NOT call Sunshine `/cancel`

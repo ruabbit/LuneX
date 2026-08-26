@@ -309,3 +309,18 @@ shell exit `0` was therefore the status of `tee`, while XCTest itself clearly
 reported failure. This receipt is recorded as a failed live attempt. It will
 not be rerun, and subsequent live wrappers must propagate the upstream XCTest
 exit status with `set -o pipefail` or an equivalent explicit status capture.
+
+The close-delimited fix was committed and pushed as exact SHA
+`c105414288ce3b2978f839ecf697c7d9b81a52da`. A fresh warnings-as-errors live
+bundle build had zero structured errors, warnings, or analyzer warnings. Its
+single double-opt-in session gate used `pipefail` and correctly returned XCTest
+exit `1` after 11.507 seconds. The receipt was `launch=0`, `resume=1`,
+`cancel=0`, `controlEvents=launch_accepted,rtsp_ready`, and
+`controlFailure=ENetTransportError.connectionFailed`.
+
+This is positive exact-SHA evidence that close-delimited DESCRIBE processing is
+fixed: OPTIONS, DESCRIBE, all three SETUP transactions, SDP parsing, and
+negotiated port extraction completed. The next isolated failure is the ENet
+control-channel connection. The four local state files retained identical
+mode, size, and SHA-256 before and after the attempt, and no xctest process
+remained. This exact attempt must not be rerun before the ENet stage is fixed.

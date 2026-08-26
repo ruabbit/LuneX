@@ -590,7 +590,10 @@ final class RTSPBootstrapTests: XCTestCase {
             response(cSeq: "1"),
             response(
                 cSeq: "2",
-                body: Data("v=0\r\na=x-ss-general.featureFlags:0\r\nsprop-parameter-sets=AAAAAU\r\n".utf8)
+                body: Data(
+                    "v=0\r\na=x-ss-general.featureFlags:0\r\na=x-ss-general.encryptionSupported:1\r\nsprop-parameter-sets=AAAAAU\r\n"
+                        .utf8
+                )
             ),
             setupResponse(
                 cSeq: "3",
@@ -609,7 +612,9 @@ final class RTSPBootstrapTests: XCTestCase {
                 session: "session-token",
                 port: 47_999,
                 connectData: 0x1234_5678
-            )
+            ),
+            response(cSeq: "6"),
+            response(cSeq: "7")
         ])
         let hdrMode = SunshineHDRModeMetadata(
             isEnabled: true,
@@ -666,16 +671,21 @@ final class RTSPBootstrapTests: XCTestCase {
         let preservedColorMetadata = await provider.videoColorMetadata(sessionID: sessionID)
         XCTAssertEqual(preservedColorMetadata, expectedColorMetadata)
         let requests = await connection.recordedRequests()
-        XCTAssertEqual(requests.map(\.method), ["OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP"])
+        XCTAssertEqual(
+            requests.map(\.method),
+            ["OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP", "ANNOUNCE", "PLAY"]
+        )
         XCTAssertEqual(requests.map(\.target), [
             "rtsp://moon.local/session",
             "rtsp://moon.local/session",
             "streamid=audio/0/0",
             "streamid=video/0/0",
-            "streamid=control/13/0"
+            "streamid=control/13/0",
+            "streamid=control/13/0",
+            "/"
         ])
         XCTAssertEqual(requests.map { $0.headerValues(named: "CSeq") }, [
-            ["1"], ["2"], ["3"], ["4"], ["5"]
+            ["1"], ["2"], ["3"], ["4"], ["5"], ["6"], ["7"]
         ])
         XCTAssertTrue(requests.allSatisfy {
             $0.headerValues(named: "X-GS-ClientVersion") == ["14"]
@@ -692,6 +702,23 @@ final class RTSPBootstrapTests: XCTestCase {
         XCTAssertTrue(requests[2...4].allSatisfy {
             $0.headerValues(named: "Transport") == ["unicast;X-GS-ClientPort=50000-50001"]
         })
+        XCTAssertEqual(requests[5].headerValues(named: "Session"), ["session-token"])
+        XCTAssertEqual(requests[5].headerValues(named: "Content-Type"), ["application/sdp"])
+        XCTAssertEqual(
+            requests[5].headerValues(named: "Content-Length"),
+            [String(requests[5].body.count)]
+        )
+        XCTAssertEqual(requests[6].headerValues(named: "Session"), ["session-token"])
+        let announce = try XCTUnwrap(String(data: requests[5].body, encoding: .utf8))
+        XCTAssertTrue(announce.contains("a=x-ml-general.featureFlags:2\r\n"))
+        XCTAssertTrue(announce.contains("a=x-ss-general.encryptionEnabled:1\r\n"))
+        XCTAssertTrue(announce.contains("a=x-nv-general.useReliableUdp:13\r\n"))
+        XCTAssertTrue(announce.contains("a=x-nv-video[0].clientViewportWd:2560\r\n"))
+        XCTAssertTrue(announce.contains("a=x-nv-video[0].clientViewportHt:1440\r\n"))
+        XCTAssertTrue(announce.contains("a=x-nv-video[0].maxFPS:120\r\n"))
+        XCTAssertTrue(announce.contains("a=x-nv-vqos[0].bitStreamFormat:1\r\n"))
+        XCTAssertTrue(announce.contains("a=x-nv-video[0].dynamicRangeMode:1\r\n"))
+        XCTAssertTrue(announce.hasSuffix("m=video 47998\r\n"))
         let controlConnect = await control.recordedConnect()
         XCTAssertEqual(controlConnect?.endpoint, RuntimeNetworkEndpoint(
             host: "moon.local",
@@ -769,6 +796,114 @@ final class RTSPBootstrapTests: XCTestCase {
         )
     }
 
+    func testBootstrapFailsBeforeSetupWithoutControlV2EncryptionSupport() async {
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            response(cSeq: "2", body: Data("v=0\r\n".utf8))
+        ])
+        let control = BootstrapStubControlChannel(events: [])
+        let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: control
+        )
+
+        let result = await collectFailure(await provider.start(
+            sessionID: UUID(),
+            request: makeRequest()
+        ))
+
+        XCTAssertEqual(result.events, [.launchAccepted(launchResponse)])
+        XCTAssertEqual(
+            result.error as? SunshineRTSPAnnounceError,
+            .unsupportedControlEncryption
+        )
+        let requests = await connection.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), ["OPTIONS", "DESCRIBE"])
+        let controlConnect = await control.recordedConnect()
+        XCTAssertNil(controlConnect)
+    }
+
+    func testBootstrapDoesNotConnectControlWhenAnnounceOrPlayFails() async {
+        for failingCSeq in ["6", "7"] {
+            let launchResponse = StreamLaunchResponse(
+                sessionURL: "rtsp://moon.local/session",
+                gameSessionID: "session-1",
+                rawValues: [:]
+            )
+            var responses = [
+                response(cSeq: "1"),
+                response(
+                    cSeq: "2",
+                    body: Data(
+                        "v=0\r\na=x-ss-general.encryptionSupported:1\r\n".utf8
+                    )
+                ),
+                setupResponse(cSeq: "3", session: "session-token", port: 48_000),
+                setupResponse(cSeq: "4", session: "session-token", port: 47_998),
+                setupResponse(
+                    cSeq: "5",
+                    session: "session-token",
+                    port: 47_999,
+                    connectData: 0x1234_5678
+                )
+            ]
+            responses.append(failingCSeq == "6"
+                ? RTSPResponse(
+                    statusCode: 500,
+                    reasonPhrase: "Rejected",
+                    headers: [RTSPHeader(name: "CSeq", value: "6")]
+                )
+                : response(cSeq: "6"))
+            if failingCSeq == "7" {
+                responses.append(RTSPResponse(
+                    statusCode: 500,
+                    reasonPhrase: "Rejected",
+                    headers: [RTSPHeader(name: "CSeq", value: "7")]
+                ))
+            }
+            let connection = BootstrapStubRTSPConnection(responses: responses)
+            let control = BootstrapStubControlChannel(events: [])
+            let provider = MoonlightSessionControlProvider(
+                serverInfoClient: SessionServerInfoClient(),
+                launchClient: BootstrapStubLaunchClient(response: launchResponse),
+                connection: connection,
+                controlChannel: control
+            )
+
+            let result = await collectFailure(await provider.start(
+                sessionID: UUID(),
+                request: makeRequest()
+            ))
+
+            XCTAssertEqual(
+                result.events,
+                [.launchAccepted(launchResponse), .rtspReady],
+                "failing CSeq \(failingCSeq)"
+            )
+            XCTAssertEqual(
+                result.error as? RTSPBootstrapError,
+                .unexpectedResponse,
+                "failing CSeq \(failingCSeq)"
+            )
+            let requests = await connection.recordedRequests()
+            XCTAssertEqual(
+                requests.map(\.method),
+                failingCSeq == "6"
+                    ? ["OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP", "ANNOUNCE"]
+                    : ["OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP", "ANNOUNCE", "PLAY"]
+            )
+            let controlConnect = await control.recordedConnect()
+            XCTAssertNil(controlConnect)
+        }
+    }
+
     func testBootstrapPersistsDeterministicAV1FallbackSelection() async throws {
         let sessionID = UUID(uuidString: "0AD74D34-BDBC-4557-9183-40EAC7B68D38")!
         let launchResponse = StreamLaunchResponse(
@@ -778,7 +913,10 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let describeResponse = response(
             cSeq: "2",
-            body: Data("v=0\r\nsprop-parameter-sets=AAAAAU\r\na=rtpmap:98 AV1/90000\r\n".utf8)
+            body: Data(
+                "v=0\r\na=x-ss-general.encryptionSupported:1\r\nsprop-parameter-sets=AAAAAU\r\na=rtpmap:98 AV1/90000\r\n"
+                    .utf8
+            )
         )
         let parsedDescription = try SunshineSessionDescriptionParser.parse(describeResponse)
         XCTAssertEqual(parsedDescription.availableVideoCodecs, [.h264, .hevc, .av1])
@@ -792,7 +930,9 @@ final class RTSPBootstrapTests: XCTestCase {
                 session: "session-token",
                 port: 47_999,
                 connectData: 0x1234_5678
-            )
+            ),
+            response(cSeq: "6"),
+            response(cSeq: "7")
         ])
         let provider = MoonlightSessionControlProvider(
             serverInfoClient: SessionServerInfoClient(),
@@ -829,7 +969,10 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let describeResponse = response(
             cSeq: "2",
-            body: Data("v=0\r\nsprop-parameter-sets=AAAAAU\r\na=rtpmap:98 AV1/90000\r\n".utf8)
+            body: Data(
+                "v=0\r\na=x-ss-general.encryptionSupported:1\r\nsprop-parameter-sets=AAAAAU\r\na=rtpmap:98 AV1/90000\r\n"
+                    .utf8
+            )
         )
         let parsedDescription = try SunshineSessionDescriptionParser.parse(describeResponse)
         XCTAssertEqual(parsedDescription.availableVideoCodecs, [.h264, .hevc, .av1])
@@ -876,7 +1019,10 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let connection = BootstrapStubRTSPConnection(responses: [
             response(cSeq: "1"),
-            response(cSeq: "2", body: Data("v=0\r\n".utf8)),
+            response(
+                cSeq: "2",
+                body: Data("v=0\r\na=x-ss-general.encryptionSupported:1\r\n".utf8)
+            ),
             setupResponse(cSeq: "3", session: "audio-session", port: 48_000),
             setupResponse(cSeq: "4", session: "different-session", port: 47_998)
         ])
@@ -907,7 +1053,10 @@ final class RTSPBootstrapTests: XCTestCase {
         )
         let connection = BootstrapStubRTSPConnection(responses: [
             response(cSeq: "1"),
-            response(cSeq: "2", body: Data("v=0\r\n".utf8)),
+            response(
+                cSeq: "2",
+                body: Data("v=0\r\na=x-ss-general.encryptionSupported:1\r\n".utf8)
+            ),
             setupResponse(cSeq: "3", session: "session-token", port: 48_000),
             setupResponse(cSeq: "4", session: "session-token", port: 47_998),
             setupResponse(cSeq: "5", session: "session-token", port: 47_999)
@@ -953,6 +1102,50 @@ final class RTSPBootstrapTests: XCTestCase {
         XCTAssertEqual(result.error as? RTSPBootstrapError, .invalidSessionURL)
         let recordedEndpoint = await connection.recordedEndpoint()
         XCTAssertNil(recordedEndpoint)
+    }
+
+    func testAnnounceConfigurationSerializesCodecHDRAndBoundedBitrate() throws {
+        let h264 = try SunshineRTSPAnnounceConfiguration(
+            width: 1_920,
+            height: 1_080,
+            frameRate: 60,
+            bitrateKbps: 20_000,
+            codec: .h264,
+            isHDR: false,
+            videoPort: 47_998
+        ).serialize()
+        let h264Text = try XCTUnwrap(String(data: h264, encoding: .utf8))
+        XCTAssertTrue(h264Text.contains("a=x-nv-vqos[0].bitStreamFormat:0\r\n"))
+        XCTAssertTrue(h264Text.contains("a=x-nv-video[0].dynamicRangeMode:0\r\n"))
+        XCTAssertTrue(h264Text.contains("a=x-nv-vqos[0].bw.maximumBitrateKbps:16000\r\n"))
+
+        let av1 = try SunshineRTSPAnnounceConfiguration(
+            width: 3_840,
+            height: 2_160,
+            frameRate: 120,
+            bitrateKbps: 200_000,
+            codec: .av1,
+            isHDR: true,
+            videoPort: 50_000
+        ).serialize()
+        let av1Text = try XCTUnwrap(String(data: av1, encoding: .utf8))
+        XCTAssertTrue(av1Text.contains("a=x-nv-vqos[0].bitStreamFormat:2\r\n"))
+        XCTAssertTrue(av1Text.contains("a=x-nv-video[0].dynamicRangeMode:1\r\n"))
+        XCTAssertTrue(av1Text.contains("a=x-nv-vqos[0].bw.maximumBitrateKbps:100000\r\n"))
+        XCTAssertThrowsError(try SunshineRTSPAnnounceConfiguration(
+            width: 1_920,
+            height: 1_080,
+            frameRate: 60,
+            bitrateKbps: 20_000,
+            codec: .h264,
+            isHDR: true,
+            videoPort: 47_998
+        ).serialize()) {
+            XCTAssertEqual(
+                $0 as? SunshineRTSPAnnounceError,
+                .invalidConfiguration
+            )
+        }
     }
 
     func testBootstrapFailsClosedOnCSeqMismatch() async {
