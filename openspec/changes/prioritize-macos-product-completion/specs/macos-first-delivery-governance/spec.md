@@ -48,6 +48,16 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 
 All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
 
+Every production network URL SHALL preserve the parsed endpoint port even when the persisted or user-facing address omits the default GameStream port. The macOS application SHALL declare a non-empty Local Network usage description and every Bonjour service type it browses, including `_nvstream._tcp`, in its product Info.plist.
+
+#### Scenario: Default GameStream address is used
+- **WHEN** a stored host address omits the default port and LuneX requests server info
+- **THEN** the request SHALL target that host on TCP `47989` rather than relying on HTTP port `80`
+
+#### Scenario: macOS product browses Sunshine hosts
+- **WHEN** the macOS product uses Network.framework to browse `_nvstream._tcp` or connects to a local Sunshine endpoint
+- **THEN** the built application SHALL contain `NSLocalNetworkUsageDescription` and an `NSBonjourServices` array containing `_nvstream._tcp`, while signed application acceptance remains distinct from bare XCTest or command-line evidence
+
 #### Scenario: Existing Moonlight-qt identity is reused
 - **WHEN** the user explicitly imports the local Moonlight-qt client certificate/private key into the Debug file fallback
 - **THEN** LuneX SHALL validate the material, preserve private file permissions, send `0123456789ABCDEF` for every Moonlight HTTP command, present the persisted client identity during pinned HTTPS catalog/launch/resume/cancel authentication, and rely on the paired client certificate for live authorization without requiring re-pairing unless authentication actually fails

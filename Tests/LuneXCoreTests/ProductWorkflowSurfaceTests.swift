@@ -1275,6 +1275,25 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(infoSource.contains("<true/>"))
     }
 
+    func testMacOSInfoDeclaresLocalNetworkAndMoonlightBonjourUsage() throws {
+        let data = try Data(contentsOf: macOSInfoURL)
+        let propertyList = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String: Any]
+        )
+
+        let usageDescription = try XCTUnwrap(
+            propertyList["NSLocalNetworkUsageDescription"] as? String
+        )
+        XCTAssertFalse(usageDescription.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty)
+        XCTAssertEqual(
+            propertyList["NSBonjourServices"] as? [String],
+            ["_nvstream._tcp"]
+        )
+    }
+
     func testUnsupportedPlatformsExposeOnlySingleWorkspaceScenes() throws {
         let appSource = try String(contentsOf: appSourceURL, encoding: .utf8)
 
@@ -1428,5 +1447,12 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Configuration/Info/LuneX-iOS.plist")
+    }
+
+    private var macOSInfoURL: URL {
+        rootViewURL.deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Configuration/Info/LuneX-macOS.plist")
     }
 }

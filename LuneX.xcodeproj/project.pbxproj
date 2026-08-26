@@ -276,6 +276,7 @@
 		24BD23FFD510EF30F694E232 /* AudioPacketJitterBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C6B6FFA15778F50114093FC /* AudioPacketJitterBuffer.swift */; };
 		25183216D7DC6ADA569228B6 /* callbacks.c in Sources */ = {isa = PBXBuildFile; fileRef = B315A2E144291C0C6E464F3E /* callbacks.c */; settings = {COMPILER_FLAGS = "-Wno-unused-parameter -Wno-shorten-64-to-32"; }; };
 		2578E0CD8761B7C726A1B7F2 /* Configuration */ = {isa = PBXGroup; children = (
+				40B6B5978879840C5982EC7F /* LuneX-macOS.plist */,
 				E256BE9F6131F1CB948A89B0 /* LuneX-iOS.plist */,
 				F979D7936D54276C28B42CEE /* LuneX-macOS.entitlements */,
 				87165C5F8BD44A93CE121470 /* LuneX-iOS.entitlements */,
@@ -553,6 +554,7 @@
 		403A2C8E4B815C9092FE8EC0 /* VideoCodecSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39657BF8E5A5BB7530B4EDDE /* VideoCodecSelection.swift */; };
 		408EB1E417041C0DB195A097 /* HDRColorPipelineDeterminismTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B452D3C20C42FCBAD3300E98 /* HDRColorPipelineDeterminismTests.swift */; };
 		40B2CE3BAA2EC0803C6A42E9 /* SessionResourceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620591FA7092BCEE22B47B90 /* SessionResourceTracker.swift */; };
+		40B6B5978879840C5982EC7F /* LuneX-macOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Configuration/Info/LuneX-macOS.plist"; sourceTree = "<group>"; };
 		41027C1F4921A223AF263FAF /* UIKitLifecycleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB925F3538A7E31454660A8B /* UIKitLifecycleMonitor.swift */; };
 		411B250A7745E05178367E0C /* VideoPacketAssemblyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/VideoPacketAssemblyTests.swift"; sourceTree = "<group>"; };
 		41606DEEA6DC7579A2D93BCA /* HeadPoseEntitlementReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LuneXCoreTests/HeadPoseEntitlementReaderTests.swift"; sourceTree = "<group>"; };
@@ -1469,6 +1471,7 @@
 				SWIFT_VERSION = "6.0";
 				MACOSX_DEPLOYMENT_TARGET = "26.0";
 				CODE_SIGN_ENTITLEMENTS = "Configuration/Entitlements/LuneX-macOS.entitlements";
+				INFOPLIST_FILE = "Configuration/Info/LuneX-macOS.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
 			}; name = Debug; };
@@ -2183,6 +2186,7 @@
 				SWIFT_VERSION = "6.0";
 				MACOSX_DEPLOYMENT_TARGET = "26.0";
 				CODE_SIGN_ENTITLEMENTS = "Configuration/Entitlements/LuneX-macOS.entitlements";
+				INFOPLIST_FILE = "Configuration/Info/LuneX-macOS.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 			}; name = Release; };
 		F6B08151BEDFF41608DB8852 /* SessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/LuneXCore/SessionState.swift"; sourceTree = "<group>"; };

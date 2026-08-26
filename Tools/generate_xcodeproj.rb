@@ -381,6 +381,7 @@ resources = [
 ]
 
 configuration_files = [
+  "Configuration/Info/LuneX-macOS.plist",
   "Configuration/Info/LuneX-iOS.plist",
   "Configuration/Entitlements/LuneX-macOS.entitlements",
   "Configuration/Entitlements/LuneX-iOS.entitlements",
@@ -398,6 +399,7 @@ targets = [
     bundle: "dev.lunex.client.macos",
     extra: {
       "CODE_SIGN_ENTITLEMENTS" => "Configuration/Entitlements/LuneX-macOS.entitlements",
+      "INFOPLIST_FILE" => "Configuration/Info/LuneX-macOS.plist",
       "INFOPLIST_KEY_LSApplicationCategoryType" => "public.app-category.games"
     }
   },

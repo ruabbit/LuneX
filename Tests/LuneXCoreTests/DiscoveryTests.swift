@@ -8,6 +8,24 @@ final class DiscoveryTests: XCTestCase {
         XCTAssertEqual(try HostEndpointParser.parse("[fe80::1]:47989").displayAddress, "[fe80::1]:47989")
     }
 
+    func testServerInfoURLAlwaysCarriesTheGameStreamHTTPPort() throws {
+        XCTAssertEqual(
+            try HostEndpointParser.parse("192.168.1.50")
+                .serverInfoURL?.absoluteString,
+            "http://192.168.1.50:47989/serverinfo"
+        )
+        XCTAssertEqual(
+            try HostEndpointParser.parse("moon.local:48010")
+                .serverInfoURL?.absoluteString,
+            "http://moon.local:48010/serverinfo"
+        )
+        XCTAssertEqual(
+            try HostEndpointParser.parse("fe80::1%en0")
+                .serverInfoURL?.absoluteString,
+            "http://[fe80::1%25en0]:47989/serverinfo"
+        )
+    }
+
     func testEndpointParserNormalizesWhitespaceNamesURLsAndIPv6() throws {
         XCTAssertEqual(
             try HostEndpointParser.parse("  Moon.Local.  ").displayAddress,

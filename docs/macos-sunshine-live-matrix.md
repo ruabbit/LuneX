@@ -65,7 +65,7 @@ or arbitrary application requiring a separate approval gate.
 |---|---|---|
 | Host inventory | `tanmy-white` advertised protocol/codec modes and host-free precondition | Capabilities recorded; host was busy at inventory time |
 | Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Moonlight-qt identity imported and validated locally; production pinned HTTPS now loads and presents it for mTLS, but live authentication has not run |
-| Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | 2026-08-26 17:41 CST: the single bounded server-info preflight timed out after 5 seconds, so no catalog request was sent; cached `Desktop` is not counted as live evidence |
+| Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | 2026-08-26 18:03 CST: the corrected production URL reached `:47989` and returned `SUNSHINE_SERVER_BUSY` with current `Desktop` in 0.020 seconds; the gate skipped before catalog, so cached `Desktop` is not counted as live evidence |
 | Launch | Exactly one `Desktop` session launches through the production runtime | Not run |
 | RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Not run |
 | Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Not run |
@@ -136,10 +136,31 @@ real reconnect and host-side termination worked. Those rows remain manual live
 acceptance requirements even if the automated session passes.
 
 The first actual catalog-only run at 17:41 CST on 2026-08-26 inherited the
-explicit opt-in and made one request to the fixed server-info endpoint. It timed
-out at the five-second boundary. No pinned catalog, launch, resume, cancel,
-stop, or input request followed, and the four local data-file hashes and modes
-were unchanged. The host was not queried again in that run.
+explicit opt-in and made one request. Its retained NSError shows the generated
+URL was `http://10.1.100.69/serverinfo`, without Sunshine's `:47989`, so it
+reached TCP 80 and timed out at the five-second boundary. This was an endpoint
+construction defect, not evidence that the host was unreachable or that TCC
+denied the request. No pinned catalog, launch, resume, cancel, stop, or input
+request followed, and the four local data-file hashes and modes were unchanged.
+
+At 17:51 CST, one read-only terminal request to the correct
+`http://10.1.100.69:47989/serverinfo` endpoint returned HTTP `200` and reported
+`SUNSHINE_SERVER_BUSY` with current game `881448767` (`Desktop`). LuneX did not
+send catalog or session operations and must wait for that session to end
+naturally. The endpoint fix keeps the UI/persistence form unchanged while
+always including the actual port in the network URL. The macOS product also
+declares its Local Network purpose and `_nvstream._tcp` Bonjour browse type;
+final live evidence must still run under the actual app's stable signed identity
+rather than treating a bare ad-hoc XCTest bundle as product TCC acceptance.
+
+After the endpoint and product-privacy fix, the one permitted corrected
+catalog-only preflight ran at 18:03 CST from a fresh Debug test product. It
+reached the production `serverInfoURL` on `:47989`, received
+`SUNSHINE_SERVER_BUSY` with current game `881448767`, and skipped in 0.020
+seconds before pinned catalog. The four local state-file hashes and modes were
+identical before and after. This proves the corrected URL is reachable in the
+direct test context; it does not substitute for stable signed-App TCC or live
+catalog/session acceptance.
 
 ## Debug Identity Reuse
 

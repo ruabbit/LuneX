@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；唯一catalog-only preflight于2026-08-26 17:41 CST对`tanmy-white`超时，因而未发送catalog或session请求。下一执行点是在host重新可达且free时运行production mTLS catalog，再执行唯一`Desktop` live session和人工矩阵；Task 2.3保持pending。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；17:41 catalog-only preflight因`HostEndpoint.serverInfoURL`遗漏默认`47989`端口而实际请求了TCP 80，不能证明host不可达或TCC拒绝。endpoint与macOS Local Network/Bonjour产品配置现已修复并完成确定性验收；18:03 corrected preflight确认`:47989/serverinfo`网络可达，但host仍在运行`Desktop`。下一执行点是在host自然free后运行production mTLS catalog及唯一`Desktop` live session和人工矩阵。Task 2.3保持pending。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -52,7 +52,7 @@
 | 里程碑 | 状态 | 完成门 |
 |---|---|---|
 | M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
-| M1 Production session与live transport | in_progress (Task 2.3; host currently unreachable) | production video/audio receiver、server-advertised capability inventory、identity/mTLS接线及显式live harness已完成；待`tanmy-white`重新可达并通过`Desktop` catalog、持续视频、可听同步音频、输入、重连、终止、停止全矩阵 |
+| M1 Production session与live transport | in_progress (Task 2.3; host reachable but busy) | production video/audio receiver、server-advertised capability inventory、identity/mTLS接线、server-info端口、macOS Local Network/Bonjour声明及显式live harness已完成确定性验收；待`tanmy-white`自然free并通过`Desktop` catalog、持续视频、可听同步音频、输入、重连、终止、停止全矩阵 |
 | M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
 | M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
 | M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
@@ -83,7 +83,8 @@
 
 - live harness final repository gate已解析focused与normal xcresult以及build diagnostics，随后错误假设当前`openspec validate --all --strict --json`顶层为`.results`，`jq`因实际`.items`结构而在generator前退出；OpenSpec原始输出本身为`11 passed / 0 failed`，仓库/runtime零变化。修正为`.items`后从OpenSpec开始完整重跑剩余gate，不重复测试。
 - normal回归后direct xctest在仓库根生成未跟踪coverage文件`default.profraw`；首个精确`rm -f`清理命令被工具安全层在执行前拒绝且文件仍在。随后仅对`./default.profraw`使用精确`find -delete`成功，后续direct runner固定`LLVM_PROFILE_FILE`到`/private/tmp` evidence路径，避免再次污染仓库。
-- direct catalog-only live gate正确继承opt-in后只发送一次`GET http://10.1.100.69/serverinfo`，但在5秒边界内timeout；测试以真实失败退出，未进入pinned mTLS catalog、launch/resume/cancel/stop/input，四个本地数据文件SHA/权限前后相同。按单次探测规则不在同一轮重试，Task 2.3保持pending并将host当前不可达记为live外部阻塞证据。
+- direct catalog-only live gate正确继承opt-in后只发送一次请求并在5秒边界timeout；后续读取原始NSError确认失败URL为`http://10.1.100.69/serverinfo`，即`HostEndpoint.serverInfoURL`把用于持久化显示的无端口地址误当网络authority，实际连接TCP 80而非Sunshine `47989`。因此该轮只能证明错误endpoint超时，不能证明host不可达或TCC拒绝；测试未进入pinned mTLS catalog、launch/resume/cancel/stop/input，四个本地数据文件SHA/权限前后相同。修复必须使默认/显式端口及IPv6 URL都保留真实port，并为macOS产品声明Local Network用途与`_nvstream._tcp` Bonjour service。
+- 端口修复前的临时Swift URLComponents probe尝试向`percentEncodedHost`写入非法IPv6文本并触发独立`swift-frontend`进程fatal error；该一次性probe未读取host、未修改仓库或runtime。实现改用经过测试的显式IPv6 bracket和zone percent encoding，不重复非法setter调用。
 - 修正`env`顺序后的catalog-only `xcodebuild test-without-building`启动了XCTest，但Xcode独立test runner过滤了自定义shell环境变量，结构化结果仍以“host opt-in未设置”在0.002秒skip；因此没有发出host请求或触发Keychain，四个本地文件仍不变。后续用已构建bundle的`xcrun xctest -XCTest <exact-selector>`直接运行，显式环境由该进程继承，不修改scheme或扩大接口。
 - live harness首个catalog-only运行命令将`LUNEX_RUN_LIVE_HOST_TEST=1`赋值放在`env -u`选项之前，macOS `env`以`-u: No such file or directory`在`xcodebuild`和任何host请求前退出；本地四个数据文件前后不变。改为所有`-u`选项在前、赋值在后后执行，不把该轮计为preflight。
 - 用户恢复工作后再次按先前明确要求调用`create_goal`，控制面仍以已有`blocked`目标为unfinished拒绝创建；仓库、Keychain、host、Simulator和runtime零副作用。继续以当前OpenSpec和planning files为执行权威，不伪造目标已重建。

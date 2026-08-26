@@ -16,7 +16,13 @@ struct HostEndpoint: Codable, Equatable, Hashable, Sendable {
     }
 
     var serverInfoURL: URL? {
-        URL(string: "http://\(displayAddress)/serverinfo")
+        let encodedHost: String
+        if host.contains(":") {
+            encodedHost = "[\(host.replacingOccurrences(of: "%", with: "%25"))]"
+        } else {
+            encodedHost = host
+        }
+        return URL(string: "http://\(encodedHost):\(port)/serverinfo")
     }
 }
 
