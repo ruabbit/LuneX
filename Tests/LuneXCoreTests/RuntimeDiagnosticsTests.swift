@@ -142,6 +142,28 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testApplicationDiagnosticsClassifyEncryptedAudioPacketFailures() {
+        let invalidKey = ApplicationDiagnosticFactory.streamFailure(
+            MoonlightAudioPacketDecryptError.invalidKeyMaterial
+        )
+        XCTAssertEqual(invalidKey.category, .audio)
+        XCTAssertEqual(invalidKey.code, "audio_packet_invalid_key")
+        XCTAssertEqual(invalidKey.action, .checkAudioOutput)
+
+        let invalidCiphertext = ApplicationDiagnosticFactory.streamFailure(
+            MoonlightAudioPacketDecryptError.invalidCiphertext
+        )
+        XCTAssertEqual(invalidCiphertext.category, .audio)
+        XCTAssertEqual(invalidCiphertext.code, "audio_packet_invalid_ciphertext")
+
+        let decryptionFailed = ApplicationDiagnosticFactory.streamFailure(
+            MoonlightAudioPacketDecryptError.decryptionFailed
+        )
+        XCTAssertEqual(decryptionFailed.category, .audio)
+        XCTAssertEqual(decryptionFailed.code, "audio_packet_decryption_failed")
+    }
+
+    @MainActor
     func testStaleLifecycleApplicationUsesSafeStableDiagnostic() {
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(
             SessionMediaEnvironmentError.staleLifecycleApplication

@@ -17,6 +17,7 @@ struct SunshineRTSPAnnounceConfiguration: Equatable, Sendable {
     var codec: NegotiatedVideoCodec
     var isHDR: Bool
     var videoPort: UInt16
+    var audioEncryptionEnabled: Bool = false
 
     func serialize() throws -> Data {
         guard width > 0,
@@ -38,7 +39,7 @@ struct SunshineRTSPAnnounceConfiguration: Equatable, Sendable {
         }
         let attributes: [(String, String)] = [
             ("x-ml-general.featureFlags", String(Self.moonlightFeatureFlags)),
-            ("x-ss-general.encryptionEnabled", "1"),
+            ("x-ss-general.encryptionEnabled", audioEncryptionEnabled ? "5" : "1"),
             ("x-ss-video[0].chromaSamplingType", "0"),
             ("x-nv-video[0].clientViewportWd", String(width)),
             ("x-nv-video[0].clientViewportHt", String(height)),

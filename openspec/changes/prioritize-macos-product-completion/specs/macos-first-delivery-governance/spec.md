@@ -108,6 +108,16 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 - **AND** an unsupported required control-encryption capability or a rejected ANNOUNCE or PLAY SHALL fail closed before ENet connection
 - **AND** the SDP feature mask SHALL advertise only protocol features whose corresponding client behavior LuneX actually implements
 
+#### Scenario: Audio encryption follows the negotiated Sunshine capability
+- **WHEN** the SDP requests control-v2 plus audio encryption and advertises both capabilities as supported
+- **THEN** LuneX SHALL retain control-v2 protection, declare the audio bit in ANNOUNCE, and attach the negotiated AES-128 key material only to the in-memory audio receive configuration
+- **AND** the audio receiver SHALL decrypt only the Opus payload with AES-128-CBC using the negotiated key ID plus RTP sequence IV construction, while preserving the RTP header
+- **AND** audio key bytes and key IDs SHALL be excluded from Codable snapshots, diagnostics, and exported state
+- **WHEN** the SDP requests video encryption or any unknown encryption bit
+- **THEN** LuneX SHALL fail closed before ENet connection because video encryption is not implemented
+- **WHEN** an encrypted audio configuration lacks a 16-byte key or an unsigned 32-bit key ID
+- **THEN** LuneX SHALL reject the configuration before creating a media channel
+
 #### Scenario: Established Sunshine control session remains alive
 - **WHEN** encrypted ENet control transport completes START A and START B
 - **THEN** LuneX SHALL immediately send the reliable `0x0200` periodic-ping message on the generic control channel and continue sending it at the Moonlight 100-millisecond interval while that control generation remains active

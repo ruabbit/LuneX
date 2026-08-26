@@ -833,6 +833,18 @@ enum ApplicationDiagnosticFactory {
             error is AudioPipelineError || error is AudioRuntimeRecoveryError {
             return audioFailure(code: "audio_pipeline_failed")
         }
+        if let error = error as? MoonlightAudioPacketDecryptError {
+            let code: String
+            switch error {
+            case .invalidKeyMaterial:
+                code = "audio_packet_invalid_key"
+            case .invalidCiphertext:
+                code = "audio_packet_invalid_ciphertext"
+            case .decryptionFailed:
+                code = "audio_packet_decryption_failed"
+            }
+            return audioFailure(code: code)
+        }
         if error is RemoteInputRuntimeError || error is RemoteInputCodecError {
             return inputFailure(code: "input_delivery_failed")
         }

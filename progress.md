@@ -4257,3 +4257,14 @@
 - 2026-08-27：首次repository gate虽输出`FINAL_MEDIA_ACTIVITY_REPOSITORY_GATE_OK`，但人工性能终审发现actor recorder会让每个高包率video datagram产生actor hop并可能扰动live时序；该成功证据降为pre-final。实现改为`NSLock`保护的同步饱和计数器，保持单次轻量临界区且不改变production channel/provider；因此必须在最终源码重跑focused/related/normal和repository gate。
 - 2026-08-27：同步锁最终版fresh focused `/private/tmp/LuneX-M1-media-activity-lock-focused.bIvyPn/Focused.xcresult`通过`5/5`，related `/private/tmp/LuneX-M1-media-activity-lock-related.aKCHJ1/Related.xcresult`通过`102/101/1 live skip/0`，normal `/private/tmp/LuneX-M1-media-activity-lock-normal.JR0eky/Normal.xcresult`通过`1322/1320/2 exact opt-in skips/0`；三份structured build均`succeeded/0/0/0`，精确skip不变且零process残留。
 - 2026-08-27：最终只读repository gate输出`FINAL_MEDIA_ACTIVITY_LOCK_REPOSITORY_GATE_OK`：三方基线`9516a557`、generator hash稳定`783a7494...5944`、OpenSpec strict `11/11`与apply `7/27 next 2.3 pending`、精确6文件且零product source/pbx drift、最终`5/5`、`102/101/1/0`、`1322/1320/2/0`、fallback `0700/0600`、receipt privacy与零process全部通过。Task 2.3不勾选，准备提交推送。
+
+## 2026-08-27 M1 Task 2.3 audio encryption interoperability repair
+
+- **诊断修复：** 将 `MoonlightAudioPacketDecryptError` 映射为音频域的有限诊断码（invalid key、invalid ciphertext、decryption failed），避免加密音频包错误错误归类为通用 transport failure；fresh warnings-as-errors focused `/tmp/LuneX-audio-fix-focused2.iebYRM/Focused.xcresult` 通过 `82/82/0/0`，完整 macOS normal `/tmp/LuneX-audio-fix-normal.mmEgdC/Normal.xcresult` 通过 `1327 total / 1325 passed / 2 skipped / 0 failed`，两个 skip 精确为 live Sunshine 与 real Keychain opt-in。
+
+- **实现：** 协商音频配置新增内存态 `isEncrypted`、AES-128 key 与 UInt32 key ID；key material 被排除在 Codable 之外。RTSP 现在支持 `controlV2 + audio`，ANNOUNCE 在音频加密请求时发送 `x-ss-general.encryptionEnabled:5`，仍对视频加密和未知位 fail closed。
+- **媒体路径：** 音频接收保留 RTP 头，仅对 Opus payload 使用 AES-128-CBC/PKCS#7 解密，IV 为大端 `keyID + RTP sequence` 后补零，非法 key、key ID、密文长度和解密失败均为 typed failure。
+- **确定性验收：** fresh focused `/tmp/LuneX-M1-audio-encryption-focused.cQwqpI/Focused.xcresult` 在 Swift/Clang warnings-as-errors 下通过新增及相关 `35/35/0/0`（MoonlightMediaReceive、RTSPBootstrap、RuntimeProviderContract）；覆盖确定性密文向量、audio-only RTSP 全流程、Codable key exclusion 与配置 fail-closed。普通套件 `/tmp/LuneX-M1-audio-encryption-normal.yqkM7d/LuneXCoreTests.xcresult` 通过，唯一 skip 仍为显式禁用的真实 Keychain 与 live Sunshine 门控；structured diagnostics 为零。
+- **兼容构建：** fresh unsigned generic build `/tmp/LuneX-M1-audio-encryption-builds-final.YbDHes` 的 macOS Debug/Release、iOS/iPadOS Debug、tvOS Debug、visionOS Debug 全部成功，结构化 diagnostics 为 `0/0/0`，macOS 双架构为 `x86_64 arm64`，各目标生成 Metal AIR/metallib。冻结平台结果仅证明共享源码编译兼容。
+- **工程与边界：** generator 连续两次运行前后 `project.pbxproj` SHA-256 均为 `783a7494...5944` 且零 drift；OpenSpec strict `11/11`。未访问真实 Keychain、未查询或操作 Simulator、未执行 live host。Task 2.3 仍保持 pending；提交新 SHA 后才允许该 SHA 唯一一次双 opt-in live gate。
+- **编排错误记录：** 两次首次 generic build 将 `CODE_SIGNING_ALLOWED=NO` 作为环境变量而非 xcodebuild build setting，因无 development team 在签名阶段 exit 65；未进入源码失败，未计入验收。随后改用命令行 build setting，从 fresh 证据目录完成五项构建。

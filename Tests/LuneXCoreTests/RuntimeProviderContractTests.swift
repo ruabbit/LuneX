@@ -136,6 +136,59 @@ final class RuntimeProviderContractTests: XCTestCase {
         XCTAssertNil(decoded.audio.pingPayload)
     }
 
+    func testEncryptedAudioKeyMaterialIsExcludedFromCodableSnapshots() throws {
+        var configuration = makeAudio(channels: 2, streams: 1, coupled: 1)
+        configuration.isEncrypted = true
+        configuration.encryptionKey = Data(repeating: 0xAB, count: 16)
+        configuration.encryptionKeyID = 0x0102_0304
+        try configuration.validate()
+
+        let encoded = try JSONEncoder().encode(configuration)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        XCTAssertEqual(object["isEncrypted"] as? Bool, true)
+        XCTAssertNil(object["encryptionKey"])
+        XCTAssertNil(object["encryptionKeyID"])
+
+        let decoded = try JSONDecoder().decode(
+            NegotiatedAudioStreamConfiguration.self,
+            from: encoded
+        )
+        XCTAssertTrue(decoded.isEncrypted)
+        XCTAssertNil(decoded.encryptionKey)
+        XCTAssertNil(decoded.encryptionKeyID)
+        XCTAssertThrowsError(try decoded.validate()) { error in
+            XCTAssertEqual(
+                error as? RuntimeContractError,
+                .invalidAudioConfiguration
+            )
+        }
+    }
+
+    func testEncryptedAudioConfigurationRequiresValidKeyMaterial() {
+        var missingKey = makeAudio(channels: 2, streams: 1, coupled: 1)
+        missingKey.isEncrypted = true
+        missingKey.encryptionKeyID = 7
+        XCTAssertThrowsError(try missingKey.validate()) { error in
+            XCTAssertEqual(
+                error as? RuntimeContractError,
+                .invalidAudioConfiguration
+            )
+        }
+
+        var invalidKey = makeAudio(channels: 2, streams: 1, coupled: 1)
+        invalidKey.isEncrypted = true
+        invalidKey.encryptionKey = Data(repeating: 0x11, count: 15)
+        invalidKey.encryptionKeyID = -1
+        XCTAssertThrowsError(try invalidKey.validate()) { error in
+            XCTAssertEqual(
+                error as? RuntimeContractError,
+                .invalidAudioConfiguration
+            )
+        }
+    }
+
     private func makeSessionConfiguration() -> NegotiatedSessionConfiguration {
         let control = RuntimeNetworkEndpoint(host: "moon.test", port: 47_999, transport: .tcp)
         return NegotiatedSessionConfiguration(

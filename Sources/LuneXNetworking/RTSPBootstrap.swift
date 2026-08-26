@@ -693,11 +693,13 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             throw SunshineRTSPNegotiationError
                 .inconsistentEncryptionCapabilities
         }
-        let unknownOrMediaEncryption = requestedEncryption.rawValue
-            & ~SunshineEncryptionFeatures.controlV2.rawValue
-        guard unknownOrMediaEncryption == 0 else {
+        let unsupportedEncryption = requestedEncryption.subtracting([
+            .controlV2,
+            .audio
+        ])
+        guard unsupportedEncryption.isEmpty else {
             throw SunshineRTSPNegotiationError
-                .unsupportedMediaEncryption(unknownOrMediaEncryption)
+                .unsupportedMediaEncryption(unsupportedEncryption.rawValue)
         }
         guard supportedEncryption.contains(.controlV2) else {
             throw SunshineRTSPAnnounceError.unsupportedControlEncryption
@@ -760,7 +762,8 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             bitrateKbps: request.preferences.bitrateKbps,
             codec: videoSelection.codec,
             isHDR: videoSelection.isHDR,
-            videoPort: videoSetup.serverPort
+            videoPort: videoSetup.serverPort,
+            audioEncryptionEnabled: requestedEncryption.contains(.audio)
         )
         let announceBody = try announceConfiguration.serialize()
         _ = try await transact(
@@ -804,6 +807,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             maximumPacketSize: Self.maximumMediaPacketSize
         )
         audioConfiguration.pingPayload = audioSetup.pingPayload
+        if requestedEncryption.contains(.audio) {
+            audioConfiguration.isEncrypted = true
+            audioConfiguration.encryptionKey = request.remoteInputKey.key
+            audioConfiguration.encryptionKeyID = request.remoteInputKey.keyID
+        }
         let videoConfiguration = NegotiatedVideoStreamConfiguration(
             codec: videoSelection.codec,
             width: request.preferences.width,

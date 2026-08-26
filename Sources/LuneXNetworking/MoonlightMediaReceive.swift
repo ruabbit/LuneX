@@ -1,3 +1,4 @@
+import CommonCrypto
 import Foundation
 
 enum MoonlightMediaReceiveError: Error, Equatable, Sendable,
@@ -129,6 +130,69 @@ enum MoonlightAudioRTPPacketParser {
             | (UInt32(byte(data, at: offset + 1)) << 16)
             | (UInt32(byte(data, at: offset + 2)) << 8)
             | UInt32(byte(data, at: offset + 3))
+    }
+}
+
+enum MoonlightAudioPacketDecryptError: Error, Equatable, Sendable {
+    case invalidKeyMaterial
+    case invalidCiphertext
+    case decryptionFailed
+}
+
+enum MoonlightAudioPacketDecryptor {
+    /// Sunshine encrypts only the RTP payload with AES-128-CBC. The IV is the
+    /// big-endian `rikeyid + sequence` value in the first four bytes followed
+    /// by twelve zero bytes; PKCS#7 padding is applied by the sender.
+    static func decrypt(
+        _ packet: MoonlightAudioRTPPacket,
+        key: Data,
+        keyID: Int
+    ) throws -> Data {
+        guard key.count == kCCKeySizeAES128,
+              UInt32(exactly: keyID) != nil else {
+            throw MoonlightAudioPacketDecryptError.invalidKeyMaterial
+        }
+        let ciphertext = [UInt8](packet.payload)
+        guard !ciphertext.isEmpty,
+              ciphertext.count.isMultiple(of: kCCBlockSizeAES128) else {
+            throw MoonlightAudioPacketDecryptError.invalidCiphertext
+        }
+        var iv = [UInt8](repeating: 0, count: kCCBlockSizeAES128)
+        var ivValue = UInt32(exactly: keyID)! &+ UInt32(packet.sequenceNumber)
+        ivValue = ivValue.bigEndian
+        withUnsafeBytes(of: &ivValue) { bytes in
+            iv.replaceSubrange(0..<MemoryLayout<UInt32>.size, with: bytes)
+        }
+
+        var plaintext = [UInt8](repeating: 0, count: ciphertext.count)
+        let plaintextCapacity = plaintext.count
+        var plaintextLength = 0
+        let status = key.withUnsafeBytes { keyBytes in
+            ciphertext.withUnsafeBytes { inputBytes in
+                iv.withUnsafeBytes { ivBytes in
+                    plaintext.withUnsafeMutableBytes { outputBytes in
+                        CCCrypt(
+                            CCOperation(kCCDecrypt),
+                            CCAlgorithm(kCCAlgorithmAES),
+                            CCOptions(kCCOptionPKCS7Padding),
+                            keyBytes.baseAddress,
+                            kCCKeySizeAES128,
+                            ivBytes.baseAddress,
+                            inputBytes.baseAddress,
+                            ciphertext.count,
+                            outputBytes.baseAddress,
+                            plaintextCapacity,
+                            &plaintextLength
+                        )
+                    }
+                }
+            }
+        }
+        guard status == kCCSuccess,
+              (1...ciphertext.count).contains(plaintextLength) else {
+            throw MoonlightAudioPacketDecryptError.decryptionFailed
+        }
+        return Data(plaintext.prefix(plaintextLength))
     }
 }
 
@@ -555,11 +619,25 @@ actor MoonlightAudioReceiveProvider: AudioReceiveProvider {
                 maximumPayloadSize: configuration.maximumPacketSize
             )
             guard !packet.isFEC else { return nil }
+            let payload: Data
+            if configuration.isEncrypted {
+                guard let key = configuration.encryptionKey,
+                      let keyID = configuration.encryptionKeyID else {
+                    throw MoonlightAudioPacketDecryptError.invalidKeyMaterial
+                }
+                payload = try MoonlightAudioPacketDecryptor.decrypt(
+                    packet,
+                    key: key,
+                    keyID: keyID
+                )
+            } else {
+                payload = packet.payload
+            }
             return .packet(ReceivedAudioPacket(
                 sequenceNumber: packet.sequenceNumber,
                 timestamp: packet.timestamp,
                 receiveTimeNanoseconds: receiveTimeNanoseconds,
-                payload: packet.payload
+                payload: payload
             ))
         }
     }

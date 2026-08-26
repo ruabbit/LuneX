@@ -85,6 +85,11 @@ struct NegotiatedAudioStreamConfiguration: Codable, Equatable, Sendable {
     var channelMapping: [UInt8]
     var maximumPacketSize: Int
     var pingPayload: Data? = nil
+    /// Audio payload encryption is negotiated by the RTSP SDP. The key is
+    /// intentionally in-memory only and is omitted from Codable snapshots.
+    var isEncrypted: Bool = false
+    var encryptionKey: Data? = nil
+    var encryptionKeyID: Int? = nil
 
     var channelCount: Int {
         channelLayout.channelCount
@@ -106,9 +111,84 @@ struct NegotiatedAudioStreamConfiguration: Codable, Equatable, Sendable {
               channelMapping.allSatisfy({ Int($0) < codedChannelCount }),
               maximumPacketSize > 0,
               maximumPacketSize <= 1_400,
-              pingPayload == nil || pingPayload?.count == 16 else {
+              pingPayload == nil || pingPayload?.count == 16,
+              !isEncrypted || (
+                  encryptionKey?.count == 16
+                      && encryptionKeyID.map({ UInt32(exactly: $0) != nil }) == true
+              ) else {
             throw RuntimeContractError.invalidAudioConfiguration
         }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sampleRate
+        case channelLayout
+        case streamCount
+        case coupledStreamCount
+        case samplesPerFrame
+        case channelMapping
+        case maximumPacketSize
+        case pingPayload
+        case isEncrypted
+    }
+
+    init(
+        sampleRate: Int,
+        channelLayout: StreamAudioChannelLayout,
+        streamCount: Int,
+        coupledStreamCount: Int,
+        samplesPerFrame: Int,
+        channelMapping: [UInt8],
+        maximumPacketSize: Int,
+        pingPayload: Data? = nil,
+        isEncrypted: Bool = false,
+        encryptionKey: Data? = nil,
+        encryptionKeyID: Int? = nil
+    ) {
+        self.sampleRate = sampleRate
+        self.channelLayout = channelLayout
+        self.streamCount = streamCount
+        self.coupledStreamCount = coupledStreamCount
+        self.samplesPerFrame = samplesPerFrame
+        self.channelMapping = channelMapping
+        self.maximumPacketSize = maximumPacketSize
+        self.pingPayload = pingPayload
+        self.isEncrypted = isEncrypted
+        self.encryptionKey = encryptionKey
+        self.encryptionKeyID = encryptionKeyID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sampleRate = try container.decode(Int.self, forKey: .sampleRate)
+        channelLayout = try container.decode(
+            StreamAudioChannelLayout.self,
+            forKey: .channelLayout
+        )
+        streamCount = try container.decode(Int.self, forKey: .streamCount)
+        coupledStreamCount = try container.decode(
+            Int.self,
+            forKey: .coupledStreamCount
+        )
+        samplesPerFrame = try container.decode(Int.self, forKey: .samplesPerFrame)
+        channelMapping = try container.decode(
+            [UInt8].self,
+            forKey: .channelMapping
+        )
+        maximumPacketSize = try container.decode(
+            Int.self,
+            forKey: .maximumPacketSize
+        )
+        pingPayload = try container.decodeIfPresent(
+            Data.self,
+            forKey: .pingPayload
+        )
+        isEncrypted = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .isEncrypted
+        ) ?? false
+        encryptionKey = nil
+        encryptionKeyID = nil
     }
 }
 

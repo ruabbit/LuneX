@@ -755,6 +755,73 @@ final class RTSPBootstrapTests: XCTestCase {
         })
     }
 
+    func testBootstrapCompletesWhenOnlyAudioEncryptionIsRequested() async throws {
+        let sessionID = UUID()
+        let launchResponse = StreamLaunchResponse(
+            sessionURL: "rtsp://moon.local/session",
+            gameSessionID: "session-1",
+            rawValues: [:]
+        )
+        let connection = BootstrapStubRTSPConnection(responses: [
+            response(cSeq: "1"),
+            response(
+                cSeq: "2",
+                body: Data(
+                    "v=0\r\na=x-ss-general.featureFlags:0\r\na=x-ss-general.encryptionSupported:5\r\na=x-ss-general.encryptionRequested:5\r\nsprop-parameter-sets=AAAAAU\r\n"
+                        .utf8
+                )
+            ),
+            setupResponse(
+                cSeq: "3",
+                session: "session-token",
+                port: 48_000,
+                pingPayload: "audio-ping-00000"
+            ),
+            setupResponse(
+                cSeq: "4",
+                session: "session-token",
+                port: 47_998,
+                pingPayload: "video-ping-00000"
+            ),
+            setupResponse(
+                cSeq: "5",
+                session: "session-token",
+                port: 47_999,
+                connectData: 0x1234_5678
+            ),
+            response(cSeq: "6"),
+            response(cSeq: "7")
+        ])
+        let control = BootstrapStubControlChannel(events: [
+            .terminated(HostTerminationReason(code: 0x8003_0023, kind: .graceful))
+        ])
+        let provider = MoonlightSessionControlProvider(
+            serverInfoClient: SessionServerInfoClient(),
+            launchClient: BootstrapStubLaunchClient(response: launchResponse),
+            connection: connection,
+            controlChannel: control
+        )
+
+        let events = try await collect(await provider.start(
+            sessionID: sessionID,
+            request: makeRequest()
+        ))
+        let configuration = try XCTUnwrap(events.compactMap { event in
+            if case let .negotiated(value) = event { return value }
+            return nil
+        }.first)
+
+        XCTAssertTrue(configuration.audio.isEncrypted)
+        XCTAssertEqual(configuration.audio.encryptionKey, makeRequest().remoteInputKey.key)
+        XCTAssertEqual(configuration.audio.encryptionKeyID, makeRequest().remoteInputKey.keyID)
+        let requests = await connection.recordedRequests()
+        let announce = try XCTUnwrap(String(data: requests[5].body, encoding: .utf8))
+        XCTAssertTrue(announce.contains("a=x-ss-general.encryptionEnabled:5\r\n"))
+        XCTAssertEqual(requests.map(\.method), [
+            "OPTIONS", "DESCRIBE", "SETUP", "SETUP", "SETUP", "ANNOUNCE", "PLAY"
+        ])
+    }
+
     func testBootstrapFailsClosedWhenMediaEncryptionIsRequested() async {
         let launchResponse = StreamLaunchResponse(
             sessionURL: "rtsp://moon.local/session",

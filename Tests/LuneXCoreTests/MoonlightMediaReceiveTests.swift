@@ -195,6 +195,46 @@ final class MoonlightMediaReceiveTests: XCTestCase {
         }
     }
 
+    func testAudioProviderDecryptsEncryptedOpusPayload() async throws {
+        let channel = MediaReceiveStubChannel(chunks: [
+            .success(NetworkReceiveChunk(
+                data: makeAudioDatagram(
+                    payloadType: MoonlightAudioRTPPacket.opusPayloadType,
+                    sequenceNumber: 5,
+                    timestamp: 240,
+                    payload: Data(hex: "5718f358897fa2a2da88be5421dfbefc")
+                ),
+                isComplete: true
+            ))
+        ])
+        let provider = MoonlightAudioReceiveProvider(
+            channelFactory: { _, _ in channel },
+            timing: testTiming,
+            timeProvider: { 999 }
+        )
+        let configuration = audioConfiguration()
+        var encrypted = configuration
+        encrypted.isEncrypted = true
+        encrypted.encryptionKey = Data(hex: "00112233445566778899aabbccddeeff")
+        encrypted.encryptionKeyID = 0x0102_0304
+        let sessionID = UUID()
+        let stream = await provider.receiveAudio(
+            sessionID: sessionID,
+            endpoint: udpEndpoint(port: 48_000),
+            configuration: encrypted
+        )
+
+        var iterator = stream.makeAsyncIterator()
+        let event = try await iterator.next()
+        guard case let .packet(packet) = event else {
+            XCTFail("Expected one decrypted audio packet.")
+            await provider.stopAudio(sessionID: sessionID)
+            return
+        }
+        XCTAssertEqual(packet.payload, Data("hello moonlight".utf8))
+        await provider.stopAudio(sessionID: sessionID)
+    }
+
     func testStopIsIdempotentAndWaitsForBlockedReceiveCancellation()
         async throws
     {
@@ -474,6 +514,18 @@ final class MoonlightMediaReceiveTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(5))
         }
         return false
+    }
+}
+
+private extension Data {
+    init(hex: String) {
+        self.init()
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2)
+            append(UInt8(hex[index..<next], radix: 16)!)
+            index = next
+        }
     }
 }
 
