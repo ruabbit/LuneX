@@ -185,6 +185,13 @@ resume, input, cancel, or stop path ran. This direct XCTest evidence still does
 not prove Local Network TCC acceptance by the actual App under a stable signing
 identity.
 
+After the catalog-admission batch was committed and pushed as
+`f9cefd74f8584de123541724b952e4b0d4650208`, one bounded read-only preflight
+again identified `tanmy-white` as `SUNSHINE_SERVER_BUSY` with current game
+`881448767`. The double-opt-in session gate was therefore not run, and no
+launch, input, cancel, or stop request was sent. M1 remains at Task 2.3 until
+the existing `Desktop` session ends naturally.
+
 ## Debug Identity Reuse
 
 Normal Debug testing uses the file fallback and does not access Keychain. The
