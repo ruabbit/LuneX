@@ -4261,6 +4261,7 @@
 ## 2026-08-27 M1 Task 2.3 audio encryption interoperability repair
 
 - **诊断修复：** 将 `MoonlightAudioPacketDecryptError` 映射为音频域的有限诊断码（invalid key、invalid ciphertext、decryption failed），避免加密音频包错误错误归类为通用 transport failure；fresh warnings-as-errors focused `/tmp/LuneX-audio-fix-focused2.iebYRM/Focused.xcresult` 通过 `82/82/0/0`，完整 macOS normal `/tmp/LuneX-audio-fix-normal.mmEgdC/Normal.xcresult` 通过 `1327 total / 1325 passed / 2 skipped / 0 failed`，两个 skip 精确为 live Sunshine 与 real Keychain opt-in。
+- **新 SHA 唯一 live gate：** `3889cfb325800527e8a8bb150f6da60355df8195` 的直接 `xcrun xctest` 双 opt-in 运行在 45.726 秒后失败于 `waitingForTransport`；`launch/resume/cancel=0/1/0`，control events 到 `channels_1` 与 `video_color_metadata`，control failure 为空。视频通道 `connections=1,pings=86,datagrams=10058,events=4189`，音频通道 `connections=1,pings=86,datagrams=0,events=0`，因此本轮未进入 decoded video/audio readiness，未观察到音频解密错误；`spatial_audio_missing_entitlement` 仅为既有诊断状态。该 SHA 不再重跑，Task 2.3 继续 pending。
 
 - **实现：** 协商音频配置新增内存态 `isEncrypted`、AES-128 key 与 UInt32 key ID；key material 被排除在 Codable 之外。RTSP 现在支持 `controlV2 + audio`，ANNOUNCE 在音频加密请求时发送 `x-ss-general.encryptionEnabled:5`，仍对视频加密和未知位 fail closed。
 - **媒体路径：** 音频接收保留 RTP 头，仅对 Opus payload 使用 AES-128-CBC/PKCS#7 解密，IV 为大端 `keyID + RTP sequence` 后补零，非法 key、key ID、密文长度和解密失败均为 typed failure。
