@@ -38,6 +38,42 @@ private enum LiveSunshineAcceptanceError: Error {
     case invalidServerInfoResponse
 }
 
+private actor LiveRecordingStreamLaunchClient: StreamLaunchClient {
+    private let base: any StreamLaunchClient
+    private var launches = 0
+    private var resumes = 0
+    private var stops = 0
+
+    init(base: any StreamLaunchClient) {
+        self.base = base
+    }
+
+    func launch(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        launches += 1
+        return try await base.launch(request, parameters: parameters)
+    }
+
+    func resume(
+        _ request: StreamLaunchRequest,
+        parameters: StreamNegotiationParameters
+    ) async throws -> StreamLaunchResponse {
+        resumes += 1
+        return try await base.resume(request, parameters: parameters)
+    }
+
+    func stop(host: MoonlightHost, clientUniqueID: String) async throws {
+        stops += 1
+        try await base.stop(host: host, clientUniqueID: clientUniqueID)
+    }
+
+    func counts() -> (launches: Int, resumes: Int, stops: Int) {
+        (launches, resumes, stops)
+    }
+}
+
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
     func testLiveSunshineAcceptanceRequiresExactOptIns() {
@@ -93,7 +129,8 @@ final class AppModelWorkflowTests: XCTestCase {
         }
 
 #if os(macOS) && DEBUG
-        let model = makeLiveSunshineProductionModel()
+        let liveRuntime = makeLiveSunshineProductionModel()
+        let model = liveRuntime.model
         await model.loadInitialState()
 
         let matchingHosts = model.hosts.filter {
@@ -146,8 +183,11 @@ final class AppModelWorkflowTests: XCTestCase {
             _ = await model.stopStream(in: model.primaryWorkspaceReference)
             launchTask.cancel()
             await launchTask.value
+            let calls = await liveRuntime.launchClient.counts()
+            let issueCode = model.streamProductIssue?.code.rawValue ?? "none"
+            let diagnostic = model.diagnostics.latestStreamActionableEvent
             XCTFail(
-                "The production session did not reach streaming; phase=\(model.productSessionActualPhase)."
+                "The production session did not reach streaming; phase=\(model.productSessionActualPhase), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops)."
             )
             return
         }
@@ -223,6 +263,15 @@ final class AppModelWorkflowTests: XCTestCase {
             in: model.primaryWorkspaceReference
         )
         XCTAssertFalse(repeatedStop)
+        let calls = await liveRuntime.launchClient.counts()
+        if serverInfo.state?.hasSuffix("_SERVER_BUSY") == true {
+            XCTAssertEqual(calls.launches, 0)
+            XCTAssertEqual(calls.resumes, 1)
+        } else {
+            XCTAssertEqual(calls.launches, 1)
+            XCTAssertEqual(calls.resumes, 0)
+        }
+        XCTAssertEqual(calls.stops, 0)
 #else
         throw XCTSkip(
             "The live harness is limited to macOS Debug so it always uses the explicit file identity fallback."
@@ -9651,15 +9700,18 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
-    private func makeLiveSunshineProductionModel() -> AppModel {
+    private func makeLiveSunshineProductionModel() -> (
+        model: AppModel,
+        launchClient: LiveRecordingStreamLaunchClient
+    ) {
         let identityStore = JSONFileClientIdentityStore(
             fileURL: AppStorageLocations.debugClientIdentityFile
         )
         let requestExecutor = PinnedHTTPSRequestExecutor(
             clientIdentityStore: identityStore
         )
-        let launchClient = HTTPStreamLaunchClient(
-            requestExecutor: requestExecutor
+        let launchClient = LiveRecordingStreamLaunchClient(
+            base: HTTPStreamLaunchClient(requestExecutor: requestExecutor)
         )
         let controlChannel = MoonlightControlChannel()
         let runtimeProviders = RuntimeProviderInventory(
@@ -9674,7 +9726,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 feedbackSource: controlChannel
             )
         )
-        return AppModel(
+        let model = AppModel(
             appCatalogManager: AppCatalogManager(
                 appListClient: HTTPAppListClient(
                     requestExecutor: requestExecutor
@@ -9688,6 +9740,7 @@ final class AppModelWorkflowTests: XCTestCase {
             runtimeProviders: runtimeProviders,
             clientIdentityStore: identityStore
         )
+        return (model, launchClient)
     }
 
     private func fetchLiveServerInfoOnce(
