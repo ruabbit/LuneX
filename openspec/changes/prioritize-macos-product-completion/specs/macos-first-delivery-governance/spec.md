@@ -44,8 +44,15 @@ The project SHALL classify every completion claim as deterministic implementatio
 #### Scenario: Live media failure remains diagnosable and privacy bounded
 - **WHEN** an exact-SHA live session fails before sustained video and audible synchronized audio are accepted
 - **THEN** the test receipt identifies `video_receive` or `audio_receive` and a finite enumerated transport, media-runtime, or packet-parser cause
-- **AND** the receipt excludes endpoint values, payload bytes, credentials, certificates, numeric transport details, arbitrary operation names, and arbitrary error descriptions
+- **AND** the failure receipt excludes endpoint addresses, payload bytes, credentials, certificates, arbitrary numeric transport-error details, arbitrary operation names, and arbitrary error descriptions
 - **AND** consumer termination, task cancellation, and an explicitly cancelled network channel are not recorded as production media failures
+
+#### Scenario: Live media idle path remains diagnosable before cleanup
+- **WHEN** an exact-SHA live session keeps control ready but video or audio readiness does not arrive before the bounded acceptance deadline
+- **THEN** a test-only forwarding wrapper around the production datagram channel records only the channel kind, negotiated UDP port, custom-versus-legacy ping selection, and saturated counts for successful connections, ping sends, received datagrams, and parser-produced events
+- **AND** the receipt captures the AppModel phase, published-frame count, and finite audio runtime stage before local cleanup changes observable state
+- **AND** the receipt does not store host addresses, ping or media payloads, keys, credentials, certificates, identity material, or arbitrary error descriptions
+- **AND** this diagnostic receipt does not by itself satisfy sustained decoded video, audible synchronized audio, physical input feedback, reconnect, remote termination, repeated stop, or clean-teardown acceptance
 
 ### Requirement: macOS completion gate
 The macOS client SHALL NOT be declared functionally complete until an authorized live Sunshine workflow proves pairing, catalog, launch, sustained video, audible synchronized audio, remote input, reconnect, termination, stop, and clean resource teardown through the production runtime.

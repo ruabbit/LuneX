@@ -43,7 +43,7 @@
 
 ## 当前焦点
 
-2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；production pinned-mTLS `/applist`已取得唯一`Desktop`，同一运行app按`/resume`连接，其余free、missing、unknown、inconsistent或different-app状态不作客户端容量门而尝试`/launch`，由认证服务器响应决定结果；普通断开、失败、取消、replacement与reconnect cleanup保持零`/cancel`。精确SHA `edb75bf`的唯一live回执已通过OPTIONS、DESCRIBE、三次SETUP、ANNOUNCE、PLAY、ENet、negotiated configuration、control readiness与video color metadata，且不再出现媒体receive timeout；随后control readiness从`channels_1`降到`channels_0`并进入`reconnecting_1`，最终为`stream.input / input_stream_ended`，`launch/resume/cancel=0/1/0`且`mediaFailures=none`。Sunshine应用层control keepalive缺失已完成确定性修复和完整离线门：START A/B后立即并每100 ms可靠发送`0x0200` periodic ping，与IDR/input共享authenticated sequence，stop不产生late keepalive或远端`/cancel`。下一步提交新exact SHA后只运行一次bounded live gate，不重跑`edb75bf`。Task 2.3保持pending，不以协商或一次session启动代替持续媒体、实际输入、重连、远程终止、重复停止与clean teardown验收。
+2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。当前Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；production pinned-mTLS `/applist`已取得唯一`Desktop`，同一运行app按`/resume`连接，其余free、missing、unknown、inconsistent或different-app状态不作客户端容量门而尝试`/launch`，由认证服务器响应决定结果；普通断开、失败、取消、replacement与reconnect cleanup保持零`/cancel`。精确SHA `9516a557`的唯一live回执已通过OPTIONS、DESCRIBE、三次SETUP、ANNOUNCE、PLAY、ENet、negotiated configuration与video color metadata，并在45.829秒gate全程保持`channels_1`，没有重现旧SHA约10秒后的`channels_0/reconnecting/input_stream_ended`；`launch/resume/cancel=0/1/0`且control/media failure均为空，因此Sunshine应用层control keepalive已获direct live证明。当前阻塞转为video/audio readiness始终未到达，AppModel没有进入`streaming`；下一步修补privacy-bounded媒体ping/receive/parser/processor观测并定位UDP握手或首包路径，不从host free/busy推断客户端容量，也不重跑`9516a557`。Task 2.3保持pending，不以持续control readiness代替持续解码媒体、实际输入、重连、远程终止、重复停止与clean teardown验收。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
 
@@ -52,7 +52,7 @@
 | 里程碑 | 状态 | 完成门 |
 |---|---|---|
 | M0 权威审计与优先级迁移 | complete | gap matrix、OpenSpec、四份planning authority、strict与Git审计一致 |
-| M1 Production session与live transport | in_progress (Task 2.3; control keepalive deterministically accepted) | production pinned-mTLS catalog、matching-busy `/resume`、RTSP、ANNOUNCE/PLAY、ENet、negotiated configuration与初始control readiness已获exact-SHA live接受；媒体idle timeout已消失，应用层periodic ping修复已通过完整离线门，待新exact-SHA再验持续视频、可听同步音频、实际输入、重连、终止与零`/cancel`本地停止全矩阵 |
+| M1 Production session与live transport | in_progress (Task 2.3; control keepalive live accepted, media readiness pending) | exact SHA `9516a557`已证明pinned-mTLS catalog、matching-running-app `/resume`、RTSP、ANNOUNCE/PLAY、ENet、negotiated configuration、video metadata及45.829秒持续`channels_1`；当前定位video/audio UDP握手、首包和readiness publication，随后仍需持续解码视频、可听同步音频、实际输入、重连、远程终止与零`/cancel`本地停止全矩阵 |
 | M2 macOS原生媒体与输入 | pending | live receiver到VideoToolbox/Metal/AVAudioEngine单owner接线；物理键鼠/控制器/坐标/cursor通过 |
 | M3 window/display/HDR/audio lifecycle | pending | occlusion/focus/screen/resize/fullscreen、多显示器、HDR/SDR、head tracking/route物理验收 |
 | M4 macOS原生SwiftUI工作流 | pending | host/pairing/catalog/session/multiwindow/diagnostics/export/accessibility完整 |
@@ -2282,7 +2282,7 @@
 
 ## 2026-08-27 M1 Task 2.3 control application keepalive 修复
 
-- **状态：** `in_progress`；精确SHA `edb75bf26f02b54da51945a2d44b5742ed31d31b`的唯一live gate在约10秒后由`channels_1`降到`channels_0`并进入`reconnecting_1`，最终为`input_stream_ended`。Task 2.3继续保持`7/27 next`且不勾选。
+- **状态：** `in_progress`；修复已提交推送为精确SHA `9516a557de2ebe03ff32ecc5c74d42f49a3afeb9`，其唯一live gate在45.829秒内持续保持`channels_1`，不再出现旧SHA的`channels_0/reconnecting/input_stream_ended`。当前阻塞为video/audio readiness没有到达；Task 2.3继续保持`7/27 next`且不勾选。
 - **根因：** Sunshine默认control `ping_timeout`为10秒且只在收到客户端应用层control数据时续期；ENet协议级peer ping不产生该应用层receive event。`moonlight-common-c`在START A/B后立即并每100 ms可靠发送`0x0200` periodic ping，LuneX此前遗漏。
 - **实现边界：** `MoonlightControlChannel`在START A/B后立即发送8-byte确定性periodic ping，并在既有100 ms ENet service循环前按deadline续发；ping使用generic channel 0和reliable flag，与IDR及remote input共用同一AES-GCM client sequence。stop清除deadline、sequence、key、input context与feedback streams，不新增第二个常驻Task或远端`/cancel`。
 - **确定性验收：** lifecycle focused `/private/tmp/LuneX-M1-control-keepalive-lifecycle.iKCxAp/Lifecycle.xcresult`通过`11/11`；related `/private/tmp/LuneX-M1-control-keepalive-related.2Y2Ebj/Related.xcresult`通过`318/317/1 live skip/0`；normal `/private/tmp/LuneX-M1-control-keepalive-normal.Rwo9gd/Normal.xcresult`通过`1321/1319/2 exact opt-in skips/0`。三份structured build均`succeeded/0/0/0`。
@@ -2290,3 +2290,12 @@
 - **generator：** 权威Ruby generator前与连续两次运行后project SHA-256均为`783a749484d0dc173a1296f7a573dfc0a7e9f5a3292fccf08046c0fa54035944`且零drift。
 - **repository wrapper错误：** 首轮只读门已确认OpenSpec strict `11/11`、retained test/build结果、精确8文件、fallback权限与零普通remote cancel，但隐私扫描再次使用macOS awk不接受的复合正则并在最终marker前退出；skip提取同时误用不存在的`testStatus`字段。产品、仓库与runtime无副作用，本轮不计完整门；改用四个显式PEM marker、当前`.result`字段和实际`LuneX-macOS`产品路径从头重跑，不重复test/build/generator/live。
 - **最终repository gate：** 修正后的完整只读门输出`FINAL_CONTROL_KEEPALIVE_REPOSITORY_GATE_OK`：三方`edb75bf`基线、OpenSpec strict `11/11`与`7/27 next 2.3 pending`、精确8文件、stable project、最终`11/11`、`318/317/1/0`、`1321/1319/2/0`、五build/Metal、双universal、精确skip、fallback `0700/0600`及零privacy/普通remote-cancel/opt-in/process全部通过。人工审阅未发现新问题；Task 2.3继续pending，准备独立提交推送。
+- **exact-SHA live验收：** fresh bundle `/private/tmp/LuneX-M1-control-keepalive-live-build.6klv5l`为`succeeded/0/0/0`；唯一双opt-in gate为`launch/resume/cancel=0/1/0`、control events到持续`channels_1`和`video_color_metadata`、control/media failure均为空。45.829秒后因video/audio readiness始终未到达而由harness本地stop，cleanup后的idle不是自行完成证据。四state文件不变、零process残留、log SHA为`d237e828...a73`；该SHA不得重跑，下一步增加privacy-bounded媒体首包观测并定位UDP握手/receive路径。
+
+## 2026-08-27 M1 Task 2.3 media activity receipt harness
+
+- **状态：** `in_progress`；Task 2.3继续保持`7/27 next`且不勾选。本批只增强下一exact-SHA live receipt，不宣称媒体根因或行为修复。
+- **实现：** test-only channel wrapper原样转发production `NetworkByteChannel` connect/send/receive/cancel；`NSLock`保护的同步bounded recorder避免每个高包率datagram发生actor hop，按video/audio记录endpoint kind、UDP port、custom/legacy ping、connect/ping/datagram/parser-event饱和计数，并在local cleanup前记录AppModel phase、frame count与finite audio stage。地址、payload、key、credential、certificate、identity和任意错误文本不进入receipt。
+- **确定性验收：** final focused `5/5`、完整AppModel workflow `102/101/1 exact live skip/0`、macOS normal `1322/1320/2 exact opt-in skips/0`；三份structured build均`succeeded/0/0/0`。live、real Keychain和Simulator均未运行；仅test/OpenSpec/planning/docs变化，不需要冻结平台generic build。
+- **下一门：** 完成OpenSpec strict、generator/diff/privacy/Git审计并提交推送新exact SHA，之后才允许一次新的bounded live gate；`9516a557`不得重跑。
+- **最终repository gate：** 输出`FINAL_MEDIA_ACTIVITY_LOCK_REPOSITORY_GATE_OK`，确认基线`9516a557`、stable project `783a7494...5944`、OpenSpec `11/11`与`7/27 next 2.3 pending`、精确6文件且零product source/pbx drift、最终三层证据、fallback权限、receipt privacy及零process。下一步提交推送新exact SHA，再执行该SHA唯一bounded live gate。

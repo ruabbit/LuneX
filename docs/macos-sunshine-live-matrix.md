@@ -558,3 +558,68 @@ remote cancel, enabled real opt-ins, or residual build/test process.
 This is deterministic and generic-build evidence, not a live result for the
 new code. Task 2.3 remains pending until a newly committed exact SHA receives
 its single bounded live attempt and the remaining physical/live matrix is met.
+
+## Exact-SHA Sustained Control Receipt
+
+The control keepalive repair was committed and pushed as exact SHA
+`9516a557de2ebe03ff32ecc5c74d42f49a3afeb9`. Its fresh warnings-as-errors Debug
+XCTest bundle at `/private/tmp/LuneX-M1-control-keepalive-live-build.6klv5l`
+built as `succeeded / 0 errors / 0 warnings / 0 analyzer warnings`. The only
+double-opt-in gate for that SHA returned XCTest exit `1` after 45.829 seconds.
+
+The production path used `launch=0`, `resume=1`, and `cancel=0`. Control events
+remained
+`launch_accepted,rtsp_ready,negotiated,channels_1,video_color_metadata` with no
+control or typed media failure. Unlike exact SHA `edb75bf`, this run did not
+fall to `channels_0`, enter reconnecting, or end the input stream after the
+Sunshine 10-second control deadline. Sustained `channels_1` through the full
+45-second gate is direct live evidence that the application-level periodic
+control ping repair works.
+
+The session still did not reach AppModel `streaming` because video and audio
+readiness never arrived. The harness stopped the local session after its
+bounded deadline, so the final cleanup projection `phase=idle, issue=none`
+does not mean the session completed by itself. The current isolated problem is
+the media UDP handshake/first-packet path or its readiness publication, not
+Sunshine free/busy state, client capacity, control keepalive, or ordinary
+remote cancellation.
+
+All four local state files retained identical mode, size, and SHA-256; the
+state diff was empty, no xctest or xcodebuild process remained, and the live
+log SHA-256 was
+`d237e828c4e582b27e79cca975e1e464eb82958af9ef21748ad95d07aa25aa73`.
+The reporting wrapper again exited after the completed gate because a zero
+match from `pgrep` ran under `set -e`; the independent read-only post-check
+completed the receipt without rerunning the gate. This exact SHA must not be
+run again. Task 2.3 remains pending because sustained decoded video, physically
+audible synchronized audio, visible input feedback, real reconnect, remote
+termination, repeated stop, and complete teardown are not yet accepted.
+
+## Offline Media Activity Receipt Harness
+
+The next exact-SHA live gate wraps each production `NetworkByteChannel` with a
+test-only forwarding channel. It delegates the same connect, send, indefinite
+UDP receive, and cancel operations while recording only the media stage,
+endpoint kind, negotiated UDP port, custom-versus-legacy ping selection, and
+saturated counts for successful connections, ping sends, received datagrams,
+and parser-produced events. The receipt stores no host address, ping or media
+payload, key, credential, certificate, identity material, arbitrary operation
+name, or arbitrary error description.
+
+The failure path also captures AppModel phase, published-frame count, and the
+finite audio runtime stage before local stop changes the observable session
+state. This distinguishes no ping, no datagram, parser rejection, and
+processor/readiness stalls without replacing the production media providers or
+changing their runtime behavior.
+
+Fresh warnings-as-errors focused evidence at
+`/private/tmp/LuneX-M1-media-activity-lock-focused.bIvyPn/Focused.xcresult`
+passed `5/5`. The complete AppModel workflow class at
+`/private/tmp/LuneX-M1-media-activity-lock-related.aKCHJ1/Related.xcresult` passed
+`102 total / 101 passed / 1 explicit live skip / 0 failed`. The complete macOS
+suite at `/private/tmp/LuneX-M1-media-activity-lock-normal.JR0eky/Normal.xcresult`
+passed `1322 total / 1320 passed / 2 exact opt-in skips / 0 failed`. All three
+structured builds report zero errors, warnings, and analyzer warnings. No live
+Sunshine, real-Keychain, or Simulator operation occurred. Task 2.3 remains
+pending, and no new live attempt is authorized until this change is committed
+and pushed as a new exact SHA.

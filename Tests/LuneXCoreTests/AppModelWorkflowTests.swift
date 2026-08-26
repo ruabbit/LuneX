@@ -79,7 +79,7 @@ private struct LiveSessionControlReceipt: Sendable {
     var failure: String?
 }
 
-private enum LiveMediaFailureStage: String, Equatable, Sendable {
+private enum LiveMediaFailureStage: String, Equatable, Hashable, Sendable {
     case videoReceive = "video_receive"
     case audioReceive = "audio_receive"
 }
@@ -133,6 +133,139 @@ private struct LiveMediaReceipt: Equatable, Sendable {
         guard !failures.isEmpty else { return "none" }
         return failures.map { "\($0.stage.rawValue):\($0.cause.rawValue)" }
             .joined(separator: ",")
+    }
+}
+
+private enum LiveMediaEndpointKind: String, Equatable, Sendable {
+    case ipv4
+    case ipv6
+    case name
+}
+
+private struct LiveMediaActivityStageReceipt: Equatable, Sendable {
+    var stage: LiveMediaFailureStage
+    var endpointKind: LiveMediaEndpointKind
+    var transport: RuntimeTransportKind
+    var port: UInt16
+    var usesCustomPing: Bool
+    var connections: Int
+    var pingsSent: Int
+    var datagramsReceived: Int
+    var eventsProduced: Int
+
+    var summary: String {
+        let pingKind = usesCustomPing ? "custom" : "legacy"
+        return "\(stage.rawValue)(endpoint=\(endpointKind.rawValue)_\(transport.rawValue):\(port),ping=\(pingKind),connections=\(connections),pings=\(pingsSent),datagrams=\(datagramsReceived),events=\(eventsProduced))"
+    }
+}
+
+private struct LiveMediaActivityReceipt: Equatable, Sendable {
+    var stages: [LiveMediaActivityStageReceipt]
+
+    var summary: String {
+        guard !stages.isEmpty else { return "none" }
+        return stages.map(\.summary).joined(separator: ";")
+    }
+}
+
+private final class LiveMediaActivityRecorder: @unchecked Sendable {
+    private struct StageState {
+        var endpointKind: LiveMediaEndpointKind
+        var transport: RuntimeTransportKind
+        var port: UInt16
+        var usesCustomPing: Bool
+        var connections = 0
+        var pingsSent = 0
+        var datagramsReceived = 0
+        var eventsProduced = 0
+    }
+
+    private static let maximumCount = 1_000_000
+    private let lock = NSLock()
+    private var states: [LiveMediaFailureStage: StageState] = [:]
+
+    func recordConfiguration(
+        stage: LiveMediaFailureStage,
+        endpoint: RuntimeNetworkEndpoint,
+        usesCustomPing: Bool
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        states[stage] = StageState(
+            endpointKind: Self.endpointKind(endpoint.host),
+            transport: endpoint.transport,
+            port: endpoint.port,
+            usesCustomPing: usesCustomPing
+        )
+    }
+
+    func recordConnection(stage: LiveMediaFailureStage) {
+        update(stage) { $0.connections = Self.increment($0.connections) }
+    }
+
+    func recordPing(stage: LiveMediaFailureStage) {
+        update(stage) { $0.pingsSent = Self.increment($0.pingsSent) }
+    }
+
+    func recordDatagram(stage: LiveMediaFailureStage) {
+        update(stage) {
+            $0.datagramsReceived = Self.increment($0.datagramsReceived)
+        }
+    }
+
+    func recordEvent(stage: LiveMediaFailureStage) {
+        update(stage) { $0.eventsProduced = Self.increment($0.eventsProduced) }
+    }
+
+    func receipt() -> LiveMediaActivityReceipt {
+        lock.lock()
+        defer { lock.unlock() }
+        let orderedStages: [LiveMediaFailureStage] = [
+            .videoReceive,
+            .audioReceive,
+        ]
+        return LiveMediaActivityReceipt(stages: orderedStages.compactMap { stage in
+            guard let state = states[stage] else { return nil }
+            return LiveMediaActivityStageReceipt(
+                stage: stage,
+                endpointKind: state.endpointKind,
+                transport: state.transport,
+                port: state.port,
+                usesCustomPing: state.usesCustomPing,
+                connections: state.connections,
+                pingsSent: state.pingsSent,
+                datagramsReceived: state.datagramsReceived,
+                eventsProduced: state.eventsProduced
+            )
+        })
+    }
+
+    private func update(
+        _ stage: LiveMediaFailureStage,
+        mutation: (inout StageState) -> Void
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard var state = states[stage] else { return }
+        mutation(&state)
+        states[stage] = state
+    }
+
+    private static func increment(_ count: Int) -> Int {
+        min(count + 1, maximumCount)
+    }
+
+    private static func endpointKind(_ host: String) -> LiveMediaEndpointKind {
+        if host.contains(":") { return .ipv6 }
+        let components = host.split(separator: ".", omittingEmptySubsequences: false)
+        if components.count == 4,
+           components.allSatisfy({ component in
+               guard let octet = UInt8(component) else { return false }
+               return String(octet) == String(component)
+           }) {
+            return .ipv4
+        }
+        return .name
     }
 }
 
@@ -233,12 +366,14 @@ private actor LiveMediaFailureRecorder {
 private func recordingLiveMediaStream<Event: Sendable>(
     _ upstream: AsyncThrowingStream<Event, Error>,
     stage: LiveMediaFailureStage,
-    recorder: LiveMediaFailureRecorder
+    recorder: LiveMediaFailureRecorder,
+    activityRecorder: LiveMediaActivityRecorder?
 ) -> AsyncThrowingStream<Event, Error> {
     AsyncThrowingStream { continuation in
         let forwarding = Task {
             do {
                 for try await event in upstream {
+                    activityRecorder?.recordEvent(stage: stage)
                     if case .terminated = continuation.yield(event) {
                         break
                     }
@@ -260,12 +395,18 @@ private func recordingLiveMediaStream<Event: Sendable>(
 private struct LiveRecordingVideoReceiveProvider: VideoReceiveProvider {
     let base: any VideoReceiveProvider
     let recorder: LiveMediaFailureRecorder
+    var activityRecorder: LiveMediaActivityRecorder? = nil
 
     func receiveVideo(
         sessionID: UUID,
         endpoint: RuntimeNetworkEndpoint,
         configuration: NegotiatedVideoStreamConfiguration
     ) async -> AsyncThrowingStream<VideoReceiveEvent, Error> {
+        activityRecorder?.recordConfiguration(
+            stage: .videoReceive,
+            endpoint: endpoint,
+            usesCustomPing: configuration.pingPayload != nil
+        )
         let upstream = await base.receiveVideo(
             sessionID: sessionID,
             endpoint: endpoint,
@@ -274,7 +415,8 @@ private struct LiveRecordingVideoReceiveProvider: VideoReceiveProvider {
         return recordingLiveMediaStream(
             upstream,
             stage: .videoReceive,
-            recorder: recorder
+            recorder: recorder,
+            activityRecorder: activityRecorder
         )
     }
 
@@ -286,12 +428,18 @@ private struct LiveRecordingVideoReceiveProvider: VideoReceiveProvider {
 private struct LiveRecordingAudioReceiveProvider: AudioReceiveProvider {
     let base: any AudioReceiveProvider
     let recorder: LiveMediaFailureRecorder
+    var activityRecorder: LiveMediaActivityRecorder? = nil
 
     func receiveAudio(
         sessionID: UUID,
         endpoint: RuntimeNetworkEndpoint,
         configuration: NegotiatedAudioStreamConfiguration
     ) async -> AsyncThrowingStream<AudioReceiveEvent, Error> {
+        activityRecorder?.recordConfiguration(
+            stage: .audioReceive,
+            endpoint: endpoint,
+            usesCustomPing: configuration.pingPayload != nil
+        )
         let upstream = await base.receiveAudio(
             sessionID: sessionID,
             endpoint: endpoint,
@@ -300,12 +448,58 @@ private struct LiveRecordingAudioReceiveProvider: AudioReceiveProvider {
         return recordingLiveMediaStream(
             upstream,
             stage: .audioReceive,
-            recorder: recorder
+            recorder: recorder,
+            activityRecorder: activityRecorder
         )
     }
 
     func stopAudio(sessionID: UUID) async {
         await base.stopAudio(sessionID: sessionID)
+    }
+}
+
+private struct LiveRecordingDatagramChannel: MoonlightDatagramChannel {
+    let base: any MoonlightDatagramChannel
+    let stage: LiveMediaFailureStage
+    let recorder: LiveMediaActivityRecorder
+
+    func connect(timeout: Duration) async throws {
+        try await base.connect(timeout: timeout)
+        recorder.recordConnection(stage: stage)
+    }
+
+    func send(_ data: Data, timeout: Duration) async throws {
+        try await base.send(data, timeout: timeout)
+        recorder.recordPing(stage: stage)
+    }
+
+    func receiveWithoutDeadline(
+        minimumLength: Int,
+        maximumLength: Int?
+    ) async throws -> NetworkReceiveChunk {
+        let chunk = try await base.receiveWithoutDeadline(
+            minimumLength: minimumLength,
+            maximumLength: maximumLength
+        )
+        recorder.recordDatagram(stage: stage)
+        return chunk
+    }
+
+    func cancel() async {
+        await base.cancel()
+    }
+}
+
+private func liveRecordingDatagramChannelFactory(
+    stage: LiveMediaFailureStage,
+    recorder: LiveMediaActivityRecorder
+) -> MoonlightDatagramChannelFactory {
+    { endpoint, limits in
+        LiveRecordingDatagramChannel(
+            base: try NetworkByteChannel(endpoint: endpoint, limits: limits),
+            stage: stage,
+            recorder: recorder
+        )
     }
 }
 
@@ -429,6 +623,7 @@ final class AppModelWorkflowTests: XCTestCase {
         let expectedError = NetworkChannelError.posixFailure(code: 61)
         let stops = LiveMediaTestStopRecorder()
         let recorder = LiveMediaFailureRecorder()
+        let activityRecorder = LiveMediaActivityRecorder()
         let provider = LiveRecordingVideoReceiveProvider(
             base: LiveMediaTestVideoProvider(
                 stops: stops,
@@ -439,7 +634,8 @@ final class AppModelWorkflowTests: XCTestCase {
                     }
                 }
             ),
-            recorder: recorder
+            recorder: recorder,
+            activityRecorder: activityRecorder
         )
         let sessionID = UUID()
         let stream = await provider.receiveVideo(
@@ -469,6 +665,23 @@ final class AppModelWorkflowTests: XCTestCase {
         )
         XCTAssertEqual(receipt.summary, "video_receive:network_posix_failure")
         XCTAssertFalse(receipt.summary.contains("61"))
+        let activity = activityRecorder.receipt()
+        XCTAssertEqual(
+            activity,
+            LiveMediaActivityReceipt(stages: [
+                LiveMediaActivityStageReceipt(
+                    stage: .videoReceive,
+                    endpointKind: .name,
+                    transport: .udp,
+                    port: 48_000,
+                    usesCustomPing: false,
+                    connections: 0,
+                    pingsSent: 0,
+                    datagramsReceived: 0,
+                    eventsProduced: 1
+                )
+            ])
+        )
     }
 
     func testLiveMediaRecorderAttributesAudioParserFailureAndPreservesError()
@@ -564,6 +777,75 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertFalse(receipt.summary.contains("certificate"))
         XCTAssertFalse(receipt.summary.contains("payload"))
         XCTAssertFalse(receipt.summary.contains("operation"))
+    }
+
+    func testLiveMediaActivityRecorderForwardsChannelAndBoundsReceipt()
+        async throws
+    {
+        let recorder = LiveMediaActivityRecorder()
+        let endpoint = RuntimeNetworkEndpoint(
+            host: "198.51.100.42",
+            port: 48_098,
+            transport: .udp
+        )
+        recorder.recordConfiguration(
+            stage: .videoReceive,
+            endpoint: endpoint,
+            usesCustomPing: true
+        )
+        let base = LiveMediaTestDatagramChannel(
+            receiveChunk: NetworkReceiveChunk(
+                data: Data("private-packet-payload".utf8),
+                isComplete: true
+            )
+        )
+        let channel = LiveRecordingDatagramChannel(
+            base: base,
+            stage: .videoReceive,
+            recorder: recorder
+        )
+
+        try await channel.connect(timeout: .seconds(1))
+        try await channel.send(
+            Data("private-ping-payload".utf8),
+            timeout: .seconds(1)
+        )
+        _ = try await channel.receiveWithoutDeadline(
+            minimumLength: 1,
+            maximumLength: 1_500
+        )
+        recorder.recordEvent(stage: .videoReceive)
+        await channel.cancel()
+
+        let receipt = recorder.receipt()
+        XCTAssertEqual(
+            receipt,
+            LiveMediaActivityReceipt(stages: [
+                LiveMediaActivityStageReceipt(
+                    stage: .videoReceive,
+                    endpointKind: .ipv4,
+                    transport: .udp,
+                    port: 48_098,
+                    usesCustomPing: true,
+                    connections: 1,
+                    pingsSent: 1,
+                    datagramsReceived: 1,
+                    eventsProduced: 1
+                )
+            ])
+        )
+        XCTAssertEqual(
+            receipt.summary,
+            "video_receive(endpoint=ipv4_udp:48098,ping=custom,connections=1,pings=1,datagrams=1,events=1)"
+        )
+        XCTAssertFalse(receipt.summary.contains("198.51.100.42"))
+        XCTAssertFalse(receipt.summary.contains("private-ping"))
+        XCTAssertFalse(receipt.summary.contains("private-packet"))
+        let calls = await base.calls()
+        XCTAssertEqual(calls.connections, 1)
+        XCTAssertEqual(calls.sends, 1)
+        XCTAssertEqual(calls.receives, 1)
+        XCTAssertEqual(calls.cancels, 1)
     }
 
     func testLiveMediaRecorderConsumerTerminationCancelsUpstreamWithoutFailure()
@@ -665,16 +947,22 @@ final class AppModelWorkflowTests: XCTestCase {
                     .contains(model.productSessionActualPhase)
         }
         guard reachedStreaming, model.session.isStreaming else {
-            _ = await model.stopStream(in: model.primaryWorkspaceReference)
-            launchTask.cancel()
-            await launchTask.value
+            let phaseBeforeCleanup = model.productSessionActualPhase
+            let issueCode = model.streamProductIssue?.code.rawValue ?? "none"
+            let diagnostic = model.diagnostics.latestStreamActionableEvent
+            let frameCount = model.videoPresentationSource
+                .snapshot().publishedFrameCount
+            let audioStage = model.audioRuntimeState?.runtime.stage.rawValue
+                ?? "none"
             let calls = await liveRuntime.launchClient.counts()
             let control = await liveRuntime.controlProvider.receipt()
             let media = await liveRuntime.mediaRecorder.receipt()
-            let issueCode = model.streamProductIssue?.code.rawValue ?? "none"
-            let diagnostic = model.diagnostics.latestStreamActionableEvent
+            let mediaActivity = liveRuntime.mediaActivityRecorder.receipt()
+            _ = await model.stopStream(in: model.primaryWorkspaceReference)
+            launchTask.cancel()
+            await launchTask.value
             XCTFail(
-                "The production session did not reach streaming; phase=\(model.productSessionActualPhase), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure ?? "none"), mediaFailures=\(media.summary)."
+                "The production session did not reach streaming; preCleanupPhase=\(phaseBeforeCleanup), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), frames=\(frameCount), audioStage=\(audioStage), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure ?? "none"), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary)."
             )
             return
         }
@@ -687,12 +975,18 @@ final class AppModelWorkflowTests: XCTestCase {
                 && model.audioRuntimeState?.runtime.stage == .running
         }
         guard mediaBecameActive else {
+            let phaseBeforeCleanup = model.productSessionActualPhase
+            let frameCount = model.videoPresentationSource
+                .snapshot().publishedFrameCount
+            let audioStage = model.audioRuntimeState?.runtime.stage.rawValue
+                ?? "none"
+            let media = await liveRuntime.mediaRecorder.receipt()
+            let mediaActivity = liveRuntime.mediaActivityRecorder.receipt()
             _ = await model.stopStream(in: model.primaryWorkspaceReference)
             launchTask.cancel()
             await launchTask.value
-            let media = await liveRuntime.mediaRecorder.receipt()
             XCTFail(
-                "Production video/audio runtime signals did not become active; mediaFailures=\(media.summary)."
+                "Production video/audio runtime signals did not become active; preCleanupPhase=\(phaseBeforeCleanup), frames=\(frameCount), audioStage=\(audioStage), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary)."
             )
             return
         }
@@ -10201,7 +10495,8 @@ final class AppModelWorkflowTests: XCTestCase {
         model: AppModel,
         launchClient: LiveRecordingStreamLaunchClient,
         controlProvider: LiveRecordingSessionControlProvider,
-        mediaRecorder: LiveMediaFailureRecorder
+        mediaRecorder: LiveMediaFailureRecorder,
+        mediaActivityRecorder: LiveMediaActivityRecorder
     ) {
         let identityStore = JSONFileClientIdentityStore(
             fileURL: AppStorageLocations.debugClientIdentityFile
@@ -10220,15 +10515,28 @@ final class AppModelWorkflowTests: XCTestCase {
             )
         )
         let mediaRecorder = LiveMediaFailureRecorder()
+        let mediaActivityRecorder = LiveMediaActivityRecorder()
         let runtimeProviders = RuntimeProviderInventory(
             sessionControl: controlProvider,
             videoReceive: LiveRecordingVideoReceiveProvider(
-                base: MoonlightVideoReceiveProvider(),
-                recorder: mediaRecorder
+                base: MoonlightVideoReceiveProvider(
+                    channelFactory: liveRecordingDatagramChannelFactory(
+                        stage: .videoReceive,
+                        recorder: mediaActivityRecorder
+                    )
+                ),
+                recorder: mediaRecorder,
+                activityRecorder: mediaActivityRecorder
             ),
             audioReceive: LiveRecordingAudioReceiveProvider(
-                base: MoonlightAudioReceiveProvider(),
-                recorder: mediaRecorder
+                base: MoonlightAudioReceiveProvider(
+                    channelFactory: liveRecordingDatagramChannelFactory(
+                        stage: .audioReceive,
+                        recorder: mediaActivityRecorder
+                    )
+                ),
+                recorder: mediaRecorder,
+                activityRecorder: mediaActivityRecorder
             ),
             remoteInput: MoonlightRemoteInputProvider(
                 sender: controlChannel,
@@ -10249,7 +10557,13 @@ final class AppModelWorkflowTests: XCTestCase {
             runtimeProviders: runtimeProviders,
             clientIdentityStore: identityStore
         )
-        return (model, launchClient, controlProvider, mediaRecorder)
+        return (
+            model,
+            launchClient,
+            controlProvider,
+            mediaRecorder,
+            mediaActivityRecorder
+        )
     }
 
     private func fetchLiveServerInfoOnce(
@@ -10502,6 +10816,52 @@ private actor LiveMediaTestStopRecorder {
 
     func audioSessionIDs() -> [UUID] {
         audioStops
+    }
+}
+
+private actor LiveMediaTestDatagramChannel: MoonlightDatagramChannel {
+    private let receiveChunk: NetworkReceiveChunk
+    private var connectionCount = 0
+    private var sendCount = 0
+    private var receiveCount = 0
+    private var cancelCount = 0
+
+    init(receiveChunk: NetworkReceiveChunk) {
+        self.receiveChunk = receiveChunk
+    }
+
+    func connect(timeout: Duration) async throws {
+        _ = timeout
+        connectionCount += 1
+    }
+
+    func send(_ data: Data, timeout: Duration) async throws {
+        _ = data
+        _ = timeout
+        sendCount += 1
+    }
+
+    func receiveWithoutDeadline(
+        minimumLength: Int,
+        maximumLength: Int?
+    ) async throws -> NetworkReceiveChunk {
+        _ = minimumLength
+        _ = maximumLength
+        receiveCount += 1
+        return receiveChunk
+    }
+
+    func cancel() async {
+        cancelCount += 1
+    }
+
+    func calls() -> (
+        connections: Int,
+        sends: Int,
+        receives: Int,
+        cancels: Int
+    ) {
+        (connectionCount, sendCount, receiveCount, cancelCount)
     }
 }
 
