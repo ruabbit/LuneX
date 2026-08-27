@@ -88,15 +88,21 @@ struct RuntimeProviderInventory: Sendable {
 enum ProductionRuntimeProviderFactory {
     static func makeDefault() -> RuntimeProviderInventory {
         let controlChannel = MoonlightControlChannel()
+        let audioDatagramReservations = MoonlightAudioDatagramReservationStore()
         let pairingProvider = PersistingPairingProvider(
             provider: MoonlightPairingProvider(),
             repository: JSONFileHostRepository(fileURL: AppStorageLocations.hostsFile)
         )
         return RuntimeProviderInventory(
             pairing: pairingProvider,
-            sessionControl: MoonlightSessionControlProvider(controlChannel: controlChannel),
+            sessionControl: MoonlightSessionControlProvider(
+                controlChannel: controlChannel,
+                audioDatagramReservations: audioDatagramReservations
+            ),
             videoReceive: MoonlightVideoReceiveProvider(),
-            audioReceive: MoonlightAudioReceiveProvider(),
+            audioReceive: MoonlightAudioReceiveProvider(
+                reservationStore: audioDatagramReservations
+            ),
             remoteInput: MoonlightRemoteInputProvider(
                 sender: controlChannel,
                 feedbackSource: controlChannel

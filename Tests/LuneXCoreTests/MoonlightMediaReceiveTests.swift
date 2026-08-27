@@ -121,6 +121,140 @@ final class MoonlightMediaReceiveTests: XCTestCase {
         XCTAssertEqual(audioCancelCount, 1)
     }
 
+    func testAudioProviderClaimsPrimedChannelAndContinuesPingSequence()
+        async throws
+    {
+        let channel = MediaReceiveStubChannel(chunks: [
+            .success(NetworkReceiveChunk(
+                data: makeAudioDatagram(
+                    payloadType: MoonlightAudioRTPPacket.opusPayloadType,
+                    sequenceNumber: 11,
+                    timestamp: 480,
+                    payload: Data([0x4F, 0x70, 0x75, 0x73])
+                ),
+                isComplete: true
+            ))
+        ])
+        let reservationStore = MoonlightAudioDatagramReservationStore(
+            channelFactory: { _, _ in channel },
+            timing: testTiming
+        )
+        let provider = MoonlightAudioReceiveProvider(
+            channelFactory: { _, _ in
+                XCTFail("A primed audio session must reuse its reserved channel.")
+                return MediaReceiveStubChannel()
+            },
+            reservationStore: reservationStore,
+            timing: testTiming,
+            timeProvider: { 777 }
+        )
+        let sessionID = UUID()
+        let endpoint = udpEndpoint(port: 48_000)
+        let pingPayload = Data("audio-ping-00000".utf8)
+
+        try await reservationStore.reserve(
+            sessionID: sessionID,
+            endpoint: endpoint,
+            pingPayload: pingPayload
+        )
+        try await reservationStore.sendPing(sessionID: sessionID)
+        let stream = await provider.receiveAudio(
+            sessionID: sessionID,
+            endpoint: endpoint,
+            configuration: audioConfiguration(pingPayload: pingPayload)
+        )
+        var iterator = stream.makeAsyncIterator()
+
+        let event = try await iterator.next()
+
+        XCTAssertEqual(event, .packet(ReceivedAudioPacket(
+            sequenceNumber: 11,
+            timestamp: 480,
+            receiveTimeNanoseconds: 777,
+            payload: Data([0x4F, 0x70, 0x75, 0x73])
+        )))
+        let continuedPing = await waitUntil {
+            await channel.sentDatagrams().count >= 3
+        }
+        XCTAssertTrue(continuedPing)
+        let connectionCount = await channel.connectionCount()
+        XCTAssertEqual(connectionCount, 1)
+        let pings = await channel.sentDatagrams()
+        XCTAssertEqual(pings[0], pingPayload + Data([0, 0, 0, 0]))
+        XCTAssertEqual(pings[1], pingPayload + Data([0, 0, 0, 1]))
+        XCTAssertEqual(pings[2], pingPayload + Data([0, 0, 0, 2]))
+
+        await reservationStore.cancel(sessionID: sessionID)
+        let cancelCountBeforeStop = await channel.cancelCount()
+        XCTAssertEqual(cancelCountBeforeStop, 0)
+        await provider.stopAudio(sessionID: sessionID)
+        let cancelCountAfterStop = await channel.cancelCount()
+        XCTAssertEqual(cancelCountAfterStop, 1)
+    }
+
+    func testAudioReservationReplacementAndUnclaimedCancellationCloseChannels()
+        async throws
+    {
+        let first = MediaReceiveStubChannel()
+        let second = MediaReceiveStubChannel()
+        let channels = MediaReceiveChannelQueue([first, second])
+        let store = MoonlightAudioDatagramReservationStore(
+            channelFactory: { _, _ in try channels.next() },
+            timing: testTiming
+        )
+        let sessionID = UUID()
+        let endpoint = udpEndpoint(port: 48_000)
+        let pingPayload = Data("audio-ping-00000".utf8)
+
+        try await store.reserve(
+            sessionID: sessionID,
+            endpoint: endpoint,
+            pingPayload: pingPayload
+        )
+        try await store.reserve(
+            sessionID: sessionID,
+            endpoint: endpoint,
+            pingPayload: pingPayload
+        )
+
+        let firstCancelCount = await first.cancelCount()
+        let secondConnectionCount = await second.connectionCount()
+        XCTAssertEqual(firstCancelCount, 1)
+        XCTAssertEqual(secondConnectionCount, 1)
+        await store.cancel(sessionID: sessionID)
+        await store.cancel(sessionID: sessionID)
+        let secondCancelCount = await second.cancelCount()
+        XCTAssertEqual(secondCancelCount, 1)
+    }
+
+    func testAudioProviderWithReservationStoreFailsClosedWithoutReservation()
+        async throws
+    {
+        let store = MoonlightAudioDatagramReservationStore(
+            channelFactory: { _, _ in MediaReceiveStubChannel() },
+            timing: testTiming
+        )
+        let provider = MoonlightAudioReceiveProvider(
+            reservationStore: store,
+            timing: testTiming
+        )
+        let stream = await provider.receiveAudio(
+            sessionID: UUID(),
+            endpoint: udpEndpoint(port: 48_000),
+            configuration: audioConfiguration()
+        )
+
+        do {
+            for try await _ in stream {}
+            XCTFail("A configured reservation store must not fall back to a new socket.")
+        } catch {
+            XCTAssertEqual(
+                error as? MoonlightMediaReceiveError,
+                .missingAudioReservation
+            )
+        }
+    }
+
     func testAudioParserRejectsUnsupportedLayoutsBoundsAndPayloads() throws {
         let valid = makeAudioDatagram(
             payloadType: MoonlightAudioRTPPacket.opusPayloadType,
@@ -544,6 +678,7 @@ private final class MediaReceiveStubChannel: MoonlightDatagramChannel,
         CheckedContinuation<NetworkReceiveChunk, Error>?
     private var sent: [Data] = []
     private var connected = false
+    private var connections = 0
     private var cancelled = false
     private var cancellations = 0
 
@@ -556,6 +691,7 @@ private final class MediaReceiveStubChannel: MoonlightDatagramChannel,
         try lock.withLock {
             guard !cancelled else { throw CancellationError() }
             connected = true
+            connections += 1
         }
     }
 
@@ -594,6 +730,10 @@ private final class MediaReceiveStubChannel: MoonlightDatagramChannel,
 
     func sentDatagrams() async -> [Data] {
         lock.withLock { sent }
+    }
+
+    func connectionCount() async -> Int {
+        lock.withLock { connections }
     }
 
     func cancelCount() async -> Int {

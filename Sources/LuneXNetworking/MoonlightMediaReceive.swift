@@ -7,6 +7,7 @@ enum MoonlightMediaReceiveError: Error, Equatable, Sendable,
     case invalidEndpoint
     case invalidConfiguration
     case invalidLimits
+    case missingAudioReservation
     case receiveBufferOverflow
     case unexpectedTermination
 
@@ -18,6 +19,8 @@ enum MoonlightMediaReceiveError: Error, Equatable, Sendable,
             "Media receive configuration is invalid."
         case .invalidLimits:
             "Media receive timing or buffer limits are invalid."
+        case .missingAudioReservation:
+            "The primed audio datagram channel is unavailable."
         case .receiveBufferOverflow:
             "The bounded media receive buffer is full."
         case .unexpectedTermination:
@@ -263,6 +266,138 @@ private struct MoonlightDatagramPing: Sendable {
     }
 }
 
+struct MoonlightReservedDatagramChannel: Sendable {
+    let channel: any MoonlightDatagramChannel
+    let nextPingSequence: UInt32
+}
+
+actor MoonlightAudioDatagramReservationStore {
+    private struct Reservation: Sendable {
+        let token: UUID
+        let endpoint: RuntimeNetworkEndpoint
+        let pingPayload: Data?
+        let ping: MoonlightDatagramPing
+        let channel: any MoonlightDatagramChannel
+        var nextPingSequence: UInt32
+    }
+
+    private let channelFactory: MoonlightDatagramChannelFactory
+    private let timing: MoonlightMediaReceiveTiming
+    private var reservations: [UUID: Reservation] = [:]
+
+    init(
+        channelFactory: @escaping MoonlightDatagramChannelFactory = {
+            endpoint, limits in
+            try NetworkByteChannel(endpoint: endpoint, limits: limits)
+        },
+        timing: MoonlightMediaReceiveTiming = .production
+    ) {
+        self.channelFactory = channelFactory
+        self.timing = timing
+    }
+
+    func reserve(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        pingPayload: Data?
+    ) async throws {
+        try endpoint.validate()
+        guard endpoint.transport == .udp else {
+            throw MoonlightMediaReceiveError.invalidEndpoint
+        }
+        try timing.validate()
+        let ping = try MoonlightDatagramPing(customPayload: pingPayload)
+
+        if let previous = reservations.removeValue(forKey: sessionID) {
+            await previous.channel.cancel()
+        }
+
+        let channel = try channelFactory(endpoint, .moonlightDatagram)
+        let token = UUID()
+        reservations[sessionID] = Reservation(
+            token: token,
+            endpoint: endpoint,
+            pingPayload: pingPayload,
+            ping: ping,
+            channel: channel,
+            nextPingSequence: 0
+        )
+
+        do {
+            try await channel.connect(timeout: timing.connectTimeout)
+            try ensureCurrent(sessionID: sessionID, token: token)
+            try await sendPing(sessionID: sessionID, expectedToken: token)
+        } catch {
+            if reservations[sessionID]?.token == token {
+                reservations.removeValue(forKey: sessionID)
+            }
+            await channel.cancel()
+            throw error
+        }
+    }
+
+    func sendPing(sessionID: UUID) async throws {
+        guard let reservation = reservations[sessionID] else {
+            throw MoonlightMediaReceiveError.missingAudioReservation
+        }
+        try await sendPing(
+            sessionID: sessionID,
+            expectedToken: reservation.token
+        )
+    }
+
+    func claim(
+        sessionID: UUID,
+        endpoint: RuntimeNetworkEndpoint,
+        pingPayload: Data?
+    ) async throws -> MoonlightReservedDatagramChannel {
+        guard let reservation = reservations.removeValue(forKey: sessionID) else {
+            throw MoonlightMediaReceiveError.missingAudioReservation
+        }
+        guard reservation.endpoint == endpoint,
+              reservation.pingPayload == pingPayload else {
+            await reservation.channel.cancel()
+            throw MoonlightMediaReceiveError.invalidConfiguration
+        }
+        return MoonlightReservedDatagramChannel(
+            channel: reservation.channel,
+            nextPingSequence: reservation.nextPingSequence
+        )
+    }
+
+    func cancel(sessionID: UUID) async {
+        guard let reservation = reservations.removeValue(forKey: sessionID) else {
+            return
+        }
+        await reservation.channel.cancel()
+    }
+
+    private func sendPing(
+        sessionID: UUID,
+        expectedToken: UUID
+    ) async throws {
+        guard let reservation = reservations[sessionID],
+              reservation.token == expectedToken else {
+            throw CancellationError()
+        }
+        try await reservation.channel.send(
+            reservation.ping.datagram(sequence: reservation.nextPingSequence),
+            timeout: timing.sendTimeout
+        )
+        try ensureCurrent(sessionID: sessionID, token: expectedToken)
+        var current = reservations[sessionID]!
+        current.nextPingSequence &+= 1
+        reservations[sessionID] = current
+    }
+
+    private func ensureCurrent(sessionID: UUID, token: UUID) throws {
+        guard !Task.isCancelled,
+              reservations[sessionID]?.token == token else {
+            throw CancellationError()
+        }
+    }
+}
+
 private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
     typealias Transform = @Sendable (Data, UInt64) throws -> Event?
 
@@ -298,6 +433,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         endpoint: RuntimeNetworkEndpoint,
         maximumDatagramBytes: Int,
         pingPayload: Data?,
+        reservedChannel: MoonlightReservedDatagramChannel? = nil,
         transform: @escaping Transform
     ) async -> AsyncThrowingStream<Event, Error> {
         if let active {
@@ -317,7 +453,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                 throw MoonlightMediaReceiveError.invalidLimits
             }
             let ping = try MoonlightDatagramPing(customPayload: pingPayload)
-            let channel = try channelFactory(
+            let channel = try reservedChannel?.channel ?? channelFactory(
                 endpoint,
                 .moonlightDatagram
             )
@@ -343,6 +479,8 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                     continuation: continuation,
                     maximumDatagramBytes: maximumDatagramBytes,
                     ping: ping,
+                    isConnected: reservedChannel != nil,
+                    initialPingSequence: reservedChannel?.nextPingSequence ?? 0,
                     transform: transform
                 )
             }
@@ -378,15 +516,20 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         continuation: AsyncThrowingStream<Event, Error>.Continuation,
         maximumDatagramBytes: Int,
         ping: MoonlightDatagramPing,
+        isConnected: Bool,
+        initialPingSequence: UInt32,
         transform: @escaping Transform
     ) async {
         do {
-            try await channel.connect(timeout: timing.connectTimeout)
+            if !isConnected {
+                try await channel.connect(timeout: timing.connectTimeout)
+            }
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     try await Self.pingLoop(
                         channel: channel,
                         ping: ping,
+                        initialSequence: initialPingSequence,
                         timing: self.timing
                     )
                 }
@@ -440,9 +583,10 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
     private static func pingLoop(
         channel: any MoonlightDatagramChannel,
         ping: MoonlightDatagramPing,
+        initialSequence: UInt32,
         timing: MoonlightMediaReceiveTiming
     ) async throws {
-        var sequence: UInt32 = 0
+        var sequence = initialSequence
         while true {
             try Task.checkCancellation()
             try await channel.send(
@@ -579,18 +723,21 @@ actor MoonlightVideoReceiveProvider: VideoReceiveProvider {
 
 actor MoonlightAudioReceiveProvider: AudioReceiveProvider {
     private let runtime: MoonlightDatagramReceiveRuntime<AudioReceiveEvent>
+    private let reservationStore: MoonlightAudioDatagramReservationStore?
 
     init(
         channelFactory: @escaping MoonlightDatagramChannelFactory = {
             endpoint, limits in
             try NetworkByteChannel(endpoint: endpoint, limits: limits)
         },
+        reservationStore: MoonlightAudioDatagramReservationStore? = nil,
         timing: MoonlightMediaReceiveTiming = .production,
         eventBufferCapacity: Int = 512,
         timeProvider: @escaping MoonlightMediaReceiveTimeProvider = {
             DispatchTime.now().uptimeNanoseconds
         }
     ) {
+        self.reservationStore = reservationStore
         runtime = MoonlightDatagramReceiveRuntime(
             channelFactory: channelFactory,
             timing: timing,
@@ -615,11 +762,24 @@ actor MoonlightAudioReceiveProvider: AudioReceiveProvider {
         }
         let maximumDatagramBytes = configuration.maximumPacketSize
             + MoonlightAudioRTPPacket.fixedHeaderBytes
+        let reservedChannel: MoonlightReservedDatagramChannel?
+        do {
+            reservedChannel = try await reservationStore?.claim(
+                sessionID: sessionID,
+                endpoint: endpoint,
+                pingPayload: configuration.pingPayload
+            )
+        } catch {
+            return AsyncThrowingStream { continuation in
+                continuation.finish(throwing: error)
+            }
+        }
         return await runtime.start(
             sessionID: sessionID,
             endpoint: endpoint,
             maximumDatagramBytes: maximumDatagramBytes,
-            pingPayload: configuration.pingPayload
+            pingPayload: configuration.pingPayload,
+            reservedChannel: reservedChannel
         ) { datagram, receiveTimeNanoseconds in
             let packet = try MoonlightAudioRTPPacketParser.parse(
                 datagram,

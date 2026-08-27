@@ -74,9 +74,47 @@ private actor LiveRecordingStreamLaunchClient: StreamLaunchClient {
     }
 }
 
+private enum LiveSessionControlFailureCause: String, Equatable, Sendable {
+    case streamNegotiation = "stream_negotiation"
+    case rtspBootstrap = "rtsp_bootstrap"
+    case rtspMessage = "rtsp_message"
+    case rtspNegotiation = "rtsp_negotiation"
+    case rtspAnnounce = "rtsp_announce"
+    case controlChannel = "control_channel"
+    case enetTransport = "enet_transport"
+    case networkChannel = "network_channel"
+    case unclassified
+
+    static func classify(_ error: Error) -> Self? {
+        if error is CancellationError {
+            return nil
+        }
+        if let networkError = error as? NetworkChannelError {
+            if case .cancelled = networkError {
+                return nil
+            }
+            return .networkChannel
+        }
+        if error is StreamNegotiationFailure { return .streamNegotiation }
+        if error is RTSPBootstrapError { return .rtspBootstrap }
+        if error is RTSPMessageError { return .rtspMessage }
+        if error is SunshineRTSPNegotiationError { return .rtspNegotiation }
+        if error is SunshineRTSPAnnounceError { return .rtspAnnounce }
+        if error is ControlChannelError { return .controlChannel }
+        if error is ENetTransportError { return .enetTransport }
+        return .unclassified
+    }
+}
+
 private struct LiveSessionControlReceipt: Sendable {
     var events: [String]
-    var failure: String?
+    var failure: LiveSessionControlFailureCause?
+}
+
+private struct LiveAdversarialControlError: Error, CustomStringConvertible {
+    var description: String {
+        "secret endpoint payload certificate operation"
+    }
 }
 
 private enum LiveMediaFailureStage: String, Equatable, Hashable, Sendable {
@@ -103,6 +141,7 @@ private enum LiveMediaFailureCause: String, Equatable, Sendable {
     case mediaInvalidEndpoint = "media_invalid_endpoint"
     case mediaInvalidConfiguration = "media_invalid_configuration"
     case mediaInvalidLimits = "media_invalid_limits"
+    case mediaMissingAudioReservation = "media_missing_audio_reservation"
     case mediaReceiveBufferOverflow = "media_receive_buffer_overflow"
     case mediaUnexpectedTermination = "media_unexpected_termination"
     case videoPacketInvalidLimits = "video_packet_invalid_limits"
@@ -313,6 +352,7 @@ private actor LiveMediaFailureRecorder {
         case .invalidEndpoint: .mediaInvalidEndpoint
         case .invalidConfiguration: .mediaInvalidConfiguration
         case .invalidLimits: .mediaInvalidLimits
+        case .missingAudioReservation: .mediaMissingAudioReservation
         case .receiveBufferOverflow: .mediaReceiveBufferOverflow
         case .unexpectedTermination: .mediaUnexpectedTermination
         }
@@ -506,7 +546,7 @@ private func liveRecordingDatagramChannelFactory(
 private actor LiveRecordingSessionControlProvider: SessionControlProvider {
     private let base: any SessionControlProvider
     private var events: [String] = []
-    private var failure: String?
+    private var failure: LiveSessionControlFailureCause?
 
     init(base: any SessionControlProvider) {
         self.base = base
@@ -570,12 +610,39 @@ private actor LiveRecordingSessionControlProvider: SessionControlProvider {
     }
 
     private func record(_ error: Error) {
-        failure = "\(String(reflecting: type(of: error))):\(String(describing: error))"
+        failure = LiveSessionControlFailureCause.classify(error)
     }
 }
 
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
+    func testLiveControlFailureReceiptIsFiniteAndPrivacyBounded() {
+        let arbitrary = LiveSessionControlFailureCause.classify(
+            LiveAdversarialControlError()
+        )
+        XCTAssertEqual(arbitrary, .unclassified)
+        XCTAssertNil(
+            LiveSessionControlFailureCause.classify(CancellationError())
+        )
+        XCTAssertNil(
+            LiveSessionControlFailureCause.classify(
+                NetworkChannelError.cancelled
+            )
+        )
+        XCTAssertEqual(
+            LiveSessionControlFailureCause.classify(
+                NetworkChannelError.timedOut(operation: "secret operation")
+            ),
+            .networkChannel
+        )
+        let summary = arbitrary?.rawValue ?? "none"
+        XCTAssertFalse(summary.contains("secret"))
+        XCTAssertFalse(summary.contains("endpoint"))
+        XCTAssertFalse(summary.contains("payload"))
+        XCTAssertFalse(summary.contains("certificate"))
+        XCTAssertFalse(summary.contains("operation"))
+    }
+
     func testLiveSunshineAcceptanceRequiresExactOptIns() {
         XCTAssertEqual(
             LiveSunshineAcceptanceConfiguration.scope(environment: [:]),
@@ -962,7 +1029,7 @@ final class AppModelWorkflowTests: XCTestCase {
             launchTask.cancel()
             await launchTask.value
             XCTFail(
-                "The production session did not reach streaming; preCleanupPhase=\(phaseBeforeCleanup), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), frames=\(frameCount), audioStage=\(audioStage), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure ?? "none"), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary)."
+                "The production session did not reach streaming; preCleanupPhase=\(phaseBeforeCleanup), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), frames=\(frameCount), audioStage=\(audioStage), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure?.rawValue ?? "none"), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary)."
             )
             return
         }
@@ -10508,14 +10575,22 @@ final class AppModelWorkflowTests: XCTestCase {
             base: HTTPStreamLaunchClient(requestExecutor: requestExecutor)
         )
         let controlChannel = MoonlightControlChannel()
+        let mediaRecorder = LiveMediaFailureRecorder()
+        let mediaActivityRecorder = LiveMediaActivityRecorder()
+        let audioChannelFactory = liveRecordingDatagramChannelFactory(
+            stage: .audioReceive,
+            recorder: mediaActivityRecorder
+        )
+        let audioDatagramReservations = MoonlightAudioDatagramReservationStore(
+            channelFactory: audioChannelFactory
+        )
         let controlProvider = LiveRecordingSessionControlProvider(
             base: MoonlightSessionControlProvider(
                 launchClient: launchClient,
-                controlChannel: controlChannel
+                controlChannel: controlChannel,
+                audioDatagramReservations: audioDatagramReservations
             )
         )
-        let mediaRecorder = LiveMediaFailureRecorder()
-        let mediaActivityRecorder = LiveMediaActivityRecorder()
         let runtimeProviders = RuntimeProviderInventory(
             sessionControl: controlProvider,
             videoReceive: LiveRecordingVideoReceiveProvider(
@@ -10530,10 +10605,8 @@ final class AppModelWorkflowTests: XCTestCase {
             ),
             audioReceive: LiveRecordingAudioReceiveProvider(
                 base: MoonlightAudioReceiveProvider(
-                    channelFactory: liveRecordingDatagramChannelFactory(
-                        stage: .audioReceive,
-                        recorder: mediaActivityRecorder
-                    )
+                    channelFactory: audioChannelFactory,
+                    reservationStore: audioDatagramReservations
                 ),
                 recorder: mediaRecorder,
                 activityRecorder: mediaActivityRecorder

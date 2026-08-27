@@ -580,6 +580,16 @@ final class RTSPBootstrapTests: XCTestCase {
             rawValues: [:]
         )
         let launchClient = BootstrapStubLaunchClient(response: launchResponse)
+        let ordering = BootstrapOrderingRecorder()
+        let audioChannel = BootstrapOrderingDatagramChannel(recorder: ordering)
+        let audioReservations = MoonlightAudioDatagramReservationStore(
+            channelFactory: { _, _ in audioChannel },
+            timing: MoonlightMediaReceiveTiming(
+                connectTimeout: .seconds(1),
+                sendTimeout: .seconds(1),
+                pingInterval: .milliseconds(10)
+            )
+        )
         let connection = BootstrapStubRTSPConnection(responses: [
             response(cSeq: "1"),
             response(
@@ -609,7 +619,9 @@ final class RTSPBootstrapTests: XCTestCase {
             ),
             response(cSeq: "6"),
             response(cSeq: "7")
-        ])
+        ], requestObserver: { request in
+            ordering.record("rtsp:\(request.method):\(request.target)")
+        })
         let hdrMode = SunshineHDRModeMetadata(
             isEnabled: true,
             masteringDisplay: VideoMasteringDisplayMetadata(
@@ -640,7 +652,8 @@ final class RTSPBootstrapTests: XCTestCase {
             controlChannel: control,
             videoCodecSelectionPolicy: VideoCodecSelectionPolicy(
                 capabilityProvider: BootstrapVideoDecoderCapabilities([.hevc])
-            )
+            ),
+            audioDatagramReservations: audioReservations
         )
 
         let events = try await collect(await provider.start(
@@ -743,6 +756,27 @@ final class RTSPBootstrapTests: XCTestCase {
             Data("audio-ping-00000".utf8)
         )
         XCTAssertEqual(configuration.input.keyMaterial, makeRequest().remoteInputKey)
+        let orderedSteps = ordering.snapshot()
+        let firstAudioPing = try XCTUnwrap(
+            orderedSteps.firstIndex(of: "audio-send")
+        )
+        let videoSetup = try XCTUnwrap(
+            orderedSteps.firstIndex(of: "rtsp:SETUP:streamid=video/0/0")
+        )
+        let secondAudioPing = try XCTUnwrap(
+            orderedSteps.lastIndex(of: "audio-send")
+        )
+        let play = try XCTUnwrap(
+            orderedSteps.firstIndex(of: "rtsp:PLAY:/")
+        )
+        XCTAssertLessThan(firstAudioPing, videoSetup)
+        XCTAssertLessThan(secondAudioPing, play)
+        let audioConnectionCount = await audioChannel.connectionCount()
+        let audioSendCount = await audioChannel.sendCount()
+        let audioCancelCount = await audioChannel.cancelCount()
+        XCTAssertEqual(audioConnectionCount, 1)
+        XCTAssertEqual(audioSendCount, 2)
+        XCTAssertEqual(audioCancelCount, 1)
         let controlStops = await control.stopCount()
         let rtspCancellations = await connection.cancelCount()
         let remoteCancellations = await launchClient.stopCount()
@@ -931,15 +965,28 @@ final class RTSPBootstrapTests: XCTestCase {
             }
             let connection = BootstrapStubRTSPConnection(responses: responses)
             let control = BootstrapStubControlChannel(events: [])
+            let audioChannel = BootstrapOrderingDatagramChannel(
+                recorder: BootstrapOrderingRecorder()
+            )
+            let audioReservations = MoonlightAudioDatagramReservationStore(
+                channelFactory: { _, _ in audioChannel },
+                timing: MoonlightMediaReceiveTiming(
+                    connectTimeout: .seconds(1),
+                    sendTimeout: .seconds(1),
+                    pingInterval: .milliseconds(10)
+                )
+            )
             let provider = MoonlightSessionControlProvider(
                 serverInfoClient: SessionServerInfoClient(),
                 launchClient: BootstrapStubLaunchClient(response: launchResponse),
                 connection: connection,
-                controlChannel: control
+                controlChannel: control,
+                audioDatagramReservations: audioReservations
             )
+            let sessionID = UUID()
 
             let result = await collectFailure(await provider.start(
-                sessionID: UUID(),
+                sessionID: sessionID,
                 request: makeRequest()
             ))
 
@@ -962,6 +1009,8 @@ final class RTSPBootstrapTests: XCTestCase {
             )
             let controlConnect = await control.recordedConnect()
             XCTAssertNil(controlConnect)
+            let audioCancelCount = await audioChannel.cancelCount()
+            XCTAssertEqual(audioCancelCount, 1)
         }
     }
 
@@ -1671,9 +1720,14 @@ private actor BootstrapStubRTSPConnection: RTSPConnectionExecuting {
     private var requests: [RTSPRequest] = []
     private var endpoint: RTSPSessionEndpoint?
     private var cancellations = 0
+    private let requestObserver: @Sendable (RTSPRequest) -> Void
 
-    init(responses: [RTSPResponse]) {
+    init(
+        responses: [RTSPResponse],
+        requestObserver: @escaping @Sendable (RTSPRequest) -> Void = { _ in }
+    ) {
         self.responses = responses
+        self.requestObserver = requestObserver
     }
 
     func connect(endpoint: RTSPSessionEndpoint, encryptionKey: Data) async throws {
@@ -1682,6 +1736,7 @@ private actor BootstrapStubRTSPConnection: RTSPConnectionExecuting {
 
     func transact(_ request: RTSPRequest) async throws -> RTSPResponse {
         requests.append(request)
+        requestObserver(request)
         guard !responses.isEmpty else { throw RTSPBootstrapError.connectionClosed }
         return responses.removeFirst()
     }
@@ -1701,4 +1756,59 @@ private actor BootstrapStubRTSPConnection: RTSPConnectionExecuting {
     func cancelCount() -> Int {
         cancellations
     }
+}
+
+private final class BootstrapOrderingRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var steps: [String] = []
+
+    func record(_ step: String) {
+        lock.withLock { steps.append(step) }
+    }
+
+    func snapshot() -> [String] {
+        lock.withLock { steps }
+    }
+}
+
+private actor BootstrapOrderingDatagramChannel: MoonlightDatagramChannel {
+    private let recorder: BootstrapOrderingRecorder
+    private var connections = 0
+    private var sends = 0
+    private var cancellations = 0
+
+    init(recorder: BootstrapOrderingRecorder) {
+        self.recorder = recorder
+    }
+
+    func connect(timeout: Duration) async throws {
+        _ = timeout
+        connections += 1
+        recorder.record("audio-connect")
+    }
+
+    func send(_ data: Data, timeout: Duration) async throws {
+        _ = data
+        _ = timeout
+        sends += 1
+        recorder.record("audio-send")
+    }
+
+    func receiveWithoutDeadline(
+        minimumLength: Int,
+        maximumLength: Int?
+    ) async throws -> NetworkReceiveChunk {
+        _ = minimumLength
+        _ = maximumLength
+        throw NetworkChannelError.closed
+    }
+
+    func cancel() async {
+        cancellations += 1
+        recorder.record("audio-cancel")
+    }
+
+    func connectionCount() -> Int { connections }
+    func sendCount() -> Int { sends }
+    func cancelCount() -> Int { cancellations }
 }

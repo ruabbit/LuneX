@@ -386,6 +386,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private let keyMaterialGenerator: any RemoteInputKeyMaterialGenerating
     private let reconnectClassifier: SessionReconnectFailureClassifier
     private let videoCodecSelectionPolicy: VideoCodecSelectionPolicy
+    private let audioDatagramReservations: MoonlightAudioDatagramReservationStore?
     private var activeSession: ActiveSession?
     private var lastSession: TerminalSession?
     private var negotiatedVideoSelection: (
@@ -407,7 +408,8 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         reconnectSleeper: any SessionReconnectSleeping = ContinuousSessionReconnectSleeper(),
         keyMaterialGenerator: any RemoteInputKeyMaterialGenerating = SecureRemoteInputKeyMaterialGenerator(),
         reconnectClassifier: SessionReconnectFailureClassifier = SessionReconnectFailureClassifier(),
-        videoCodecSelectionPolicy: VideoCodecSelectionPolicy = VideoCodecSelectionPolicy()
+        videoCodecSelectionPolicy: VideoCodecSelectionPolicy = VideoCodecSelectionPolicy(),
+        audioDatagramReservations: MoonlightAudioDatagramReservationStore? = nil
     ) {
         self.launchClient = launchClient
         self.serverInfoClient = serverInfoClient
@@ -418,6 +420,7 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         self.keyMaterialGenerator = keyMaterialGenerator
         self.reconnectClassifier = reconnectClassifier
         self.videoCodecSelectionPolicy = videoCodecSelectionPolicy
+        self.audioDatagramReservations = audioDatagramReservations
     }
 
     func start(
@@ -728,12 +731,20 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
         )
         try yield(.rtspReady, token: token, continuation: continuation)
 
+        let host = endpoint.networkEndpoint.host
         let audioSetup = try await setupStream(
             .audio,
             cSeq: "3",
             endpoint: endpoint,
             sessionToken: nil
         )
+        if let audioDatagramReservations {
+            try await audioDatagramReservations.reserve(
+                sessionID: activeSession.sessionID,
+                endpoint: audioSetup.endpoint(host: host),
+                pingPayload: audioSetup.pingPayload
+            )
+        }
         let videoSetup = try await setupStream(
             .video,
             cSeq: "4",
@@ -779,6 +790,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             ),
             expectedCSeq: "6"
         )
+        if let audioDatagramReservations {
+            try await audioDatagramReservations.sendPing(
+                sessionID: activeSession.sessionID
+            )
+        }
         _ = try await transact(
             RTSPRequest(
                 method: "PLAY",
@@ -794,7 +810,6 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
             connectData: connectData,
             encryptionKey: request.remoteInputKey.key
         )
-        let host = endpoint.networkEndpoint.host
         let controlEndpoint = controlSetup.endpoint(host: host)
         guard let audioProfile = description.opusConfiguration(
             channelCount: 2,
@@ -858,6 +873,11 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
                 token: token,
                 continuation: continuation
             )
+            if let activeSession, activeSession.token == token {
+                await audioDatagramReservations?.cancel(
+                    sessionID: activeSession.sessionID
+                )
+            }
             await controlChannel.stop()
             await connection.cancel()
             try await reconnectSleeper.sleep(for: reconnectPolicy.delay(forAttempt: attempt))
@@ -1046,7 +1066,8 @@ actor MoonlightSessionControlProvider: SessionControlProvider {
     private func executeTeardown(
         _ session: TerminalSession
     ) async -> SessionControlTeardownReport {
-        await session.teardown.teardown(
+        await audioDatagramReservations?.cancel(sessionID: session.sessionID)
+        return await session.teardown.teardown(
             trigger: session.trigger,
             cancelRemoteSession: session.cancelRemoteSession
         )

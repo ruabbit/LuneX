@@ -756,14 +756,30 @@ private final class HDRMetalReadbackHarness {
             let words = buffer.contents().assumingMemoryBound(to: UInt16.self)
             return HDRMetalReadbackPixel(
                 rgb: HDRColorVector(
-                    x: Double(Float16(bitPattern: words[0])),
-                    y: Double(Float16(bitPattern: words[1])),
-                    z: Double(Float16(bitPattern: words[2]))
+                    x: Self.decodeBinary16(words[0]),
+                    y: Self.decodeBinary16(words[1]),
+                    z: Self.decodeBinary16(words[2])
                 ),
-                alpha: Double(Float16(bitPattern: words[3]))
+                alpha: Self.decodeBinary16(words[3])
             )
         default:
             preconditionFailure("The readback pixel format was validated before blitting.")
+        }
+    }
+
+    private static func decodeBinary16(_ bits: UInt16) -> Double {
+        let sign = bits & 0x8000 == 0 ? 1.0 : -1.0
+        let exponent = Int((bits >> 10) & 0x1F)
+        let fraction = Int(bits & 0x03FF)
+        switch exponent {
+        case 0:
+            return sign * Double(fraction) * pow(2.0, -24.0)
+        case 0x1F:
+            return fraction == 0 ? sign * .infinity : .nan
+        default:
+            return sign
+                * (1.0 + Double(fraction) / 1_024.0)
+                * pow(2.0, Double(exponent - 15))
         }
     }
 
