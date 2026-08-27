@@ -66,15 +66,15 @@ or arbitrary application requiring a separate approval gate.
 | Host inventory | `tanmy-white` advertised protocol/codec modes and current application state | Capabilities recorded; matching busy `Desktop` permits a concurrent `/resume` session |
 | Pairing or identity reuse | Existing isolated LuneX identity authenticates, or one bounded pairing operation completes, without changing unrelated clients | Passed at 18:14 CST: the imported Moonlight-qt identity completed live production pinned-mTLS authentication without pairing or local-state mutation |
 | Catalog | Live pinned HTTPS catalog succeeds and contains `Desktop` | Passed at 18:14 CST: production `/applist` became current and contained exactly one matching `Desktop` entry with app ID `881448767` |
-| Initial session | Exactly one `Desktop` client session starts through production `/launch` or `/resume` routing | Passed on exact SHA `05aa877`: matching busy selected one `/resume`, zero `/launch`, zero `/cancel` |
-| RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Passed on exact SHA `05aa877`; the new candidate `3889cfb` also completed ANNOUNCE, PLAY, ENet, negotiated configuration, control readiness, and video color metadata in the live gate. Audio-encryption interoperability remains unproven until audio datagrams arrive. |
-| Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Not accepted on exact SHA `3889cfb`: video UDP activity was observed, but the session stayed waiting for required audio readiness before decoded-frame acceptance |
-| Audible synchronized audio | Audio is audible, synchronized, and stops cleanly on the selected route | Failed before audio readiness on exact SHA `3889cfb`: audio channel connected and sent 86 pings, but received 0 datagrams and produced 0 packet events; no decryption failure was observed |
-| Remote input and feedback | Harmless keyboard, pointer, scroll, controller, and feedback sequence is observed in `Desktop` | Not run |
+| Initial session | Exactly one `Desktop` client session starts through production `/launch` or `/resume` routing | Passed again on exact SHA `df76fa5`: matching busy selected `/resume`; automated gate required zero remote `/cancel` |
+| RTSP negotiation | Launch URL, DESCRIBE, audio/video/control SETUP, negotiated endpoints, and control readiness succeed | Passed through the production session on exact SHA `df76fa5`; decoded video and running audio subsequently became ready |
+| Sustained video | Decoded and presented frames remain continuous for the fixed duration; frame/loss counters are recorded | Automated bounded gate passed on exact SHA `df76fa5`: a decoded frame arrived and presentation advanced by at least 30 additional frames; longer physical/performance duration remains pending |
+| Audible synchronized audio | Audio is audible, synchronized, and stops cleanly on the selected route | Runtime stage reached `running` on exact SHA `df76fa5`; physical audibility, synchronization, selected-route observation, and interruption behavior remain pending |
+| Remote input and feedback | Harmless keyboard, pointer, scroll, controller, and feedback sequence is observed in `Desktop` | Automated no-button relative pointer `+1/-1` and input release passed on exact SHA `df76fa5`; visible host feedback and the broader keyboard/scroll/controller matrix remain pending |
 | Reconnect | One bounded interruption uses fresh authenticated material and resumes without a second launch | Not run |
 | Remote termination | Host-side termination is observed without redundant remote cancel | Not run |
-| Repeated stop | Local stop is repeated and remains idempotent | Not run |
-| Clean teardown | Socket/task/decoder/audio/input/resource ownership returns to zero and relaunch remains possible | Not run |
+| Repeated stop | Local stop is repeated and remains idempotent | Passed in the exact SHA `df76fa5` automated gate: first local stop succeeded, repeated stop returned false, and remote `/cancel` remained zero |
+| Clean teardown | Socket/task/decoder/audio/input/resource ownership returns to zero and relaunch remains possible | Model-owned session/audio/video teardown passed on exact SHA `df76fa5`; full process/resource instrumentation and relaunch proof remain pending |
 
 ## Task 2.3 Preconditions
 
@@ -666,3 +666,40 @@ at `/private/tmp/LuneX-lifecycle-decode-focused.t0Vl6g/Focused.xcresult` passed
 `3/3` with zero structured errors, warnings, or analyzer warnings. This remains
 deterministic evidence only; Task 2.3 stays pending until the full live matrix
 passes on a new exact pushed SHA.
+
+## Exact-SHA Lifecycle Decode Repair Receipt
+
+Exact pushed SHA `df76fa58b994f4f8ad3f67bd85bcfd7e5e012d22` consumed its
+only double-opt-in live gate and must not be rerun. The fresh arm64 Debug test
+bundle at `/private/tmp/LuneX-live-df76fa5.ys7L6g` was bound to that Git SHA,
+its executable SHA-256 was
+`014bfbc3821c737b7351cede29edf4946c1adee00a961ceac6c8bf7bcd4e505a`,
+and strict ad-hoc codesign verification passed. XCTest exited `0`: the
+production session reached streaming, decoded video published a first frame
+and at least 30 further frames, audio reached `running`, the bounded relative
+pointer round trip and input release completed, the first local stop
+succeeded, repeated stop remained idempotent, and the observable AppModel
+session/audio/video owners returned to idle.
+
+Coverage from the exact live executable proves the prior inactive-lifecycle
+early return was removed from the active session path:
+`NativeSessionVideoProcessor.consume()` ran `2109` times,
+`VideoDecodePipeline.consume()` ran `38` times, and
+`MoonlightControlChannel.requestIDR()` ran once. On exact SHA `8005584`, the
+corresponding decode-pipeline and IDR counts were both zero. This closes the
+specific decoded-readiness/lifecycle activation cycle and supplies live proof
+that events now enter VideoToolbox-facing decode processing.
+
+The four local LuneX state files retained identical mode, size, and SHA-256.
+Sunshine retained PID `14640`, start time
+`2026-08-27T04:21:28.2870310+08:00`, running service state, and the identical
+bounded Event 1000/1001 list. Git remained clean, no xcodebuild or xctest
+process remained, coverage stayed inside the evidence directory, and the live
+log SHA-256 was
+`44068b9d3478e035f798eda38b2760db297ee2fcb39ece4add49e2d4b33a3c28`.
+
+This automated gate does not prove physical audibility or synchronization,
+visible host input feedback, a real reconnect, host-side remote termination,
+an actual AppKit window lifecycle, stable signed-App Local Network TCC, full
+resource instrumentation, or a post-teardown relaunch. Those rows remain
+pending, so Task 2.3 is not marked complete.
