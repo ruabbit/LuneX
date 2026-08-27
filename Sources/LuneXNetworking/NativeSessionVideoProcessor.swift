@@ -259,6 +259,12 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
 }
 
 struct NormalizedVideoAccessUnitAssembler: Sendable {
+    private struct FECBlockMetadata: Equatable, Sendable {
+        var dataShardCount: Int
+        var parityShardCount: Int
+        var fecPercentage: Int
+    }
+
     private struct FrameAssembly: Sendable {
         var frameIndex: UInt32
         var rtpTimestamp: UInt32
@@ -267,9 +273,7 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
         var payloadBytes: Int
         var usesFEC: Bool
         var lastFECBlockIndex: UInt8
-        var fecDataShardCount: Int
-        var fecParityShardCount: Int
-        var fecPercentage: Int
+        var fecBlockMetadata: [UInt8: FECBlockMetadata]
         var firstSequenceNumber: UInt32?
         var lastSequenceNumber: UInt32?
         var packets: [UInt32: ReceivedVideoPacket]
@@ -336,9 +340,7 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
                 payloadBytes: 0,
                 usesFEC: packet.parityShardCount > 0,
                 lastFECBlockIndex: packet.lastFECBlockIndex,
-                fecDataShardCount: packet.dataShardCount,
-                fecParityShardCount: packet.parityShardCount,
-                fecPercentage: packet.fecPercentage,
+                fecBlockMetadata: [:],
                 firstSequenceNumber: nil,
                 lastSequenceNumber: nil,
                 packets: [:]
@@ -366,11 +368,26 @@ struct NormalizedVideoAccessUnitAssembler: Sendable {
                   && packet.fecPercentage <= 255
                   && packet.fecShardIndex >= 0
                   && packet.fecShardIndex < packet.dataShardCount
-                  && packet.dataShardCount == frame.fecDataShardCount
-                  && packet.parityShardCount == frame.fecParityShardCount
-                  && packet.fecPercentage == frame.fecPercentage
               ) else {
             return invalidate(&events, frame: frame, reason: .inconsistentFrameMetadata)
+        }
+        if frame.usesFEC {
+            let metadata = FECBlockMetadata(
+                dataShardCount: packet.dataShardCount,
+                parityShardCount: packet.parityShardCount,
+                fecPercentage: packet.fecPercentage
+            )
+            if let existing = frame.fecBlockMetadata[packet.fecBlockIndex] {
+                guard existing == metadata else {
+                    return invalidate(
+                        &events,
+                        frame: frame,
+                        reason: .inconsistentFrameMetadata
+                    )
+                }
+            } else {
+                frame.fecBlockMetadata[packet.fecBlockIndex] = metadata
+            }
         }
 
         if let existing = frame.packets[packet.sequenceNumber] {

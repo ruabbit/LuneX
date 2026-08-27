@@ -3258,6 +3258,79 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         })
     }
 
+    func testNormalizedAssemblerAcceptsDifferentShardCountsPerFECBlock() throws {
+        var assembler = try NormalizedVideoAccessUnitAssembler(codec: .h264)
+        let header = Data([0x01, 0x00, 0x00, 0x02, 0x03, 0x00, 0x00, 0x00])
+        func packet(
+            sequence: UInt32,
+            block: UInt8,
+            shard: Int,
+            dataShardCount: Int,
+            parityShardCount: Int = 1,
+            fecPercentage: Int = 50,
+            payload: Data,
+            first: Bool = false,
+            last: Bool = false
+        ) -> ReceivedVideoPacket {
+            ReceivedVideoPacket(
+                sequenceNumber: sequence,
+                frameIndex: 13,
+                rtpTimestamp: 181_500,
+                receiveTimeNanoseconds: UInt64(sequence),
+                isFirstPacket: first,
+                isLastPacket: last,
+                payload: payload,
+                fecBlockIndex: block,
+                lastFECBlockIndex: 1,
+                fecShardIndex: shard,
+                dataShardCount: dataShardCount,
+                parityShardCount: parityShardCount,
+                fecPercentage: fecPercentage
+            )
+        }
+
+        let packets = [
+            packet(
+                sequence: 103,
+                block: 1,
+                shard: 0,
+                dataShardCount: 1,
+                parityShardCount: 2,
+                fecPercentage: 200,
+                payload: Data([0x03]),
+                last: true
+            ),
+            packet(
+                sequence: 101,
+                block: 0,
+                shard: 1,
+                dataShardCount: 2,
+                payload: Data([0x02])
+            ),
+            packet(
+                sequence: 100,
+                block: 0,
+                shard: 0,
+                dataShardCount: 2,
+                payload: header + Data([0x01]),
+                first: true
+            )
+        ]
+        let events = packets.flatMap { assembler.ingest($0) }
+        let accessUnits = events.compactMap { event -> VideoAccessUnit? in
+            guard case let .accessUnit(value) = event else { return nil }
+            return value
+        }
+
+        let accessUnit = try XCTUnwrap(accessUnits.first)
+        XCTAssertEqual(accessUnit.packetCount, 3)
+        XCTAssertEqual(accessUnit.payload, Data([0x01, 0x02, 0x03]))
+        XCTAssertFalse(events.contains { event in
+            if case .frameLost = event { return true }
+            return false
+        })
+    }
+
     func testNormalizedAssemblerRejectsFECMetadataDriftAndConflictingShards() throws {
         let header = Data([0x01, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00])
         func packet(
