@@ -207,6 +207,271 @@ private struct LiveMediaActivityReceipt: Equatable, Sendable {
     }
 }
 
+private struct LiveVideoFrameLossCounts: Equatable, Sendable {
+    var superseded = 0
+    var assemblyTimedOut = 0
+    var packetCapacityExceeded = 0
+    var accessUnitTooLarge = 0
+    var inconsistentFrameMetadata = 0
+    var conflictingDuplicate = 0
+    var invalidFrameHeader = 0
+    var incompleteAtEndOfStream = 0
+
+    var summary: String {
+        "superseded=\(superseded),assemblyTimedOut=\(assemblyTimedOut),packetCapacityExceeded=\(packetCapacityExceeded),accessUnitTooLarge=\(accessUnitTooLarge),inconsistentFrameMetadata=\(inconsistentFrameMetadata),conflictingDuplicate=\(conflictingDuplicate),invalidFrameHeader=\(invalidFrameHeader),incompleteAtEndOfStream=\(incompleteAtEndOfStream)"
+    }
+}
+
+private struct LiveVideoProcessingReceipt: Equatable, Sendable {
+    var packetsReceived: Int
+    var firstPacketsReceived: Int
+    var lastPacketsReceived: Int
+    var transportLossEvents: Int
+    var accessUnitsAssembled: Int
+    var frameLosses: LiveVideoFrameLossCounts
+    var discardedDuplicates: Int
+    var discardedParityPackets: Int
+    var discardedLatePackets: Int
+    var submittedFrames: Int
+
+    var summary: String {
+        "packets=\(packetsReceived),first=\(firstPacketsReceived),last=\(lastPacketsReceived),transportLoss=\(transportLossEvents),accessUnits=\(accessUnitsAssembled),frameLosses=[\(frameLosses.summary)],discardedDuplicate=\(discardedDuplicates),discardedParity=\(discardedParityPackets),discardedLate=\(discardedLatePackets),submitted=\(submittedFrames)"
+    }
+}
+
+private final class LiveVideoProcessingRecorder: @unchecked Sendable {
+    private static let maximumCount = 1_000_000
+    private let lock = NSLock()
+    private var packetsReceived = 0
+    private var firstPacketsReceived = 0
+    private var lastPacketsReceived = 0
+    private var transportLossEvents = 0
+    private var accessUnitsAssembled = 0
+    private var frameLosses = LiveVideoFrameLossCounts()
+    private var discardedDuplicates = 0
+    private var discardedParityPackets = 0
+    private var discardedLatePackets = 0
+    private var submittedFrames = 0
+
+    func record(_ event: VideoReceiveEvent) {
+        lock.lock()
+        defer { lock.unlock() }
+        switch event {
+        case let .packet(packet):
+            packetsReceived = Self.increment(packetsReceived)
+            if packet.isFirstPacket {
+                firstPacketsReceived = Self.increment(firstPacketsReceived)
+            }
+            if packet.isLastPacket {
+                lastPacketsReceived = Self.increment(lastPacketsReceived)
+            }
+        case .packetLoss:
+            transportLossEvents = Self.increment(transportLossEvents)
+        case .closed:
+            break
+        }
+    }
+
+    func record(_ events: [VideoAccessUnitAssemblyEvent]) {
+        lock.lock()
+        defer { lock.unlock() }
+        for event in events {
+            switch event {
+            case .accessUnit:
+                accessUnitsAssembled = Self.increment(accessUnitsAssembled)
+            case let .frameLost(loss):
+                switch loss.reason {
+                case .superseded:
+                    frameLosses.superseded = Self.increment(frameLosses.superseded)
+                case .assemblyTimedOut:
+                    frameLosses.assemblyTimedOut = Self.increment(
+                        frameLosses.assemblyTimedOut
+                    )
+                case .packetCapacityExceeded:
+                    frameLosses.packetCapacityExceeded = Self.increment(
+                        frameLosses.packetCapacityExceeded
+                    )
+                case .accessUnitTooLarge:
+                    frameLosses.accessUnitTooLarge = Self.increment(
+                        frameLosses.accessUnitTooLarge
+                    )
+                case .inconsistentFrameMetadata:
+                    frameLosses.inconsistentFrameMetadata = Self.increment(
+                        frameLosses.inconsistentFrameMetadata
+                    )
+                case .conflictingDuplicate:
+                    frameLosses.conflictingDuplicate = Self.increment(
+                        frameLosses.conflictingDuplicate
+                    )
+                case .invalidFrameHeader:
+                    frameLosses.invalidFrameHeader = Self.increment(
+                        frameLosses.invalidFrameHeader
+                    )
+                case .incompleteAtEndOfStream:
+                    frameLosses.incompleteAtEndOfStream = Self.increment(
+                        frameLosses.incompleteAtEndOfStream
+                    )
+                }
+            case let .packetDiscarded(reason):
+                switch reason {
+                case .duplicate:
+                    discardedDuplicates = Self.increment(discardedDuplicates)
+                case .parity:
+                    discardedParityPackets = Self.increment(discardedParityPackets)
+                case .lateFrame:
+                    discardedLatePackets = Self.increment(discardedLatePackets)
+                }
+            }
+        }
+    }
+
+    func recordSubmittedFrame() {
+        lock.lock()
+        submittedFrames = Self.increment(submittedFrames)
+        lock.unlock()
+    }
+
+    func receipt() -> LiveVideoProcessingReceipt {
+        lock.lock()
+        defer { lock.unlock() }
+        return LiveVideoProcessingReceipt(
+            packetsReceived: packetsReceived,
+            firstPacketsReceived: firstPacketsReceived,
+            lastPacketsReceived: lastPacketsReceived,
+            transportLossEvents: transportLossEvents,
+            accessUnitsAssembled: accessUnitsAssembled,
+            frameLosses: frameLosses,
+            discardedDuplicates: discardedDuplicates,
+            discardedParityPackets: discardedParityPackets,
+            discardedLatePackets: discardedLatePackets,
+            submittedFrames: submittedFrames
+        )
+    }
+
+    private static func increment(_ count: Int) -> Int {
+        min(count + 1, maximumCount)
+    }
+}
+
+private struct LiveRecordingVideoProcessorFactory: SessionVideoProcessorCreating {
+    let base: any SessionVideoProcessorCreating
+    let recorder: LiveVideoProcessingRecorder
+
+    func makeVideoProcessor(
+        sessionID: UUID,
+        mediaGeneration: UInt64,
+        configuration: NegotiatedVideoStreamConfiguration,
+        controlProvider: any SessionControlProvider,
+        presentationEventSink: @escaping @Sendable (
+            StreamVideoPresentationEvent
+        ) -> Void
+    ) async throws -> any SessionVideoProcessing {
+        let processor = try await base.makeVideoProcessor(
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration,
+            configuration: configuration,
+            controlProvider: controlProvider,
+            presentationEventSink: presentationEventSink
+        )
+        return try LiveRecordingVideoProcessor(
+            base: processor,
+            configuration: configuration,
+            recorder: recorder
+        )
+    }
+}
+
+private actor LiveRecordingVideoProcessor: SessionVideoProcessing {
+    private let base: any SessionVideoProcessing
+    private let recorder: LiveVideoProcessingRecorder
+    private var shadowAssembler: NormalizedVideoAccessUnitAssembler
+
+    init(
+        base: any SessionVideoProcessing,
+        configuration: NegotiatedVideoStreamConfiguration,
+        recorder: LiveVideoProcessingRecorder
+    ) throws {
+        self.base = base
+        self.recorder = recorder
+        shadowAssembler = try NormalizedVideoAccessUnitAssembler(
+            codec: configuration.codec
+        )
+    }
+
+    func consume(_ event: VideoReceiveEvent) async throws -> Bool {
+        recorder.record(event)
+        switch event {
+        case let .packet(packet):
+            recorder.record(shadowAssembler.ingest(packet))
+        case .packetLoss:
+            break
+        case .closed:
+            recorder.record(shadowAssembler.finish())
+        }
+        let submitted = try await base.consume(event)
+        if submitted {
+            recorder.recordSubmittedFrame()
+        }
+        return submitted
+    }
+
+    func updateColorMetadata(_ metadata: VideoColorMetadata) async throws {
+        try await base.updateColorMetadata(metadata)
+    }
+
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        try await base.applyLifecycle(application)
+    }
+
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws {
+        try await base.applyMobileVideo(application)
+    }
+
+    func stop() async {
+        shadowAssembler.reset()
+        await base.stop()
+    }
+}
+
+private actor LiveVideoProcessingSpy: SessionVideoProcessing {
+    private let submissionResult: Bool
+    private var events: [VideoReceiveEvent] = []
+    private var stopCount = 0
+
+    init(submissionResult: Bool) {
+        self.submissionResult = submissionResult
+    }
+
+    func consume(_ event: VideoReceiveEvent) async throws -> Bool {
+        events.append(event)
+        return submissionResult
+    }
+
+    func updateColorMetadata(_ metadata: VideoColorMetadata) async throws {
+        _ = metadata
+    }
+
+    func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
+        _ = application
+    }
+
+    func applyMobileVideo(
+        _ application: SessionMobileVideoApplication
+    ) async throws {
+        _ = application
+    }
+
+    func stop() async {
+        stopCount += 1
+    }
+
+    func receipt() -> (events: [VideoReceiveEvent], stopCount: Int) {
+        (events, stopCount)
+    }
+}
+
 private final class LiveMediaActivityRecorder: @unchecked Sendable {
     private struct StageState {
         var endpointKind: LiveMediaEndpointKind
@@ -915,6 +1180,99 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(calls.cancels, 1)
     }
 
+    func testLiveVideoProcessingReceiptIsFiniteAndPrivacyBounded() {
+        let recorder = LiveVideoProcessingRecorder()
+        recorder.record(.packet(ReceivedVideoPacket(
+            sequenceNumber: 987_654,
+            frameIndex: 456_789,
+            rtpTimestamp: 123_456,
+            receiveTimeNanoseconds: 42,
+            isFirstPacket: true,
+            isLastPacket: true,
+            payload: Data("secret payload certificate key endpoint".utf8)
+        )))
+        recorder.record(.packetLoss(expected: 123_450, received: 123_456))
+        recorder.record([
+            .accessUnit(VideoAccessUnit(
+                frameIndex: 456_789,
+                rtpTimestamp: 123_456,
+                codec: .hevc,
+                frameType: .instantaneousDecoderRefresh,
+                hostProcessingLatencyTenthsOfMillisecond: 12,
+                firstReceiveTimeNanoseconds: 10,
+                lastReceiveTimeNanoseconds: 42,
+                packetCount: 1,
+                payload: Data("private access unit".utf8)
+            )),
+            .frameLost(VideoFrameLoss(
+                firstFrameIndex: 456_790,
+                lastFrameIndex: 456_790,
+                reason: .inconsistentFrameMetadata,
+                requiresIDR: true
+            )),
+            .packetDiscarded(.duplicate),
+            .packetDiscarded(.parity),
+            .packetDiscarded(.lateFrame),
+        ])
+        recorder.recordSubmittedFrame()
+
+        let receipt = recorder.receipt()
+        XCTAssertEqual(receipt.packetsReceived, 1)
+        XCTAssertEqual(receipt.firstPacketsReceived, 1)
+        XCTAssertEqual(receipt.lastPacketsReceived, 1)
+        XCTAssertEqual(receipt.transportLossEvents, 1)
+        XCTAssertEqual(receipt.accessUnitsAssembled, 1)
+        XCTAssertEqual(receipt.frameLosses.inconsistentFrameMetadata, 1)
+        XCTAssertEqual(receipt.discardedDuplicates, 1)
+        XCTAssertEqual(receipt.discardedParityPackets, 1)
+        XCTAssertEqual(receipt.discardedLatePackets, 1)
+        XCTAssertEqual(receipt.submittedFrames, 1)
+        XCTAssertFalse(receipt.summary.contains("987654"))
+        XCTAssertFalse(receipt.summary.contains("456789"))
+        XCTAssertFalse(receipt.summary.contains("123456"))
+        XCTAssertFalse(receipt.summary.contains("secret"))
+        XCTAssertFalse(receipt.summary.contains("payload"))
+        XCTAssertFalse(receipt.summary.contains("certificate"))
+        XCTAssertFalse(receipt.summary.contains("key"))
+        XCTAssertFalse(receipt.summary.contains("endpoint"))
+        XCTAssertFalse(receipt.summary.contains("private"))
+    }
+
+    func testLiveVideoProcessingWrapperForwardsProductionEventAndResult()
+        async throws
+    {
+        let recorder = LiveVideoProcessingRecorder()
+        let base = LiveVideoProcessingSpy(submissionResult: true)
+        let processor = try LiveRecordingVideoProcessor(
+            base: base,
+            configuration: liveMediaTestVideoConfiguration(),
+            recorder: recorder
+        )
+        var payload = Data([0x01, 0x00, 0x00, 0x02, 0x01, 0x00, 0x00, 0x00])
+        payload.append(contentsOf: [0x00, 0x00, 0x01, 0x26, 0x01])
+        let event = VideoReceiveEvent.packet(ReceivedVideoPacket(
+            sequenceNumber: 9,
+            frameIndex: 7,
+            rtpTimestamp: 6,
+            receiveTimeNanoseconds: 5,
+            isFirstPacket: true,
+            isLastPacket: true,
+            payload: payload
+        ))
+
+        let submitted = try await processor.consume(event)
+        XCTAssertTrue(submitted)
+        await processor.stop()
+
+        let processingReceipt = recorder.receipt()
+        XCTAssertEqual(processingReceipt.packetsReceived, 1)
+        XCTAssertEqual(processingReceipt.accessUnitsAssembled, 1)
+        XCTAssertEqual(processingReceipt.submittedFrames, 1)
+        let baseReceipt = await base.receipt()
+        XCTAssertEqual(baseReceipt.events, [event])
+        XCTAssertEqual(baseReceipt.stopCount, 1)
+    }
+
     func testLiveMediaRecorderConsumerTerminationCancelsUpstreamWithoutFailure()
         async
     {
@@ -1025,11 +1383,12 @@ final class AppModelWorkflowTests: XCTestCase {
             let control = await liveRuntime.controlProvider.receipt()
             let media = await liveRuntime.mediaRecorder.receipt()
             let mediaActivity = liveRuntime.mediaActivityRecorder.receipt()
+            let videoProcessing = liveRuntime.videoProcessingRecorder.receipt()
             _ = await model.stopStream(in: model.primaryWorkspaceReference)
             launchTask.cancel()
             await launchTask.value
             XCTFail(
-                "The production session did not reach streaming; preCleanupPhase=\(phaseBeforeCleanup), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), frames=\(frameCount), audioStage=\(audioStage), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure?.rawValue ?? "none"), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary)."
+                "The production session did not reach streaming; preCleanupPhase=\(phaseBeforeCleanup), issue=\(issueCode), diagnostic=\(diagnostic?.code ?? "none"), subsystem=\(diagnostic?.subsystem ?? "none"), frames=\(frameCount), audioStage=\(audioStage), launch=\(calls.launches), resume=\(calls.resumes), cancel=\(calls.stops), controlEvents=\(control.events.joined(separator: ",")), controlFailure=\(control.failure?.rawValue ?? "none"), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary), videoProcessing=\(videoProcessing.summary)."
             )
             return
         }
@@ -1049,11 +1408,12 @@ final class AppModelWorkflowTests: XCTestCase {
                 ?? "none"
             let media = await liveRuntime.mediaRecorder.receipt()
             let mediaActivity = liveRuntime.mediaActivityRecorder.receipt()
+            let videoProcessing = liveRuntime.videoProcessingRecorder.receipt()
             _ = await model.stopStream(in: model.primaryWorkspaceReference)
             launchTask.cancel()
             await launchTask.value
             XCTFail(
-                "Production video/audio runtime signals did not become active; preCleanupPhase=\(phaseBeforeCleanup), frames=\(frameCount), audioStage=\(audioStage), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary)."
+                "Production video/audio runtime signals did not become active; preCleanupPhase=\(phaseBeforeCleanup), frames=\(frameCount), audioStage=\(audioStage), mediaFailures=\(media.summary), mediaActivity=\(mediaActivity.summary), videoProcessing=\(videoProcessing.summary)."
             )
             return
         }
@@ -10563,7 +10923,8 @@ final class AppModelWorkflowTests: XCTestCase {
         launchClient: LiveRecordingStreamLaunchClient,
         controlProvider: LiveRecordingSessionControlProvider,
         mediaRecorder: LiveMediaFailureRecorder,
-        mediaActivityRecorder: LiveMediaActivityRecorder
+        mediaActivityRecorder: LiveMediaActivityRecorder,
+        videoProcessingRecorder: LiveVideoProcessingRecorder
     ) {
         let identityStore = JSONFileClientIdentityStore(
             fileURL: AppStorageLocations.debugClientIdentityFile
@@ -10577,6 +10938,7 @@ final class AppModelWorkflowTests: XCTestCase {
         let controlChannel = MoonlightControlChannel()
         let mediaRecorder = LiveMediaFailureRecorder()
         let mediaActivityRecorder = LiveMediaActivityRecorder()
+        let videoProcessingRecorder = LiveVideoProcessingRecorder()
         let audioChannelFactory = liveRecordingDatagramChannelFactory(
             stage: .audioReceive,
             recorder: mediaActivityRecorder
@@ -10616,6 +10978,20 @@ final class AppModelWorkflowTests: XCTestCase {
                 feedbackSource: controlChannel
             )
         )
+        let presentationSource = StreamVideoPresentationSource()
+        let mediaEnvironment = NativeSessionMediaEnvironment(
+            videoReceiveProvider: runtimeProviders.videoReceive,
+            audioReceiveProvider: runtimeProviders.audioReceive,
+            remoteInputProvider: runtimeProviders.remoteInput,
+            videoProcessorFactory: LiveRecordingVideoProcessorFactory(
+                base: NativeSessionVideoProcessorFactory(
+                    presentationSource: presentationSource
+                ),
+                recorder: videoProcessingRecorder
+            ),
+            audioProcessorFactory: NativeSessionAudioProcessorFactory(),
+            videoPresentationSource: presentationSource
+        )
         let model = AppModel(
             appCatalogManager: AppCatalogManager(
                 appListClient: HTTPAppListClient(
@@ -10628,6 +11004,8 @@ final class AppModelWorkflowTests: XCTestCase {
                 launchClient: launchClient
             ),
             runtimeProviders: runtimeProviders,
+            sessionMediaEnvironment: mediaEnvironment,
+            videoPresentationSource: presentationSource,
             clientIdentityStore: identityStore
         )
         return (
@@ -10635,7 +11013,8 @@ final class AppModelWorkflowTests: XCTestCase {
             launchClient,
             controlProvider,
             mediaRecorder,
-            mediaActivityRecorder
+            mediaActivityRecorder,
+            videoProcessingRecorder
         )
     }
 
