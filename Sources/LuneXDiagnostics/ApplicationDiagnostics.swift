@@ -86,6 +86,78 @@ enum ApplicationDiagnosticAction: String, Hashable, Sendable {
     }
 }
 
+enum AudioProcessingFailureCause: String, Equatable, Hashable, Sendable {
+    case decoderInvalidConfiguration = "audio_decoder_invalid_configuration"
+    case decoderInvalidPayload = "audio_decoder_invalid_payload"
+    case decoderSetupFailed = "audio_decoder_setup_failed"
+    case decoderDecodeFailed = "audio_decoder_decode_failed"
+    case decoderInconsistentPCM = "audio_decoder_inconsistent_pcm"
+    case decoderClosed = "audio_decoder_closed"
+    case jitterInvalidPolicy = "audio_jitter_invalid_policy"
+    case jitterInvalidPayload = "audio_jitter_invalid_payload"
+    case jitterNonMonotonicClock = "audio_jitter_non_monotonic_clock"
+    case jitterSequenceGap = "audio_jitter_sequence_gap"
+    case jitterFinished = "audio_jitter_finished"
+    case pipelineConfiguration = "audio_pipeline_configuration_failed"
+    case pipelineNotRunning = "audio_pipeline_not_running"
+    case pipelineInvalidPCM = "audio_pipeline_invalid_pcm"
+    case pipelineScheduleCapacity = "audio_pipeline_schedule_capacity"
+    case runtimeInvalidPolicy = "audio_runtime_invalid_policy"
+    case runtimeInvalidState = "audio_runtime_invalid_state"
+    case runtimeStopped = "audio_runtime_stopped"
+    case runtimeClock = "audio_runtime_clock_failed"
+    case runtimeSpatialPolicy = "audio_runtime_spatial_policy_failed"
+    case runtimeGraph = "audio_runtime_graph_failed"
+    case runtimeArithmetic = "audio_runtime_arithmetic_failed"
+
+    static func classify(_ error: Error) -> Self? {
+        if let error = error as? OpusDecoderError {
+            switch error {
+            case .invalidConfiguration: return .decoderInvalidConfiguration
+            case .invalidPacketPayload: return .decoderInvalidPayload
+            case .converterCreationFailed, .magicCookieRejected:
+                return .decoderSetupFailed
+            case .decodeFailed: return .decoderDecodeFailed
+            case .inconsistentPCMOutput: return .decoderInconsistentPCM
+            case .closed: return .decoderClosed
+            }
+        }
+        if let error = error as? AudioJitterBufferError {
+            switch error {
+            case .invalidPolicy: return .jitterInvalidPolicy
+            case .invalidPacketPayload: return .jitterInvalidPayload
+            case .nonMonotonicClock: return .jitterNonMonotonicClock
+            case .sequenceGapTooLarge: return .jitterSequenceGap
+            case .finished: return .jitterFinished
+            }
+        }
+        if let error = error as? AudioPipelineError {
+            switch error {
+            case .missingConfiguration, .invalidConfiguration, .invalidGraphIntent,
+                 .invalidSpatialRuntimeSnapshot:
+                return .pipelineConfiguration
+            case .notRunning: return .pipelineNotRunning
+            case .invalidPCMBuffer: return .pipelineInvalidPCM
+            case .scheduleCapacityExceeded: return .pipelineScheduleCapacity
+            }
+        }
+        if let error = error as? AudioRuntimeRecoveryError {
+            switch error {
+            case .invalidPolicy: return .runtimeInvalidPolicy
+            case .invalidState: return .runtimeInvalidState
+            case .stopped: return .runtimeStopped
+            case .nonMonotonicEventTime: return .runtimeClock
+            case .invalidGraphIntent, .staleSpatialPolicyRevision,
+                 .conflictingSpatialPolicyRevision:
+                return .runtimeSpatialPolicy
+            case .graphFailed: return .runtimeGraph
+            case .arithmeticOverflow: return .runtimeArithmetic
+            }
+        }
+        return nil
+    }
+}
+
 struct ApplicationDiagnostic: Hashable, Sendable {
     var category: ApplicationDiagnosticCategory
     var severity: RuntimeDiagnosticSeverity
@@ -829,9 +901,8 @@ enum ApplicationDiagnosticFactory {
             error is MetalFrameDeliveryError {
             return decoderFailure(code: "video_pipeline_failed")
         }
-        if error is OpusDecoderError || error is AudioJitterBufferError ||
-            error is AudioPipelineError || error is AudioRuntimeRecoveryError {
-            return audioFailure(code: "audio_pipeline_failed")
+        if let cause = AudioProcessingFailureCause.classify(error) {
+            return audioFailure(code: cause.rawValue)
         }
         if let error = error as? MoonlightAudioPacketDecryptError {
             let code: String

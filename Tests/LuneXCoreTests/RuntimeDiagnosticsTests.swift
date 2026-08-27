@@ -164,6 +164,58 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testApplicationDiagnosticsClassifyAudioProcessingFailuresWithoutDetails() {
+        let cases: [(Error, AudioProcessingFailureCause)] = [
+            (OpusDecoderError.invalidPacketPayload, .decoderInvalidPayload),
+            (OpusDecoderError.decodeFailed(-50), .decoderDecodeFailed),
+            (OpusDecoderError.inconsistentPCMOutput, .decoderInconsistentPCM),
+            (AudioJitterBufferError.sequenceGapTooLarge(
+                expected: 12,
+                received: 65_000
+            ), .jitterSequenceGap),
+            (AudioPipelineError.notRunning, .pipelineNotRunning),
+            (AudioPipelineError.invalidPCMBuffer, .pipelineInvalidPCM),
+            (AudioPipelineError.scheduleCapacityExceeded, .pipelineScheduleCapacity),
+            (AudioRuntimeRecoveryError.nonMonotonicEventTime, .runtimeClock),
+            (AudioRuntimeRecoveryError.graphFailed(
+                "secret endpoint payload certificate key"
+            ), .runtimeGraph),
+            (AudioRuntimeRecoveryError.arithmeticOverflow, .runtimeArithmetic),
+        ]
+
+        for (error, expectedCause) in cases {
+            XCTAssertEqual(
+                AudioProcessingFailureCause.classify(error),
+                expectedCause
+            )
+            let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
+            XCTAssertEqual(diagnostic.category, .audio)
+            XCTAssertEqual(diagnostic.code, expectedCause.rawValue)
+            XCTAssertEqual(diagnostic.action, .checkAudioOutput)
+            for forbidden in ["-50", "12", "65000", "secret"] {
+                XCTAssertFalse(diagnostic.code.contains(forbidden))
+                XCTAssertFalse(
+                    diagnostic.summary.localizedCaseInsensitiveContains(forbidden)
+                )
+            }
+        }
+
+        let secretGraph = ApplicationDiagnosticFactory.streamFailure(
+            AudioRuntimeRecoveryError.graphFailed(
+                "secret endpoint payload certificate key"
+            )
+        )
+        for forbidden in [
+            "secret", "endpoint", "payload", "certificate", "key",
+        ] {
+            XCTAssertFalse(secretGraph.code.contains(forbidden))
+            XCTAssertFalse(
+                secretGraph.summary.localizedCaseInsensitiveContains(forbidden)
+            )
+        }
+    }
+
+    @MainActor
     func testStaleLifecycleApplicationUsesSafeStableDiagnostic() {
         let diagnostic = ApplicationDiagnosticFactory.streamFailure(
             SessionMediaEnvironmentError.staleLifecycleApplication
