@@ -683,11 +683,19 @@ enum AudioRouteInspector {
 }
 
 actor AudioSessionPipeline {
+    private struct CapacityWaiter {
+        let generation: UInt64
+        let continuation: CheckedContinuation<Void, Error>
+    }
+
     private let engineClient: AudioEngineClient
     private let maximumScheduledBuffers: Int
     private var generation: UInt64 = 0
     private var nextScheduleID: UInt64 = 0
+    private var nextCapacityWaiterID: UInt64 = 0
     private var scheduledFramesByID: [UInt64: Int] = [:]
+    private var capacityWaiters: [UInt64: CapacityWaiter] = [:]
+    private var capacityWaiterOrder: [UInt64] = []
     private(set) var snapshot: AudioPipelineSnapshot
 
     init(
@@ -781,7 +789,7 @@ actor AudioSessionPipeline {
         }
     }
 
-    func schedule(_ buffer: DecodedPCMBuffer) throws -> AudioScheduleReceipt {
+    func schedule(_ buffer: DecodedPCMBuffer) async throws -> AudioScheduleReceipt {
         guard snapshot.stage == .running,
               let configuration = snapshot.configuration else {
             throw AudioPipelineError.notRunning
@@ -795,13 +803,17 @@ actor AudioSessionPipeline {
               buffer.interleavedSamples.count == buffer.frameCount * configuration.channelCount else {
             throw AudioPipelineError.invalidPCMBuffer
         }
-        guard scheduledFramesByID.count < maximumScheduledBuffers else {
-            throw AudioPipelineError.scheduleCapacityExceeded
+        let scheduledGeneration = generation
+        try await waitForScheduleCapacity(generation: scheduledGeneration)
+        try Task.checkCancellation()
+        guard snapshot.stage == .running,
+              generation == scheduledGeneration,
+              snapshot.configuration == configuration else {
+            throw AudioPipelineError.notRunning
         }
 
         let scheduleID = nextScheduleID
         nextScheduleID &+= 1
-        let scheduledGeneration = generation
         scheduledFramesByID[scheduleID] = buffer.frameCount
         do {
             try engineClient.schedule(buffer) { [weak self] in
@@ -814,6 +826,7 @@ actor AudioSessionPipeline {
             }
         } catch {
             scheduledFramesByID.removeValue(forKey: scheduleID)
+            resumeNextCapacityWaiter()
             throw error
         }
         return AudioScheduleReceipt(
@@ -829,6 +842,10 @@ actor AudioSessionPipeline {
 
     func scheduledFrameCount() -> Int {
         scheduledFramesByID.values.reduce(0, +)
+    }
+
+    func waitingScheduleCount() -> Int {
+        capacityWaiters.count
     }
 
     func stop(reason: AudioStopReason, drain: Bool, now: Date = Date()) -> AudioPipelineSnapshot {
@@ -848,12 +865,75 @@ actor AudioSessionPipeline {
 
     private func didConsume(scheduleID: UInt64, generation: UInt64) {
         guard generation == self.generation else { return }
-        scheduledFramesByID.removeValue(forKey: scheduleID)
+        guard scheduledFramesByID.removeValue(forKey: scheduleID) != nil else {
+            return
+        }
+        resumeNextCapacityWaiter()
     }
 
     private func invalidateScheduledBuffers() {
         generation &+= 1
         scheduledFramesByID.removeAll(keepingCapacity: true)
+        let continuations = capacityWaiterOrder.compactMap {
+            capacityWaiters.removeValue(forKey: $0)?.continuation
+        }
+        capacityWaiterOrder.removeAll(keepingCapacity: true)
+        for continuation in continuations {
+            continuation.resume(throwing: AudioPipelineError.notRunning)
+        }
+    }
+
+    private func waitForScheduleCapacity(generation: UInt64) async throws {
+        while scheduledFramesByID.count >= maximumScheduledBuffers {
+            try Task.checkCancellation()
+            guard snapshot.stage == .running,
+                  self.generation == generation else {
+                throw AudioPipelineError.notRunning
+            }
+            let waiterID = nextCapacityWaiterID
+            nextCapacityWaiterID &+= 1
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Void, Error>) in
+                    if Task.isCancelled {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    capacityWaiters[waiterID] = CapacityWaiter(
+                        generation: generation,
+                        continuation: continuation
+                    )
+                    capacityWaiterOrder.append(waiterID)
+                }
+            } onCancel: {
+                Task { await self.cancelCapacityWaiter(waiterID) }
+            }
+        }
+    }
+
+    private func cancelCapacityWaiter(_ waiterID: UInt64) {
+        guard let waiter = capacityWaiters.removeValue(forKey: waiterID) else {
+            return
+        }
+        capacityWaiterOrder.removeAll { $0 == waiterID }
+        waiter.continuation.resume(throwing: CancellationError())
+    }
+
+    private func resumeNextCapacityWaiter() {
+        while !capacityWaiterOrder.isEmpty {
+            let waiterID = capacityWaiterOrder.removeFirst()
+            guard let waiter = capacityWaiters.removeValue(forKey: waiterID) else {
+                continue
+            }
+            if waiter.generation == generation {
+                waiter.continuation.resume()
+            } else {
+                waiter.continuation.resume(
+                    throwing: AudioPipelineError.notRunning
+                )
+            }
+            return
+        }
     }
 
     private func fail(_ error: Error, now: Date) -> AudioPipelineSnapshot {

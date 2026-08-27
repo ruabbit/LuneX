@@ -81,6 +81,11 @@
 
 ### M1 Task 2.3 错误记录
 
+- 2026-08-28：音频backpressure首轮focused证据目录`/private/tmp/LuneX-audio-backpressure-focused.YXYpo4`在测试执行前以exit `65`结束，structured result为`0 tests / 2 errors / 0 warnings`。唯一源码错误为`AudioSessionPipeline.swift:895 Generic parameter 'T' could not be inferred`，根因是`withCheckedThrowingContinuation`的`Void` continuation无法从上下文推断；修复限于显式声明`CheckedContinuation<Void, Error>`，不改变容量等待语义。该失败bundle仅作编译证据，后续从fresh目录重跑focused，不复用失败bundle。
+- 2026-08-28：第二轮focused `/private/tmp/LuneX-audio-backpressure-focused-r2.FrkRDb`已越过产品源码编译，但在测试执行前以exit `65`结束；summary为`0 tests / 0 failed / 0 skipped`，build diagnostics为`5 errors / 0 warnings / 0 analyzer warnings`，其中4个源码错误均是新增`Task` closure通过`makePCM`捕获非Sendable XCTest `self`，另一个为build-cancelled汇总。修复为在当前测试隔离域预先构建`DecodedPCMBuffer`，Task只捕获actor和Sendable value；不改变产品实现，下一轮从fresh目录运行。
+- 2026-08-28：第三轮focused `/private/tmp/LuneX-audio-backpressure-focused-r3.cSHy9c/Focused.xcresult`完整通过`30/30/0/0`，structured build为`succeeded / 0 errors / 0 warnings / 0 analyzer warnings`。外层zsh wrapper在`xcodebuild` 成功后给只读特殊变量`status`赋值而退出；该错误发生在result bundle完整写入之后，不影响Xcode测试证据，不重跑该bundle。后续wrapper使用`exit_code`。
+- 2026-08-28：首轮repository wrapper已确认generator双跑hash稳定，且`openspec validate --all --strict --json`已产生实际`11/11`成功结果，但jq读取器误用不存在的`.results`而非当前`.items`，在后续apply/test/build/privacy断言前退出。该错误仅属证据wrapper schema，无产品、host或runtime副作用；改用`.items`后从头运行完整门禁，不重跑test/build。
+
 - RTSP lifecycle repository gate的OpenSpec汇总jq再次缺少子表达式括号；`.items | length`改变了后续array-constructor的输入，因而在验证命令已成功并保存JSON后报`Cannot index array with string items`。没有重复OpenSpec验证；对已保存对象使用三个独立括号表达式后确认`11/11`。仓库/runtime无副作用。
 - RTSP lifecycle修复首轮warnings-as-errors focused在测试执行前被Swift 6并发检查拒绝：取消测试的`Task`闭包通过实例helper构造request并间接捕获了`XCTestCase self`。production源码无诊断、0 tests执行且未访问Keychain/host/Simulator；改为在Task外构造独立`Sendable RTSPRequest`并从fresh DerivedData完整重跑同组测试。
 - live harness final repository gate已解析focused与normal xcresult以及build diagnostics，随后错误假设当前`openspec validate --all --strict --json`顶层为`.results`，`jq`因实际`.items`结构而在generator前退出；OpenSpec原始输出本身为`11 passed / 0 failed`，仓库/runtime零变化。修正为`.items`后从OpenSpec开始完整重跑剩余gate，不重复测试。
@@ -2349,3 +2354,6 @@
 - **通用构建门：** fresh universal test bundle为`x86_64 arm64`且structured diagnostics全零；macOS Debug/Release及iOS/iPadOS、tvOS、visionOS generic build五份全部`succeeded/0/0/0`。首次只读架构脚本沿用错误产物名`LuneX.app`而在`find`断言退出，构建无失败且未重跑；已枚举实际`LuneX-macOS.app`路径，等待完成双macOS架构、Metal和repository门复核。
 - **repository gate错误记录：** 首轮完整wrapper的分段诊断证明除coverage hygiene外均已通过；过宽全树扫描命中mtime为2026-07-10且被`build/`规则忽略的既有IdentityLifecycle `.profraw`，并非本轮生成。保留既有证据且不删除，最终门只拒绝Git可见未跟踪coverage与仓库根`default.profraw`，复用既有test/build/generator结果。
 - **pre-commit验收：** corrected repository gate输出`FINAL_AUDIO_CAUSE_REPOSITORY_GATE_OK`；精确5文件、三方`0b803c3`基线、stable project、OpenSpec `11/11`与`7/27 next 2.3 pending`、最终test/build/Metal/universal证据、精确opt-in skips、fallback权限及零privacy/remote-cancel/opt-in/process/coverage污染均通过。Task 2.3保持pending，等待人工diff终审、提交推送与新SHA唯一live gate。
+- **exact diagnostic candidate：** `838e5b56543c2e4127e286b652a8b614e218179f`已提交推送并从clean SHA构建fresh arm64 bundle `/private/tmp/LuneX-live-838e5b5.mQT1aK`；本地/origin/remote一致。
+- **唯一live结果：** `838e5b5`仅运行一次双opt-in gate且已消费，不得重跑。Desktop走`/resume`，`launch/resume/cancel=0/1/0`，control到`channels_1`和video metadata；audio真实流为`93 datagram / 62 parser event`，随后1.176秒明确以`audio_pipeline_schedule_capacity`失败。该结果排除本轮decrypt、Opus decode、PCM shape与clock分类，下一修复点为AudioSessionPipeline容量/backpressure及AVAudioPlayerNode completion合同。
+- **live清理与边界：** 四状态文件和Sunshine PID/start/event前后完全一致，Git clean、零remote `/cancel`、零build/test进程；video仅1 datagram/0 event是audio早停截面，不能标记视频回归。Task 2.3仍pending。

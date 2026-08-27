@@ -185,7 +185,9 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(snapshot.lastErrorMessage, "missingConfiguration")
     }
 
-    func testPipelineSchedulesBoundedPCMAndReleasesConsumedBuffers() async throws {
+    func testPipelineBackpressuresAtCapacityAndResumesAfterConsumption()
+        async throws
+    {
         let client = StubAudioEngineClient()
         let pipeline = AudioSessionPipeline(
             engineClient: client,
@@ -207,18 +209,143 @@ final class AudioPipelineTests: XCTestCase {
         let framesBeforeCompletion = await pipeline.scheduledFrameCount()
         XCTAssertEqual(queuedBeforeCompletion, 2)
         XCTAssertEqual(framesBeforeCompletion, 4)
-        await AudioPipelineXCTAssertThrowsErrorAsync(
-            try await pipeline.schedule(makePCM(sequence: 9, timestamp: 720))
-        ) { error in
-            XCTAssertEqual(error as? AudioPipelineError, .scheduleCapacityExceeded)
+        let thirdBuffer = makePCM(sequence: 9, timestamp: 720)
+        let thirdTask = Task {
+            try await pipeline.schedule(thirdBuffer)
         }
+        await waitForWaitingScheduleCount(1, pipeline: pipeline)
+        XCTAssertEqual(
+            client.snapshotCalls().filter { $0.hasPrefix("schedule:") },
+            ["schedule:7", "schedule:8"]
+        )
 
         client.completeScheduledBuffer(at: 0)
-        await waitForScheduledBufferCount(1, pipeline: pipeline)
+        let third = try await thirdTask.value
+        XCTAssertEqual(third.sequenceNumber, 9)
+        await waitForScheduledBufferCount(2, pipeline: pipeline)
         let queuedAfterCompletion = await pipeline.scheduledBufferCount()
         let framesAfterCompletion = await pipeline.scheduledFrameCount()
-        XCTAssertEqual(queuedAfterCompletion, 1)
-        XCTAssertEqual(framesAfterCompletion, 2)
+        let waitingAfterCompletion = await pipeline.waitingScheduleCount()
+        XCTAssertEqual(queuedAfterCompletion, 2)
+        XCTAssertEqual(framesAfterCompletion, 4)
+        XCTAssertEqual(waitingAfterCompletion, 0)
+    }
+
+    func testCancelledCapacityWaitDoesNotScheduleOrConsumeCapacity()
+        async throws
+    {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(
+            engineClient: client,
+            maximumScheduledBuffers: 1
+        )
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
+        _ = try await pipeline.start()
+        _ = try await pipeline.schedule(makePCM(sequence: 1, timestamp: 0))
+        let waitingBuffer = makePCM(sequence: 2, timestamp: 240)
+        let waitingTask = Task {
+            try await pipeline.schedule(waitingBuffer)
+        }
+        await waitForWaitingScheduleCount(1, pipeline: pipeline)
+
+        waitingTask.cancel()
+        await AudioPipelineXCTAssertThrowsErrorAsync(
+            try await waitingTask.value
+        ) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+        await waitForWaitingScheduleCount(0, pipeline: pipeline)
+        let scheduledAfterCancellation = await pipeline.scheduledBufferCount()
+        XCTAssertEqual(scheduledAfterCancellation, 1)
+        XCTAssertEqual(
+            client.snapshotCalls().filter { $0.hasPrefix("schedule:") },
+            ["schedule:1"]
+        )
+        client.completeScheduledBuffer(at: 0)
+        await waitForScheduledBufferCount(0, pipeline: pipeline)
+        _ = try await pipeline.schedule(makePCM(sequence: 3, timestamp: 480))
+    }
+
+    func testStopFailsCapacityWaitAndIgnoresLateCompletion() async throws {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(
+            engineClient: client,
+            maximumScheduledBuffers: 1
+        )
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
+        _ = try await pipeline.start()
+        _ = try await pipeline.schedule(makePCM(sequence: 1, timestamp: 0))
+        let waitingBuffer = makePCM(sequence: 2, timestamp: 240)
+        let waitingTask = Task {
+            try await pipeline.schedule(waitingBuffer)
+        }
+        await waitForWaitingScheduleCount(1, pipeline: pipeline)
+
+        _ = await pipeline.stop(reason: .sessionEnded, drain: false)
+        await AudioPipelineXCTAssertThrowsErrorAsync(
+            try await waitingTask.value
+        ) { error in
+            XCTAssertEqual(error as? AudioPipelineError, .notRunning)
+        }
+        client.completeScheduledBuffer(at: 0)
+        await Task.yield()
+
+        let scheduledAfterStop = await pipeline.scheduledBufferCount()
+        let waitingAfterStop = await pipeline.waitingScheduleCount()
+        XCTAssertEqual(scheduledAfterStop, 0)
+        XCTAssertEqual(waitingAfterStop, 0)
+        XCTAssertEqual(
+            client.snapshotCalls().filter { $0.hasPrefix("schedule:") },
+            ["schedule:1"]
+        )
+    }
+
+    func testReconfigureFailsCapacityWaitAndIsolatesLateCompletion()
+        async throws
+    {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(
+            engineClient: client,
+            maximumScheduledBuffers: 1
+        )
+        let graphIntent = makeAudioGraphIntent(channelCount: 2)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent
+        )
+        _ = try await pipeline.start()
+        _ = try await pipeline.schedule(makePCM(sequence: 1, timestamp: 0))
+        let waitingBuffer = makePCM(sequence: 2, timestamp: 240)
+        let waitingTask = Task {
+            try await pipeline.schedule(waitingBuffer)
+        }
+        await waitForWaitingScheduleCount(1, pipeline: pipeline)
+
+        let configured = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: graphIntent
+        )
+        await AudioPipelineXCTAssertThrowsErrorAsync(
+            try await waitingTask.value
+        ) { error in
+            XCTAssertEqual(error as? AudioPipelineError, .notRunning)
+        }
+        XCTAssertEqual(configured.stage, .configured)
+        _ = try await pipeline.start()
+        _ = try await pipeline.schedule(makePCM(sequence: 3, timestamp: 480))
+
+        client.completeScheduledBuffer(at: 0)
+        await Task.yield()
+        let scheduledAfterLateCompletion = await pipeline.scheduledBufferCount()
+        XCTAssertEqual(scheduledAfterLateCompletion, 1)
+        client.completeScheduledBuffer(at: 1)
+        await waitForScheduledBufferCount(0, pipeline: pipeline)
     }
 
     func testStopClearsQueueAndIgnoresLateCompletion() async throws {
@@ -1118,6 +1245,19 @@ final class AudioPipelineTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Timed out waiting for scheduled audio completion")
+    }
+
+    private func waitForWaitingScheduleCount(
+        _ expected: Int,
+        pipeline: AudioSessionPipeline
+    ) async {
+        for _ in 0..<100 {
+            if await pipeline.waitingScheduleCount() == expected {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("Timed out waiting for audio schedule backpressure")
     }
 }
 
