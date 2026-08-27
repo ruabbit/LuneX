@@ -64,7 +64,8 @@ struct NativeSessionVideoProcessorFactory: SessionVideoProcessorCreating {
     }
 }
 
-actor NativeSessionVideoProcessor: SessionVideoProcessing {
+actor NativeSessionVideoProcessor: SessionVideoProcessing,
+    VideoDecodePipelineSnapshotProviding {
     private let sessionID: UUID
     private let mediaGeneration: UInt64
     private let pipeline: VideoDecodePipeline
@@ -242,6 +243,10 @@ actor NativeSessionVideoProcessor: SessionVideoProcessing {
             return
         }
         needsResumeRecovery = false
+    }
+
+    func videoDecodePipelineSnapshot() async -> VideoDecodePipelineSnapshot {
+        await pipeline.snapshot()
     }
 
     func stop() async {

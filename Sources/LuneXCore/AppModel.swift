@@ -1362,6 +1362,10 @@ final class AppModel: ApplicationInputSink {
         activeStreamSessionID != nil
     }
 
+    var isPlatformStreamLifecycleActive: Bool {
+        hasActiveStreamSession
+    }
+
     func sessionCommandState(
         in workspace: ProductWorkspaceReference
     ) -> ProductSessionCommandState {

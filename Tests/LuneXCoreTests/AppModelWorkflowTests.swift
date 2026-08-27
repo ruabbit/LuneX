@@ -222,7 +222,32 @@ private struct LiveVideoFrameLossCounts: Equatable, Sendable {
     }
 }
 
+private struct LiveVideoDecodePipelineReceipt: Equatable, Sendable {
+    var decoderActive: Bool
+    var isAwaitingIDR: Bool
+    var hasOutstandingIDRRequest: Bool
+    var isStopped: Bool
+    var isLifecyclePaused: Bool
+    var sessionCreationCount: Int
+    var decoderResetCount: Int
+    var formatChangeCount: Int
+    var colorMetadataChangeCount: Int
+    var idrRequestCount: Int
+    var idrRequestFailureCount: Int
+    var droppedAccessUnitCount: Int
+    var decoderDroppedFrameCount: Int
+    var decoderFailureCount: Int
+    var teardownCount: Int
+    var lifecyclePauseCount: Int
+    var lifecycleResumeCount: Int
+
+    var summary: String {
+        "decoderActive=\(decoderActive),awaitingIDR=\(isAwaitingIDR),outstandingIDR=\(hasOutstandingIDRRequest),stopped=\(isStopped),lifecyclePaused=\(isLifecyclePaused),sessions=\(sessionCreationCount),resets=\(decoderResetCount),formatChanges=\(formatChangeCount),colorChanges=\(colorMetadataChangeCount),idrRequests=\(idrRequestCount),idrRequestFailures=\(idrRequestFailureCount),droppedAccessUnits=\(droppedAccessUnitCount),decoderDrops=\(decoderDroppedFrameCount),decoderFailures=\(decoderFailureCount),teardowns=\(teardownCount),lifecyclePauses=\(lifecyclePauseCount),lifecycleResumes=\(lifecycleResumeCount)"
+    }
+}
+
 private struct LiveVideoProcessingReceipt: Equatable, Sendable {
+    var codec: NegotiatedVideoCodec?
     var packetsReceived: Int
     var firstPacketsReceived: Int
     var lastPacketsReceived: Int
@@ -233,9 +258,12 @@ private struct LiveVideoProcessingReceipt: Equatable, Sendable {
     var discardedParityPackets: Int
     var discardedLatePackets: Int
     var submittedFrames: Int
+    var decodePipeline: LiveVideoDecodePipelineReceipt?
 
     var summary: String {
-        "packets=\(packetsReceived),first=\(firstPacketsReceived),last=\(lastPacketsReceived),transportLoss=\(transportLossEvents),accessUnits=\(accessUnitsAssembled),frameLosses=[\(frameLosses.summary)],discardedDuplicate=\(discardedDuplicates),discardedParity=\(discardedParityPackets),discardedLate=\(discardedLatePackets),submitted=\(submittedFrames)"
+        let codecSummary = codec?.rawValue ?? "none"
+        let pipelineSummary = decodePipeline?.summary ?? "none"
+        return "codec=\(codecSummary),packets=\(packetsReceived),first=\(firstPacketsReceived),last=\(lastPacketsReceived),transportLoss=\(transportLossEvents),accessUnits=\(accessUnitsAssembled),frameLosses=[\(frameLosses.summary)],discardedDuplicate=\(discardedDuplicates),discardedParity=\(discardedParityPackets),discardedLate=\(discardedLatePackets),submitted=\(submittedFrames),decode=[\(pipelineSummary)]"
     }
 }
 
@@ -252,6 +280,14 @@ private final class LiveVideoProcessingRecorder: @unchecked Sendable {
     private var discardedParityPackets = 0
     private var discardedLatePackets = 0
     private var submittedFrames = 0
+    private var codec: NegotiatedVideoCodec?
+    private var decodePipeline: LiveVideoDecodePipelineReceipt?
+
+    func record(codec: NegotiatedVideoCodec) {
+        lock.lock()
+        self.codec = codec
+        lock.unlock()
+    }
 
     func record(_ event: VideoReceiveEvent) {
         lock.lock()
@@ -331,10 +367,43 @@ private final class LiveVideoProcessingRecorder: @unchecked Sendable {
         lock.unlock()
     }
 
+    func record(_ snapshot: VideoDecodePipelineSnapshot) {
+        lock.lock()
+        decodePipeline = LiveVideoDecodePipelineReceipt(
+            decoderActive: snapshot.activeDecoderGeneration != nil,
+            isAwaitingIDR: snapshot.isAwaitingIDR,
+            hasOutstandingIDRRequest: snapshot.hasOutstandingIDRRequest,
+            isStopped: snapshot.isStopped,
+            isLifecyclePaused: snapshot.isLifecyclePaused,
+            sessionCreationCount: Self.bounded(snapshot.sessionCreationCount),
+            decoderResetCount: Self.bounded(snapshot.decoderResetCount),
+            formatChangeCount: Self.bounded(snapshot.formatChangeCount),
+            colorMetadataChangeCount: Self.bounded(
+                snapshot.colorMetadataChangeCount
+            ),
+            idrRequestCount: Self.bounded(snapshot.idrRequestCount),
+            idrRequestFailureCount: Self.bounded(
+                snapshot.idrRequestFailureCount
+            ),
+            droppedAccessUnitCount: Self.bounded(
+                snapshot.droppedAccessUnitCount
+            ),
+            decoderDroppedFrameCount: Self.bounded(
+                snapshot.decoderDroppedFrameCount
+            ),
+            decoderFailureCount: Self.bounded(snapshot.decoderFailureCount),
+            teardownCount: Self.bounded(snapshot.teardownCount),
+            lifecyclePauseCount: Self.bounded(snapshot.lifecyclePauseCount),
+            lifecycleResumeCount: Self.bounded(snapshot.lifecycleResumeCount)
+        )
+        lock.unlock()
+    }
+
     func receipt() -> LiveVideoProcessingReceipt {
         lock.lock()
         defer { lock.unlock() }
         return LiveVideoProcessingReceipt(
+            codec: codec,
             packetsReceived: packetsReceived,
             firstPacketsReceived: firstPacketsReceived,
             lastPacketsReceived: lastPacketsReceived,
@@ -344,12 +413,17 @@ private final class LiveVideoProcessingRecorder: @unchecked Sendable {
             discardedDuplicates: discardedDuplicates,
             discardedParityPackets: discardedParityPackets,
             discardedLatePackets: discardedLatePackets,
-            submittedFrames: submittedFrames
+            submittedFrames: submittedFrames,
+            decodePipeline: decodePipeline
         )
     }
 
     private static func increment(_ count: Int) -> Int {
         min(count + 1, maximumCount)
+    }
+
+    private static func bounded(_ count: UInt64) -> Int {
+        Int(min(count, UInt64(maximumCount)))
     }
 }
 
@@ -393,6 +467,7 @@ private actor LiveRecordingVideoProcessor: SessionVideoProcessing {
     ) throws {
         self.base = base
         self.recorder = recorder
+        recorder.record(codec: configuration.codec)
         shadowAssembler = try NormalizedVideoAccessUnitAssembler(
             codec: configuration.codec
         )
@@ -400,27 +475,34 @@ private actor LiveRecordingVideoProcessor: SessionVideoProcessing {
 
     func consume(_ event: VideoReceiveEvent) async throws -> Bool {
         recorder.record(event)
+        let assemblyEvents: [VideoAccessUnitAssemblyEvent]
         switch event {
         case let .packet(packet):
-            recorder.record(shadowAssembler.ingest(packet))
+            assemblyEvents = shadowAssembler.ingest(packet)
         case .packetLoss:
-            break
+            assemblyEvents = []
         case .closed:
-            recorder.record(shadowAssembler.finish())
+            assemblyEvents = shadowAssembler.finish()
         }
+        recorder.record(assemblyEvents)
         let submitted = try await base.consume(event)
         if submitted {
             recorder.recordSubmittedFrame()
+        }
+        if submitted || !assemblyEvents.isEmpty {
+            await recordDecodePipelineSnapshot()
         }
         return submitted
     }
 
     func updateColorMetadata(_ metadata: VideoColorMetadata) async throws {
         try await base.updateColorMetadata(metadata)
+        await recordDecodePipelineSnapshot()
     }
 
     func applyLifecycle(_ application: SessionLifecycleApplication) async throws {
         try await base.applyLifecycle(application)
+        await recordDecodePipelineSnapshot()
     }
 
     func applyMobileVideo(
@@ -433,9 +515,17 @@ private actor LiveRecordingVideoProcessor: SessionVideoProcessing {
         shadowAssembler.reset()
         await base.stop()
     }
+
+    private func recordDecodePipelineSnapshot() async {
+        guard let provider = base as? any VideoDecodePipelineSnapshotProviding else {
+            return
+        }
+        recorder.record(await provider.videoDecodePipelineSnapshot())
+    }
 }
 
-private actor LiveVideoProcessingSpy: SessionVideoProcessing {
+private actor LiveVideoProcessingSpy: SessionVideoProcessing,
+    VideoDecodePipelineSnapshotProviding {
     private let submissionResult: Bool
     private var events: [VideoReceiveEvent] = []
     private var stopCount = 0
@@ -465,6 +555,28 @@ private actor LiveVideoProcessingSpy: SessionVideoProcessing {
 
     func stop() async {
         stopCount += 1
+    }
+
+    func videoDecodePipelineSnapshot() -> VideoDecodePipelineSnapshot {
+        VideoDecodePipelineSnapshot(
+            activeDecoderGeneration: 3,
+            isAwaitingIDR: false,
+            hasOutstandingIDRRequest: false,
+            isStopped: false,
+            isLifecyclePaused: false,
+            sessionCreationCount: 1,
+            decoderResetCount: 0,
+            formatChangeCount: 0,
+            colorMetadataChangeCount: 0,
+            idrRequestCount: 1,
+            idrRequestFailureCount: 0,
+            droppedAccessUnitCount: 0,
+            decoderDroppedFrameCount: 0,
+            decoderFailureCount: 0,
+            teardownCount: 0,
+            lifecyclePauseCount: 0,
+            lifecycleResumeCount: 0
+        )
     }
 
     func receipt() -> (events: [VideoReceiveEvent], stopCount: Int) {
@@ -1215,6 +1327,25 @@ final class AppModelWorkflowTests: XCTestCase {
             .packetDiscarded(.lateFrame),
         ])
         recorder.recordSubmittedFrame()
+        recorder.record(VideoDecodePipelineSnapshot(
+            activeDecoderGeneration: nil,
+            isAwaitingIDR: true,
+            hasOutstandingIDRRequest: true,
+            isStopped: false,
+            isLifecyclePaused: false,
+            sessionCreationCount: 0,
+            decoderResetCount: 0,
+            formatChangeCount: 0,
+            colorMetadataChangeCount: 0,
+            idrRequestCount: 1,
+            idrRequestFailureCount: 0,
+            droppedAccessUnitCount: 1,
+            decoderDroppedFrameCount: 0,
+            decoderFailureCount: 0,
+            teardownCount: 0,
+            lifecyclePauseCount: 0,
+            lifecycleResumeCount: 0
+        ))
 
         let receipt = recorder.receipt()
         XCTAssertEqual(receipt.packetsReceived, 1)
@@ -1227,6 +1358,12 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(receipt.discardedParityPackets, 1)
         XCTAssertEqual(receipt.discardedLatePackets, 1)
         XCTAssertEqual(receipt.submittedFrames, 1)
+        XCTAssertTrue(receipt.decodePipeline?.isAwaitingIDR == true)
+        XCTAssertTrue(
+            receipt.decodePipeline?.hasOutstandingIDRRequest == true
+        )
+        XCTAssertEqual(receipt.decodePipeline?.idrRequestCount, 1)
+        XCTAssertEqual(receipt.decodePipeline?.droppedAccessUnitCount, 1)
         XCTAssertFalse(receipt.summary.contains("987654"))
         XCTAssertFalse(receipt.summary.contains("456789"))
         XCTAssertFalse(receipt.summary.contains("123456"))
@@ -1268,6 +1405,10 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(processingReceipt.packetsReceived, 1)
         XCTAssertEqual(processingReceipt.accessUnitsAssembled, 1)
         XCTAssertEqual(processingReceipt.submittedFrames, 1)
+        XCTAssertEqual(processingReceipt.codec, .hevc)
+        XCTAssertTrue(processingReceipt.decodePipeline?.decoderActive == true)
+        XCTAssertEqual(processingReceipt.decodePipeline?.sessionCreationCount, 1)
+        XCTAssertEqual(processingReceipt.decodePipeline?.idrRequestCount, 1)
         let baseReceipt = await base.receipt()
         XCTAssertEqual(baseReceipt.events, [event])
         XCTAssertEqual(baseReceipt.stopCount, 1)
@@ -1360,6 +1501,18 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(matchingApps.count, 1)
         guard scope == .desktopSession else { return }
         model.select(app: desktop)
+
+        let lifecycle = makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(
+                width: model.settings.stream.width,
+                height: model.settings.stream.height
+            )
+        )
+        XCTAssertEqual(lifecycle.renderPolicy, .active)
+        model.applyPlatformLifecycle(lifecycle)
 
         let framesBeforeLaunch = model.videoPresentationSource
             .snapshot().publishedFrameCount
@@ -1829,6 +1982,8 @@ final class AppModelWorkflowTests: XCTestCase {
 
         let launchTask = Task { await model.launchSelectedApp() }
         let record = try await waitForSessionStart(provider)
+        XCTAssertTrue(model.isPlatformStreamLifecycleActive)
+        XCTAssertFalse(model.session.isStreaming)
         driveSessionToStreaming(provider, record: record)
         await waitUntil { mediaEnvironment.currentLifecycleApplications().count == 1 }
 
@@ -2803,6 +2958,7 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(mediaSnapshot.resourcePhase)
         XCTAssertEqual(mediaSnapshot.activeResourceCount, 0)
         XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertFalse(model.isPlatformStreamLifecycleActive)
         XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
         XCTAssertNil(model.macSessionInputSnapshot().generation)
         XCTAssertEqual(model.renderState.policy, .idle)

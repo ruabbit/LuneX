@@ -623,3 +623,46 @@ structured builds report zero errors, warnings, and analyzer warnings. No live
 Sunshine, real-Keychain, or Simulator operation occurred. Task 2.3 remains
 pending, and no new live attempt is authorized until this change is committed
 and pushed as a new exact SHA.
+
+## Exact-SHA Pre-Decode Lifecycle Receipt
+
+Exact pushed SHA `80055846be96b3f0ea7ddacf6a0cab5d6dbf52b7` consumed its
+only double-opt-in live gate and must not be rerun. The session selected
+`/resume` for the matching `Desktop` application and recorded
+`launch=0`, `resume=1`, and `cancel=0`. Audio reached the running stage with
+`13494` datagrams and `8996` parser events. Video received `309380` datagrams
+and produced `251588` parser events; the bounded shadow assembler reconstructed
+`4628` access units with every finite loss and discard count at zero, while
+the production path submitted zero frames and published zero frames.
+
+Coverage from the exact live executable and its retained profraw proves that
+`NativeSessionVideoProcessor.consume()` ran for the production events while
+`VideoDecodePipeline.consume()` and `MoonlightControlChannel.requestIDR()` were
+never entered. The production processor had received an inactive lifecycle,
+set `isDrainingTransport`, and returned before decode. The actual macOS UI
+created this cycle by waiting for `session.isStreaming` before marking the
+platform stream active, even though `session.isStreaming` itself requires
+decoded video readiness.
+
+The product lifecycle is now active while an AppModel stream session owns the
+current media generation, rather than only after the first decoded frame.
+Session stop and teardown still clear that ownership. Occlusion, minimize,
+drawable loss, and focus continue to resolve through the existing production
+window lifecycle policy and can still pause or reject rendering as designed.
+
+The direct live XCTest has no AppKit window. It therefore installs an explicit
+test-owned active, visible, focused, nonzero-drawable lifecycle before launch
+through the same production resolver. This is a harness prerequisite, not
+evidence that a real `NSWindow` correctly handles occlusion, minimization,
+focus changes, resize, backing-scale changes, screen changes, or drawable loss.
+Those rows remain separate AppKit and physical-hardware acceptance work.
+
+The live receipt also exposes only the negotiated codec, finite decode-state
+booleans, and saturated session, reset, format, color, IDR, drop, failure,
+teardown, pause, and resume counts. It excludes decoder-generation values,
+frame and sequence identifiers, RTP timestamps, OSStatus values, endpoints,
+payloads, identity material, and arbitrary error text. Fresh focused evidence
+at `/private/tmp/LuneX-lifecycle-decode-focused.t0Vl6g/Focused.xcresult` passed
+`3/3` with zero structured errors, warnings, or analyzer warnings. This remains
+deterministic evidence only; Task 2.3 stays pending until the full live matrix
+passes on a new exact pushed SHA.

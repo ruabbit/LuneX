@@ -47,8 +47,11 @@ struct RootView: View {
     private var platformRoot: some View {
         #if os(macOS)
         navigationRoot
-            .onChange(of: appModel.session.isStreaming, initial: true) { _, isStreaming in
-                platformLifecycle.setStreamActive(isStreaming)
+            .onChange(
+                of: appModel.isPlatformStreamLifecycleActive,
+                initial: true
+            ) { _, isActive in
+                platformLifecycle.setStreamActive(isActive)
                 appModel.applyPlatformLifecycle(platformLifecycle)
             }
             .onChange(of: platformLifecycle.revision, initial: true) { _, _ in

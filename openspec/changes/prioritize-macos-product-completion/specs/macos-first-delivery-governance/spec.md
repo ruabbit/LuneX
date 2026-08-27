@@ -51,9 +51,10 @@ The project SHALL classify every completion claim as deterministic implementatio
 - **WHEN** an exact-SHA live session keeps control ready but video or audio readiness does not arrive before the bounded acceptance deadline
 - **THEN** a test-only forwarding wrapper around the production datagram channel records only the channel kind, negotiated UDP port, custom-versus-legacy ping selection, and saturated counts for successful connections, ping sends, received datagrams, and parser-produced events
 - **AND** when parser-produced video events remain active without a published frame, a test-only forwarding wrapper around the real production video processor runs the same bounded normalized assembler in shadow while forwarding every original event unchanged to the real processor
-- **AND** the video-processing receipt records only saturated packet, first-packet, last-packet, transport-loss, assembled-access-unit, finite frame-loss/discard-reason, and successful production-submission counts
+- **AND** when the direct XCTest harness has no AppKit window, it applies an explicit test-owned active, visible, focused, nonzero-drawable lifecycle state through the same production resolver before launch, without weakening product occlusion, minimize, drawable-loss, or focus behavior
+- **AND** the video-processing receipt records only the finite negotiated codec, saturated packet, first-packet, last-packet, transport-loss, assembled-access-unit, finite frame-loss/discard-reason, and successful production-submission counts plus the latest production decode-pipeline booleans and saturated session/reset/format/color/IDR/drop/failure/teardown/pause/resume counts
 - **AND** the receipt captures the AppModel phase, published-frame count, and finite audio runtime stage before local cleanup changes observable state
-- **AND** the receipt does not store host addresses, ping or media payloads, frame indexes, sequence numbers, keys, credentials, certificates, identity material, or arbitrary error descriptions
+- **AND** the receipt does not store host addresses, ping or media payloads, frame indexes, decoder-generation values, sequence numbers, RTP timestamps, keys, credentials, certificates, identity material, OSStatus values, or arbitrary error descriptions
 - **AND** this diagnostic receipt does not by itself satisfy sustained decoded video, audible synchronized audio, physical input feedback, reconnect, remote termination, repeated stop, or clean-teardown acceptance
 
 ### Requirement: macOS completion gate

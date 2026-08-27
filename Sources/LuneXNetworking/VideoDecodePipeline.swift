@@ -77,6 +77,10 @@ struct VideoDecodePipelineSnapshot: Equatable, Sendable {
     var lifecycleResumeCount: UInt64
 }
 
+protocol VideoDecodePipelineSnapshotProviding: Sendable {
+    func videoDecodePipelineSnapshot() async -> VideoDecodePipelineSnapshot
+}
+
 actor VideoDecodePipeline {
     typealias DecoderEventSink = @Sendable (VideoDecoderEvent) -> Void
 
