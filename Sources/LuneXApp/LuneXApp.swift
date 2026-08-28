@@ -18,8 +18,23 @@ struct LuneXApp: App {
             ProductWorkspaceSceneRoot(sceneIdentity: sceneIdentity)
                 .environment(appModel)
         }
-        .defaultSize(width: 1280, height: 800)
-        .windowResizability(.contentSize)
+        .defaultSize(
+            width: CGFloat(ProductWorkspaceWindowSizingPolicy.macOSDefaultSize.width),
+            height: CGFloat(ProductWorkspaceWindowSizingPolicy.macOSDefaultSize.height)
+        )
+        .windowResizability(.contentMinSize)
+        Settings {
+            MacOSSettingsView()
+                .environment(appModel)
+        }
+        Window("Diagnostics", id: "diagnostics") {
+            MacOSDiagnosticsWindow()
+                .environment(appModel)
+        }
+        .defaultSize(width: 760, height: 620)
+        .commands {
+            MacOSAppCommands(appModel: appModel)
+        }
         #elseif os(iOS)
         WindowGroup(
             id: "workspace",
@@ -61,6 +76,12 @@ private struct ProductWorkspaceSceneRoot: View {
                 ProgressView()
             }
         }
+        #if os(macOS)
+        .frame(
+            minWidth: CGFloat(ProductWorkspaceWindowSizingPolicy.macOSMinimumSize.width),
+            minHeight: CGFloat(ProductWorkspaceWindowSizingPolicy.macOSMinimumSize.height)
+        )
+        #endif
         .onAppear(perform: connect)
         .onDisappear(perform: disconnect)
     }

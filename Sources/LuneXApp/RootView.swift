@@ -12,6 +12,9 @@ struct RootView: View {
         platformRoot
             .task(id: workspace) {
                 await appModel.loadInitialState(in: workspace)
+                #if os(macOS)
+                appModel.startHostMonitoring()
+                #endif
             }
             .confirmationDialog(
                 "Disconnect Stream?",
@@ -46,7 +49,11 @@ struct RootView: View {
     @ViewBuilder
     private var platformRoot: some View {
         #if os(macOS)
-        navigationRoot
+        MacOSProductShell(
+            workspace: workspace,
+            platformLifecycle: platformLifecycle,
+            onAddHost: presentAddHost
+        )
             .onChange(
                 of: appModel.isPlatformStreamLifecycleActive,
                 initial: true
@@ -1466,7 +1473,7 @@ private struct StreamLaunchPanel: View {
     }
 }
 
-private struct StreamWorkspaceView: View {
+struct StreamWorkspaceView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -2296,7 +2303,7 @@ private struct VirtualControllerOverlay: View {
     }
 }
 
-private struct DiagnosticsView: View {
+struct DiagnosticsView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -3153,7 +3160,7 @@ private struct NumberSettingRow: View {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func productActionTarget() -> some View {
         #if os(iOS)

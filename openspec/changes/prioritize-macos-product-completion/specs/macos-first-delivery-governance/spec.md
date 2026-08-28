@@ -171,6 +171,22 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 ### Requirement: native macOS acceptance gate
 The macOS candidate SHALL pass native window, display, input, HDR/EDR, audio, product workflow, diagnostics, accessibility, packaging, and quality acceptance before freeze.
 
+#### Scenario: Library reflects the primary user task
+- **WHEN** no stream session owns the macOS workspace
+- **THEN** the product presents one Library workbench that prioritizes current host availability, host selection, the selected host's application catalog, pairing only when required, and direct launch
+- **AND** Stream, Diagnostics, and Settings SHALL NOT occupy equal permanent sidebar destinations
+- **AND** an active or recoverable session MAY temporarily own the full content surface while stop or successful teardown returns the user to Library
+
+#### Scenario: Host and catalog state stays current without manual refresh
+- **WHEN** a saved or Bonjour-discovered host changes availability while the Library window is alive
+- **THEN** LuneX automatically reconciles the host as checking, online, or offline within a bounded polling/discovery interval and updates the selected paired host's catalog without requiring a normal-use refresh action
+- **AND** green availability treatment means reachable, pairing/trust is shown separately, cached offline apps do not appear launch-ready, and explicit retry is reserved for an actual failed operation
+
+#### Scenario: Low-frequency support surfaces remain bounded
+- **WHEN** the user requests Settings or Diagnostics on macOS
+- **THEN** Settings opens through the native application settings affordance with bounded preference groups and persistent changes, while Diagnostics opens on demand with current runtime state and privacy-safe export
+- **AND** inactive runtime telemetry, mobile-only continuity state, and unrelated preferences do not create a sparse or unbounded macOS settings layout
+
 #### Scenario: Window and display lifecycle acceptance
 - **WHEN** the stream window is occluded, minimized, unfocused, resized, made full screen, or moved across representative displays
 - **THEN** rendering and input ownership follow actual visibility/focus, drawable and pointer transforms match the current surface, cursor ownership remains balanced, and the stream resumes without stale presentation

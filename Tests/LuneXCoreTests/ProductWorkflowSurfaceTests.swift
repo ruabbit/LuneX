@@ -1,6 +1,104 @@
 import XCTest
 
 final class ProductWorkflowSurfaceTests: XCTestCase {
+    func testMacOSAutomaticHostSelectionPrefersLaunchReadyHost() {
+        let offlinePaired = MoonlightHost(
+            name: "A Offline",
+            address: "offline.local",
+            pairingState: .paired,
+            reachability: .offline
+        )
+        let onlineUnpaired = MoonlightHost(
+            name: "B Online Unpaired",
+            address: "unpaired.local",
+            pairingState: .unpaired,
+            reachability: .online
+        )
+        let checkingPaired = MoonlightHost(
+            name: "C Checking",
+            address: "checking.local",
+            pairingState: .paired,
+            reachability: .unknown
+        )
+        let onlinePaired = MoonlightHost(
+            name: "D Online Paired",
+            address: "online.local",
+            pairingState: .paired,
+            reachability: .online
+        )
+
+        XCTAssertEqual(
+            ProductMacOSHostSelectionPolicy.orderedHostIDs(from: [
+                offlinePaired,
+                onlineUnpaired,
+                checkingPaired,
+                onlinePaired
+            ]),
+            [
+                onlinePaired.id,
+                onlineUnpaired.id,
+                checkingPaired.id,
+                offlinePaired.id
+            ]
+        )
+    }
+
+    func testMacOSAutomaticCatalogRefreshWaitsForCurrentOnlinePairedOwner() {
+        let host = MoonlightHost(
+            name: "Online Paired",
+            address: "online.local",
+            pairingState: .paired,
+            reachability: .online
+        )
+        let owner = ProductCatalogOwner(
+            workspace: workspace,
+            hostID: host.id,
+            hostSelectionGeneration: ProductHostSelectionGeneration()
+        )
+
+        XCTAssertEqual(
+            ProductMacOSAutomaticCatalogRefreshPolicy.taskID(
+                selectedHost: host,
+                catalogOwner: owner
+            ),
+            host.id
+        )
+        XCTAssertNil(ProductMacOSAutomaticCatalogRefreshPolicy.taskID(
+            selectedHost: host,
+            catalogOwner: nil
+        ))
+
+        var offline = host
+        offline.reachability = .offline
+        XCTAssertNil(ProductMacOSAutomaticCatalogRefreshPolicy.taskID(
+            selectedHost: offline,
+            catalogOwner: owner
+        ))
+
+        var unpaired = host
+        unpaired.pairingState = .unpaired
+        XCTAssertNil(ProductMacOSAutomaticCatalogRefreshPolicy.taskID(
+            selectedHost: unpaired,
+            catalogOwner: owner
+        ))
+
+        let otherHost = MoonlightHost(
+            name: "Other",
+            address: "other.local",
+            pairingState: .paired,
+            reachability: .online
+        )
+        let staleOwner = ProductCatalogOwner(
+            workspace: workspace,
+            hostID: otherHost.id,
+            hostSelectionGeneration: ProductHostSelectionGeneration()
+        )
+        XCTAssertNil(ProductMacOSAutomaticCatalogRefreshPolicy.taskID(
+            selectedHost: host,
+            catalogOwner: staleOwner
+        ))
+    }
+
     func testStreamWorkspaceLayoutUsesCompactForNarrowOrExpandedText() {
         XCTAssertEqual(
             ProductStreamWorkspaceLayout(
@@ -103,6 +201,88 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
                 .compact
             )
         }
+    }
+
+    func testMacOSWorkspaceContentModeFollowsHostTrustAndSessionOwnership() {
+        let unpaired = makeHost(pairingState: .unpaired)
+        let paired = makeHost(pairingState: .paired)
+
+        XCTAssertEqual(
+            ProductMacOSWorkspaceContentModeResolver.resolve(
+                selectedHost: nil,
+                ownsStreamPresentation: false
+            ),
+            .firstUse
+        )
+        XCTAssertEqual(
+            ProductMacOSWorkspaceContentModeResolver.resolve(
+                selectedHost: unpaired,
+                ownsStreamPresentation: false
+            ),
+            .pairing(hostID: unpaired.id)
+        )
+        XCTAssertEqual(
+            ProductMacOSWorkspaceContentModeResolver.resolve(
+                selectedHost: paired,
+                ownsStreamPresentation: false
+            ),
+            .catalog(hostID: paired.id)
+        )
+        XCTAssertEqual(
+            ProductMacOSWorkspaceContentModeResolver.resolve(
+                selectedHost: paired,
+                ownsStreamPresentation: true
+            ),
+            .stream
+        )
+        XCTAssertEqual(
+            ProductMacOSWorkspaceContentModeResolver.resolve(
+                selectedHost: nil,
+                ownsStreamPresentation: true
+            ),
+            .stream
+        )
+    }
+
+    func testMacOSStreamSettingsPreserveNativeAndCustomSelections() {
+        let namedNative = PixelSize(width: 2_560, height: 1_440)
+        let custom = PixelSize(width: 3_200, height: 1_800)
+
+        let namedChoices = ProductMacOSStreamSettingsOptions.resolutionChoices(
+            nativeDisplaySize: namedNative,
+            stored: namedNative
+        )
+        XCTAssertTrue(namedChoices.contains(.preset(namedNative)))
+        XCTAssertTrue(namedChoices.contains(.native(namedNative)))
+        XCTAssertEqual(
+            ProductMacOSStreamSettingsOptions.selectedResolutionChoice(
+                nativeDisplaySize: namedNative,
+                stored: namedNative
+            ),
+            .native(namedNative)
+        )
+
+        let customChoices = ProductMacOSStreamSettingsOptions.resolutionChoices(
+            nativeDisplaySize: namedNative,
+            stored: custom
+        )
+        XCTAssertTrue(customChoices.contains(.custom(custom)))
+        let customSelection =
+            ProductMacOSStreamSettingsOptions.selectedResolutionChoice(
+                nativeDisplaySize: namedNative,
+                stored: custom
+            )
+        XCTAssertEqual(customSelection, .custom(custom))
+        XCTAssertEqual(customSelection.size, custom)
+
+        XCTAssertEqual(
+            ProductMacOSStreamSettingsOptions.frameRates(stored: 75),
+            [30, 60, 75, 90, 120, 144, 240]
+        )
+        XCTAssertEqual(
+            ProductMacOSStreamSettingsOptions.frameRates(stored: 120),
+            [30, 60, 90, 120, 144, 240]
+        )
     }
 
     func testInteractionAccessibilityPolicyUsesNativeTouchAndMotionBounds() {
@@ -1055,33 +1235,77 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         }
     }
 
-    func testRootViewConsumesSurfaceContractsAndNativeAppButtons() throws {
+    func testMacOSRootUsesHostCatalogShellAndNativeLowFrequencySurfaces() throws {
         let source = try String(contentsOf: rootViewURL, encoding: .utf8)
+        let shell = try String(
+            contentsOf: appViewURL("MacOSProductShell.swift"),
+            encoding: .utf8
+        )
+        let sidebar = try String(
+            contentsOf: appViewURL("MacOSHostSidebar.swift"),
+            encoding: .utf8
+        )
+        let catalog = try String(
+            contentsOf: appViewURL("MacOSCatalogView.swift"),
+            encoding: .utf8
+        )
+        let pairing = try String(
+            contentsOf: appViewURL("MacOSPairingView.swift"),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: appViewURL("MacOSSettingsView.swift"),
+            encoding: .utf8
+        )
+        let diagnostics = try String(
+            contentsOf: appViewURL("MacOSDiagnosticsWindow.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(contentsOf: appSourceURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("ProductHostLibrarySurface("))
-        XCTAssertTrue(source.contains("ProductPairingSurface("))
-        XCTAssertTrue(source.contains("ProductAppCatalogSurface("))
-        XCTAssertTrue(source.contains("retryHostLibraryLoad(in: workspace)"))
-        XCTAssertTrue(source.contains("retryAppCatalog(in: workspace)"))
-        XCTAssertTrue(source.contains("Pairing complete"))
-        XCTAssertTrue(source.contains("Pairing cancelled"))
-        XCTAssertTrue(source.contains("streamProductIssue(in: workspace)"))
-        XCTAssertTrue(source.contains("performProductAction(action)"))
-        XCTAssertTrue(source.contains("canPerformProductAction(action)"))
+        XCTAssertTrue(source.contains("MacOSProductShell("))
         XCTAssertTrue(source.contains(".task(id: workspace)"))
         XCTAssertTrue(source.contains("loadInitialState(in: workspace)"))
-        XCTAssertTrue(source.contains("navigationSelectionBinding"))
-        XCTAssertTrue(source.contains("workspaceSheet(in: workspace) == .addHost"))
-        XCTAssertTrue(source.contains("LibraryDashboardView(\n                    workspace: workspace"))
-        XCTAssertTrue(source.contains("AppCatalogPanel(workspace: workspace)"))
-        XCTAssertTrue(source.contains("PairingPanel(workspace: workspace)"))
-        XCTAssertTrue(source.contains("StreamLaunchPanel(workspace: workspace)"))
-        XCTAssertTrue(source.contains("selectedHost(in: workspace)"))
-        XCTAssertFalse(source.contains("streamLaunchUI.errorMessage"))
-        XCTAssertFalse(source.contains("streamLaunchUI.actionMessage"))
-        XCTAssertFalse(source.contains("appModel.primaryWorkspaceReference"))
-        XCTAssertTrue(source.contains("Button {\n                    appModel.select(app: app, in: workspace)"))
-        XCTAssertFalse(source.contains(".onTapGesture"))
+        XCTAssertTrue(source.contains("startHostMonitoring()"))
+        XCTAssertTrue(shell.contains("NavigationSplitView"))
+        XCTAssertTrue(shell.contains("MacOSHostSidebar("))
+        XCTAssertTrue(shell.contains("MacOSPairingView(workspace: workspace)"))
+        XCTAssertTrue(shell.contains("MacOSCatalogView(workspace: workspace)"))
+        XCTAssertTrue(shell.contains("StreamWorkspaceView("))
+        XCTAssertFalse(shell.contains("SidebarNavigationList"))
+        XCTAssertFalse(shell.contains("Disconnect"))
+
+        XCTAssertTrue(sidebar.contains("List(selection: selectedHostID)"))
+        XCTAssertTrue(sidebar.contains(".contextMenu"))
+        XCTAssertTrue(sidebar.contains("ProgressView()"))
+        XCTAssertTrue(sidebar.contains(".foregroundStyle(.green)"))
+        XCTAssertTrue(sidebar.contains("Image(systemName: \"lock.fill\")"))
+        XCTAssertFalse(sidebar.contains("Text(\"Unknown\")"))
+        XCTAssertFalse(sidebar.contains("Text(\"Paired\")"))
+
+        XCTAssertTrue(catalog.contains("ProductAppCatalogSurface("))
+        XCTAssertTrue(catalog.contains("ProductMacOSAutomaticCatalogRefreshPolicy.taskID("))
+        XCTAssertTrue(catalog.contains("refreshAppsForSelectedHost(in: workspace)"))
+        XCTAssertTrue(catalog.contains("TapGesture(count: 2)"))
+        XCTAssertTrue(catalog.contains(".onKeyPress(.return)"))
+        XCTAssertTrue(catalog.contains("launchSelectedApp(in: workspace)"))
+        XCTAssertFalse(catalog.contains("StreamLaunchPanel"))
+        XCTAssertFalse(catalog.contains("Button(\"Refresh"))
+
+        XCTAssertTrue(pairing.contains("ProductPairingSurface("))
+        XCTAssertFalse(pairing.contains("Pairing was cancelled"))
+        XCTAssertFalse(pairing.contains("Pair Again"))
+        XCTAssertFalse(pairing.contains(".focusable()"))
+
+        XCTAssertTrue(appSource.contains("Settings {"))
+        XCTAssertTrue(appSource.contains("Window(\"Diagnostics\", id: \"diagnostics\")"))
+        XCTAssertTrue(settings.contains(".formStyle(.grouped)"))
+        XCTAssertTrue(settings.contains("await appModel.saveSettings()"))
+        XCTAssertFalse(settings.contains("Save Settings"))
+        XCTAssertFalse(settings.contains("Picture in Picture"))
+        XCTAssertFalse(settings.contains("Background continuity"))
+        XCTAssertFalse(diagnostics.contains("CommandGroup(after: .windowArrangement)"))
+        XCTAssertFalse(diagnostics.contains("@Environment(\\.openWindow)"))
 
         let rootEnd = try XCTUnwrap(
             source.range(of: "private struct SidebarNavigationList: View")
@@ -1091,7 +1315,7 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertFalse(root.contains("appModel.primaryWorkspaceReference"))
 
         let workspaceStart = try XCTUnwrap(
-            source.range(of: "private struct StreamWorkspaceView: View")
+            source.range(of: "struct StreamWorkspaceView: View")
         )
         let workspaceEnd = try XCTUnwrap(
             source.range(
@@ -1217,14 +1441,14 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertFalse(source.contains(".lineLimit(2)"))
     }
 
-    func testLibraryDashboardAndCommandsReflowWithoutPlatformAssumptions() throws {
+    func testFrozenPlatformDashboardStillKeepsAdaptiveWorkflowContracts() throws {
         let source = try String(contentsOf: rootViewURL, encoding: .utf8)
         let dashboardStart = try XCTUnwrap(
             source.range(of: "private struct LibraryDashboardView: View")
         )
         let streamStart = try XCTUnwrap(
             source.range(
-                of: "private struct StreamWorkspaceView: View",
+                of: "struct StreamWorkspaceView: View",
                 range: dashboardStart.upperBound..<source.endIndex
             )
         )
@@ -1273,6 +1497,25 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(infoSource.contains("UIApplicationSceneManifest"))
         XCTAssertTrue(infoSource.contains("UIApplicationSupportsMultipleScenes"))
         XCTAssertTrue(infoSource.contains("<true/>"))
+    }
+
+    func testMacOSWorkspaceWindowKeepsUsableResizableBounds() throws {
+        let defaultSize = ProductWorkspaceWindowSizingPolicy.macOSDefaultSize
+        let minimumSize = ProductWorkspaceWindowSizingPolicy.macOSMinimumSize
+        XCTAssertEqual(defaultSize, PixelSize(width: 1_280, height: 800))
+        XCTAssertEqual(minimumSize, PixelSize(width: 960, height: 640))
+        XCTAssertGreaterThanOrEqual(defaultSize.width, minimumSize.width)
+        XCTAssertGreaterThanOrEqual(defaultSize.height, minimumSize.height)
+
+        let appSource = try String(contentsOf: appSourceURL, encoding: .utf8)
+        XCTAssertTrue(appSource.contains(".windowResizability(.contentMinSize)"))
+        XCTAssertFalse(appSource.contains(".windowResizability(.contentSize)"))
+        XCTAssertTrue(appSource.contains(
+            "ProductWorkspaceWindowSizingPolicy.macOSDefaultSize"
+        ))
+        XCTAssertTrue(appSource.contains(
+            "ProductWorkspaceWindowSizingPolicy.macOSMinimumSize"
+        ))
     }
 
     func testMacOSInfoDeclaresLocalNetworkAndMoonlightBonjourUsage() throws {
@@ -1440,6 +1683,11 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
     private var appSourceURL: URL {
         rootViewURL.deletingLastPathComponent()
             .appendingPathComponent("LuneXApp.swift")
+    }
+
+    private func appViewURL(_ filename: String) -> URL {
+        rootViewURL.deletingLastPathComponent()
+            .appendingPathComponent(filename)
     }
 
     private var iOSInfoURL: URL {

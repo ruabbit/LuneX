@@ -1073,7 +1073,7 @@ final class RuntimeDiagnosticsTests: XCTestCase {
             encoding: .utf8
         )
         let diagnosticsStart = try XCTUnwrap(
-            rootView.range(of: "private struct DiagnosticsView")
+            rootView.range(of: "struct DiagnosticsView")
         )
         let settingsStart = try XCTUnwrap(
             rootView.range(of: "private struct SettingsView")

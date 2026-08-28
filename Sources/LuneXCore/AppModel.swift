@@ -177,6 +177,10 @@ final class AppModel: ApplicationInputSink {
     let workspaceRegistry: ProductWorkspaceRegistry
     @ObservationIgnored private let workspaceSceneCoordinator:
         ProductWorkspaceSceneCoordinator
+    @ObservationIgnored private var explicitHostSelectionByWorkspace:
+        [ProductWorkspaceReference: MoonlightHost.ID] = [:]
+    @ObservationIgnored private var knownHostSelectionWorkspaces:
+        Set<ProductWorkspaceReference> = []
     var primaryWorkspaceReference: ProductWorkspaceReference {
         workspaceSceneCoordinator.primaryWorkspaceReference
     }
@@ -592,6 +596,7 @@ final class AppModel: ApplicationInputSink {
     let tvVisionMetalPresentationOwner: TVVisionMetalPresentationOwner
 
     private let hostLibraryManager: HostLibraryManager
+    private let hostDiscoveryService: any HostDiscoveryService
     private let settingsRepository: AppSettingsRepository
     private let appCatalogManager: AppCatalogManager
     private let appCatalogRepository: AppCatalogSnapshotRepository
@@ -611,6 +616,7 @@ final class AppModel: ApplicationInputSink {
     private var activeStreamSessionID: UUID?
     @ObservationIgnored private var productSessionStopOperation:
         ProductSessionStopOperation?
+    @ObservationIgnored private var hostMonitoringTask: Task<Void, Never>?
     private var activeMediaSessionID: UUID?
     private var activeMediaGeneration: UInt64?
     @ObservationIgnored private var activeDecodedSourceSize: PixelSize?
@@ -719,6 +725,8 @@ final class AppModel: ApplicationInputSink {
             repository: JSONFileHostRepository(fileURL: AppStorageLocations.hostsFile),
             serverInfoClient: HTTPServerInfoClient()
         ),
+        hostDiscoveryService: any HostDiscoveryService =
+            BonjourHostDiscoveryService(),
         settingsRepository: AppSettingsRepository = JSONFileAppSettingsRepository(fileURL: AppStorageLocations.settingsFile),
         appCatalogManager: AppCatalogManager = AppCatalogManager(
             appListClient: HTTPAppListClient(),
@@ -751,7 +759,9 @@ final class AppModel: ApplicationInputSink {
             registry: workspaceRegistry,
             primaryWorkspaceReference: primaryWorkspaceReference
         )
+        knownHostSelectionWorkspaces = [primaryWorkspaceReference]
         self.hostLibraryManager = hostLibraryManager
+        self.hostDiscoveryService = hostDiscoveryService
         self.settingsRepository = settingsRepository
         self.appCatalogManager = appCatalogManager
         self.appCatalogRepository = appCatalogRepository
@@ -847,6 +857,11 @@ final class AppModel: ApplicationInputSink {
     ) -> Bool {
         guard let state = workspaceRegistry.state(for: workspace) else {
             return false
+        }
+        if let hostID {
+            explicitHostSelectionByWorkspace[workspace] = hostID
+        } else {
+            explicitHostSelectionByWorkspace[workspace] = nil
         }
         guard state.selectedHostID != hostID else { return true }
         do {
@@ -1158,12 +1173,45 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func reconcileWorkspaceSelections() {
+        #if os(macOS)
+        for workspace in workspaceRegistry.states
+        where !knownHostSelectionWorkspaces.contains(workspace.reference) {
+            knownHostSelectionWorkspaces.insert(workspace.reference)
+            if let selectedHostID = workspace.selectedHostID {
+                explicitHostSelectionByWorkspace[workspace.reference] =
+                    selectedHostID
+            }
+        }
+        let availableHostIDs = ProductMacOSHostSelectionPolicy.orderedHostIDs(
+            from: hosts
+        )
+        #else
+        let availableHostIDs = hosts.map(\.id)
+        #endif
         workspaceRegistry.reconcile(
-            availableHostIDs: hosts.map(\.id),
+            availableHostIDs: availableHostIDs,
             availableAppIDsByHostID: appsByHostID.mapValues {
                 Set($0.map(\.id))
             }
         )
+        #if os(macOS)
+        let availableHosts = Set(availableHostIDs)
+        let preferredHostID = availableHostIDs.first
+        for workspace in workspaceRegistry.states {
+            if let explicitHostID = explicitHostSelectionByWorkspace[
+                workspace.reference
+            ], workspace.selectedHostID == explicitHostID,
+               availableHosts.contains(explicitHostID) {
+                continue
+            }
+            explicitHostSelectionByWorkspace[workspace.reference] = nil
+            guard workspace.selectedHostID != preferredHostID else { continue }
+            _ = try? workspaceRegistry.update(workspace.reference) { state in
+                state.selectedHostID = preferredHostID
+                applyCachedCatalog(to: &state)
+            }
+        }
+        #endif
         invalidateActivePairingIfOwnerStale()
     }
 
@@ -1360,6 +1408,21 @@ final class AppModel: ApplicationInputSink {
 
     var hasActiveStreamSession: Bool {
         activeStreamSessionID != nil
+    }
+
+    func ownsStreamPresentation(
+        in workspace: ProductWorkspaceReference
+    ) -> Bool {
+        activeStreamOwner(in: workspace) != nil
+    }
+
+    func macOSContentMode(
+        in workspace: ProductWorkspaceReference
+    ) -> ProductMacOSWorkspaceContentMode {
+        ProductMacOSWorkspaceContentModeResolver.resolve(
+            selectedHost: selectedHost(in: workspace),
+            ownsStreamPresentation: ownsStreamPresentation(in: workspace)
+        )
     }
 
     var isPlatformStreamLifecycleActive: Bool {
@@ -1569,6 +1632,84 @@ final class AppModel: ApplicationInputSink {
         await loadSettings()
         await loadHosts(in: workspace)
         await loadCachedApps(in: workspace)
+    }
+
+    func startHostMonitoring() {
+        guard hostMonitoringTask == nil else { return }
+        hostMonitoringTask = Task { [weak self] in
+            guard let self else { return }
+            async let reachability: Void = monitorSavedHostReachability()
+            async let discovery: Void = monitorBonjourHosts()
+            _ = await (reachability, discovery)
+        }
+    }
+
+    private func monitorSavedHostReachability() async {
+        while !Task.isCancelled {
+            await refreshHostReachability()
+            do {
+                try await Task.sleep(for: .seconds(15))
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func monitorBonjourHosts() async {
+        for await candidate in hostDiscoveryService.candidates() {
+            guard !Task.isCancelled else { return }
+            guard settings.discoveryEnabled else { continue }
+            do {
+                hosts = try await hostLibraryManager.mergeDiscoveredHost(
+                    candidate
+                )
+                reconcileSharedHostRepositoryState()
+            } catch {
+                diagnostics.record(
+                    "Automatic host discovery could not update the library.",
+                    subsystem: "hosts",
+                    severity: .warning,
+                    code: "host_discovery_merge_failed"
+                )
+            }
+        }
+    }
+
+    func refreshHostReachability() async {
+        guard !hosts.isEmpty else { return }
+        for workspace in workspaceRegistry.states {
+            _ = try? workspaceRegistry.update(workspace.reference) { state in
+                state.hostLibrary.isRefreshing = true
+            }
+        }
+        do {
+            hosts = try await hostLibraryManager.refreshReachability()
+            reconcileSharedHostRepositoryState()
+            for workspace in workspaceRegistry.states {
+                _ = try? workspaceRegistry.update(workspace.reference) { state in
+                    state.hostLibrary.isRefreshing = false
+                    state.hostLibrary.refreshIssue = nil
+                }
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            for workspace in workspaceRegistry.states {
+                _ = try? workspaceRegistry.update(workspace.reference) { state in
+                    state.hostLibrary.isRefreshing = false
+                    state.hostLibrary.refreshIssue = ProductIssue(
+                        code: .hostLibraryLoadFailed,
+                        actionScope: .workspace(workspace.reference)
+                    )
+                }
+            }
+            diagnostics.record(
+                "Automatic host status could not be updated.",
+                subsystem: "hosts",
+                severity: .warning,
+                code: "host_reachability_refresh_failed"
+            )
+        }
     }
 
     func loadClientIdentity() async {
@@ -2219,7 +2360,11 @@ final class AppModel: ApplicationInputSink {
         do {
             let loadedHosts = try await hostLibraryManager.loadHosts()
             guard workspaceRegistry.state(for: workspace) != nil else { return }
-            hosts = loadedHosts
+            hosts = loadedHosts.map { host in
+                var checkingHost = host
+                checkingHost.reachability = .unknown
+                return checkingHost
+            }
             reconcileSharedHostRepositoryState()
             _ = try? workspaceRegistry.update(workspace) { state in
                 state.hostLibrary.phase = loadedHosts.isEmpty ? .firstUse : .available
@@ -3877,7 +4022,8 @@ final class AppModel: ApplicationInputSink {
     ) {
         guard let owner = activeProductSessionOwner,
               owner.sessionID == snapshot.sessionID,
-              activeStreamSessionID == snapshot.sessionID else {
+              activeStreamSessionID == snapshot.sessionID,
+              productSessionStopOperation?.owner != owner else {
             return
         }
         defer {

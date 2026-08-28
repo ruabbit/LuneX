@@ -143,6 +143,73 @@ enum ProductSessionActualPhase: Equatable, Sendable {
     case failed
 }
 
+enum ProductMacOSWorkspaceContentMode: Equatable, Sendable {
+    case firstUse
+    case pairing(hostID: MoonlightHost.ID)
+    case catalog(hostID: MoonlightHost.ID)
+    case stream
+}
+
+enum ProductMacOSWorkspaceContentModeResolver {
+    static func resolve(
+        selectedHost: MoonlightHost?,
+        ownsStreamPresentation: Bool
+    ) -> ProductMacOSWorkspaceContentMode {
+        if ownsStreamPresentation {
+            return .stream
+        }
+        guard let selectedHost else { return .firstUse }
+        return selectedHost.pairingState == .paired
+            ? .catalog(hostID: selectedHost.id)
+            : .pairing(hostID: selectedHost.id)
+    }
+}
+
+enum ProductMacOSHostSelectionPolicy {
+    static func orderedHostIDs(
+        from hosts: [MoonlightHost]
+    ) -> [MoonlightHost.ID] {
+        hosts.sorted { lhs, rhs in
+            let lhsRank = rank(lhs)
+            let rhsRank = rank(rhs)
+            if lhsRank != rhsRank {
+                return lhsRank < rhsRank
+            }
+            let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }.map(\.id)
+    }
+
+    private static func rank(_ host: MoonlightHost) -> Int {
+        switch (host.reachability, host.pairingState == .paired) {
+        case (.online, true): 0
+        case (.online, false): 1
+        case (.unknown, true): 2
+        case (.unknown, false): 3
+        case (.offline, true): 4
+        case (.offline, false): 5
+        }
+    }
+}
+
+enum ProductMacOSAutomaticCatalogRefreshPolicy {
+    static func taskID(
+        selectedHost: MoonlightHost?,
+        catalogOwner: ProductCatalogOwner?
+    ) -> MoonlightHost.ID? {
+        guard let selectedHost,
+              selectedHost.reachability == .online,
+              selectedHost.pairingState == .paired,
+              catalogOwner?.hostID == selectedHost.id else {
+            return nil
+        }
+        return selectedHost.id
+    }
+}
+
 enum ProductWorkspaceSceneCloseDisposition: Equatable, Sendable {
     case rejectStaleAttachment
     case detach
@@ -1070,6 +1137,65 @@ struct ProductWorkspaceSceneIdentity: Codable, Hashable, Sendable {
 
     init(workspaceID: ProductWorkspaceID = ProductWorkspaceID()) {
         self.workspaceID = workspaceID
+    }
+}
+
+enum ProductWorkspaceWindowSizingPolicy {
+    static let macOSDefaultSize = PixelSize(width: 1_280, height: 800)
+    static let macOSMinimumSize = PixelSize(width: 960, height: 640)
+}
+
+enum ProductMacOSResolutionChoice: Hashable, Sendable {
+    case preset(PixelSize)
+    case native(PixelSize)
+    case custom(PixelSize)
+
+    var size: PixelSize {
+        switch self {
+        case let .preset(size), let .native(size), let .custom(size): size
+        }
+    }
+}
+
+enum ProductMacOSStreamSettingsOptions {
+    static let namedResolutions = [
+        PixelSize(width: 1_920, height: 1_080),
+        PixelSize(width: 2_560, height: 1_440),
+        PixelSize(width: 3_840, height: 2_160)
+    ]
+    static let namedFrameRates = [30, 60, 90, 120, 144, 240]
+
+    static func resolutionChoices(
+        nativeDisplaySize: PixelSize?,
+        stored: PixelSize
+    ) -> [ProductMacOSResolutionChoice] {
+        var choices = namedResolutions.map(ProductMacOSResolutionChoice.preset)
+        if let nativeDisplaySize {
+            choices.append(.native(nativeDisplaySize))
+        }
+        if !namedResolutions.contains(stored), stored != nativeDisplaySize {
+            choices.append(.custom(stored))
+        }
+        return choices
+    }
+
+    static func selectedResolutionChoice(
+        nativeDisplaySize: PixelSize?,
+        stored: PixelSize
+    ) -> ProductMacOSResolutionChoice {
+        if stored == nativeDisplaySize {
+            return .native(stored)
+        }
+        if namedResolutions.contains(stored) {
+            return .preset(stored)
+        }
+        return .custom(stored)
+    }
+
+    static func frameRates(stored: Int) -> [Int] {
+        namedFrameRates.contains(stored)
+            ? namedFrameRates
+            : (namedFrameRates + [stored]).sorted()
     }
 }
 

@@ -40,7 +40,7 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
         let persistedSnapshots = await catalogRepository.currentSnapshots()
         XCTAssertEqual(persistedHosts, hosts)
         XCTAssertEqual(persistedSnapshots, snapshots)
-        XCTAssertEqual(model.hosts, hosts)
+        XCTAssertEqual(model.hosts, checkingProjection(of: hosts))
     }
 
     func testRemovalDeletesOnlyTargetHostAndItsCachedCatalog() async throws {
@@ -176,7 +176,7 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
         }
         XCTAssertEqual(issue.code, .hostRemoveFailed)
         XCTAssertEqual(issue.action?.scope, .host(confirmation.owner))
-        XCTAssertEqual(model.hosts, hosts)
+        XCTAssertEqual(model.hosts, checkingProjection(of: hosts))
         let persistedHosts = await hostRepository.currentHosts()
         let persistedSnapshots = await catalogRepository.currentSnapshots()
         let catalogSaveCount = await catalogRepository.saveCount()
@@ -386,7 +386,7 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
         model.cancelHostDestructiveAction(in: model.primaryWorkspaceReference)
         await model.stopStream()
         await launch.value
-        XCTAssertEqual(model.hosts, hosts)
+        XCTAssertEqual(model.hosts, checkingProjection(of: hosts))
     }
 
     func testStopAndRemoveCompletesStopBeforeRepositoryMutation() async throws {
@@ -680,6 +680,14 @@ final class ProductHostDestructiveWorkspaceTests: XCTestCase {
                 pairedAt: Date(timeIntervalSince1970: TimeInterval(suffix))
             )
         )
+    }
+
+    private func checkingProjection(of hosts: [MoonlightHost]) -> [MoonlightHost] {
+        hosts.map { host in
+            var checkingHost = host
+            checkingHost.reachability = .unknown
+            return checkingHost
+        }
     }
 
     private func makeSnapshots(hosts: [MoonlightHost]) -> [AppListSnapshot] {

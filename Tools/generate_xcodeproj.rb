@@ -50,6 +50,12 @@ c_sources = [
 sources = [
   "Sources/LuneXApp/LuneXApp.swift",
   "Sources/LuneXApp/RootView.swift",
+  "Sources/LuneXApp/MacOSProductShell.swift",
+  "Sources/LuneXApp/MacOSHostSidebar.swift",
+  "Sources/LuneXApp/MacOSCatalogView.swift",
+  "Sources/LuneXApp/MacOSPairingView.swift",
+  "Sources/LuneXApp/MacOSSettingsView.swift",
+  "Sources/LuneXApp/MacOSDiagnosticsWindow.swift",
   "Sources/LuneXCore/AppModel.swift",
   "Sources/LuneXCore/HDRPresentationStatus.swift",
   "Sources/LuneXCore/SpatialAudioPresentationStatus.swift",

@@ -58,6 +58,12 @@ Alternative considered: call `main` frozen after tests pass. A moving branch can
 
 Completed checkboxes remain unchanged. Active platform-specific changes remain open with their unmet physical/live tasks pending and are annotated by the new planning authority as deferred. `complete-native-product-workflows` is split operationally: macOS-applicable work may be pulled into M4, while cross-platform-only expansion is deferred. This governance change does not archive or falsify those changes.
 
+### 7. Organize the macOS product around the streaming task
+
+The macOS product uses one Library workbench for the repeated path: observe current host availability, choose a host, browse its application catalog, and launch. An active session temporarily owns the content surface. Pairing and host addition are setup flows; Settings use the native low-frequency settings surface; Diagnostics is opened only for support and recovery. Reachability and pairing remain separate state dimensions, and automatic background orchestration keeps them current without requiring a normal-use refresh button.
+
+Alternative considered: retain `Library`, `Stream`, `Diagnostics`, and `Settings` as equal permanent sidebar destinations. That structure gives the lowest-frequency surfaces the same weight as launch, wastes the stream canvas when no session exists, and makes the navigation hierarchy describe implementation modules instead of user goals.
+
 ## Risks / Trade-offs
 
 - [Shared code may drift on frozen platforms] -> Run generic non-macOS target builds only when shared code or project generation changes could break them; do not treat those builds as product progress.

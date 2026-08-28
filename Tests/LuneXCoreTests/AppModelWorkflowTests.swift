@@ -4076,9 +4076,13 @@ final class AppModelWorkflowTests: XCTestCase {
             )
             model.receiveTVVisionGeometryUpdate(resized)
             await waitUntil {
-                mediaEnvironment
+                let latestScene = mediaEnvironment
                     .currentTVVisionPlatformPresentationApplications()
-                    .last?.action == .scene(resized)
+                    .last { application in
+                        if case .scene = application.action { return true }
+                        return false
+                    }
+                return latestScene?.action == .scene(resized)
                     && model.visionInputCaptureEnabled
             }
             XCTAssertTrue(
@@ -9890,6 +9894,17 @@ final class AppModelWorkflowTests: XCTestCase {
         await waitUntil { model.productSessionActualPhase == .streaming }
         let owner = try XCTUnwrap(model.activeProductSessionOwner)
         XCTAssertEqual(owner.workspace, ownerScene.workspace)
+        XCTAssertEqual(
+            model.macOSContentMode(in: ownerScene.workspace),
+            .stream
+        )
+        let nonOwnerHost = try XCTUnwrap(
+            model.selectedHost(in: nonOwnerScene.workspace)
+        )
+        XCTAssertEqual(
+            model.macOSContentMode(in: nonOwnerScene.workspace),
+            .catalog(hostID: nonOwnerHost.id)
+        )
         XCTAssertEqual(
             model.sessionCommandState(in: nonOwnerScene.workspace).stop,
             .unavailable(.ownedByAnotherWorkspace)
