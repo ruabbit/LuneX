@@ -81,6 +81,10 @@
 
 ### M1 Task 2.3 错误记录
 
+- 2026-08-28：真实 App 最新连接停在 `Waiting for Audio` 后断开，Diagnostics 暂只暴露 `media_session_state_invalid`。已定位为 media event consumer 安装晚于 startup spatial/lifecycle application 的终止结果竞争；当前修复目标是让同一 generation 的原始有限 media terminal error 优先，且不放宽真实 lifecycle effect failure。Task 2.3 保持 pending，修复与确定性门通过后必须立即提交推送，再以单一新构建做 live 复验并依据解蔽后的有限错误继续处理。
+- 首轮 focused 的既有 lifecycle failure control 通过，新 terminal-ownership 回归仍发现历史 `media_session_state_invalid`，但 `audio_stream_ended` 已成为当前音频诊断。失败 bundle 保留，不伪称通过；下一步以有限 diagnostics code 序列定位第二记录来源，并从 fresh result bundle 重跑目标门。
+- ownership snapshot 修复首轮编译因 `guard !await` 语法错误在测试前失败；改为 `guard !(await ...)`，不改变语义。失败 bundle 不计通过，下一轮使用新的 `.xcresult`。
+
 - 2026-08-28：终审后首个final repository gate在读取第一个xcresult时使用zsh特殊变量`path`保存result路径，意外改写shell `PATH`并导致后续`awk: command not found`；此前仅完成只读scope/OpenSpec断言并创建临时目录，无源码、测试、build、host、Keychain、Simulator或runtime副作用。改名`result_path`后完整重跑门禁通过，不重复test/build。
 - 2026-08-28：multi-FEC repository gate首轮在进入shell前因JavaScript模板把shell `${tuple% *}`当成插值而语法失败；第二轮虽转义JavaScript，却让zsh整段预解析在反斜杠参数展开处失败。两轮均未执行命令、未创建证据目录，也没有fetch、仓库、测试、build、host、Keychain、Simulator或runtime副作用。第三轮改用`sed`/`awk`拆分tuple并完整通过，不重复已有test/build。
 - 2026-08-28：用户再次要求持续推进后，`create_goal`仍以旧阶段13-20 goal为unfinished而拒绝创建当前M1窄目标；未错误地把旧目标标记complete，也没有仓库、host、Keychain、Simulator或runtime副作用。OpenSpec `prioritize-macos-product-completion`与三份planning authority继续作为执行状态源。

@@ -3072,6 +3072,61 @@ final class AppModelWorkflowTests: XCTestCase {
         )
     }
 
+    func testAudioTerminalErrorOwnsSecondaryInactiveLifecycleFailure() async throws {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        mediaEnvironment.blockNextLifecycleApplication()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 35,
+                    key: Data(repeating: 0x35, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        model.applyPlatformLifecycle(makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2560, height: 1440)
+        ))
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil { mediaEnvironment.hasBlockedLifecycleApplication() }
+
+        mediaEnvironment.finish(
+            sessionID: record.sessionID,
+            throwing: SessionMediaEnvironmentError.streamEnded(.audio)
+        )
+        mediaEnvironment.resumeBlockedLifecycleApplication()
+        await launchTask.value
+
+        guard case .failed = model.session.phase else {
+            return XCTFail("The original audio terminal error must fail the session.")
+        }
+        XCTAssertEqual(
+            model.diagnostics.currentActionableEvent(in: .audio)?.code,
+            "audio_stream_ended"
+        )
+        XCTAssertFalse(model.diagnostics.events.contains {
+            $0.code == "media_session_state_invalid"
+        }, model.diagnostics.events.map(\.code).joined(separator: ","))
+        XCTAssertFalse(model.hasActiveStreamSession)
+        XCTAssertNil(model.macSessionInputSnapshot().generation)
+        XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
+        XCTAssertEqual(
+            mediaEnvironment.currentStoppedSessionIDs(),
+            [record.sessionID]
+        )
+    }
+
     func testUnavailablePairingPreservesHostState() async throws {
         let hostRepository = InMemoryHostRepository()
         let hostManager = HostLibraryManager(
@@ -12583,6 +12638,9 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private var blockedReleaseContinuation: CheckedContinuation<Void, Never>?
     private var shouldBlockNextInputSend = false
     private var blockedInputSendContinuation: CheckedContinuation<Void, Never>?
+    private var shouldBlockNextLifecycleApplication = false
+    private var blockedLifecycleApplicationContinuation:
+        CheckedContinuation<Void, Never>?
     private var shouldBlockNextStop = false
     private var blockedStopContinuation: CheckedContinuation<Void, Never>?
     private var blockedTVVisionActivationContinuation:
@@ -12648,6 +12706,25 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         }
         guard application.mediaGeneration == state.1 else {
             throw SessionMediaEnvironmentError.staleLifecycleApplication
+        }
+        let shouldBlock = withLock {
+            let value = shouldBlockNextLifecycleApplication
+            shouldBlockNextLifecycleApplication = false
+            return value
+        }
+        if shouldBlock {
+            await withCheckedContinuation { continuation in
+                withLock {
+                    blockedLifecycleApplicationContinuation = continuation
+                }
+            }
+            guard continuation(for: application.sessionID) != nil else {
+                throw SessionMediaEnvironmentError.inactiveSession
+            }
+            guard application.mediaGeneration
+                    == withLock({ UInt64(startRecords.count) }) else {
+                throw SessionMediaEnvironmentError.staleLifecycleApplication
+            }
         }
         if failsLifecycleApplication {
             throw MediaEnvironmentApplicationTestError.failed
@@ -12932,6 +13009,22 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
 
     func currentLifecycleApplications() -> [SessionLifecycleApplication] {
         withLock { lifecycleApplications }
+    }
+
+    func blockNextLifecycleApplication() {
+        withLock { shouldBlockNextLifecycleApplication = true }
+    }
+
+    func hasBlockedLifecycleApplication() -> Bool {
+        withLock { blockedLifecycleApplicationContinuation != nil }
+    }
+
+    func resumeBlockedLifecycleApplication() {
+        let continuation = withLock {
+            defer { blockedLifecycleApplicationContinuation = nil }
+            return blockedLifecycleApplicationContinuation
+        }
+        continuation?.resume()
     }
 
     func currentTVVisionPlatformPresentationApplications()

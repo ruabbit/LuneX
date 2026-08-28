@@ -3826,7 +3826,12 @@ final class AppModel: ApplicationInputSink {
         do {
             try await sessionMediaEnvironment.sendInput(application)
         } catch {
-            if productSessionOwnerIsCurrent(owner),
+            let environmentOwnsGeneration = await mediaEnvironmentOwns(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration
+            )
+            if environmentOwnsGeneration,
+               productSessionOwnerIsCurrent(owner),
                activeStreamSessionID == sessionID,
                activeMediaSessionID == sessionID,
                activeMediaGeneration == mediaGeneration {
@@ -3852,7 +3857,12 @@ final class AppModel: ApplicationInputSink {
         do {
             try await sessionMediaEnvironment.releaseInput(application)
         } catch {
-            if activeStreamSessionID == sessionID,
+            let environmentOwnsGeneration = await mediaEnvironmentOwns(
+                sessionID: sessionID,
+                mediaGeneration: mediaGeneration
+            )
+            if environmentOwnsGeneration,
+               activeStreamSessionID == sessionID,
                activeMediaSessionID == sessionID,
                activeMediaGeneration == mediaGeneration {
                 isMacInputGenerationFailed = true
@@ -4249,36 +4259,7 @@ final class AppModel: ApplicationInputSink {
         clearActiveAudioRuntime()
         activeMediaSessionID = sessionID
         activeMediaGeneration = environmentSnapshot.generation
-        beginTVVisionPlatformPresentationRuntime()
-#if os(iOS)
-        beginMobileRuntime(mediaGeneration: environmentSnapshot.generation)
-#endif
-        if let audioRuntime = environmentSnapshot.audioRuntime {
-            applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
-        }
-        try await applySpatialAudioPreferences(
-            spatialAudioPreferences,
-            owner: owner,
-            mediaGeneration: environmentSnapshot.generation
-        )
-        beginVideoPresentation(
-            negotiatedColorMetadata: configuration.video.colorMetadata
-        )
-        activeDecodedSourceSize = PixelSize(
-            width: configuration.video.width,
-            height: configuration.video.height
-        )
-        renderState.transform.sourceSize = activeDecodedSourceSize ?? .zero
-        refreshMacInputSurfacePolicy()
-        appliedLifecycleApplication = nil
-        let lifecycleTask = scheduleLifecycleApplication()
-        await lifecycleTask?.value
-        guard productSessionOwnerIsCurrent(owner),
-              activeMediaSessionID == sessionID,
-              activeMediaGeneration == environmentSnapshot.generation else {
-            return false
-        }
-        mediaConsumerTask = Task { [weak self] in
+        let consumerTask = Task { [weak self] in
             do {
                 for try await event in events {
                     try Task.checkCancellation()
@@ -4300,7 +4281,84 @@ final class AppModel: ApplicationInputSink {
                 )
             }
         }
+        mediaConsumerTask = consumerTask
+        beginTVVisionPlatformPresentationRuntime()
+#if os(iOS)
+        beginMobileRuntime(mediaGeneration: environmentSnapshot.generation)
+#endif
+        if let audioRuntime = environmentSnapshot.audioRuntime {
+            applyAudioRuntimeState(audioRuntime, sessionID: sessionID)
+        }
+        do {
+            try await applySpatialAudioPreferences(
+                spatialAudioPreferences,
+                owner: owner,
+                mediaGeneration: environmentSnapshot.generation
+            )
+        } catch {
+            if await mediaTerminalOwnsSecondaryApplicationFailure(
+                error,
+                owner: owner,
+                mediaGeneration: environmentSnapshot.generation,
+                consumerTask: consumerTask
+            ) {
+                return false
+            }
+            throw error
+        }
+        beginVideoPresentation(
+            negotiatedColorMetadata: configuration.video.colorMetadata
+        )
+        activeDecodedSourceSize = PixelSize(
+            width: configuration.video.width,
+            height: configuration.video.height
+        )
+        renderState.transform.sourceSize = activeDecodedSourceSize ?? .zero
+        refreshMacInputSurfacePolicy()
+        appliedLifecycleApplication = nil
+        let lifecycleTask = scheduleLifecycleApplication()
+        await lifecycleTask?.value
+        guard productSessionOwnerIsCurrent(owner),
+              activeMediaSessionID == sessionID,
+              activeMediaGeneration == environmentSnapshot.generation else {
+            return false
+        }
         return true
+    }
+
+    private func mediaTerminalOwnsSecondaryApplicationFailure(
+        _ error: Error,
+        owner: ProductSessionOwner,
+        mediaGeneration: UInt64,
+        consumerTask: Task<Void, Never>? = nil
+    ) async -> Bool {
+        guard let applicationError = error as? SessionMediaEnvironmentError,
+              applicationError == .inactiveSession
+                || applicationError == .staleLifecycleApplication
+                || applicationError == .staleAudioApplication else {
+            return false
+        }
+        guard !(await mediaEnvironmentOwns(
+            sessionID: owner.sessionID,
+            mediaGeneration: mediaGeneration
+        )) else {
+            return false
+        }
+
+        let terminalConsumer = consumerTask ?? mediaConsumerTask
+        await terminalConsumer?.value
+        return !productSessionOwnerIsCurrent(owner)
+            || activeMediaSessionID != owner.sessionID
+            || activeMediaGeneration != mediaGeneration
+    }
+
+    private func mediaEnvironmentOwns(
+        sessionID: UUID,
+        mediaGeneration: UInt64
+    ) async -> Bool {
+        let snapshot = await sessionMediaEnvironment.snapshot()
+        return snapshot.sessionID == sessionID
+            && snapshot.generation == mediaGeneration
     }
 
     private func consumeMediaEnvironmentEvent(
@@ -4609,6 +4667,13 @@ final class AppModel: ApplicationInputSink {
                 if error as? SessionMediaEnvironmentError == .staleLifecycleApplication,
                    latestLifecycleRevision > application.lifecycleRevision {
                     continue
+                }
+                if await mediaTerminalOwnsSecondaryApplicationFailure(
+                    error,
+                    owner: owner,
+                    mediaGeneration: mediaGeneration
+                ) {
+                    break
                 }
                 if let sessionControlProvider = runtimeProviders.sessionControl {
                     await failFromMediaEnvironment(
