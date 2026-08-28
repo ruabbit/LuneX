@@ -1411,9 +1411,17 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             mediaGeneration: generation,
             runtime: event
         )
+        let audioBecameReady = event.stage == .running
+            && !active.readiness.contains(.audio)
         active.audioRuntime = state
+        if audioBecameReady {
+            active.readiness.insert(.audio)
+        }
         self.active = active
         active.continuation.yield(.audioRuntime(state))
+        if audioBecameReady {
+            active.continuation.yield(.readiness(active.readiness))
+        }
         guard let ownership = active.tvVisionPlatformOwnership else { return }
         do {
             try await applyTVVisionAudioRuntime(

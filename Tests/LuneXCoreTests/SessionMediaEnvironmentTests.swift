@@ -156,9 +156,12 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         )
         let forwarded = try await iterator.next()
         XCTAssertEqual(forwarded, .audioRuntime(expected))
+        let runtimeReadiness = try await iterator.next()
+        XCTAssertEqual(runtimeReadiness, .readiness([.audio, .input]))
         let snapshot = await environment.snapshot()
         XCTAssertEqual(snapshot.audioRuntime, expected)
         XCTAssertEqual(snapshot.audioRuntime?.mediaGeneration, snapshot.generation)
+        XCTAssertEqual(snapshot.readiness, [.audio, .input])
 
         _ = await environment.stop(sessionID: sessionID)
     }
@@ -2154,6 +2157,8 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         guard case let .audioRuntime(first) = try await iterator.next() else {
             return XCTFail("Expected the first current audio runtime event.")
         }
+        let runtimeReadiness = try await iterator.next()
+        XCTAssertEqual(runtimeReadiness, .readiness([.audio, .input]))
         guard case let .audioRuntime(second) = try await iterator.next() else {
             return XCTFail("Expected the next monotonic audio runtime event.")
         }
