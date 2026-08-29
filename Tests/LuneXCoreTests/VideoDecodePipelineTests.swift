@@ -231,15 +231,48 @@ final class VideoDecodePipelineTests: XCTestCase {
         let resumedRequestCount = await requester.count
         XCTAssertEqual(resumedRequestCount, 1)
 
+        let firstCompletePredictedFrame = try await pipeline.consume(
+            .accessUnit(try accessUnit(
+                frameIndex: 3,
+                codec: .h264,
+                frameType: .predicted,
+                payloadHex: fixture.h264.accessUnitHex
+            ))
+        )
+        XCTAssertEqual(
+            firstCompletePredictedFrame,
+            .dropped(frameIndex: 3, reason: .awaitingIDR)
+        )
+        snapshot = await pipeline.snapshot()
+        XCTAssertTrue(snapshot.hasOutstandingIDRRequest)
+        XCTAssertEqual(snapshot.idrRequestCount, 2)
+        let retriedRequestCount = await requester.count
+        XCTAssertEqual(retriedRequestCount, 2)
+
+        let secondCompletePredictedFrame = try await pipeline.consume(
+            .accessUnit(try accessUnit(
+                frameIndex: 4,
+                codec: .h264,
+                frameType: .predicted,
+                payloadHex: fixture.h264.accessUnitHex
+            ))
+        )
+        XCTAssertEqual(
+            secondCompletePredictedFrame,
+            .dropped(frameIndex: 4, reason: .awaitingIDR)
+        )
+        let coalescedRequestCount = await requester.count
+        XCTAssertEqual(coalescedRequestCount, 2)
+
         let recovered = try await pipeline.consume(.accessUnit(try accessUnit(
-            frameIndex: 3,
+            frameIndex: 5,
             codec: .h264,
             frameType: .instantaneousDecoderRefresh,
             payloadHex: fixture.h264.accessUnitHex
         )))
         XCTAssertEqual(
             recovered,
-            .submitted(frameIndex: 3, generation: 2, replacedSession: true)
+            .submitted(frameIndex: 5, generation: 2, replacedSession: true)
         )
         snapshot = await pipeline.snapshot()
         XCTAssertFalse(snapshot.isAwaitingIDR)

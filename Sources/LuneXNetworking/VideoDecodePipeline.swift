@@ -94,6 +94,7 @@ actor VideoDecodePipeline {
     private var activeDecoderGeneration: UInt64?
     private var isAwaitingIDR = true
     private var hasOutstandingIDRRequest = false
+    private var allowsLifecycleResumeIDRRetry = false
     private var isStopped = false
     private var isLifecyclePaused = false
     private var lifecycleToken: UInt64 = 0
@@ -211,6 +212,7 @@ actor VideoDecodePipeline {
         activeDecoderGeneration = nil
         isAwaitingIDR = true
         hasOutstandingIDRRequest = false
+        allowsLifecycleResumeIDRRetry = false
         lifecyclePauseCount &+= 1
         if hadActiveDecoder {
             await decoder.stop()
@@ -225,6 +227,7 @@ actor VideoDecodePipeline {
         if isLifecyclePaused {
             isLifecyclePaused = false
             lifecycleResumeCount &+= 1
+            allowsLifecycleResumeIDRRetry = true
         }
         try await beginRecovery(.lifecycleResume)
     }
@@ -238,6 +241,7 @@ actor VideoDecodePipeline {
         activeDecoderGeneration = nil
         isAwaitingIDR = true
         hasOutstandingIDRRequest = false
+        allowsLifecycleResumeIDRRetry = false
         lastParameterSets = nil
         lastSessionColorMetadata = nil
         teardownCount &+= 1
@@ -279,6 +283,11 @@ actor VideoDecodePipeline {
         }
         guard !isAwaitingIDR, let generation = activeDecoderGeneration else {
             droppedAccessUnitCount &+= 1
+            if hasOutstandingIDRRequest,
+               allowsLifecycleResumeIDRRetry {
+                allowsLifecycleResumeIDRRetry = false
+                hasOutstandingIDRRequest = false
+            }
             try await beginRecovery(.missingInitialIDR)
             return .dropped(frameIndex: accessUnit.frameIndex, reason: .awaitingIDR)
         }
@@ -304,6 +313,7 @@ actor VideoDecodePipeline {
     ) async throws -> VideoDecodePipelineResult {
         let token = lifecycleToken
         hasOutstandingIDRRequest = false
+        allowsLifecycleResumeIDRRetry = false
         let parameterSets: VideoParameterSets
         do {
             parameterSets = try parameterSetParser.parse(
