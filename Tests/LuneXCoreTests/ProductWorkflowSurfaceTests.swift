@@ -1331,6 +1331,7 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             "GeometryReader",
             "availableWidth: geometry.size.width",
             "overlayMaximumHeight(",
+            "alignment: overlayContentAlignment(for: layout)",
             "layout == .compact ? 0.48 : 0.82",
             ".safeAreaPadding(16)",
             "alignment: streamOverlayAlignment(for: layout)",
@@ -1342,6 +1343,15 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
                 "Missing stream workspace contract: \(contract)"
             )
         }
+        XCTAssertTrue(streamWorkspace.contains(
+            "layout == .compact ? .bottom : .top"
+        ))
+        XCTAssertTrue(streamWorkspace.contains(
+            "return min(760, max(560, size.width - 32))"
+        ))
+        XCTAssertFalse(streamWorkspace.contains(
+            "layout == .compact ? .bottom : .topLeading"
+        ))
         XCTAssertFalse(streamWorkspace.contains(".onHover"))
 
         let overlayEnd = try XCTUnwrap(
@@ -1364,6 +1374,46 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(streamOverlay.contains(
             "VisionStreamControls(workspace: workspace, workspaceLayout: layout)"
         ))
+        XCTAssertTrue(streamOverlay.contains("macOSOverlayContent"))
+        XCTAssertTrue(streamOverlay.contains("streamProfileSummary"))
+        XCTAssertTrue(streamOverlay.contains(
+            "Picker(\"Pointer mode\", selection: pointerModeBinding)"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "Picker(\"Scaling\", selection: scalingBinding)"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "Toggle(isOn: hdrEnabledBinding)"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "Toggle(isOn: spatialAudioEnabledBinding)"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "try await appModel.updateSpatialAudioPreferences("
+        ))
+        XCTAssertTrue(streamOverlay.contains("await appModel.saveSettings()"))
+        XCTAssertTrue(streamOverlay.contains(
+            "if !appModel.session.isStreaming,"
+        ))
+
+        let macOverlayStart = try XCTUnwrap(
+            streamOverlay.range(of: "private var macOSOverlayContent: some View")
+        )
+        let macOverlayEnd = try XCTUnwrap(
+            streamOverlay.range(
+                of: "#endif",
+                range: macOverlayStart.upperBound..<streamOverlay.endIndex
+            )
+        )
+        let macOverlay = String(
+            streamOverlay[
+                macOverlayStart.lowerBound..<macOverlayEnd.lowerBound
+            ]
+        )
+        XCTAssertFalse(macOverlay.contains("latestSummary"))
+        XCTAssertFalse(macOverlay.contains("Direct pointer"))
+        XCTAssertFalse(macOverlay.contains("Fixed spatial"))
+        XCTAssertFalse(macOverlay.contains("entitlement"))
         XCTAssertFalse(streamOverlay.contains(".onHover"))
     }
 

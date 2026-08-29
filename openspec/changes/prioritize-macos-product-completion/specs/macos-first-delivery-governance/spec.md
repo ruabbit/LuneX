@@ -182,6 +182,14 @@ The macOS candidate SHALL pass native window, display, input, HDR/EDR, audio, pr
 - **THEN** LuneX automatically reconciles the host as checking, online, or offline within a bounded polling/discovery interval and updates the selected paired host's catalog without requiring a normal-use refresh action
 - **AND** green availability treatment means reachable, pairing/trust is shown separately, cached offline apps do not appear launch-ready, and explicit retry is reserved for an actual failed operation
 
+#### Scenario: Active stream controls prioritize session actions
+- **WHEN** a macOS workspace owns an active or connecting stream and its controls are visible
+- **THEN** the overlay identifies the selected application and host, summarizes the configured resolution, frame rate, and bitrate, and exposes live pointer-mode, scaling, HDR/EDR, spatial-audio, hide, and disconnect controls
+- **AND** pointer, scaling, HDR/EDR, and spatial-audio changes apply through their real runtime paths and persist as preferences
+- **AND** a wide macOS stream window presents a width-bounded overlay at the top center below the title bar instead of vertically centering it over remote content
+- **AND** normal streaming SHALL NOT use primary overlay space for standalone pointer, SDR, fixed-spatial, entitlement, or general diagnostic-summary labels
+- **AND** current output detail remains available to assistive technology and through on-demand Settings or Diagnostics, while a connecting or failed session MAY show the bounded actionable state needed to recover
+
 #### Scenario: Low-frequency support surfaces remain bounded
 - **WHEN** the user requests Settings or Diagnostics on macOS
 - **THEN** Settings opens through the native application settings affordance with bounded preference groups and persistent changes, while Diagnostics opens on demand with current runtime state and privacy-safe export

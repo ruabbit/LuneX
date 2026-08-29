@@ -1621,7 +1621,7 @@ struct StreamWorkspaceView: View {
                     .frame(maxHeight: overlayMaximumHeight(
                         in: geometry.size,
                         layout: layout
-                    ))
+                    ), alignment: overlayContentAlignment(for: layout))
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -1644,7 +1644,7 @@ struct StreamWorkspaceView: View {
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
-                        alignment: .topLeading
+                        alignment: .top
                     )
                     .safeAreaPadding(16)
                     #endif
@@ -1726,7 +1726,13 @@ struct StreamWorkspaceView: View {
     private func streamOverlayAlignment(
         for layout: ProductStreamWorkspaceLayout
     ) -> Alignment {
-        layout == .compact ? .bottom : .topLeading
+        layout == .compact ? .bottom : .top
+    }
+
+    private func overlayContentAlignment(
+        for layout: ProductStreamWorkspaceLayout
+    ) -> Alignment {
+        layout == .compact ? .bottom : .top
     }
 
     private func streamOverlayMaximumWidth(
@@ -1734,7 +1740,7 @@ struct StreamWorkspaceView: View {
         layout: ProductStreamWorkspaceLayout
     ) -> CGFloat {
         guard layout == .wide else { return .infinity }
-        return min(1_040, max(640, size.width * 0.68))
+        return min(760, max(560, size.width - 32))
     }
 
     private func overlayMaximumHeight(
@@ -1809,6 +1815,8 @@ private struct StreamStatusOverlay: View {
             )
             #elseif os(visionOS)
             VisionStreamControls(workspace: workspace, workspaceLayout: layout)
+            #elseif os(macOS)
+            macOSOverlayContent
             #else
             switch layout {
             case .compact:
@@ -1835,6 +1843,221 @@ private struct StreamStatusOverlay: View {
             #endif
         }
     }
+
+    #if os(macOS)
+    private var macOSOverlayContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label {
+                        HStack(spacing: 5) {
+                            Text(streamApplicationName)
+                                .font(.headline)
+                            if let streamHostName {
+                                Text("on \(streamHostName)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: appModel.session.isStreaming
+                            ? "dot.radiowaves.left.and.right"
+                            : "hourglass")
+                    }
+                    Text(streamProfileSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                Spacer(minLength: 12)
+                macOSCommandButtons
+            }
+
+            Divider()
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 20) {
+                    macOSPointerControl
+                    macOSScalingControl
+                    macOSHDRControl
+                    macOSSpatialAudioControl
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    macOSPointerControl
+                    macOSScalingControl
+                    macOSHDRControl
+                    macOSSpatialAudioControl
+                }
+            }
+
+            if !appModel.session.isStreaming,
+               let message = appModel.diagnostics.latestStreamActionableEvent?.message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var macOSCommandButtons: some View {
+        HStack(spacing: 8) {
+            Button {
+                _ = appModel.setStreamOverlayVisibility(
+                    .hidden,
+                    in: workspace
+                )
+            } label: {
+                Image(systemName: "eye.slash")
+            }
+            .buttonStyle(.bordered)
+            .productActionTarget()
+            .keyboardShortcut(.cancelAction)
+            .help("Hide Stream Controls")
+            .accessibilityLabel("Hide Stream Controls")
+            .focused($focusedControl, equals: .streamHideControls)
+
+            Button(role: .destructive) {
+                _ = appModel.requestStopStreamConfirmation(in: workspace)
+            } label: {
+                Label("Disconnect", systemImage: "xmark.circle")
+            }
+            .buttonStyle(.bordered)
+            .productActionTarget()
+            .disabled(appModel.session.phase == .disconnected)
+            .accessibilityLabel("Disconnect Stream")
+            .focused($focusedControl, equals: .streamDisconnect)
+        }
+    }
+
+    private var macOSPointerControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Pointer mode", systemImage: "cursorarrow.motionlines")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("Pointer mode", selection: pointerModeBinding) {
+                Text("Direct").tag(false)
+                Text("Relative").tag(true)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 156)
+        }
+    }
+
+    private var macOSScalingControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Scaling", systemImage: "arrow.up.left.and.arrow.down.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("Scaling", selection: scalingBinding) {
+                Text("Fit").tag(RenderScaleMode.fit)
+                Text("Fill").tag(RenderScaleMode.fill)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 128)
+        }
+    }
+
+    private var macOSHDRControl: some View {
+        let content = appModel.hdrPresentationStatus.content
+        return Toggle(isOn: hdrEnabledBinding) {
+            Label("HDR / EDR", systemImage: "sun.max")
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .accessibilityLabel("HDR and EDR")
+        .accessibilityValue(
+            Text("\(appModel.settings.stream.hdrEnabled ? "Enabled" : "Disabled"). \(content.accessibilityValue)")
+        )
+    }
+
+    private var macOSSpatialAudioControl: some View {
+        let content = appModel.spatialAudioPresentationStatus.content
+        return Toggle(isOn: spatialAudioEnabledBinding) {
+            Label("Spatial audio", systemImage: "wave.3.right.circle")
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .accessibilityValue(spatialAudioAccessibilityValue(content))
+    }
+
+    private var streamApplicationName: String {
+        appModel.selectedApp(in: workspace)?.name ?? appModel.session.phase.label
+    }
+
+    private var streamHostName: String? {
+        appModel.selectedHost(in: workspace)?.name
+    }
+
+    private var streamProfileSummary: String {
+        let stream = appModel.settings.stream
+        return "\(stream.width)x\(stream.height) @ \(stream.frameRate) fps - \(stream.bitrateKbps / 1_000) Mbps"
+    }
+
+    private var pointerModeBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.settings.input.preferRelativeMouseMode },
+            set: { enabled in
+                appModel.settings.input.preferRelativeMouseMode = enabled
+                persistSettings()
+            }
+        )
+    }
+
+    private var scalingBinding: Binding<RenderScaleMode> {
+        Binding(
+            get: { appModel.settings.stream.scaleMode },
+            set: { mode in
+                appModel.settings.stream.scaleMode = mode
+                persistSettings()
+            }
+        )
+    }
+
+    private var hdrEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.settings.stream.hdrEnabled },
+            set: { enabled in
+                appModel.settings.stream.hdrEnabled = enabled
+                persistSettings()
+            }
+        )
+    }
+
+    private var spatialAudioEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.settings.audio.spatialAudioEnabled },
+            set: { enabled in
+                Task {
+                    let preferences = SessionSpatialAudioPreferences(
+                        spatialAudioEnabled: enabled,
+                        headTrackingEnabled:
+                            appModel.settings.audio.headTrackingEnabled
+                    )
+                    do {
+                        try await appModel.updateSpatialAudioPreferences(
+                            preferences
+                        )
+                        await appModel.saveSettings()
+                    } catch {
+                        appModel.diagnostics.record(
+                            ApplicationDiagnosticFactory.streamFailure(error)
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    private func persistSettings() {
+        Task {
+            await appModel.saveSettings()
+        }
+    }
+    #endif
 
     private var compactCommandHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1902,11 +2125,11 @@ private struct StreamStatusOverlay: View {
         #endif
     }
 
+    #if os(iOS)
     @ViewBuilder
     private var statusPills: some View {
         let spatialContent = appModel.spatialAudioPresentationStatus.content
 
-        #if os(iOS)
         let mobileStatus = appModel.mobileExperiencePresentationStatus
         MobileActualStatusPill(
             content: mobileSceneStatusContent(mobileStatus.scene)
@@ -1922,22 +2145,6 @@ private struct StreamStatusOverlay: View {
         MobileActualStatusPill(
             content: mobileDisplayStatusContent(mobileStatus.display)
         )
-        #else
-        let hdrContent = appModel.hdrPresentationStatus.content
-        StatusPill(
-            label: appModel.settings.input.preferRelativeMouseMode
-                ? "Relative mouse"
-                : "Direct pointer",
-            systemImage: "cursorarrow.motionlines"
-        )
-        StatusPill(
-            label: hdrContent.overlayLabel,
-            systemImage: hdrContent.systemImage
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("HDR presentation")
-        .accessibilityValue(hdrContent.accessibilityValue)
-        #endif
         StatusPill(
             label: spatialContent.overlayLabel,
             systemImage: spatialContent.systemImage
@@ -1946,6 +2153,7 @@ private struct StreamStatusOverlay: View {
         .accessibilityLabel("Spatial audio presentation")
         .accessibilityValue(spatialAudioAccessibilityValue(spatialContent))
     }
+    #endif
 }
 
 #if os(tvOS)

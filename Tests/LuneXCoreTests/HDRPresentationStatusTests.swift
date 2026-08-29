@@ -135,15 +135,13 @@ final class HDRPresentationStatusTests: XCTestCase {
             .appendingPathComponent("Sources/LuneXApp/RootView.swift")
         let source = try String(contentsOf: rootViewURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains(
-            "let hdrContent = appModel.hdrPresentationStatus.content"
-        ))
+        XCTAssertTrue(source.contains("Toggle(isOn: hdrEnabledBinding)"))
         XCTAssertTrue(source.contains("ViewThatFits(in: .horizontal)"))
         XCTAssertTrue(source.contains(
             "HDRPresentationStatusRow(status: appModel.hdrPresentationStatus)"
         ))
         XCTAssertTrue(source.contains(
-            ".accessibilityLabel(\"HDR presentation\")"
+            ".accessibilityLabel(\"HDR and EDR\")"
         ))
         XCTAssertTrue(source.contains(
             ".accessibilityLabel(\"Current HDR presentation\")"

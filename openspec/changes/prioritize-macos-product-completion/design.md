@@ -62,6 +62,8 @@ Completed checkboxes remain unchanged. Active platform-specific changes remain o
 
 The macOS product uses one Library workbench for the repeated path: observe current host availability, choose a host, browse its application catalog, and launch. An active session temporarily owns the content surface. Pairing and host addition are setup flows; Settings use the native low-frequency settings surface; Diagnostics is opened only for support and recovery. Reachability and pairing remain separate state dimensions, and automatic background orchestration keeps them current without requiring a normal-use refresh button.
 
+The in-session overlay is an action surface rather than a diagnostic banner. It identifies the current application and host, summarizes the configured stream profile, and exposes controls that take effect during the session: pointer mode, scaling, HDR/EDR permission, spatial audio, hide, and disconnect. On a wide macOS window it is width-bounded and anchored at the top center immediately below the title bar, rather than vertically centered over remote content. Normal streaming does not reserve primary canvas space for read-only implementation labels or entitlement prose; actual output detail remains available through accessibility semantics and the on-demand Settings or Diagnostics surfaces.
+
 Alternative considered: retain `Library`, `Stream`, `Diagnostics`, and `Settings` as equal permanent sidebar destinations. That structure gives the lowest-frequency surfaces the same weight as launch, wastes the stream canvas when no session exists, and makes the navigation hierarchy describe implementation modules instead of user goals.
 
 ## Risks / Trade-offs

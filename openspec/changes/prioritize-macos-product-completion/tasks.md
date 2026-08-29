@@ -25,7 +25,7 @@
 
 ## 5. M4 Native macOS Product Workflows
 
-- [ ] 5.1 Complete the macOS portions of host, pairing, catalog, launch, recovery, overlay, multiwindow, settings, and destructive confirmation workflows without advancing frozen-platform-only behavior. macOS acceptance includes a single high-frequency Library workbench, automatic reachability/discovery and selected-host catalog updates, separate reachability/pairing semantics, direct app launch, full-surface active streaming, native on-demand Settings, and on-demand Diagnostics; a permanent screen-category sidebar or normal-use manual refresh requirement does not satisfy this task.
+- [ ] 5.1 Complete the macOS portions of host, pairing, catalog, launch, recovery, overlay, multiwindow, settings, and destructive confirmation workflows without advancing frozen-platform-only behavior. macOS acceptance includes a single high-frequency Library workbench, automatic reachability/discovery and selected-host catalog updates, separate reachability/pairing semantics, direct app launch, full-surface active streaming, an action-oriented overlay with current app/host/profile and real in-session controls, native on-demand Settings, and on-demand Diagnostics; a permanent screen-category sidebar, normal-use manual refresh requirement, or read-only implementation-status banner does not satisfy this task.
 - [ ] 5.2 Remove arbitrary workflow error text and endpoint/identity echoes; implement bounded retention, deterministic deduplication, privacy-safe export/share, and adversarial redaction tests.
 - [ ] 5.3 Complete macOS keyboard navigation, Reduce Motion, localization expansion, VoiceOver, Voice Control, and physical multiwindow application acceptance.
 
