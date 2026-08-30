@@ -347,7 +347,8 @@ final class MacStreamInputCaptureView: MTKView {
 
     private func emitPointerMovement(_ event: NSEvent) {
         let deltaX = Double(event.deltaX)
-        let deltaY = Double(event.deltaY)
+        // AppKit's vertical delta is opposite Moonlight's screen-coordinate direction.
+        let deltaY = -Double(event.deltaY)
         guard deltaX.isFinite, deltaY.isFinite else { return }
         sampleHandler(.pointerMove(MacPointerSample(
             localPoint: backingPoint(for: event),

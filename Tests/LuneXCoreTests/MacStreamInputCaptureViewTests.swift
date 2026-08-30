@@ -259,7 +259,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(actual.y, backingPoint.y - backingBounds.minY, accuracy: 0.000_001)
     }
 
-    func testPointerMovementCarriesDeltasAndPressedButtonState() throws {
+    func testPointerMovementUsesMoonlightVerticalDirectionAndPressedButtonState() throws {
         let recorder = MacInputSampleRecorder()
         let view = makeView(recorder: recorder)
 
@@ -281,11 +281,44 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
 
         XCTAssertEqual(recorder.pointerSamples.count, 2)
         XCTAssertEqual(recorder.pointerSamples[0].deltaX, 7)
-        XCTAssertEqual(recorder.pointerSamples[0].deltaY, -3)
+        XCTAssertEqual(recorder.pointerSamples[0].deltaY, 3)
         XCTAssertEqual(recorder.pointerSamples[0].buttons, [.left, .right])
         XCTAssertEqual(recorder.pointerSamples[1].deltaX, -2)
-        XCTAssertEqual(recorder.pointerSamples[1].deltaY, 5)
+        XCTAssertEqual(recorder.pointerSamples[1].deltaY, -5)
         XCTAssertEqual(recorder.pointerSamples[1].buttons, [.right])
+    }
+
+    func testEveryPointerMovementEntryPointConvertsAppKitVerticalDirection() throws {
+        let recorder = MacInputSampleRecorder()
+        let view = makeView(recorder: recorder)
+
+        view.mouseMoved(with: try cgMouseEvent(
+            type: .mouseMoved,
+            buttonNumber: 0,
+            deltaX: 1,
+            deltaY: 2
+        ))
+        view.mouseDragged(with: try cgMouseEvent(
+            type: .leftMouseDragged,
+            buttonNumber: 0,
+            deltaX: 3,
+            deltaY: -4
+        ))
+        view.rightMouseDragged(with: try cgMouseEvent(
+            type: .rightMouseDragged,
+            buttonNumber: 1,
+            deltaX: 5,
+            deltaY: 6
+        ))
+        view.otherMouseDragged(with: try cgMouseEvent(
+            type: .otherMouseDragged,
+            buttonNumber: 2,
+            deltaX: 7,
+            deltaY: -8
+        ))
+
+        XCTAssertEqual(recorder.pointerSamples.map(\.deltaX), [1, 3, 5, 7])
+        XCTAssertEqual(recorder.pointerSamples.map(\.deltaY), [-2, 4, -6, 8])
     }
 
     func testButtonCallbacksMapLeftRightMiddleBackAndForward() throws {

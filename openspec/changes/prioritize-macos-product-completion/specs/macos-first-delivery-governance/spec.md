@@ -210,6 +210,11 @@ The macOS candidate SHALL pass native window, display, input, HDR/EDR, audio, pr
 - **WHEN** the stream window is occluded, minimized, unfocused, resized, made full screen, or moved across representative displays
 - **THEN** rendering and input ownership follow actual visibility/focus, drawable and pointer transforms match the current surface, cursor ownership remains balanced, and the stream resumes without stale presentation
 
+#### Scenario: Relative pointer direction matches remote screen coordinates
+- **WHEN** AppKit reports moved or dragged relative pointer deltas on the active macOS stream surface
+- **THEN** LuneX converts the vertical delta at the macOS capture boundary so positive Moonlight relative Y moves down and negative Y moves up on the remote screen
+- **AND** horizontal relative motion, Direct absolute coordinates, scroll direction, shared input adapters, and non-macOS behavior remain unchanged
+
 #### Scenario: HDR and spatial audio acceptance
 - **WHEN** representative HDR/SDR displays and supported/non-supported audio routes are exercised
 - **THEN** EDR mapping, SDR fallback, headroom transitions, spatial/fixed fallback, listener head tracking where entitled, route recovery, audible synchronization, and teardown match the recorded capability state
