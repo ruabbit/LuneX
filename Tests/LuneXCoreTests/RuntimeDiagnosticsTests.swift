@@ -199,6 +199,32 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testApplicationDiagnosticsClassifyEveryMediaReceiveFailure() {
+        let cases: [(MoonlightMediaReceiveError, String)] = [
+            (.invalidEndpoint, "media_receive_invalid_endpoint"),
+            (.invalidConfiguration, "media_receive_invalid_configuration"),
+            (.invalidLimits, "media_receive_invalid_limits"),
+            (
+                .missingAudioReservation,
+                "media_receive_missing_audio_reservation"
+            ),
+            (.receiveBufferOverflow, "media_receive_buffer_overflow"),
+            (
+                .unexpectedTermination,
+                "media_receive_unexpected_termination"
+            )
+        ]
+
+        for (error, expectedCode) in cases {
+            let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
+
+            XCTAssertEqual(diagnostic.category, .transport)
+            XCTAssertEqual(diagnostic.code, expectedCode)
+            XCTAssertEqual(diagnostic.action, .retryStream)
+        }
+    }
+
+    @MainActor
     func testApplicationDiagnosticsClassifyEncryptedAudioPacketFailures() {
         let invalidKey = ApplicationDiagnosticFactory.streamFailure(
             MoonlightAudioPacketDecryptError.invalidKeyMaterial

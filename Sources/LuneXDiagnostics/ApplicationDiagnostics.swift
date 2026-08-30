@@ -959,6 +959,23 @@ enum ApplicationDiagnosticFactory {
         if error is SunshineRTSPAnnounceError {
             return transportFailure(code: "rtsp_announce_failed")
         }
+        if let error = error as? MoonlightMediaReceiveError {
+            let code = switch error {
+            case .invalidEndpoint:
+                "media_receive_invalid_endpoint"
+            case .invalidConfiguration:
+                "media_receive_invalid_configuration"
+            case .invalidLimits:
+                "media_receive_invalid_limits"
+            case .missingAudioReservation:
+                "media_receive_missing_audio_reservation"
+            case .receiveBufferOverflow:
+                "media_receive_buffer_overflow"
+            case .unexpectedTermination:
+                "media_receive_unexpected_termination"
+            }
+            return transportFailure(code: code)
+        }
         if error is NetworkChannelError || error is ControlChannelError ||
             error is RTSPBootstrapError || error is SunshineRTSPNegotiationError ||
             error is RTSPMessageError {
