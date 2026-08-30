@@ -57,19 +57,22 @@ struct RuntimeProviderInventory: Sendable {
     let videoReceive: (any VideoReceiveProvider)?
     let audioReceive: (any AudioReceiveProvider)?
     let remoteInput: (any RemoteInputProvider)?
+    let realtimeSources: RuntimeProviderRealtimeSources
 
     init(
         pairing: (any PairingRuntimeProvider)? = nil,
         sessionControl: (any SessionControlProvider)? = nil,
         videoReceive: (any VideoReceiveProvider)? = nil,
         audioReceive: (any AudioReceiveProvider)? = nil,
-        remoteInput: (any RemoteInputProvider)? = nil
+        remoteInput: (any RemoteInputProvider)? = nil,
+        realtimeSources: RuntimeProviderRealtimeSources = .unavailable
     ) {
         self.pairing = pairing
         self.sessionControl = sessionControl
         self.videoReceive = videoReceive
         self.audioReceive = audioReceive
         self.remoteInput = remoteInput
+        self.realtimeSources = realtimeSources
     }
 
     var availability: RuntimeProviderAvailability {
@@ -85,10 +88,38 @@ struct RuntimeProviderInventory: Sendable {
     static let unavailable = RuntimeProviderInventory()
 }
 
+struct RuntimeProviderRealtimeSources: Sendable {
+    var videoReceive: (@Sendable () async -> MoonlightMediaReceiveSnapshot?)?
+    var audioReceive: (@Sendable () async -> MoonlightMediaReceiveSnapshot?)?
+    var remoteInput: (@Sendable () async -> RemoteInputRuntimeSnapshot?)?
+    var controlTransport: (@Sendable () async -> ENetConnectionDriverSnapshot?)?
+
+    static let unavailable = RuntimeProviderRealtimeSources()
+}
+
+struct ApplicationStreamRealtimeSnapshot: Equatable, Sendable {
+    var input: MacSessionInputCoordinatorSnapshot
+    var remoteInput: RemoteInputRuntimeSnapshot?
+    var controlTransport: ENetConnectionDriverSnapshot?
+    var videoReceive: MoonlightMediaReceiveSnapshot?
+    var audioReceive: MoonlightMediaReceiveSnapshot?
+    var videoDecode: VideoDecodePipelineSnapshot?
+    var videoPresentation: StreamVideoPresentationSnapshot
+}
+
 enum ProductionRuntimeProviderFactory {
     static func makeDefault() -> RuntimeProviderInventory {
-        let controlChannel = MoonlightControlChannel()
+        let controlDriver = ENetConnectionDriver()
+        let controlChannel = MoonlightControlChannel(driver: controlDriver)
         let audioDatagramReservations = MoonlightAudioDatagramReservationStore()
+        let videoReceive = MoonlightVideoReceiveProvider()
+        let audioReceive = MoonlightAudioReceiveProvider(
+            reservationStore: audioDatagramReservations
+        )
+        let remoteInput = MoonlightRemoteInputProvider(
+            sender: controlChannel,
+            feedbackSource: controlChannel
+        )
         let pairingProvider = PersistingPairingProvider(
             provider: MoonlightPairingProvider(),
             repository: JSONFileHostRepository(fileURL: AppStorageLocations.hostsFile)
@@ -99,13 +130,14 @@ enum ProductionRuntimeProviderFactory {
                 controlChannel: controlChannel,
                 audioDatagramReservations: audioDatagramReservations
             ),
-            videoReceive: MoonlightVideoReceiveProvider(),
-            audioReceive: MoonlightAudioReceiveProvider(
-                reservationStore: audioDatagramReservations
-            ),
-            remoteInput: MoonlightRemoteInputProvider(
-                sender: controlChannel,
-                feedbackSource: controlChannel
+            videoReceive: videoReceive,
+            audioReceive: audioReceive,
+            remoteInput: remoteInput,
+            realtimeSources: RuntimeProviderRealtimeSources(
+                videoReceive: { await videoReceive.snapshot() },
+                audioReceive: { await audioReceive.snapshot() },
+                remoteInput: { await remoteInput.snapshot() },
+                controlTransport: { await controlDriver.snapshot() }
             )
         )
     }
@@ -2331,6 +2363,25 @@ final class AppModel: ApplicationInputSink {
 
     func macSessionInputSnapshot() -> MacSessionInputCoordinatorSnapshot {
         macSessionInputCoordinator.snapshot()
+    }
+
+    func streamRealtimeSnapshot() async -> ApplicationStreamRealtimeSnapshot {
+        let input = macSessionInputCoordinator.snapshot()
+        let presentation = videoPresentationSource.snapshot()
+        async let remoteInput = runtimeProviders.realtimeSources.remoteInput?()
+        async let controlTransport = runtimeProviders.realtimeSources.controlTransport?()
+        async let videoReceive = runtimeProviders.realtimeSources.videoReceive?()
+        async let audioReceive = runtimeProviders.realtimeSources.audioReceive?()
+        async let videoDecode = sessionMediaEnvironment.videoDecodePipelineSnapshot()
+        return await ApplicationStreamRealtimeSnapshot(
+            input: input,
+            remoteInput: remoteInput ?? nil,
+            controlTransport: controlTransport ?? nil,
+            videoReceive: videoReceive ?? nil,
+            audioReceive: audioReceive ?? nil,
+            videoDecode: videoDecode,
+            videoPresentation: presentation
+        )
     }
 
     func exitMacRelativePointerCapture() {

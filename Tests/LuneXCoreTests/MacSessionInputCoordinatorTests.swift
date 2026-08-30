@@ -832,6 +832,44 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
         XCTAssertThrowsError(try MacSessionInputQueuePolicy(maximumPendingSamples: 4_097))
     }
 
+    func testSnapshotSeparatesQueueAgeFromSinkDeliveryDuration() async throws {
+        let clock = InputMonotonicClock(now: 1_000)
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            nowNanoseconds: { clock.read() }
+        )
+        let generation = await coordinator.activate()
+        let sample = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 0,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+        clock.advance(by: 10)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+        XCTAssertEqual(coordinator.enqueue(sample, generation: generation), .accepted)
+        clock.advance(by: 20)
+
+        let blocked = coordinator.snapshot()
+        XCTAssertEqual(blocked.inFlightSampleAgeNanoseconds, 20)
+        XCTAssertEqual(blocked.oldestQueuedSampleAgeNanoseconds, 20)
+        sink.resumeFirstSend()
+        await waitUntil { coordinator.snapshot().deliveredEventCount == 2 }
+
+        let delivered = coordinator.snapshot()
+        XCTAssertEqual(delivered.maximumQueueDelayNanoseconds, 20)
+        XCTAssertEqual(delivered.maximumDeliveryDurationNanoseconds, 20)
+        XCTAssertEqual(delivered.oldestQueuedSampleAgeNanoseconds, 0)
+        XCTAssertEqual(delivered.inFlightSampleAgeNanoseconds, 0)
+    }
+
     private func envelope(
         _ sample: MacPlatformInputSample,
         snapshot: StreamCoordinateSnapshot,
@@ -955,5 +993,22 @@ private final class CaptureCleanupRecorder {
 
     func releaseCapture() {
         releaseCount += 1
+    }
+}
+
+private final class InputMonotonicClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var now: UInt64
+
+    init(now: UInt64) {
+        self.now = now
+    }
+
+    func read() -> UInt64 {
+        lock.withLock { now }
+    }
+
+    func advance(by nanoseconds: UInt64) {
+        lock.withLock { now += nanoseconds }
     }
 }

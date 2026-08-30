@@ -106,6 +106,11 @@ struct MacSessionInputCoordinatorSnapshot: Equatable, Sendable {
     var droppedSampleCount: UInt64
     var rejectedSampleCount: UInt64
     var deliveryFailureCount: UInt64
+    var oldestQueuedSampleAgeNanoseconds: UInt64
+    var inFlightSampleAgeNanoseconds: UInt64
+    var lastDeliveryDurationNanoseconds: UInt64
+    var maximumQueueDelayNanoseconds: UInt64
+    var maximumDeliveryDurationNanoseconds: UInt64
     var hasPendingReleaseBarrier: Bool
     var hasInFlightReleaseBarrier: Bool
     var completedReleaseBarrierCount: UInt64
@@ -118,6 +123,7 @@ private struct MacInputSampleFIFO {
     private struct Entry {
         var output: InputAdapterOutput
         var coordinateSnapshot: StreamCoordinateSnapshot
+        var enqueuedAtNanoseconds: UInt64
     }
 
     private var storage: [Entry?]
@@ -131,12 +137,14 @@ private struct MacInputSampleFIFO {
 
     mutating func append(
         _ output: InputAdapterOutput,
-        coordinateSnapshot: StreamCoordinateSnapshot
+        coordinateSnapshot: StreamCoordinateSnapshot,
+        enqueuedAtNanoseconds: UInt64
     ) -> Bool {
         guard count < storage.count else { return false }
         storage[tail] = Entry(
             output: output,
-            coordinateSnapshot: coordinateSnapshot
+            coordinateSnapshot: coordinateSnapshot,
+            enqueuedAtNanoseconds: enqueuedAtNanoseconds
         )
         tail = (tail + 1) % storage.count
         count += 1
@@ -167,18 +175,24 @@ private struct MacInputSampleFIFO {
                 event: coalesced,
                 policy: .deliver
             ),
-            coordinateSnapshot: coordinateSnapshot
+            coordinateSnapshot: coordinateSnapshot,
+            enqueuedAtNanoseconds: older.enqueuedAtNanoseconds
         )
         return true
     }
 
-    mutating func popFirst() -> InputAdapterOutput? {
+    mutating func popFirst() -> (output: InputAdapterOutput, enqueuedAtNanoseconds: UInt64)? {
         guard count > 0 else { return nil }
         let entry = storage[head]
         storage[head] = nil
         head = (head + 1) % storage.count
         count -= 1
-        return entry?.output
+        return entry.map { ($0.output, $0.enqueuedAtNanoseconds) }
+    }
+
+    func oldestEnqueueTimeNanoseconds() -> UInt64? {
+        guard count > 0 else { return nil }
+        return storage[head]?.enqueuedAtNanoseconds
     }
 
     mutating func removeAll() {
@@ -199,6 +213,7 @@ final class MacSessionInputCoordinator {
     private let sink: any ApplicationInputSink
     private let policy: MacSessionInputQueuePolicy
     private let releaseCapture: @MainActor @Sendable () -> Void
+    private let nowNanoseconds: @Sendable () -> UInt64
 
     private var generation: MacSessionInputGeneration?
     private var isFocusEligible = false
@@ -217,6 +232,10 @@ final class MacSessionInputCoordinator {
     private var droppedSampleCount: UInt64 = 0
     private var rejectedSampleCount: UInt64 = 0
     private var deliveryFailureCount: UInt64 = 0
+    private var inFlightSampleStartedAtNanoseconds: UInt64?
+    private var lastDeliveryDurationNanoseconds: UInt64 = 0
+    private var maximumQueueDelayNanoseconds: UInt64 = 0
+    private var maximumDeliveryDurationNanoseconds: UInt64 = 0
     private var completedReleaseBarrierCount: UInt64 = 0
     private var releaseBarrierFailureCount: UInt64 = 0
     private var terminationReason: MacSessionInputTerminationReason?
@@ -226,10 +245,14 @@ final class MacSessionInputCoordinator {
     init(
         sink: any ApplicationInputSink,
         policy: MacSessionInputQueuePolicy = .realtime,
+        nowNanoseconds: @escaping @Sendable () -> UInt64 = {
+            DispatchTime.now().uptimeNanoseconds
+        },
         releaseCapture: @escaping @MainActor @Sendable () -> Void = {}
     ) {
         self.sink = sink
         self.policy = policy
+        self.nowNanoseconds = nowNanoseconds
         self.releaseCapture = releaseCapture
         queue = MacInputSampleFIFO(capacity: policy.maximumPendingSamples)
     }
@@ -292,15 +315,15 @@ final class MacSessionInputCoordinator {
         generation: MacSessionInputGeneration
     ) -> MacSessionInputEnqueueResult {
         guard let currentGeneration = self.generation else {
-            rejectedSampleCount &+= 1
+            rejectedSampleCount = Self.saturatedIncrement(rejectedSampleCount)
             return .rejected(.inactiveGeneration)
         }
         guard currentGeneration == generation else {
-            rejectedSampleCount &+= 1
+            rejectedSampleCount = Self.saturatedIncrement(rejectedSampleCount)
             return .rejected(.staleGeneration)
         }
         guard acceptsInput else {
-            rejectedSampleCount &+= 1
+            rejectedSampleCount = Self.saturatedIncrement(rejectedSampleCount)
             return .rejected(.admissionClosed)
         }
         let output = envelope.resolve()
@@ -308,27 +331,28 @@ final class MacSessionInputCoordinator {
             with: output,
             coordinateSnapshot: envelope.coordinateSnapshot
         ) {
-            acceptedSampleCount &+= 1
-            coalescedSampleCount &+= 1
+            acceptedSampleCount = Self.saturatedIncrement(acceptedSampleCount)
+            coalescedSampleCount = Self.saturatedIncrement(coalescedSampleCount)
             return .accepted
         }
         let outstanding = queue.count + (hasInFlightSample ? 1 : 0)
         guard outstanding < policy.maximumPendingSamples else {
-            rejectedSampleCount &+= 1
+            rejectedSampleCount = Self.saturatedIncrement(rejectedSampleCount)
             return .rejected(.capacityExceeded(
                 limit: policy.maximumPendingSamples
             ))
         }
         guard queue.append(
             output,
-            coordinateSnapshot: envelope.coordinateSnapshot
+            coordinateSnapshot: envelope.coordinateSnapshot,
+            enqueuedAtNanoseconds: nowNanoseconds()
         ) else {
-            rejectedSampleCount &+= 1
+            rejectedSampleCount = Self.saturatedIncrement(rejectedSampleCount)
             return .rejected(.capacityExceeded(
                 limit: policy.maximumPendingSamples
             ))
         }
-        acceptedSampleCount &+= 1
+        acceptedSampleCount = Self.saturatedIncrement(acceptedSampleCount)
         signalContinuation?.yield(())
         return .accepted
     }
@@ -390,7 +414,8 @@ final class MacSessionInputCoordinator {
     }
 
     func snapshot() -> MacSessionInputCoordinatorSnapshot {
-        MacSessionInputCoordinatorSnapshot(
+        let now = nowNanoseconds()
+        return MacSessionInputCoordinatorSnapshot(
             generation: generation,
             isFocusEligible: isFocusEligible,
             acceptsInput: acceptsInput,
@@ -403,6 +428,17 @@ final class MacSessionInputCoordinator {
             droppedSampleCount: droppedSampleCount,
             rejectedSampleCount: rejectedSampleCount,
             deliveryFailureCount: deliveryFailureCount,
+            oldestQueuedSampleAgeNanoseconds: Self.elapsedNanoseconds(
+                since: queue.oldestEnqueueTimeNanoseconds(),
+                now: now
+            ),
+            inFlightSampleAgeNanoseconds: Self.elapsedNanoseconds(
+                since: inFlightSampleStartedAtNanoseconds,
+                now: now
+            ),
+            lastDeliveryDurationNanoseconds: lastDeliveryDurationNanoseconds,
+            maximumQueueDelayNanoseconds: maximumQueueDelayNanoseconds,
+            maximumDeliveryDurationNanoseconds: maximumDeliveryDurationNanoseconds,
             hasPendingReleaseBarrier: hasPendingReleaseBarrier,
             hasInFlightReleaseBarrier: hasInFlightReleaseBarrier,
             completedReleaseBarrierCount: completedReleaseBarrierCount,
@@ -414,22 +450,36 @@ final class MacSessionInputCoordinator {
 
     private func drain(generation: MacSessionInputGeneration) async {
         while self.generation == generation, !Task.isCancelled {
-            if let output = queue.popFirst() {
+            if let pending = queue.popFirst() {
+                let output = pending.output
+                let startedAt = nowNanoseconds()
+                maximumQueueDelayNanoseconds = max(
+                    maximumQueueDelayNanoseconds,
+                    Self.elapsedNanoseconds(
+                        since: pending.enqueuedAtNanoseconds,
+                        now: startedAt
+                    )
+                )
                 hasInFlightSample = true
+                inFlightSampleStartedAtNanoseconds = startedAt
 
                 switch output.policy {
                 case .deliver:
                     guard let event = output.event else {
-                        droppedSampleCount &+= 1
+                        droppedSampleCount = Self.saturatedIncrement(droppedSampleCount)
                         hasInFlightSample = false
+                        finishInFlightSample()
                         continue
                     }
                     do {
                         try await sink.sendRemoteInput(event)
                     } catch {
                         guard self.generation == generation else { return }
-                        deliveryFailureCount &+= 1
+                        deliveryFailureCount = Self.saturatedIncrement(
+                            deliveryFailureCount
+                        )
                         hasInFlightSample = false
+                        finishInFlightSample()
                         beginTermination(
                             reason: .sendFailure,
                             requiresReleaseBarrier: false
@@ -438,13 +488,18 @@ final class MacSessionInputCoordinator {
                         return
                     }
                     guard self.generation == generation else { return }
-                    deliveredEventCount &+= 1
+                    deliveredEventCount = Self.saturatedIncrement(
+                        deliveredEventCount
+                    )
                 case .reserveLocally:
-                    reservedSampleCount &+= 1
+                    reservedSampleCount = Self.saturatedIncrement(
+                        reservedSampleCount
+                    )
                 case .drop:
-                    droppedSampleCount &+= 1
+                    droppedSampleCount = Self.saturatedIncrement(droppedSampleCount)
                 }
                 hasInFlightSample = false
+                finishInFlightSample()
                 continue
             }
 
@@ -460,7 +515,9 @@ final class MacSessionInputCoordinator {
                 try await sink.releaseRemoteInput()
             } catch {
                 guard self.generation == generation else { return }
-                releaseBarrierFailureCount &+= 1
+                releaseBarrierFailureCount = Self.saturatedIncrement(
+                    releaseBarrierFailureCount
+                )
                 hasInFlightReleaseBarrier = false
                 acceptsInput = false
                 if terminationReason != nil {
@@ -470,7 +527,9 @@ final class MacSessionInputCoordinator {
             }
             guard self.generation == generation else { return }
             hasInFlightReleaseBarrier = false
-            completedReleaseBarrierCount &+= 1
+            completedReleaseBarrierCount = Self.saturatedIncrement(
+                completedReleaseBarrierCount
+            )
             if terminationReason != nil {
                 signalContinuation?.finish()
                 return
@@ -488,11 +547,14 @@ final class MacSessionInputCoordinator {
         }
         acceptsInput = false
         isFocusEligible = false
-        droppedSampleCount &+= UInt64(queue.count)
+        droppedSampleCount = Self.saturatedAdd(
+            droppedSampleCount,
+            UInt64(queue.count)
+        )
         queue.removeAll()
         if !didReleaseCapture {
             didReleaseCapture = true
-            captureCleanupCount &+= 1
+            captureCleanupCount = Self.saturatedIncrement(captureCleanupCount)
             releaseCapture()
         }
         if requiresReleaseBarrier {
@@ -508,9 +570,13 @@ final class MacSessionInputCoordinator {
         acceptsInput = false
         isFocusEligible = false
         generation = nil
-        droppedSampleCount &+= UInt64(queue.count)
+        droppedSampleCount = Self.saturatedAdd(
+            droppedSampleCount,
+            UInt64(queue.count)
+        )
         queue.removeAll()
         hasInFlightSample = false
+        inFlightSampleStartedAtNanoseconds = nil
         hasPendingReleaseBarrier = false
         hasInFlightReleaseBarrier = false
         signalContinuation?.finish()
@@ -527,10 +593,44 @@ final class MacSessionInputCoordinator {
         droppedSampleCount = 0
         rejectedSampleCount = 0
         deliveryFailureCount = 0
+        inFlightSampleStartedAtNanoseconds = nil
+        lastDeliveryDurationNanoseconds = 0
+        maximumQueueDelayNanoseconds = 0
+        maximumDeliveryDurationNanoseconds = 0
         completedReleaseBarrierCount = 0
         releaseBarrierFailureCount = 0
         terminationReason = nil
         captureCleanupCount = 0
         didReleaseCapture = false
+    }
+
+    private func finishInFlightSample() {
+        let duration = Self.elapsedNanoseconds(
+            since: inFlightSampleStartedAtNanoseconds,
+            now: nowNanoseconds()
+        )
+        lastDeliveryDurationNanoseconds = duration
+        maximumDeliveryDurationNanoseconds = max(
+            maximumDeliveryDurationNanoseconds,
+            duration
+        )
+        inFlightSampleStartedAtNanoseconds = nil
+    }
+
+    private static func elapsedNanoseconds(
+        since start: UInt64?,
+        now: UInt64
+    ) -> UInt64 {
+        guard let start, now >= start else { return 0 }
+        return now - start
+    }
+
+    private static func saturatedIncrement(_ value: UInt64) -> UInt64 {
+        value == .max ? .max : value + 1
+    }
+
+    private static func saturatedAdd(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
+        let result = lhs.addingReportingOverflow(rhs)
+        return result.overflow ? .max : result.partialValue
     }
 }

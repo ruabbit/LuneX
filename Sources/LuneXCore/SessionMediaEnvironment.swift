@@ -211,9 +211,15 @@ protocol SessionMediaEnvironment: Sendable {
     func stop(sessionID: UUID) async -> SessionTeardownReport?
 
     func snapshot() async -> SessionMediaEnvironmentSnapshot
+
+    func videoDecodePipelineSnapshot() async -> VideoDecodePipelineSnapshot?
 }
 
 extension SessionMediaEnvironment {
+    func videoDecodePipelineSnapshot() async -> VideoDecodePipelineSnapshot? {
+        nil
+    }
+
     func applyMobileRuntime(
         _ application: SessionMobileRuntimeApplication
     ) async throws {
@@ -1389,6 +1395,12 @@ actor NativeSessionMediaEnvironment: SessionMediaEnvironment {
             tvVisionPlatformPresentation:
                 active.tvVisionPlatformPresentation
         )
+    }
+
+    func videoDecodePipelineSnapshot() async -> VideoDecodePipelineSnapshot? {
+        guard let provider = active?.videoProcessor
+            as? any VideoDecodePipelineSnapshotProviding else { return nil }
+        return await provider.videoDecodePipelineSnapshot()
     }
 
     private func publishAudioRuntime(

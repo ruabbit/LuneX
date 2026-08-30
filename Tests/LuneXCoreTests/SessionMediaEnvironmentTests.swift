@@ -3647,6 +3647,53 @@ final class SessionMediaEnvironmentTests: XCTestCase {
         XCTAssertNil(snapshot.latestFrameID)
     }
 
+    func testPresentationSnapshotSeparatesSupersededFramesFromPresentDelay()
+        throws {
+        let clock = PresentationMonotonicClock(now: 1_000)
+        let source = StreamVideoPresentationSource(
+            nowNanoseconds: { clock.read() }
+        )
+        let sessionID = UUID()
+        let mediaGeneration: UInt64 = 9
+        let pixelBuffer = try makePixelBuffer()
+        source.beginSession(sessionID: sessionID, mediaGeneration: mediaGeneration)
+        source.consume(
+            .sessionStarted(generation: 1, colorMetadata: .rec709VideoRange()),
+            sessionID: sessionID,
+            mediaGeneration: mediaGeneration
+        )
+
+        func publish(_ frameID: UInt64) {
+            source.consume(.frame(DecodedVideoFrame(
+                generation: 1,
+                frameID: frameID,
+                pixelBuffer: pixelBuffer,
+                presentationTimeStamp: .zero,
+                duration: CMTime(value: 1, timescale: 144),
+                infoFlags: [],
+                colorMetadata: .rec709VideoRange()
+            )), sessionID: sessionID, mediaGeneration: mediaGeneration)
+        }
+
+        publish(1)
+        clock.advance(by: 4_000_000)
+        source.recordPresentedFrame(1)
+        publish(2)
+        clock.advance(by: 3_000_000)
+        publish(3)
+        clock.advance(by: 2_000_000)
+        source.recordPresentedFrame(3)
+
+        let snapshot = source.snapshot()
+        XCTAssertEqual(snapshot.publishedFrameCount, 3)
+        XCTAssertEqual(snapshot.presentedFrameCount, 2)
+        XCTAssertEqual(snapshot.supersededBeforePresentationCount, 1)
+        XCTAssertEqual(snapshot.lastPresentedFrameID, 3)
+        XCTAssertEqual(snapshot.latestFrameAgeNanoseconds, 2_000_000)
+        XCTAssertEqual(snapshot.lastPresentationDelayNanoseconds, 2_000_000)
+        XCTAssertEqual(snapshot.maximumPresentationDelayNanoseconds, 4_000_000)
+    }
+
     func testMediaEnvironmentForwardsGenerationOwnedVideoPresentationEvents()
         async throws {
         let calls = MediaEnvironmentCallRecorder()
@@ -5280,5 +5327,22 @@ private func XCTAssertThrowsErrorAsync<T>(
         XCTFail("Expected async expression to throw.")
     } catch {
         errorHandler(error)
+    }
+}
+
+private final class PresentationMonotonicClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var now: UInt64
+
+    init(now: UInt64) {
+        self.now = now
+    }
+
+    func read() -> UInt64 {
+        lock.withLock { now }
+    }
+
+    func advance(by nanoseconds: UInt64) {
+        lock.withLock { now += nanoseconds }
     }
 }

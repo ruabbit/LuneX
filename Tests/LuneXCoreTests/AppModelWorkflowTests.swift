@@ -993,6 +993,91 @@ private actor LiveRecordingSessionControlProvider: SessionControlProvider {
 
 @MainActor
 final class AppModelWorkflowTests: XCTestCase {
+    func testRealtimeSnapshotAggregatesBoundedPipelineSources() async {
+        let videoReceive = MoonlightMediaReceiveSnapshot(
+            sessionID: UUID(),
+            generation: 3,
+            isActive: true,
+            discardedEventCount: 4
+        )
+        let audioReceive = MoonlightMediaReceiveSnapshot(
+            sessionID: UUID(),
+            generation: 5,
+            isActive: true,
+            discardedEventCount: 6
+        )
+        let remoteInput = RemoteInputRuntimeSnapshot(
+            isActive: true,
+            pendingEventCount: 1,
+            pendingPacketCount: 2,
+            pendingCallCount: 3,
+            hasInFlightDelivery: true,
+            acceptedCallCount: 7,
+            coalescedCallCount: 8,
+            deliveredCallCount: 9,
+            rejectedCallCount: 10,
+            deliveryFailureCount: 11
+        )
+        let controlTransport = ENetConnectionDriverSnapshot(
+            pendingSendCount: 1,
+            pendingServiceCount: 2,
+            enqueuedSendCount: 3,
+            sentPacketCount: 4,
+            flushCount: 5,
+            serviceCallCount: 6,
+            rejectedSendCount: 7,
+            rejectedServiceCount: 8,
+            maximumServiceSliceMilliseconds: 1,
+            maximumSendQueueDelayNanoseconds: 9
+        )
+        let videoDecode = VideoDecodePipelineSnapshot(
+            activeDecoderGeneration: 12,
+            isAwaitingIDR: false,
+            hasOutstandingIDRRequest: false,
+            isStopped: false,
+            isLifecyclePaused: false,
+            sessionCreationCount: 1,
+            decoderResetCount: 2,
+            formatChangeCount: 3,
+            colorMetadataChangeCount: 4,
+            idrRequestCount: 5,
+            idrRequestFailureCount: 6,
+            droppedAccessUnitCount: 7,
+            decoderDroppedFrameCount: 8,
+            decoderFailureCount: 9,
+            teardownCount: 10,
+            lifecyclePauseCount: 11,
+            lifecycleResumeCount: 12
+        )
+        let presentationSource = StreamVideoPresentationSource()
+        let environment = ControlledSessionMediaEnvironment(
+            videoDecodeSnapshot: videoDecode
+        )
+        let model = AppModel(
+            runtimeProviders: RuntimeProviderInventory(
+                realtimeSources: RuntimeProviderRealtimeSources(
+                    videoReceive: { videoReceive },
+                    audioReceive: { audioReceive },
+                    remoteInput: { remoteInput },
+                    controlTransport: { controlTransport }
+                )
+            ),
+            sessionMediaEnvironment: environment,
+            videoPresentationSource: presentationSource,
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+
+        let snapshot = await model.streamRealtimeSnapshot()
+
+        XCTAssertEqual(snapshot.videoReceive, videoReceive)
+        XCTAssertEqual(snapshot.audioReceive, audioReceive)
+        XCTAssertEqual(snapshot.remoteInput, remoteInput)
+        XCTAssertEqual(snapshot.controlTransport, controlTransport)
+        XCTAssertEqual(snapshot.videoDecode, videoDecode)
+        XCTAssertEqual(snapshot.videoPresentation, presentationSource.snapshot())
+        XCTAssertEqual(snapshot.input, model.macSessionInputSnapshot())
+    }
+
     func testLiveControlFailureReceiptIsFiniteAndPrivacyBounded() {
         let arbitrary = LiveSessionControlFailureCause.classify(
             LiveAdversarialControlError()
@@ -12623,6 +12708,7 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
     private let failsTVVisionDisplayApplication: Bool
     private let blocksFirstTVVisionActivation: Bool
     private let blocksFailingTVVisionActivationAfterTerminalEvent: Bool
+    private let videoDecodeSnapshot: VideoDecodePipelineSnapshot?
     private var startRecords: [StartRecord] = []
     private var stoppedSessionIDs: [UUID] = []
     private var continuations: [UUID: Continuation] = [:]
@@ -12653,7 +12739,8 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         failsInputSend: Bool = false,
         failsTVVisionDisplayApplication: Bool = false,
         blocksFirstTVVisionActivation: Bool = false,
-        blocksFailingTVVisionActivationAfterTerminalEvent: Bool = false
+        blocksFailingTVVisionActivationAfterTerminalEvent: Bool = false,
+        videoDecodeSnapshot: VideoDecodePipelineSnapshot? = nil
     ) {
         self.automaticallyReady = automaticallyReady
         self.failsLifecycleApplication = failsLifecycleApplication
@@ -12663,6 +12750,11 @@ private final class ControlledSessionMediaEnvironment: SessionMediaEnvironment, 
         shouldBlockTVVisionActivation = blocksFirstTVVisionActivation
         self.blocksFailingTVVisionActivationAfterTerminalEvent =
             blocksFailingTVVisionActivationAfterTerminalEvent
+        self.videoDecodeSnapshot = videoDecodeSnapshot
+    }
+
+    func videoDecodePipelineSnapshot() async -> VideoDecodePipelineSnapshot? {
+        videoDecodeSnapshot
     }
 
     func start(

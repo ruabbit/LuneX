@@ -63,6 +63,19 @@ struct RemoteInputDeliveryLimits: Equatable, Sendable {
     var maximumPendingCalls: Int
 }
 
+struct RemoteInputRuntimeSnapshot: Equatable, Sendable {
+    var isActive: Bool
+    var pendingEventCount: Int
+    var pendingPacketCount: Int
+    var pendingCallCount: Int
+    var hasInFlightDelivery: Bool
+    var acceptedCallCount: UInt64
+    var coalescedCallCount: UInt64
+    var deliveredCallCount: UInt64
+    var rejectedCallCount: UInt64
+    var deliveryFailureCount: UInt64
+}
+
 actor MoonlightRemoteInputProvider: RemoteInputProvider {
     private struct PendingDelivery {
         var event: RemoteInputEvent?
@@ -90,6 +103,11 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
     private var controllerRegistry = RemoteControllerRegistry()
     private var heldInputState = RemoteHeldInputState()
     private var feedbackContinuations: [UUID: AsyncStream<RemoteInputFeedback>.Continuation] = [:]
+    private var acceptedCallCount: UInt64 = 0
+    private var coalescedCallCount: UInt64 = 0
+    private var deliveredCallCount: UInt64 = 0
+    private var rejectedCallCount: UInt64 = 0
+    private var deliveryFailureCount: UInt64 = 0
 
     init(
         sender: any AuthenticatedInputFrameSending,
@@ -137,6 +155,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
         activeSessionID = sessionID
         controllerRegistry = RemoteControllerRegistry()
         heldInputState = RemoteHeldInputState()
+        resetMetrics()
         if let feedbackSource {
             let stream = await feedbackSource.controllerFeedbackMessages()
             guard activeSessionID == sessionID, generation == inputGeneration else {
@@ -197,6 +216,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
               nextEventCount <= deliveryLimits.maximumPendingEvents,
               pendingCallCount < deliveryLimits.maximumPendingCalls,
               pendingPacketCount - previousPacketCount + nextPacketCount <= deliveryLimits.maximumPendingPackets else {
+            rejectedCallCount = Self.saturatedIncrement(rejectedCallCount)
             throw RemoteInputRuntimeError.queueFull
         }
 
@@ -214,6 +234,7 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 pending[pending.count - 1].affectsHeldState =
                     pending[pending.count - 1].affectsHeldState || affectsHeldState
                 pendingPacketCount += coalescedPackets.count
+                coalescedCallCount = Self.saturatedIncrement(coalescedCallCount)
             } else {
                 pending.append(PendingDelivery(
                     event: resolution.event,
@@ -225,8 +246,24 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 pendingPacketCount += packets.count
             }
             pendingCallCount += 1
+            acceptedCallCount = Self.saturatedIncrement(acceptedCallCount)
             startDrainIfNeeded()
         }
+    }
+
+    func snapshot() -> RemoteInputRuntimeSnapshot {
+        RemoteInputRuntimeSnapshot(
+            isActive: activeSessionID != nil,
+            pendingEventCount: pending.count,
+            pendingPacketCount: pendingPacketCount,
+            pendingCallCount: pendingCallCount,
+            hasInFlightDelivery: currentDeliveryAffectsHeldState || drainTask != nil,
+            acceptedCallCount: acceptedCallCount,
+            coalescedCallCount: coalescedCallCount,
+            deliveredCallCount: deliveredCallCount,
+            rejectedCallCount: rejectedCallCount,
+            deliveryFailureCount: deliveryFailureCount
+        )
     }
 
     func feedback(sessionID: UUID) async -> AsyncStream<RemoteInputFeedback> {
@@ -363,6 +400,10 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                     throw CancellationError()
                 }
                 currentDeliveryAffectsHeldState = false
+                deliveredCallCount = Self.saturatedAdd(
+                    deliveredCallCount,
+                    UInt64(delivery.continuations.count)
+                )
                 for continuation in delivery.continuations {
                     continuation.resume()
                 }
@@ -378,6 +419,10 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                     drainTask = nil
                     return
                 }
+
+                deliveryFailureCount = Self.saturatedIncrement(
+                    deliveryFailureCount
+                )
 
                 activeSessionID = nil
                 generation &+= 1
@@ -556,6 +601,23 @@ actor MoonlightRemoteInputProvider: RemoteInputProvider {
                 return false
             }
         }
+    }
+
+    private func resetMetrics() {
+        acceptedCallCount = 0
+        coalescedCallCount = 0
+        deliveredCallCount = 0
+        rejectedCallCount = 0
+        deliveryFailureCount = 0
+    }
+
+    private static func saturatedIncrement(_ value: UInt64) -> UInt64 {
+        value == .max ? .max : value + 1
+    }
+
+    private static func saturatedAdd(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
+        let result = lhs.addingReportingOverflow(rhs)
+        return result.overflow ? .max : result.partialValue
     }
 }
 

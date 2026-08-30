@@ -2806,6 +2806,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
                 ),
                 completion: .asynchronous
             )
+            presentationSource.recordPresentedFrame(frame.frameID)
             if let resolvedConfiguration = snapshot.3 {
                 publishDiagnostic(.resolved(resolvedConfiguration))
             }

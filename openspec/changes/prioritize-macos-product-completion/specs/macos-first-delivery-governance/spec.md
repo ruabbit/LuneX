@@ -79,6 +79,13 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 - **AND** downstream packet-loss, incomplete-frame supersession, and IDR recovery remain responsible for restoring a decodable current video frame
 - **AND** real network, parser, configuration, cancellation, and unexpected-termination behavior remains fail closed
 
+#### Scenario: Realtime latency source remains observable
+- **WHEN** a macOS stream is active and pointer motion appears delayed or visually discontinuous
+- **THEN** on-demand Diagnostics SHALL expose bounded current and maximum macOS input queue and sink-delivery delay, accepted/coalesced/rejected/dropped input counts, remote-input and ENet send backlog, and media receive discard counts
+- **AND** Diagnostics SHALL expose decode drop/failure counts plus published, actually presented, and superseded-before-presentation frame counts and monotonic publish-to-present age
+- **AND** these values SHALL use saturated counters and monotonic time without creating a high-frequency event history or retaining payloads, endpoints, identities, frame contents, credentials, or arbitrary error text
+- **AND** deterministic or live evidence SHALL distinguish input admission/send delay from media receive, decode, and presentation replacement before assigning the visible discontinuity to one layer
+
 All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
 
 Every production network URL SHALL preserve the parsed endpoint port even when the persisted or user-facing address omits the default GameStream port. The macOS application SHALL declare a non-empty Local Network usage description and every Bonjour service type it browses, including `_nvstream._tcp`, in its product Info.plist.
@@ -147,7 +154,7 @@ Every production network URL SHALL preserve the parsed endpoint port even when t
 #### Scenario: Long-lived media UDP is temporarily idle
 - **WHEN** a negotiated video or audio UDP receiver is waiting and no datagram arrives within an arbitrary polling window
 - **THEN** LuneX SHALL keep the media channel active instead of cancelling the Network.framework connection or publishing a terminal transport failure solely because the receive was idle
-- **AND** explicit session stop, consumer cancellation, send failure, actual receive failure, invalid or oversized data, and buffer overflow SHALL retain bounded fail-closed teardown
+- **AND** explicit session stop, consumer cancellation, send failure, actual receive failure, and invalid or oversized data SHALL retain bounded fail-closed teardown
 - **AND** connect and send deadlines plus every TCP/RTSP transaction deadline and terminal-close rule SHALL remain unchanged
 
 #### Scenario: Local client disconnect preserves the remote application

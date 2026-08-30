@@ -2554,6 +2554,7 @@ private struct VirtualControllerOverlay: View {
 
 struct DiagnosticsView: View {
     @Environment(AppModel.self) private var appModel
+    @State private var realtimeSnapshot: ApplicationStreamRealtimeSnapshot?
 
     var body: some View {
         List {
@@ -2561,6 +2562,58 @@ struct DiagnosticsView: View {
                 LabeledContent("Session", value: appModel.session.phase.label)
                 LabeledContent("Render policy", value: appModel.renderState.policy.label)
                 LabeledContent("Display headroom", value: String(format: "%.2fx current", appModel.renderState.headroom.current))
+                if let realtimeSnapshot {
+                    LabeledContent(
+                        "Input queue",
+                        value: "\(realtimeSnapshot.input.queuedSampleCount) queued, \(realtimeSnapshot.input.coalescedSampleCount) coalesced"
+                    )
+                    LabeledContent(
+                        "Input latency",
+                        value: "queue \(milliseconds(realtimeSnapshot.input.oldestQueuedSampleAgeNanoseconds)) / \(milliseconds(realtimeSnapshot.input.maximumQueueDelayNanoseconds)) max; send \(milliseconds(realtimeSnapshot.input.lastDeliveryDurationNanoseconds)) / \(milliseconds(realtimeSnapshot.input.maximumDeliveryDurationNanoseconds)) max"
+                    )
+                    LabeledContent(
+                        "Input loss",
+                        value: "\(realtimeSnapshot.input.rejectedSampleCount) rejected, \(realtimeSnapshot.input.droppedSampleCount) dropped"
+                    )
+                    if let remote = realtimeSnapshot.remoteInput {
+                        LabeledContent(
+                            "Remote input",
+                            value: "\(remote.pendingCallCount) pending, \(remote.coalescedCallCount) coalesced, \(remote.rejectedCallCount) rejected"
+                        )
+                    }
+                    if let transport = realtimeSnapshot.controlTransport {
+                        LabeledContent(
+                            "Control transport",
+                            value: "\(transport.pendingSendCount) pending, \(transport.rejectedSendCount) rejected, \(milliseconds(transport.maximumSendQueueDelayNanoseconds)) max queue"
+                        )
+                    }
+                    if let receive = realtimeSnapshot.videoReceive {
+                        LabeledContent(
+                            "Video receive",
+                            value: "\(receive.discardedEventCount) obsolete events discarded"
+                        )
+                    }
+                    if let receive = realtimeSnapshot.audioReceive {
+                        LabeledContent(
+                            "Audio receive",
+                            value: "\(receive.discardedEventCount) obsolete events discarded"
+                        )
+                    }
+                    if let decode = realtimeSnapshot.videoDecode {
+                        LabeledContent(
+                            "Video decode",
+                            value: "\(decode.droppedAccessUnitCount) access units, \(decode.decoderDroppedFrameCount) frames, \(decode.decoderFailureCount) failures"
+                        )
+                    }
+                    LabeledContent(
+                        "Video presentation",
+                        value: "\(realtimeSnapshot.videoPresentation.publishedFrameCount) published, \(realtimeSnapshot.videoPresentation.presentedFrameCount) presented, \(realtimeSnapshot.videoPresentation.supersededBeforePresentationCount) superseded"
+                    )
+                    LabeledContent(
+                        "Latest frame",
+                        value: "\(milliseconds(realtimeSnapshot.videoPresentation.latestFrameAgeNanoseconds)) old; \(milliseconds(realtimeSnapshot.videoPresentation.lastPresentationDelayNanoseconds)) / \(milliseconds(realtimeSnapshot.videoPresentation.maximumPresentationDelayNanoseconds)) max present"
+                    )
+                }
             }
 
             Section("Events") {
@@ -2615,6 +2668,16 @@ struct DiagnosticsView: View {
                 #endif
             }
         }
+        .task {
+            while !Task.isCancelled {
+                realtimeSnapshot = await appModel.streamRealtimeSnapshot()
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
+
+    private func milliseconds(_ nanoseconds: UInt64) -> String {
+        String(format: "%.1f ms", Double(nanoseconds) / 1_000_000)
     }
 
     private func color(for severity: RuntimeDiagnosticSeverity) -> Color {

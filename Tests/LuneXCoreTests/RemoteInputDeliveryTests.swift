@@ -670,9 +670,17 @@ final class RemoteInputDeliveryTests: XCTestCase {
             try await provider.send(.pointer(.relativeMove(deltaX: 3, deltaY: 3, buttons: [])), sessionID: sessionID)
         }
 
+        let queuedSnapshot = await provider.snapshot()
+        XCTAssertEqual(queuedSnapshot.acceptedCallCount, 3)
+        XCTAssertEqual(queuedSnapshot.coalescedCallCount, 1)
+        XCTAssertEqual(queuedSnapshot.rejectedCallCount, 1)
+
         try await barrier.value
         try await firstMove.value
         try await secondMove.value
+        let deliveredSnapshot = await provider.snapshot()
+        XCTAssertEqual(deliveredSnapshot.deliveredCallCount, 3)
+        XCTAssertEqual(deliveredSnapshot.deliveryFailureCount, 0)
         let sends = await sender.recordedSends()
         XCTAssertEqual(sends.count, 2)
         XCTAssertEqual(try relativeMovementDelta(sends[1].packet), RelativeMovementDelta(x: 3, y: 3))

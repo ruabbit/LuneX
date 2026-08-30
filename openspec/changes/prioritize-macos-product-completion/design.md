@@ -82,6 +82,12 @@ The production audio and video datagram receivers use fixed-capacity newest-even
 
 Alternative considered: terminate the media stream when its receive FIFO fills. At high negotiated frame rates and bitrates, a transient scheduling delay can fill that FIFO even when the host and network remain healthy; converting this recoverable realtime backlog into a terminal session error produces avoidable disconnects and diverges from Moonlight's latest-media-first behavior.
 
+### 10. Diagnose latency by layer without logging realtime payloads
+
+The on-demand Diagnostics window polls one fixed-size realtime snapshot at a low rate. The snapshot separates macOS capture queue age and sink-delivery duration from the remote-input queue and ENet send delay, then reports receiver discards, decoder drops/failures, published frames, actually presented frames, frames superseded before presentation, and monotonic publish-to-present delay. Counters saturate and clocks are monotonic; no endpoint, identity, payload, frame content, credential, or arbitrary error string enters the snapshot or event history.
+
+Alternative considered: infer the cause from cursor appearance or append an event for every input and video frame. Visual inspection alone cannot distinguish host input from client presentation pacing, while high-frequency diagnostic events would add allocation and observation work to the path being measured.
+
 ## Risks / Trade-offs
 
 - [Shared code may drift on frozen platforms] -> Run generic non-macOS target builds only when shared code or project generation changes could break them; do not treat those builds as product progress.

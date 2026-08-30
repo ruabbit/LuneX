@@ -9,6 +9,12 @@ struct StreamVideoPresentationSnapshot: Equatable, Sendable {
     var deliveryRevision: UInt64
     var latestFrameID: UInt64?
     var publishedFrameCount: UInt64
+    var presentedFrameCount: UInt64
+    var supersededBeforePresentationCount: UInt64
+    var lastPresentedFrameID: UInt64?
+    var latestFrameAgeNanoseconds: UInt64
+    var lastPresentationDelayNanoseconds: UInt64
+    var maximumPresentationDelayNanoseconds: UInt64
     var staleFrameDropCount: UInt64
     var clearCount: UInt64
     var activeSubscriptionCount: Int
@@ -126,27 +132,38 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
     }
 
     private let lock = NSLock()
+    private let nowNanoseconds: @Sendable () -> UInt64
     private var sessionID: UUID?
     private var mediaGeneration: UInt64?
     private var decoderGeneration: UInt64?
     private var invalidatedDecoderGeneration: UInt64?
     private var latestFrame: DecodedVideoFrame?
+    private var latestFramePublishedAtNanoseconds: UInt64?
+    private var lastPresentedFrameID: UInt64?
     private var lastPublishedContract: StreamVideoDecodedPresentationContract?
     private var presentationRevision: UInt64
     private var deliveryRevision: UInt64
     private var isPresentationRevisionExhausted = false
     private var isDeliveryRevisionExhausted = false
     private var publishedFrameCount: UInt64 = 0
+    private var presentedFrameCount: UInt64 = 0
+    private var supersededBeforePresentationCount: UInt64 = 0
+    private var lastPresentationDelayNanoseconds: UInt64 = 0
+    private var maximumPresentationDelayNanoseconds: UInt64 = 0
     private var staleFrameDropCount: UInt64 = 0
     private var clearCount: UInt64 = 0
     private var subscribers: [UUID: Subscriber] = [:]
 
     init(
         initialPresentationRevision: UInt64 = 0,
-        initialDeliveryRevision: UInt64 = 0
+        initialDeliveryRevision: UInt64 = 0,
+        nowNanoseconds: @escaping @Sendable () -> UInt64 = {
+            DispatchTime.now().uptimeNanoseconds
+        }
     ) {
         presentationRevision = initialPresentationRevision
         deliveryRevision = initialDeliveryRevision
+        self.nowNanoseconds = nowNanoseconds
     }
 
     @discardableResult
@@ -160,13 +177,15 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                 || self.mediaGeneration != mediaGeneration
                 || latestFrame != nil
                 || decoderGeneration != nil {
-                clearCount &+= 1
+                clearCount = Self.saturatedIncrement(clearCount)
             }
             self.sessionID = sessionID
             self.mediaGeneration = mediaGeneration
             decoderGeneration = nil
             invalidatedDecoderGeneration = nil
             latestFrame = nil
+            latestFramePublishedAtNanoseconds = nil
+            lastPresentedFrameID = nil
             lastPublishedContract = nil
             guard let event = makeEvent({ ownership in
                 .cleared(ownership: ownership, decoderGeneration: nil)
@@ -198,14 +217,14 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
             guard self.sessionID == sessionID,
                   self.mediaGeneration == mediaGeneration else {
                 if case .frame = event {
-                    staleFrameDropCount &+= 1
+                    staleFrameDropCount = Self.saturatedIncrement(staleFrameDropCount)
                 }
                 return nil
             }
             guard !isPresentationRevisionExhausted,
                   !isDeliveryRevisionExhausted else {
                 if case .frame = event {
-                    staleFrameDropCount &+= 1
+                    staleFrameDropCount = Self.saturatedIncrement(staleFrameDropCount)
                 }
                 return nil
             }
@@ -217,6 +236,8 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                 }
                 decoderGeneration = generation
                 latestFrame = nil
+                latestFramePublishedAtNanoseconds = nil
+                lastPresentedFrameID = nil
                 let decoderContract = StreamVideoDecoderPresentationContract(
                     decoderGeneration: generation,
                     colorMetadata: colorMetadata
@@ -244,11 +265,18 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                     : presentationEvent
             case let .frame(frame):
                 guard frame.generation == decoderGeneration else {
-                    staleFrameDropCount &+= 1
+                    staleFrameDropCount = Self.saturatedIncrement(staleFrameDropCount)
                     return nil
                 }
+                if let latestFrame,
+                   latestFrame.frameID != lastPresentedFrameID {
+                    supersededBeforePresentationCount = Self.saturatedIncrement(
+                        supersededBeforePresentationCount
+                    )
+                }
                 latestFrame = frame
-                publishedFrameCount &+= 1
+                latestFramePublishedAtNanoseconds = nowNanoseconds()
+                publishedFrameCount = Self.saturatedIncrement(publishedFrameCount)
                 let contract = StreamVideoDecodedPresentationContract(
                     decoderGeneration: frame.generation,
                     colorMetadata: frame.colorMetadata,
@@ -285,8 +313,10 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                 guard generation == decoderGeneration else { return nil }
                 decoderGeneration = nil
                 latestFrame = nil
+                latestFramePublishedAtNanoseconds = nil
+                lastPresentedFrameID = nil
                 lastPublishedContract = nil
-                clearCount &+= 1
+                clearCount = Self.saturatedIncrement(clearCount)
                 guard let presentationEvent = makeEvent({ ownership in
                     .cleared(
                         ownership: ownership,
@@ -312,8 +342,10 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                     return nil
                 }
                 latestFrame = nil
+                latestFramePublishedAtNanoseconds = nil
+                lastPresentedFrameID = nil
                 lastPublishedContract = nil
-                clearCount &+= 1
+                clearCount = Self.saturatedIncrement(clearCount)
                 guard let presentationEvent = makeEvent({ ownership in
                     .cleared(
                         ownership: ownership,
@@ -344,6 +376,25 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
 
     func currentFrame() -> DecodedVideoFrame? {
         withLock { latestFrame }
+    }
+
+    func recordPresentedFrame(_ frameID: UInt64) {
+        let now = nowNanoseconds()
+        withLock {
+            guard latestFrame?.frameID == frameID,
+                  lastPresentedFrameID != frameID else { return }
+            lastPresentedFrameID = frameID
+            presentedFrameCount = Self.saturatedIncrement(presentedFrameCount)
+            let delay = Self.elapsedNanoseconds(
+                since: latestFramePublishedAtNanoseconds,
+                now: now
+            )
+            lastPresentationDelayNanoseconds = delay
+            maximumPresentationDelayNanoseconds = max(
+                maximumPresentationDelayNanoseconds,
+                delay
+            )
+        }
     }
 
     func subscribe(
@@ -406,7 +457,7 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                 || latestFrame != nil
                 || lastPublishedContract != nil
             if decoderGeneration != nil || latestFrame != nil {
-                clearCount &+= 1
+                clearCount = Self.saturatedIncrement(clearCount)
             }
             if let decoderGeneration {
                 invalidatedDecoderGeneration = max(
@@ -416,6 +467,8 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
             }
             decoderGeneration = nil
             latestFrame = nil
+            latestFramePublishedAtNanoseconds = nil
+            lastPresentedFrameID = nil
             lastPublishedContract = nil
             guard hadPresentation else { return nil }
             guard let event = makeEvent({ ownership in
@@ -469,8 +522,10 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
             decoderGeneration = nil
             invalidatedDecoderGeneration = nil
             latestFrame = nil
+            latestFramePublishedAtNanoseconds = nil
+            lastPresentedFrameID = nil
             lastPublishedContract = nil
-            clearCount &+= 1
+            clearCount = Self.saturatedIncrement(clearCount)
             return publication == nil || isDeliveryRevisionExhausted
                 ? nil
                 : event
@@ -480,7 +535,8 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
     }
 
     func snapshot() -> StreamVideoPresentationSnapshot {
-        withLock {
+        let now = nowNanoseconds()
+        return withLock {
             StreamVideoPresentationSnapshot(
                 sessionID: sessionID,
                 mediaGeneration: mediaGeneration,
@@ -489,6 +545,18 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                 deliveryRevision: deliveryRevision,
                 latestFrameID: latestFrame?.frameID,
                 publishedFrameCount: publishedFrameCount,
+                presentedFrameCount: presentedFrameCount,
+                supersededBeforePresentationCount:
+                    supersededBeforePresentationCount,
+                lastPresentedFrameID: lastPresentedFrameID,
+                latestFrameAgeNanoseconds: Self.elapsedNanoseconds(
+                    since: latestFramePublishedAtNanoseconds,
+                    now: now
+                ),
+                lastPresentationDelayNanoseconds:
+                    lastPresentationDelayNanoseconds,
+                maximumPresentationDelayNanoseconds:
+                    maximumPresentationDelayNanoseconds,
                 staleFrameDropCount: staleFrameDropCount,
                 clearCount: clearCount,
                 activeSubscriptionCount: subscribers.count,
@@ -525,6 +593,8 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
         decoderGeneration = nil
         invalidatedDecoderGeneration = nil
         latestFrame = nil
+        latestFramePublishedAtNanoseconds = nil
+        lastPresentedFrameID = nil
         lastPublishedContract = nil
     }
 
@@ -598,6 +668,18 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
         _ = withLock {
             subscribers.removeValue(forKey: subscriptionID)
         }
+    }
+
+    private static func saturatedIncrement(_ value: UInt64) -> UInt64 {
+        value == .max ? .max : value + 1
+    }
+
+    private static func elapsedNanoseconds(
+        since start: UInt64?,
+        now: UInt64
+    ) -> UInt64 {
+        guard let start, now >= start else { return 0 }
+        return now - start
     }
 
     private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
