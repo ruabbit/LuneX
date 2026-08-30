@@ -48,12 +48,21 @@ struct StreamMetalViewSchedule: Equatable, Sendable {
 }
 
 enum StreamMetalViewScheduleResolver {
-    static func resolve(_ policy: RenderPolicy) -> StreamMetalViewSchedule {
+    private static let fallbackFramesPerSecond = 60
+
+    static func resolve(
+        _ policy: RenderPolicy,
+        negotiatedFramesPerSecond: Int? = nil,
+        maximumDisplayFramesPerSecond: Int? = nil
+    ) -> StreamMetalViewSchedule {
         switch policy {
         case .active:
             return StreamMetalViewSchedule(
                 isPaused: false,
-                preferredFramesPerSecond: 60,
+                preferredFramesPerSecond: activeFramesPerSecond(
+                    negotiated: negotiatedFramesPerSecond,
+                    displayMaximum: maximumDisplayFramesPerSecond
+                ),
                 requestsImmediateDraw: false
             )
         case .throttled:
@@ -69,6 +78,19 @@ enum StreamMetalViewScheduleResolver {
                 requestsImmediateDraw: true
             )
         }
+    }
+
+    private static func activeFramesPerSecond(
+        negotiated: Int?,
+        displayMaximum: Int?
+    ) -> Int {
+        guard let negotiated,
+              negotiated > 0,
+              let displayMaximum,
+              displayMaximum > 0 else {
+            return fallbackFramesPerSecond
+        }
+        return min(negotiated, displayMaximum)
     }
 }
 
@@ -3894,7 +3916,12 @@ struct MetalStreamSurface: NSViewRepresentable {
         _ state: StreamRenderState,
         to view: MTKView
     ) -> StreamMetalViewSchedule {
-        let schedule = StreamMetalViewScheduleResolver.resolve(state.policy)
+        let schedule = StreamMetalViewScheduleResolver.resolve(
+            state.policy,
+            negotiatedFramesPerSecond: state.negotiatedVideoFramesPerSecond,
+            maximumDisplayFramesPerSecond:
+                state.maximumDisplayFramesPerSecond
+        )
         view.isPaused = schedule.isPaused
         view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
         return schedule

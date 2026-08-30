@@ -7,6 +7,7 @@ final class PlatformLifecycleState {
     var isVisible = true
     var isFocused = true
     private(set) var displayID: String?
+    private(set) var maximumDisplayFramesPerSecond: Int?
     var drawableSize: PixelSize = .zero
     private(set) var headroom = DisplayHeadroom()
     private(set) var displayRevision = HDRDisplayRevision(rawValue: 0)
@@ -43,10 +44,14 @@ final class PlatformLifecycleState {
     @discardableResult
     func updateSurface(
         displayID: String?,
+        maximumDisplayFramesPerSecond: Int? = nil,
         headroom: DisplayHeadroom,
         drawableSize: PixelSize
     ) -> HDRDisplayPublicationOutcome {
         self.displayID = displayID
+        self.maximumDisplayFramesPerSecond = Self.validFramesPerSecond(
+            maximumDisplayFramesPerSecond
+        )
         self.headroom = headroom
         self.drawableSize = drawableSize
         let outcome = publishDisplayState(isSurfaceAttached: true)
@@ -58,12 +63,14 @@ final class PlatformLifecycleState {
     func updateSurface(
         for attachmentID: UUID,
         displayID: String?,
+        maximumDisplayFramesPerSecond: Int? = nil,
         headroom: DisplayHeadroom,
         drawableSize: PixelSize
     ) -> HDRDisplayPublicationOutcome? {
         guard activeSurfaceAttachmentID == attachmentID else { return nil }
         return updateSurface(
             displayID: displayID,
+            maximumDisplayFramesPerSecond: maximumDisplayFramesPerSecond,
             headroom: headroom,
             drawableSize: drawableSize
         )
@@ -74,6 +81,7 @@ final class PlatformLifecycleState {
         isVisible = false
         isFocused = false
         displayID = nil
+        maximumDisplayFramesPerSecond = nil
         headroom = DisplayHeadroom()
         drawableSize = .zero
         _ = publishDisplayState(isSurfaceAttached: false)
@@ -101,6 +109,11 @@ final class PlatformLifecycleState {
         isDisplayRevisionExhausted = displayPublisher.isRevisionExhausted
         return outcome
     }
+
+    private static func validFramesPerSecond(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
+    }
 }
 
 @Observable
@@ -120,6 +133,22 @@ final class StreamRenderState {
     }
     var displaySnapshot: HDRDisplaySnapshot? {
         didSet { publishRevisionIfChanged(displaySnapshot, oldValue: oldValue) }
+    }
+    var negotiatedVideoFramesPerSecond: Int? {
+        didSet {
+            publishRevisionIfChanged(
+                negotiatedVideoFramesPerSecond,
+                oldValue: oldValue
+            )
+        }
+    }
+    var maximumDisplayFramesPerSecond: Int? {
+        didSet {
+            publishRevisionIfChanged(
+                maximumDisplayFramesPerSecond,
+                oldValue: oldValue
+            )
+        }
     }
     var isDisplayRevisionExhausted = false {
         didSet {

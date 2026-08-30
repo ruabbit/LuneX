@@ -86,6 +86,14 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 - **AND** these values SHALL use saturated counters and monotonic time without creating a high-frequency event history or retaining payloads, endpoints, identities, frame contents, credentials, or arbitrary error text
 - **AND** deterministic or live evidence SHALL distinguish input admission/send delay from media receive, decode, and presentation replacement before assigning the visible discontinuity to one layer
 
+#### Scenario: Active Metal presentation follows source and display cadence
+- **WHEN** a macOS stream has a valid negotiated video frame rate and its current window has an attached display with a valid maximum frame rate
+- **THEN** active Metal presentation SHALL request the lower of the negotiated source rate and current display maximum rather than a fixed 60 fps
+- **AND** window screen changes, backing-property changes, and application screen-parameter changes SHALL refresh the requested active cadence through the current surface owner
+- **AND** a stale or detached window SHALL NOT overwrite a replacement surface's cadence
+- **AND** throttled presentation SHALL remain 15 fps while idle or paused presentation remains stopped with an immediate clear
+- **AND** missing or invalid cadence inputs SHALL use a bounded 60 fps fallback
+
 All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
 
 Every production network URL SHALL preserve the parsed endpoint port even when the persisted or user-facing address omits the default GameStream port. The macOS application SHALL declare a non-empty Local Network usage description and every Bonjour service type it browses, including `_nvstream._tcp`, in its product Info.plist.

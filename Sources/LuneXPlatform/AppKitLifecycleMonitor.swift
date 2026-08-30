@@ -26,12 +26,14 @@ protocol AppKitLifecycleMonitoring: AnyObject {
 @MainActor
 final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     typealias WindowVisibilityProvider = @MainActor (NSWindow) -> Bool
+    typealias MaximumFramesPerSecondProvider = @MainActor (NSScreen?) -> Int?
 
     private let logger = Logger(subsystem: "dev.lunex.client.macos", category: "window.lifecycle")
     private weak var window: NSWindow?
     private weak var surface: NSView?
     private let lifecycle: PlatformLifecycleState
     private let windowVisibilityProvider: WindowVisibilityProvider
+    private let maximumFramesPerSecondProvider: MaximumFramesPerSecondProvider
     private let attachmentID = UUID()
     private var observers: [NSObjectProtocol] = []
 
@@ -45,10 +47,14 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
                 isKeyWindow: $0.isKeyWindow,
                 isApplicationActive: NSApp.isActive
             )
+        },
+        maximumFramesPerSecondProvider: @escaping MaximumFramesPerSecondProvider = {
+            $0?.maximumFramesPerSecond
         }
     ) {
         self.lifecycle = lifecycle
         self.windowVisibilityProvider = windowVisibilityProvider
+        self.maximumFramesPerSecondProvider = maximumFramesPerSecondProvider
     }
 
     func attach(to window: NSWindow, surface: NSView) {
@@ -219,6 +225,8 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
         guard lifecycle.updateSurface(
             for: attachmentID,
             displayID: displayIdentity(window.screen),
+            maximumDisplayFramesPerSecond:
+                maximumFramesPerSecondProvider(window.screen),
             headroom: DisplayHeadroomReader.read(screen: window.screen),
             drawableSize: drawableSize
         ) != nil else { return }

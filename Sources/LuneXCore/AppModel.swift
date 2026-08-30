@@ -1779,6 +1779,8 @@ final class AppModel: ApplicationInputSink {
         renderState.transform.drawableSize = lifecycle.drawableSize
         renderState.headroom = lifecycle.headroom
         renderState.displaySnapshot = lifecycle.displaySnapshot
+        renderState.maximumDisplayFramesPerSecond =
+            lifecycle.maximumDisplayFramesPerSecond
         renderState.isDisplayRevisionExhausted = lifecycle.isDisplayRevisionExhausted
         refreshHDRRenderResolution()
 #if os(macOS)
@@ -4358,7 +4360,8 @@ final class AppModel: ApplicationInputSink {
             throw error
         }
         beginVideoPresentation(
-            negotiatedColorMetadata: configuration.video.colorMetadata
+            negotiatedColorMetadata: configuration.video.colorMetadata,
+            negotiatedFramesPerSecond: configuration.video.frameRate
         )
         activeDecodedSourceSize = PixelSize(
             width: configuration.video.width,
@@ -7029,12 +7032,14 @@ final class AppModel: ApplicationInputSink {
     }
 
     private func beginVideoPresentation(
-        negotiatedColorMetadata: VideoColorMetadata
+        negotiatedColorMetadata: VideoColorMetadata,
+        negotiatedFramesPerSecond: Int
     ) {
         activeVideoPresentationRevision = 0
         activeVideoDecoderGeneration = nil
         highestVideoDecoderGeneration = 0
         renderState.negotiatedVideoColorMetadata = negotiatedColorMetadata
+        renderState.negotiatedVideoFramesPerSecond = negotiatedFramesPerSecond
         renderState.decodedVideoPresentationContract = nil
         refreshHDRRenderResolution()
     }
@@ -7123,6 +7128,7 @@ final class AppModel: ApplicationInputSink {
         activeVideoDecoderGeneration = nil
         highestVideoDecoderGeneration = 0
         renderState.negotiatedVideoColorMetadata = nil
+        renderState.negotiatedVideoFramesPerSecond = nil
         renderState.decodedVideoPresentationContract = nil
         renderState.hdrRenderResolution = .closed(.inactiveSession)
         publishHDRPresentationDiagnostic(.inactive)

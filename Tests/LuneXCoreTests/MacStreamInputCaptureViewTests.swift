@@ -536,6 +536,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertFalse(lifecycle.isVisible)
         XCTAssertFalse(lifecycle.isFocused)
         XCTAssertNil(lifecycle.displayID)
+        XCTAssertNil(lifecycle.maximumDisplayFramesPerSecond)
         XCTAssertEqual(lifecycle.headroom, DisplayHeadroom())
         XCTAssertEqual(lifecycle.drawableSize, .zero)
     }
@@ -755,6 +756,31 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             XCTAssertEqual(lifecycle.displayID, expectedDisplayID)
             XCTAssertEqual(lifecycle.displayRevision, initialDisplayRevision)
         }
+    }
+
+    func testScreenNotificationsRefreshMaximumDisplayFrameRate() async {
+        let lifecycle = PlatformLifecycleState()
+        let frameRate = MutableFrameRate(60)
+        let monitor = AppKitLifecycleMonitor(
+            lifecycle: lifecycle,
+            maximumFramesPerSecondProvider: { _ in frameRate.value }
+        )
+        let surface = makeView()
+        let window = makeWindow(contentView: surface)
+        monitor.attach(to: window, surface: surface)
+        XCTAssertEqual(lifecycle.maximumDisplayFramesPerSecond, 60)
+
+        frameRate.value = 120
+        NotificationCenter.default.post(
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(lifecycle.maximumDisplayFramesPerSecond, 120)
+        monitor.detach()
+        XCTAssertNil(lifecycle.maximumDisplayFramesPerSecond)
     }
 
     func testInputAdmissionOwnsResponderOnlyWhileEnabledAndAttached() throws {
@@ -1480,6 +1506,15 @@ private final class MutableWindowVisibility {
     var value: Bool
 
     init(_ value: Bool) {
+        self.value = value
+    }
+}
+
+@MainActor
+private final class MutableFrameRate {
+    var value: Int
+
+    init(_ value: Int) {
         self.value = value
     }
 }

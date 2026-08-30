@@ -2561,6 +2561,10 @@ struct DiagnosticsView: View {
             Section("Current") {
                 LabeledContent("Session", value: appModel.session.phase.label)
                 LabeledContent("Render policy", value: appModel.renderState.policy.label)
+                LabeledContent(
+                    "Presentation cadence",
+                    value: presentationCadenceDescription
+                )
                 LabeledContent("Display headroom", value: String(format: "%.2fx current", appModel.renderState.headroom.current))
                 if let realtimeSnapshot {
                     LabeledContent(
@@ -2678,6 +2682,24 @@ struct DiagnosticsView: View {
 
     private func milliseconds(_ nanoseconds: UInt64) -> String {
         String(format: "%.1f ms", Double(nanoseconds) / 1_000_000)
+    }
+
+    private var presentationCadenceDescription: String {
+        let state = appModel.renderState
+        let schedule = StreamMetalViewScheduleResolver.resolve(
+            state.policy,
+            negotiatedFramesPerSecond: state.negotiatedVideoFramesPerSecond,
+            maximumDisplayFramesPerSecond:
+                state.maximumDisplayFramesPerSecond
+        )
+        let source = state.negotiatedVideoFramesPerSecond.map(String.init)
+            ?? "unknown"
+        let display = state.maximumDisplayFramesPerSecond.map(String.init)
+            ?? "unknown"
+        let target = schedule.isPaused
+            ? "paused"
+            : "\(schedule.preferredFramesPerSecond) requested"
+        return "\(source) source / \(display) display / \(target)"
     }
 
     private func color(for severity: RuntimeDiagnosticSeverity) -> Color {

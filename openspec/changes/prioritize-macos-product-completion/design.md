@@ -88,6 +88,12 @@ The on-demand Diagnostics window polls one fixed-size realtime snapshot at a low
 
 Alternative considered: infer the cause from cursor appearance or append an event for every input and video frame. Visual inspection alone cannot distinguish host input from client presentation pacing, while high-frequency diagnostic events would add allocation and observation work to the path being measured.
 
+### 11. Pace active macOS presentation from the source and display
+
+The active macOS Metal surface carries the successfully negotiated video frame rate and the currently attached `NSScreen.maximumFramesPerSecond` through the existing lifecycle/render revision path. Its requested cadence is the lower valid value, with a 60 fps fallback until both are known. Window screen changes, backing-property changes, and application screen-parameter notifications refresh the attached-display value. Throttled presentation remains 15 fps, while idle and paused presentation remain stopped with an immediate clear.
+
+Alternative considered: always request the configured preference or a fixed 60 fps. The setting can differ from the negotiated stream, while a 60 fps ceiling visibly undersamples high-refresh streams and a source-only request can exceed the current display capability.
+
 ## Risks / Trade-offs
 
 - [Shared code may drift on frozen platforms] -> Run generic non-macOS target builds only when shared code or project generation changes could break them; do not treat those builds as product progress.

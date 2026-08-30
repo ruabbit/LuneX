@@ -364,6 +364,8 @@ final class LifecycleRenderPolicyTests: XCTestCase {
             },
             { state.isDisplayRevisionExhausted = true },
             { state.negotiatedVideoColorMetadata = .rec709VideoRange() },
+            { state.negotiatedVideoFramesPerSecond = 144 },
+            { state.maximumDisplayFramesPerSecond = 120 },
             { state.hdrRenderResolution = .closed(.invalidSourceContract) },
             { state.transform.mode = .fill }
         ]
@@ -379,6 +381,10 @@ final class LifecycleRenderPolicyTests: XCTestCase {
             state.displaySnapshot = state.displaySnapshot
             state.isDisplayRevisionExhausted = state.isDisplayRevisionExhausted
             state.negotiatedVideoColorMetadata = state.negotiatedVideoColorMetadata
+            state.negotiatedVideoFramesPerSecond =
+                state.negotiatedVideoFramesPerSecond
+            state.maximumDisplayFramesPerSecond =
+                state.maximumDisplayFramesPerSecond
             state.decodedVideoPresentationContract = state.decodedVideoPresentationContract
             state.hdrRenderResolution = state.hdrRenderResolution
             state.transform = state.transform

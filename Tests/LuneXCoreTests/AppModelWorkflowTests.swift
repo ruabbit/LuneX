@@ -2055,6 +2055,7 @@ final class AppModelWorkflowTests: XCTestCase {
         lifecycle.isVisible = false
         lifecycle.updateSurface(
             displayID: "display-a",
+            maximumDisplayFramesPerSecond: 120,
             headroom: DisplayHeadroom(
                 potential: 2.4,
                 current: 1.8,
@@ -2069,7 +2070,11 @@ final class AppModelWorkflowTests: XCTestCase {
         let record = try await waitForSessionStart(provider)
         XCTAssertTrue(model.isPlatformStreamLifecycleActive)
         XCTAssertFalse(model.session.isStreaming)
-        driveSessionToStreaming(provider, record: record)
+        driveSessionToStreaming(
+            provider,
+            record: record,
+            videoFramesPerSecond: 144
+        )
         await waitUntil { mediaEnvironment.currentLifecycleApplications().count == 1 }
 
         let cachedApplication = try XCTUnwrap(
@@ -2102,9 +2107,12 @@ final class AppModelWorkflowTests: XCTestCase {
             PixelSize(width: 3840, height: 2160)
         )
         XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
+        XCTAssertEqual(model.renderState.negotiatedVideoFramesPerSecond, 144)
+        XCTAssertEqual(model.renderState.maximumDisplayFramesPerSecond, 120)
 
         await model.stopStream()
         await launchTask.value
+        XCTAssertNil(model.renderState.negotiatedVideoFramesPerSecond)
     }
 
     func testHDREligibilityWaitsForStreamingVideoReadiness() async throws {
@@ -11406,14 +11414,16 @@ final class AppModelWorkflowTests: XCTestCase {
 
     private func driveSessionToStreaming(
         _ provider: ControlledSessionControlProvider,
-        record: ControlledSessionControlProvider.StartRecord
+        record: ControlledSessionControlProvider.StartRecord,
+        videoFramesPerSecond: Int = 60
     ) {
         provider.yield(.launchAccepted(makeSessionLaunchResponse()), sessionID: record.sessionID)
         provider.yield(.rtspReady, sessionID: record.sessionID)
         provider.yield(
             .negotiated(makeSessionConfiguration(
                 sessionID: record.sessionID,
-                keyMaterial: record.request.remoteInputKey
+                keyMaterial: record.request.remoteInputKey,
+                videoFramesPerSecond: videoFramesPerSecond
             )),
             sessionID: record.sessionID
         )
@@ -11432,6 +11442,7 @@ final class AppModelWorkflowTests: XCTestCase {
         sessionID: UUID,
         keyMaterial: RemoteInputKeyMaterial,
         videoColorMetadata: VideoColorMetadata = .rec709VideoRange(),
+        videoFramesPerSecond: Int = 60,
         audioConfiguration: NegotiatedAudioStreamConfiguration? = nil
     ) -> NegotiatedSessionConfiguration {
         NegotiatedSessionConfiguration(
@@ -11460,7 +11471,7 @@ final class AppModelWorkflowTests: XCTestCase {
                 codec: .hevc,
                 width: 3_840,
                 height: 2_160,
-                frameRate: 60,
+                frameRate: videoFramesPerSecond,
                 colorMetadata: videoColorMetadata,
                 maximumPacketSize: 1_400
             ),

@@ -3607,7 +3607,7 @@ final class StreamMetalPresenterTests: XCTestCase {
         ), .present)
     }
 
-    func testViewScheduleResumesAt60ThrottlesAt15AndRequestsOnePausedDraw() {
+    func testViewScheduleUsesSourceDisplayMinimumAndPreservesInactivePolicies() {
         XCTAssertEqual(
             StreamMetalViewScheduleResolver.resolve(.active),
             StreamMetalViewSchedule(
@@ -3623,6 +3623,40 @@ final class StreamMetalPresenterTests: XCTestCase {
                 preferredFramesPerSecond: 15,
                 requestsImmediateDraw: false
             )
+        )
+        let activeCases: [(source: Int, display: Int, expected: Int)] = [
+            (30, 60, 30),
+            (60, 120, 60),
+            (120, 120, 120),
+            (144, 120, 120),
+            (144, 240, 144),
+            (240, 120, 120)
+        ]
+        for entry in activeCases {
+            XCTAssertEqual(
+                StreamMetalViewScheduleResolver.resolve(
+                    .active,
+                    negotiatedFramesPerSecond: entry.source,
+                    maximumDisplayFramesPerSecond: entry.display
+                ).preferredFramesPerSecond,
+                entry.expected
+            )
+        }
+        XCTAssertEqual(
+            StreamMetalViewScheduleResolver.resolve(
+                .active,
+                negotiatedFramesPerSecond: 144,
+                maximumDisplayFramesPerSecond: nil
+            ).preferredFramesPerSecond,
+            60
+        )
+        XCTAssertEqual(
+            StreamMetalViewScheduleResolver.resolve(
+                .active,
+                negotiatedFramesPerSecond: 0,
+                maximumDisplayFramesPerSecond: 120
+            ).preferredFramesPerSecond,
+            60
         )
         let paused = StreamMetalViewSchedule(
             isPaused: true,
