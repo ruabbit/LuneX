@@ -55,6 +55,16 @@ LuneXENetResult lunex_enet_send(
     bool reliable
 );
 
+LuneXENetResult lunex_enet_queue_send(
+    LuneXENetConnection *connection,
+    uint8_t channelID,
+    const uint8_t *bytes,
+    size_t length,
+    bool reliable
+);
+
+LuneXENetResult lunex_enet_flush(LuneXENetConnection *connection);
+
 LuneXENetResult lunex_enet_service(
     LuneXENetConnection *connection,
     uint32_t timeoutMilliseconds,

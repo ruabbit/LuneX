@@ -72,6 +72,8 @@ The macOS input coordinator uses a bounded realtime queue that coalesces only ad
 
 AppKit pointer-motion `deltaY` is converted at the macOS capture boundary into Moonlight's screen-coordinate convention, where positive relative Y moves down. The conversion applies uniformly to moved and dragged mouse events but does not alter Direct absolute coordinates, horizontal motion, or scroll-wheel normalization. Shared adapters and wire serialization therefore retain platform-neutral Moonlight semantics.
 
+The production ENet driver owns its host on one serial pump. Long receive waits are divided into at most one-millisecond service slices so queued outbound input can run between slices. Outbound packets enter a bounded mailbox, are queued to ENet together, and cause one flush per drained batch; connection teardown rejects and resumes every pending send/service continuation. Saturated packet, flush, rejection, service-slice, and maximum send-queue-delay counters provide a finite discriminator without retaining payloads, endpoints, identities, or arbitrary errors.
+
 Alternative considered: rely only on `MoonlightRemoteInputProvider` coalescing. The macOS coordinator serially awaits every provider send, so the provider normally sees only one macOS call at a time and cannot coalesce the backlog that already formed upstream. Increasing pointer sensitivity would magnify movement while leaving stale-event and click latency unchanged.
 
 ## Risks / Trade-offs

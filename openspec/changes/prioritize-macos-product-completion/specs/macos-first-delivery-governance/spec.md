@@ -215,6 +215,12 @@ The macOS candidate SHALL pass native window, display, input, HDR/EDR, audio, pr
 - **THEN** LuneX converts the vertical delta at the macOS capture boundary so positive Moonlight relative Y moves down and negative Y moves up on the remote screen
 - **AND** horizontal relative motion, Direct absolute coordinates, scroll direction, shared input adapters, and non-macOS behavior remain unchanged
 
+#### Scenario: Control receive polling does not stall remote input
+- **WHEN** a long-lived ENet control receive operation is idle while remote input or another control frame becomes ready to send
+- **THEN** one serial ENet owner services receive in slices no longer than one millisecond and admits outbound work between slices
+- **AND** outbound packets use a bounded mailbox with one ENet flush per drained batch rather than one flush inside every packet enqueue
+- **AND** teardown completes every pending operation while finite saturated counters distinguish queued, sent, flushed, rejected, serviced, and maximum send-queue-delay observations without retaining payloads, endpoints, identities, or arbitrary errors
+
 #### Scenario: HDR and spatial audio acceptance
 - **WHEN** representative HDR/SDR displays and supported/non-supported audio routes are exercised
 - **THEN** EDR mapping, SDR fallback, headroom transitions, spatial/fixed fallback, listener head tracking where entitled, route recovery, audible synchronization, and teardown match the recorded capability state

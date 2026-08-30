@@ -125,6 +125,26 @@ LuneXENetResult lunex_enet_send(
     size_t length,
     bool reliable
 ) {
+    const LuneXENetResult result = lunex_enet_queue_send(
+        connection,
+        channelID,
+        bytes,
+        length,
+        reliable
+    );
+    if (result != LUNEX_ENET_OK) {
+        return result;
+    }
+    return lunex_enet_flush(connection);
+}
+
+LuneXENetResult lunex_enet_queue_send(
+    LuneXENetConnection *connection,
+    uint8_t channelID,
+    const uint8_t *bytes,
+    size_t length,
+    bool reliable
+) {
     if (connection == NULL || connection->host == NULL || connection->peer == NULL ||
         bytes == NULL || length == 0 || channelID >= connection->channelCount) {
         return LUNEX_ENET_ERROR_INVALID_ARGUMENT;
@@ -137,6 +157,13 @@ LuneXENetResult lunex_enet_send(
     if (enet_peer_send(connection->peer, channelID, packet) != 0) {
         enet_packet_destroy(packet);
         return LUNEX_ENET_ERROR_SEND;
+    }
+    return LUNEX_ENET_OK;
+}
+
+LuneXENetResult lunex_enet_flush(LuneXENetConnection *connection) {
+    if (connection == NULL || connection->host == NULL || connection->peer == NULL) {
+        return LUNEX_ENET_ERROR_INVALID_ARGUMENT;
     }
     enet_host_flush(connection->host);
     return LUNEX_ENET_OK;
