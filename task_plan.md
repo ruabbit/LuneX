@@ -89,6 +89,7 @@
 
 ### M1 Task 2.3 错误记录
 
+- 2026-08-31：render-state revision focused R1误用没有Test action的产品scheme `LuneX-macOS`，`xcodebuild`在任何源码编译或测试执行前以66退出；Keychain、live host、Simulator与唯一运行App均未触碰。保留R1输出并改用工程已声明的`LuneXCoreTests` scheme与新R2证据目录，不重复同一命令。
 - 2026-08-31：AppKit mouse-moved shared ownership focused R3在产品Swift编译阶段失败：嵌套entry初始化器从非隔离context读取main-actor隔离的`NSWindow.acceptsMouseMovedEvents`。没有测试执行；把读取移动到已`@MainActor`的acquire函数并向entry传递Bool，使用新R4路径继续，R3保留为失败证据。
 - 2026-08-31：macOS realtime input related R1通过已执行的AppModel/input/provider/wire用例后，停在既有`SessionMediaEnvironmentTests.testNativeAudioProcessorConnectsOpusFixtureToSessionAudioGraph()`；音频测试桩从不调用schedule completion，而上一批已把生产pending ceiling从8降至3，所以第4个5ms buffer按合同永久等待容量。等待确认后中止唯一`xcodebuild/xctest`并保留interrupted bundle；修复测试桩在第4包前完成最旧schedule，再使用精确输入相关selector重跑，不能把中断算作输入失败或放宽生产背压。
 - 2026-08-29：runtime continuity focused R1在测试源码编译阶段失败，四处新断言把`await processor.consume(...)`直接放进XCTest autoclosure，Swift 6明确拒绝异步autoclosure；产品代码未进入测试执行。已改为先等待并保存Bool再断言，保留R1 `.xcresult`，用新R2路径继续。

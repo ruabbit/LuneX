@@ -5,6 +5,51 @@ import XCTest
 
 @MainActor
 final class MacStreamInputCaptureViewTests: XCTestCase {
+    func testWindowVisibilityResolverUsesForegroundKeyWindowOnlyAsStartupFallback() {
+        XCTAssertTrue(AppKitWindowVisibilityResolver.resolve(
+            isOrderedVisible: true,
+            isMiniaturized: false,
+            isOcclusionVisible: false,
+            isKeyWindow: true,
+            isApplicationActive: true
+        ))
+        XCTAssertFalse(AppKitWindowVisibilityResolver.resolve(
+            isOrderedVisible: true,
+            isMiniaturized: false,
+            isOcclusionVisible: false,
+            isKeyWindow: false,
+            isApplicationActive: true
+        ))
+        XCTAssertFalse(AppKitWindowVisibilityResolver.resolve(
+            isOrderedVisible: true,
+            isMiniaturized: false,
+            isOcclusionVisible: false,
+            isKeyWindow: true,
+            isApplicationActive: false
+        ))
+        XCTAssertFalse(AppKitWindowVisibilityResolver.resolve(
+            isOrderedVisible: true,
+            isMiniaturized: true,
+            isOcclusionVisible: true,
+            isKeyWindow: true,
+            isApplicationActive: true
+        ))
+        XCTAssertFalse(AppKitWindowVisibilityResolver.resolve(
+            isOrderedVisible: false,
+            isMiniaturized: false,
+            isOcclusionVisible: true,
+            isKeyWindow: true,
+            isApplicationActive: true
+        ))
+        XCTAssertTrue(AppKitWindowVisibilityResolver.resolve(
+            isOrderedVisible: true,
+            isMiniaturized: false,
+            isOcclusionVisible: true,
+            isKeyWindow: false,
+            isApplicationActive: false
+        ))
+    }
+
     func testViewIsFlippedAndAcceptsFirstResponder() {
         let view = makeView()
 
@@ -495,6 +540,51 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(lifecycle.drawableSize, .zero)
     }
 
+    func testDeferredVisibilityRefreshCorrectsPreOrderAttachment() async {
+        let lifecycle = PlatformLifecycleState()
+        let visibility = MutableWindowVisibility(false)
+        let monitor = AppKitLifecycleMonitor(
+            lifecycle: lifecycle,
+            windowVisibilityProvider: { _ in visibility.value }
+        )
+        let surface = makeView()
+        let window = makeWindow(contentView: surface)
+
+        monitor.attach(to: window, surface: surface)
+        XCTAssertFalse(lifecycle.isVisible)
+        visibility.value = true
+        await waitForNextMainQueueTurn()
+
+        XCTAssertTrue(lifecycle.isVisible)
+        monitor.detach()
+    }
+
+    func testWindowExposeRefreshesVisibilityWithoutOcclusionChange() async {
+        let lifecycle = PlatformLifecycleState()
+        let visibility = MutableWindowVisibility(false)
+        let monitor = AppKitLifecycleMonitor(
+            lifecycle: lifecycle,
+            windowVisibilityProvider: { _ in visibility.value }
+        )
+        let surface = makeView()
+        let window = makeWindow(contentView: surface)
+        monitor.attach(to: window, surface: surface)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertFalse(lifecycle.isVisible)
+
+        visibility.value = true
+        NotificationCenter.default.post(
+            name: NSWindow.didExposeNotification,
+            object: window
+        )
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertTrue(lifecycle.isVisible)
+        monitor.detach()
+    }
+
     func testReplacementMonitorOwnsSharedLifecycleBeforeOldDismantle() {
         let lifecycle = PlatformLifecycleState()
         let oldMonitor = AppKitLifecycleMonitor(lifecycle: lifecycle)
@@ -541,6 +631,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             to: replacementWindow,
             surface: replacementSurface
         )
+        await waitForNextMainQueueTurn()
         let expectedDrawableSize = backingPixelSize(of: replacementSurface)
         let expectedDisplayID = lifecycle.displayID
         let expectedDisplayRevision = lifecycle.displayRevision
@@ -1305,6 +1396,14 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             mode: .fit
         )!
     }
+
+    private func waitForNextMainQueueTurn() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
+    }
 }
 
 @MainActor
@@ -1374,6 +1473,15 @@ private final class MacInputSampleRecorder {
 private struct RecordedPointerButtonTransition {
     var button: PointerButton
     var isDown: Bool
+}
+
+@MainActor
+private final class MutableWindowVisibility {
+    var value: Bool
+
+    init(_ value: Bool) {
+        self.value = value
+    }
 }
 
 @MainActor

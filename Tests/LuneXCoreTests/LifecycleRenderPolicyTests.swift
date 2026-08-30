@@ -328,6 +328,91 @@ final class LifecycleRenderPolicyTests: XCTestCase {
         )
     }
 
+    func testRenderStateRevisionAdvancesOnlyForSemanticSurfaceChanges() {
+        let state = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 1920, height: 1080),
+            drawableSize: PixelSize(width: 1280, height: 720),
+            mode: .fit
+        ))
+
+        XCTAssertEqual(state.revision, 0)
+
+        state.policy = .idle
+        state.headroom = DisplayHeadroom()
+        state.displaySnapshot = nil
+        state.isDisplayRevisionExhausted = false
+        state.negotiatedVideoColorMetadata = nil
+        state.decodedVideoPresentationContract = nil
+        state.hdrRenderResolution = .closed(.inactiveSession)
+        XCTAssertEqual(state.revision, 0)
+
+        let changes: [() -> Void] = [
+            { state.policy = .active },
+            {
+                state.headroom = DisplayHeadroom(
+                    potential: 2,
+                    current: 1.5,
+                    reference: 1
+                )
+            },
+            {
+                state.displaySnapshot = HDRDisplaySnapshot(
+                    revision: HDRDisplayRevision(rawValue: 1),
+                    displayID: "display-a",
+                    headroom: state.headroom
+                )
+            },
+            { state.isDisplayRevisionExhausted = true },
+            { state.negotiatedVideoColorMetadata = .rec709VideoRange() },
+            { state.hdrRenderResolution = .closed(.invalidSourceContract) },
+            { state.transform.mode = .fill }
+        ]
+
+        for change in changes {
+            let previousRevision = state.revision
+            change()
+            XCTAssertGreaterThan(state.revision, previousRevision)
+
+            let unchangedRevision = state.revision
+            state.policy = state.policy
+            state.headroom = state.headroom
+            state.displaySnapshot = state.displaySnapshot
+            state.isDisplayRevisionExhausted = state.isDisplayRevisionExhausted
+            state.negotiatedVideoColorMetadata = state.negotiatedVideoColorMetadata
+            state.decodedVideoPresentationContract = state.decodedVideoPresentationContract
+            state.hdrRenderResolution = state.hdrRenderResolution
+            state.transform = state.transform
+            XCTAssertEqual(state.revision, unchangedRevision)
+        }
+    }
+
+    func testRenderStateRevisionTracksPlatformCoordinateSnapshotReplacement() throws {
+        let state = StreamRenderState(transform: RenderTransform(
+            sourceSize: PixelSize(width: 1920, height: 1080),
+            drawableSize: PixelSize(width: 1280, height: 720),
+            mode: .fit
+        ))
+        let initialSnapshot = try XCTUnwrap(state.coordinateSnapshot)
+
+        state.applyPlatformCoordinateSnapshot(initialSnapshot)
+        XCTAssertEqual(state.revision, 0)
+
+        let replacement = try XCTUnwrap(StreamCoordinateSnapshot.resolve(
+            revision: initialSnapshot.revision + 1,
+            sourceSize: initialSnapshot.sourceSize,
+            drawableSize: PixelSize(width: 1600, height: 900),
+            mode: initialSnapshot.mode
+        ))
+        state.applyPlatformCoordinateSnapshot(replacement)
+        let replacementRevision = state.revision
+
+        XCTAssertGreaterThan(replacementRevision, 0)
+        XCTAssertEqual(state.coordinateSnapshot, replacement)
+
+        state.applyPlatformCoordinateSnapshot(replacement)
+        XCTAssertEqual(state.revision, replacementRevision)
+    }
+
     private func resolve(
         isStreamActive: Bool,
         isVisible: Bool,

@@ -1498,6 +1498,7 @@ struct StreamWorkspaceView: View {
             #if os(macOS)
             MetalStreamSurface(
                 renderState: appModel.renderState,
+                renderRevision: appModel.renderState.revision,
                 presentationSource: appModel.videoPresentationSource,
                 lifecycle: platformLifecycle,
                 inputPolicy: appModel.macInputSurfacePolicy,

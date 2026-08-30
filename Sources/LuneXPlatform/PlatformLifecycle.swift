@@ -105,17 +105,52 @@ final class PlatformLifecycleState {
 
 @Observable
 final class StreamRenderState {
-    var policy: RenderPolicy = .idle
+    var policy: RenderPolicy = .idle {
+        didSet { publishRevisionIfChanged(policy, oldValue: oldValue) }
+    }
     var transform: RenderTransform {
-        didSet { publishCoordinateSnapshot() }
+        didSet {
+            publishCoordinateSnapshot()
+            publishRevisionIfChanged(transform, oldValue: oldValue)
+        }
     }
     private(set) var coordinateSnapshot: StreamCoordinateSnapshot?
-    var headroom = DisplayHeadroom()
-    var displaySnapshot: HDRDisplaySnapshot?
-    var isDisplayRevisionExhausted = false
-    var negotiatedVideoColorMetadata: VideoColorMetadata?
-    var decodedVideoPresentationContract: StreamVideoDecodedPresentationContract?
-    var hdrRenderResolution: HDRRenderConfigurationResolution = .closed(.inactiveSession)
+    var headroom = DisplayHeadroom() {
+        didSet { publishRevisionIfChanged(headroom, oldValue: oldValue) }
+    }
+    var displaySnapshot: HDRDisplaySnapshot? {
+        didSet { publishRevisionIfChanged(displaySnapshot, oldValue: oldValue) }
+    }
+    var isDisplayRevisionExhausted = false {
+        didSet {
+            publishRevisionIfChanged(
+                isDisplayRevisionExhausted,
+                oldValue: oldValue
+            )
+        }
+    }
+    var negotiatedVideoColorMetadata: VideoColorMetadata? {
+        didSet {
+            publishRevisionIfChanged(
+                negotiatedVideoColorMetadata,
+                oldValue: oldValue
+            )
+        }
+    }
+    var decodedVideoPresentationContract: StreamVideoDecodedPresentationContract? {
+        didSet {
+            publishRevisionIfChanged(
+                decodedVideoPresentationContract,
+                oldValue: oldValue
+            )
+        }
+    }
+    var hdrRenderResolution: HDRRenderConfigurationResolution = .closed(.inactiveSession) {
+        didSet {
+            publishRevisionIfChanged(hdrRenderResolution, oldValue: oldValue)
+        }
+    }
+    private(set) var revision: UInt64 = 0
     @ObservationIgnored private var coordinatePublisher: StreamCoordinateSnapshotPublisher
 
     init(transform: RenderTransform = RenderTransform()) {
@@ -132,6 +167,12 @@ final class StreamRenderState {
     func applyPlatformCoordinateSnapshot(
         _ snapshot: StreamCoordinateSnapshot?
     ) {
+        let previousSnapshot = coordinateSnapshot
+        defer {
+            if coordinateSnapshot != previousSnapshot {
+                publishRevision()
+            }
+        }
         guard let snapshot else {
             if transform.drawableSize != .zero {
                 transform.drawableSize = .zero
@@ -159,6 +200,18 @@ final class StreamRenderState {
             drawableSize: transform.drawableSize,
             mode: transform.mode
         )
+    }
+
+    private func publishRevisionIfChanged<Value: Equatable>(
+        _ value: Value,
+        oldValue: Value
+    ) {
+        guard value != oldValue else { return }
+        publishRevision()
+    }
+
+    private func publishRevision() {
+        revision &+= 1
     }
 }
 

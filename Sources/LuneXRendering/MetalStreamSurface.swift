@@ -3828,6 +3828,7 @@ final class MacStreamSurfaceCoordinator {
 
 struct MetalStreamSurface: NSViewRepresentable {
     let renderState: StreamRenderState
+    var renderRevision: UInt64 = 0
     let presentationSource: StreamVideoPresentationSource
     let lifecycle: PlatformLifecycleState
     var inputPolicy = MacInputSurfacePolicy.inactive
@@ -3867,6 +3868,7 @@ struct MetalStreamSurface: NSViewRepresentable {
     }
 
     func updateNSView(_ view: MacStreamInputCaptureView, context: Context) {
+        _ = renderRevision
         view.forwardsSystemShortcuts = inputPolicy.forwardsSystemShortcuts
         context.coordinator.update(
             renderState: renderState,

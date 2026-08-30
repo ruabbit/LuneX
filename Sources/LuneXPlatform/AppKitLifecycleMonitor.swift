@@ -3,6 +3,19 @@ import AppKit
 import MetalKit
 import OSLog
 
+enum AppKitWindowVisibilityResolver {
+    static func resolve(
+        isOrderedVisible: Bool,
+        isMiniaturized: Bool,
+        isOcclusionVisible: Bool,
+        isKeyWindow: Bool,
+        isApplicationActive: Bool
+    ) -> Bool {
+        guard isOrderedVisible, !isMiniaturized else { return false }
+        return isOcclusionVisible || (isKeyWindow && isApplicationActive)
+    }
+}
+
 @MainActor
 protocol AppKitLifecycleMonitoring: AnyObject {
     func attach(to window: NSWindow, surface: NSView)
@@ -12,15 +25,30 @@ protocol AppKitLifecycleMonitoring: AnyObject {
 
 @MainActor
 final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
+    typealias WindowVisibilityProvider = @MainActor (NSWindow) -> Bool
+
     private let logger = Logger(subsystem: "dev.lunex.client.macos", category: "window.lifecycle")
     private weak var window: NSWindow?
     private weak var surface: NSView?
     private let lifecycle: PlatformLifecycleState
+    private let windowVisibilityProvider: WindowVisibilityProvider
     private let attachmentID = UUID()
     private var observers: [NSObjectProtocol] = []
 
-    init(lifecycle: PlatformLifecycleState) {
+    init(
+        lifecycle: PlatformLifecycleState,
+        windowVisibilityProvider: @escaping WindowVisibilityProvider = {
+            AppKitWindowVisibilityResolver.resolve(
+                isOrderedVisible: $0.isVisible,
+                isMiniaturized: $0.isMiniaturized,
+                isOcclusionVisible: $0.occlusionState.contains(.visible),
+                isKeyWindow: $0.isKeyWindow,
+                isApplicationActive: NSApp.isActive
+            )
+        }
+    ) {
         self.lifecycle = lifecycle
+        self.windowVisibilityProvider = windowVisibilityProvider
     }
 
     func attach(to window: NSWindow, surface: NSView) {
@@ -41,6 +69,11 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
         let center = NotificationCenter.default
         observers = [
             center.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    self?.refreshVisibility()
+                }
+            },
+            center.addObserver(forName: NSWindow.didExposeNotification, object: window, queue: .main) { [weak self] _ in
                 Task { @MainActor in
                     self?.refreshVisibility()
                 }
@@ -87,7 +120,9 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
             },
             center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
+                    self?.refreshVisibility()
                     self?.refreshFocus()
+                    self?.refreshSurfaceState()
                 }
             },
             center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
@@ -106,6 +141,7 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
         refreshFocus()
         refreshSurfaceState()
         logger.info("Lifecycle ready: visible=\(self.lifecycle.isVisible, privacy: .public) focused=\(self.lifecycle.isFocused, privacy: .public) drawable=\(self.lifecycle.drawableSize.width, privacy: .public)x\(self.lifecycle.drawableSize.height, privacy: .public) EDR=\(self.lifecycle.headroom.current, privacy: .public)")
+        schedulePostAttachmentRefresh(window: window, surface: surface)
     }
 
     func surfaceGeometryDidChange() {
@@ -131,9 +167,26 @@ final class AppKitLifecycleMonitor: AppKitLifecycleMonitoring {
     private func refreshVisibility() {
         guard lifecycle.isCurrentSurfaceAttachment(attachmentID),
               let window else { return }
-        lifecycle.isVisible = window.occlusionState.contains(.visible) && !window.isMiniaturized
+        lifecycle.isVisible = windowVisibilityProvider(window)
         logger.debug("Window visibility changed: \(self.lifecycle.isVisible, privacy: .public)")
         lifecycle.updateRenderPolicy()
+    }
+
+    private func schedulePostAttachmentRefresh(
+        window: NSWindow,
+        surface: NSView
+    ) {
+        DispatchQueue.main.async { @MainActor [weak self, weak window, weak surface] in
+            guard let self,
+                  let window,
+                  let surface,
+                  self.window === window,
+                  self.surface === surface else { return }
+            self.refreshVisibility()
+            self.refreshFocus()
+            self.refreshSurfaceState()
+            self.logger.info("Lifecycle post-attach refresh: visible=\(self.lifecycle.isVisible, privacy: .public) focused=\(self.lifecycle.isFocused, privacy: .public) drawable=\(self.lifecycle.drawableSize.width, privacy: .public)x\(self.lifecycle.drawableSize.height, privacy: .public)")
+        }
     }
 
     private func setFocused(_ focused: Bool) {
