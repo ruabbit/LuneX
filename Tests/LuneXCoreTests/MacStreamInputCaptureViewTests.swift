@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 @preconcurrency import CoreVideo
+import MetalKit
 import XCTest
 
 @MainActor
@@ -1232,6 +1233,96 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(recorder.samples.count, 1)
     }
 
+    func testDisplayLinkOwnerUsesSourceCadenceOneFrameLatencyAndCleanTeardown()
+        throws
+    {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 240),
+            device: device
+        )
+        view.wantsLayer = true
+        let runtime = RecordingMacMetalDisplayLinkRuntime()
+        let owner = MacMetalDisplayLinkOwner { _ in runtime }
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState()
+        )
+
+        XCTAssertTrue(owner.attach(to: view, presenter: presenter))
+        owner.apply(
+            StreamMetalViewSchedule(
+                isPaused: false,
+                preferredFramesPerSecond: 144,
+                requestsImmediateDraw: false
+            ),
+            to: view
+        )
+
+        XCTAssertTrue(view.isPaused)
+        XCTAssertEqual(view.preferredFramesPerSecond, 144)
+        XCTAssertEqual(runtime.addCount, 1)
+        XCTAssertEqual(runtime.preferredFrameLatency, 1)
+        XCTAssertEqual(runtime.preferredFrameRateRange.minimum, 144)
+        XCTAssertEqual(runtime.preferredFrameRateRange.maximum, 144)
+        XCTAssertEqual(runtime.preferredFrameRateRange.preferred, 144)
+        XCTAssertFalse(runtime.isPaused)
+        XCTAssertEqual(
+            owner.snapshot(),
+            MacMetalDisplayLinkSnapshot(
+                isAttached: true,
+                isUsingDisplayLink: true,
+                isPaused: false,
+                preferredFramesPerSecond: 144,
+                preferredFrameLatency: 1
+            )
+        )
+
+        owner.apply(
+            StreamMetalViewSchedule(
+                isPaused: true,
+                preferredFramesPerSecond: 60,
+                requestsImmediateDraw: true
+            ),
+            to: view
+        )
+        XCTAssertTrue(runtime.isPaused)
+        owner.detach(from: view)
+        XCTAssertEqual(runtime.invalidateCount, 1)
+        XCTAssertNil(runtime.delegate)
+        XCTAssertFalse(owner.snapshot().isAttached)
+    }
+
+    func testDisplayLinkOwnerFallsBackToMTKViewSchedulingWithoutMetalLayerRuntime()
+        throws
+    {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MTKView(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 240),
+            device: device
+        )
+        let owner = MacMetalDisplayLinkOwner { _ in nil }
+        let presenter = StreamMetalPresenter(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: StreamRenderState()
+        )
+        XCTAssertFalse(owner.attach(to: view, presenter: presenter))
+
+        owner.apply(
+            StreamMetalViewSchedule(
+                isPaused: false,
+                preferredFramesPerSecond: 120,
+                requestsImmediateDraw: false
+            ),
+            to: view
+        )
+
+        XCTAssertFalse(view.isPaused)
+        XCTAssertEqual(view.preferredFramesPerSecond, 120)
+        XCTAssertFalse(owner.snapshot().isUsingDisplayLink)
+        owner.detach(from: view)
+    }
+
     private func makeView(
         recorder: MacInputSampleRecorder = MacInputSampleRecorder()
     ) -> MacStreamInputCaptureView {
@@ -1493,6 +1584,31 @@ private final class MacInputSampleRecorder {
             guard case let .button(button, isDown, _) = $0 else { return nil }
             return RecordedPointerButtonTransition(button: button, isDown: isDown)
         }
+    }
+}
+
+@MainActor
+private final class RecordingMacMetalDisplayLinkRuntime:
+    MacMetalDisplayLinkRuntiming {
+    var delegate: (any CAMetalDisplayLinkDelegate)?
+    var preferredFrameLatency: Float = 0
+    var preferredFrameRateRange = CAFrameRateRange(
+        minimum: 0,
+        maximum: 0,
+        preferred: 0
+    )
+    var isPaused = true
+    private(set) var addCount = 0
+    private(set) var invalidateCount = 0
+
+    func add(to runLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        _ = runLoop
+        _ = mode
+        addCount += 1
+    }
+
+    func invalidate() {
+        invalidateCount += 1
     }
 }
 

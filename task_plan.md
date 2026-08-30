@@ -89,6 +89,10 @@
 
 ### M1 Task 2.3 错误记录
 
+- 2026-08-31：`CAMetalDisplayLink` focused R1已通过产品源码编译，但在新增owner测试源码编译时因测试文件缺少显式`MetalKit` import而失败，两处`MTKView`无法解析；没有测试执行，也未替换唯一运行App或触发Keychain/live harness/Simulator。补齐测试依赖后使用新R2证据路径继续，R1保留为测试编排失败证据。
+- 2026-08-31：focused R2在产品`MetalStreamSurface.swift`严格并发编译时停止：Objective-C `CAMetalDisplayLinkDelegate`回调是nonisolated，而owner为MainActor；抽取后的私有render body也未继承`MTKViewDelegate`入口的MainActor隔离。没有测试执行。回调已基于其明确注册到`RunLoop.main`的合同使用同步`MainActor.assumeIsolated`，render body显式MainActor；使用新R3路径继续，不能用异步Task hop引入额外呈现延迟。
+- 2026-08-31：focused R3确认render body隔离修复有效，但Swift 6拒绝把Objective-C non-Sendable `link/update`捕获进`MainActor.assumeIsolated`闭包。没有测试执行。改为在delegate conformance上使用`@preconcurrency`表达QuartzCore回调的主run-loop兼容边界，并在回调中同步使用原始drawable；使用新R4路径继续，不复制或异步发送drawable。
+- 2026-08-31：focused R4严格编译通过且新增display-link owner测试通过，唯一失败为既有`testDisplayMoveDuringDrawDropsPlanFromPriorRevision`。重构曾把drawable provider提前到presenter状态快照之前，改变了显示器在draw中切换时的stale-plan拒绝顺序。生产代码已恢复“先快照、再取drawable、最后revision复核”，display-link提供的drawable也走同一延迟provider入口；使用新R5路径继续，不放宽旧测试。
 - 2026-08-31：render-state revision focused R1误用没有Test action的产品scheme `LuneX-macOS`，`xcodebuild`在任何源码编译或测试执行前以66退出；Keychain、live host、Simulator与唯一运行App均未触碰。保留R1输出并改用工程已声明的`LuneXCoreTests` scheme与新R2证据目录，不重复同一命令。
 - 2026-08-31：AppKit mouse-moved shared ownership focused R3在产品Swift编译阶段失败：嵌套entry初始化器从非隔离context读取main-actor隔离的`NSWindow.acceptsMouseMovedEvents`。没有测试执行；把读取移动到已`@MainActor`的acquire函数并向entry传递Bool，使用新R4路径继续，R3保留为失败证据。
 - 2026-08-31：macOS realtime input related R1通过已执行的AppModel/input/provider/wire用例后，停在既有`SessionMediaEnvironmentTests.testNativeAudioProcessorConnectsOpusFixtureToSessionAudioGraph()`；音频测试桩从不调用schedule completion，而上一批已把生产pending ceiling从8降至3，所以第4个5ms buffer按合同永久等待容量。等待确认后中止唯一`xcodebuild/xctest`并保留interrupted bundle；修复测试桩在第4包前完成最旧schedule，再使用精确输入相关selector重跑，不能把中断算作输入失败或放宽生产背压。
@@ -2488,3 +2492,9 @@
 - **全量门：** fresh serial `/tmp/LuneX-MediaLatest-Full-R1/Full.xcresult` 通过 `1377 total / 1375 passed / 2 exact opt-in skips / 0 failed`；两个 skip 为 live Sunshine 与 real Keychain，structured build 为 `succeeded / 0 errors / 0 warnings / 0 analyzer warnings`。准备最终 repository gate 与独立提交推送。
 - **提交与真实产品：** 修复已以 pushed SHA `25672d1` 构建并由标准脚本替换为唯一 PID `96674`。Computer Use 单次双击 `Desktop` 后，产品稳定保持串流工作区并持续显示真实视频，控制层为 `2560x1440 @ 144 fps - 100 Mbps`；旧的约 1.25 秒 `media_receive_buffer_overflow` 返回 Library 未复现。
 - **输入验收边界：** 临时切换 Relative 成功，但 Computer Use 的坐标 drag/click 两次返回 `noWindowsAvailable`，未产生可依赖的主机方向证据；已恢复 Direct 并隐藏控制层。该工具错误不等同产品输入失败，Task 3.2 继续 pending。下一批实现 input/video 分层时延与丢弃指标后再做物理判别。
+
+## 2026-08-31 M1 macOS display-linked presentation repair
+
+- **状态：** implementation and deterministic gates complete；one current-surface `CAMetalDisplayLink` now owns active macOS presentation, consumes the callback drawable directly, requests one-frame latency, follows negotiated/display cadence, and pauses/invalidates with lifecycle and teardown. MTKView scheduling is retained only as attachment fallback.
+- **验收证据：** focused `116/116`、related `344/343/1/0`、fresh full macOS `1383/1381/2/0` 均通过且 structured build diagnostics 全零；iOS/iPadOS、tvOS、visionOS generic compatibility 均成功。Generator 双跑 hash 稳定，OpenSpec strict `12/12`，diff hygiene 通过，未操作 Simulator、Keychain live gate、Sunshine 或第二个 App。
+- **下一步：** 立即独立 commit/push；用标准脚本精确替换当前唯一旧 App，再在新 session 比较 foreground presentation counter 增量和 Direct/Relative/click 实际表现。Tasks 2.3、3.1、3.2 与 9.1 保持 pending，直到用户确认 Relative 纵向、主观平滑度及完整物理/性能矩阵。

@@ -90,9 +90,9 @@ Alternative considered: infer the cause from cursor appearance or append an even
 
 ### 11. Pace active macOS presentation from the source and display
 
-The active macOS Metal surface carries the successfully negotiated video frame rate and the currently attached `NSScreen.maximumFramesPerSecond` through the existing lifecycle/render revision path. Its requested cadence is the lower valid value, with a 60 fps fallback until both are known. Window screen changes, backing-property changes, and application screen-parameter notifications refresh the attached-display value. Throttled presentation remains 15 fps, while idle and paused presentation remain stopped with an immediate clear.
+The active macOS Metal surface carries the successfully negotiated video frame rate and the currently attached `NSScreen.maximumFramesPerSecond` through the existing lifecycle/render revision path. Its requested cadence is the lower valid value, with a 60 fps fallback until both are known. A single surface-owned `CAMetalDisplayLink` drives presentation from the layer's callback drawable, requests one-frame latency, and consumes the existing latest decoded frame without an asynchronous actor hop. Window screen changes, backing-property changes, and application screen-parameter notifications refresh the attached-display value. Throttled presentation remains 15 fps, while idle and paused presentation pause the display link and perform the required immediate clear. The prior MTKView scheduler remains only as a bounded fallback when no display-link runtime can attach to the Metal layer.
 
-Alternative considered: always request the configured preference or a fixed 60 fps. The setting can differ from the negotiated stream, while a 60 fps ceiling visibly undersamples high-refresh streams and a source-only request can exceed the current display capability.
+Alternative considered: always request the configured preference or a fixed 60 fps through `MTKView.preferredFramesPerSecond`. The setting can differ from the negotiated stream, while a 60 fps ceiling visibly undersamples high-refresh streams, a source-only request can exceed the current display capability, and the view timer does not provide the same explicit one-frame drawable deadline as `CAMetalDisplayLink`.
 
 ## Risks / Trade-offs
 

@@ -89,10 +89,13 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 #### Scenario: Active Metal presentation follows source and display cadence
 - **WHEN** a macOS stream has a valid negotiated video frame rate and its current window has an attached display with a valid maximum frame rate
 - **THEN** active Metal presentation SHALL request the lower of the negotiated source rate and current display maximum rather than a fixed 60 fps
+- **AND** the current macOS surface SHALL own at most one `CAMetalDisplayLink`, request one-frame latency, and render from the callback-provided drawable without an asynchronous scheduling hop
+- **AND** decoded frames SHALL retain latest-frame replacement semantics rather than building a presentation FIFO behind the display link
 - **AND** window screen changes, backing-property changes, and application screen-parameter changes SHALL refresh the requested active cadence through the current surface owner
 - **AND** a stale or detached window SHALL NOT overwrite a replacement surface's cadence
-- **AND** throttled presentation SHALL remain 15 fps while idle or paused presentation remains stopped with an immediate clear
+- **AND** throttled presentation SHALL remain 15 fps while idle or paused presentation pauses the display link and performs an immediate clear
 - **AND** missing or invalid cadence inputs SHALL use a bounded 60 fps fallback
+- **AND** the MTKView scheduler MAY be used only as a bounded fallback when a display-link runtime cannot attach to the current Metal layer
 
 All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
 

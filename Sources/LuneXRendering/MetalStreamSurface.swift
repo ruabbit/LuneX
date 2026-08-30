@@ -1,5 +1,6 @@
 import Foundation
 import MetalKit
+@preconcurrency import QuartzCore
 import SwiftUI
 
 enum StreamMetalPresenterError: Error, Equatable, Sendable {
@@ -2737,6 +2738,19 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
+        render(in: view) { drawableProvider(view) }
+    }
+
+    @MainActor
+    func draw(in view: MTKView, drawable: any CAMetalDrawable) {
+        render(in: view) { drawable }
+    }
+
+    @MainActor
+    private func render(
+        in view: MTKView,
+        drawableProvider: @MainActor () -> (any CAMetalDrawable)?
+    ) {
         let snapshot = withLock {
             (
                 renderPolicy,
@@ -2750,7 +2764,7 @@ final class StreamMetalPresenter: NSObject, MTKViewDelegate {
             )
         }
         guard let runtime = snapshot.2 else { return }
-        let drawable = drawableProvider(view)
+        let drawable = drawableProvider()
         if snapshot.4 {
             guard let drawable else { return }
             do {
@@ -3779,11 +3793,130 @@ final class MacStreamSurfaceCaptureController {
     }
 }
 
+struct MacMetalDisplayLinkSnapshot: Equatable, Sendable {
+    let isAttached: Bool
+    let isUsingDisplayLink: Bool
+    let isPaused: Bool
+    let preferredFramesPerSecond: Int
+    let preferredFrameLatency: Float
+}
+
+@MainActor
+protocol MacMetalDisplayLinkRuntiming: AnyObject {
+    var delegate: (any CAMetalDisplayLinkDelegate)? { get set }
+    var preferredFrameLatency: Float { get set }
+    var preferredFrameRateRange: CAFrameRateRange { get set }
+    var isPaused: Bool { get set }
+
+    func add(to runLoop: RunLoop, forMode mode: RunLoop.Mode)
+    func invalidate()
+}
+
+extension CAMetalDisplayLink: MacMetalDisplayLinkRuntiming {}
+
+@MainActor
+final class MacMetalDisplayLinkOwner:
+    NSObject, @preconcurrency CAMetalDisplayLinkDelegate {
+    typealias RuntimeFactory = @MainActor (CAMetalLayer)
+        -> (any MacMetalDisplayLinkRuntiming)?
+
+    static let preferredFrameLatency: Float = 1
+
+    private let runtimeFactory: RuntimeFactory
+    private weak var view: MTKView?
+    private weak var presenter: StreamMetalPresenter?
+    private var runtime: (any MacMetalDisplayLinkRuntiming)?
+    private var appliedFramesPerSecond = 60
+    private var appliedIsPaused = true
+
+    init(
+        runtimeFactory: @escaping RuntimeFactory = { layer in
+            CAMetalDisplayLink(metalLayer: layer)
+        }
+    ) {
+        self.runtimeFactory = runtimeFactory
+    }
+
+    @discardableResult
+    func attach(
+        to view: MTKView,
+        presenter: StreamMetalPresenter
+    ) -> Bool {
+        if self.view === view, runtime != nil { return true }
+        if self.view !== view { detach() }
+        self.view = view
+        self.presenter = presenter
+        guard let layer = view.layer as? CAMetalLayer,
+              let runtime = runtimeFactory(layer) else {
+            return false
+        }
+        runtime.delegate = self
+        runtime.preferredFrameLatency = Self.preferredFrameLatency
+        runtime.isPaused = true
+        runtime.add(to: .main, forMode: .common)
+        self.runtime = runtime
+        return true
+    }
+
+    func apply(_ schedule: StreamMetalViewSchedule, to view: MTKView) {
+        appliedFramesPerSecond = schedule.preferredFramesPerSecond
+        appliedIsPaused = schedule.isPaused
+        view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
+        guard let runtime else {
+            view.isPaused = schedule.isPaused
+            return
+        }
+        view.isPaused = true
+        let framesPerSecond = Float(schedule.preferredFramesPerSecond)
+        runtime.preferredFrameLatency = Self.preferredFrameLatency
+        runtime.preferredFrameRateRange = CAFrameRateRange(
+            minimum: framesPerSecond,
+            maximum: framesPerSecond,
+            preferred: framesPerSecond
+        )
+        runtime.isPaused = schedule.isPaused
+    }
+
+    func detach(from candidate: MTKView? = nil) {
+        if let candidate, view !== candidate { return }
+        runtime?.isPaused = true
+        runtime?.delegate = nil
+        runtime?.invalidate()
+        runtime = nil
+        presenter = nil
+        view = nil
+        appliedFramesPerSecond = 60
+        appliedIsPaused = true
+    }
+
+    func snapshot() -> MacMetalDisplayLinkSnapshot {
+        MacMetalDisplayLinkSnapshot(
+            isAttached: view != nil,
+            isUsingDisplayLink: runtime != nil,
+            isPaused: appliedIsPaused,
+            preferredFramesPerSecond: appliedFramesPerSecond,
+            preferredFrameLatency: Self.preferredFrameLatency
+        )
+    }
+
+    func metalDisplayLink(
+        _ link: CAMetalDisplayLink,
+        needsUpdate update: CAMetalDisplayLink.Update
+    ) {
+        guard let runtime,
+              runtime as AnyObject === link,
+              let view,
+              let presenter else { return }
+        presenter.draw(in: view, drawable: update.drawable)
+    }
+}
+
 @MainActor
 final class MacStreamSurfaceCoordinator {
     let presenter: StreamMetalPresenter
     let attachmentOwner: MacStreamSurfaceAttachmentOwner
     let captureController: MacStreamSurfaceCaptureController
+    let displayLinkOwner: MacMetalDisplayLinkOwner
     private var inputSampleHandler: MacStreamInputCaptureView.SampleHandler
     private var captureExitHandler: @MainActor () -> Void
 
@@ -3795,7 +3928,10 @@ final class MacStreamSurfaceCoordinator {
         captureExitHandler: @escaping @MainActor () -> Void,
         diagnosticHandler: @escaping StreamMetalPresenter.DiagnosticHandler = { _ in },
         diagnosticLease: HDRPresentationDiagnosticLease = .unmanaged,
-        cursorBroker: MacCursorCaptureBroker = .shared
+        cursorBroker: MacCursorCaptureBroker = .shared,
+        displayLinkRuntimeFactory: @escaping MacMetalDisplayLinkOwner.RuntimeFactory = {
+            layer in CAMetalDisplayLink(metalLayer: layer)
+        }
     ) {
         presenter = StreamMetalPresenter(
             presentationSource: presentationSource,
@@ -3805,6 +3941,9 @@ final class MacStreamSurfaceCoordinator {
         )
         let captureController = MacStreamSurfaceCaptureController(broker: cursorBroker)
         self.captureController = captureController
+        displayLinkOwner = MacMetalDisplayLinkOwner(
+            runtimeFactory: displayLinkRuntimeFactory
+        )
         attachmentOwner = MacStreamSurfaceAttachmentOwner(
             lifecycleMonitor: AppKitLifecycleMonitor(lifecycle: lifecycle),
             attachmentHandler: { view, isAttached in
@@ -3818,17 +3957,26 @@ final class MacStreamSurfaceCoordinator {
         self.captureExitHandler = captureExitHandler
     }
 
+    func configure(_ view: MacStreamInputCaptureView, renderState: StreamRenderState) {
+        presenter.configure(view)
+        _ = displayLinkOwner.attach(to: view, presenter: presenter)
+        _ = applySchedule(renderState, to: view)
+    }
+
+    @discardableResult
     func update(
         renderState: StreamRenderState,
         inputPolicy: MacInputSurfacePolicy,
         view: MacStreamInputCaptureView,
         inputSampleHandler: @escaping MacStreamInputCaptureView.SampleHandler,
         captureExitHandler: @escaping @MainActor () -> Void
-    ) {
+    ) -> StreamMetalViewSchedule {
         presenter.update(renderState: renderState)
         captureController.update(inputPolicy, for: view)
         self.inputSampleHandler = inputSampleHandler
         self.captureExitHandler = captureExitHandler
+        _ = displayLinkOwner.attach(to: view, presenter: presenter)
+        return applySchedule(renderState, to: view)
     }
 
     func handle(_ sample: MacPlatformInputSample) {
@@ -3841,11 +3989,26 @@ final class MacStreamSurfaceCoordinator {
     }
 
     func detach(_ view: MacStreamInputCaptureView) {
+        displayLinkOwner.detach(from: view)
         presenter.stop()
         captureController.detach(from: view)
         attachmentOwner.detach(from: view)
         view.delegate = nil
         view.isPaused = true
+    }
+
+    private func applySchedule(
+        _ state: StreamRenderState,
+        to view: MTKView
+    ) -> StreamMetalViewSchedule {
+        let schedule = StreamMetalViewScheduleResolver.resolve(
+            state.policy,
+            negotiatedFramesPerSecond: state.negotiatedVideoFramesPerSecond,
+            maximumDisplayFramesPerSecond:
+                state.maximumDisplayFramesPerSecond
+        )
+        displayLinkOwner.apply(schedule, to: view)
+        return schedule
     }
 }
 
@@ -3884,7 +4047,7 @@ struct MetalStreamSurface: NSViewRepresentable {
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.enableSetNeedsDisplay = false
         view.isPaused = true
-        context.coordinator.presenter.configure(view)
+        context.coordinator.configure(view, renderState: renderState)
         context.coordinator.captureController.update(inputPolicy, for: view)
         context.coordinator.attachmentOwner.attach(to: view)
         return view
@@ -3893,7 +4056,7 @@ struct MetalStreamSurface: NSViewRepresentable {
     func updateNSView(_ view: MacStreamInputCaptureView, context: Context) {
         _ = renderRevision
         view.forwardsSystemShortcuts = inputPolicy.forwardsSystemShortcuts
-        context.coordinator.update(
+        let schedule = context.coordinator.update(
             renderState: renderState,
             inputPolicy: inputPolicy,
             view: view,
@@ -3901,7 +4064,6 @@ struct MetalStreamSurface: NSViewRepresentable {
             captureExitHandler: captureExitHandler
         )
         context.coordinator.attachmentOwner.attach(to: view)
-        let schedule = apply(renderState, to: view)
         if schedule.requestsImmediateDraw { view.draw() }
     }
 
@@ -3912,20 +4074,6 @@ struct MetalStreamSurface: NSViewRepresentable {
         coordinator.detach(view)
     }
 
-    private func apply(
-        _ state: StreamRenderState,
-        to view: MTKView
-    ) -> StreamMetalViewSchedule {
-        let schedule = StreamMetalViewScheduleResolver.resolve(
-            state.policy,
-            negotiatedFramesPerSecond: state.negotiatedVideoFramesPerSecond,
-            maximumDisplayFramesPerSecond:
-                state.maximumDisplayFramesPerSecond
-        )
-        view.isPaused = schedule.isPaused
-        view.preferredFramesPerSecond = schedule.preferredFramesPerSecond
-        return schedule
-    }
 }
 #else
 #if os(tvOS) || os(visionOS)
