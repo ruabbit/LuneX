@@ -43,6 +43,12 @@
 
 ## 当前焦点
 
+2026-08-31追加P0真实输入回归：Direct与Relative指针都明显迟缓并丢失大量移动，按钮点击存在巨大端到端延迟。已确认共同根因是macOS输入的双重排队：`MacSessionInputCoordinator`先以256样本FIFO逐项等待完整network send，导致下游`MoonlightRemoteInputProvider`的移动合并无法生效；旧移动积压在按钮之前且容量耗尽后新样本被拒绝。当前批次将第一级改为低延迟、保序的实时合并队列：相邻Relative累加总位移、相邻Direct保留最新位置、不同按钮快照/键盘/按钮/滚轮/坐标参考变化保持顺序屏障，并以focused、related、fresh full和单实例live验收确认点击不会排在陈旧移动长队之后。Task 2.3与3.2均保持pending直到物理host可见反馈通过。
+
+2026-08-31同批单实例live抽验已观察到host可见的Direct与Relative指针移动及点击均在下一次截图前完成，未出现陈旧轨迹追赶；应用失焦置后台10秒后返回仍由同一串流工作区持有，返回后的Relative输入立即恢复。该证据只关闭本次报告的指针/点击与workspace-return回归，不替代Task 2.3/3.2剩余的键盘、滚轮、控制器、多显示器、reconnect、remote termination、重复stop、资源矩阵或主观可听同步，因此checkbox保持pending。
+
+2026-08-29追加P0运行缺陷：macOS放到后台一段时间后返回会错误显示Library，但音频继续，证明session/media generation未断而workspace presentation ownership丢失；同时实际音频延迟显著高于Moonlight-Qt。当前批次先修复窗口/scene所有权连续性与音频总待播时长的追实时策略，再恢复Task 2.3物理验收；Task 3.1、4.1、5.1在确定性和真实窗口验收完成前均保持pending。
+
 2026-08-26起由OpenSpec `prioritize-macos-product-completion`和`docs/macos-first-completion-plan.md`覆盖旧的阶段轮转顺序。M0已完成权威审计与计划迁移；M1 Task 2.1已完成production `VideoReceiveProvider`/`AudioReceiveProvider`、RTSP negotiated configuration、默认runtime接线及取消/teardown的确定性验收。Task 2.2已通过严格自验：登记`tanmy-white`广告的协议/codec能力，将`Desktop`指定为无破坏测试app，不使用Sunshine package-version allowlist，并将另外两个已知离线host的timeout记为预期状态。Task 2.3的Qt identity导入、wire ID continuity、production pinned mTLS与严格双重opt-in live harness均已完成确定性验收；production pinned-mTLS `/applist`取得唯一`Desktop`，同一运行app按`/resume`连接，其余free、missing、unknown、inconsistent或different-app状态不作客户端容量门而尝试`/launch`，由认证服务器响应决定结果；普通断开、失败、取消、replacement与reconnect cleanup保持零`/cancel`。exact SHA `df76fa5`已live验证解码生命周期死锁修复：自动门观察到decoded frame、30帧持续增长、audio runtime running、相对指针往返、input release、一次local stop、重复stop幂等与model teardown；coverage显示`NativeSessionVideoProcessor.consume()` 2109次、`VideoDecodePipeline.consume()` 38次、`requestIDR()` 1次。Task 2.3仍保持pending，因为物理可听同步音频、host可见输入反馈、真实reconnect、host-side remote termination、实际AppKit window/TCC与完整资源/重启矩阵尚未验收。
 
 阶段19当前历史进度仍为`33/48`，其Group 1–5与6.1证据全部保留；6.2-6.5中macOS适用的diagnostics工作进入M4，跨平台专用矩阵与UI扩展冻结。阶段13–18所有未完成physical/live checkbox继续保持pending，任何确定性测试、generic build、Simulator或后续工作均不得回填。
@@ -80,6 +86,22 @@
 - 后续路线图/合同/计划组合patch因`task_plan.md`大范围锚点不匹配而整体拒绝，零文件写入。改为路线图、合同、计划三组小patch后继续，不重复只读host inventory。
 
 ### M1 Task 2.3 错误记录
+
+- 2026-08-31：AppKit mouse-moved shared ownership focused R3在产品Swift编译阶段失败：嵌套entry初始化器从非隔离context读取main-actor隔离的`NSWindow.acceptsMouseMovedEvents`。没有测试执行；把读取移动到已`@MainActor`的acquire函数并向entry传递Bool，使用新R4路径继续，R3保留为失败证据。
+- 2026-08-31：macOS realtime input related R1通过已执行的AppModel/input/provider/wire用例后，停在既有`SessionMediaEnvironmentTests.testNativeAudioProcessorConnectsOpusFixtureToSessionAudioGraph()`；音频测试桩从不调用schedule completion，而上一批已把生产pending ceiling从8降至3，所以第4个5ms buffer按合同永久等待容量。等待确认后中止唯一`xcodebuild/xctest`并保留interrupted bundle；修复测试桩在第4包前完成最旧schedule，再使用精确输入相关selector重跑，不能把中断算作输入失败或放宽生产背压。
+- 2026-08-29：runtime continuity focused R1在测试源码编译阶段失败，四处新断言把`await processor.consume(...)`直接放进XCTest autoclosure，Swift 6明确拒绝异步autoclosure；产品代码未进入测试执行。已改为先等待并保存Bool再断言，保留R1 `.xcresult`，用新R2路径继续。
+- 2026-08-29：runtime continuity focused R2仍在测试源码编译阶段被严格并发阻止，新default-capacity测试的`Task`闭包内调用实例`makePCM`导致隐式发送非Sendable XCTestCase。已在Task外构造Sendable PCM值，保留R2失败bundle并用R3继续。
+- 2026-08-29：runtime continuity focused R3完成产品源码编译后，在新audio-provider测试的两处`XCTAssertTrue(await ...)`停止。已对本批四个测试文件系统检索同类模式，确认仅这两处真实异步autoclosure并统一改为先取值；字符串source-contract中的`"await ..."`不是异步调用。保留R3 bundle，R4继续。
+- 2026-08-29：focused R4通过后，macOS AppBuild R1在源码编译前因Head Pose entitlement要求development certificate而失败；这与当前普通Debug adhoc/file-fallback边界一致。改用仓库标准`CODE_SIGNING_ALLOWED=NO`在新R2路径验证源码，不能把无签名build描述为Head Pose或M6签名验收。
+
+- 2026-08-29：空间音频内联 fallback 首轮 fresh full macOS 门禁完成 `1356` 项中的 `1353 passed / 2 skipped / 1 failed`，构建诊断仍为全零；唯一失败不是断言，而是 `MacStreamInputCaptureViewTests.testViewIsFlippedAndAcceptsFirstResponder()` 所在 `xctest` 进程触发 `libsystem_malloc` free-block corruption。该 bundle 保留为失败证据，不把 focused/related 通过替代为 full 通过；先以单进程 focused gate 判断 AppKit/Metal 并行隔离，再决定修复或采用串行完整门禁。
+- 2026-08-29：首个 crash-focused 命令因包含临时证据目录的 `rm -rf`，在创建 shell 进程前被工具策略拒绝，测试、源码和 runtime 均零副作用；改用新的唯一目录并省略删除步骤。
+- 2026-08-29：同一 crash test 的 fresh 串行 focused gate 已 `1/1` 通过，证明其独立执行稳定；下一步改用 `-parallel-testing-enabled NO` 跑一次 fresh 完整门禁，以隔离并行 AppKit/Metal worker 生命周期，而不是原样重复失败命令。
+- 2026-08-29：fresh 串行完整门禁最终通过 `1356/1354/2/0`，structured build diagnostics 全零，精确 skips 仍只有 live Sunshine 与 real Keychain；首轮并行 worker 的 libmalloc 崩溃未复现。并行读取同一 `.xcresult` 时，skip-name reader 因 `xcresulttool` 临时 `database.sqlite3` 重名失败；改为单独串行只读后确认 skip，不重复测试。
+- 2026-08-29：空间音频内联 fallback 的 generator 前/双跑 project hash 均稳定为 `e412926...7524bf`；macOS universal 与三个冻结平台 generic compatibility build 全部 structured `succeeded/0/0/0`，macOS executable 为 `x86_64 arm64`。未操作 Simulator，非 macOS 结果不推进其产品状态。
+- 2026-08-29：产品替换包装器首个命令误写为不存在的 `scripts/build_and_run.sh`，shell 在任何脚本、构建或进程操作前以 `127` 退出；实际仓库路径为 `script/build_and_run.sh`，改用精确路径继续。
+- 2026-08-29：Computer Use 向已选中的 `Desktop` 发送 Return 后，在同一调用的截图回传阶段因 REPL 文件模块变量未持久化而报 `fs is not defined`；按键可能已生效，因此不重复启动动作，先重新读取窗口并显式导入依赖。
+- 2026-08-29：精确路径单实例中，Computer Use 通过实际坐标双击成功启动 `Desktop`；真实浮层确认新小字位置正确，同时发现 connecting footer 重复同一 `spatial_audio_missing_entitlement` 信息。已用结构化 `spatial_audio_` code 在 macOS footer 去重，保留其他真正影响连接的 actionable message，待 fresh focused/full 与真实窗口复验。
 
 - 2026-08-28：真实 App 最新连接停在 `Waiting for Audio` 后断开，Diagnostics 暂只暴露 `media_session_state_invalid`。已定位为 media event consumer 安装晚于 startup spatial/lifecycle application 的终止结果竞争；当前修复目标是让同一 generation 的原始有限 media terminal error 优先，且不放宽真实 lifecycle effect failure。Task 2.3 保持 pending，修复与确定性门通过后必须立即提交推送，再以单一新构建做 live 复验并依据解蔽后的有限错误继续处理。
 - 首轮 focused 的既有 lifecycle failure control 通过，新 terminal-ownership 回归仍发现历史 `media_session_state_invalid`，但 `audio_stream_ended` 已成为当前音频诊断。失败 bundle 保留，不伪称通过；下一步以有限 diagnostics code 序列定位第二记录来源，并从 fresh result bundle 重跑目标门。
@@ -2449,3 +2471,6 @@
 - **position exact full：** `/tmp/LuneX-MacOverlay-Position-Full-20260829-R1/Full.xcresult` 通过 `1356 total / 1354 passed / 2 exact opt-in skips / 0 failed / 0 expected failures`，structured build `succeeded/0/0/0`。定位修复未引入 session、media、input、workflow、accessibility 或 teardown 回归。
 - **position compatibility：** `/tmp/LuneX-MacOverlay-Position-Compatibility-20260829-R1` 的 macOS unsigned compile-only Debug executable 精确 `x86_64 arm64`；iOS/iPadOS、tvOS、visionOS generic Debug 串行成功。未启动、创建、clone 或查询 Simulator；非 macOS evidence 不推进冻结平台。
 - **overlay final repository gate：** `git diff --check`、精确 9 个预期 tracked 文件、零 untracked、OpenSpec strict `12/12`、Debug fallback 权限 `0700/0600/0600`、三个真实 opt-in unset、零 `xcodebuild/xctest`、唯一 LuneX PID `51200` 全部通过；`HEAD == origin/main == cf7ebd4`，立即提交并推送本批且不重启当前 live session。
+- **spatial fallback follow-up：** Apple 文档确认 macOS 头部跟踪需要 `com.apple.developer.coremotion.head-pose` Head Pose capability，它不是 TCC 用户授权；`spatial-audio.profile-access` 是另一项只控制个性化 profile 的 entitlement。当前 adhoc Debug App 无 entitlement，所以在 spatial/head-tracking 均请求时 fixed-spatial 降级属实。下一批在 Spatial audio 开关下仅对真实 fallback/failure 显示一行 `caption2` 小字，健康或关闭时不占位；完成 focused/related/full、兼容与 live 单实例验收后立即提交推送。
+- **spatial issue focused：** fresh `/tmp/LuneX-SpatialIssue-Focused-20260829-R1/Focused.xcresult` 在 Swift/Clang/Metal warnings-as-errors 下通过 `1/1`；macOS overlay source contract 与产品 SwiftUI 编译均成功。下一门扩大到 presentation、entitlement reader、audio graph/recovery/native processor 与 AppModel 状态矩阵。
+- **spatial issue related：** `/tmp/LuneX-SpatialIssue-Related-20260829-R1/Related.xcresult` 通过 `281/280/1/0`、0 expected failures，structured build `succeeded/0/0/0`；唯一 skip 是显式 live Sunshine gate。进入 fresh exact-source full macOS suite。

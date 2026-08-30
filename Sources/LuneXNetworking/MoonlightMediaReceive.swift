@@ -398,8 +398,17 @@ actor MoonlightAudioDatagramReservationStore {
     }
 }
 
+private enum MoonlightDatagramBufferOverflowPolicy: Equatable, Sendable {
+    case fail
+    case discardOldest
+}
+
 private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
     typealias Transform = @Sendable (Data, UInt64) throws -> Event?
+    typealias BufferingPolicy = AsyncThrowingStream<
+        Event,
+        Error
+    >.Continuation.BufferingPolicy
 
     private struct ActiveSession {
         var sessionID: UUID
@@ -412,6 +421,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
     private let channelFactory: MoonlightDatagramChannelFactory
     private let timing: MoonlightMediaReceiveTiming
     private let eventBufferCapacity: Int
+    private let overflowPolicy: MoonlightDatagramBufferOverflowPolicy
     private let timeProvider: MoonlightMediaReceiveTimeProvider
     private var generation: UInt64 = 0
     private var active: ActiveSession?
@@ -420,11 +430,13 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         channelFactory: @escaping MoonlightDatagramChannelFactory,
         timing: MoonlightMediaReceiveTiming,
         eventBufferCapacity: Int,
+        overflowPolicy: MoonlightDatagramBufferOverflowPolicy = .fail,
         timeProvider: @escaping MoonlightMediaReceiveTimeProvider
     ) {
         self.channelFactory = channelFactory
         self.timing = timing
         self.eventBufferCapacity = eventBufferCapacity
+        self.overflowPolicy = overflowPolicy
         self.timeProvider = timeProvider
     }
 
@@ -458,8 +470,11 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                 .moonlightDatagram
             )
             var continuation: AsyncThrowingStream<Event, Error>.Continuation!
+            let bufferingPolicy: BufferingPolicy = overflowPolicy == .fail
+                ? .bufferingOldest(eventBufferCapacity)
+                : .bufferingNewest(eventBufferCapacity)
             let stream = AsyncThrowingStream<Event, Error>(
-                bufferingPolicy: .bufferingOldest(eventBufferCapacity)
+                bufferingPolicy: bufferingPolicy
             ) {
                 continuation = $0
             }
@@ -539,6 +554,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                         continuation: continuation,
                         maximumDatagramBytes: maximumDatagramBytes,
                         timeProvider: self.timeProvider,
+                        overflowPolicy: self.overflowPolicy,
                         transform: transform
                     )
                 }
@@ -603,6 +619,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         continuation: AsyncThrowingStream<Event, Error>.Continuation,
         maximumDatagramBytes: Int,
         timeProvider: @escaping MoonlightMediaReceiveTimeProvider,
+        overflowPolicy: MoonlightDatagramBufferOverflowPolicy,
         transform: @escaping Transform
     ) async throws {
         while true {
@@ -624,7 +641,9 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
             case .enqueued:
                 break
             case .dropped:
-                throw MoonlightMediaReceiveError.receiveBufferOverflow
+                guard overflowPolicy == .discardOldest else {
+                    throw MoonlightMediaReceiveError.receiveBufferOverflow
+                }
             case .terminated:
                 throw CancellationError()
             @unknown default:
@@ -732,7 +751,7 @@ actor MoonlightAudioReceiveProvider: AudioReceiveProvider {
         },
         reservationStore: MoonlightAudioDatagramReservationStore? = nil,
         timing: MoonlightMediaReceiveTiming = .production,
-        eventBufferCapacity: Int = 512,
+        eventBufferCapacity: Int = 16,
         timeProvider: @escaping MoonlightMediaReceiveTimeProvider = {
             DispatchTime.now().uptimeNanoseconds
         }
@@ -742,6 +761,7 @@ actor MoonlightAudioReceiveProvider: AudioReceiveProvider {
             channelFactory: channelFactory,
             timing: timing,
             eventBufferCapacity: eventBufferCapacity,
+            overflowPolicy: .discardOldest,
             timeProvider: timeProvider
         )
     }

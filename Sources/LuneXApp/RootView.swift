@@ -1892,7 +1892,7 @@ private struct StreamStatusOverlay: View {
             }
 
             if !appModel.session.isStreaming,
-               let message = appModel.diagnostics.latestStreamActionableEvent?.message {
+               let message = macOSStreamActionableMessage {
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1976,12 +1976,52 @@ private struct StreamStatusOverlay: View {
 
     private var macOSSpatialAudioControl: some View {
         let content = appModel.spatialAudioPresentationStatus.content
-        return Toggle(isOn: spatialAudioEnabledBinding) {
-            Label("Spatial audio", systemImage: "wave.3.right.circle")
+        return VStack(alignment: .leading, spacing: 3) {
+            Toggle(isOn: spatialAudioEnabledBinding) {
+                Label("Spatial audio", systemImage: "wave.3.right.circle")
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .accessibilityValue(spatialAudioAccessibilityValue(content))
+
+            if let issue = macOSSpatialAudioIssue {
+                Text(issue)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Spatial audio status")
+            }
         }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-        .accessibilityValue(spatialAudioAccessibilityValue(content))
+        .frame(maxWidth: 210, alignment: .leading)
+    }
+
+    private var macOSSpatialAudioIssue: LocalizedStringResource? {
+        guard appModel.settings.audio.spatialAudioEnabled else { return nil }
+
+        let status = appModel.spatialAudioPresentationStatus
+        if let fallback = status.fallback {
+            switch fallback {
+            case .userDisabled:
+                return nil
+            case .missingEntitlement:
+                return "Head tracking unavailable in this build; fixed spatial audio is active."
+            case .unreadableEntitlement:
+                return "Head tracking capability could not be verified; fixed spatial audio is active."
+            default:
+                return fallback.detail
+            }
+        }
+        return status.mode == .failed ? status.content.detail : nil
+    }
+
+    private var macOSStreamActionableMessage: String? {
+        guard let event = appModel.diagnostics.latestStreamActionableEvent else {
+            return nil
+        }
+        if event.code.hasPrefix("spatial_audio_"), macOSSpatialAudioIssue != nil {
+            return nil
+        }
+        return event.message
     }
 
     private var streamApplicationName: String {

@@ -6,7 +6,7 @@ enum MacSessionInputQueuePolicyError: Error, Equatable, Sendable {
 
 struct MacSessionInputQueuePolicy: Equatable, Sendable {
     static let realtime = MacSessionInputQueuePolicy(
-        validatedMaximumPendingSamples: 256
+        validatedMaximumPendingSamples: 16
     )
 
     let maximumPendingSamples: Int
@@ -100,6 +100,7 @@ struct MacSessionInputCoordinatorSnapshot: Equatable, Sendable {
     var queuedSampleCount: Int
     var hasInFlightSample: Bool
     var acceptedSampleCount: UInt64
+    var coalescedSampleCount: UInt64
     var deliveredEventCount: UInt64
     var reservedSampleCount: UInt64
     var droppedSampleCount: UInt64
@@ -114,7 +115,12 @@ struct MacSessionInputCoordinatorSnapshot: Equatable, Sendable {
 }
 
 private struct MacInputSampleFIFO {
-    private var storage: [MacInputSampleEnvelope?]
+    private struct Entry {
+        var output: InputAdapterOutput
+        var coordinateSnapshot: StreamCoordinateSnapshot
+    }
+
+    private var storage: [Entry?]
     private var head = 0
     private var tail = 0
     private(set) var count = 0
@@ -123,21 +129,56 @@ private struct MacInputSampleFIFO {
         storage = Array(repeating: nil, count: capacity)
     }
 
-    mutating func append(_ envelope: MacInputSampleEnvelope) -> Bool {
+    mutating func append(
+        _ output: InputAdapterOutput,
+        coordinateSnapshot: StreamCoordinateSnapshot
+    ) -> Bool {
         guard count < storage.count else { return false }
-        storage[tail] = envelope
+        storage[tail] = Entry(
+            output: output,
+            coordinateSnapshot: coordinateSnapshot
+        )
         tail = (tail + 1) % storage.count
         count += 1
         return true
     }
 
-    mutating func popFirst() -> MacInputSampleEnvelope? {
+    mutating func coalesceLastMovement(
+        with newer: InputAdapterOutput,
+        coordinateSnapshot: StreamCoordinateSnapshot
+    ) -> Bool {
+        guard count > 0,
+              case .deliver = newer.policy,
+              let newerEvent = newer.event else { return false }
+        let lastIndex = (tail + storage.count - 1) % storage.count
+        guard let older = storage[lastIndex],
+              older.coordinateSnapshot == coordinateSnapshot,
+              case .deliver = older.output.policy,
+              let olderEvent = older.output.event,
+              let coalesced = RemoteInputMovementCoalescer.coalesce(
+                  older: olderEvent,
+                  newer: newerEvent
+              ),
+              (try? RemoteInputWireCodec.outboundPackets(for: coalesced)) != nil else {
+            return false
+        }
+        storage[lastIndex] = Entry(
+            output: InputAdapterOutput(
+                event: coalesced,
+                policy: .deliver
+            ),
+            coordinateSnapshot: coordinateSnapshot
+        )
+        return true
+    }
+
+    mutating func popFirst() -> InputAdapterOutput? {
         guard count > 0 else { return nil }
-        let envelope = storage[head]
+        let entry = storage[head]
         storage[head] = nil
         head = (head + 1) % storage.count
         count -= 1
-        return envelope
+        return entry?.output
     }
 
     mutating func removeAll() {
@@ -170,6 +211,7 @@ final class MacSessionInputCoordinator {
     private var consumerTask: Task<Void, Never>?
     private var activationOperation: ActivationOperation?
     private var acceptedSampleCount: UInt64 = 0
+    private var coalescedSampleCount: UInt64 = 0
     private var deliveredEventCount: UInt64 = 0
     private var reservedSampleCount: UInt64 = 0
     private var droppedSampleCount: UInt64 = 0
@@ -261,6 +303,15 @@ final class MacSessionInputCoordinator {
             rejectedSampleCount &+= 1
             return .rejected(.admissionClosed)
         }
+        let output = envelope.resolve()
+        if queue.coalesceLastMovement(
+            with: output,
+            coordinateSnapshot: envelope.coordinateSnapshot
+        ) {
+            acceptedSampleCount &+= 1
+            coalescedSampleCount &+= 1
+            return .accepted
+        }
         let outstanding = queue.count + (hasInFlightSample ? 1 : 0)
         guard outstanding < policy.maximumPendingSamples else {
             rejectedSampleCount &+= 1
@@ -268,7 +319,10 @@ final class MacSessionInputCoordinator {
                 limit: policy.maximumPendingSamples
             ))
         }
-        guard queue.append(envelope) else {
+        guard queue.append(
+            output,
+            coordinateSnapshot: envelope.coordinateSnapshot
+        ) else {
             rejectedSampleCount &+= 1
             return .rejected(.capacityExceeded(
                 limit: policy.maximumPendingSamples
@@ -343,6 +397,7 @@ final class MacSessionInputCoordinator {
             queuedSampleCount: queue.count,
             hasInFlightSample: hasInFlightSample,
             acceptedSampleCount: acceptedSampleCount,
+            coalescedSampleCount: coalescedSampleCount,
             deliveredEventCount: deliveredEventCount,
             reservedSampleCount: reservedSampleCount,
             droppedSampleCount: droppedSampleCount,
@@ -359,9 +414,8 @@ final class MacSessionInputCoordinator {
 
     private func drain(generation: MacSessionInputGeneration) async {
         while self.generation == generation, !Task.isCancelled {
-            if let envelope = queue.popFirst() {
+            if let output = queue.popFirst() {
                 hasInFlightSample = true
-                let output = envelope.resolve()
 
                 switch output.policy {
                 case .deliver:
@@ -467,6 +521,7 @@ final class MacSessionInputCoordinator {
 
     private func resetCounters() {
         acceptedSampleCount = 0
+        coalescedSampleCount = 0
         deliveredEventCount = 0
         reservedSampleCount = 0
         droppedSampleCount = 0

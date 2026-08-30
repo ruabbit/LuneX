@@ -14,6 +14,7 @@ enum AudioGraphRebuildReason: String, Equatable, Sendable {
     case underrun
     case packetLossExceeded
     case concealmentFailed
+    case realtimeCatchUp
 }
 
 enum AudioRuntimeRecoveryAction: Equatable, Sendable {
@@ -34,6 +35,7 @@ enum AudioRuntimeDiscontinuity: Equatable, Sendable {
     case interruptionBegan
     case interruptionEnded(shouldResume: Bool)
     case underrun
+    case realtimeCatchUp
     case packetLoss(
         firstSequenceNumber: UInt16,
         firstRTPTimeStamp: UInt32,
@@ -268,6 +270,13 @@ actor SessionAudioRuntime {
         case .underrun:
             guard stage == .running else { throw AudioRuntimeRecoveryError.invalidState }
             return try await rebuildGraph(reason: .underrun, at: timeNanoseconds)
+
+        case .realtimeCatchUp:
+            guard stage == .running else { throw AudioRuntimeRecoveryError.invalidState }
+            return try await rebuildGraph(
+                reason: .realtimeCatchUp,
+                at: timeNanoseconds
+            )
 
         case let .packetLoss(
             firstSequenceNumber,

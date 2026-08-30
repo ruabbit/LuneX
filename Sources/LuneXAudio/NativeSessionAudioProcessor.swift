@@ -24,6 +24,7 @@ enum SessionAudioRuntimeEventCause: String, Equatable, Hashable, Sendable {
     case mobilePolicyPaused = "mobile-policy-paused"
     case mobilePolicyResumed = "mobile-policy-resumed"
     case recovery
+    case realtimeCatchUp = "realtime-catch-up"
     case failed
     case stopped
 }
@@ -265,6 +266,7 @@ struct NativeSessionAudioProcessorFactory: SessionAudioProcessorCreating {
 actor NativeSessionAudioProcessor: SessionAudioProcessing {
     static let defaultEventCapacity = 16
     static let maximumEventCapacity = 64
+    static let maximumQueuedPacketAgeNanoseconds: UInt64 = 30_000_000
 
     private let sessionID: UUID
     private let configuration: NegotiatedAudioStreamConfiguration
@@ -296,6 +298,7 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
     private var mobileAudioApplication: SessionMobileAudioApplication?
     private var isMobileAudioPolicyPaused = false
     private var isSystemAudioInterrupted = false
+    private var requiresRealtimeRebase = false
     private var graphGeneration: UInt64 = 1
     private var nextEventSequence: UInt64 = 1
     private var isStopping = false
@@ -556,6 +559,31 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
                 latestReceiveTimeNanoseconds,
                 packet.receiveTimeNanoseconds
             )
+            let currentTimeNanoseconds = max(
+                eventTimeProvider(),
+                packet.receiveTimeNanoseconds
+            )
+            if currentTimeNanoseconds - packet.receiveTimeNanoseconds
+                > Self.maximumQueuedPacketAgeNanoseconds {
+                requiresRealtimeRebase = true
+                return false
+            }
+            if requiresRealtimeRebase {
+                let rebaseTime = max(
+                    currentTimeNanoseconds,
+                    latestRuntimeEventTimeNanoseconds,
+                    nextPresentationTimeNanoseconds
+                )
+                let snapshot = try await runtime.handle(
+                    .realtimeCatchUp,
+                    at: rebaseTime
+                )
+                latestRuntime = snapshot
+                latestRuntimeEventTimeNanoseconds = rebaseTime
+                try publish(snapshot, cause: .realtimeCatchUp)
+                try resetJitterBufferForContinuityTransition()
+                requiresRealtimeRebase = false
+            }
             var events = try jitterBuffer.ingest(packet)
             events += try jitterBuffer.advanceTime(to: latestReceiveTimeNanoseconds)
             return try await process(

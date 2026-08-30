@@ -231,6 +231,37 @@ final class AudioPipelineTests: XCTestCase {
         XCTAssertEqual(waitingAfterCompletion, 0)
     }
 
+    func testRealtimeDefaultBackpressuresAfterThreeFiveMillisecondBuffers()
+        async throws
+    {
+        let client = StubAudioEngineClient()
+        let pipeline = AudioSessionPipeline(engineClient: client)
+        _ = try await pipeline.configure(
+            .stereoLowLatency,
+            graphIntent: makeAudioGraphIntent(channelCount: 2)
+        )
+        _ = try await pipeline.start()
+
+        for sequence in UInt16(1)...UInt16(3) {
+            _ = try await pipeline.schedule(makePCM(
+                sequence: sequence,
+                timestamp: UInt32(sequence) * 240
+            ))
+        }
+        let fourthBuffer = makePCM(sequence: 4, timestamp: 960)
+        let fourthTask = Task {
+            try await pipeline.schedule(fourthBuffer)
+        }
+        await waitForWaitingScheduleCount(1, pipeline: pipeline)
+        let countAtCapacity = await pipeline.scheduledBufferCount()
+        XCTAssertEqual(countAtCapacity, 3)
+
+        client.completeScheduledBuffer(at: 0)
+        _ = try await fourthTask.value
+        let countAfterResume = await pipeline.scheduledBufferCount()
+        XCTAssertEqual(countAfterResume, 3)
+    }
+
     func testCancelledCapacityWaitDoesNotScheduleOrConsumeCapacity()
         async throws
     {

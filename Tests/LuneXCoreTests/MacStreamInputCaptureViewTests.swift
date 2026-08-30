@@ -12,6 +12,38 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertTrue(view.acceptsFirstResponder)
     }
 
+    func testCaptureOwnsMouseMovedDeliveryOnlyWhileAttachedAndEnabled() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 180),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        let root = NSView(frame: window.contentView?.bounds ?? .zero)
+        let view = makeView()
+        window.acceptsMouseMovedEvents = false
+        window.contentView = root
+
+        root.addSubview(view)
+        XCTAssertTrue(window.acceptsMouseMovedEvents)
+
+        let replacement = makeView()
+        root.addSubview(replacement)
+        XCTAssertTrue(window.acceptsMouseMovedEvents)
+
+        view.isInputCaptureEnabled = false
+        XCTAssertTrue(window.acceptsMouseMovedEvents)
+
+        replacement.isInputCaptureEnabled = false
+        XCTAssertFalse(window.acceptsMouseMovedEvents)
+
+        view.isInputCaptureEnabled = true
+        XCTAssertTrue(window.acceptsMouseMovedEvents)
+
+        view.removeFromSuperview()
+        XCTAssertFalse(window.acceptsMouseMovedEvents)
+    }
+
     func testKeyDownAndUpPreserveCharactersModifiersAndRepeat() throws {
         let recorder = MacInputSampleRecorder()
         let view = makeView(recorder: recorder)

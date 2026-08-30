@@ -2,6 +2,10 @@ import XCTest
 
 @MainActor
 final class MacSessionInputCoordinatorTests: XCTestCase {
+    func testRealtimePolicyUsesLowLatencyBound() {
+        XCTAssertEqual(MacSessionInputQueuePolicy.realtime.maximumPendingSamples, 16)
+    }
+
     func testSingleConsumerPreservesFIFOAndEnqueueTimeCoordinates() async throws {
         let sink = ControlledApplicationInputSink(blockFirstSend: true)
         let coordinator = MacSessionInputCoordinator(
@@ -105,6 +109,242 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
             .accepted
         )
         await waitUntil { coordinator.snapshot().deliveredEventCount == 1 }
+    }
+
+    func testRelativeMotionCoalescesAheadOfClickWithoutLosingTotalDelta() async throws {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 4)
+        )
+        let generation = await coordinator.activate()
+        let keyboard = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 0,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        XCTAssertEqual(coordinator.enqueue(keyboard, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+
+        let relativePolicy = CursorCapturePolicy(
+            hidesSystemCursor: true,
+            capturesRelativePointer: true,
+            usesRemotePointer: true,
+            reason: nil
+        )
+        for _ in 0..<100 {
+            XCTAssertEqual(
+                coordinator.enqueue(
+                    envelope(
+                        .pointerMove(MacPointerSample(
+                            localPoint: nil,
+                            deltaX: 2,
+                            deltaY: -1,
+                            buttons: []
+                        )),
+                        snapshot: snapshot(revision: 1, sourceWidth: 100),
+                        cursorPolicy: relativePolicy
+                    ),
+                    generation: generation
+                ),
+                .accepted
+            )
+        }
+        XCTAssertEqual(
+            coordinator.enqueue(
+                envelope(
+                    .button(button: .left, isDown: true, localPoint: nil),
+                    snapshot: snapshot(revision: 1, sourceWidth: 100),
+                    cursorPolicy: relativePolicy
+                ),
+                generation: generation
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            coordinator.enqueue(
+                envelope(
+                    .button(button: .left, isDown: false, localPoint: nil),
+                    snapshot: snapshot(revision: 1, sourceWidth: 100),
+                    cursorPolicy: relativePolicy
+                ),
+                generation: generation
+            ),
+            .accepted
+        )
+
+        let queued = coordinator.snapshot()
+        XCTAssertEqual(queued.queuedSampleCount, 3)
+        XCTAssertEqual(queued.coalescedSampleCount, 99)
+        XCTAssertEqual(queued.rejectedSampleCount, 0)
+        sink.resumeFirstSend()
+        await waitUntil { coordinator.snapshot().deliveredEventCount == 4 }
+
+        XCTAssertEqual(sink.events, [
+            .keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x41,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            .pointer(.relativeMove(deltaX: 200, deltaY: -100, buttons: [])),
+            .pointer(.button(button: .left, isDown: true, point: nil)),
+            .pointer(.button(button: .left, isDown: false, point: nil))
+        ])
+    }
+
+    func testDirectMotionKeepsNewestPointWithoutCrossingButtonBarrier() async throws {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 5)
+        )
+        let generation = await coordinator.activate()
+        let keyboard = envelope(
+            .keyboard(MacKeyboardSample(
+                rawKeyCode: 0,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            snapshot: snapshot(revision: 1, sourceWidth: 100)
+        )
+        XCTAssertEqual(coordinator.enqueue(keyboard, generation: generation), .accepted)
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+
+        func directMove(_ x: Double) -> MacInputSampleEnvelope {
+            envelope(
+                .pointerMove(MacPointerSample(
+                    localPoint: RemotePoint(x: x, y: 50),
+                    deltaX: 0,
+                    deltaY: 0,
+                    buttons: []
+                )),
+                snapshot: snapshot(revision: 1, sourceWidth: 100)
+            )
+        }
+        XCTAssertEqual(coordinator.enqueue(directMove(10), generation: generation), .accepted)
+        XCTAssertEqual(coordinator.enqueue(directMove(20), generation: generation), .accepted)
+        XCTAssertEqual(
+            coordinator.enqueue(
+                envelope(
+                    .button(
+                        button: .left,
+                        isDown: true,
+                        localPoint: RemotePoint(x: 20, y: 50)
+                    ),
+                    snapshot: snapshot(revision: 1, sourceWidth: 100)
+                ),
+                generation: generation
+            ),
+            .accepted
+        )
+        XCTAssertEqual(coordinator.enqueue(directMove(30), generation: generation), .accepted)
+        XCTAssertEqual(coordinator.enqueue(directMove(40), generation: generation), .accepted)
+
+        let queued = coordinator.snapshot()
+        XCTAssertEqual(queued.queuedSampleCount, 3)
+        XCTAssertEqual(queued.coalescedSampleCount, 2)
+        XCTAssertEqual(queued.rejectedSampleCount, 0)
+        sink.resumeFirstSend()
+        await waitUntil { coordinator.snapshot().deliveredEventCount == 4 }
+
+        XCTAssertEqual(sink.events, [
+            .keyboard(KeyboardInputEvent(
+                rawKeyCode: 0x41,
+                characters: "a",
+                isDown: true,
+                modifiers: [],
+                isRepeat: false
+            )),
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 20, y: 50),
+                referenceSize: PixelSize(width: 100, height: 100),
+                buttons: []
+            )),
+            .pointer(.button(
+                button: .left,
+                isDown: true,
+                point: RemotePoint(x: 20, y: 50)
+            )),
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 40, y: 50),
+                referenceSize: PixelSize(width: 100, height: 100),
+                buttons: []
+            ))
+        ])
+    }
+
+    func testDirectMotionDoesNotCoalesceAcrossCoordinateRevision() async throws {
+        let sink = ControlledApplicationInputSink(blockFirstSend: true)
+        let coordinator = MacSessionInputCoordinator(
+            sink: sink,
+            policy: try MacSessionInputQueuePolicy(maximumPendingSamples: 3)
+        )
+        let generation = await coordinator.activate()
+        XCTAssertEqual(
+            coordinator.enqueue(
+                envelope(
+                    .keyboard(MacKeyboardSample(
+                        rawKeyCode: 0,
+                        characters: "a",
+                        isDown: true,
+                        modifiers: [],
+                        isRepeat: false
+                    )),
+                    snapshot: snapshot(revision: 1, sourceWidth: 100)
+                ),
+                generation: generation
+            ),
+            .accepted
+        )
+        await waitUntil { coordinator.snapshot().hasInFlightSample }
+
+        func directMove(_ x: Double, revision: UInt64) -> MacInputSampleEnvelope {
+            envelope(
+                .pointerMove(MacPointerSample(
+                    localPoint: RemotePoint(x: x, y: 50),
+                    deltaX: 0,
+                    deltaY: 0,
+                    buttons: []
+                )),
+                snapshot: snapshot(revision: revision, sourceWidth: 100)
+            )
+        }
+        XCTAssertEqual(
+            coordinator.enqueue(directMove(10, revision: 1), generation: generation),
+            .accepted
+        )
+        XCTAssertEqual(
+            coordinator.enqueue(directMove(20, revision: 2), generation: generation),
+            .accepted
+        )
+
+        let queued = coordinator.snapshot()
+        XCTAssertEqual(queued.queuedSampleCount, 2)
+        XCTAssertEqual(queued.coalescedSampleCount, 0)
+        sink.resumeFirstSend()
+        await waitUntil { coordinator.snapshot().deliveredEventCount == 3 }
+
+        XCTAssertEqual(Array(sink.events.dropFirst()), [
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 10, y: 50),
+                referenceSize: PixelSize(width: 100, height: 100),
+                buttons: []
+            )),
+            .pointer(.absoluteMove(
+                point: RemotePoint(x: 20, y: 50),
+                referenceSize: PixelSize(width: 100, height: 100),
+                buttons: []
+            ))
+        ])
     }
 
     func testReservedAndOutOfVideoSamplesNeverReachApplicationSink() async throws {
@@ -594,17 +834,18 @@ final class MacSessionInputCoordinatorTests: XCTestCase {
 
     private func envelope(
         _ sample: MacPlatformInputSample,
-        snapshot: StreamCoordinateSnapshot
+        snapshot: StreamCoordinateSnapshot,
+        cursorPolicy: CursorCapturePolicy = CursorCapturePolicy(
+            hidesSystemCursor: false,
+            capturesRelativePointer: false,
+            usesRemotePointer: false,
+            reason: nil
+        )
     ) -> MacInputSampleEnvelope {
         MacInputSampleEnvelope(
             sample: sample,
             coordinateSnapshot: snapshot,
-            cursorPolicy: CursorCapturePolicy(
-                hidesSystemCursor: false,
-                capturesRelativePointer: false,
-                usesRemotePointer: false,
-                reason: nil
-            ),
+            cursorPolicy: cursorPolicy,
             forwardsSystemShortcuts: false
         )
     }

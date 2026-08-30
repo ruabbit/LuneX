@@ -35,6 +35,48 @@ enum MacScrollDeltaNormalizer {
 }
 
 @MainActor
+private enum MacMouseMovedEventOwnership {
+    private final class Entry {
+        weak var window: NSWindow?
+        let previousValue: Bool
+        var owners: Set<ObjectIdentifier>
+
+        init(window: NSWindow, previousValue: Bool, owner: AnyObject) {
+            self.window = window
+            self.previousValue = previousValue
+            owners = [ObjectIdentifier(owner)]
+        }
+    }
+
+    private static var entries: [ObjectIdentifier: Entry] = [:]
+
+    static func acquire(window: NSWindow, owner: AnyObject) {
+        let windowID = ObjectIdentifier(window)
+        if let entry = entries[windowID], entry.window === window {
+            entry.owners.insert(ObjectIdentifier(owner))
+        } else {
+            entries[windowID] = Entry(
+                window: window,
+                previousValue: window.acceptsMouseMovedEvents,
+                owner: owner
+            )
+        }
+        window.acceptsMouseMovedEvents = true
+    }
+
+    static func release(window: NSWindow, owner: AnyObject) {
+        let windowID = ObjectIdentifier(window)
+        guard let entry = entries[windowID], entry.window === window else {
+            return
+        }
+        entry.owners.remove(ObjectIdentifier(owner))
+        guard entry.owners.isEmpty else { return }
+        window.acceptsMouseMovedEvents = entry.previousValue
+        entries[windowID] = nil
+    }
+}
+
+@MainActor
 final class MacStreamInputCaptureView: MTKView {
     typealias SampleHandler = @MainActor (MacPlatformInputSample) -> Void
 
@@ -42,9 +84,11 @@ final class MacStreamInputCaptureView: MTKView {
         didSet {
             guard isInputCaptureEnabled != oldValue else { return }
             if isInputCaptureEnabled {
+                acquireMouseMovedEventsIfNeeded()
                 requestFirstResponderIfNeeded()
             } else {
                 resetTransientInputState()
+                releaseMouseMovedEventsIfNeeded()
                 if window?.firstResponder === self {
                     window?.makeFirstResponder(nil)
                 }
@@ -60,6 +104,7 @@ final class MacStreamInputCaptureView: MTKView {
     private var pressedModifierKeyCodes: Set<UInt16> = []
     private var pressedPointerButtons: PointerButtonSet = []
     private var reservedShortcutsByKeyCode: [UInt16: MacReservedShortcut] = [:]
+    private weak var mouseMovedEventWindow: NSWindow?
 
     init(
         frame frameRect: NSRect = .zero,
@@ -86,6 +131,8 @@ final class MacStreamInputCaptureView: MTKView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        releaseMouseMovedEventsIfNeeded()
+        acquireMouseMovedEventsIfNeeded()
         onWindowChange?(window)
         requestFirstResponderIfNeeded()
     }
@@ -308,6 +355,23 @@ final class MacStreamInputCaptureView: MTKView {
             deltaY: deltaY,
             buttons: pressedPointerButtons
         )))
+    }
+
+    private func acquireMouseMovedEventsIfNeeded() {
+        guard isInputCaptureEnabled,
+              let window,
+              mouseMovedEventWindow !== window else { return }
+        mouseMovedEventWindow = window
+        MacMouseMovedEventOwnership.acquire(window: window, owner: self)
+    }
+
+    private func releaseMouseMovedEventsIfNeeded() {
+        guard let mouseMovedEventWindow else { return }
+        MacMouseMovedEventOwnership.release(
+            window: mouseMovedEventWindow,
+            owner: self
+        )
+        self.mouseMovedEventWindow = nil
     }
 
     private func emitButton(_ button: PointerButton, isDown: Bool, event: NSEvent) {

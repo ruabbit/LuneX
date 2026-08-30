@@ -1389,6 +1389,22 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             "Toggle(isOn: spatialAudioEnabledBinding)"
         ))
         XCTAssertTrue(streamOverlay.contains(
+            "if let issue = macOSSpatialAudioIssue"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "Head tracking unavailable in this build; fixed spatial audio is active."
+        ))
+        XCTAssertTrue(streamOverlay.contains(".font(.caption2)"))
+        XCTAssertTrue(streamOverlay.contains(
+            ".accessibilityLabel(\"Spatial audio status\")"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "let message = macOSStreamActionableMessage"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
+            "event.code.hasPrefix(\"spatial_audio_\")"
+        ))
+        XCTAssertTrue(streamOverlay.contains(
             "try await appModel.updateSpatialAudioPreferences("
         ))
         XCTAssertTrue(streamOverlay.contains("await appModel.saveSettings()"))
@@ -1543,7 +1559,11 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
             "RootView(workspace: appModel.primaryWorkspaceReference)"
         ))
         XCTAssertTrue(appSource.contains(".onAppear(perform: connect)"))
-        XCTAssertTrue(appSource.contains(".onDisappear(perform: disconnect)"))
+        XCTAssertTrue(appSource.contains(
+            "ProductWorkspaceWindowCloseObserver(onClose: disconnect)"
+        ))
+        XCTAssertTrue(appSource.contains("NSWindow.willCloseNotification"))
+        XCTAssertTrue(appSource.contains("#else\n        .onDisappear(perform: disconnect)"))
         XCTAssertTrue(infoSource.contains("UIApplicationSceneManifest"))
         XCTAssertTrue(infoSource.contains("UIApplicationSupportsMultipleScenes"))
         XCTAssertTrue(infoSource.contains("<true/>"))

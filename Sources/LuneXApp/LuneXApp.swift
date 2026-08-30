@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 @main
 struct LuneXApp: App {
@@ -83,7 +86,13 @@ private struct ProductWorkspaceSceneRoot: View {
         )
         #endif
         .onAppear(perform: connect)
+        #if os(macOS)
+        .background {
+            ProductWorkspaceWindowCloseObserver(onClose: disconnect)
+        }
+        #else
         .onDisappear(perform: disconnect)
+        #endif
     }
 
     private func connect() {
@@ -111,4 +120,70 @@ private struct ProductWorkspaceSceneRoot: View {
         }
     }
 }
+
+#if os(macOS)
+private struct ProductWorkspaceWindowCloseObserver: NSViewRepresentable {
+    let onClose: @MainActor () -> Void
+
+    func makeNSView(context: Context) -> ProductWorkspaceWindowCloseView {
+        ProductWorkspaceWindowCloseView(onClose: onClose)
+    }
+
+    func updateNSView(
+        _ nsView: ProductWorkspaceWindowCloseView,
+        context: Context
+    ) {
+        nsView.onClose = onClose
+    }
+}
+
+private final class ProductWorkspaceWindowCloseView: NSView {
+    var onClose: @MainActor () -> Void
+    private weak var observedWindow: NSWindow?
+
+    init(onClose: @escaping @MainActor () -> Void) {
+        self.onClose = onClose
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard observedWindow !== window else { return }
+        stopObservingWindow()
+        guard let window else { return }
+        observedWindow = window
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+    }
+
+    @objc private func windowWillClose(_ notification: Notification) {
+        guard notification.object as? NSWindow === observedWindow else { return }
+        onClose()
+        stopObservingWindow()
+    }
+
+    private func stopObservingWindow() {
+        guard let observedWindow else { return }
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWindow.willCloseNotification,
+            object: observedWindow
+        )
+        self.observedWindow = nil
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+#endif
 #endif

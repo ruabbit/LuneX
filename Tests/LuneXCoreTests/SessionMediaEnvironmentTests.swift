@@ -3981,7 +3981,21 @@ final class SessionMediaEnvironmentTests: XCTestCase {
                 payload: payload
             ))) || becameReady
         }
-        becameReady = try await processor.consume(.closed) || becameReady
+        let closeTask = Task {
+            try await processor.consume(.closed)
+        }
+        let reachedRealtimeCapacity = await waitUntil {
+            engine.pendingCompletionCount()
+                == AudioSessionPipeline.realtimeMaximumScheduledBuffers
+        }
+        guard reachedRealtimeCapacity else {
+            closeTask.cancel()
+            _ = try? await closeTask.value
+            await processor.stop()
+            return
+        }
+        engine.completeOldestScheduledBuffer()
+        becameReady = try await closeTask.value || becameReady
         XCTAssertTrue(becameReady)
         let scheduled = engine.scheduledBuffers()
         XCTAssertEqual(scheduled.map(\.sequenceNumber), [0, 1, 2, 3])
@@ -4298,6 +4312,7 @@ private struct MediaEnvironmentAudioFixture: Decodable {
 private final class MediaEnvironmentAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private let lock = NSLock()
     private var buffers: [DecodedPCMBuffer] = []
+    private var completions: [@Sendable () -> Void] = []
     private var stopped = false
 
     func configure(
@@ -4320,8 +4335,10 @@ private final class MediaEnvironmentAudioEngineClient: AudioEngineClient, @unche
         _ buffer: DecodedPCMBuffer,
         completion: @escaping @Sendable () -> Void
     ) throws {
-        _ = completion
-        withLock { buffers.append(buffer) }
+        withLock {
+            buffers.append(buffer)
+            completions.append(completion)
+        }
     }
 
     func stop(drain: Bool) {
@@ -4329,6 +4346,7 @@ private final class MediaEnvironmentAudioEngineClient: AudioEngineClient, @unche
         withLock {
             stopped = true
             buffers.removeAll()
+            completions.removeAll()
         }
     }
 
@@ -4347,6 +4365,17 @@ private final class MediaEnvironmentAudioEngineClient: AudioEngineClient, @unche
 
     func scheduledBuffers() -> [DecodedPCMBuffer] {
         withLock { buffers }
+    }
+
+    func completeOldestScheduledBuffer() {
+        let completion = withLock {
+            completions.isEmpty ? nil : completions.removeFirst()
+        }
+        completion?()
+    }
+
+    func pendingCompletionCount() -> Int {
+        withLock { completions.count }
     }
 
     func isStopped() -> Bool {

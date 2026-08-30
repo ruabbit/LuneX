@@ -444,6 +444,75 @@ final class NativeSessionAudioProcessorTests: XCTestCase {
         XCTAssertTrue(source.stopped())
     }
 
+    func testStaleQueuedPacketsAreDroppedAndFreshAudioRebasesOnce()
+        async throws
+    {
+        let engine = ProcessorRecordingAudioEngineClient(
+            capability: routeCapability(support: .supported)
+        )
+        let source = ProcessorManualRouteEventSource()
+        let decoder = ProcessorRecordingDecoder()
+        let clock = ProcessorControlledClock(now: 100_000_000)
+        let factory = NativeSessionAudioProcessorFactory(
+            entitlementReader: ProcessorEntitlementReader(state: .granted),
+            decoderFactory: { _ in decoder },
+            engineClientFactory: { engine },
+            routeEventSourceFactory: { source },
+            eventTimeProvider: { clock.read() }
+        )
+        let processor = try await factory.makeAudioProcessor(
+            sessionID: UUID(),
+            configuration: Self.audioConfiguration()
+        )
+
+        let firstStaleResult = try await processor.consume(.packet(Self.packet(
+            sequence: 1,
+            timestamp: 0,
+            receivedAt: 0
+        )))
+        let secondStaleResult = try await processor.consume(.packet(Self.packet(
+            sequence: 2,
+            timestamp: 240,
+            receivedAt: 5_000_000
+        )))
+        XCTAssertFalse(firstStaleResult)
+        XCTAssertFalse(secondStaleResult)
+        let decodedBeforeFreshAudio = await decoder.decodedSequences()
+        XCTAssertEqual(decodedBeforeFreshAudio, [])
+        XCTAssertEqual(engine.graphIntents().count, 1)
+
+        clock.set(110_000_000)
+        let firstFreshResult = try await processor.consume(.packet(Self.packet(
+            sequence: 3,
+            timestamp: 480,
+            receivedAt: 105_000_000
+        )))
+        clock.set(115_000_000)
+        let secondFreshResult = try await processor.consume(.packet(Self.packet(
+            sequence: 4,
+            timestamp: 720,
+            receivedAt: 115_000_000
+        )))
+        XCTAssertFalse(firstFreshResult)
+        XCTAssertTrue(secondFreshResult)
+
+        let decodedAfterCatchUp = await decoder.decodedSequences()
+        XCTAssertEqual(decodedAfterCatchUp, [3, 4])
+        XCTAssertEqual(engine.graphIntents().count, 2)
+        let stream = await processor.audioRuntimeEvents()
+        var iterator = stream.makeAsyncIterator()
+        let firstEvent = await iterator.next()
+        let secondEvent = await iterator.next()
+        let events = [firstEvent, secondEvent].compactMap { $0 }
+        XCTAssertEqual(events.map(\.cause), [.initial, .realtimeCatchUp])
+        XCTAssertEqual(
+            events.last?.lastAction,
+            .graphRebuilt(.realtimeCatchUp)
+        )
+
+        await processor.stop()
+    }
+
     func testGraphFailurePublishesFailedStateStopsObservationAndRejectsLateCallbacks()
         async throws
     {
@@ -640,6 +709,19 @@ final class NativeSessionAudioProcessorTests: XCTestCase {
             maximumPacketSize: 1_400
         )
     }
+
+    private static func packet(
+        sequence: UInt16,
+        timestamp: UInt32,
+        receivedAt: UInt64
+    ) -> ReceivedAudioPacket {
+        ReceivedAudioPacket(
+            sequenceNumber: sequence,
+            timestamp: timestamp,
+            receiveTimeNanoseconds: receivedAt,
+            payload: Data([0x01])
+        )
+    }
 }
 
 private struct ProcessorHarness {
@@ -700,6 +782,23 @@ private final class ProcessorIncrementingClock: @unchecked Sendable {
     }
 }
 
+private final class ProcessorControlledClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var now: UInt64
+
+    init(now: UInt64) {
+        self.now = now
+    }
+
+    func read() -> UInt64 {
+        lock.withLock { now }
+    }
+
+    func set(_ now: UInt64) {
+        lock.withLock { self.now = now }
+    }
+}
+
 private struct ProcessorEntitlementReader: HeadPoseEntitlementReading {
     let state: SpatialAudioEntitlementState
 
@@ -711,13 +810,15 @@ private struct ProcessorEntitlementReader: HeadPoseEntitlementReading {
 private actor ProcessorRecordingDecoder: SessionAudioDecoding {
     private let order: ProcessorCallOrderRecorder?
     private var closed = false
+    private var sequences: [UInt16] = []
 
     init(order: ProcessorCallOrderRecorder? = nil) {
         self.order = order
     }
 
     func decode(_ packet: ReceivedAudioPacket) throws -> DecodedPCMBuffer {
-        DecodedPCMBuffer(
+        sequences.append(packet.sequenceNumber)
+        return DecodedPCMBuffer(
             sequenceNumber: packet.sequenceNumber,
             rtpTimestamp: packet.timestamp,
             format: .signedInt16(
@@ -736,6 +837,10 @@ private actor ProcessorRecordingDecoder: SessionAudioDecoding {
 
     func isClosed() -> Bool {
         closed
+    }
+
+    func decodedSequences() -> [UInt16] {
+        sequences
     }
 }
 

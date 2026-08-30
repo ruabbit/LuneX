@@ -121,6 +121,50 @@ final class MoonlightMediaReceiveTests: XCTestCase {
         XCTAssertEqual(audioCancelCount, 1)
     }
 
+    func testAudioProviderKeepsNewestPacketsWhenConsumerFallsBehind()
+        async throws
+    {
+        let datagrams = (1...3).map { sequence in
+            Result<NetworkReceiveChunk, Error>.success(NetworkReceiveChunk(
+                data: makeAudioDatagram(
+                    payloadType: MoonlightAudioRTPPacket.opusPayloadType,
+                    sequenceNumber: UInt16(sequence),
+                    timestamp: UInt32(sequence * 240),
+                    payload: Data([UInt8(sequence)])
+                ),
+                isComplete: true
+            ))
+        }
+        let channel = MediaReceiveStubChannel(chunks: datagrams)
+        let provider = MoonlightAudioReceiveProvider(
+            channelFactory: { _, _ in channel },
+            timing: testTiming,
+            eventBufferCapacity: 2,
+            timeProvider: { 777 }
+        )
+        let sessionID = UUID()
+        let stream = await provider.receiveAudio(
+            sessionID: sessionID,
+            endpoint: udpEndpoint(port: 48_000),
+            configuration: audioConfiguration()
+        )
+        let receiveLoopBufferedAllPackets = await waitUntil {
+            await channel.isReceiveBlocked()
+        }
+        XCTAssertTrue(receiveLoopBufferedAllPackets)
+        var iterator = stream.makeAsyncIterator()
+
+        guard case let .packet(first) = try await iterator.next(),
+              case let .packet(second) = try await iterator.next() else {
+            await provider.stopAudio(sessionID: sessionID)
+            return XCTFail("Expected the two newest buffered packets.")
+        }
+        XCTAssertEqual([first.sequenceNumber, second.sequenceNumber], [2, 3])
+        let snapshot = await provider.snapshot()
+        XCTAssertTrue(snapshot.isActive)
+        await provider.stopAudio(sessionID: sessionID)
+    }
+
     func testAudioProviderClaimsPrimedChannelAndContinuesPingSequence()
         async throws
     {

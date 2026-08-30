@@ -62,6 +62,15 @@ The macOS client SHALL NOT be declared functionally complete until an authorized
 
 The client SHALL NOT restrict users through a Sunshine package-version allowlist. Compatibility SHALL be selected from server-advertised protocol and codec capabilities and validated by actual negotiation and live behavior. A Sunshine package version MAY be recorded as diagnostic metadata when available, but SHALL NOT be a prerequisite for attempting a compatible session.
 
+#### Scenario: Continuous macOS pointer input remains realtime
+- **WHEN** Direct or Relative pointer movement arrives faster than the authenticated transport completes individual sends
+- **THEN** the first serialized macOS input queue coalesces only adjacent compatible movement before transport admission
+- **AND** Relative mode preserves the summed movement delta while Direct mode preserves the newest mapped position
+- **AND** coordinate-reference changes, pointer-button snapshots, keyboard events, button transitions, scroll events, focus release, and termination remain ordering barriers
+- **AND** a button transition is not delayed behind a long FIFO history of stale pointer movement
+- **AND** bounded overload does not silently discard the accumulated Relative displacement
+- **AND** every active AppKit capture surface participates in replacement-safe window mouse-movement delivery ownership, restoring the prior window policy only after the final owner detaches
+
 All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
 
 Every production network URL SHALL preserve the parsed endpoint port even when the persisted or user-facing address omits the default GameStream port. The macOS application SHALL declare a non-empty Local Network usage description and every Bonjour service type it browses, including `_nvstream._tcp`, in its product Info.plist.
@@ -187,6 +196,8 @@ The macOS candidate SHALL pass native window, display, input, HDR/EDR, audio, pr
 - **THEN** the overlay identifies the selected application and host, summarizes the configured resolution, frame rate, and bitrate, and exposes live pointer-mode, scaling, HDR/EDR, spatial-audio, hide, and disconnect controls
 - **AND** pointer, scaling, HDR/EDR, and spatial-audio changes apply through their real runtime paths and persist as preferences
 - **AND** a wide macOS stream window presents a width-bounded overlay at the top center below the title bar instead of vertically centering it over remote content
+- **AND** when requested spatial audio falls back or fails, the spatial-audio control shows a compact subordinate reason below the switch, while healthy or disabled output does not reserve space for status prose
+- **AND** the same spatial-audio reason SHALL NOT be duplicated in the connecting or failure footer
 - **AND** normal streaming SHALL NOT use primary overlay space for standalone pointer, SDR, fixed-spatial, entitlement, or general diagnostic-summary labels
 - **AND** current output detail remains available to assistive technology and through on-demand Settings or Diagnostics, while a connecting or failed session MAY show the bounded actionable state needed to recover
 

@@ -683,6 +683,8 @@ enum AudioRouteInspector {
 }
 
 actor AudioSessionPipeline {
+    static let realtimeMaximumScheduledBuffers = 3
+
     private struct CapacityWaiter {
         let generation: UInt64
         let continuation: CheckedContinuation<Void, Error>
@@ -700,7 +702,7 @@ actor AudioSessionPipeline {
 
     init(
         engineClient: AudioEngineClient = AVAudioEngineClient(),
-        maximumScheduledBuffers: Int = 8,
+        maximumScheduledBuffers: Int = realtimeMaximumScheduledBuffers,
         now: Date = Date()
     ) {
         self.engineClient = engineClient
