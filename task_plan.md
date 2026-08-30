@@ -2477,3 +2477,12 @@
 - **spatial fallback follow-up：** Apple 文档确认 macOS 头部跟踪需要 `com.apple.developer.coremotion.head-pose` Head Pose capability，它不是 TCC 用户授权；`spatial-audio.profile-access` 是另一项只控制个性化 profile 的 entitlement。当前 adhoc Debug App 无 entitlement，所以在 spatial/head-tracking 均请求时 fixed-spatial 降级属实。下一批在 Spatial audio 开关下仅对真实 fallback/failure 显示一行 `caption2` 小字，健康或关闭时不占位；完成 focused/related/full、兼容与 live 单实例验收后立即提交推送。
 - **spatial issue focused：** fresh `/tmp/LuneX-SpatialIssue-Focused-20260829-R1/Focused.xcresult` 在 Swift/Clang/Metal warnings-as-errors 下通过 `1/1`；macOS overlay source contract 与产品 SwiftUI 编译均成功。下一门扩大到 presentation、entitlement reader、audio graph/recovery/native processor 与 AppModel 状态矩阵。
 - **spatial issue related：** `/tmp/LuneX-SpatialIssue-Related-20260829-R1/Related.xcresult` 通过 `281/280/1/0`、0 expected failures，structured build `succeeded/0/0/0`；唯一 skip 是显式 live Sunshine gate。进入 fresh exact-source full macOS suite。
+
+## 2026-08-31 M1 realtime media backlog repair
+
+- **状态：** `in_progress`；真实产品已把当前断开原因精确归类为 `media_receive_buffer_overflow`。OpenSpec `prioritize-macos-product-completion` 保持 `spec-driven / 7 of 27 / ready`，Tasks 2.3、3.1、3.2 与 9.1 均继续 pending。
+- **实现边界：** production audio/video datagram receiver 使用固定容量 newest-event buffer；消费者落后时丢弃最旧事件、保留最新事件并饱和累计 discard count，不再把可恢复 backlog 升级为 terminal session failure。真实 network/parser/configuration/cancellation/unexpected-termination 仍 fail closed。
+- **Moonlight 参考：** 行为遵循本地 Moonlight Common/Qt 的 realtime-first 原则：过期媒体不应排队播放，缺失或不完整旧帧由更新 frame index 淘汰并触发现有 loss/IDR recovery；不复制或链接 GPL 源码。
+- **确定性门：** focused `/tmp/LuneX-MediaLatest-Focused-R1/Focused.xcresult` 结构化通过 `49/49/0/0`；related `/tmp/LuneX-MediaLatest-Related-R1/Related.xcresult` 通过 `269 total / 268 passed / 1 expected live skip / 0 failed`。两份 build result 均为 `succeeded / 0 errors / 0 warnings / 0 analyzer warnings`。
+- **下一步：** 完成 OpenSpec strict、diff/process/opt-in gate 后立即独立 commit/push；再用标准脚本替换唯一 App，通过 Computer Use 单次双击 `Desktop` 持续观察至少 10 秒并读取有限 diagnostics。若 session 稳定，再实现 input 与 video 分层时延/丢弃指标以区分鼠标视觉跳跃来源。
+- **全量门：** fresh serial `/tmp/LuneX-MediaLatest-Full-R1/Full.xcresult` 通过 `1377 total / 1375 passed / 2 exact opt-in skips / 0 failed`；两个 skip 为 live Sunshine 与 real Keychain，structured build 为 `succeeded / 0 errors / 0 warnings / 0 analyzer warnings`。准备最终 repository gate 与独立提交推送。

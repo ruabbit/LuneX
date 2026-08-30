@@ -242,6 +242,7 @@ struct MoonlightMediaReceiveSnapshot: Equatable, Sendable {
     var sessionID: UUID?
     var generation: UInt64
     var isActive: Bool
+    var discardedEventCount: UInt64
 }
 
 private struct MoonlightDatagramPing: Sendable {
@@ -424,6 +425,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
     private let overflowPolicy: MoonlightDatagramBufferOverflowPolicy
     private let timeProvider: MoonlightMediaReceiveTimeProvider
     private var generation: UInt64 = 0
+    private var discardedEventCount: UInt64 = 0
     private var active: ActiveSession?
 
     init(
@@ -480,6 +482,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
             }
             let token = UUID()
             generation &+= 1
+            discardedEventCount = 0
             active = ActiveSession(
                 sessionID: sessionID,
                 token: token,
@@ -521,7 +524,8 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         MoonlightMediaReceiveSnapshot(
             sessionID: active?.sessionID,
             generation: generation,
-            isActive: active != nil
+            isActive: active != nil,
+            discardedEventCount: discardedEventCount
         )
     }
 
@@ -555,6 +559,9 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                         maximumDatagramBytes: maximumDatagramBytes,
                         timeProvider: self.timeProvider,
                         overflowPolicy: self.overflowPolicy,
+                        discardObserver: {
+                            await self.recordDiscardedEvent(token: token)
+                        },
                         transform: transform
                     )
                 }
@@ -585,6 +592,13 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
               active.sessionID == sessionID,
               active.token == token else { return }
         await stop(active)
+    }
+
+    private func recordDiscardedEvent(token: UUID) {
+        guard active?.token == token else { return }
+        if discardedEventCount < UInt64.max {
+            discardedEventCount += 1
+        }
     }
 
     private func stop(_ session: ActiveSession) async {
@@ -620,6 +634,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
         maximumDatagramBytes: Int,
         timeProvider: @escaping MoonlightMediaReceiveTimeProvider,
         overflowPolicy: MoonlightDatagramBufferOverflowPolicy,
+        discardObserver: @escaping @Sendable () async -> Void,
         transform: @escaping Transform
     ) async throws {
         while true {
@@ -644,6 +659,7 @@ private actor MoonlightDatagramReceiveRuntime<Event: Sendable> {
                 guard overflowPolicy == .discardOldest else {
                     throw MoonlightMediaReceiveError.receiveBufferOverflow
                 }
+                await discardObserver()
             case .terminated:
                 throw CancellationError()
             @unknown default:
@@ -679,6 +695,7 @@ actor MoonlightVideoReceiveProvider: VideoReceiveProvider {
             channelFactory: channelFactory,
             timing: timing,
             eventBufferCapacity: eventBufferCapacity,
+            overflowPolicy: .discardOldest,
             timeProvider: timeProvider
         )
     }

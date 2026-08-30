@@ -71,6 +71,14 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 - **AND** bounded overload does not silently discard the accumulated Relative displacement
 - **AND** every active AppKit capture surface participates in replacement-safe window mouse-movement delivery ownership, restoring the prior window policy only after the final owner detaches
 
+#### Scenario: Realtime media receive backlog remains recoverable
+- **WHEN** the production audio or video consumer temporarily falls behind its fixed-capacity datagram event buffer
+- **THEN** the receiver discards the oldest buffered event and retains the newest event
+- **AND** the receiver increments a saturated discard count without retaining endpoint, payload, identity, or arbitrary error data
+- **AND** a recoverable buffer discard does not terminate the session or emit `media_receive_buffer_overflow`
+- **AND** downstream packet-loss, incomplete-frame supersession, and IDR recovery remain responsible for restoring a decodable current video frame
+- **AND** real network, parser, configuration, cancellation, and unexpected-termination behavior remains fail closed
+
 All Moonlight HTTP commands SHALL use the same 16-character protocol client identifier across pairing, catalog, artwork, launch, resume, and cancel. The persisted LuneX identity UUID SHALL remain a local storage identifier and SHALL NOT replace the protocol identifier on the wire. An explicitly imported Moonlight-qt certificate/private-key identity SHALL reproduce Moonlight-qt's protocol identifier without exposing or rewriting unrelated identity material.
 
 Every production network URL SHALL preserve the parsed endpoint port even when the persisted or user-facing address omits the default GameStream port. The macOS application SHALL declare a non-empty Local Network usage description and every Bonjour service type it browses, including `_nvstream._tcp`, in its product Info.plist.

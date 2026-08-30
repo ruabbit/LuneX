@@ -76,6 +76,12 @@ The production ENet driver owns its host on one serial pump. Long receive waits 
 
 Alternative considered: rely only on `MoonlightRemoteInputProvider` coalescing. The macOS coordinator serially awaits every provider send, so the provider normally sees only one macOS call at a time and cannot coalesce the backlog that already formed upstream. Increasing pointer sensitivity would magnify movement while leaving stale-event and click latency unchanged.
 
+### 9. Keep realtime media live by discarding obsolete buffered events
+
+The production audio and video datagram receivers use fixed-capacity newest-event buffers. When a consumer falls behind, the receiver discards the oldest buffered event, retains the new event, increments a saturated discard counter, and continues the session. The downstream video assembler already supersedes an incomplete older frame when a newer frame index arrives and requests IDR recovery for loss, so replaying an obsolete packet history or terminating the entire session would increase latency without improving recovery. Network, parser, configuration, cancellation, and unexpected-termination failures retain their existing fail-closed behavior.
+
+Alternative considered: terminate the media stream when its receive FIFO fills. At high negotiated frame rates and bitrates, a transient scheduling delay can fill that FIFO even when the host and network remain healthy; converting this recoverable realtime backlog into a terminal session error produces avoidable disconnects and diverges from Moonlight's latest-media-first behavior.
+
 ## Risks / Trade-offs
 
 - [Shared code may drift on frozen platforms] -> Run generic non-macOS target builds only when shared code or project generation changes could break them; do not treat those builds as product progress.

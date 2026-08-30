@@ -64,6 +64,52 @@ final class MoonlightMediaReceiveTests: XCTestCase {
         XCTAssertEqual(videoCancelCount, 1)
     }
 
+    func testVideoProviderKeepsNewestPacketsWhenConsumerFallsBehind()
+        async throws
+    {
+        let datagrams = (1...3).map { sequence in
+            Result<NetworkReceiveChunk, Error>.success(NetworkReceiveChunk(
+                data: makeVideoDatagram(
+                    sequenceNumber: UInt32(sequence),
+                    frameIndex: UInt32(sequence),
+                    rtpTimestamp: UInt32(sequence * 1_000),
+                    isParity: false,
+                    payload: Data([UInt8(sequence)])
+                ),
+                isComplete: true
+            ))
+        }
+        let channel = MediaReceiveStubChannel(chunks: datagrams)
+        let provider = MoonlightVideoReceiveProvider(
+            channelFactory: { _, _ in channel },
+            timing: testTiming,
+            eventBufferCapacity: 2,
+            timeProvider: { 123_456 }
+        )
+        let sessionID = UUID()
+        let stream = await provider.receiveVideo(
+            sessionID: sessionID,
+            endpoint: udpEndpoint(port: 47_998),
+            configuration: videoConfiguration()
+        )
+        let receiveLoopBufferedAllPackets = await waitUntil {
+            await channel.isReceiveBlocked()
+        }
+        XCTAssertTrue(receiveLoopBufferedAllPackets)
+        var iterator = stream.makeAsyncIterator()
+
+        guard case let .packet(first) = try await iterator.next(),
+              case let .packet(second) = try await iterator.next() else {
+            await provider.stopVideo(sessionID: sessionID)
+            return XCTFail("Expected the two newest buffered packets.")
+        }
+        XCTAssertEqual([first.frameIndex, second.frameIndex], [2, 3])
+        let snapshot = await provider.snapshot()
+        XCTAssertTrue(snapshot.isActive)
+        XCTAssertEqual(snapshot.discardedEventCount, 1)
+        await provider.stopVideo(sessionID: sessionID)
+    }
+
     func testAudioProviderMapsOpusSkipsFECAndSendsSequencedCustomPing()
         async throws
     {
@@ -162,6 +208,7 @@ final class MoonlightMediaReceiveTests: XCTestCase {
         XCTAssertEqual([first.sequenceNumber, second.sequenceNumber], [2, 3])
         let snapshot = await provider.snapshot()
         XCTAssertTrue(snapshot.isActive)
+        XCTAssertEqual(snapshot.discardedEventCount, 1)
         await provider.stopAudio(sessionID: sessionID)
     }
 
