@@ -18,7 +18,7 @@ private enum PairingApplicationError: Error {
     case invalidAuthenticatedCompletion
 }
 
-private enum SessionApplicationError: Error {
+enum SessionApplicationError: Error {
     case incompleteControlStream
     case staleProductSessionOwner
 }
@@ -4837,6 +4837,9 @@ final class AppModel: ApplicationInputSink {
            activeProductSessionOwner?.sessionID != sessionID {
             return
         }
+
+        let errorType = String(reflecting: type(of: error))
+        logger.error("Stream failed with type \(errorType, privacy: .public)")
 
         invalidateLifecycleApplicationPump()
         clearTVVisionPlatformPresentationRuntime(

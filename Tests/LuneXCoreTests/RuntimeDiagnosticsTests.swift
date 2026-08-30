@@ -142,6 +142,63 @@ final class RuntimeDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testApplicationDiagnosticsClassifyEveryENetFailureWithoutRawDetails() {
+        let cases: [(ENetTransportError, String)] = [
+            (.invalidArgument, "enet_invalid_argument"),
+            (.initializationFailed, "enet_initialization_failed"),
+            (.resolutionFailed, "enet_resolution_failed"),
+            (.hostCreationFailed, "enet_host_creation_failed"),
+            (.connectionFailed, "enet_connection_failed"),
+            (.timedOut, "enet_timed_out"),
+            (.disconnected, "enet_disconnected"),
+            (.sendFailed, "enet_send_failed"),
+            (.serviceFailed, "enet_service_failed"),
+            (.payloadTooLarge, "enet_payload_too_large"),
+            (.unknown(code: 12_345), "enet_unknown")
+        ]
+
+        for (error, expectedCode) in cases {
+            let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
+
+            XCTAssertEqual(diagnostic.category, .transport)
+            XCTAssertEqual(diagnostic.code, expectedCode)
+            XCTAssertEqual(diagnostic.action, .retryStream)
+            XCTAssertFalse(diagnostic.code.contains("12345"))
+            XCTAssertFalse(diagnostic.summary.contains("12345"))
+        }
+    }
+
+    @MainActor
+    func testApplicationDiagnosticsClassifyControlStreamAndRTSPAnnounceFailures() {
+        let cases: [(Error, String)] = [
+            (
+                SessionApplicationError.incompleteControlStream,
+                "control_stream_incomplete"
+            ),
+            (
+                SessionApplicationError.staleProductSessionOwner,
+                "session_owner_stale"
+            ),
+            (
+                SunshineRTSPAnnounceError.invalidConfiguration,
+                "rtsp_announce_failed"
+            ),
+            (
+                SunshineRTSPAnnounceError.unsupportedControlEncryption,
+                "rtsp_announce_failed"
+            )
+        ]
+
+        for (error, expectedCode) in cases {
+            let diagnostic = ApplicationDiagnosticFactory.streamFailure(error)
+
+            XCTAssertEqual(diagnostic.category, .transport)
+            XCTAssertEqual(diagnostic.code, expectedCode)
+            XCTAssertEqual(diagnostic.action, .retryStream)
+        }
+    }
+
+    @MainActor
     func testApplicationDiagnosticsClassifyEncryptedAudioPacketFailures() {
         let invalidKey = ApplicationDiagnosticFactory.streamFailure(
             MoonlightAudioPacketDecryptError.invalidKeyMaterial

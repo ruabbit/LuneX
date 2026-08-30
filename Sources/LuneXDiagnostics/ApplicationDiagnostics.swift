@@ -919,6 +919,46 @@ enum ApplicationDiagnosticFactory {
         if error is RemoteInputRuntimeError || error is RemoteInputCodecError {
             return inputFailure(code: "input_delivery_failed")
         }
+        if let error = error as? ENetTransportError {
+            let code: String
+            switch error {
+            case .invalidArgument:
+                code = "enet_invalid_argument"
+            case .initializationFailed:
+                code = "enet_initialization_failed"
+            case .resolutionFailed:
+                code = "enet_resolution_failed"
+            case .hostCreationFailed:
+                code = "enet_host_creation_failed"
+            case .connectionFailed:
+                code = "enet_connection_failed"
+            case .timedOut:
+                code = "enet_timed_out"
+            case .disconnected:
+                code = "enet_disconnected"
+            case .sendFailed:
+                code = "enet_send_failed"
+            case .serviceFailed:
+                code = "enet_service_failed"
+            case .payloadTooLarge:
+                code = "enet_payload_too_large"
+            case .unknown:
+                code = "enet_unknown"
+            }
+            return transportFailure(code: code)
+        }
+        if let error = error as? SessionApplicationError {
+            let code = switch error {
+            case .incompleteControlStream:
+                "control_stream_incomplete"
+            case .staleProductSessionOwner:
+                "session_owner_stale"
+            }
+            return transportFailure(code: code)
+        }
+        if error is SunshineRTSPAnnounceError {
+            return transportFailure(code: "rtsp_announce_failed")
+        }
         if error is NetworkChannelError || error is ControlChannelError ||
             error is RTSPBootstrapError || error is SunshineRTSPNegotiationError ||
             error is RTSPMessageError {
