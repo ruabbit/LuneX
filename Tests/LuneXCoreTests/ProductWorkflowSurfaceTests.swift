@@ -1288,6 +1288,7 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(catalog.contains("refreshAppsForSelectedHost(in: workspace)"))
         XCTAssertTrue(catalog.contains("TapGesture(count: 2)"))
         XCTAssertTrue(catalog.contains(".onKeyPress(.return)"))
+        XCTAssertTrue(catalog.contains("Task.detached { @MainActor in"))
         XCTAssertTrue(catalog.contains("launchSelectedApp(in: workspace)"))
         XCTAssertFalse(catalog.contains("StreamLaunchPanel"))
         XCTAssertFalse(catalog.contains("Button(\"Refresh"))
