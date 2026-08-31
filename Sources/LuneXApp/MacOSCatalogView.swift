@@ -142,8 +142,10 @@ struct MacOSCatalogView: View {
     private func launch(_ app: RemoteApp, ifAllowed: Bool) {
         guard ifAllowed else { return }
         appModel.select(app: app, in: workspace)
-        Task.detached { [appModel, workspace] in
-            await appModel.launchSelectedApp(in: workspace)
+        DispatchQueue.main.async { [appModel, workspace] in
+            Task { @MainActor in
+                await appModel.launchSelectedApp(in: workspace)
+            }
         }
     }
 
