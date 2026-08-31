@@ -86,6 +86,12 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 - **AND** these values SHALL use saturated counters and monotonic time without creating a high-frequency event history or retaining payloads, endpoints, identities, frame contents, credentials, or arbitrary error text
 - **AND** deterministic or live evidence SHALL distinguish input admission/send delay from media receive, decode, and presentation replacement before assigning the visible discontinuity to one layer
 
+#### Scenario: Pressed pointer leaves the stream surface
+- **WHEN** a macOS pointer button remains pressed while motion crosses beyond the local stream surface and authenticated control or media events continue
+- **THEN** the current MainActor session reservation SHALL remain valid without entering Swift Observation tracking
+- **AND** the drag SHALL remain a bounded input sample until button release, focus release, capture exit, or terminal session teardown
+- **AND** leaving the surface SHALL NOT crash, replace, or terminate the active product session
+
 #### Scenario: Active Metal presentation follows source and display cadence
 - **WHEN** a macOS stream has a valid negotiated video frame rate and its current window has an attached display with a valid maximum frame rate
 - **THEN** active Metal presentation SHALL request the lower of the negotiated source rate and current display maximum rather than a fixed 60 fps

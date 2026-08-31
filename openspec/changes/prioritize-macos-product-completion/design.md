@@ -74,6 +74,8 @@ AppKit pointer-motion `deltaY` is preserved at the macOS capture boundary becaus
 
 The production ENet driver owns its host on one serial pump. Long receive waits are divided into at most one-millisecond service slices so queued outbound input can run between slices. Outbound packets enter a bounded mailbox, are queued to ENet together, and cause one flush per drained batch; connection teardown rejects and resumes every pending send/service continuation. Saturated packet, flush, rejection, service-slice, and maximum send-queue-delay counters provide a finite discriminator without retaining payloads, endpoints, identities, or arbitrary errors.
 
+The active product-session owner is a MainActor-confined reservation token, not user-facing presentation state. It remains outside Swift Observation so long-lived control/media continuations and synchronous AppKit pointer callbacks can validate the same reservation without registering transient SwiftUI access-list dependencies. Observable launch, session, workspace, render, input, audio, and diagnostic projections remain the UI invalidation surface. A pressed drag may continue beyond the local stream surface and still produce a bounded input sample; leaving the surface does not transfer or terminate session ownership.
+
 Alternative considered: rely only on `MoonlightRemoteInputProvider` coalescing. The macOS coordinator serially awaits every provider send, so the provider normally sees only one macOS call at a time and cannot coalesce the backlog that already formed upstream. Increasing pointer sensitivity would magnify movement while leaving stale-event and click latency unchanged.
 
 ### 9. Keep realtime media live by discarding obsolete buffered events

@@ -643,7 +643,8 @@ final class AppModel: ApplicationInputSink {
     private var preparedPairingIdentity: PreparedPairingIdentity?
     private var activeHostDestructiveOwner: ProductHostActionOwner?
     private var hostDestructiveOperationInFlight = false
-    private(set) var activeProductSessionOwner: ProductSessionOwner?
+    @ObservationIgnored private(set) var activeProductSessionOwner:
+        ProductSessionOwner?
     private(set) var productSessionActualPhase: ProductSessionActualPhase = .idle
     private var activeStreamSessionID: UUID?
     @ObservationIgnored private var productSessionStopOperation:

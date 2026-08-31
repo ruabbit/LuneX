@@ -2,6 +2,7 @@
 @preconcurrency import Metal
 import Foundation
 import MetalKit
+import Observation
 import QuartzCore
 import XCTest
 
@@ -3080,6 +3081,86 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertNil(model.macSessionInputSnapshot().generation)
         XCTAssertEqual(provider.currentStoppedSessionIDs(), [record.sessionID])
         XCTAssertEqual(mediaEnvironment.currentStoppedSessionIDs(), [record.sessionID])
+    }
+
+    func testSessionReservationIgnoresObservationDuringPointerAndControlTraffic()
+        async throws
+    {
+        let provider = ControlledSessionControlProvider()
+        let mediaEnvironment = ControlledSessionMediaEnvironment()
+        let model = makeLaunchReadyModel(
+            sessionControlProvider: provider,
+            sessionMediaEnvironment: mediaEnvironment,
+            launchClient: StubStreamLaunchClient(),
+            remoteInputKeyGenerator: ScriptedInputKeyGenerator(results: [
+                .success(RemoteInputKeyMaterial(
+                    keyID: 38,
+                    key: Data(repeating: 0x38, count: 16)
+                ))
+            ])
+        )
+        await model.loadInitialState()
+        await model.refreshAppsForSelectedHost()
+        model.settings.input.preferRelativeMouseMode = true
+        model.applyPlatformLifecycle(makePlatformLifecycle(
+            isStreamActive: true,
+            isVisible: true,
+            isFocused: true,
+            drawableSize: PixelSize(width: 2_560, height: 1_440)
+        ))
+        let observationChanges = ObservationChangeRecorder()
+        withObservationTracking {
+            _ = model.activeProductSessionOwner
+        } onChange: {
+            observationChanges.recordChange()
+        }
+
+        let launchTask = Task { await model.launchSelectedApp() }
+        let record = try await waitForSessionStart(provider)
+        driveSessionToStreaming(provider, record: record)
+        await waitUntil {
+            model.session.isStreaming && model.macInputSurfacePolicy.admitsInput
+        }
+        XCTAssertEqual(observationChanges.count, 0)
+
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.button(
+                button: .left,
+                isDown: true,
+                localPoint: RemotePoint(x: 1_280, y: 720)
+            )),
+            .accepted
+        )
+        for index in 0..<128 {
+            _ = model.submitMacPlatformInput(.pointerMove(MacPointerSample(
+                localPoint: RemotePoint(x: 3_000, y: -200),
+                deltaX: 1,
+                deltaY: index.isMultiple(of: 2) ? 1 : -1,
+                buttons: [.left]
+            )))
+            if index.isMultiple(of: 16) {
+                provider.yield(
+                    .videoColorMetadata(.rec709VideoRange()),
+                    sessionID: record.sessionID
+                )
+            }
+        }
+        XCTAssertEqual(
+            model.submitMacPlatformInput(.button(
+                button: .left,
+                isDown: false,
+                localPoint: RemotePoint(x: 3_000, y: -200)
+            )),
+            .accepted
+        )
+        await Task.yield()
+        XCTAssertEqual(model.activeProductSessionOwner?.sessionID, record.sessionID)
+        XCTAssertEqual(observationChanges.count, 0)
+
+        await model.stopStream()
+        await launchTask.value
+        XCTAssertNil(model.activeProductSessionOwner)
+        XCTAssertEqual(observationChanges.count, 0)
     }
 
     func testMacPlatformInputFailsClosedWithoutCurrentDrawableGeometry() async throws {
@@ -12528,6 +12609,23 @@ private actor ControlledIdentityProvisioner: ClientIdentityProvisioning {
 
 private enum PairingTestError: Error {
     case identityFailure
+}
+
+private final class ObservationChangeRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCount = 0
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedCount
+    }
+
+    func recordChange() {
+        lock.lock()
+        storedCount += 1
+        lock.unlock()
+    }
 }
 
 private final class ControlledSessionControlProvider: SessionControlProvider, @unchecked Sendable {

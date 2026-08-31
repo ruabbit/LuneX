@@ -367,6 +367,34 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(recorder.pointerSamples.map(\.deltaY), [2, -4, 6, -8])
     }
 
+    func testPressedPointerDragOutsideSurfaceRemainsAValidCaptureSample() throws {
+        let recorder = MacInputSampleRecorder()
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
+        let view = MacStreamInputCaptureView(
+            frame: root.bounds,
+            sampleHandler: { recorder.samples.append($0) }
+        )
+        let window = makeWindow(contentView: root)
+        root.addSubview(view)
+        view.mouseDown(with: try mouseEvent(
+            type: .leftMouseDown,
+            location: NSPoint(x: 160, y: 120),
+            windowNumber: window.windowNumber
+        ))
+
+        view.mouseDragged(with: try mouseEvent(
+            type: .leftMouseDragged,
+            location: NSPoint(x: 480, y: -80),
+            windowNumber: window.windowNumber
+        ))
+
+        let sample = try XCTUnwrap(recorder.pointerSamples.last)
+        let localPoint = try XCTUnwrap(sample.localPoint)
+        XCTAssertEqual(sample.buttons, [.left])
+        XCTAssertGreaterThan(localPoint.x, Double(view.bounds.maxX))
+        XCTAssertLessThan(localPoint.y, Double(view.bounds.minY))
+    }
+
     func testButtonCallbacksMapLeftRightMiddleBackAndForward() throws {
         let recorder = MacInputSampleRecorder()
         let view = makeView(recorder: recorder)

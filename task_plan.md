@@ -2526,3 +2526,15 @@
 - **full R1：** fresh serial `/tmp/LuneX-InputDecode-Full-R1.xcresult` 通过 `1385 total / 1383 passed / 2 exact opt-in skips / 0 failed`，structured build 为 `succeeded / 0 errors / 0 warnings / 0 analyzer warnings`。两个skip仍为live Sunshine与real Keychain；共享snapshot变化需最低限度frozen-platform generic builds，但不启动Simulator也不推进非macOS状态。
 - **compatibility R1：** unsigned warnings-as-errors generic builds `/tmp/LuneX-InputDecode-{iOS,tvOS,visionOS}-R1.xcresult` 全部 `succeeded / 0 errors / 0 warnings / 0 analyzer warnings`。iOS target同时覆盖iPhone/iPad generic编译面；未启动、创建或查询Simulator，这些证据不推进冻结平台产品状态。
 - **repository gate：** generator双跑前/中/后`project.pbxproj` SHA-256均为`e412926e1036f7ebda429dfffb4b5a2705cf01dccba65c08cdccbb74da7524bf`；OpenSpec strict `12/12`、`git diff --check`通过，三个真实opt-in均unset，零`xcodebuild/xctest`，唯一运行产品仍为旧pushed PID `26877`。完成最终diff审阅后立即commit/push，不在推送前替换App。
+
+## 2026-08-31 pressed-drag window-exit crash repair
+
+- **真实崩溃证据：** 用户在pushed `61e4d47`唯一原PID `34362`中按住鼠标移出窗口，`15:40:51`产生新报告`LuneX-macOS-2026-08-31-154054.ips`。fault仍为main-thread Swift Observation access-list损坏，精确栈为`activeProductSessionOwner.getter -> productSessionOwnerOwnsActiveReservation -> consumeSessionControlEvent -> launchSelectedApp`；不是AppKit drag callback、越界坐标转换、ENet、Metal或音频线程。用户粘贴文本是旧PID `15431`的`07:51`报告，不能替代本次证据。
+- **修复边界：** `activeProductSessionOwner`是MainActor内部reservation token，改为`@ObservationIgnored`；可见UI仍由launch/session/workspace/render/input/audio/diagnostic projections驱动。增加真实Observation dependency测试，以及按键保持、surface外坐标、高频motion与control metadata交错回归。Task 2.3/3.1/3.2继续pending直到新pushed产品由用户重复物理触发通过。
+- **focused R1：** `/tmp/LuneX-DragExit-Focused-R1.xcresult`结构化通过`2/2/0/0`，build为`succeeded/0 errors/0 warnings/0 analyzer warnings`；未访问Keychain、live host、Simulator或产品App。下一门为六组macOS input/session相关矩阵。
+- **related R1：** fresh serial `/tmp/LuneX-DragExit-Related-R1.xcresult`通过`309 total / 308 passed / 1 explicit live-host skip / 0 failed`，build为`succeeded/0/0/0`。下一门为真实`LuneX-macOS` product scheme unsigned strict build。
+- **product R1：** `/tmp/LuneX-DragExit-Product-R1.xcresult`严格构建真实`LuneX-macOS` scheme成功，structured diagnostics为`succeeded/0/0/0`。下一门为fresh serial full macOS suite。
+- **full R1：** fresh serial `/tmp/LuneX-DragExit-Full-R1.xcresult`通过`1387 total / 1385 passed / 2 exact opt-in skips / 0 failed`，build为`succeeded/0/0/0`。共享AppModel注解需最低限度generic compatibility builds；不操作Simulator且不推进冻结平台状态。
+- **compatibility R1：** iOS/iPadOS、tvOS、visionOS generic builds全部`succeeded/0 errors/0 warnings/0 analyzer warnings`；仅验证共享源码编译面，未启动、创建、clone或查询Simulator，不推进冻结平台状态。进入最终diff与repository gate。
+- **记录错误：** 首次同步focused结果的三文件`apply_patch`误以为`progress.md`存在同名标题，因锚点不匹配在写入前原子拒绝，零部分修改；按真实文件结构拆分后完成。
+- **repository gate：** 最终审查确认owner每次mutation都有observable projection同步且View无直接绑定；generator双跑前/中/后hash稳定为`e412926e1036f7ebda429dfffb4b5a2705cf01dccba65c08cdccbb74da7524bf`；OpenSpec strict `12/12`、diff hygiene、三项真实opt-in unset、零build/test/App进程全部通过。立即独立commit/push；2.3/3.1/3.2在精确pushed产品物理复验前保持pending。
