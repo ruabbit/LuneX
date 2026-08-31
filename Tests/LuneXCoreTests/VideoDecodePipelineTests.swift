@@ -41,6 +41,41 @@ final class VideoDecodePipelineTests: XCTestCase {
         XCTAssertEqual(snapshot.sessionCreationCount, 1)
         XCTAssertEqual(snapshot.decoderResetCount, 0)
         XCTAssertEqual(snapshot.formatChangeCount, 0)
+        XCTAssertEqual(snapshot.submittedAccessUnitCount, 2)
+        XCTAssertEqual(snapshot.decodedFrameCount, 0)
+        await pipeline.stop()
+    }
+
+    func testSuccessfulCurrentGenerationCallbackIncrementsDecodedFrameCount() async throws {
+        let fixture = try loadFixture()
+        let requester = PipelineIDRRequester()
+        let factory = PipelineSessionFactory()
+        let pipeline = try makePipeline(
+            codec: .h264,
+            colorMetadata: .rec709VideoRange(),
+            requester: requester,
+            factory: factory
+        )
+        _ = try await pipeline.consume(.accessUnit(try accessUnit(
+            frameIndex: 1,
+            codec: .h264,
+            frameType: .instantaneousDecoderRefresh,
+            payloadHex: fixture.h264.accessUnitHex
+        )))
+
+        factory.sessions[0].emit(
+            frameID: 1,
+            pixelBuffer: try makePipelinePixelBuffer()
+        )
+
+        try await waitUntil {
+            await pipeline.snapshot().decodedFrameCount == 1
+        }
+        let snapshot = await pipeline.snapshot()
+        XCTAssertEqual(snapshot.submittedAccessUnitCount, 1)
+        XCTAssertEqual(snapshot.decodedFrameCount, 1)
+        XCTAssertEqual(snapshot.decoderDroppedFrameCount, 0)
+        XCTAssertEqual(snapshot.decoderFailureCount, 0)
         await pipeline.stop()
     }
 
@@ -687,17 +722,37 @@ private final class PipelineSession: VideoDecompressionSessionOwning, @unchecked
         return []
     }
 
-    func emit(frameID: UInt64, infoFlags: VTDecodeInfoFlags) {
+    func emit(
+        frameID: UInt64,
+        infoFlags: VTDecodeInfoFlags = [],
+        pixelBuffer: CVPixelBuffer? = nil
+    ) {
         callbackBridge.forward(VideoDecompressionOutput(
             generation: callbackBridge.generation,
             frameID: frameID,
             status: noErr,
             infoFlags: infoFlags,
-            imageBuffer: nil,
+            imageBuffer: pixelBuffer,
             presentationTimeStamp: .invalid,
             duration: .invalid
         ))
     }
+}
+
+private func makePipelinePixelBuffer() throws -> CVPixelBuffer {
+    var pixelBuffer: CVPixelBuffer?
+    let status = CVPixelBufferCreate(
+        kCFAllocatorDefault,
+        64,
+        64,
+        kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
+        &pixelBuffer
+    )
+    guard status == kCVReturnSuccess, let pixelBuffer else {
+        throw PipelineTestError.pixelBufferCreationFailed(status)
+    }
+    return pixelBuffer
 }
 
 private final class PipelineDecoderEventRecorder: @unchecked Sendable {
@@ -784,6 +839,7 @@ private extension Data {
 private enum PipelineTestError: Error {
     case invalidHex
     case missingFormatChangeFixture
+    case pixelBufferCreationFailed(CVReturn)
     case timedOut
 }
 

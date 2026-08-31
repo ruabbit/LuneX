@@ -69,6 +69,8 @@ struct VideoDecodePipelineSnapshot: Equatable, Sendable {
     var colorMetadataChangeCount: UInt64
     var idrRequestCount: UInt64
     var idrRequestFailureCount: UInt64
+    var submittedAccessUnitCount: UInt64
+    var decodedFrameCount: UInt64
     var droppedAccessUnitCount: UInt64
     var decoderDroppedFrameCount: UInt64
     var decoderFailureCount: UInt64
@@ -105,6 +107,8 @@ actor VideoDecodePipeline {
     private var colorMetadataChangeCount: UInt64 = 0
     private var idrRequestCount: UInt64 = 0
     private var idrRequestFailureCount: UInt64 = 0
+    private var submittedAccessUnitCount: UInt64 = 0
+    private var decodedFrameCount: UInt64 = 0
     private var droppedAccessUnitCount: UInt64 = 0
     private var decoderDroppedFrameCount: UInt64 = 0
     private var decoderFailureCount: UInt64 = 0
@@ -262,6 +266,8 @@ actor VideoDecodePipeline {
             colorMetadataChangeCount: colorMetadataChangeCount,
             idrRequestCount: idrRequestCount,
             idrRequestFailureCount: idrRequestFailureCount,
+            submittedAccessUnitCount: submittedAccessUnitCount,
+            decodedFrameCount: decodedFrameCount,
             droppedAccessUnitCount: droppedAccessUnitCount,
             decoderDroppedFrameCount: decoderDroppedFrameCount,
             decoderFailureCount: decoderFailureCount,
@@ -296,6 +302,9 @@ actor VideoDecodePipeline {
         do {
             _ = try await decoder.decode(compressedSample(from: accessUnit))
             try validateSubmission(token: token)
+            submittedAccessUnitCount = Self.saturatedIncrement(
+                submittedAccessUnitCount
+            )
             return .submitted(
                 frameIndex: accessUnit.frameIndex,
                 generation: generation,
@@ -364,6 +373,9 @@ actor VideoDecodePipeline {
         do {
             _ = try await decoder.decode(compressedSample(from: accessUnit))
             try validateSubmission(token: token)
+            submittedAccessUnitCount = Self.saturatedIncrement(
+                submittedAccessUnitCount
+            )
         } catch let error as VideoDecoderError {
             try validateSubmission(token: token)
             try? await beginRecovery(.decoderFailure(error))
@@ -444,6 +456,8 @@ actor VideoDecodePipeline {
     fileprivate func receiveDecoderEvent(_ event: VideoDecoderEvent) async {
         guard !isStopped else { return }
         switch event {
+        case let .frame(frame) where frame.generation == activeDecoderGeneration:
+            decodedFrameCount = Self.saturatedIncrement(decodedFrameCount)
         case let .frameDropped(generation, _, _)
             where generation == activeDecoderGeneration:
             decoderDroppedFrameCount &+= 1
@@ -455,6 +469,10 @@ actor VideoDecodePipeline {
         case .sessionStarted, .frame, .frameDropped, .failure, .sessionStopped:
             break
         }
+    }
+
+    private static func saturatedIncrement(_ value: UInt64) -> UInt64 {
+        value == .max ? .max : value + 1
     }
 }
 

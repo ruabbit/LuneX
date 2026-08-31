@@ -305,7 +305,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(actual.y, backingPoint.y - backingBounds.minY, accuracy: 0.000_001)
     }
 
-    func testPointerMovementUsesMoonlightVerticalDirectionAndPressedButtonState() throws {
+    func testPointerMovementPreservesHostVerifiedVerticalDirectionAndPressedButtonState() throws {
         let recorder = MacInputSampleRecorder()
         let view = makeView(recorder: recorder)
 
@@ -327,14 +327,14 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
 
         XCTAssertEqual(recorder.pointerSamples.count, 2)
         XCTAssertEqual(recorder.pointerSamples[0].deltaX, 7)
-        XCTAssertEqual(recorder.pointerSamples[0].deltaY, 3)
+        XCTAssertEqual(recorder.pointerSamples[0].deltaY, -3)
         XCTAssertEqual(recorder.pointerSamples[0].buttons, [.left, .right])
         XCTAssertEqual(recorder.pointerSamples[1].deltaX, -2)
-        XCTAssertEqual(recorder.pointerSamples[1].deltaY, -5)
+        XCTAssertEqual(recorder.pointerSamples[1].deltaY, 5)
         XCTAssertEqual(recorder.pointerSamples[1].buttons, [.right])
     }
 
-    func testEveryPointerMovementEntryPointConvertsAppKitVerticalDirection() throws {
+    func testEveryPointerMovementEntryPointPreservesVerticalDirection() throws {
         let recorder = MacInputSampleRecorder()
         let view = makeView(recorder: recorder)
 
@@ -364,7 +364,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         ))
 
         XCTAssertEqual(recorder.pointerSamples.map(\.deltaX), [1, 3, 5, 7])
-        XCTAssertEqual(recorder.pointerSamples.map(\.deltaY), [-2, 4, -6, 8])
+        XCTAssertEqual(recorder.pointerSamples.map(\.deltaY), [2, -4, 6, -8])
     }
 
     func testButtonCallbacksMapLeftRightMiddleBackAndForward() throws {
@@ -793,6 +793,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
             sampleHandler: { _ in }
         )
         let window = makeWindow(contentView: root)
+        let initialMouseCoalescing = NSEvent.isMouseCoalescingEnabled
         root.addSubview(sibling)
         root.addSubview(view)
         XCTAssertTrue(window.makeFirstResponder(sibling))
@@ -801,6 +802,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         view.isInputCaptureEnabled = true
         XCTAssertTrue(window.firstResponder === view)
         XCTAssertTrue(view.requestFirstResponderIfNeeded())
+        XCTAssertFalse(NSEvent.isMouseCoalescingEnabled)
 
         XCTAssertTrue(window.makeFirstResponder(sibling))
         view.mouseDown(with: try mouseEvent(
@@ -812,6 +814,7 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         view.isInputCaptureEnabled = false
         XCTAssertFalse(window.firstResponder === view)
         XCTAssertFalse(view.requestFirstResponderIfNeeded())
+        XCTAssertEqual(NSEvent.isMouseCoalescingEnabled, initialMouseCoalescing)
     }
 
     func testStaleWindowCallbackCannotReattachReplacementOwner() {

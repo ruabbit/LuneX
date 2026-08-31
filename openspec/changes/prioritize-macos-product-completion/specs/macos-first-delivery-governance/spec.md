@@ -82,7 +82,7 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 #### Scenario: Realtime latency source remains observable
 - **WHEN** a macOS stream is active and pointer motion appears delayed or visually discontinuous
 - **THEN** on-demand Diagnostics SHALL expose bounded current and maximum macOS input queue and sink-delivery delay, accepted/coalesced/rejected/dropped input counts, remote-input and ENet send backlog, and media receive discard counts
-- **AND** Diagnostics SHALL expose decode drop/failure counts plus published, actually presented, and superseded-before-presentation frame counts and monotonic publish-to-present age
+- **AND** Diagnostics SHALL expose successfully submitted access-unit and current-generation decoded-frame totals, decode drop/failure counts, plus published, actually presented, and superseded-before-presentation frame counts and monotonic publish-to-present age
 - **AND** these values SHALL use saturated counters and monotonic time without creating a high-frequency event history or retaining payloads, endpoints, identities, frame contents, credentials, or arbitrary error text
 - **AND** deterministic or live evidence SHALL distinguish input admission/send delay from media receive, decode, and presentation replacement before assigning the visible discontinuity to one layer
 

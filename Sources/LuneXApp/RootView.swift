@@ -2606,7 +2606,7 @@ struct DiagnosticsView: View {
                     if let decode = realtimeSnapshot.videoDecode {
                         LabeledContent(
                             "Video decode",
-                            value: "\(decode.droppedAccessUnitCount) access units, \(decode.decoderDroppedFrameCount) frames, \(decode.decoderFailureCount) failures"
+                            value: "\(decode.submittedAccessUnitCount) submitted, \(decode.decodedFrameCount) decoded, \(decode.droppedAccessUnitCount) access-unit drops, \(decode.decoderDroppedFrameCount) frame drops, \(decode.decoderFailureCount) failures"
                         )
                     }
                     LabeledContent(

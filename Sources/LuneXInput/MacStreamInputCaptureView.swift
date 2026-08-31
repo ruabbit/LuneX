@@ -77,6 +77,30 @@ private enum MacMouseMovedEventOwnership {
 }
 
 @MainActor
+private enum MacMouseCoalescingOwnership {
+    private static var owners: Set<ObjectIdentifier> = []
+    private static var previousValue: Bool?
+
+    static func acquire(owner: AnyObject) {
+        let ownerID = ObjectIdentifier(owner)
+        guard owners.insert(ownerID).inserted else { return }
+        if owners.count == 1 {
+            previousValue = NSEvent.isMouseCoalescingEnabled
+        }
+        NSEvent.isMouseCoalescingEnabled = false
+    }
+
+    static func release(owner: AnyObject) {
+        guard owners.remove(ObjectIdentifier(owner)) != nil,
+              owners.isEmpty else { return }
+        if let previousValue {
+            NSEvent.isMouseCoalescingEnabled = previousValue
+        }
+        previousValue = nil
+    }
+}
+
+@MainActor
 final class MacStreamInputCaptureView: MTKView {
     typealias SampleHandler = @MainActor (MacPlatformInputSample) -> Void
 
@@ -347,8 +371,7 @@ final class MacStreamInputCaptureView: MTKView {
 
     private func emitPointerMovement(_ event: NSEvent) {
         let deltaX = Double(event.deltaX)
-        // AppKit's vertical delta is opposite Moonlight's screen-coordinate direction.
-        let deltaY = -Double(event.deltaY)
+        let deltaY = Double(event.deltaY)
         guard deltaX.isFinite, deltaY.isFinite else { return }
         sampleHandler(.pointerMove(MacPointerSample(
             localPoint: backingPoint(for: event),
@@ -364,6 +387,7 @@ final class MacStreamInputCaptureView: MTKView {
               mouseMovedEventWindow !== window else { return }
         mouseMovedEventWindow = window
         MacMouseMovedEventOwnership.acquire(window: window, owner: self)
+        MacMouseCoalescingOwnership.acquire(owner: self)
     }
 
     private func releaseMouseMovedEventsIfNeeded() {
@@ -372,6 +396,7 @@ final class MacStreamInputCaptureView: MTKView {
             window: mouseMovedEventWindow,
             owner: self
         )
+        MacMouseCoalescingOwnership.release(owner: self)
         self.mouseMovedEventWindow = nil
     }
 
