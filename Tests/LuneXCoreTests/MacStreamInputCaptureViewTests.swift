@@ -1323,6 +1323,80 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         owner.detach(from: view)
     }
 
+    func testSurfaceCoordinatorDefersDisplayLinkUntilDecodedFrameIsReady()
+        throws
+    {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let view = MacStreamInputCaptureView(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 240),
+            device: device,
+            sampleHandler: { _ in }
+        )
+        view.wantsLayer = true
+        let runtime = RecordingMacMetalDisplayLinkRuntime()
+        let renderState = StreamRenderState()
+        renderState.policy = .active
+        renderState.negotiatedVideoFramesPerSecond = 144
+        renderState.maximumDisplayFramesPerSecond = 144
+        let coordinator = MacStreamSurfaceCoordinator(
+            presentationSource: StreamVideoPresentationSource(),
+            renderState: renderState,
+            lifecycle: PlatformLifecycleState(),
+            inputSampleHandler: { _ in },
+            captureExitHandler: {},
+            displayLinkRuntimeFactory: { _ in runtime }
+        )
+
+        coordinator.configure(view, renderState: renderState)
+
+        XCTAssertEqual(runtime.addCount, 0)
+        XCTAssertTrue(view.isPaused)
+        XCTAssertFalse(coordinator.displayLinkOwner.snapshot().isAttached)
+
+        let metadata = VideoColorMetadata.hdr10VideoRange()
+        renderState.decodedVideoPresentationContract =
+            StreamVideoDecodedPresentationContract(
+                decoderGeneration: 1,
+                colorMetadata: metadata,
+                decodedLayout: HDRDecodedPixelBufferLayout(
+                    pixelFormat:
+                        kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+                    width: 320,
+                    height: 240,
+                    planes: [
+                        HDRDecodedPlaneDimensions(width: 320, height: 240),
+                        HDRDecodedPlaneDimensions(width: 160, height: 120)
+                    ]
+                )
+            )
+        let activeSchedule = coordinator.update(
+            renderState: renderState,
+            inputPolicy: .inactive,
+            view: view,
+            inputSampleHandler: { _ in },
+            captureExitHandler: {}
+        )
+
+        XCTAssertEqual(runtime.addCount, 1)
+        XCTAssertFalse(runtime.isPaused)
+        XCTAssertEqual(activeSchedule.preferredFramesPerSecond, 144)
+
+        renderState.decodedVideoPresentationContract = nil
+        let waitingSchedule = coordinator.update(
+            renderState: renderState,
+            inputPolicy: .inactive,
+            view: view,
+            inputSampleHandler: { _ in },
+            captureExitHandler: {}
+        )
+
+        XCTAssertTrue(waitingSchedule.isPaused)
+        XCTAssertTrue(waitingSchedule.requestsImmediateDraw)
+        XCTAssertEqual(runtime.invalidateCount, 1)
+        XCTAssertTrue(view.isPaused)
+        XCTAssertFalse(coordinator.displayLinkOwner.snapshot().isAttached)
+    }
+
     private func makeView(
         recorder: MacInputSampleRecorder = MacInputSampleRecorder()
     ) -> MacStreamInputCaptureView {

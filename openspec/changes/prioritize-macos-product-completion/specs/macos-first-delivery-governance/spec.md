@@ -90,6 +90,8 @@ The client SHALL NOT restrict users through a Sunshine package-version allowlist
 - **WHEN** a macOS stream has a valid negotiated video frame rate and its current window has an attached display with a valid maximum frame rate
 - **THEN** active Metal presentation SHALL request the lower of the negotiated source rate and current display maximum rather than a fixed 60 fps
 - **AND** the current macOS surface SHALL own at most one `CAMetalDisplayLink`, request one-frame latency, and render from the callback-provided drawable without an asynchronous scheduling hop
+- **AND** surface creation without a current decoded presentation contract SHALL keep the display link paused and unattached rather than driving an empty surface
+- **AND** the first current decoded presentation contract MAY attach the display link, while clearing that contract for reset, replacement, or teardown SHALL pause, invalidate, and detach it before immediate clear
 - **AND** decoded frames SHALL retain latest-frame replacement semantics rather than building a presentation FIFO behind the display link
 - **AND** window screen changes, backing-property changes, and application screen-parameter changes SHALL refresh the requested active cadence through the current surface owner
 - **AND** a stale or detached window SHALL NOT overwrite a replacement surface's cadence

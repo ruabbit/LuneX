@@ -3959,8 +3959,8 @@ final class MacStreamSurfaceCoordinator {
 
     func configure(_ view: MacStreamInputCaptureView, renderState: StreamRenderState) {
         presenter.configure(view)
-        _ = displayLinkOwner.attach(to: view, presenter: presenter)
-        _ = applySchedule(renderState, to: view)
+        let schedule = applySchedule(renderState, to: view)
+        if schedule.requestsImmediateDraw { view.draw() }
     }
 
     @discardableResult
@@ -3975,7 +3975,6 @@ final class MacStreamSurfaceCoordinator {
         captureController.update(inputPolicy, for: view)
         self.inputSampleHandler = inputSampleHandler
         self.captureExitHandler = captureExitHandler
-        _ = displayLinkOwner.attach(to: view, presenter: presenter)
         return applySchedule(renderState, to: view)
     }
 
@@ -4007,6 +4006,17 @@ final class MacStreamSurfaceCoordinator {
             maximumDisplayFramesPerSecond:
                 state.maximumDisplayFramesPerSecond
         )
+        guard state.decodedVideoPresentationContract != nil else {
+            displayLinkOwner.detach(from: view)
+            let waitingSchedule = StreamMetalViewSchedule(
+                isPaused: true,
+                preferredFramesPerSecond: schedule.preferredFramesPerSecond,
+                requestsImmediateDraw: true
+            )
+            displayLinkOwner.apply(waitingSchedule, to: view)
+            return waitingSchedule
+        }
+        _ = displayLinkOwner.attach(to: view, presenter: presenter)
         displayLinkOwner.apply(schedule, to: view)
         return schedule
     }
