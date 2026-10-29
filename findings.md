@@ -4,6 +4,8 @@
 
 ### 2026-10-29 audit correction and diagnostic boundary
 
+- Read-only Moonlight-Qt `app/gui/PcView.qml` confirms client-generated PIN display followed by entry in Sunshine web UI. LuneX now uses its existing authenticated provider with that direction; no reference code is copied and host state is not mutated for the test.
+
 - Apple SDK AVAudioEngine.h (27.0, lines 1036-1062) documents engine-owned configuration-change notifications, automatic stop after hardware channel/sample-rate changes, retained graph connections, and internal-queue teardown deadlock risk. Production macOS observation now filters the exact engine and leaves its callback queue before capability/recovery handling. Equal spatial capability still requires engine restart.
 - Audio capacity waits previously had no deadline inside two serialized gates. Missing player completion could therefore prevent both route recovery and stop. Add a 250 ms stall bound (normal 3-buffer capacity unchanged), cancel timers with waiter lifecycle, and rebuild once on capacity timeout before scheduling the current buffer. This is failure recovery, not a larger steady-state audio buffer.
 

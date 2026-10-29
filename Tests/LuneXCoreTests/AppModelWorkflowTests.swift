@@ -2116,6 +2116,12 @@ final class AppModelWorkflowTests: XCTestCase {
         XCTAssertEqual(model.renderState.headroom, lifecycle.headroom)
         XCTAssertEqual(model.renderState.negotiatedVideoFramesPerSecond, 144)
         XCTAssertEqual(model.renderState.maximumDisplayFramesPerSecond, 120)
+        let profile = try XCTUnwrap(model.streamLaunchUI.negotiatedProfile)
+        XCTAssertEqual(profile.frameRate, 144)
+        XCTAssertEqual(profile.width, 3840)
+        model.settings.stream.frameRate = 30
+        model.settings.stream.width = 1920
+        XCTAssertEqual(model.streamLaunchUI.negotiatedProfile, profile)
 
         await model.stopStream()
         await launchTask.value
@@ -3404,6 +3410,32 @@ final class AppModelWorkflowTests: XCTestCase {
 
         let recordedUniqueIDs = await client.recordedUniqueIDs()
         XCTAssertEqual(recordedUniqueIDs, [identity.protocolUniqueID])
+    }
+
+    func testClientGeneratedPINStartsPairingAndPreservesAuthentication() async throws {
+        let host = makeUnpairedHost()
+        let provider = ControlledPairingProvider()
+        let model = makePairingModel(
+            host: host,
+            provider: provider,
+            identityProvisioner: FixedIdentityProvisioner(identity: makePairingIdentity())
+        )
+        await model.loadHosts()
+        let task = Task {
+            await model.beginPairing(
+                host: host, in: model.primaryWorkspaceReference, clientPIN: "0427"
+            )
+        }
+        await waitUntil { provider.currentRequestCount() == 1 }
+        let request = try XCTUnwrap(provider.latestRequest())
+        XCTAssertEqual(request.pin, "0427")
+        XCTAssertEqual(model.pairingUI.stage, .exchangingSecrets)
+        XCTAssertEqual(model.selectedHost?.pairingState, .unpaired)
+        XCTAssertFalse(model.diagnostics.events.contains { $0.message.contains("0427") })
+        provider.completeAuthenticated(request)
+        await task.value
+        XCTAssertEqual(model.selectedHost?.pairingState, .paired)
+        XCTAssertEqual(provider.currentRequestCount(), 1)
     }
 
     func testPairingUIConsumesProgressAndAuthenticatedCompletion() async throws {

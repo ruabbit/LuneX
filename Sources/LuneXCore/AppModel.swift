@@ -25,6 +25,14 @@ enum SessionApplicationError: Error {
 
 struct StreamLaunchUIState: Equatable {
     var isLaunching = false
+    var negotiatedProfile: StreamPresentationProfile?
+}
+
+struct StreamPresentationProfile: Equatable {
+    let width: Int
+    let height: Int
+    let frameRate: Int
+    let targetBitrateKbps: Int?
 }
 
 struct RuntimeProviderAvailability: OptionSet, Equatable, Sendable {
@@ -3041,7 +3049,8 @@ final class AppModel: ApplicationInputSink {
 
     func beginPairing(
         host: MoonlightHost,
-        in workspace: ProductWorkspaceReference
+        in workspace: ProductWorkspaceReference,
+        clientPIN: String? = nil
     ) async {
         guard workspaceRegistry.state(for: workspace)?.selectedHostID == host.id,
               activeHostDestructiveOwner?.hostID != host.id,
@@ -3106,10 +3115,14 @@ final class AppModel: ApplicationInputSink {
                 guard state.pairing.owner == owner else { return }
                 state.pairing.stage = .waitingForPIN
                 state.pairing.isRunning = false
-                state.pairing.message = "Enter the PIN shown on \(host.name)."
+                state.pairing.message = "Choose a four-digit PIN, then enter it in Sunshine on \(host.name)."
                 state.pairing.issue = nil
             }
             diagnostics.record("Prepared client identity for pairing", subsystem: "pairing")
+            if let clientPIN {
+                updatePairingPIN(clientPIN, in: workspace)
+                await submitPairingPIN(in: workspace)
+            }
         } catch {
             guard pairingOwnerIsCurrent(owner) else {
                 invalidateActivePairingIfOwnerStale()
@@ -3655,6 +3668,7 @@ final class AppModel: ApplicationInputSink {
             for: owner
         )
         streamLaunchUI.isLaunching = true
+        streamLaunchUI.negotiatedProfile = nil
         session.activeHostID = host.id
         session.lastError = nil
         if workspace == primaryWorkspaceReference {
@@ -4131,6 +4145,16 @@ final class AppModel: ApplicationInputSink {
         defer {
             refreshMacInputSurfacePolicy()
             refreshHDRRenderResolution()
+        }
+        if let video = snapshot.negotiatedConfiguration?.video {
+            streamLaunchUI.negotiatedProfile = StreamPresentationProfile(
+                width: video.width,
+                height: video.height,
+                frameRate: video.frameRate,
+                targetBitrateKbps: snapshot.parameters?.bitrateKbps
+            )
+        } else {
+            streamLaunchUI.negotiatedProfile = nil
         }
         switch snapshot.stage {
         case .idle, .disconnected:

@@ -2,6 +2,10 @@
 
 ## 2026-10-29 audit remediation
 
+- Pairing/profile R1 passed 142 total / 141 passed / 1 explicit live-host skip / 0 failed; macOS product and all frozen-platform generic builds succeeded. Evidence `/tmp/LuneX-AuditPairing-20261029-R1.xcresult`, `/tmp/LuneX-AuditPairing-*.log`. Authenticated pairing remains provider-verified; no real host pairing was changed. OpenSpec overlay contract now names actual negotiated video and launch bitrate target. Commit/push this batch immediately.
+
+- Pairing/profile batch: macOS generates and displays the client PIN while starting the existing authenticated handshake; the user enters it in Sunshine's web interface. Corrected reverse-direction copy, retained manual shared API compatibility, projected negotiated video plus launch target bitrate independently of editable preferences, and bound Disconnect to command progress/admission. Validation pending.
+
 - UI R1 passed 178 total / 177 passed / 1 live-host opt-in skip / 0 failed at `/tmp/LuneX-AuditUI-20261029-R1.xcresult`. macOS product and frozen-platform generic builds succeeded; diff hygiene passed. Commit/push Library failure feedback, capture preference preservation and effective diagnostic recording as one UI correctness batch.
 
 - UI batch: Library retains an actionable stream failure notice after returning from a failed session, dismissals check the issue identity, offline/empty catalog no longer claims to be loading, Escape reveals controls without changing the stored pointer mode, and disabling diagnostic recording stops history retention while preserving current actionable error state. Validation pending.

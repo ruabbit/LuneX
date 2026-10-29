@@ -1903,7 +1903,8 @@ private struct StreamStatusOverlay: View {
     }
 
     private var macOSCommandButtons: some View {
-        HStack(spacing: 8) {
+        let stopState = appModel.sessionCommandState(in: workspace).stop
+        return HStack(spacing: 8) {
             Button {
                 _ = appModel.setStreamOverlayVisibility(
                     .hidden,
@@ -1922,11 +1923,16 @@ private struct StreamStatusOverlay: View {
             Button(role: .destructive) {
                 _ = appModel.requestStopStreamConfirmation(in: workspace)
             } label: {
-                Label("Disconnect", systemImage: "xmark.circle")
+                if stopState == .inProgress {
+                    ProgressView().controlSize(.small)
+                    Text("Disconnecting...")
+                } else {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
             }
             .buttonStyle(.bordered)
             .productActionTarget()
-            .disabled(appModel.session.phase == .disconnected)
+            .disabled(stopState != .available)
             .accessibilityLabel("Disconnect Stream")
             .focused($focusedControl, equals: .streamDisconnect)
         }
@@ -2034,8 +2040,12 @@ private struct StreamStatusOverlay: View {
     }
 
     private var streamProfileSummary: String {
-        let stream = appModel.settings.stream
-        return "\(stream.width)x\(stream.height) @ \(stream.frameRate) fps - \(stream.bitrateKbps / 1_000) Mbps"
+        guard let profile = appModel.streamLaunchUI.negotiatedProfile else {
+            return "Negotiating stream..."
+        }
+        let video = "\(profile.width)x\(profile.height) @ \(profile.frameRate) fps"
+        guard let bitrate = profile.targetBitrateKbps else { return video }
+        return "\(video) - \(bitrate / 1_000) Mbps target"
     }
 
     private var pointerModeBinding: Binding<Bool> {

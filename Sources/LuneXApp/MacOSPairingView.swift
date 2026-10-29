@@ -4,6 +4,7 @@ import SwiftUI
 struct MacOSPairingView: View {
     @Environment(AppModel.self) private var appModel
     @FocusState private var pinFocused: Bool
+    @State private var displayedPIN = ""
     let workspace: ProductWorkspaceReference
 
     var body: some View {
@@ -38,6 +39,12 @@ struct MacOSPairingView: View {
         .navigationTitle(host?.name ?? "Pair Host")
         .onChange(of: surface.phase, initial: true) { _, phase in
             pinFocused = phase == .waitingForPIN
+            if phase == .completed || phase == .cancelled || phase == .failed {
+                displayedPIN = ""
+            }
+        }
+        .onChange(of: host?.id) { _, _ in
+            displayedPIN = ""
         }
     }
 
@@ -52,9 +59,7 @@ struct MacOSPairingView: View {
         case .ready:
             Button("Pair Host") {
                 guard let host else { return }
-                Task {
-                    await appModel.beginPairing(host: host, in: workspace)
-                }
+                startPairing(host)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -63,6 +68,15 @@ struct MacOSPairingView: View {
             issueLabel(surface.issue)
         case .preparing, .exchangingSecrets, .verifyingServer, .savingIdentity:
             VStack(spacing: 14) {
+                if surface.phase == .exchangingSecrets, !displayedPIN.isEmpty {
+                    Text(displayedPIN)
+                        .font(.system(size: 36, weight: .semibold, design: .monospaced))
+                        .textSelection(.enabled)
+                        .accessibilityLabel("Pairing PIN")
+                        .accessibilityValue(displayedPIN.map(String.init).joined(separator: " "))
+                    Text("Enter this PIN in the Sunshine web interface on your host.")
+                        .multilineTextAlignment(.center)
+                }
                 ProgressView()
                     .controlSize(.large)
                 if surface.canCancel {
@@ -107,9 +121,7 @@ struct MacOSPairingView: View {
         case .cancelled:
             if surface.canStart, let host {
                 Button("Pair Host") {
-                    Task {
-                        await appModel.beginPairing(host: host, in: workspace)
-                    }
+                    startPairing(host)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -120,9 +132,8 @@ struct MacOSPairingView: View {
                 issueLabel(surface.issue)
                 if surface.canRetry {
                     Button("Retry Pairing") {
-                        Task {
-                            await appModel.retryPairing(in: workspace)
-                        }
+                        guard let host else { return }
+                        startPairing(host)
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
@@ -138,6 +149,14 @@ struct MacOSPairingView: View {
         )
     }
 
+    private func startPairing(_ host: MoonlightHost) {
+        let pin = String(format: "%04d", Int.random(in: 0...9_999))
+        displayedPIN = pin
+        Task {
+            await appModel.beginPairing(host: host, in: workspace, clientPIN: pin)
+        }
+    }
+
     private func pairingSubtitle(
         _ surface: ProductPairingSurface
     ) -> String {
@@ -146,7 +165,7 @@ struct MacOSPairingView: View {
         case .ready: "Pair once to authorize this Mac with Sunshine."
         case .unavailable: "Pairing is unavailable in this build."
         case .preparing: "Preparing a secure pairing request..."
-        case .waitingForPIN: "Enter the four-digit PIN shown by Sunshine."
+        case .waitingForPIN: "Choose a four-digit PIN, then enter the same PIN in Sunshine."
         case .exchangingSecrets: "Exchanging pairing credentials..."
         case .verifyingServer: "Verifying the host identity..."
         case .savingIdentity: "Saving the verified identity..."

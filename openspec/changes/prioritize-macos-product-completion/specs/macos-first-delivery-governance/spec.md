@@ -227,7 +227,7 @@ The macOS candidate SHALL pass native window, display, input, HDR/EDR, audio, pr
 
 #### Scenario: Active stream controls prioritize session actions
 - **WHEN** a macOS workspace owns an active or connecting stream and its controls are visible
-- **THEN** the overlay identifies the selected application and host, summarizes the configured resolution, frame rate, and bitrate, and exposes live pointer-mode, scaling, HDR/EDR, spatial-audio, hide, and disconnect controls
+- **THEN** the overlay identifies the selected application and host, summarizes the current negotiated resolution and frame rate with the session's launch bitrate target (not subsequently edited preferences), and exposes live pointer-mode, scaling, HDR/EDR, spatial-audio, hide, and disconnect controls
 - **AND** pointer, scaling, HDR/EDR, and spatial-audio changes apply through their real runtime paths and persist as preferences
 - **AND** a wide macOS stream window presents a width-bounded overlay at the top center below the title bar instead of vertically centering it over remote content
 - **AND** when requested spatial audio falls back or fails, the spatial-audio control shows a compact subordinate reason below the switch, while healthy or disabled output does not reserve space for status prose
