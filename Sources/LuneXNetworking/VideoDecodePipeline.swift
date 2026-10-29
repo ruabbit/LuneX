@@ -1,5 +1,6 @@
 @preconcurrency import CoreMedia
 import Foundation
+import VideoToolbox
 
 protocol VideoIDRRequesting: Sendable {
     func requestIDR() async throws
@@ -312,6 +313,10 @@ actor VideoDecodePipeline {
             )
         } catch let error as VideoDecoderError {
             try validateSubmission(token: token)
+            if Self.isRecoverableSubmissionError(error) {
+                try await beginRecovery(.decoderFailure(error))
+                return .recoveryRequested(.decoderFailure(error))
+            }
             try? await beginRecovery(.decoderFailure(error))
             throw error
         }
@@ -378,6 +383,10 @@ actor VideoDecodePipeline {
             )
         } catch let error as VideoDecoderError {
             try validateSubmission(token: token)
+            if Self.isRecoverableSubmissionError(error) {
+                try await beginRecovery(.decoderFailure(error))
+                return .recoveryRequested(.decoderFailure(error))
+            }
             try? await beginRecovery(.decoderFailure(error))
             throw error
         }
@@ -416,9 +425,17 @@ actor VideoDecodePipeline {
         let recovery = recoveryGeneration
         let hadActiveDecoder = activeDecoderGeneration != nil
         isAwaitingIDR = true
-        activeDecoderGeneration = nil
-        if hadActiveDecoder {
-            await decoder.stop()
+        // Packet loss invalidates reference frames, not the decoder or its format.
+        // Keep the last presented frame and resume this session with the next IDR.
+        switch reason {
+        case .packetLoss, .missingInitialIDR:
+            break
+        case .colorMetadataChanged, .malformedIDR, .decoderFrameDropped,
+             .decoderFailure, .lifecycleResume:
+            activeDecoderGeneration = nil
+            if hadActiveDecoder {
+                await decoder.stop()
+            }
         }
         guard !isStopped,
               !isLifecyclePaused,
@@ -443,7 +460,11 @@ actor VideoDecodePipeline {
         guard !isStopped,
               lifecycleToken == token,
               recoveryGeneration == recovery else { return }
-        _ = reason
+    }
+
+    private static func isRecoverableSubmissionError(_ error: VideoDecoderError) -> Bool {
+        guard case let .decodeFailed(status) = error else { return false }
+        return status == kVTVideoDecoderBadDataErr || status == kVTInvalidSessionErr
     }
 
     private func validateSubmission(token: UInt64) throws {
@@ -465,7 +486,14 @@ actor VideoDecodePipeline {
         case let .failure(failure)
             where failure.generation == activeDecoderGeneration && failure.frameID != nil:
             decoderFailureCount &+= 1
-            try? await beginRecovery(.decoderFailure(failure.error))
+            // Synchronous submission failures are already handled by submit/submitIDR.
+            // Starting a second recovery here can race that path's decoder teardown.
+            switch failure.error {
+            case .callbackFailed, .callbackMissingImageBuffer:
+                try? await beginRecovery(.decoderFailure(failure.error))
+            default:
+                break
+            }
         case .sessionStarted, .frame, .frameDropped, .failure, .sessionStopped:
             break
         }

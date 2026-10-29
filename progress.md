@@ -2,6 +2,11 @@
 
 ## 2026-10-29 audit remediation
 
+- Video R2 passed all 71 executed tests (VideoDecodePipelineTests and SessionMediaEnvironmentTests), including decoder reuse, recoverable submission errors, fatal propagation and teardown. Two requested class selectors do not exist as standalone test classes; do not claim their independent coverage. macOS/iOS/tvOS/visionOS product/generic builds succeeded. Evidence `/tmp/LuneX-AuditVideo-20261029-R2.xcresult` and `/tmp/LuneX-AuditVideo-*.log`. Physical weak-network quality remains pending. Commit/push video batch now.
+
+- HDR boundary batch committed/pushed as `4761466`. Video batch now retains the decoder across packet loss, admits recovery for the two explicit VideoToolbox submission errors, and preserves fatal/unknown and control-send error propagation. Focused verification pending.
+- Video R1 exposed duplicate recovery: synchronous decode errors also emit an asynchronous failure event, allowing a second recovery to observe clearing before teardown completes. The submission path now owns synchronous recovery; only actual callback failures start recovery from the event handler. Preserve R1 failure evidence and verify R2.
+
 - HDR R3 passed 212 total / 211 passed / 1 explicit live-host skip / 0 failed at `/tmp/LuneX-AuditHDR-20261029-R3.xcresult`. Product build `/tmp/LuneX-AuditHDR-Product-R1.xcresult` succeeded; Xcode emitted its AppIntents metadata-extraction notice (no AppIntents dependency), so do not claim a completely warning-free log. Generic iOS/tvOS/visionOS compatibility builds succeeded without Simulator operations. OpenSpec strict 12/12 and diff hygiene passed. Physical pressed-drag acceptance remains pending. Commit/push this batch immediately.
 
 - Rechecked clean baseline b25f6d3 and Claude's read-only audit; current toolchain is Xcode 27.0 (27A266a). Context7 is quota-blocked. OpenSpec remains 7/27.

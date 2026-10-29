@@ -4,6 +4,9 @@
 
 ### 2026-10-29 audit correction and diagnostic boundary
 
+- Video recovery: packet loss can retain the current decompression session and last presentation while predicted units are withheld until IDR. Parameter/color changes and decoder faults still invalidate. Local VideoToolbox VTErrors.h identifies bad-data (-12909) and invalid-session (-12903); synchronous submission of these errors now requests IDR recovery rather than terminal media failure. Allocation/unknown errors remain terminal.
+- IDR request exceptions in the current control implementation mean invalid session state or an authenticated reliable-control send failure. No proven transient error category exists here; blanket suppression would conceal control failure, so preserve propagation and outstanding-request cleanup.
+
 - The historical Observation getter stack does not establish the root cause of the pressed-drag crash. The ignored-token regression only proves dependency exclusion. Physical reproduction remains open.
 - Confirmed synchronous path: representable update -> presenter transition/draw -> diagnostic lease -> observable AppModel HDR status/diagnostics. Defer only the UI writeback, coalesce pending status, and invalidate queued delivery on ownership replacement/release. Frame rendering stays synchronous.
 - Claude's claims of absent mouse-coalescing and CAMetalDisplayLink tests were incorrect; existing tests cover normal ownership and fake display-link behavior, not full physical acceptance.

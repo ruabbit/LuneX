@@ -46,7 +46,8 @@
 2026-10-29 Claude审计修复：先隔离representable更新中的HDR状态回写，再修复视频恢复、macOS音频恢复和用户错误反馈。每批执行针对性回归及产品编译后立即提交推送。历史Observation getter栈仅定位故障发生位置，不能证明reservation token是崩溃根因；拖拽实机验收继续pending。当前OpenSpec为7/27，不以单测替代物理验收。Context7额度耗尽，Apple API改查官方资料/本机SDK。
 
 - HDR回写隔离：实现及确定性验收完成（212项，211通过，1 live-host skip），macOS产品及generic兼容构建通过；物理拖拽复验未完成。
-- 后续：视频丢包恢复保留有效decoder；核查macOS音频配置变更与容量等待互锁；补Library串流错误反馈。三项仍pending。
+- 视频丢包与已分类解码错误恢复：71项确定性测试及产品/generic构建通过，待真实弱网验收。
+- 后续：macOS音频配置变更与容量等待互锁；Library串流错误反馈。两项仍pending。
 
 2026-08-31追加P0 Relative方向与端到端跳跃修复：真实host反馈确认macOS Relative上下方向镜像，连续移动的总路径近似完整但远程光标视觉更新跳跃。当前按Moonlight-Qt的实时策略分批处理：(1)在AppKit pointer-movement capture边界保持真实主机验证的原始`NSEvent.deltaY`，撤销错误反转并保持Direct和scroll不变；(2)增加有限、饱和、无payload/地址/identity的输入capture/coalesce/reject/send-latency与视频receive/decode/present/frame-age统计，区分输入真实丢弃、发送阻塞、移动合并和视频呈现替换；(3)把ENet receive/send重构为单一owner loop、0至1ms service cadence、outbound mailbox和批量flush；(4)后续以display-linked latest-frame呈现修复固定60Hz调度。每个可归档批次独立验收后立即commit/push；Task 2.3、3.1、3.2与9.1在完整物理/live/performance证据前保持pending。
 

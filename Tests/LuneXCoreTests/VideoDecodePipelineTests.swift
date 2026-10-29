@@ -162,7 +162,9 @@ final class VideoDecodePipelineTests: XCTestCase {
         XCTAssertEqual(predicted, .dropped(frameIndex: 4, reason: .awaitingIDR))
         let requestCountBeforeRecovery = await requester.count
         XCTAssertEqual(requestCountBeforeRecovery, 1)
-        XCTAssertEqual(factory.sessions[0].finishCount, 1)
+        XCTAssertEqual(factory.sessions[0].finishCount, 0)
+        let awaiting = await pipeline.snapshot()
+        XCTAssertEqual(awaiting.activeDecoderGeneration, 1)
 
         let recovered = try await pipeline.consume(.accessUnit(try accessUnit(
             frameIndex: 5,
@@ -170,13 +172,13 @@ final class VideoDecodePipelineTests: XCTestCase {
             frameType: .instantaneousDecoderRefresh,
             payloadHex: fixture.h264.accessUnitHex
         )))
-        XCTAssertEqual(recovered, .submitted(frameIndex: 5, generation: 2, replacedSession: true))
+        XCTAssertEqual(recovered, .submitted(frameIndex: 5, generation: 1, replacedSession: false))
         let snapshot = await pipeline.snapshot()
         XCTAssertFalse(snapshot.isAwaitingIDR)
         XCTAssertFalse(snapshot.hasOutstandingIDRRequest)
         XCTAssertEqual(snapshot.idrRequestCount, 1)
         XCTAssertEqual(snapshot.droppedAccessUnitCount, 1)
-        XCTAssertEqual(snapshot.decoderResetCount, 1)
+        XCTAssertEqual(snapshot.decoderResetCount, 0)
         await pipeline.stop()
     }
 
@@ -527,6 +529,59 @@ final class VideoDecodePipelineTests: XCTestCase {
         await pipeline.stop()
     }
 
+    func testRecoverableDecodeSubmissionRequestsIDRAndRebuildsOnRecovery() async throws {
+        let fixture = try loadFixture()
+        for status in [kVTVideoDecoderBadDataErr, kVTInvalidSessionErr] {
+            let factory = PipelineSessionFactory()
+            let requester = PipelineIDRRequester()
+            let pipeline = try makePipeline(
+                codec: .h264,
+                colorMetadata: .rec709VideoRange(),
+                requester: requester,
+                factory: factory
+            )
+            let idr = try accessUnit(
+                frameIndex: 1, codec: .h264,
+                frameType: .instantaneousDecoderRefresh,
+                payloadHex: fixture.h264.accessUnitHex
+            )
+            _ = try await pipeline.consume(.accessUnit(idr))
+            factory.sessions[0].failNextDecode(.decodeFailed(status))
+            let predicted = try accessUnit(
+                frameIndex: 2, codec: .h264, frameType: .predicted,
+                payloadHex: fixture.h264.accessUnitHex
+            )
+            let result = try await pipeline.consume(.accessUnit(predicted))
+            XCTAssertEqual(result, .recoveryRequested(.decoderFailure(.decodeFailed(status))))
+            XCTAssertEqual(factory.sessions[0].finishCount, 1)
+            let recovered = try await pipeline.consume(.accessUnit(idr))
+            XCTAssertEqual(recovered, .submitted(frameIndex: 1, generation: 2, replacedSession: true))
+            await pipeline.stop()
+        }
+    }
+
+    func testUnclassifiedDecodeSubmissionFailureStillPropagates() async throws {
+        let fixture = try loadFixture()
+        let factory = PipelineSessionFactory()
+        let pipeline = try makePipeline(
+            codec: .h264,
+            colorMetadata: .rec709VideoRange(),
+            requester: PipelineIDRRequester(),
+            factory: factory
+        )
+        let idr = try accessUnit(
+            frameIndex: 1, codec: .h264,
+            frameType: .instantaneousDecoderRefresh,
+            payloadHex: fixture.h264.accessUnitHex
+        )
+        _ = try await pipeline.consume(.accessUnit(idr))
+        factory.sessions[0].failNextDecode(.decodeFailed(kVTAllocationFailedErr))
+        await PipelineXCTAssertThrowsErrorAsync(try await pipeline.consume(.accessUnit(idr))) {
+            XCTAssertEqual($0 as? VideoDecoderError, .decodeFailed(kVTAllocationFailedErr))
+        }
+        await pipeline.stop()
+    }
+
     private func makePipeline(
         codec: NegotiatedVideoCodec,
         colorMetadata: VideoColorMetadata,
@@ -699,6 +754,11 @@ private final class PipelineSession: VideoDecompressionSessionOwning, @unchecked
     private let lock = NSLock()
     private var storedDecodeCount = 0
     private var storedFinishCount = 0
+    private var nextDecodeError: VideoDecoderError?
+
+    func failNextDecode(_ error: VideoDecoderError) {
+        lock.withLock { nextDecodeError = error }
+    }
 
     var decodeCount: Int { lock.withLock { storedDecodeCount } }
     var finishCount: Int { lock.withLock { storedFinishCount } }
@@ -712,7 +772,12 @@ private final class PipelineSession: VideoDecompressionSessionOwning, @unchecked
         generation _: UInt64,
         frameID _: UInt64
     ) -> Result<VideoDecodeSubmission, VideoDecoderError> {
-        lock.withLock { storedDecodeCount += 1 }
+        let error = lock.withLock {
+            storedDecodeCount += 1
+            defer { nextDecodeError = nil }
+            return nextDecodeError
+        }
+        if let error { return .failure(error) }
         return .success(VideoDecodeSubmission(infoFlags: []))
     }
 
