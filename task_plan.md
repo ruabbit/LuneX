@@ -43,6 +43,11 @@
 
 ## 当前焦点
 
+2026-10-29 Claude审计修复：先隔离representable更新中的HDR状态回写，再修复视频恢复、macOS音频恢复和用户错误反馈。每批执行针对性回归及产品编译后立即提交推送。历史Observation getter栈仅定位故障发生位置，不能证明reservation token是崩溃根因；拖拽实机验收继续pending。当前OpenSpec为7/27，不以单测替代物理验收。Context7额度耗尽，Apple API改查官方资料/本机SDK。
+
+- HDR回写隔离：实现及确定性验收完成（212项，211通过，1 live-host skip），macOS产品及generic兼容构建通过；物理拖拽复验未完成。
+- 后续：视频丢包恢复保留有效decoder；核查macOS音频配置变更与容量等待互锁；补Library串流错误反馈。三项仍pending。
+
 2026-08-31追加P0 Relative方向与端到端跳跃修复：真实host反馈确认macOS Relative上下方向镜像，连续移动的总路径近似完整但远程光标视觉更新跳跃。当前按Moonlight-Qt的实时策略分批处理：(1)在AppKit pointer-movement capture边界保持真实主机验证的原始`NSEvent.deltaY`，撤销错误反转并保持Direct和scroll不变；(2)增加有限、饱和、无payload/地址/identity的输入capture/coalesce/reject/send-latency与视频receive/decode/present/frame-age统计，区分输入真实丢弃、发送阻塞、移动合并和视频呈现替换；(3)把ENet receive/send重构为单一owner loop、0至1ms service cadence、outbound mailbox和批量flush；(4)后续以display-linked latest-frame呈现修复固定60Hz调度。每个可归档批次独立验收后立即commit/push；Task 2.3、3.1、3.2与9.1在完整物理/live/performance证据前保持pending。
 
 2026-08-31追加P0真实输入回归：Direct与Relative指针都明显迟缓并丢失大量移动，按钮点击存在巨大端到端延迟。已确认共同根因是macOS输入的双重排队：`MacSessionInputCoordinator`先以256样本FIFO逐项等待完整network send，导致下游`MoonlightRemoteInputProvider`的移动合并无法生效；旧移动积压在按钮之前且容量耗尽后新样本被拒绝。当前批次将第一级改为低延迟、保序的实时合并队列：相邻Relative累加总位移、相邻Direct保留最新位置、不同按钮快照/键盘/按钮/滚轮/坐标参考变化保持顺序屏障，并以focused、related、fresh full和单实例live验收确认点击不会排在陈旧移动长队之后。Task 2.3与3.2均保持pending直到物理host可见反馈通过。

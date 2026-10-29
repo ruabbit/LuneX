@@ -208,7 +208,7 @@ final class MobilePictureInPictureDisplayLayerClient:
         notificationTokens.removeAll()
     }
 
-    deinit {
+    isolated deinit {
         if readinessRequestOrdinal != nil {
             renderer.stopRequestingMediaData()
         }

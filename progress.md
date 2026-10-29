@@ -1,5 +1,14 @@
 # LuneX 进度日志
 
+## 2026-10-29 audit remediation
+
+- HDR R3 passed 212 total / 211 passed / 1 explicit live-host skip / 0 failed at `/tmp/LuneX-AuditHDR-20261029-R3.xcresult`. Product build `/tmp/LuneX-AuditHDR-Product-R1.xcresult` succeeded; Xcode emitted its AppIntents metadata-extraction notice (no AppIntents dependency), so do not claim a completely warning-free log. Generic iOS/tvOS/visionOS compatibility builds succeeded without Simulator operations. OpenSpec strict 12/12 and diff hygiene passed. Physical pressed-drag acceptance remains pending. Commit/push this batch immediately.
+
+- Rechecked clean baseline b25f6d3 and Claude's read-only audit; current toolchain is Xcode 27.0 (27A266a). Context7 is quota-blocked. OpenSpec remains 7/27.
+- Implementing deferred, coalesced HDR UI diagnostic delivery with ownership epochs. No simulator, Keychain, host mutation or product launch; validation pending.
+- R1 test build failed before execution: Xcode 27 timed out type-checking the existing video receive fixture and warned about nonisolated AVSampleBufferVideoRenderer destruction. Split the fixture expression and isolate renderer destruction to MainActor; this shared-source edit is required for macOS test/product compilation. Preserve R1 evidence; rerun in R2.
+- R2 compiled and ran 212 tests: one opt-in skip and two assertions in the HDR integration case still expected synchronous delivery. Update those checks to await the actual deferred status before asserting diagnostics; new deferred/ownership/reset tests passed. R3 retains the same coverage.
+
 ## 2026-06-09
 
 - 创建项目跟踪文件：`task_plan.md`、`findings.md`、`progress.md`。

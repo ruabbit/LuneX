@@ -2308,7 +2308,7 @@ final class AppModelWorkflowTests: XCTestCase {
             diagnosticLease: HDRPresentationDiagnosticLease(
                 claim: { model.claimHDRPresentationDiagnosticOwnership($0) },
                 publish: { ownerID, state in
-                    model.publishHDRPresentationDiagnostic(
+                    model.enqueueHDRPresentationDiagnostic(
                         state,
                         ownerID: ownerID
                     )
@@ -2412,6 +2412,8 @@ final class AppModelWorkflowTests: XCTestCase {
         presenter.update(renderState: model.renderState)
         presenter.draw(in: view)
         presenter.draw(in: view)
+        XCTAssertEqual(model.hdrPresentationStatus, .inactive)
+        await waitUntil { model.hdrPresentationStatus == .edr }
         XCTAssertEqual(
             presenter.snapshot().activeConfiguration,
             activeEDR.identity
@@ -2512,6 +2514,9 @@ final class AppModelWorkflowTests: XCTestCase {
             presenterRuntimes.last?.presentedConfigurations.last?.mappingMode,
             .hdrToSDR
         )
+        await waitUntil {
+            model.hdrPresentationStatus == .sdrFallback(.displayConstrained)
+        }
         XCTAssertEqual(
             model.diagnostics.latestStreamActionableEvent?.code,
             "hdr_sdr_fallback_headroom_insufficient"
@@ -2538,6 +2543,7 @@ final class AppModelWorkflowTests: XCTestCase {
             presenterRuntimes.last?.presentedConfigurations.last,
             recovered.identity
         )
+        await waitUntil { model.hdrPresentationStatus == .edr }
         XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
 
         model.settings.stream.hdrEnabled = false

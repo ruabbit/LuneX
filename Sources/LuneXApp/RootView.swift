@@ -1759,7 +1759,7 @@ struct StreamWorkspaceView: View {
                 appModel.claimHDRPresentationDiagnosticOwnership(ownerID)
             },
             publish: { ownerID, state in
-                appModel.publishHDRPresentationDiagnostic(
+                appModel.enqueueHDRPresentationDiagnostic(
                     state,
                     ownerID: ownerID
                 )

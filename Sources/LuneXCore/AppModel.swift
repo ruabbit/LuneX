@@ -659,6 +659,9 @@ final class AppModel: ApplicationInputSink {
     @ObservationIgnored private var lastHDRPresentationDiagnosticState:
         HDRPresentationDiagnosticState = .inactive
     @ObservationIgnored private var activeHDRPresentationDiagnosticOwnerID: UUID?
+    @ObservationIgnored private var hdrDiagnosticDeliveryEpoch = UUID()
+    @ObservationIgnored private var pendingHDRPresentationDiagnostic: HDRPresentationDiagnosticState?
+    @ObservationIgnored private var hdrDiagnosticDeliveryScheduled = false
     private var activeControlReadiness: SessionChannelReadiness = []
     private var activeMediaReadiness: SessionChannelReadiness = []
     private var mediaConsumerTask: Task<Void, Never>?
@@ -2283,6 +2286,7 @@ final class AppModel: ApplicationInputSink {
     func publishHDRPresentationDiagnostic(
         _ state: HDRPresentationDiagnosticState
     ) {
+        pendingHDRPresentationDiagnostic = nil
         let presentationStatus = HDRPresentationStatus(state)
         if presentationStatus != hdrPresentationStatus {
             hdrPresentationStatus = presentationStatus
@@ -2306,7 +2310,36 @@ final class AppModel: ApplicationInputSink {
     }
 
     func claimHDRPresentationDiagnosticOwnership(_ ownerID: UUID) {
+        invalidatePendingHDRDiagnosticDelivery()
         activeHDRPresentationDiagnosticOwnerID = ownerID
+    }
+
+    // Representable callbacks must return before mutating observable UI state.
+    func enqueueHDRPresentationDiagnostic(
+        _ state: HDRPresentationDiagnosticState,
+        ownerID: UUID
+    ) {
+        guard activeHDRPresentationDiagnosticOwnerID == ownerID else { return }
+        scheduleHDRDiagnosticDelivery(state)
+    }
+
+    private func scheduleHDRDiagnosticDelivery(_ state: HDRPresentationDiagnosticState) {
+        pendingHDRPresentationDiagnostic = state
+        guard !hdrDiagnosticDeliveryScheduled else { return }
+        hdrDiagnosticDeliveryScheduled = true
+        let epoch = hdrDiagnosticDeliveryEpoch
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.hdrDiagnosticDeliveryEpoch == epoch else { return }
+            self.hdrDiagnosticDeliveryScheduled = false
+            guard let pending = self.pendingHDRPresentationDiagnostic else { return }
+            self.publishHDRPresentationDiagnostic(pending)
+        }
+    }
+
+    private func invalidatePendingHDRDiagnosticDelivery() {
+        hdrDiagnosticDeliveryEpoch = UUID()
+        pendingHDRPresentationDiagnostic = nil
+        hdrDiagnosticDeliveryScheduled = false
     }
 
     func publishHDRPresentationDiagnostic(
@@ -2319,7 +2352,9 @@ final class AppModel: ApplicationInputSink {
 
     func releaseHDRPresentationDiagnosticOwnership(_ ownerID: UUID) {
         guard activeHDRPresentationDiagnosticOwnerID == ownerID else { return }
+        invalidatePendingHDRDiagnosticDelivery()
         activeHDRPresentationDiagnosticOwnerID = nil
+        scheduleHDRDiagnosticDelivery(.inactive)
     }
 
     @discardableResult

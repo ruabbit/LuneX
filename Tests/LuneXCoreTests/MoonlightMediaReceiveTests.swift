@@ -67,17 +67,15 @@ final class MoonlightMediaReceiveTests: XCTestCase {
     func testVideoProviderKeepsNewestPacketsWhenConsumerFallsBehind()
         async throws
     {
-        let datagrams = (1...3).map { sequence in
-            Result<NetworkReceiveChunk, Error>.success(NetworkReceiveChunk(
-                data: makeVideoDatagram(
-                    sequenceNumber: UInt32(sequence),
-                    frameIndex: UInt32(sequence),
-                    rtpTimestamp: UInt32(sequence * 1_000),
-                    isParity: false,
-                    payload: Data([UInt8(sequence)])
-                ),
-                isComplete: true
-            ))
+        let datagrams: [Result<NetworkReceiveChunk, Error>] = (1...3).map { (sequence: Int) in
+            let data = makeVideoDatagram(
+                sequenceNumber: UInt32(sequence),
+                frameIndex: UInt32(sequence),
+                rtpTimestamp: UInt32(sequence * 1_000),
+                isParity: false,
+                payload: Data([UInt8(sequence)])
+            )
+            return .success(NetworkReceiveChunk(data: data, isComplete: true))
         }
         let channel = MediaReceiveStubChannel(chunks: datagrams)
         let provider = MoonlightVideoReceiveProvider(

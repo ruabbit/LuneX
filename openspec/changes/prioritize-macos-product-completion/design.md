@@ -98,6 +98,8 @@ Alternative considered: always request the configured preference or a fixed 60 f
 
 ## Risks / Trade-offs
 
+- Representable diagnostic callbacks enqueue coalesced main-queue UI delivery rather than synchronously mutating observed state during a view update. Ownership epochs cancel queued work on replacement and teardown; session resets supersede pending output. Rendering is not deferred. This removes a concrete reentrancy path, but does not establish the root cause or physical resolution of the reported drag crash.
+
 - [Shared code may drift on frozen platforms] -> Run generic non-macOS target builds only when shared code or project generation changes could break them; do not treat those builds as product progress.
 - [macOS hardware/live acceptance can block the lane] -> Surface the blocker explicitly and prepare deterministic tooling and secret-safe evidence templates, but do not switch to unrelated platform features to manufacture progress.
 - [Sunshine releases evolve independently of LuneX] -> Never gate users through a Sunshine package-version allowlist. Select protocol paths from server-advertised capabilities and validate actual negotiation/behavior; record a package version only when it is readily available and useful for reproducing a defect.

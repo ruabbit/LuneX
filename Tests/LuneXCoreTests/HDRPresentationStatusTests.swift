@@ -160,4 +160,63 @@ final class HDRPresentationStatusTests: XCTestCase {
             clientIdentityStore: InMemoryClientIdentityStore()
         )
     }
+
+    func testSurfaceDiagnosticDeliveryIsDeferredAndCoalesced() async {
+        let model = makeModel()
+        let owner = UUID()
+        model.claimHDRPresentationDiagnosticOwnership(owner)
+        model.enqueueHDRPresentationDiagnostic(.pipelineFailure, ownerID: owner)
+        model.enqueueHDRPresentationDiagnostic(.activeEDR, ownerID: owner)
+        XCTAssertEqual(model.hdrPresentationStatus, .inactive)
+        XCTAssertTrue(model.diagnostics.events.isEmpty)
+
+        await drainMainQueue()
+        XCTAssertEqual(model.hdrPresentationStatus, .edr)
+        XCTAssertEqual(model.diagnostics.events.map(\.code), ["hdr_active_edr"])
+    }
+
+    func testQueuedSurfaceDiagnosticsCannotOutliveReplacementOrRelease() async {
+        let model = makeModel()
+        let oldOwner = UUID()
+        let owner = UUID()
+        model.claimHDRPresentationDiagnosticOwnership(oldOwner)
+        model.enqueueHDRPresentationDiagnostic(.pipelineFailure, ownerID: oldOwner)
+        model.claimHDRPresentationDiagnosticOwnership(owner)
+        model.enqueueHDRPresentationDiagnostic(.activeSDR, ownerID: owner)
+        model.releaseHDRPresentationDiagnosticOwnership(oldOwner)
+        await drainMainQueue()
+        XCTAssertEqual(model.hdrPresentationStatus, .sdr)
+        XCTAssertEqual(model.diagnostics.events.map(\.code), ["hdr_active_sdr"])
+
+        model.enqueueHDRPresentationDiagnostic(.pipelineFailure, ownerID: owner)
+        model.releaseHDRPresentationDiagnosticOwnership(owner)
+        XCTAssertEqual(model.hdrPresentationStatus, .sdr)
+        await drainMainQueue()
+        XCTAssertEqual(model.hdrPresentationStatus, .inactive)
+        XCTAssertNil(model.diagnostics.latestStreamActionableEvent)
+
+        model.claimHDRPresentationDiagnosticOwnership(oldOwner)
+        model.releaseHDRPresentationDiagnosticOwnership(oldOwner)
+        model.claimHDRPresentationDiagnosticOwnership(owner)
+        model.enqueueHDRPresentationDiagnostic(.activeEDR, ownerID: owner)
+        await drainMainQueue()
+        XCTAssertEqual(model.hdrPresentationStatus, .edr)
+    }
+
+    func testImmediateSessionResetSupersedesQueuedSurfaceStatus() async {
+        let model = makeModel()
+        let owner = UUID()
+        model.claimHDRPresentationDiagnosticOwnership(owner)
+        model.enqueueHDRPresentationDiagnostic(.activeEDR, ownerID: owner)
+        model.publishHDRPresentationDiagnostic(.inactive)
+        await drainMainQueue()
+        XCTAssertEqual(model.hdrPresentationStatus, .inactive)
+        XCTAssertTrue(model.diagnostics.events.isEmpty)
+    }
+
+    private func drainMainQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
 }
