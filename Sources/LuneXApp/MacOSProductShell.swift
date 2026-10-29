@@ -33,6 +33,11 @@ struct MacOSProductShell: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             detail
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if let issue = appModel.streamProductIssue(in: workspace) {
+                        streamIssueNotice(issue)
+                    }
+                }
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
                         Button(action: onAddHost) {
@@ -102,6 +107,43 @@ struct MacOSProductShell: View {
         case .stream:
             EmptyView()
         }
+    }
+
+    private func streamIssueNotice(_ issue: ProductIssue) -> some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: issue.presentation.systemImage)
+                    .foregroundStyle(issue.severity == .error ? Color.red : Color.secondary)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(issue.presentation.title).font(.headline)
+                    Text(issue.presentation.message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let action = issue.action {
+                        Button {
+                            Task { await appModel.performProductAction(action) }
+                        } label: {
+                            Text(action.kind.title)
+                        }
+                        .disabled(!appModel.canPerformProductAction(action))
+                    }
+                }
+                Spacer(minLength: 0)
+                Button {
+                    appModel.dismissStreamIssue(issue.id, in: workspace)
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss")
+                .accessibilityLabel("Dismiss stream error")
+            }
+            .padding(16)
+        }
+        .background(.background)
     }
 }
 #endif

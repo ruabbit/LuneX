@@ -241,6 +241,7 @@ final class DiagnosticsStore {
     ]
 
     private let capacity: Int
+    var isRecordingEnabled = true
     private(set) var events: [DiagnosticEvent] = []
     private var currentActionableEvents: [ApplicationDiagnosticCategory: DiagnosticEvent] = [:]
     @ObservationIgnored private var currentActionableOwnership:
@@ -468,7 +469,9 @@ final class DiagnosticsStore {
             "message",
             .string(event.message)
         ))
-        events.append(sanitizedEvent)
+        if isRecordingEnabled {
+            events.append(sanitizedEvent)
+        }
         if sanitizedEvent.action != nil || sanitizedEvent.severity == .error {
             let current = currentActionableEvents[sanitizedEvent.category]
             if current?.hasSameActionOwnership(as: sanitizedEvent) != true {

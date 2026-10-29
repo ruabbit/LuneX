@@ -8448,7 +8448,14 @@ final class AppModelWorkflowTests: XCTestCase {
 
         model.settings.input.preferRelativeMouseMode = true
         model.exitMacRelativePointerCapture()
-        XCTAssertFalse(model.settings.input.preferRelativeMouseMode)
+        XCTAssertTrue(model.settings.input.preferRelativeMouseMode)
+        XCTAssertFalse(model.macInputSurfacePolicy.admitsInput)
+        lifecycle.drawableSize = PixelSize(width: 2_560, height: 1_440)
+        lifecycle.updateRenderPolicy()
+        model.applyPlatformLifecycle(lifecycle)
+        _ = model.setStreamOverlayVisibility(.hidden, in: model.primaryWorkspaceReference)
+        await waitUntil { model.macInputSurfacePolicy.admitsInput }
+        XCTAssertTrue(model.settings.input.preferRelativeMouseMode)
 
         await model.stopStream()
         await launchTask.value

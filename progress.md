@@ -2,6 +2,10 @@
 
 ## 2026-10-29 audit remediation
 
+- UI R1 passed 178 total / 177 passed / 1 live-host opt-in skip / 0 failed at `/tmp/LuneX-AuditUI-20261029-R1.xcresult`. macOS product and frozen-platform generic builds succeeded; diff hygiene passed. Commit/push Library failure feedback, capture preference preservation and effective diagnostic recording as one UI correctness batch.
+
+- UI batch: Library retains an actionable stream failure notice after returning from a failed session, dismissals check the issue identity, offline/empty catalog no longer claims to be loading, Escape reveals controls without changing the stored pointer mode, and disabling diagnostic recording stops history retention while preserving current actionable error state. Validation pending.
+
 - Audio R2 passed 81/81 tests at `/tmp/LuneX-AuditAudio-20261029-R2.xcresult`; macOS product and iOS/tvOS/visionOS generic builds succeeded. Normal scheduled-buffer limit remains three. Physical route-switch/audible-latency acceptance is still pending. Commit/push this independent batch now.
 
 - Audio batch implements exact-engine macOS configuration notifications, same-capability restart, and bounded schedule-capacity recovery; tests now cover stopped-player completion loss and route change without capability change. Validation pending; no physical output device was changed.

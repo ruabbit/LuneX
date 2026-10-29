@@ -188,6 +188,7 @@ final class AppModel: ApplicationInputSink {
     var hosts: [MoonlightHost] = []
     var settings = AppSettings.defaults {
         didSet {
+            diagnostics.isRecordingEnabled = settings.diagnosticsEnabled
             if settings.input != oldValue.input {
                 refreshMacInputSurfacePolicy()
             }
@@ -1509,6 +1510,11 @@ final class AppModel: ApplicationInputSink {
         return issue
     }
 
+    func dismissStreamIssue(_ issueID: UUID, in workspace: ProductWorkspaceReference) {
+        guard streamProductIssue(in: workspace)?.id == issueID else { return }
+        clearStreamIssue(in: workspace)
+    }
+
     func canPerformProductAction(_ token: ProductActionToken) -> Bool {
         productActionAdmission(for: token) != nil
     }
@@ -2431,9 +2437,6 @@ final class AppModel: ApplicationInputSink {
     ) {
         guard activeStreamOwner(in: workspace) != nil else { return }
         _ = setStreamOverlayVisibility(.visible, in: workspace)
-        guard settings.input.preferRelativeMouseMode else { return }
-        settings.input.preferRelativeMouseMode = false
-        refreshMacInputSurfacePolicy()
     }
 
     func loadHosts() async {

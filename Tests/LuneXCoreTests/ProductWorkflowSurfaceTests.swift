@@ -1,6 +1,22 @@
 import XCTest
 
 final class ProductWorkflowSurfaceTests: XCTestCase {
+    @MainActor
+    func testDismissingStreamIssueRejectsStaleNoticeIdentity() throws {
+        let model = AppModel(
+            runtimeProviders: .unavailable,
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+        let workspace = model.primaryWorkspaceReference
+        let oldIssue = ProductIssue(code: .streamInterrupted)
+        let current = ProductIssue(code: .audioOutputUnavailable)
+        try model.workspaceRegistry.update(workspace) { $0.presentation.issue = current }
+        model.dismissStreamIssue(oldIssue.id, in: workspace)
+        XCTAssertEqual(model.streamProductIssue(in: workspace), current)
+        model.dismissStreamIssue(current.id, in: workspace)
+        XCTAssertNil(model.streamProductIssue(in: workspace))
+    }
+
     func testMacOSAutomaticHostSelectionPrefersLaunchReadyHost() {
         let offlinePaired = MoonlightHost(
             name: "A Offline",
@@ -1268,6 +1284,8 @@ final class ProductWorkflowSurfaceTests: XCTestCase {
         XCTAssertTrue(source.contains("loadInitialState(in: workspace)"))
         XCTAssertTrue(source.contains("startHostMonitoring()"))
         XCTAssertTrue(shell.contains("NavigationSplitView"))
+        XCTAssertTrue(shell.contains("appModel.streamProductIssue(in: workspace)"))
+        XCTAssertTrue(shell.contains("appModel.performProductAction(action)"))
         XCTAssertTrue(shell.contains("MacOSHostSidebar("))
         XCTAssertTrue(shell.contains("MacOSPairingView(workspace: workspace)"))
         XCTAssertTrue(shell.contains("MacOSCatalogView(workspace: workspace)"))

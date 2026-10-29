@@ -211,8 +211,16 @@ struct MacOSCatalogView: View {
                 description: Text("Sunshine returned an empty application list.")
             )
         case .idle:
-            ProgressView("Loading applications...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if appModel.selectedHost(in: workspace)?.reachability == .offline {
+                ContentUnavailableView(
+                    "Host Offline",
+                    systemImage: "network.slash",
+                    description: Text("Applications will appear when the host is available.")
+                )
+            } else {
+                ProgressView("Waiting for host...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         case .unavailable, .requiresPairing:
             ContentUnavailableView(
                 "Applications Unavailable",

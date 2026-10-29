@@ -2,6 +2,22 @@ import Foundation
 import XCTest
 
 final class RuntimeDiagnosticsTests: XCTestCase {
+    @MainActor
+    func testRecordingPreferenceStopsHistoryButPreservesActionableFailures() {
+        let model = AppModel(
+            runtimeProviders: .unavailable,
+            clientIdentityStore: InMemoryClientIdentityStore()
+        )
+        model.settings.diagnosticsEnabled = false
+        model.diagnostics.record("not retained")
+        model.diagnostics.record(ApplicationDiagnosticFactory.streamFailure(NetworkChannelError.closed))
+        XCTAssertTrue(model.diagnostics.events.isEmpty)
+        XCTAssertNotNil(model.diagnostics.latestStreamActionableEvent)
+        model.settings.diagnosticsEnabled = true
+        model.diagnostics.record("retained")
+        XCTAssertEqual(model.diagnostics.events.count, 1)
+    }
+
     func testRecorderRedactsSecretAndPrivateFields() async {
         let recorder = RuntimeDiagnosticsRecorder()
         let event = await recorder.record(
