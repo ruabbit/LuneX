@@ -51,7 +51,8 @@
 - Library错误反馈、离线空状态、Escape偏好、诊断记录开关：178项回归（177通过、1 live skip）及产品/generic构建通过。
 - macOS客户端PIN配对、当前会话参数、Disconnect进行中状态：142项回归（141通过、1 live skip）及产品/generic构建通过。
 - 帧乱序/序号回绕、鼠标合并owner销毁、ENet scratch复用：124项回归及产品/generic构建通过。
-- 下一门：全量macOS回归、唯一标准路径产品编译/界面检查；物理拖拽、输出设备切换、多屏、弱网和端到端性能仍待验收。不得以此次确定性修复勾选广义发布/冻结任务。
+- 全量macOS R2：1400项，1398通过、2个真实Keychain/live-host opt-in跳过、0失败；标准路径产品构建成功。Computer Use仅启动PID 10437，Desktop会话进入workspace但等待Video，submitted/decoded/published/presented均为0；正常Disconnect回Library，同一PID存活。
+- 下一P0：定位当前真实会话首个视频帧未到达（receive/assembly/IDR），之后复验物理拖拽、输出设备切换、多屏、弱网与端到端性能。OpenSpec保持7/27，不能以确定性测试勾选物理/发布/冻结任务。
 
 2026-08-31追加P0 Relative方向与端到端跳跃修复：真实host反馈确认macOS Relative上下方向镜像，连续移动的总路径近似完整但远程光标视觉更新跳跃。当前按Moonlight-Qt的实时策略分批处理：(1)在AppKit pointer-movement capture边界保持真实主机验证的原始`NSEvent.deltaY`，撤销错误反转并保持Direct和scroll不变；(2)增加有限、饱和、无payload/地址/identity的输入capture/coalesce/reject/send-latency与视频receive/decode/present/frame-age统计，区分输入真实丢弃、发送阻塞、移动合并和视频呈现替换；(3)把ENet receive/send重构为单一owner loop、0至1ms service cadence、outbound mailbox和批量flush；(4)后续以display-linked latest-frame呈现修复固定60Hz调度。每个可归档批次独立验收后立即commit/push；Task 2.3、3.1、3.2与9.1在完整物理/live/performance证据前保持pending。
 

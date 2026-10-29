@@ -4,6 +4,8 @@
 
 ### 2026-10-29 audit correction and diagnostic boundary
 
+- Final standard-path product smoke test stayed in `Connecting: Waiting for Video` on PC-20260610OBZH with zero submitted/decoded/published/presented frames. The live failure is upstream of observed presentation, but current counters do not distinguish absent UDP packets from incomplete access units/IDR. No root cause is claimed. Local Disconnect returned to Library cleanly in the same PID. Keep this new live discriminator ahead of further UI polishing.
+
 - Read-only Moonlight-Qt `app/gui/PcView.qml` confirms client-generated PIN display followed by entry in Sunshine web UI. LuneX now uses its existing authenticated provider with that direction; no reference code is copied and host state is not mutated for the test.
 
 - Apple SDK AVAudioEngine.h (27.0, lines 1036-1062) documents engine-owned configuration-change notifications, automatic stop after hardware channel/sample-rate changes, retained graph connections, and internal-queue teardown deadlock risk. Production macOS observation now filters the exact engine and leaves its callback queue before capability/recovery handling. Equal spatial capability still requires engine restart.

@@ -331,7 +331,14 @@ final class ProductIssueTests: XCTestCase {
 
         XCTAssertEqual(
             Set(Mirror(reflecting: StreamLaunchUIState()).children.compactMap(\.label)),
-            ["isLaunching"]
+            ["isLaunching", "negotiatedProfile"]
+        )
+        let profile = StreamPresentationProfile(
+            width: 1920, height: 1080, frameRate: 60, targetBitrateKbps: 20000
+        )
+        XCTAssertEqual(
+            Set(Mirror(reflecting: profile).children.compactMap(\.label)),
+            ["width", "height", "frameRate", "targetBitrateKbps"]
         )
     }
 
