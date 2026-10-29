@@ -89,9 +89,13 @@ protocol AudioEngineClient: Sendable {
     func routeSnapshot() -> AudioRouteSnapshot
     func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState
     func mobileAudioSessionActiveReadback() -> Bool?
+    func makeRouteEventSource() -> any SpatialAudioRouteMonitorEventSourcing
 }
 
 extension AudioEngineClient {
+    func makeRouteEventSource() -> any SpatialAudioRouteMonitorEventSourcing {
+        SpatialAudioPlatformNotificationSource()
+    }
     func currentSpatialRouteCapability() -> SpatialAudioRouteCapabilityState {
         let route = routeSnapshot()
         let channelCount = max(route.outputChannelCount, 0)
@@ -282,6 +286,18 @@ final class AVAudioEngineClient: AudioEngineClient, @unchecked Sendable {
     private var configuredGraphFallback: SpatialAudioGraphFallbackReason?
     private var applicableRenderingAlgorithmRawValues: [Int] = []
     private var platformReadback = AVAudioSpatialPlatformReadback.none
+
+    func makeRouteEventSource() -> any SpatialAudioRouteMonitorEventSourcing {
+        #if os(macOS)
+        SpatialAudioPlatformNotificationSource(
+            notificationCenter: .default,
+            observedObject: engine,
+            names: .current
+        )
+        #else
+        SpatialAudioPlatformNotificationSource()
+        #endif
+    }
 
     init(
         environmentGraphBuilder: any AVAudioEnvironmentGraphBuilding =
@@ -688,10 +704,12 @@ actor AudioSessionPipeline {
     private struct CapacityWaiter {
         let generation: UInt64
         let continuation: CheckedContinuation<Void, Error>
+        let timeout: Task<Void, Never>
     }
 
     private let engineClient: AudioEngineClient
     private let maximumScheduledBuffers: Int
+    private let scheduleCapacityTimeout: Duration
     private var generation: UInt64 = 0
     private var nextScheduleID: UInt64 = 0
     private var nextCapacityWaiterID: UInt64 = 0
@@ -703,10 +721,12 @@ actor AudioSessionPipeline {
     init(
         engineClient: AudioEngineClient = AVAudioEngineClient(),
         maximumScheduledBuffers: Int = realtimeMaximumScheduledBuffers,
+        scheduleCapacityTimeout: Duration = .milliseconds(250),
         now: Date = Date()
     ) {
         self.engineClient = engineClient
         self.maximumScheduledBuffers = min(max(maximumScheduledBuffers, 1), 64)
+        self.scheduleCapacityTimeout = max(scheduleCapacityTimeout, .milliseconds(1))
         self.snapshot = AudioPipelineSnapshot(
             stage: .idle,
             configuration: nil,
@@ -877,7 +897,9 @@ actor AudioSessionPipeline {
         generation &+= 1
         scheduledFramesByID.removeAll(keepingCapacity: true)
         let continuations = capacityWaiterOrder.compactMap {
-            capacityWaiters.removeValue(forKey: $0)?.continuation
+            let waiter = capacityWaiters.removeValue(forKey: $0)
+            waiter?.timeout.cancel()
+            return waiter?.continuation
         }
         capacityWaiterOrder.removeAll(keepingCapacity: true)
         for continuation in continuations {
@@ -903,7 +925,12 @@ actor AudioSessionPipeline {
                     }
                     capacityWaiters[waiterID] = CapacityWaiter(
                         generation: generation,
-                        continuation: continuation
+                        continuation: continuation,
+                        timeout: Task { [weak self, scheduleCapacityTimeout] in
+                            do { try await Task.sleep(for: scheduleCapacityTimeout) }
+                            catch { return }
+                            await self?.expireCapacityWaiter(waiterID)
+                        }
                     )
                     capacityWaiterOrder.append(waiterID)
                 }
@@ -918,7 +945,14 @@ actor AudioSessionPipeline {
             return
         }
         capacityWaiterOrder.removeAll { $0 == waiterID }
+        waiter.timeout.cancel()
         waiter.continuation.resume(throwing: CancellationError())
+    }
+
+    private func expireCapacityWaiter(_ waiterID: UInt64) {
+        guard let waiter = capacityWaiters.removeValue(forKey: waiterID) else { return }
+        capacityWaiterOrder.removeAll { $0 == waiterID }
+        waiter.continuation.resume(throwing: AudioPipelineError.scheduleCapacityExceeded)
     }
 
     private func resumeNextCapacityWaiter() {
@@ -927,6 +961,7 @@ actor AudioSessionPipeline {
             guard let waiter = capacityWaiters.removeValue(forKey: waiterID) else {
                 continue
             }
+            waiter.timeout.cancel()
             if waiter.generation == generation {
                 waiter.continuation.resume()
             } else {

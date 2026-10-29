@@ -2,6 +2,11 @@
 
 ## 2026-10-29 audit remediation
 
+- Audio R2 passed 81/81 tests at `/tmp/LuneX-AuditAudio-20261029-R2.xcresult`; macOS product and iOS/tvOS/visionOS generic builds succeeded. Normal scheduled-buffer limit remains three. Physical route-switch/audible-latency acceptance is still pending. Commit/push this independent batch now.
+
+- Audio batch implements exact-engine macOS configuration notifications, same-capability restart, and bounded schedule-capacity recovery; tests now cover stopped-player completion loss and route change without capability change. Validation pending; no physical output device was changed.
+- Audio R1 completed with one new-test assertion failure: a new route revision correctly uses the existing spatial-policy rebuild path. Removed redundant fallback logic and asserted the actual single rebuild reason. Added notification ownership/teardown coverage before R2.
+
 - Video R2 passed all 71 executed tests (VideoDecodePipelineTests and SessionMediaEnvironmentTests), including decoder reuse, recoverable submission errors, fatal propagation and teardown. Two requested class selectors do not exist as standalone test classes; do not claim their independent coverage. macOS/iOS/tvOS/visionOS product/generic builds succeeded. Evidence `/tmp/LuneX-AuditVideo-20261029-R2.xcresult` and `/tmp/LuneX-AuditVideo-*.log`. Physical weak-network quality remains pending. Commit/push video batch now.
 
 - HDR boundary batch committed/pushed as `4761466`. Video batch now retains the decoder across packet loss, admits recovery for the two explicit VideoToolbox submission errors, and preserves fatal/unknown and control-send error propagation. Focused verification pending.

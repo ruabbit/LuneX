@@ -363,6 +363,23 @@ final class NativeSessionAudioProcessorTests: XCTestCase {
         await harness.collection.value
     }
 
+    func testEngineConfigurationChangeRebuildsEvenWithEquivalentCapability() async throws {
+        let harness = try await makeHarness(
+            capability: routeCapability(support: .supported)
+        )
+        defer { harness.collection.cancel() }
+        try await waitForEventCount(1, recorder: harness.events)
+        harness.source.emit(.engineConfigurationChanged)
+        try await waitForEventCount(2, recorder: harness.events)
+        XCTAssertEqual(harness.engine.graphIntents().count, 2)
+        let events = await harness.events.snapshot()
+        XCTAssertEqual(events.last?.cause, .routeChanged)
+        XCTAssertEqual(events.last?.stage, .running)
+        XCTAssertEqual(events.last?.lastAction, .graphRebuilt(.spatialPolicyChanged))
+        await harness.processor.stop()
+        await harness.collection.value
+    }
+
     func testEquivalentRouteAndPreferenceStateDoesNotRebuildOrPublish()
         async throws
     {

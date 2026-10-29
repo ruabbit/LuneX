@@ -2,6 +2,24 @@ import Foundation
 import XCTest
 
 final class AudioRuntimeRecoveryTests: XCTestCase {
+    func testMissingPlayerCompletionsRebuildAndReleaseTheOperationGate() async throws {
+        let harness = try makeHarness(scheduleCapacityTimeout: .milliseconds(10))
+        _ = try await harness.runtime.start(at: 0)
+        for sequence in UInt16(1)...UInt16(4) {
+            _ = try await harness.runtime.schedule(
+                pcm(sequence: sequence, timestamp: UInt32(sequence) * 240),
+                presentationTimeNanoseconds: UInt64(sequence)
+            )
+        }
+        let queued = await harness.pipeline.scheduledBufferCount()
+        XCTAssertEqual(queued, 1)
+        XCTAssertEqual(harness.client.snapshotCalls().filter { $0 == "configure" }.count, 2)
+        let stopped = try await harness.runtime.stop(at: 5)
+        XCTAssertEqual(stopped.stage, .stopped)
+        let waiters = await harness.pipeline.waitingScheduleCount()
+        XCTAssertEqual(waiters, 0)
+    }
+
     func testStartScheduleAndIdempotentStopOwnPipelineAndClock() async throws {
         let harness = try makeHarness()
         let started = try await harness.runtime.start(at: 0)
@@ -593,9 +611,12 @@ final class AudioRuntimeRecoveryTests: XCTestCase {
         )
     }
 
-    private func makeHarness() throws -> RecoveryHarness {
+    private func makeHarness(scheduleCapacityTimeout: Duration = .milliseconds(250)) throws -> RecoveryHarness {
         let client = RecoveryAudioEngineClient()
-        let pipeline = AudioSessionPipeline(engineClient: client)
+        let pipeline = AudioSessionPipeline(
+            engineClient: client,
+            scheduleCapacityTimeout: scheduleCapacityTimeout
+        )
         let clock = try MediaClockSynchronizer()
         let graphIntent = makeAudioGraphIntent(channelCount: 2)
         let runtime = try SessionAudioRuntime(

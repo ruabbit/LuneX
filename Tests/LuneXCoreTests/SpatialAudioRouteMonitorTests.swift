@@ -1,10 +1,37 @@
 import XCTest
 
 final class SpatialAudioRouteMonitorTests: XCTestCase {
+    func testEngineNotificationFiltersItsOwnerAndDeliversRecoveryOffCallback() async {
+        let center = NotificationCenter()
+        let engine = NSObject()
+        let name = Notification.Name("test.engine.configuration")
+        let names = SpatialAudioPlatformNotificationNames(
+            routeChange: nil, interruption: nil, mediaServicesLost: nil,
+            mediaServicesReset: nil, spatialPlaybackCapabilityChange: nil,
+            engineConfigurationChange: name
+        )
+        let source = SpatialAudioPlatformNotificationSource(
+            notificationCenter: center, observedObject: engine, names: names
+        )
+        let received = expectation(description: "owned engine configuration")
+        let recorder = SpatialAudioRouteEventRecorder()
+        source.start {
+            recorder.append($0)
+            received.fulfill()
+        }
+        center.post(name: name, object: NSObject())
+        center.post(name: name, object: engine)
+        await fulfillment(of: [received], timeout: 1)
+        source.stop()
+        center.post(name: name, object: engine)
+        XCTAssertEqual(recorder.events, [.engineConfigurationChanged])
+    }
+
     func testCurrentPlatformNotificationNamesMatchCompileTimeSupport() {
         let names = SpatialAudioPlatformNotificationNames.current
 
         #if os(macOS)
+        XCTAssertNotNil(names.engineConfigurationChange)
         XCTAssertNil(names.routeChange)
         XCTAssertNil(names.interruption)
         XCTAssertNil(names.mediaServicesLost)

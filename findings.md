@@ -4,6 +4,9 @@
 
 ### 2026-10-29 audit correction and diagnostic boundary
 
+- Apple SDK AVAudioEngine.h (27.0, lines 1036-1062) documents engine-owned configuration-change notifications, automatic stop after hardware channel/sample-rate changes, retained graph connections, and internal-queue teardown deadlock risk. Production macOS observation now filters the exact engine and leaves its callback queue before capability/recovery handling. Equal spatial capability still requires engine restart.
+- Audio capacity waits previously had no deadline inside two serialized gates. Missing player completion could therefore prevent both route recovery and stop. Add a 250 ms stall bound (normal 3-buffer capacity unchanged), cancel timers with waiter lifecycle, and rebuild once on capacity timeout before scheduling the current buffer. This is failure recovery, not a larger steady-state audio buffer.
+
 - Video recovery: packet loss can retain the current decompression session and last presentation while predicted units are withheld until IDR. Parameter/color changes and decoder faults still invalidate. Local VideoToolbox VTErrors.h identifies bad-data (-12909) and invalid-session (-12903); synchronous submission of these errors now requests IDR recovery rather than terminal media failure. Allocation/unknown errors remain terminal.
 - IDR request exceptions in the current control implementation mean invalid session state or an authenticated reliable-control send failure. No proven transient error category exists here; blanket suppression would conceal control failure, so preserve propagation and outstanding-request cleanup.
 

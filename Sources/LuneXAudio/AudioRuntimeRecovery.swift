@@ -189,7 +189,15 @@ actor SessionAudioRuntime {
             throw AudioRuntimeRecoveryError.invalidState
         }
         try validateEventTime(presentationTimeNanoseconds)
-        let receipt = try await pipeline.schedule(decoded)
+        let receipt: AudioScheduleReceipt
+        do {
+            receipt = try await pipeline.schedule(decoded)
+        } catch AudioPipelineError.scheduleCapacityExceeded {
+            // A stopped output device may never return player completions. Bound
+            // the wait so route recovery and stop can enter the serialized gate.
+            _ = try await rebuildGraph(reason: .underrun, at: presentationTimeNanoseconds)
+            receipt = try await pipeline.schedule(decoded)
+        }
         do {
             _ = try await clock.observeAudio(
                 receipt,

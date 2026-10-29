@@ -1,8 +1,6 @@
 import Foundation
 
-#if os(iOS) || os(tvOS) || os(visionOS)
 import AVFAudio
-#endif
 
 struct SpatialAudioRouteCapabilityState: Codable, Equatable, Hashable, Sendable {
     let outputAvailable: Bool
@@ -103,6 +101,7 @@ struct SpatialAudioRouteSemanticState: Codable, Equatable, Hashable, Sendable {
 
 enum SpatialAudioRouteMonitorTrigger: Equatable, Hashable, Sendable {
     case initial
+    case engineConfigurationChanged
     case routeChanged
     case interruptionBegan
     case interruptionEnded(shouldResume: Bool)
@@ -123,6 +122,7 @@ struct SpatialAudioRouteMonitorSnapshot: Equatable, Hashable, Sendable {
 }
 
 enum SpatialAudioRouteMonitorEvent: Equatable, Hashable, Sendable {
+    case engineConfigurationChanged
     case routeChanged
     case interruptionBegan
     case interruptionEnded(shouldResume: Bool)
@@ -133,6 +133,8 @@ enum SpatialAudioRouteMonitorEvent: Equatable, Hashable, Sendable {
 
     fileprivate var trigger: SpatialAudioRouteMonitorTrigger {
         switch self {
+        case .engineConfigurationChanged:
+            .engineConfigurationChanged
         case .routeChanged:
             .routeChanged
         case .interruptionBegan:
@@ -152,7 +154,7 @@ enum SpatialAudioRouteMonitorEvent: Equatable, Hashable, Sendable {
 
     fileprivate var refreshesRouteCapability: Bool {
         switch self {
-        case .routeChanged, .mediaServicesReset,
+        case .engineConfigurationChanged, .routeChanged, .mediaServicesReset,
              .spatialPlaybackCapabilityChanged, .refresh:
             true
         case .interruptionBegan, .interruptionEnded, .mediaServicesLost:
@@ -174,6 +176,7 @@ struct SpatialAudioPlatformNotificationNames: Equatable, Sendable {
     let mediaServicesLost: Notification.Name?
     let mediaServicesReset: Notification.Name?
     let spatialPlaybackCapabilityChange: Notification.Name?
+    var engineConfigurationChange: Notification.Name? = nil
 
     static var current: SpatialAudioPlatformNotificationNames {
         #if os(iOS) || os(tvOS) || os(visionOS)
@@ -193,7 +196,8 @@ struct SpatialAudioPlatformNotificationNames: Equatable, Sendable {
             interruption: nil,
             mediaServicesLost: nil,
             mediaServicesReset: nil,
-            spatialPlaybackCapabilityChange: nil
+            spatialPlaybackCapabilityChange: nil,
+            engineConfigurationChange: .AVAudioEngineConfigurationChange
         )
         #endif
     }
@@ -256,6 +260,11 @@ final class SpatialAudioPlatformNotificationSource:
         }
 
         var observers: [NSObjectProtocol] = []
+        if let name = names.engineConfigurationChange {
+            observers.append(observe(name: name, generation: generation) {
+                _ in .engineConfigurationChanged
+            })
+        }
         if let name = names.routeChange {
             observers.append(observe(name: name, generation: generation) {
                 _ in .routeChanged
@@ -313,6 +322,14 @@ final class SpatialAudioPlatformNotificationSource:
             queue: nil
         ) { [weak self] notification in
             guard let event = event(notification) else { return }
+            if event == .engineConfigurationChanged {
+                // AVAudioEngine posts on an internal queue. Leave it before reading
+                // capabilities or allowing the consumer to rebuild the graph.
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    self?.deliver(event, generation: generation)
+                }
+                return
+            }
             self?.deliver(event, generation: generation)
         }
     }
@@ -527,11 +544,13 @@ final class SpatialAudioRouteMonitor: @unchecked Sendable {
                     interruption: semanticState.interruption,
                     mediaServices: .reset
                 )
-            case .routeChanged, .spatialPlaybackCapabilityChanged, .refresh:
+            case .engineConfigurationChanged, .routeChanged, .spatialPlaybackCapabilityChanged, .refresh:
                 break
             }
 
-            guard semanticState != state.semanticState else { return nil }
+            guard semanticState != state.semanticState || event == .engineConfigurationChanged else {
+                return nil
+            }
             guard state.revision.rawValue < UInt64.max else {
                 state.revisionExhausted = true
                 return nil

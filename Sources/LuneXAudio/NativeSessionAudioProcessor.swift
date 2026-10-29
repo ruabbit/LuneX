@@ -120,7 +120,7 @@ struct NativeSessionAudioProcessorFactory: SessionAudioProcessorCreating {
     private let entitlementReader: any HeadPoseEntitlementReading
     private let decoderFactory: DecoderFactory
     private let engineClientFactory: EngineClientFactory
-    private let routeEventSourceFactory: RouteEventSourceFactory
+    private let routeEventSourceFactory: RouteEventSourceFactory?
     private let eventTimeProvider: EventTimeProvider
 
     init(
@@ -135,9 +135,7 @@ struct NativeSessionAudioProcessorFactory: SessionAudioProcessorCreating {
         engineClientFactory: @escaping EngineClientFactory = {
             AVAudioEngineClient()
         },
-        routeEventSourceFactory: @escaping RouteEventSourceFactory = {
-            SpatialAudioPlatformNotificationSource()
-        },
+        routeEventSourceFactory: RouteEventSourceFactory? = nil,
         eventTimeProvider: @escaping EventTimeProvider = {
             DispatchTime.now().uptimeNanoseconds
         }
@@ -165,7 +163,7 @@ struct NativeSessionAudioProcessorFactory: SessionAudioProcessorCreating {
                 capabilityReader: AudioEngineRouteCapabilityReader(
                     engineClient: engineClient
                 ),
-                eventSource: routeEventSourceFactory()
+                eventSource: routeEventSourceFactory?() ?? engineClient.makeRouteEventSource()
             )
         } catch {
             await decoder.close()
@@ -652,7 +650,9 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
         guard snapshot.revision > lastRouteSourceRevision else { return }
 
         lastRouteSourceRevision = snapshot.revision
-        guard snapshot.state != currentRoute else { return }
+        guard snapshot.state != currentRoute || snapshot.trigger == .engineConfigurationChanged else {
+            return
+        }
         currentRoute = snapshot.state
 
         let eventTime = nextRuntimeEventTime()
@@ -712,7 +712,7 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
                 runtimeSnapshot = applied
             }
 
-        case .initial, .routeChanged, .spatialPlaybackCapabilityChanged,
+        case .initial, .engineConfigurationChanged, .routeChanged, .spatialPlaybackCapabilityChanged,
              .refresh:
             runtimeSnapshot = try await runtime.applySpatialPolicy(
                 intent,
@@ -918,7 +918,7 @@ actor NativeSessionAudioProcessor: SessionAudioProcessing {
         switch trigger {
         case .initial:
             .initial
-        case .routeChanged:
+        case .engineConfigurationChanged, .routeChanged:
             .routeChanged
         case .interruptionBegan:
             .interruptionBegan
