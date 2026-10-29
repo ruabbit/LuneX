@@ -2,6 +2,12 @@
 
 ## 2026-10-29 audit remediation
 
+- Boundary R3 passed all 124 tests at `/tmp/LuneX-AuditBoundary-20261029-R3.xcresult`; product/generic builds succeeded. Frame order/wrap, ENet loopback/batched delivery and capture teardown gates passed. The test-window crash was resolved with correct ARC ownership and asynchronous cleanup; the original product pressed-drag crash remains a distinct physical gate. Commit/push before full integration verification.
+
+- Final runtime-boundary batch: presentation rejects older/duplicate frame indices with UInt32 wrap handling; input capture releases global coalescing independently of its weak window and at destruction; ENet's single serial pump reuses one receive buffer. Added frame-reordering/wrap/replacement and window-destruction regressions. No latency-improvement measurement is claimed. Validation pending.
+- Boundary R1: 123 passed, new window-close test crashed at `objc_release` during autorelease-pool drain (`xctest-2026-10-29-230757.ips`). The ARC-owned test window needs `isReleasedWhenClosed = false` before explicit close; corrected only this fixture, preserving R1 failure evidence. R2 pending.
+- Boundary R2: no crash, 123 passed and one immediate weak-view deallocation assertion failed; coalescing restoration passed. Correct the fixture to pause MTKView rendering, clear first responder, and allow bounded asynchronous AppKit cleanup before checking destruction. R3 pending.
+
 - Pairing/profile R1 passed 142 total / 141 passed / 1 explicit live-host skip / 0 failed; macOS product and all frozen-platform generic builds succeeded. Evidence `/tmp/LuneX-AuditPairing-20261029-R1.xcresult`, `/tmp/LuneX-AuditPairing-*.log`. Authenticated pairing remains provider-verified; no real host pairing was changed. OpenSpec overlay contract now names actual negotiated video and launch bitrate target. Commit/push this batch immediately.
 
 - Pairing/profile batch: macOS generates and displays the client PIN while starting the existing authenticated handshake; the user enters it in Sunshine's web interface. Corrected reverse-direction copy, retained manual shared API compatibility, projected negotiated video plus launch target bitrate independently of editable preferences, and bound Disconnect to command progress/admission. Validation pending.

@@ -6,6 +6,31 @@ import XCTest
 
 final class StreamMetalPresenterTests: XCTestCase {
     @MainActor
+    func testPresentationRejectsReorderedFramesAndAcceptsIndexWrapAndNewGeneration() throws {
+        let source = StreamVideoPresentationSource()
+        let sessionID = UUID()
+        let metadata = VideoColorMetadata.rec709VideoRange()
+        source.beginSession(sessionID: sessionID, mediaGeneration: 1)
+        source.consume(.sessionStarted(generation: 1, colorMetadata: metadata),
+                       sessionID: sessionID, mediaGeneration: 1)
+        let frameIDs: [UInt64] = [UInt64(UInt32.max) - 1, UInt64(UInt32.max), 0,
+                                 UInt64(UInt32.max), 1, 0, 1]
+        for frameID in frameIDs {
+            source.consume(.frame(try makeFrame(generation: 1, frameID: frameID, metadata: metadata)),
+                           sessionID: sessionID, mediaGeneration: 1)
+        }
+        XCTAssertEqual(source.currentFrame()?.frameID, 1)
+        XCTAssertEqual(source.snapshot().staleFrameDropCount, 3)
+        XCTAssertEqual(source.snapshot().publishedFrameCount, 4)
+        source.consume(.sessionStarted(generation: 2, colorMetadata: metadata),
+                       sessionID: sessionID, mediaGeneration: 1)
+        source.consume(.frame(try makeFrame(generation: 2, frameID: 0, metadata: metadata)),
+                       sessionID: sessionID, mediaGeneration: 1)
+        XCTAssertEqual(source.currentFrame()?.generation, 2)
+        XCTAssertEqual(source.currentFrame()?.frameID, 0)
+    }
+
+    @MainActor
     func testTVVisionSurfaceRelayPublishesOrderedStateAndReplacesHandler() {
         let scene = TVVisionSurfaceRelayTestScene()
         let surface = TVVisionSurfaceRelayTestSurface(

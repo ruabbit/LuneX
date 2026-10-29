@@ -76,6 +76,7 @@ final class ENetConnectionDriver: ENetConnectionDriving, @unchecked Sendable {
     private var connection: OpaquePointer?
     private var pendingSends: [PendingSend] = []
     private var pendingServices: [PendingService] = []
+    private var receivePayload = [UInt8](repeating: 0, count: maximumPayloadBytes)
     private var isPumpScheduled = false
     private var enqueuedSendCount: UInt64 = 0
     private var sentPacketCount: UInt64 = 0
@@ -310,9 +311,8 @@ final class ENetConnectionDriver: ENetConnectionDriving, @unchecked Sendable {
         maximumServiceSliceMilliseconds = max(maximumServiceSliceMilliseconds, timeout)
         serviceCallCount = Self.saturatedIncrement(serviceCallCount)
 
-        var payload = [UInt8](repeating: 0, count: Self.maximumPayloadBytes)
         var event = LuneXENetEvent()
-        let result = payload.withUnsafeMutableBufferPointer { buffer in
+        let result = receivePayload.withUnsafeMutableBufferPointer { buffer in
             lunex_enet_service(
                 connection,
                 timeout,
@@ -328,12 +328,12 @@ final class ENetConnectionDriver: ENetConnectionDriving, @unchecked Sendable {
             case LUNEX_ENET_EVENT_NONE:
                 resolved = DispatchTime.now().uptimeNanoseconds >= deadline ? .idle : nil
             case LUNEX_ENET_EVENT_RECEIVE:
-                guard event.payloadLength <= payload.count else {
+                guard event.payloadLength <= receivePayload.count else {
                     throw ENetTransportError.payloadTooLarge
                 }
                 resolved = .received(
                     channelID: event.channelID,
-                    payload: Data(payload.prefix(event.payloadLength))
+                    payload: Data(receivePayload.prefix(event.payloadLength))
                 )
             case LUNEX_ENET_EVENT_DISCONNECT:
                 resolved = .disconnected(data: event.data)

@@ -268,6 +268,11 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                     staleFrameDropCount = Self.saturatedIncrement(staleFrameDropCount)
                     return nil
                 }
+                if let previous = latestFrame,
+                   !Self.isNewerFrame(frame.frameID, than: previous.frameID) {
+                    staleFrameDropCount = Self.saturatedIncrement(staleFrameDropCount)
+                    return nil
+                }
                 if let latestFrame,
                    latestFrame.frameID != lastPresentedFrameID {
                     supersededBeforePresentationCount = Self.saturatedIncrement(
@@ -566,6 +571,15 @@ final class StreamVideoPresentationSource: @unchecked Sendable {
                     isDeliveryRevisionExhausted
             )
         }
+    }
+
+    private static func isNewerFrame(_ incoming: UInt64, than current: UInt64) -> Bool {
+        // Moonlight's frame index is 32-bit and wraps within a decoder generation.
+        if let incoming = UInt32(exactly: incoming), let current = UInt32(exactly: current) {
+            let distance = incoming &- current
+            return distance > 0 && distance < 0x8000_0000
+        }
+        return incoming > current
     }
 
     private func makeEvent(

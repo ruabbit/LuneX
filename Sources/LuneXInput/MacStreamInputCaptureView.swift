@@ -151,6 +151,10 @@ final class MacStreamInputCaptureView: MTKView {
     }
 
     override var isFlipped: Bool { true }
+
+    isolated deinit {
+        releaseMouseMovedEventsIfNeeded()
+    }
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
@@ -391,12 +395,12 @@ final class MacStreamInputCaptureView: MTKView {
     }
 
     private func releaseMouseMovedEventsIfNeeded() {
+        MacMouseCoalescingOwnership.release(owner: self)
         guard let mouseMovedEventWindow else { return }
         MacMouseMovedEventOwnership.release(
             window: mouseMovedEventWindow,
             owner: self
         )
-        MacMouseCoalescingOwnership.release(owner: self)
         self.mouseMovedEventWindow = nil
     }
 

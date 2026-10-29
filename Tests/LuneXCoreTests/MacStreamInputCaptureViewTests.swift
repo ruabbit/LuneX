@@ -845,6 +845,31 @@ final class MacStreamInputCaptureViewTests: XCTestCase {
         XCTAssertEqual(NSEvent.isMouseCoalescingEnabled, initialMouseCoalescing)
     }
 
+    func testClosingCaptureWindowRestoresMouseCoalescing() async throws {
+        let initial = NSEvent.isMouseCoalescingEnabled
+        weak var releasedView: MacStreamInputCaptureView?
+        autoreleasepool {
+            let view = MacStreamInputCaptureView(
+                frame: NSRect(x: 0, y: 0, width: 320, height: 240),
+                isInputCaptureEnabled: true,
+                sampleHandler: { _ in }
+            )
+            view.isPaused = true
+            releasedView = view
+            let window = makeWindow(contentView: view)
+            window.isReleasedWhenClosed = false
+            XCTAssertFalse(NSEvent.isMouseCoalescingEnabled)
+            window.makeFirstResponder(nil)
+            window.contentView = nil
+            window.close()
+        }
+        for _ in 0..<50 where releasedView != nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(releasedView)
+        XCTAssertEqual(NSEvent.isMouseCoalescingEnabled, initial)
+    }
+
     func testStaleWindowCallbackCannotReattachReplacementOwner() {
         let monitor = RecordingAppKitLifecycleMonitor()
         let owner = MacStreamSurfaceAttachmentOwner(lifecycleMonitor: monitor)
